@@ -1,3 +1,12 @@
+//! Performance benchmarks for multi-hop graph traversal (BFS).
+//!
+//! Builds a balanced tree in SQLite (branching factor × depth) and measures
+//! `get_related_multi_hop` — the BFS used by the `memory_traverse` MCP tool.
+//! The tree structure gives predictable node counts per depth level, making
+//! regressions easy to attribute to a specific traversal layer.
+//!
+//! Run with: `cargo bench --bench traversal`
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use engram::storage::graph_queries::{get_related_multi_hop, TraversalOptions};
 use engram::storage::queries::{create_crossref, create_memory};
@@ -7,6 +16,7 @@ use engram::types::{
     MemoryType,
 };
 
+/// Insert a single memory into `storage`, returning its ID.
 fn create_test_memory(storage: &Storage, i: usize) -> MemoryId {
     storage
         .with_transaction(|conn| {
@@ -35,6 +45,10 @@ fn create_test_memory(storage: &Storage, i: usize) -> MemoryId {
         .id
 }
 
+/// Build a balanced tree of memories linked by `RelatedTo` edges.
+///
+/// Returns the root memory ID. Total nodes = Σ(branching_factor^d) for
+/// d = 0..max_depth. With branching_factor=5, depth=3: 1 + 5 + 25 + 125 = 156 nodes.
 fn create_graph(storage: &Storage, branching_factor: usize, max_depth: usize) -> MemoryId {
     let root_id = create_test_memory(storage, 0);
     let mut current_level = vec![root_id];
@@ -69,6 +83,12 @@ fn create_graph(storage: &Storage, branching_factor: usize, max_depth: usize) ->
     root_id
 }
 
+/// Benchmark BFS traversal to depth 3 on a 156-node balanced tree.
+///
+/// The tree has branching factor 5 and depth 3. BFS visits all reachable
+/// nodes via the `crossrefs` table, exercising the recursive query path
+/// in `get_related_multi_hop`. Entity inclusion is disabled to isolate
+/// pure graph-walk cost from the entity join.
 fn bench_traversal(c: &mut Criterion) {
     let storage = Storage::open_in_memory().unwrap();
     // Create a graph: depth 3, branching factor 5 (~156 nodes)

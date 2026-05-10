@@ -67,6 +67,9 @@ watcher = ["dep:toml", "dep:tempfile", "dep:notify", "dep:reqwest"]
 # Emergent graph: auto-links (semantic/temporal/co-occurrence) and community detection clusters
 emergent-graph = []
 
+# Lifecycle hooks (session start/end, post-tool-use, stop)
+hooks = []
+
 # Ollama local embedding backend
 ollama = []
 

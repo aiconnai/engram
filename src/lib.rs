@@ -7,11 +7,15 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::large_enum_variant)]
 
+#[cfg(feature = "agent-portability")]
+pub mod attestation;
 pub mod auth;
 pub mod bench;
 pub mod embedding;
 pub mod error;
 pub mod graph;
+#[cfg(feature = "hooks")]
+pub mod hooks;
 #[cfg(feature = "langfuse")]
 pub mod integrations;
 pub mod intelligence;
@@ -20,15 +24,13 @@ pub mod mcp;
 pub mod multimodal;
 pub mod realtime;
 pub mod search;
+#[cfg(feature = "agent-portability")]
+pub mod snapshot;
 pub mod storage;
 pub mod sync;
 pub mod types;
 #[cfg(feature = "watcher")]
 pub mod watcher;
-#[cfg(feature = "agent-portability")]
-pub mod attestation;
-#[cfg(feature = "agent-portability")]
-pub mod snapshot;
 
 pub use error::{EngramError, Result};
 pub use storage::Storage;

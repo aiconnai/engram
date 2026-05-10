@@ -1,4 +1,16 @@
-//! Performance benchmarks for search operations (RML-902)
+//! Performance benchmarks for the search stack (RML-902).
+//!
+//! Covers every layer of the retrieval pipeline in isolation and combined:
+//! BM25 (FTS5), hybrid (BM25 + vector), TF-IDF embedding, fuzzy correction,
+//! and scale tests up to 10 000 memories.
+//!
+//! Run with: `cargo bench --bench search`
+//!
+//! ## Performance targets
+//! | Operation                     | Target   |
+//! |-------------------------------|----------|
+//! | `hybrid_search` (any variant) | < 10 ms  |
+//! | `search_scale/10K memories`   | < 10 ms  |
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use engram::embedding::{Embedder, TfIdfEmbedder};
@@ -7,6 +19,12 @@ use engram::storage::queries::*;
 use engram::storage::Storage;
 use engram::types::*;
 
+/// Create an in-memory [`Storage`] pre-loaded with `count` memories.
+///
+/// Content is drawn from 10 realistic software-engineering topics, rotated
+/// with a per-item suffix so FTS5 tokenises each row distinctly. Tags follow
+/// a 5-bucket rotation (`topic0`…`topic4` + `development`) to simulate
+/// realistic tag cardinality.
 fn setup_storage_with_data(count: usize) -> Storage {
     let storage = Storage::open_in_memory().unwrap();
 
@@ -49,6 +67,7 @@ fn setup_storage_with_data(count: usize) -> Storage {
                     event_duration_seconds: None,
                     trigger_pattern: None,
                     summary_of_id: None,
+                    media_url: None,
                 };
                 create_memory(conn, &input)
             })
@@ -58,6 +77,11 @@ fn setup_storage_with_data(count: usize) -> Storage {
     storage
 }
 
+/// Benchmark BM25 keyword search over 1 000 memories.
+///
+/// Exercises the SQLite FTS5 `MATCH` path only — no vector similarity.
+/// Four representative queries test term frequency variance: single-token,
+/// two-token, three-token, and a four-token phrase with a Redis-specific term.
 fn bench_bm25_search(c: &mut Criterion) {
     let storage = setup_storage_with_data(1000);
 
@@ -83,6 +107,15 @@ fn bench_bm25_search(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark hybrid search (BM25 + TF-IDF vector + RRF fusion) over 1 000 memories.
+///
+/// The query embedding is computed once outside the hot loop so only the
+/// retrieval and fusion cost is measured. Three query lengths stress different
+/// BM25 term-match densities while the vector component stays constant in
+/// dimension (384-d TF-IDF):
+/// - **`short`** — single abbreviated token (`auth`).
+/// - **`medium`** — three tokens matching a common topic.
+/// - **`long`** — full sentence, many tokens, maximum BM25 overlap.
 fn bench_hybrid_search(c: &mut Criterion) {
     let storage = setup_storage_with_data(1000);
     let embedder = TfIdfEmbedder::new(384);
@@ -130,6 +163,13 @@ fn bench_hybrid_search(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark TF-IDF embedding throughput at three text lengths and in batch.
+///
+/// - **`short`** — two tokens; isolates tokeniser overhead.
+/// - **`medium`** — nine tokens; typical query length.
+/// - **`long`** — 27 tokens; realistic document sentence.
+/// - **`batch_100`** — 100 mixed-length strings via `embed_batch`; measures
+///   amortised cost and any batch-path allocation savings.
 fn bench_tfidf_embedding(c: &mut Criterion) {
     let embedder = TfIdfEmbedder::new(384);
 
@@ -167,6 +207,16 @@ fn bench_tfidf_embedding(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark the fuzzy spelling-correction engine at three error levels.
+///
+/// Builds a 12-word vocabulary (each repeated 10× to simulate realistic
+/// term frequency), then runs `correct_query` for:
+/// - **`1_char_typo`** — one missing character (`authentcation`).
+/// - **`2_char_typo`** — two missing characters (`authentcatin`).
+/// - **`transposition`** — two transpositions (`authetnicaiton`).
+///
+/// The engine uses BK-tree / edit-distance lookup; this benchmark tracks
+/// regression in worst-case correction cost.
 fn bench_fuzzy_search(c: &mut Criterion) {
     let mut engine = FuzzyEngine::new();
 
@@ -209,6 +259,16 @@ fn bench_fuzzy_search(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark hybrid search scalability at 100, 1 000, and 10 000 memories.
+///
+/// Uses a fixed query (`"authentication JWT tokens"`) with a pre-computed
+/// embedding so only the retrieval and RRF fusion scale with corpus size.
+/// Throughput is expressed as elements processed (corpus size), not results
+/// returned, so the chart shows sub-linear scaling of the SQLite FTS5 + vec
+/// combined plan.
+///
+/// Sample size is reduced to 50 for the 10 K case to keep CI run time
+/// reasonable while still producing statistically stable estimates.
 fn bench_search_at_scale(c: &mut Criterion) {
     let mut group = c.benchmark_group("search_scale");
     group.sample_size(50); // Fewer samples for slow benchmarks

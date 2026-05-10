@@ -1,8 +1,22 @@
+//! Performance benchmarks for community detection on the knowledge graph.
+//!
+//! Generates a synthetic graph with clustered structure (50-node clusters
+//! with dense intra-cluster edges and sparse random inter-cluster links)
+//! and runs the Louvain-style community detection algorithm.
+//!
+//! Run with: `cargo bench --bench community_detection`
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use engram::graph::{GraphEdge, GraphNode, KnowledgeGraph};
 use engram::types::MemoryId;
 use rand::prelude::*;
 
+/// Build a synthetic [`KnowledgeGraph`] with clustered topology.
+///
+/// Nodes are assigned to clusters of 50. Each node gets 2–5 intra-cluster
+/// edges, plus a random cross-cluster edge with probability `edge_density`.
+/// Tags are drawn from a 9-element pool (20–50 per node) to create
+/// realistic attribute overlap between clusters.
 fn generate_graph(node_count: usize, edge_density: f32) -> KnowledgeGraph {
     let mut rng = StdRng::seed_from_u64(42);
     let mut nodes = Vec::with_capacity(node_count);
@@ -86,6 +100,12 @@ fn generate_graph(node_count: usize, edge_density: f32) -> KnowledgeGraph {
     KnowledgeGraph { nodes, edges }
 }
 
+/// Benchmark community detection on a 500-node clustered graph.
+///
+/// The graph has ~10 natural clusters of 50 nodes each, connected by
+/// sparse random edges (5% density). `detect_communities(10)` requests
+/// up to 10 communities. Sample size is reduced to 10 because the
+/// algorithm is O(n² · iterations) and each iteration takes ~7 ms.
 fn bench_detect_communities(c: &mut Criterion) {
     let graph = generate_graph(500, 0.05);
 
