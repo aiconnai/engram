@@ -23,7 +23,11 @@ use engram::types::*;
 // Benchmark Handler Setup
 // ---------------------------------------------------------------------------
 
-/// Create a configured HandlerContext for benchmarking.
+/// Build a [`HandlerContext`] wired to the given in-memory storage.
+///
+/// Uses the default TF-IDF embedder (no OpenAI calls), an empty fuzzy engine,
+/// and default search/cache configs. Optional features (`meilisearch`,
+/// `langfuse`) are conditionally compiled out.
 fn create_benchmark_context(storage: Storage) -> HandlerContext {
     let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
     HandlerContext {
@@ -45,7 +49,11 @@ fn create_benchmark_context(storage: Storage) -> HandlerContext {
     }
 }
 
-/// Populate storage with ~100 memories for search/list benchmarks.
+/// Pre-populate `storage` with `count` synthetic memories.
+///
+/// Memories alternate between `Note` and `Todo` types with 10 tag groups and
+/// 5 category groups, mimicking a realistic multi-type workspace. Embedding is
+/// deferred so seeding cost is pure SQLite write throughput.
 fn seed_memories(storage: &Storage, count: usize) {
     for i in 0..count {
         storage
@@ -74,6 +82,7 @@ fn seed_memories(storage: &Storage, count: usize) {
                     event_duration_seconds: None,
                     trigger_pattern: None,
                     summary_of_id: None,
+                    media_url: None,
                 };
                 create_memory(conn, &input)
             })
@@ -85,6 +94,11 @@ fn seed_memories(storage: &Storage, count: usize) {
 // Benchmark: memory_create (write path)
 // ---------------------------------------------------------------------------
 
+/// Benchmark end-to-end MCP dispatch latency for the `memory_create` tool.
+///
+/// Measures the full write path: JSON params → `dispatch()` → handler →
+/// `create_memory` SQL insert. Embedding is skipped (no `embedding` field in
+/// params), so this isolates MCP routing + serialisation + SQLite write cost.
 fn bench_dispatch_memory_create(c: &mut Criterion) {
     let storage = Storage::open_in_memory().expect("in-memory storage");
     let ctx = create_benchmark_context(storage);
@@ -111,6 +125,12 @@ fn bench_dispatch_memory_create(c: &mut Criterion) {
 // Benchmark: memory_search (read + compute path)
 // ---------------------------------------------------------------------------
 
+/// Benchmark end-to-end MCP dispatch latency for the `memory_search` tool.
+///
+/// Pre-seeds 100 memories. Measures the full read + compute path:
+/// JSON params → `dispatch()` → handler → TF-IDF embed query →
+/// BM25 + vector hybrid search → RRF fusion → JSON response.
+/// This is the most compute-intensive common tool call.
 fn bench_dispatch_memory_search(c: &mut Criterion) {
     let storage = Storage::open_in_memory().expect("in-memory storage");
     seed_memories(&storage, 100);
@@ -138,6 +158,11 @@ fn bench_dispatch_memory_search(c: &mut Criterion) {
 // Benchmark: memory_list (read path)
 // ---------------------------------------------------------------------------
 
+/// Benchmark end-to-end MCP dispatch latency for the `memory_list` tool.
+///
+/// Pre-seeds 100 memories, then lists 20 per call. Exercises the read path
+/// without embedding computation: JSON params → `dispatch()` → handler →
+/// `list_memories` SQL query → JSON serialisation.
 fn bench_dispatch_memory_list(c: &mut Criterion) {
     let storage = Storage::open_in_memory().expect("in-memory storage");
     seed_memories(&storage, 100);
@@ -164,6 +189,12 @@ fn bench_dispatch_memory_list(c: &mut Criterion) {
 // Benchmark: memory_stats (metadata path)
 // ---------------------------------------------------------------------------
 
+/// Benchmark end-to-end MCP dispatch latency for the `memory_stats` tool.
+///
+/// Pre-seeds 100 memories. Stats aggregate counts, tag cardinality, and
+/// storage size via a multi-aggregate SQL query. This is a pure metadata
+/// read — no FTS5 or vector index involved — so it measures the cost of
+/// SQLite aggregate scans through the MCP dispatch layer.
 fn bench_dispatch_memory_stats(c: &mut Criterion) {
     let storage = Storage::open_in_memory().expect("in-memory storage");
     seed_memories(&storage, 100);
@@ -187,6 +218,12 @@ fn bench_dispatch_memory_stats(c: &mut Criterion) {
 // Benchmark: unknown tool (error path)
 // ---------------------------------------------------------------------------
 
+/// Benchmark the fast-fail error path for an unrecognised tool name.
+///
+/// `dispatch()` should reject unknown tools in O(1) time via a match arm
+/// before any I/O. This benchmark acts as a regression guard: if it regresses
+/// significantly (e.g. past 1 µs), the dispatch table likely changed from a
+/// static match to a dynamic lookup.
 fn bench_dispatch_unknown_tool(c: &mut Criterion) {
     let storage = Storage::open_in_memory().expect("in-memory storage");
     let ctx = create_benchmark_context(storage);
