@@ -2537,6 +2537,14 @@ pub fn get_stats(conn: &Connection) -> Result<StorageStats> {
         |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
 
+    let schema_version: i32 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
     Ok(StorageStats {
         total_memories,
         total_tags,
@@ -2554,7 +2562,7 @@ pub fn get_stats(conn: &Connection) -> Result<StorageStats> {
         }),
         sync_pending: sync_pending > 0,
         storage_mode: "sqlite".to_string(),
-        schema_version: 0,
+        schema_version,
         workspaces,
         type_counts,
         tier_counts,
