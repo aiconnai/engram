@@ -1,6 +1,7 @@
 //! Truncation Engine for intelligent context truncation (RTK-inspired)
 //! Provides smart truncation strategies for fitting context within token budgets
 
+use crate::intelligence::context_grouper::MemoryGroup;
 use serde::{Deserialize, Serialize};
 
 /// Strategy for truncating content
@@ -89,6 +90,49 @@ impl TruncationEngine {
                 format!("...{}", recent)
             }
         }
+    }
+
+    /// Truncate a list of MemoryGroups to fit within a token budget
+    /// Returns truncated groups with summaries trimmed as needed
+    pub fn truncate_groups(
+        &self,
+        groups: &[MemoryGroup],
+        budget_tokens: usize,
+    ) -> Vec<MemoryGroup> {
+        let budget_chars = budget_tokens * 4; // rough estimate
+        let mut result = Vec::new();
+        let mut used_chars = 0;
+
+        for group in groups {
+            let group_chars = group.topic.len() + group.summary.len() + 10; // +10 for formatting
+
+            if used_chars + group_chars <= budget_chars {
+                result.push(group.clone());
+                used_chars += group_chars;
+            } else {
+                // Try to add a truncated version
+                let remaining = budget_chars.saturating_sub(used_chars);
+                if remaining > 50 {
+                    // Only add if we have reasonable space
+                    let mut truncated_group = group.clone();
+                    let max_summary_chars = remaining.saturating_sub(group.topic.len() + 10);
+                    if group.summary.len() > max_summary_chars {
+                        truncated_group.summary = format!(
+                            "{}...",
+                            group
+                                .summary
+                                .chars()
+                                .take(max_summary_chars - 3)
+                                .collect::<String>()
+                        );
+                    }
+                    result.push(truncated_group);
+                }
+                break; // Budget exhausted
+            }
+        }
+
+        result
     }
 
     /// Estimate the number of tokens in a string

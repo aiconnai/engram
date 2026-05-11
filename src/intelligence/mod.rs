@@ -51,6 +51,7 @@ pub mod synthesis;
 // RTK-inspired components (Phase 10)
 pub mod context_grouper;
 pub mod integration_orchestrator;
+pub mod output_filter;
 pub mod truncation_engine;
 
 pub use auto_capture::{
