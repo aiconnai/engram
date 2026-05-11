@@ -68,10 +68,26 @@ pub struct OpenAIEmbedder {
     base_url: String,
     model: String,
     dimensions: usize,
+    /// Owned single-threaded runtime used by the sync `embed()` / `embed_batch()`
+    /// path when no tokio runtime is in scope (e.g. MCP stdio transport, which
+    /// runs the JSON-RPC loop synchronously). When the embedder is called from
+    /// inside an existing runtime (HTTP transport), we detect that with
+    /// `Handle::try_current()` and use `block_in_place` instead of this owned
+    /// runtime to avoid the cost of a nested runtime. Fixes #9.
+    runtime: tokio::runtime::Runtime,
 }
 
 #[cfg(feature = "openai")]
 impl OpenAIEmbedder {
+    /// Build the owned fallback runtime. Single-threaded with all drivers
+    /// enabled is enough for the rare case where there's no ambient runtime.
+    fn build_fallback_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("OpenAIEmbedder: failed to build fallback tokio runtime")
+    }
+
     /// Create a new OpenAI embedder with default settings
     pub fn new(api_key: String) -> Self {
         Self {
@@ -80,6 +96,7 @@ impl OpenAIEmbedder {
             base_url: "https://api.openai.com/v1".to_string(),
             model: "text-embedding-3-small".to_string(),
             dimensions: 1536,
+            runtime: Self::build_fallback_runtime(),
         }
     }
 
@@ -102,6 +119,7 @@ impl OpenAIEmbedder {
             base_url: base_url.unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
             model: model.unwrap_or_else(|| "text-embedding-3-small".to_string()),
             dimensions: dimensions.unwrap_or(1536),
+            runtime: Self::build_fallback_runtime(),
         }
     }
 
@@ -113,6 +131,7 @@ impl OpenAIEmbedder {
             base_url: "https://api.openai.com/v1".to_string(),
             model,
             dimensions,
+            runtime: Self::build_fallback_runtime(),
         }
     }
 
@@ -233,16 +252,24 @@ impl OpenAIEmbedder {
 #[cfg(feature = "openai")]
 impl Embedder for OpenAIEmbedder {
     fn embed(&self, text: &str) -> Result<Vec<f32>> {
-        // Blocking call for sync interface
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.embed_async(text))
-        })
+        // If we are inside an existing tokio runtime (e.g. HTTP transport),
+        // use block_in_place so we don't create a nested runtime. Otherwise
+        // (e.g. MCP stdio), drive the async call from our owned fallback
+        // runtime — without this, Handle::current() panics with "there is
+        // no reactor running". Fixes #9.
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => tokio::task::block_in_place(|| handle.block_on(self.embed_async(text))),
+            Err(_) => self.runtime.block_on(self.embed_async(text)),
+        }
     }
 
     fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.embed_batch_async(texts))
-        })
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                tokio::task::block_in_place(|| handle.block_on(self.embed_batch_async(texts)))
+            }
+            Err(_) => self.runtime.block_on(self.embed_batch_async(texts)),
+        }
     }
 
     fn dimensions(&self) -> usize {
