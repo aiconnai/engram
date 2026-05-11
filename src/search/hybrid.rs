@@ -132,12 +132,15 @@ fn semantic_only_search(
 ) -> Result<Vec<SearchResult>> {
     let now = Utc::now().to_rfc3339();
 
-    // Get all memories with embeddings (excluding expired)
+    // NOTE: Columns must match what memory_from_row() reads. Missing columns
+    // here trigger silent defaults (e.g. workspace -> "default", tier ->
+    // "permanent", lifecycle_state -> Active) instead of panicking. See #10.
     let mut sql = String::from(
         "SELECT m.id, m.content, m.memory_type, m.importance, m.access_count,
                 m.created_at, m.updated_at, m.last_accessed_at, m.owner_id,
                 m.visibility, m.version, m.has_embedding, m.metadata,
-                m.scope_type, m.scope_id, m.expires_at
+                m.scope_type, m.scope_id, m.expires_at,
+                m.workspace, m.tier, m.lifecycle_state
          FROM memories m
          WHERE m.has_embedding = 1 AND m.valid_to IS NULL
            AND (m.expires_at IS NULL OR m.expires_at > ?)",
