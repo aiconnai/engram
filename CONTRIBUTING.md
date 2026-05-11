@@ -35,12 +35,12 @@ Before submitting a bug report:
 2. Fork the repository
 3. Create a feature branch from `main`
 
-#### Development Setup
+### Development Setup
 
 ```bash
 # Clone your fork
 git clone https://github.com/YOUR_USERNAME/engram.git
-cd engram
+cd engram/engram  # Código Rust está em engram/engram/
 
 # Add upstream remote
 git remote add upstream https://github.com/limaronaldo/engram.git
@@ -150,6 +150,8 @@ impl MyStruct { ... }
 mod tests { ... }
 ```
 
+**Nota**: O código Rust está em `engram/engram/src/`, não em `src/` na raiz.
+
 ### Documentation
 
 - Add doc comments to all public items
@@ -208,24 +210,32 @@ mod tests {
 
 ```
 engram/
-├── src/
-│   ├── lib.rs           # Library entry point
-│   ├── types.rs         # Core type definitions
-│   ├── error.rs         # Error types
-│   ├── bin/             # Binary entry points
-│   ├── storage/         # Database layer
-│   ├── search/          # Search functionality
-│   ├── embedding/       # Vector embeddings
-│   ├── sync/            # Cloud synchronization
-│   ├── auth/            # Authentication
-│   ├── intelligence/    # AI features
-│   ├── graph/           # Knowledge graph
-│   ├── realtime/        # WebSocket support
-│   └── mcp/             # MCP protocol
-├── benches/             # Performance benchmarks
+├── engram/              # Código principal Rust (crate: engram-core)
+│   ├── src/
+│   │   ├── lib.rs       # Library entry point
+│   │   ├── main.rs      # Binary entry point (engram-server)
+│   │   ├── types.rs     # Core type definitions
+│   │   ├── error.rs     # Error types
+│   │   ├── storage/     # Database layer
+│   │   ├── search/      # Search functionality
+│   │   ├── embedding/   # Vector embeddings
+│   │   ├── sync/        # Cloud synchronization
+│   │   ├── auth/        # Authentication
+│   │   ├── intelligence/# AI features
+│   │   ├── graph/       # Knowledge graph
+│   │   ├── realtime/    # WebSocket support
+│   │   ├── hooks/       # Lifecycle hooks
+│   │   └── mcp/         # MCP protocol
+│   └── Cargo.toml
+├── sdks/
+│   ├── python/          # Python SDK (async)
+│   └── typescript/      # TypeScript SDK
 ├── tests/               # Integration tests
-└── examples/            # Usage examples
+├── benches/             # Performance benchmarks
+└── README.md
 ```
+
+**Nota**: O código Rust está em `engram/engram/`, não na raiz. Para compilar: `cd engram && cargo build`
 
 ## Getting Help
 

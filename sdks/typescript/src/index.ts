@@ -753,14 +753,16 @@ export class EngramClient {
 
   async temporalContradictions(
     options?: TemporalContradictionsOptions,
-  ): Promise<{ contradictions: Array<{ memoryId: number, conflictingId: number, reason: string }> > {
+  ): Promise<{ contradictions: Array<{ memoryId: number, conflictingId: number, reason: string }> }> {
     const params: Record<string, unknown> = {};
     if (options?.workspace !== undefined) params.workspace = options.workspace;
-    return this.mcpCall("memory_temporal_contradictions", params);
+    return this.mcpCall("memory_temporal_contradictions", params) as Promise<{
+      contradictions: Array<{ memoryId: number; conflictingId: number; reason: string }>;
+    }>;
   }
 
   async temporalEvolve(entity: string): Promise<void> {
-    return this.mcpCall("memory_temporal_evolve", { entity });
+    await this.mcpCall("memory_temporal_evolve", { entity });
   }
 
   async scopeSet(memoryId: number, scopePath: string): Promise<void> {
@@ -768,7 +770,7 @@ export class EngramClient {
       id: memoryId,
       scope_path: scopePath,
     };
-    return this.mcpCall("memory_scope_set", params);
+    await this.mcpCall("memory_scope_set", params);
   }
 
   async scopeGet(memoryId: number): Promise<unknown> {
