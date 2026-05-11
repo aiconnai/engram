@@ -14,6 +14,7 @@ use crate::search::{FuzzyEngine, SearchConfig, SearchResultCache};
 use crate::storage::Storage;
 
 pub mod agent;
+pub mod auto_consolidate;
 pub mod autonomous;
 pub mod compression;
 pub mod context;
@@ -28,6 +29,7 @@ pub mod lifecycle;
 pub mod markdown_export;
 pub mod memory_crud;
 pub mod misc;
+pub mod pending_injections;
 pub mod project_context;
 pub mod quality;
 pub mod retrieval;
@@ -247,6 +249,20 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         // ── Dream Phase ──────────────────────────────────────────────────────
         #[cfg(feature = "dream-phase")]
         "dream_run_now" => dream::dream_run_now(ctx, params),
+
+        // ── Auto-consolidation ────────────────────────────────────────────────
+        "memory_consolidate_batch" => auto_consolidate::memory_consolidate_batch(ctx, params),
+        "memory_consolidation_history" => {
+            auto_consolidate::memory_consolidation_history(ctx, params)
+        }
+
+        // ── Pending injections (cross-session queue) ─────────────────────────
+        "pending_injections_count" => {
+            pending_injections::pending_injections_count(ctx, params)
+        }
+        "pending_injections_cleanup" => {
+            pending_injections::pending_injections_cleanup(ctx, params)
+        }
 
         // ── Summarization & archival ──────────────────────────────────────────
         "memory_summarize" => summarize::memory_summarize(ctx, params),

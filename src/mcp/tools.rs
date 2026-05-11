@@ -1525,6 +1525,61 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         tier: ToolTier::Advanced,
     },
     ToolDef {
+        name: "memory_consolidate_batch",
+        description: "Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories. Defaults to dry-run; returns a structured report of actions taken (or that would be taken).",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "default": "default"},
+                "dry_run": {"type": "boolean", "default": true},
+                "policy": {
+                    "type": "object",
+                    "properties": {
+                        "duplicate_threshold": {"type": "number", "default": 0.92},
+                        "conflict_auto_resolve": {"type": "boolean", "default": false},
+                        "summarize_age_days": {"type": "integer", "default": 90},
+                        "max_actions_per_run": {"type": "integer", "default": 50},
+                        "dry_run": {"type": "boolean", "default": true}
+                    }
+                }
+            }
+        }"#,
+        annotations: ToolAnnotations::destructive(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "memory_consolidation_history",
+        description: "List recent auto-consolidation runs for a workspace (or all workspaces). Newest-first.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string"},
+                "limit": {"type": "integer", "default": 20, "minimum": 1, "maximum": 1000}
+            }
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "pending_injections_count",
+        description: "Count of non-expired payloads queued in pending_injections for a workspace, waiting to be consumed by the next SessionStart.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "default": "default"}
+            }
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "pending_injections_cleanup",
+        description: "Drop every pending_injections row whose expires_at has passed. Idempotent. Returns the count removed.",
+        schema: r#"{"type": "object", "properties": {}}"#,
+        annotations: ToolAnnotations::destructive(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
         name: "memory_archive_old",
         description: "Archive old, low-importance memories by creating summaries. Moves originals to archived state.",
         schema: r#"{
