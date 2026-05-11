@@ -5569,7 +5569,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query version");
-        assert_eq!(version, 38);
+        assert_eq!(version, crate::storage::migrations::SCHEMA_VERSION);
     }
 
     // ========== Advanced Filter Integration Tests (RML-932) ==========

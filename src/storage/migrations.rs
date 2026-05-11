@@ -174,7 +174,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         migrate_v37(conn)?;
     }
 
-    if current_version < SCHEMA_VERSION {
+    if current_version < 38 {
         migrate_v38(conn)?;
     }
 
