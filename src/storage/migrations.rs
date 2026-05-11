@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 36;
+pub const SCHEMA_VERSION: i32 = 37;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -166,8 +166,12 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         migrate_v35(conn)?;
     }
 
-    if current_version < SCHEMA_VERSION {
+    if current_version < 36 {
         migrate_v36(conn)?;
+    }
+
+    if current_version < SCHEMA_VERSION {
+        migrate_v37(conn)?;
     }
 
     Ok(())
@@ -1819,6 +1823,41 @@ fn migrate_v36(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_v37(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v37: Creating consolidation_runs table...");
+
+    conn.execute_batch(
+        r#"
+        -- Audit log of auto-consolidation passes. One row per run regardless
+        -- of how many actions were taken. The `report` column holds the full
+        -- `ConsolidationReport` as JSON for forensic queries; counters are
+        -- denormalised into top-level columns for fast charting and ceiling
+        -- checks.
+        CREATE TABLE IF NOT EXISTS consolidation_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            dry_run INTEGER NOT NULL,
+            duplicates_merged INTEGER NOT NULL DEFAULT 0,
+            conflicts_resolved INTEGER NOT NULL DEFAULT 0,
+            summarized INTEGER NOT NULL DEFAULT 0,
+            skipped INTEGER NOT NULL DEFAULT 0,
+            report TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_consolidation_runs_workspace
+            ON consolidation_runs(workspace, started_at DESC);
+
+        INSERT INTO schema_version (version) VALUES (37);
+        "#,
+    )?;
+
+    tracing::info!("Migration v37 complete: consolidation_runs table created");
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1840,12 +1879,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 36);
+        assert_eq!(version, 37);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 36);
+        assert_eq!(SCHEMA_VERSION, 37);
     }
 
     #[test]
@@ -2000,7 +2039,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 36, "should reach v36 after full migration");
+        assert_eq!(version, 37, "should reach v37 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
