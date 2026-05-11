@@ -322,22 +322,19 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
         None => return json!({"error": "memory_id is required"}),
     };
 
-    // Support both old signals (useful/irrelevant) and new signals (helpful/not_helpful/outdated/conflict)
-    let signal_str = match params.get("signal").and_then(|v| v.as_str()) {
-        Some("useful") | Some("helpful") => "helpful",
-        Some("irrelevant") | Some("not_helpful") => "not_helpful",
-        Some("outdated") => "outdated",
-        Some("conflict") => "conflict",
-        _ => {
-            return json!({"error": "signal must be 'helpful'/'useful', 'not_helpful'/'irrelevant', 'outdated', or 'conflict'"})
-        }
-    };
-
-    let feedback_signal = match signal_str {
-        "helpful" => FeedbackSignal::Useful,
-        "not_helpful" => FeedbackSignal::Irrelevant,
-        _ => FeedbackSignal::Irrelevant, // default for outdated/conflict
-    };
+    // Accept both legacy aliases (helpful/not_helpful) and canonical names
+    // (useful/irrelevant/outdated/conflict). All four canonical signals are
+    // distinct in storage and produce different boost magnitudes downstream.
+    let (feedback_signal, signal_str): (FeedbackSignal, &str) =
+        match params.get("signal").and_then(|v| v.as_str()) {
+            Some("useful") | Some("helpful") => (FeedbackSignal::Useful, "helpful"),
+            Some("irrelevant") | Some("not_helpful") => (FeedbackSignal::Irrelevant, "not_helpful"),
+            Some("outdated") => (FeedbackSignal::Outdated, "outdated"),
+            Some("conflict") => (FeedbackSignal::Conflict, "conflict"),
+            _ => {
+                return json!({"error": "signal must be 'helpful'/'useful', 'not_helpful'/'irrelevant', 'outdated', or 'conflict'"});
+            }
+        };
 
     let rank_position = params
         .get("rank_position")

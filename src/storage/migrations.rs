@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 38;
+pub const SCHEMA_VERSION: i32 = 39;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -176,6 +176,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 38 {
         migrate_v38(conn)?;
+    }
+
+    if current_version < SCHEMA_VERSION {
+        migrate_v39(conn)?;
     }
 
     Ok(())
@@ -1963,12 +1967,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 38);
+        assert_eq!(version, 39);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 38);
+        assert_eq!(SCHEMA_VERSION, 39);
     }
 
     #[test]
@@ -2123,7 +2127,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 38, "should reach v38 after full migration");
+        assert_eq!(version, 39, "should reach v39 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
