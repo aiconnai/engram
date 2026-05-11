@@ -9,6 +9,9 @@
   ],
   "scripts": {
     "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -25,6 +28,8 @@
     "url": "https://github.com/limaronaldo/engram-typescript-sdk"
   },
   "devDependencies": {
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0",
+    "@types/node": "^20.0.0"
   }
 }

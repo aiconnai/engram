@@ -1,0 +1,63 @@
+# Aider Configuration for Engram
+# This file configures how Aider (AI coding assistant) interacts with this project
+
+# Auto-commit settings
+auto-commits: true
+dirty-commits: false
+
+# Commit message conventions
+commit-prompt: |
+  Please write a commit message for the following changes, following Conventional Commits:
+  - feat: new feature
+  - fix: bug fix
+  - docs: documentation changes
+  - test: test updates
+  - refactor: code refactoring
+
+  Changes:
+  {{changes}}
+
+  Commit message:
+
+# Model settings (uncomment to customize)
+# model: gpt-4o
+# edit-format: whole
+
+# Voice coding
+voice-format: wav
+
+# Map tokens (for large context)
+map-tokens: 4096
+
+# File watching
+watch-files:
+  - engram/src/**/*.rs
+  - sdks/python/engram_client/**/*.py
+  - sdks/typescript/src/**/*.ts
+
+# Linting commands
+lint-cmd:
+  - cmd: cd engram && cargo clippy -- -D warnings
+    lint-off: true
+  - cmd: cd engram && cargo fmt --check
+    lint-off: true
+
+# Test commands
+test-cmd:
+  - cmd: cd engram && cargo test
+    lint-off: true
+
+# Project-specific instructions for the AI
+instructions: |
+  This is the Engram project - a Rust-based memory system for AI agents.
+
+  Key points:
+  - Rust code is in engram/engram/ directory
+  - Python SDK is in sdks/python/
+  - TypeScript SDK is in sdks/typescript/
+  - Always run 'cd engram && cargo clippy' before committing Rust changes
+  - Update SCHEMA_VERSION in storage/migrations.rs when changing database schema
+  - Python uses modern type hints (dict[str, Any] not Dict[str, Any])
+  - TypeScript uses TSDoc comments for documentation
+  - Avoid shadowing built-ins in Python (use filter_ not filter)
+  - Check TypeScript syntax carefully for closing braces in complex types

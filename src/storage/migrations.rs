@@ -1567,7 +1567,9 @@ fn migrate_v28(conn: &Connection) -> Result<()> {
 
 /// v29: Sentiment columns + reflections + query_log tables
 fn migrate_v29(conn: &Connection) -> Result<()> {
-    tracing::info!("Migration v29: Adding sentiment columns and creating reflections/query_log tables...");
+    tracing::info!(
+        "Migration v29: Adding sentiment columns and creating reflections/query_log tables..."
+    );
 
     conn.execute_batch(
         r#"
@@ -1600,7 +1602,9 @@ fn migrate_v29(conn: &Connection) -> Result<()> {
 
 /// v30: Coactivation edges + graph conflicts + garden log tables
 fn migrate_v30(conn: &Connection) -> Result<()> {
-    tracing::info!("Migration v30: Creating coactivation_edges, graph_conflicts, and garden_log tables...");
+    tracing::info!(
+        "Migration v30: Creating coactivation_edges, graph_conflicts, and garden_log tables..."
+    );
 
     conn.execute_batch(
         r#"
@@ -1638,7 +1642,9 @@ fn migrate_v30(conn: &Connection) -> Result<()> {
         "#,
     )?;
 
-    tracing::info!("Migration v30 complete: coactivation_edges, graph_conflicts, garden_log created");
+    tracing::info!(
+        "Migration v30 complete: coactivation_edges, graph_conflicts, garden_log created"
+    );
 
     Ok(())
 }
@@ -1713,7 +1719,9 @@ fn migrate_v32(conn: &Connection) -> Result<()> {
 
 /// v33: DuckDB CQRS Graph support with scope_path and graph_entities table
 fn migrate_v33(conn: &Connection) -> Result<()> {
-    tracing::info!("Migration v33: Adding scope_path to temporal_edges and creating graph_entities table...");
+    tracing::info!(
+        "Migration v33: Adding scope_path to temporal_edges and creating graph_entities table..."
+    );
 
     conn.execute_batch(
         r#"
@@ -1743,7 +1751,9 @@ fn migrate_v33(conn: &Connection) -> Result<()> {
 }
 
 fn migrate_v34(conn: &Connection) -> Result<()> {
-    tracing::info!("Migration v34: Adding media_url column to memories table for multimodal support...");
+    tracing::info!(
+        "Migration v34: Adding media_url column to memories table for multimodal support..."
+    );
 
     conn.execute_batch(
         r#"
@@ -1830,12 +1840,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 34);
+        assert_eq!(version, 36);
     }
 
     #[test]
-    fn test_schema_version_constant_is_19() {
-        assert_eq!(SCHEMA_VERSION, 34);
+    fn test_schema_version_constant() {
+        assert_eq!(SCHEMA_VERSION, 36);
     }
 
     #[test]
@@ -1990,7 +2000,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 34, "should reach v34 after full migration");
+        assert_eq!(version, 36, "should reach v36 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn

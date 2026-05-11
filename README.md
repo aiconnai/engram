@@ -57,15 +57,15 @@ engram-cli search "why did we choose postgres"
 
 ---
 
-## Quick Start
+### Quick Start
 
 ```bash
 # Install from crates.io
 cargo install engram-core
 
-# Or from source
+# Or from source (código Rust está em engram/engram/)
 git clone https://github.com/limaronaldo/engram.git
-cd engram && cargo install --path .
+cd engram/engram && cargo install --path .
 
 # Run as MCP server (Claude Code, Cursor, VS Code MCP clients, etc.)
 engram-server --mcp
@@ -73,6 +73,8 @@ engram-server --mcp
 # Or run as HTTP API
 engram-server --http --port 8080
 ```
+
+**Nota**: O código Rust está no diretório `engram/engram/`, não na raiz do repositório.
 
 ---
 
@@ -266,11 +268,11 @@ Ingest and query instruction and policy files using MCP tools:
 
 **Supported patterns:**
 - CLAUDE.md
-- AGENTS.md
+- AGENTS.md (agora com documentação útil para agentes)
 - .cursorrules
 - .github/copilot-instructions.md
-- .aider.conf.yml
-- CONVENTIONS.md, CODING_GUIDELINES.md, etc.
+- .aider.conf.yml (se existir)
+- CONVENTIONS.md, CODING_GUIDELINES.md (se existirem)
 
 ---
 
