@@ -306,9 +306,10 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
 
             // Fetch the actual memories for the new frontier
             for id in &next_frontier {
-                if let Ok(mem) = ctx.storage.with_connection(|conn| {
-                    crate::storage::queries::get_memory(conn, *id)
-                }) {
+                if let Ok(mem) = ctx
+                    .storage
+                    .with_connection(|conn| crate::storage::queries::get_memory(conn, *id))
+                {
                     // Apply timeframe filter to expanded memories too
                     if let Some(cutoff) = time_cutoff {
                         if mem.created_at < cutoff {
@@ -546,6 +547,7 @@ pub fn memory_block_archive(ctx: &HandlerContext, params: Value) -> Value {
 /// - `workspace` (string, optional) — workspace to search in
 /// - `include_types` (array of string, optional) — filter by memory type (e.g. ["note","episodic"])
 pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::intelligence::truncation_engine::{TruncationEngine, TruncationStrategy};
     use crate::search::hybrid_search;
     use crate::types::SearchOptions;
 
@@ -646,50 +648,43 @@ pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value
         });
     }
 
-    // Budget exceeded — proportionally truncate each memory's content.
-    // tokens_per_memory = token_budget / count  → chars_per_content = that * 4 - overhead_chars
-    let count = memories.len();
-    let budget_chars = token_budget * 4;
-    // Reserve chars for header + separators + per-block overhead (type, id, created_at, tags lines)
-    let header_chars = header.len();
-    let separator_chars = "\n\n".len() * (count.saturating_sub(1));
-    let overhead_per_block = 80usize; // conservative estimate for the header line of each block
-    let total_overhead = header_chars + separator_chars + overhead_per_block * count;
-    let available_content_chars = budget_chars.saturating_sub(total_overhead);
-    let chars_per_content = if count > 0 {
-        available_content_chars / count
-    } else {
-        0
-    };
+    // Use TruncationEngine for intelligent truncation
+    let engine =
+        TruncationEngine::with_config(crate::intelligence::truncation_engine::TruncationConfig {
+            max_tokens: token_budget,
+            preserve_recent: 1000,
+            strategy: TruncationStrategy::Smart,
+        });
 
-    let truncated_blocks: Vec<String> = memories
+    // Build per-memory markdown blocks with truncation
+    let blocks: Vec<String> = memories
         .iter()
         .map(|r| {
             let m = &r.memory;
             let tags_str = m.tags.join(", ");
-            let content = if m.content.len() > chars_per_content && chars_per_content > 0 {
-                format!("{}…", safe_truncate(&m.content, chars_per_content))
-            } else {
-                m.content.clone()
-            };
+            // Use TruncationEngine to fit within budget
+            let budget_per = token_budget / memories.len().max(1);
+            let truncated_content = engine.truncate_to_budget(&m.content, budget_per);
             format!(
                 "## [{}] Memory #{}\nCreated: {} | Tags: {}\n\n{}\n\n---",
                 m.memory_type.as_str(),
                 m.id,
                 m.created_at.to_rfc3339(),
                 tags_str,
-                content
+                truncated_content
             )
         })
         .collect();
 
-    let final_prompt = format!("{}{}", header, truncated_blocks.join("\n\n"));
-    let tokens_used = final_prompt.len() / 4;
+    let header = "# Relevant Context\n\n";
+    let final_prompt = format!("{}{}", header, blocks.join("\n\n"));
+    let tokens_used = engine.estimate_tokens(&final_prompt);
 
     json!({
         "prompt": final_prompt,
-        "memory_count": count,
-        "tokens_used": tokens_used
+        "memory_count": memories.len(),
+        "tokens_used": tokens_used,
+        "truncated": tokens_used > token_budget
     })
 }
 
@@ -785,7 +780,7 @@ pub fn memory_observe_tool_use(ctx: &HandlerContext, params: Value) -> Value {
     }
 }
 
-// ── Endless Mode: tool output archival ───────────────────────────────────────
+// ── Endless Mode: tool output archival ───────────────────────────────
 
 /// Archive a tool's full raw output as an Episodic memory and return a compact
 /// summary, solving the O(N²) context window growth problem.
@@ -841,7 +836,10 @@ pub fn memory_archive_tool_output(ctx: &HandlerContext, params: Value) -> Value 
         ..Default::default()
     };
 
-    let archive_memory = match ctx.storage.with_transaction(|conn| create_memory(conn, &input)) {
+    let archive_memory = match ctx
+        .storage
+        .with_transaction(|conn| create_memory(conn, &input))
+    {
         Ok(m) => m,
         Err(e) => return json!({"error": e.to_string()}),
     };
@@ -868,8 +866,7 @@ pub fn memory_archive_tool_output(ctx: &HandlerContext, params: Value) -> Value 
     // Step 3: Compute token estimates.
     let raw_tokens_estimate = raw_output.len() / 4;
     let summary_tokens_estimate = summary.len() / 4;
-    let compression_ratio = summary_tokens_estimate as f64
-        / (raw_tokens_estimate.max(1)) as f64;
+    let compression_ratio = summary_tokens_estimate as f64 / (raw_tokens_estimate.max(1)) as f64;
 
     json!({
         "archive_id": archive_id,
@@ -892,13 +889,13 @@ pub fn memory_get_archived_output(ctx: &HandlerContext, params: Value) -> Value 
         None => return json!({"error": "archive_id is required"}),
     };
 
-    let memory = match ctx.storage.with_connection(|conn| {
-        match get_memory(conn, archive_id) {
+    let memory = match ctx
+        .storage
+        .with_connection(|conn| match get_memory(conn, archive_id) {
             Ok(m) => Ok(Some(m)),
             Err(crate::error::EngramError::NotFound(_)) => Ok(None),
             Err(e) => Err(e),
-        }
-    }) {
+        }) {
         Ok(Some(m)) => m,
         Ok(None) => return json!({"error": "Archive not found", "archive_id": archive_id}),
         Err(e) => return json!({"error": e.to_string()}),
@@ -1065,8 +1062,7 @@ pub fn memory_get_working_memory(ctx: &HandlerContext, params: Value) -> Value {
     // the rest evenly across observations.
     let archive_reserved = archive_section.len() / 4;
     let obs_count = observations.len();
-    let content_budget_chars =
-        (token_budget.saturating_sub(500 + archive_reserved)) * 4;
+    let content_budget_chars = (token_budget.saturating_sub(500 + archive_reserved)) * 4;
     let chars_per_obs = if obs_count > 0 {
         content_budget_chars / obs_count
     } else {
@@ -1076,8 +1072,7 @@ pub fn memory_get_working_memory(ctx: &HandlerContext, params: Value) -> Value {
     // Build markdown.
     let mut md = format!(
         "# Working Memory — Session {}\n\n## Tool Observations ({} total)\n\n",
-        session_id,
-        obs_count
+        session_id, obs_count
     );
 
     for (i, m) in observations.iter().enumerate() {
@@ -1137,12 +1132,12 @@ mod context_tests {
 
     // ── Helper: build a HandlerContext with in-memory storage ──────────────
     fn test_ctx() -> super::super::HandlerContext {
-        use std::sync::Arc;
-        use parking_lot::Mutex;
         use crate::embedding::{create_embedder, EmbeddingCache};
         use crate::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
         use crate::storage::Storage;
         use crate::types::EmbeddingConfig;
+        use parking_lot::Mutex;
+        use std::sync::Arc;
 
         let storage = Storage::open_in_memory().expect("in-memory storage");
         let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
@@ -1161,9 +1156,7 @@ mod context_tests {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new().expect("langfuse runtime"),
-            ),
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         }
     }
 
@@ -1200,23 +1193,36 @@ mod context_tests {
         let ctx = test_ctx();
         seed_memory(&ctx, "Rust is a systems programming language", "note");
 
-        let result = super::memory_build_context(
-            &ctx,
-            serde_json::json!({"query": "Rust programming"}),
-        );
+        let result =
+            super::memory_build_context(&ctx, serde_json::json!({"query": "Rust programming"}));
 
         // Must contain the original fields
         assert!(result.get("prompt").is_some(), "must have prompt");
-        assert!(result.get("token_estimate").is_some(), "must have token_estimate");
-        assert!(result.get("memories_used").is_some(), "must have memories_used");
-        assert!(result.get("total_budget").is_some(), "must have total_budget");
+        assert!(
+            result.get("token_estimate").is_some(),
+            "must have token_estimate"
+        );
+        assert!(
+            result.get("memories_used").is_some(),
+            "must have memories_used"
+        );
+        assert!(
+            result.get("total_budget").is_some(),
+            "must have total_budget"
+        );
 
         // Must contain the new default fields
         assert_eq!(result["depth"], 1, "default depth must be 1");
-        assert_eq!(result["timeframe"], "all", "default timeframe must be 'all'");
+        assert_eq!(
+            result["timeframe"], "all",
+            "default timeframe must be 'all'"
+        );
 
         // Graph should NOT be present when include_graph is false (default)
-        assert!(result.get("graph").is_none(), "graph should not be present by default");
+        assert!(
+            result.get("graph").is_none(),
+            "graph should not be present by default"
+        );
     }
 
     #[test]
@@ -1237,7 +1243,11 @@ mod context_tests {
         let used = result["memories_used"].as_u64().unwrap_or(0);
         // At most 1 memory (the decision one) if search found both
         // Note: search may return 0 results in minimal test FTS setup
-        assert!(used <= 1, "should only include decision-type memories, got {}", used);
+        assert!(
+            used <= 1,
+            "should only include decision-type memories, got {}",
+            used
+        );
     }
 
     #[test]
@@ -1257,7 +1267,10 @@ mod context_tests {
         assert_eq!(result["timeframe"], "1h");
         // Should still find the memory since it was just created
         let used = result["memories_used"].as_u64().unwrap_or(0);
-        assert!(used >= 1, "recently created memory should be found with 1h timeframe");
+        assert!(
+            used >= 1,
+            "recently created memory should be found with 1h timeframe"
+        );
     }
 
     #[test]
@@ -1317,10 +1330,16 @@ mod context_tests {
         );
 
         // Graph key must be present
-        assert!(result.get("graph").is_some(), "graph must be present when include_graph=true");
+        assert!(
+            result.get("graph").is_some(),
+            "graph must be present when include_graph=true"
+        );
         let graph = &result["graph"];
         assert!(graph.get("edges").is_some(), "graph must have edges");
-        assert!(graph.get("node_count").is_some(), "graph must have node_count");
+        assert!(
+            graph.get("node_count").is_some(),
+            "graph must have node_count"
+        );
     }
 
     #[test]
@@ -1363,8 +1382,14 @@ mod context_tests {
         // 😀 = 4 bytes, 'h' starts at byte 4
         // max_bytes=5 should land at the char boundary at byte 4 (before 'h')
         let result = safe_truncate(s, 5);
-        assert!(s.is_char_boundary(result.len()), "result must end on char boundary");
-        assert!(!result.contains('\u{FFFD}'), "must not produce replacement chars");
+        assert!(
+            s.is_char_boundary(result.len()),
+            "result must end on char boundary"
+        );
+        assert!(
+            !result.contains('\u{FFFD}'),
+            "must not produce replacement chars"
+        );
     }
 
     #[test]
