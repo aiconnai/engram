@@ -212,8 +212,18 @@ meilisearch-sdk = { version = "0.32.0", optional = true }
 tonic = { version = "0.12", optional = true, features = ["transport"] }
 prost = { version = "0.13", optional = true }
 
-# ONNX runtime for local neural models (onnx-embed, neural-rerank features)
-ort = { version = "2.0.0-rc.12", optional = true }
+# ONNX runtime for local neural models (onnx-embed, neural-rerank features).
+# Opt out of default features to avoid `tls-native` → ureq+native-tls+openssl,
+# which trips cargo-deny's openssl ban. Use rustls for ORT's runtime download.
+ort = { version = "2.0.0-rc.12", optional = true, default-features = false, features = [
+    "std",
+    "ndarray",
+    "tracing",
+    "download-binaries",
+    "tls-rustls",
+    "copy-dylibs",
+    "api-24",
+] }
 ndarray = { version = "0.16", optional = true }
 
 # TOML config parsing (watcher feature)
