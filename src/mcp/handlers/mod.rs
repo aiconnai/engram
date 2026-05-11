@@ -14,6 +14,7 @@ use crate::search::{FuzzyEngine, SearchConfig, SearchResultCache};
 use crate::storage::Storage;
 
 pub mod agent;
+pub mod auto_consolidate;
 pub mod autonomous;
 pub mod compression;
 pub mod context;
@@ -247,6 +248,13 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         // ── Dream Phase ──────────────────────────────────────────────────────
         #[cfg(feature = "dream-phase")]
         "dream_run_now" => dream::dream_run_now(ctx, params),
+
+        // ── Auto-consolidation ────────────────────────────────────────
+        "memory_consolidate_batch" => auto_consolidate::memory_consolidate_batch(ctx, params),
+        "memory_consolidation_history" => {
+            auto_consolidate::memory_consolidation_history(ctx, params)
+        }
+        "memory_auto_consolidate" => auto_consolidate::memory_auto_consolidate(ctx, params),
 
         // ── Summarization & archival ──────────────────────────────────────────
         "memory_summarize" => summarize::memory_summarize(ctx, params),
