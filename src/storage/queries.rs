@@ -5572,7 +5572,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query version");
-        assert_eq!(version, 37);
+        assert_eq!(version, 38);
     }
 
     // ========== Advanced Filter Integration Tests (RML-932) ==========

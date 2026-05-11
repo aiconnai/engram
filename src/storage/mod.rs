@@ -26,12 +26,14 @@ pub mod clustering;
 mod confidence;
 mod connection;
 pub mod entity_queries;
+pub mod feedback;
 pub mod filter;
 pub mod graph_queries;
 pub mod identity_links;
 pub mod image_storage;
 pub mod memory_blocks;
 mod migrations;
+pub mod pending_injections;
 pub mod queries;
 pub mod scope_grants;
 pub mod scoping;
@@ -49,10 +51,6 @@ pub mod turso_backend;
 pub use agent_registry::{
     deregister_agent, get_agent, get_agents_in_namespace, heartbeat_agent, list_agents,
     register_agent, update_agent_capabilities, Agent, RegisterAgentInput,
-};
-pub use scope_grants::{
-    check_scope_access, grant_scope_access, list_grants_for_agent, revoke_scope_access,
-    ScopeGrant,
 };
 pub use audit::*;
 pub use auto_linker::{
@@ -145,6 +143,9 @@ pub use queries::{
     TagHierarchyNode,
     TagInfo,
     TagValidationResult,
+};
+pub use scope_grants::{
+    check_scope_access, grant_scope_access, list_grants_for_agent, revoke_scope_access, ScopeGrant,
 };
 pub use sqlite_backend::SqliteBackend;
 pub use temporal::{
