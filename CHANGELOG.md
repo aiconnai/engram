@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.20.0] - 2026-05-10
+
+### Added
+
+- **Lifecycle hooks module** (`src/hooks/`, feature: `hooks`) — `HookManager` with register/trigger dispatch and `LifecycleHook` enum (`SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, `SessionEnd`). Handlers are currently stubs; MCP server wiring tracked in #11.
+- **Advanced metadata filter syntax** (RML-932) — `AND`/`OR` combinators and comparison operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `not_contains`, `exists`) for `memory_list` and `memory_search`.
+- **`discover_tools` meta-tool** (T2) — tiered tool filtering so harnesses can fetch only the surface they need; complements the new tool-tier annotations on every `ToolDef` (T1).
+- **`session_land` handoff tool** (T3) + **`session-handoff` MCP prompt** (T4) — structured session handover between agents.
+- **`memory_export_markdown` tool** (T5) — export memories as portable markdown.
+- **`memory_build_context` enhancements** (T6) — `depth` and `timeframe` parameters.
+- **`recent_activity` MCP tool** (T11) — surfaces recently changed memories for session restoration.
+- Documentation for progressive discovery, session handoff, markdown export, and recent_activity (T12).
+
+### Changed
+
+- `misc.rs` decomposed into focused modules (T7–T10).
+
+### Fixed
+
+- Dockerfile updated to `rust:latest` for `edition2024` dependencies.
+- `context_tests::include_types` assertion stabilized.
+- Multimodal review findings from v0.19.0 addressed.
+- RML-932 review findings on advanced metadata filters addressed.
+
+### SDKs
+
+- **Python SDK 0.5.0 (breaking)** — migrated from `httpx.Client` to `httpx.AsyncClient`. All 73 public methods are now `async def` and require `await`. `EngramError` is exported from the package root. JSON-RPC `id` is now a coroutine-safe counter (`itertools.count`). Optional-param guards normalized to `is not None`. Minimum Python bumped to **3.10**.
+- **TypeScript SDK 0.5.0** — added typed response interfaces (`Memory`, `SearchResult`, `SearchResponse`, `Stats`); `federationShare` now calls the correct MCP tool (`memory_federation_share`); `checkAccess` honors the `permission` option; orphaned return-type lines fixed.
+
+### Internal
+
+- New `hooks` Cargo feature flag (default off).
+- Rust benchmark suite documented with performance targets across all six suites (memory ops, search, traversal, community detection, entity extraction, MCP dispatch); `bench_memory_create` rewritten with proper `with_transaction` scoping and `black_box(&input)`; switched to `u32` rand to avoid `i64::MIN` panic.
+
+---
+
 ## [0.19.0] - 2026-03-19
 
 ### Added
