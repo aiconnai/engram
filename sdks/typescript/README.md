@@ -4,7 +4,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-TypeScript client for [Engram Cloud](https://github.com/limaronaldo/engram-cloud) - AI memory infrastructure for agents.
+TypeScript client for [Engram Cloud](https://github.com/aiconnai/engram-cloud) - AI memory infrastructure for agents.
 
 ## Installation
 
@@ -104,8 +104,8 @@ try {
 
 ## Related
 
-- [Engram](https://github.com/limaronaldo/engram) - Core memory engine (Rust)
-- [Engram Cloud](https://github.com/limaronaldo/engram-cloud) - Multi-tenant SaaS gateway
+- [Engram](https://github.com/aiconnai/engram) - Core memory engine (Rust)
+- [Engram Cloud](https://github.com/aiconnai/engram-cloud) - Multi-tenant SaaS gateway
 - [engram-client](https://pypi.org/project/engram-client/) - Python client
 
 ## License

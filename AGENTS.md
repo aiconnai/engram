@@ -3,7 +3,7 @@
 ## Visão Geral
 Engram é um sistema de memória persistente para agentes de IA, construído em Rust. Ele fornece armazenamento, busca híbrida (BM25 + vetores + fuzzy) e grafos de conhecimento através de uma API REST, WebSocket e protocolo MCP (Model Context Protocol).
 
-**Repositório**: https://github.com/limaronaldo/engram  
+**Repositório**: https://github.com/aiconnai/engram  
 **Linguagem Principal**: Rust (com SDKs em Python e TypeScript para integração)  
 **Banco de Dados**: SQLite + WAL (local-first), com sincronização opcional S3/R2
 
@@ -30,7 +30,7 @@ engram/
 ## Como Rodar Localmente
 ```bash
 # Clone o repositório
-git clone https://github.com/limaronaldo/engram.git
+git clone https://github.com/aiconnai/engram.git
 cd engram
 
 # Compile
@@ -66,7 +66,7 @@ cargo build --release
 ## Armadilhas Conhecidas (Gotchas)
 1. **Schema Version Mismatch**: Testes em `storage/migrations.rs` têm versão hardcoded. Ao atualizar schema, atualize também os testes.
 2. **Python Built-ins**: O parâmetro `filter` em `EngramClient.list()` foi renomeado para `filter_` para evitar sombra do built-in.
-4. **TypeScript Syntax**: Verifique cuidadosamente o fechamento de tipos em métodos que retornam objetos complexos (ex: `Promise<{...}>`).
+3. **TypeScript Syntax**: Verifique cuidadosamente o fechamento de tipos em métodos que retornam objetos complexos (ex: `Promise<{...}>`).
 
 ## Ferramentas MCP Disponíveis
 O Engram expõe 155+ ferramentas via MCP. Principais:

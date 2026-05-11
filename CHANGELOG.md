@@ -877,13 +877,13 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 - **0.2.0** - Memora Feature Parity (24 new tools)
 - **0.1.0** - Initial release with full feature set
 
-[0.11.0]: https://github.com/limaronaldo/engram/compare/v0.8.1...v0.11.0
-[0.8.1]: https://github.com/limaronaldo/engram/compare/v0.7.0...v0.8.1
-[0.7.0]: https://github.com/limaronaldo/engram/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/limaronaldo/engram/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/limaronaldo/engram/compare/v0.4.1...v0.5.0
-[0.4.1]: https://github.com/limaronaldo/engram/releases/tag/v0.4.1
-[0.4.0]: https://github.com/limaronaldo/engram/releases/tag/v0.4.0
-[0.3.0]: https://github.com/limaronaldo/engram/releases/tag/v0.3.0
-[0.2.0]: https://github.com/limaronaldo/engram/releases/tag/v0.2.0
-[0.1.0]: https://github.com/limaronaldo/engram/releases/tag/v0.1.0
+[0.11.0]: https://github.com/aiconnai/engram/compare/v0.8.1...v0.11.0
+[0.8.1]: https://github.com/aiconnai/engram/compare/v0.7.0...v0.8.1
+[0.7.0]: https://github.com/aiconnai/engram/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/aiconnai/engram/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/aiconnai/engram/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/aiconnai/engram/releases/tag/v0.4.1
+[0.4.0]: https://github.com/aiconnai/engram/releases/tag/v0.4.0
+[0.3.0]: https://github.com/aiconnai/engram/releases/tag/v0.3.0
+[0.2.0]: https://github.com/aiconnai/engram/releases/tag/v0.2.0
+[0.1.0]: https://github.com/aiconnai/engram/releases/tag/v0.1.0

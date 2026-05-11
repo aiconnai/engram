@@ -25,7 +25,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/limaronaldo/engram-typescript-sdk"
+    "url": "https://github.com/aiconnai/engram-typescript-sdk"
   },
   "devDependencies": {
     "typescript": "^5.3.0",

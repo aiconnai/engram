@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/engram-client)](https://pypi.org/project/engram-client/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Python client for [Engram Cloud](https://github.com/limaronaldo/engram-cloud) - AI memory infrastructure for agents.
+Python client for [Engram Cloud](https://github.com/aiconnai/engram-cloud) - AI memory infrastructure for agents.
 
 ## Installation
 
@@ -85,8 +85,8 @@ with EngramClient(base_url="...", api_key="...", tenant="...") as client:
 
 ## Related
 
-- [Engram](https://github.com/limaronaldo/engram) - Core memory engine (Rust)
-- [Engram Cloud](https://github.com/limaronaldo/engram-cloud) - Multi-tenant SaaS gateway
+- [Engram](https://github.com/aiconnai/engram) - Core memory engine (Rust)
+- [Engram Cloud](https://github.com/aiconnai/engram-cloud) - Multi-tenant SaaS gateway
 - [engram-client](https://www.npmjs.com/package/engram-client) - TypeScript client
 
 ## License

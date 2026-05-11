@@ -29,8 +29,8 @@ openai = ["openai>=1.0.0"]
 llamaindex = ["llama-index-core>=0.11.0"]
 
 [project.urls]
-Homepage = "https://github.com/limaronaldo/engram"
-Repository = "https://github.com/limaronaldo/engram-python-sdk"
+Homepage = "https://github.com/aiconnai/engram"
+Repository = "https://github.com/aiconnai/engram-python-sdk"
 
 [tool.setuptools.packages.find]
 include = ["engram_client*"]
