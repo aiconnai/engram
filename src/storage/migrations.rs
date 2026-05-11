@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 34;
+pub const SCHEMA_VERSION: i32 = 36;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -158,8 +158,16 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         migrate_v33(conn)?;
     }
 
-    if current_version < SCHEMA_VERSION {
+    if current_version < 34 {
         migrate_v34(conn)?;
+    }
+
+    if current_version < 35 {
+        migrate_v35(conn)?;
+    }
+
+    if current_version < SCHEMA_VERSION {
+        migrate_v36(conn)?;
     }
 
     Ok(())
@@ -1749,6 +1757,54 @@ fn migrate_v34(conn: &Connection) -> Result<()> {
     )?;
 
     tracing::info!("Migration v34 complete: media_url column added to memories");
+
+    Ok(())
+}
+
+fn migrate_v35(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v35: Creating dream_runs table...");
+
+    conn.execute_batch(
+        r#"
+        -- Dream Phase: History of background consolidation runs
+        CREATE TABLE IF NOT EXISTS dream_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            report_json TEXT NOT NULL,
+            error_count INTEGER NOT NULL DEFAULT 0,
+            workspace_count INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dream_runs_started ON dream_runs(started_at DESC);
+
+        INSERT INTO schema_version (version) VALUES (35);
+        "#,
+    )?;
+
+    tracing::info!("Migration v35 complete: dream_runs table created");
+
+    Ok(())
+}
+
+fn migrate_v36(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v36: Creating dream_locks table...");
+
+    conn.execute_batch(
+        r#"
+        -- Advisory locks for background processes (Dream Phase)
+        CREATE TABLE IF NOT EXISTS dream_locks (
+            lock_id TEXT PRIMARY KEY,
+            acquired_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            owner_id TEXT NOT NULL
+        );
+
+        INSERT INTO schema_version (version) VALUES (36);
+        "#,
+    )?;
+
+    tracing::info!("Migration v36 complete: dream_locks table created");
 
     Ok(())
 }

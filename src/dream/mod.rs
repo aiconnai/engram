@@ -36,6 +36,13 @@ pub struct DreamConfig {
     pub interval: std::time::Duration,
     /// Consolidation tuning passed down to [`OfflineConsolidator`].
     pub consolidation: ConsolidationConfig,
+    /// Unique ID for this runner instance (used for advisory locks).
+    pub owner_id: String,
+    /// Advisory lock TTL in seconds. Acts as a crash-recovery bound: if the
+    /// holder dies without releasing, the next acquirer can take over after
+    /// this many seconds. Should be a small multiple of the expected pass
+    /// duration. Defaults to 300s (5 min).
+    pub lock_ttl_seconds: u64,
 }
 
 impl Default for DreamConfig {
@@ -43,6 +50,35 @@ impl Default for DreamConfig {
         Self {
             interval: std::time::Duration::from_secs(6 * 60 * 60),
             consolidation: ConsolidationConfig::default(),
+            owner_id: uuid::Uuid::new_v4().to_string(),
+            lock_ttl_seconds: 300,
+        }
+    }
+}
+
+/// Identifier of the system-wide Dream Phase advisory lock.
+const DREAM_LOCK_ID: &str = "dream_phase_all";
+
+/// RAII guard that releases the dream-phase advisory lock on drop —
+/// including on panic-unwind. This is the only way to guarantee the lock
+/// doesn't leak when `consolidate` or any downstream code panics.
+struct DreamLockGuard<'a> {
+    storage: &'a Storage,
+    owner_id: String,
+}
+
+impl<'a> Drop for DreamLockGuard<'a> {
+    fn drop(&mut self) {
+        let res = self.storage.with_transaction(|conn| {
+            crate::storage::queries::release_dream_lock(conn, DREAM_LOCK_ID, &self.owner_id)
+        });
+        if let Err(e) = res {
+            tracing::error!(
+                target = "engram::dream",
+                error = %e,
+                owner_id = %self.owner_id,
+                "Failed to release dream-phase advisory lock — lock may persist until TTL expires"
+            );
         }
     }
 }
@@ -89,19 +125,96 @@ pub fn run_once_workspace(
     config: &DreamConfig,
 ) -> Result<DreamWorkspaceReport> {
     let consolidator = OfflineConsolidator::new(config.consolidation.clone());
-    let report = storage.with_transaction(|conn| consolidator.consolidate(conn, workspace))?;
+    let report = storage.with_transaction(|conn| {
+        let r = consolidator.consolidate(conn, workspace)?;
+
+        if r.groups_found > 0 {
+            let digest_content = format!(
+                "Dream Phase Digest: Consolidated {} memories into {} groups, saving {} tokens.",
+                r.memories_merged, r.groups_found, r.tokens_saved
+            );
+
+            let digest_input = crate::types::CreateMemoryInput {
+                content: digest_content,
+                memory_type: crate::types::MemoryType::Summary,
+                workspace: Some(workspace.to_string()),
+                tags: vec!["dream-digest".to_string(), "distillate".to_string()],
+                importance: Some(0.8),
+                ..Default::default()
+            };
+
+            // Digest emission is best-effort: a failure here should not undo
+            // the consolidation itself. Log so it's observable.
+            if let Err(e) = crate::storage::queries::create_memory(conn, &digest_input) {
+                tracing::warn!(
+                    target = "engram::dream",
+                    workspace = %workspace,
+                    error = %e,
+                    "Failed to emit dream-phase digest memory"
+                );
+            }
+        }
+
+        Ok(r)
+    })?;
     Ok((workspace, report).into())
 }
 
 /// Run a dream pass across every workspace known to storage.
+///
+/// Acquires the system-wide advisory lock first; if another instance holds
+/// it, returns a `DreamReport` with an error entry and no workspaces
+/// processed. The lock is released via [`DreamLockGuard`] on every exit
+/// path, including panic-unwind.
 pub fn run_once_all(storage: &Storage, config: &DreamConfig) -> DreamReport {
     let started_at = Utc::now();
     let mut workspaces = Vec::new();
     let mut errors = Vec::new();
 
-    let workspace_list = storage.with_transaction(crate::storage::queries::list_workspaces);
+    let lock_attempt = storage.with_transaction(|conn| {
+        crate::storage::queries::acquire_dream_lock(
+            conn,
+            DREAM_LOCK_ID,
+            &config.owner_id,
+            config.lock_ttl_seconds,
+        )
+    });
 
-    match workspace_list {
+    let lock_acquired = match lock_attempt {
+        Ok(acquired) => acquired,
+        Err(e) => {
+            tracing::error!(
+                target = "engram::dream",
+                error = %e,
+                "acquire_dream_lock failed"
+            );
+            return DreamReport {
+                started_at,
+                finished_at: Utc::now(),
+                workspaces: Vec::new(),
+                errors: vec![format!("acquire_dream_lock: {}", e)],
+            };
+        }
+    };
+
+    if !lock_acquired {
+        return DreamReport {
+            started_at,
+            finished_at: Utc::now(),
+            workspaces: Vec::new(),
+            errors: vec![
+                "Could not acquire advisory lock (another instance may be running)".to_string(),
+            ],
+        };
+    }
+
+    // From here on, the guard guarantees the lock is released even on panic.
+    let _guard = DreamLockGuard {
+        storage,
+        owner_id: config.owner_id.clone(),
+    };
+
+    match storage.with_transaction(crate::storage::queries::list_workspaces) {
         Ok(list) => {
             for stats in list {
                 match run_once_workspace(storage, &stats.workspace, config) {
@@ -113,19 +226,31 @@ pub fn run_once_all(storage: &Storage, config: &DreamConfig) -> DreamReport {
         Err(e) => errors.push(format!("list_workspaces: {}", e)),
     }
 
-    DreamReport {
+    let report = DreamReport {
         started_at,
         finished_at: Utc::now(),
         workspaces,
         errors,
+    };
+
+    if let Err(e) = storage.with_transaction(|conn| {
+        crate::storage::queries::insert_dream_run(conn, &report)
+    }) {
+        tracing::error!(
+            target = "engram::dream",
+            error = %e,
+            "Failed to persist dream_runs history row"
+        );
     }
+
+    report
 }
 
 /// Spawn a background task that runs [`run_once_all`] every `config.interval`.
 ///
 /// The returned handle keeps the task alive until dropped or the program exits.
-/// For multi-replica deployments, add a DB advisory lock around the inner call;
-/// today only one replica should run this.
+/// The blocking DB work runs inside `tokio::task::spawn_blocking`, so this
+/// works under both the multi-thread and current_thread tokio runtimes.
 pub fn spawn_scheduler(storage: Arc<Storage>, config: DreamConfig) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(config.interval);
@@ -134,7 +259,23 @@ pub fn spawn_scheduler(storage: Arc<Storage>, config: DreamConfig) -> tokio::tas
         ticker.tick().await;
         loop {
             ticker.tick().await;
-            let report = tokio::task::block_in_place(|| run_once_all(&storage, &config));
+            let storage_for_pass = Arc::clone(&storage);
+            let config_for_pass = config.clone();
+            let report = match tokio::task::spawn_blocking(move || {
+                run_once_all(&storage_for_pass, &config_for_pass)
+            })
+            .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::error!(
+                        target = "engram::dream",
+                        error = %e,
+                        "Dream Phase pass panicked"
+                    );
+                    continue;
+                }
+            };
             tracing::info!(
                 target = "engram::dream",
                 workspaces = report.workspaces.len(),

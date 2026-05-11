@@ -18,12 +18,13 @@ pub mod autonomous;
 pub mod compression;
 pub mod context;
 pub mod document_ingest;
-pub mod markdown_export;
+pub mod dream;
 pub mod evolution;
 pub mod graph;
 pub mod handoff;
 pub mod identity;
 pub mod lifecycle;
+pub mod markdown_export;
 pub mod memory_crud;
 pub mod misc;
 pub mod project_context;
@@ -37,16 +38,16 @@ pub mod sync;
 pub mod temporal;
 pub mod workspace;
 
+#[cfg(feature = "agent-portability")]
+pub mod attestation;
+#[cfg(feature = "duckdb-graph")]
+pub mod duckdb_graph;
 #[cfg(feature = "emergent-graph")]
 pub mod emergent_graph;
 #[cfg(feature = "multimodal")]
 pub mod multimodal;
 #[cfg(feature = "agent-portability")]
-pub mod attestation;
-#[cfg(feature = "agent-portability")]
 pub mod snapshot;
-#[cfg(feature = "duckdb-graph")]
-pub mod duckdb_graph;
 
 /// Shared state passed to every tool handler.
 ///
@@ -239,6 +240,9 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
 
         // ── Document ingestion ────────────────────────────────────────────────
         "memory_ingest_document" => document_ingest::ingest_document(ctx, params),
+
+        // ── Dream Phase ──────────────────────────────────────────────────────
+        "dream_run_now" => dream::dream_run_now(ctx, params),
 
         // ── Summarization & archival ──────────────────────────────────────────
         "memory_summarize" => summarize::memory_summarize(ctx, params),
