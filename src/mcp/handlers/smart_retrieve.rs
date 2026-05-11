@@ -114,42 +114,81 @@ pub fn classify(query: &str) -> Vec<Intent> {
 }
 
 /// Extract a numeric memory id from a result entry, regardless of how the
-/// upstream handler shaped it.
+/// upstream handler shaped it. Search entries wrap the row in a `memory`
+/// field; raw memories expose `id` directly; some traversal endpoints use
+/// `memory_id`.
 fn extract_id(entry: &Value) -> Option<i64> {
     entry
         .get("id")
         .or_else(|| entry.get("memory_id"))
+        .or_else(|| entry.get("memory").and_then(|m| m.get("id")))
         .and_then(|v| v.as_i64())
 }
 
-/// Run `memory_search` for the query and pull the result list out of its
-/// JSON envelope. Returns an empty vec on error.
+/// Coerce a handler response into a Vec of result entries.
+///
+/// Engram handlers return one of two shapes: a bare JSON array, or an
+/// object with a list under a well-known key (`results`, `related`,
+/// `memories`). This helper handles both.
+fn extract_list(value: &Value, keys: &[&str]) -> Vec<Value> {
+    if let Some(arr) = value.as_array() {
+        return arr.clone();
+    }
+    for key in keys {
+        if let Some(arr) = value.get(*key).and_then(|v| v.as_array()) {
+            return arr.clone();
+        }
+    }
+    Vec::new()
+}
+
+/// Run `memory_search` for the query and return its results. Empty on error.
 fn call_search(ctx: &HandlerContext, query: &str, limit: u64, workspace: Option<&str>) -> Vec<Value> {
     let mut params = json!({ "query": query, "limit": limit });
     if let Some(ws) = workspace {
         params["workspace"] = json!(ws);
     }
     let resp = search::memory_search(ctx, params);
-    resp.get("results")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default()
+    extract_list(&resp, &["results"])
+}
+
+/// Strip intent-marker phrases (e.g. "related to") that hurt keyword scoring
+/// when the cleaned phrase is forwarded as a plain query.
+fn strip_intent_markers(query: &str) -> String {
+    const MARKERS: &[&str] = &[
+        "related to ",
+        "similar to ",
+        "connected to ",
+        "relacionado a ",
+        "relacionado ao ",
+        "relacionado aos ",
+        "relacionada a ",
+        "relacionadas a ",
+        "similar a ",
+        "ligado a ",
+        "ligados a ",
+        "ligadas a ",
+    ];
+    let lower = query.to_lowercase();
+    for m in MARKERS {
+        if let Some(idx) = lower.find(m) {
+            return query[idx + m.len()..].trim().to_string();
+        }
+    }
+    query.to_string()
 }
 
 /// Run `memory_related` and return its results. Best-effort — empty on error.
 fn call_related(ctx: &HandlerContext, query: &str, limit: u64, workspace: Option<&str>) -> Vec<Value> {
+    let cleaned = strip_intent_markers(query);
     // `memory_related` needs a seed id. We fetch one via search first.
-    let seed = call_search(ctx, query, 1, workspace);
+    let seed = call_search(ctx, &cleaned, 1, workspace);
     let Some(seed_id) = seed.first().and_then(extract_id) else {
         return Vec::new();
     };
     let params = json!({ "id": seed_id, "limit": limit });
     let resp = graph::memory_related(ctx, params);
-    resp.get("related")
-        .or_else(|| resp.get("results"))
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default()
+    extract_list(&resp, &["related", "results"])
 }
 
 /// Run `memory_get_project_context` and surface its memories list.
@@ -157,11 +196,7 @@ fn call_context(ctx: &HandlerContext, workspace: Option<&str>) -> Vec<Value> {
     let workspace = workspace.unwrap_or("default");
     let params = json!({ "workspace": workspace });
     let resp = project_context::get_project_context(ctx, params);
-    resp.get("memories")
-        .or_else(|| resp.get("results"))
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default()
+    extract_list(&resp, &["memories", "results"])
 }
 
 /// Top-level handler: parses params, classifies, dispatches, merges.
@@ -213,8 +248,9 @@ pub fn memory_smart_retrieve(ctx: &HandlerContext, params: Value) -> Value {
         let entries = match intent {
             Intent::Lookup => call_search(ctx, query, limit, workspace),
             Intent::Exploration => {
+                let cleaned = strip_intent_markers(query);
                 let mut combined = call_related(ctx, query, limit, workspace);
-                combined.extend(call_search(ctx, query, limit, workspace));
+                combined.extend(call_search(ctx, &cleaned, limit, workspace));
                 combined
             }
             Intent::Context => call_context(ctx, workspace),
