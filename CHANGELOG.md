@@ -9,6 +9,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.21.0] - 2026-05-10
+
+### Added
+
+- **Lifecycle hooks wired into the MCP server** (#11). `EngramHandler` now
+  carries an `Option<Arc<HookManager>>` and fires `PostToolUse` after every
+  `tools/call` dispatch (populating `tool_name` and `tool_output` in the hook
+  context). `enable_hooks()` registers default handlers for `SessionStart`,
+  `PostToolUse`, `Stop`, `SessionEnd`. Activated by `--features hooks`.
+- **Dream Phase**: periodic background memory consolidation (#12).
+  - New module `engram::dream` (feature `dream-phase`) with `run_once_workspace`,
+    `run_once_all`, and `spawn_scheduler`.
+  - CLI flag `--dream-interval-seconds` (env `ENGRAM_DREAM_INTERVAL`) on
+    `engram-server`; 0 disables, > 0 spawns the scheduler.
+  - MCP tool `dream_run_now` for manual trigger.
+  - Migration v35: `dream_runs` history table.
+  - Migration v36: `dream_locks` table with TTL-based advisory locking.
+  - Digest emission: each successful workspace pass writes a
+    `MemoryType::Summary` tagged `dream-digest`, `distillate` (ready for
+    `SessionStart` hook injection).
+  - `DreamLockGuard` (RAII) guarantees lock release on panic-unwind.
+  - Scheduler uses `tokio::task::spawn_blocking` (runtime-agnostic).
+- **`memory_smart_retrieve` MCP tool** (#13): intent-aware unified
+  retrieval. Classifies the query (Lookup / Exploration / Context / Path)
+  and routes to the matching combination of `memory_search`,
+  `memory_related`, and `memory_get_project_context`, merging by memory id.
+  Returns audit fields `intents_used` and `strategies_called`. Heuristic
+  classifier supports English and Portuguese.
+- **`engram::app_state::AppState`** in the lib as forward infrastructure
+  for handler state migration.
+
+### Fixed
+
+- **Server binary now builds** (#14). The previously broken
+  `src/bin/app_state.rs` (invalid `super::` paths, missing `fn main`) is
+  promoted to `engram::app_state` and `src/bin/server.rs` no longer
+  references the would-be sibling binary as a module. `cargo build`
+  (default features) is clean.
+- Feature-gated residual `crate::dream::*` references in
+  `src/storage/queries.rs::insert_dream_run` and the MCP handler module so
+  `cargo build` succeeds with **and** without `--features dream-phase`.
+
+### Internal
+
+- New Cargo features: `hooks` (lifecycle) and `dream-phase` (consolidation).
+- New lib module: `engram::hooks` (feature-gated).
+- New lib module: `engram::dream` (feature-gated).
+
+---
+
 ## [0.20.0] - 2026-05-10
 
 ### Added
