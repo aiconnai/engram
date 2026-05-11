@@ -21,13 +21,11 @@ use tonic::{Code, Request};
 
 use engram::embedding::{create_embedder, EmbeddingCache};
 use engram::mcp::grpc_transport::proto::mcp_service_client::McpServiceClient;
-use engram::mcp::grpc_transport::proto::{
-    McpRequest as ProtoRequest, SubscribeRequest,
-};
+use engram::mcp::grpc_transport::proto::{McpRequest as ProtoRequest, SubscribeRequest};
 use engram::mcp::grpc_transport::serve_grpc;
 use engram::mcp::{
     get_tool_definitions, handlers, methods, InitializeResult, McpHandler, McpRequest, McpResponse,
-    ToolsCapability, ServerCapabilities, MCP_PROTOCOL_VERSION,
+    ServerCapabilities, ToolsCapability, MCP_PROTOCOL_VERSION,
 };
 use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
 use engram::storage::Storage;
@@ -62,9 +60,7 @@ impl TestHandler {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new().expect("langfuse runtime"),
-            ),
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         };
         Self { storage, ctx }
     }
@@ -77,7 +73,9 @@ impl McpHandler for TestHandler {
                 let result = InitializeResult {
                     protocol_version: MCP_PROTOCOL_VERSION.to_string(),
                     capabilities: ServerCapabilities {
-                        tools: Some(ToolsCapability { list_changed: false }),
+                        tools: Some(ToolsCapability {
+                            list_changed: false,
+                        }),
                         resources: None,
                         prompts: None,
                     },

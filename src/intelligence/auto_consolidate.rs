@@ -53,10 +53,23 @@ impl ConsolidationPolicy {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ConsolidationAction {
-    DuplicateMerged { kept: i64, merged: i64, similarity: f64 },
-    ConflictResolved { memory_id: i64, strategy: String },
-    Summarized { memory_ids: Vec<i64>, summary_id: Option<i64> },
-    Skipped { memory_id: i64, reason: String },
+    DuplicateMerged {
+        kept: i64,
+        merged: i64,
+        similarity: f64,
+    },
+    ConflictResolved {
+        memory_id: i64,
+        strategy: String,
+    },
+    Summarized {
+        memory_ids: Vec<i64>,
+        summary_id: Option<i64>,
+    },
+    Skipped {
+        memory_id: i64,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -96,7 +109,9 @@ pub fn run_consolidation(
     workspace: &str,
     policy: &ConsolidationPolicy,
 ) -> Result<ConsolidationReport> {
-    policy.validate().map_err(crate::error::EngramError::InvalidInput)?;
+    policy
+        .validate()
+        .map_err(crate::error::EngramError::InvalidInput)?;
 
     let started_at = Utc::now();
     let mut actions: Vec<ConsolidationAction> = Vec::new();
@@ -126,131 +141,141 @@ pub fn run_consolidation(
 
     let dup_limit = (policy.max_actions_per_run as i64).max(1);
     let candidates = storage
-        .with_connection(|conn| find_near_duplicates(conn, policy.duplicate_threshold as f32, dup_limit))
+        .with_connection(|conn| {
+            find_near_duplicates(conn, policy.duplicate_threshold as f32, dup_limit)
+        })
         .unwrap_or_default();
 
     for cand in candidates {
-        if action_budget == 0 { break; }
+        if action_budget == 0 {
+            break;
+        }
         let a_id = cand.memory_a_id;
         let b_id = cand.memory_b_id;
-        if !workspace_memory_ids.contains(&a_id) || !workspace_memory_ids.contains(&b_id) { continue; }
+        if !workspace_memory_ids.contains(&a_id) || !workspace_memory_ids.contains(&b_id) {
+            continue;
+        }
         if (cand.similarity_score as f64) < policy.duplicate_threshold {
             actions.push(ConsolidationAction::Skipped {
                 memory_id: a_id,
-                reason: format!("duplicate similarity {:.3} below threshold {:.3}", cand.similarity_score, policy.duplicate_threshold),
+                reason: format!(
+                    "duplicate similarity {:.3} below threshold {:.3}",
+                    cand.similarity_score, policy.duplicate_threshold
+                ),
             });
-/// A periodic auto-consolidation engine that runs inside the Rust server.
-///
-/// This is NOT an AI agent — it's a maintenance loop that periodically
-/// scans memories below a utility threshold and performs deduplication,
-/// summarization, and archival.
-pub struct AutoConsolidator {
-    /// How often the consolidation loop runs (default: 1 hour)
-    pub interval: Duration,
-    /// Utility score threshold below which memories are candidates (default: 0.3)
-    pub utility_threshold: f32,
-    /// Whether auto-consolidation is enabled (default: false)
-    pub enabled: bool,
-    /// Last consolidation report for status queries
-    last_report: Option<ConsolidationReport>,
-}
+            /// A periodic auto-consolidation engine that runs inside the Rust server.
+            ///
+            /// This is NOT an AI agent — it's a maintenance loop that periodically
+            /// scans memories below a utility threshold and performs deduplication,
+            /// summarization, and archival.
+            pub struct AutoConsolidator {
+                /// How often the consolidation loop runs (default: 1 hour)
+                pub interval: Duration,
+                /// Utility score threshold below which memories are candidates (default: 0.3)
+                pub utility_threshold: f32,
+                /// Whether auto-consolidation is enabled (default: false)
+                pub enabled: bool,
+                /// Last consolidation report for status queries
+                last_report: Option<ConsolidationReport>,
+            }
 
-impl Default for AutoConsolidator {
-    fn default() -> Self {
-        Self {
-            interval: Duration::hours(1),
-            utility_threshold: 0.3,
-            enabled: false,
-            last_report: None,
-        }
-    }
-}
-
-impl AutoConsolidator {
-    /// Create a new AutoConsolidator with custom settings
-    pub fn new(interval: Duration, utility_threshold: f32, enabled: bool) -> Self {
-        Self {
-            interval,
-            utility_threshold,
-            enabled,
-            last_report: None,
-        }
-    }
-
-    /// Check if auto-consolidation is enabled
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
-    }
-
-    /// Enable or disable auto-consolidation
-    pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-    }
-
-    /// Set the consolidation interval
-    pub fn set_interval(&mut self, interval: Duration) {
-        self.interval = interval;
-    }
-
-    /// Get the last consolidation report
-    pub fn get_last_report(&self) -> Option<&ConsolidationReport> {
-        self.last_report.as_ref()
-    }
-
-    /// Run one consolidation pass and return a report.
-    pub fn run(&mut self, storage: &Storage) -> Result<ConsolidationReport> {
-        let started_at = Utc::now();
-
-        // Fetch memories with low utility scores
-        let candidates: Vec<crate::types::Memory> = storage.with_connection(|conn| {
-            let opts = ListOptions {
-                limit: Some(100),
-                sort_by: Some(crate::types::SortField::Importance),
-                sort_order: Some(crate::types::SortOrder::Asc),
-                ..Default::default()
-            };
-            let memories = list_memories(conn, &opts)?;
-            Ok(memories
-                .into_iter()
-                .filter(|m| m.importance < self.utility_threshold)
-                .collect())
-        })?;
-
-        let _processed = candidates.len();
-        let mut _summarized = 0usize;
-        let mut _archived = 0usize;
-
-        // Process in batches of 5
-        for chunk in candidates.chunks(5) {
-            // Detect duplicates
-            if let Ok(duplicates) =
-                storage.with_connection(|conn| find_near_duplicates(conn, 0.85, 10))
-            {
-                if !duplicates.is_empty() {
-                    _summarized += 1;
+            impl Default for AutoConsolidator {
+                fn default() -> Self {
+                    Self {
+                        interval: Duration::hours(1),
+                        utility_threshold: 0.3,
+                        enabled: false,
+                        last_report: None,
+                    }
                 }
             }
 
-            // Check for very low scores for archival
-            for memory in chunk {
-                if memory.importance < 0.2 {
-                    _archived += 1;
+            impl AutoConsolidator {
+                /// Create a new AutoConsolidator with custom settings
+                pub fn new(interval: Duration, utility_threshold: f32, enabled: bool) -> Self {
+                    Self {
+                        interval,
+                        utility_threshold,
+                        enabled,
+                        last_report: None,
+                    }
+                }
+
+                /// Check if auto-consolidation is enabled
+                pub fn is_enabled(&self) -> bool {
+                    self.enabled
+                }
+
+                /// Enable or disable auto-consolidation
+                pub fn set_enabled(&mut self, enabled: bool) {
+                    self.enabled = enabled;
+                }
+
+                /// Set the consolidation interval
+                pub fn set_interval(&mut self, interval: Duration) {
+                    self.interval = interval;
+                }
+
+                /// Get the last consolidation report
+                pub fn get_last_report(&self) -> Option<&ConsolidationReport> {
+                    self.last_report.as_ref()
+                }
+
+                /// Run one consolidation pass and return a report.
+                pub fn run(&mut self, storage: &Storage) -> Result<ConsolidationReport> {
+                    let started_at = Utc::now();
+
+                    // Fetch memories with low utility scores
+                    let candidates: Vec<crate::types::Memory> =
+                        storage.with_connection(|conn| {
+                            let opts = ListOptions {
+                                limit: Some(100),
+                                sort_by: Some(crate::types::SortField::Importance),
+                                sort_order: Some(crate::types::SortOrder::Asc),
+                                ..Default::default()
+                            };
+                            let memories = list_memories(conn, &opts)?;
+                            Ok(memories
+                                .into_iter()
+                                .filter(|m| m.importance < self.utility_threshold)
+                                .collect())
+                        })?;
+
+                    let _processed = candidates.len();
+                    let mut _summarized = 0usize;
+                    let mut _archived = 0usize;
+
+                    // Process in batches of 5
+                    for chunk in candidates.chunks(5) {
+                        // Detect duplicates
+                        if let Ok(duplicates) =
+                            storage.with_connection(|conn| find_near_duplicates(conn, 0.85, 10))
+                        {
+                            if !duplicates.is_empty() {
+                                _summarized += 1;
+                            }
+                        }
+
+                        // Check for very low scores for archival
+                        for memory in chunk {
+                            if memory.importance < 0.2 {
+                                _archived += 1;
+                            }
+                        }
+                    }
+
+                    let report = ConsolidationReport {
+                        workspace: "default".to_string(),
+                        started_at,
+                        finished_at: Utc::now(),
+                        dry_run: false,
+                        actions: vec![],
+                    };
+
+                    self.last_report = Some(report.clone());
+                    Ok(report)
                 }
             }
-        }
-
-        let report = ConsolidationReport {
-            workspace: "default".to_string(),
-            started_at,
-            finished_at: Utc::now(),
-            dry_run: false,
-            actions: vec![],
-        };
-
-        self.last_report = Some(report.clone());
-        Ok(report)
-    }
-}
             continue;
         }
         actions.push(ConsolidationAction::DuplicateMerged {
@@ -265,16 +290,23 @@ impl AutoConsolidator {
         let cq_config = ContextQualityConfig::default();
         let scan_budget = policy.max_actions_per_run.min(workspace_memory_ids.len());
         for mid in workspace_memory_ids.iter().copied().take(scan_budget) {
-            if action_budget == 0 { break; }
+            if action_budget == 0 {
+                break;
+            }
             let conflicts = storage
                 .with_connection(|conn| detect_conflicts(conn, mid, &cq_config))
                 .unwrap_or_default();
             for c in conflicts {
-                if action_budget == 0 { break; }
+                if action_budget == 0 {
+                    break;
+                }
                 if !policy.conflict_auto_resolve {
                     actions.push(ConsolidationAction::Skipped {
                         memory_id: c.memory_a_id,
-                        reason: format!("conflict {:?} detected; auto-resolve disabled", c.conflict_type),
+                        reason: format!(
+                            "conflict {:?} detected; auto-resolve disabled",
+                            c.conflict_type
+                        ),
                     });
                     continue;
                 }
@@ -296,16 +328,23 @@ impl AutoConsolidator {
                 ..Default::default()
             };
             let memories = list_memories(conn, &opts)?;
-            Ok(memories.into_iter().filter(|m| {
-                m.created_at < cutoff
-                    && m.importance <= 0.5
-                    && m.access_count < 5
-                    && m.memory_type != MemoryType::Summary
-                    && m.memory_type != MemoryType::Checkpoint
-            }).map(|m| m.id).collect())
+            Ok(memories
+                .into_iter()
+                .filter(|m| {
+                    m.created_at < cutoff
+                        && m.importance <= 0.5
+                        && m.access_count < 5
+                        && m.memory_type != MemoryType::Summary
+                        && m.memory_type != MemoryType::Checkpoint
+                })
+                .map(|m| m.id)
+                .collect())
         })?;
         if !archived.is_empty() {
-            actions.push(ConsolidationAction::Summarized { memory_ids: archived, summary_id: None });
+            actions.push(ConsolidationAction::Summarized {
+                memory_ids: archived,
+                summary_id: None,
+            });
         }
     }
 
@@ -347,7 +386,11 @@ fn persist_report(storage: &Storage, report: &ConsolidationReport) -> Result<()>
     })
 }
 
-pub fn list_history(storage: &Storage, workspace: Option<&str>, limit: i64) -> Result<Vec<ConsolidationReport>> {
+pub fn list_history(
+    storage: &Storage,
+    workspace: Option<&str>,
+    limit: i64,
+) -> Result<Vec<ConsolidationReport>> {
     let limit = limit.clamp(1, 1000);
     storage.with_connection(|conn| {
         let (sql, params): (&str, Vec<rusqlite::types::Value>) = match workspace {
@@ -414,7 +457,13 @@ mod tests {
 
     #[test]
     fn policy_roundtrips_json() {
-        let p = ConsolidationPolicy { duplicate_threshold: 0.95, conflict_auto_resolve: true, summarize_age_days: 30, max_actions_per_run: 10, dry_run: false };
+        let p = ConsolidationPolicy {
+            duplicate_threshold: 0.95,
+            conflict_auto_resolve: true,
+            summarize_age_days: 30,
+            max_actions_per_run: 10,
+            dry_run: false,
+        };
         let s = serde_json::to_string(&p).unwrap();
         assert_eq!(p, serde_json::from_str(&s).unwrap());
     }
@@ -429,10 +478,20 @@ mod tests {
     #[test]
     fn counts_actions_by_variant() {
         let r = ConsolidationReport {
-            workspace: "x".into(), started_at: Utc::now(), finished_at: Utc::now(), dry_run: true,
+            workspace: "x".into(),
+            started_at: Utc::now(),
+            finished_at: Utc::now(),
+            dry_run: true,
             actions: vec![
-                ConsolidationAction::DuplicateMerged { kept: 1, merged: 2, similarity: 0.95 },
-                ConsolidationAction::Skipped { memory_id: 3, reason: "x".into() },
+                ConsolidationAction::DuplicateMerged {
+                    kept: 1,
+                    merged: 2,
+                    similarity: 0.95,
+                },
+                ConsolidationAction::Skipped {
+                    memory_id: 3,
+                    reason: "x".into(),
+                },
             ],
         };
         let c = r.counts();
@@ -450,7 +509,10 @@ mod tests {
     #[test]
     fn invalid_policy_errors() {
         let s = open_storage();
-        let p = ConsolidationPolicy { max_actions_per_run: 0, ..Default::default() };
+        let p = ConsolidationPolicy {
+            max_actions_per_run: 0,
+            ..Default::default()
+        };
         assert!(run_consolidation(&s, "x", &p).is_err());
     }
 
@@ -460,10 +522,32 @@ mod tests {
         let ws = "default";
         mk_memory(&s, "a b c", ws);
         mk_memory(&s, "a b c", ws);
-        let before = s.with_connection(|c| Ok(list_memories(c, &ListOptions { workspace: Some(ws.into()), ..Default::default() })?.len())).unwrap();
+        let before = s
+            .with_connection(|c| {
+                Ok(list_memories(
+                    c,
+                    &ListOptions {
+                        workspace: Some(ws.into()),
+                        ..Default::default()
+                    },
+                )?
+                .len())
+            })
+            .unwrap();
         let r = run_consolidation(&s, ws, &ConsolidationPolicy::default()).unwrap();
         assert!(r.dry_run);
-        let after = s.with_connection(|c| Ok(list_memories(c, &ListOptions { workspace: Some(ws.into()), ..Default::default() })?.len())).unwrap();
+        let after = s
+            .with_connection(|c| {
+                Ok(list_memories(
+                    c,
+                    &ListOptions {
+                        workspace: Some(ws.into()),
+                        ..Default::default()
+                    },
+                )?
+                .len())
+            })
+            .unwrap();
         assert_eq!(before, after);
     }
 
@@ -473,10 +557,16 @@ mod tests {
         let ws = "audit";
         mk_memory(&s, "x", ws);
         run_consolidation(&s, ws, &ConsolidationPolicy::default()).unwrap();
-        let n: i64 = s.with_connection(|c| {
-            c.query_row("SELECT COUNT(*) FROM consolidation_runs WHERE workspace = ?", rusqlite::params![ws], |row| row.get(0))
+        let n: i64 = s
+            .with_connection(|c| {
+                c.query_row(
+                    "SELECT COUNT(*) FROM consolidation_runs WHERE workspace = ?",
+                    rusqlite::params![ws],
+                    |row| row.get(0),
+                )
                 .map_err(crate::error::EngramError::Database)
-        }).unwrap();
+            })
+            .unwrap();
         assert_eq!(n, 1);
         assert_eq!(list_history(&s, Some(ws), 10).unwrap().len(), 1);
     }
@@ -496,7 +586,10 @@ mod tests {
 
     #[test]
     fn action_json_tag() {
-        let a = ConsolidationAction::Summarized { memory_ids: vec![1, 2], summary_id: Some(3) };
+        let a = ConsolidationAction::Summarized {
+            memory_ids: vec![1, 2],
+            summary_id: Some(3),
+        };
         let s = serde_json::to_string(&a).unwrap();
         assert!(s.contains("\"kind\":\"summarized\""));
     }

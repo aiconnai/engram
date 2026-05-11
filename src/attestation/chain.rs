@@ -130,7 +130,10 @@ impl AttestationChain {
                     rusqlite::Error::FromSqlConversionFailure(
                         0,
                         rusqlite::types::Type::Text,
-                        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+                        Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            e.to_string(),
+                        )),
                     )
                 })
             })?;
@@ -216,14 +219,16 @@ impl AttestationChain {
             );
 
             let mut stmt = conn.prepare(&sql)?;
-            let refs: Vec<&dyn rusqlite::ToSql> =
-                param_values.iter().map(|b| b.as_ref()).collect();
+            let refs: Vec<&dyn rusqlite::ToSql> = param_values.iter().map(|b| b.as_ref()).collect();
             let rows = stmt.query_map(refs.as_slice(), |row| {
                 row_to_record(row).map_err(|e| {
                     rusqlite::Error::FromSqlConversionFailure(
                         0,
                         rusqlite::types::Type::Text,
-                        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+                        Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            e.to_string(),
+                        )),
                     )
                 })
             })?;
@@ -437,12 +442,8 @@ mod tests {
     #[test]
     fn test_verify_chain_valid() {
         let chain = test_chain();
-        chain
-            .log_document(b"a", "a.txt", None, &[], None)
-            .unwrap();
-        chain
-            .log_document(b"b", "b.txt", None, &[], None)
-            .unwrap();
+        chain.log_document(b"a", "a.txt", None, &[], None).unwrap();
+        chain.log_document(b"b", "b.txt", None, &[], None).unwrap();
 
         match chain.verify_chain().unwrap() {
             ChainStatus::Valid { record_count } => assert_eq!(record_count, 2),
@@ -507,7 +508,9 @@ mod tests {
 
         let mut records = Vec::new();
         for (content, name) in &docs {
-            let r = chain.log_document(content, name, Some("agent-x"), &[], None).unwrap();
+            let r = chain
+                .log_document(content, name, Some("agent-x"), &[], None)
+                .unwrap();
             records.push(r);
         }
 
@@ -534,21 +537,30 @@ mod tests {
         let storage = Storage::open_in_memory().unwrap();
         let chain = AttestationChain::new(storage.clone());
 
-        chain.log_document(b"first", "first.txt", None, &[], None).unwrap();
-        let r2 = chain.log_document(b"second", "second.txt", None, &[], None).unwrap();
+        chain
+            .log_document(b"first", "first.txt", None, &[], None)
+            .unwrap();
+        let r2 = chain
+            .log_document(b"second", "second.txt", None, &[], None)
+            .unwrap();
 
         // Chain is valid before tamper
-        assert!(matches!(chain.verify_chain().unwrap(), ChainStatus::Valid { .. }));
+        assert!(matches!(
+            chain.verify_chain().unwrap(),
+            ChainStatus::Valid { .. }
+        ));
 
         // Directly modify the record_hash of the second record in the DB
         let r2_id = r2.id.unwrap();
-        storage.with_transaction(|conn| {
-            conn.execute(
-                "UPDATE attestation_log SET record_hash = 'sha256:0000tampered' WHERE id = ?1",
-                rusqlite::params![r2_id],
-            )?;
-            Ok(())
-        }).expect("tamper record");
+        storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "UPDATE attestation_log SET record_hash = 'sha256:0000tampered' WHERE id = ?1",
+                    rusqlite::params![r2_id],
+                )?;
+                Ok(())
+            })
+            .expect("tamper record");
 
         // Chain should now be broken
         match chain.verify_chain().unwrap() {

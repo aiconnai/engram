@@ -183,10 +183,7 @@ fn main() {
                 "Original memories: {} characters",
                 memories.iter().map(|m| m.content.len()).sum::<usize>()
             );
-            println!(
-                "Optimized context: {} characters",
-                prepared.context.len()
-            );
+            println!("Optimized context: {} characters", prepared.context.len());
         }
         Err(e) => {
             eprintln!("Error preparing context: {}", e);

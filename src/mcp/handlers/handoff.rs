@@ -243,9 +243,7 @@ mod tests {
             json!({"content": "Fix search ranking bug", "memory_type": "issue"}),
             json!({"content": "Add integration tests", "memory_type": "todo"}),
         ];
-        let decisions = vec![
-            json!({"content": "Use SQLite FTS5 for full-text search"}),
-        ];
+        let decisions = vec![json!({"content": "Use SQLite FTS5 for full-text search"})];
         let hints = vec![
             "Continue with graph traversal optimization".to_string(),
             "Review PR #42".to_string(),
@@ -277,14 +275,7 @@ mod tests {
 
     #[test]
     fn test_build_bootstrap_prompt_empty() {
-        let prompt = build_bootstrap_prompt(
-            "sess-empty",
-            "work",
-            &None,
-            &[],
-            &[],
-            &[],
-        );
+        let prompt = build_bootstrap_prompt("sess-empty", "work", &None, &[], &[], &[]);
 
         assert!(prompt.contains("sess-empty"));
         assert!(!prompt.contains("Previous Session Summary"));
@@ -298,18 +289,9 @@ mod tests {
     #[test]
     fn test_build_bootstrap_prompt_truncates_long_content() {
         let long_content = "x".repeat(300);
-        let open_items = vec![
-            json!({"content": long_content, "memory_type": "todo"}),
-        ];
+        let open_items = vec![json!({"content": long_content, "memory_type": "todo"})];
 
-        let prompt = build_bootstrap_prompt(
-            "sess-long",
-            "default",
-            &None,
-            &open_items,
-            &[],
-            &[],
-        );
+        let prompt = build_bootstrap_prompt("sess-long", "default", &None, &open_items, &[], &[]);
 
         // Content should be truncated to 200 chars
         assert!(!prompt.contains(&"x".repeat(300)));

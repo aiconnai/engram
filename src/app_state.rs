@@ -3,9 +3,9 @@
 //! Wraps storage, embedder, search engine, realtime broadcaster, and
 //! (when the `hooks` feature is enabled) the lifecycle `HookManager`.
 
+use crate::embedding::{Embedder, EmbeddingCache};
 #[cfg(feature = "hooks")]
 use crate::hooks::{HookContext, HookManager, HookResult, LifecycleHook};
-use crate::embedding::{Embedder, EmbeddingCache};
 use crate::realtime::RealtimeManager;
 #[cfg(feature = "meilisearch")]
 use crate::search::MeilisearchIndexer;

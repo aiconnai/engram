@@ -331,7 +331,10 @@ impl MemoryType {
 
     /// Returns true if this type is a multimodal (media) memory
     pub fn is_multimodal(&self) -> bool {
-        matches!(self, MemoryType::Image | MemoryType::Audio | MemoryType::Video)
+        matches!(
+            self,
+            MemoryType::Image | MemoryType::Audio | MemoryType::Video
+        )
     }
 }
 

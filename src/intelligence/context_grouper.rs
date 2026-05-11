@@ -76,8 +76,8 @@ impl ContextGrouper {
     fn extract_topic(&self, content: &str) -> String {
         const STOPWORDS: &[&str] = &[
             "the", "and", "for", "with", "that", "this", "user", "from", "into", "have", "has",
-            "was", "were", "are", "but", "not", "you", "your", "our", "their", "his", "her",
-            "its", "about",
+            "was", "were", "are", "but", "not", "you", "your", "our", "their", "his", "her", "its",
+            "about",
         ];
 
         let cleaned: String = content

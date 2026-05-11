@@ -24,11 +24,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-use crate::intelligence::consolidation_offline::{
-    ConsolidationConfig, ConsolidationReport, OfflineConsolidator,
-};
 use crate::intelligence::auto_consolidate::{
     run_consolidation, ConsolidationCounts, ConsolidationPolicy,
+};
+use crate::intelligence::consolidation_offline::{
+    ConsolidationConfig, ConsolidationReport, OfflineConsolidator,
 };
 use crate::storage::Storage;
 
@@ -283,9 +283,9 @@ pub fn run_once_all(storage: &Storage, config: &DreamConfig) -> DreamReport {
         errors,
     };
 
-    if let Err(e) = storage.with_transaction(|conn| {
-        crate::storage::queries::insert_dream_run(conn, &report)
-    }) {
+    if let Err(e) =
+        storage.with_transaction(|conn| crate::storage::queries::insert_dream_run(conn, &report))
+    {
         tracing::error!(
             target = "engram::dream",
             error = %e,

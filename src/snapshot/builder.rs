@@ -307,7 +307,7 @@ impl SnapshotBuilder {
                 .map(|id| id as &dyn rusqlite::ToSql)
                 .collect();
 
-            use crate::intelligence::{EntityType, Entity};
+            use crate::intelligence::{Entity, EntityType};
             use std::collections::HashMap;
 
             let entities: Vec<Entity> = stmt
@@ -438,8 +438,8 @@ impl SnapshotBuilder {
         let file = std::fs::File::create(output_path)?;
         let mut zip = zip::ZipWriter::new(file);
 
-        let options =
-            zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = zip::write::FileOptions::<()>::default()
+            .compression_method(zip::CompressionMethod::Deflated);
 
         // manifest.json
         zip.start_file("manifest.json", options)
@@ -478,7 +478,14 @@ impl SnapshotBuilder {
     }
 
     /// Collect and prepare all data, returning manifest + content
-    fn prepare(&self) -> Result<(SnapshotManifest, Vec<Memory>, Vec<Entity>, Vec<SnapshotEdge>)> {
+    fn prepare(
+        &self,
+    ) -> Result<(
+        SnapshotManifest,
+        Vec<Memory>,
+        Vec<Entity>,
+        Vec<SnapshotEdge>,
+    )> {
         let memories = self.query_memories()?;
         let memory_ids: Vec<i64> = memories.iter().map(|m| m.id).collect();
 
@@ -536,19 +543,23 @@ impl SnapshotBuilder {
             let opts = zip::write::FileOptions::<()>::default()
                 .compression_method(zip::CompressionMethod::Deflated);
 
-            inner_zip.start_file("memories.json", opts)
+            inner_zip
+                .start_file("memories.json", opts)
                 .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
             inner_zip.write_all(serde_json::to_string_pretty(&memories)?.as_bytes())?;
 
-            inner_zip.start_file("entities.json", opts)
+            inner_zip
+                .start_file("entities.json", opts)
                 .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
             inner_zip.write_all(serde_json::to_string_pretty(&entities)?.as_bytes())?;
 
-            inner_zip.start_file("graph_edges.json", opts)
+            inner_zip
+                .start_file("graph_edges.json", opts)
                 .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
             inner_zip.write_all(serde_json::to_string_pretty(&edges)?.as_bytes())?;
 
-            inner_zip.finish()
+            inner_zip
+                .finish()
                 .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
         }
 
@@ -560,19 +571,23 @@ impl SnapshotBuilder {
         let opts = zip::write::FileOptions::<()>::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
-        outer_zip.start_file("manifest.json", opts)
+        outer_zip
+            .start_file("manifest.json", opts)
             .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
         outer_zip.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
 
-        outer_zip.start_file("payload.enc", opts)
+        outer_zip
+            .start_file("payload.enc", opts)
             .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
         outer_zip.write_all(&encrypted)?;
 
-        outer_zip.start_file("README.md", opts)
+        outer_zip
+            .start_file("README.md", opts)
             .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
         outer_zip.write_all(Self::generate_readme(&manifest).as_bytes())?;
 
-        outer_zip.finish()
+        outer_zip
+            .finish()
             .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
 
         Ok(manifest)
@@ -582,7 +597,11 @@ impl SnapshotBuilder {
     ///
     /// The signature is stored as `manifest.sig` (hex-encoded) alongside
     /// the manifest in the archive.
-    pub fn build_signed(&self, output_path: &Path, secret_key: &[u8; 32]) -> Result<SnapshotManifest> {
+    pub fn build_signed(
+        &self,
+        output_path: &Path,
+        secret_key: &[u8; 32],
+    ) -> Result<SnapshotManifest> {
         let (mut manifest, memories, entities, edges) = self.prepare()?;
         manifest.signed = true;
 

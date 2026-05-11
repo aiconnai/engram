@@ -174,10 +174,7 @@ fn query_workspace_memories(
 }
 
 /// Build a map of memory_id -> [(related_id, relation_type)].
-fn build_related_map(
-    ctx: &HandlerContext,
-    memory_ids: &[i64],
-) -> HashMap<i64, Vec<(i64, String)>> {
+fn build_related_map(ctx: &HandlerContext, memory_ids: &[i64]) -> HashMap<i64, Vec<(i64, String)>> {
     let mut map: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
 
     for &id in memory_ids {
@@ -216,23 +213,14 @@ fn format_memory_markdown(
         .get("memory_type")
         .and_then(|v| v.as_str())
         .unwrap_or("note");
-    let content = mem
-        .get("content")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let tags_str = mem
-        .get("tags")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let content = mem.get("content").and_then(|v| v.as_str()).unwrap_or("");
+    let tags_str = mem.get("tags").and_then(|v| v.as_str()).unwrap_or("");
     let importance = mem.get("importance").and_then(|v| v.as_f64());
     let tier = mem
         .get("tier")
         .and_then(|v| v.as_str())
         .unwrap_or("permanent");
-    let created = mem
-        .get("created_at")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let created = mem.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
     let updated = mem.get("updated_at").and_then(|v| v.as_str());
 
     let tags_vec = parse_tags(tags_str);
@@ -311,20 +299,14 @@ fn build_index_markdown(
             .get("memory_type")
             .and_then(|v| v.as_str())
             .unwrap_or("note");
-        let content = mem
-            .get("content")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let content = mem.get("content").and_then(|v| v.as_str()).unwrap_or("");
         let title: String = content
             .chars()
             .take(60)
             .collect::<String>()
             .replace('|', "\\|")
             .replace('\n', " ");
-        let tags_str = mem
-            .get("tags")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let tags_str = mem.get("tags").and_then(|v| v.as_str()).unwrap_or("");
         let filename = id_to_filename.get(&id).cloned().unwrap_or_default();
         index.push_str(&format!(
             "| {} | {} | [{}]({}/{}.md) | {} |\n",
@@ -463,10 +445,7 @@ mod tests {
 
     #[test]
     fn test_parse_tags_json_array() {
-        assert_eq!(
-            parse_tags(r#"["alpha","beta"]"#),
-            vec!["alpha", "beta"]
-        );
+        assert_eq!(parse_tags(r#"["alpha","beta"]"#), vec!["alpha", "beta"]);
     }
 
     // ── format_memory_markdown ─────────────────────────────────────────

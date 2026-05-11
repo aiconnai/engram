@@ -71,11 +71,7 @@ fn insert_edge(
 
 /// Build a unique temp-file path for each test.
 fn tmp_path(label: &str) -> String {
-    format!(
-        "/tmp/engram_integ_{}_{}.db",
-        label,
-        std::process::id()
-    )
+    format!("/tmp/engram_integ_{}_{}.db", label, std::process::id())
 }
 
 fn cleanup(path: &str) {
@@ -108,7 +104,11 @@ fn test_cqrs_write_sqlite_read_duckdb() {
         .snapshot_at("global", "2024-06-01")
         .expect("snapshot_at should succeed");
 
-    assert_eq!(edges.len(), 3, "all three edges should be visible via DuckDB");
+    assert_eq!(
+        edges.len(),
+        3,
+        "all three edges should be visible via DuckDB"
+    );
 
     let relations: Vec<&str> = edges.iter().map(|e| e.relation.as_str()).collect();
     assert!(relations.contains(&"knows"), "edge 'knows' missing");
@@ -119,9 +119,15 @@ fn test_cqrs_write_sqlite_read_duckdb() {
     let knows_edge = edges.iter().find(|e| e.relation == "knows").unwrap();
     assert_eq!(knows_edge.from_id, 1);
     assert_eq!(knows_edge.to_id, 2);
-    assert!((knows_edge.confidence - 0.9_f32).abs() < 0.001, "confidence mismatch");
+    assert!(
+        (knows_edge.confidence - 0.9_f32).abs() < 0.001,
+        "confidence mismatch"
+    );
     assert_eq!(knows_edge.scope_path, "global");
-    assert!(knows_edge.valid_to.is_none(), "open edge should have valid_to = None");
+    assert!(
+        knows_edge.valid_to.is_none(),
+        "open edge should have valid_to = None"
+    );
 
     cleanup(&path);
 }
@@ -142,15 +148,60 @@ fn test_scope_isolation() {
         let conn = setup_test_db(&path);
 
         // Org-A edges (should be visible when scoping to global/org_a).
-        insert_edge(&conn, 10, 11, "member_of", "2024-01-01", None, 1.0, "global/org_a/user_1");
-        insert_edge(&conn, 11, 12, "reports_to", "2024-01-01", None, 1.0, "global/org_a");
+        insert_edge(
+            &conn,
+            10,
+            11,
+            "member_of",
+            "2024-01-01",
+            None,
+            1.0,
+            "global/org_a/user_1",
+        );
+        insert_edge(
+            &conn,
+            11,
+            12,
+            "reports_to",
+            "2024-01-01",
+            None,
+            1.0,
+            "global/org_a",
+        );
 
         // Org-B edges (must NOT appear under global/org_a queries).
-        insert_edge(&conn, 20, 21, "member_of", "2024-01-01", None, 1.0, "global/org_b/user_2");
-        insert_edge(&conn, 21, 22, "reports_to", "2024-01-01", None, 1.0, "global/org_b");
+        insert_edge(
+            &conn,
+            20,
+            21,
+            "member_of",
+            "2024-01-01",
+            None,
+            1.0,
+            "global/org_b/user_2",
+        );
+        insert_edge(
+            &conn,
+            21,
+            22,
+            "reports_to",
+            "2024-01-01",
+            None,
+            1.0,
+            "global/org_b",
+        );
 
         // Root scope edge (also must NOT appear — LIKE 'global/org_a%' won't match 'global').
-        insert_edge(&conn, 30, 31, "root_link", "2024-01-01", None, 1.0, "global");
+        insert_edge(
+            &conn,
+            30,
+            31,
+            "root_link",
+            "2024-01-01",
+            None,
+            1.0,
+            "global",
+        );
     }
 
     let graph = TemporalGraph::new(&path).expect("TemporalGraph::new");
@@ -164,7 +215,10 @@ fn test_scope_isolation() {
         org_a_edges.len(),
         2,
         "only the two org_a edges should be returned; got {:?}",
-        org_a_edges.iter().map(|e| &e.scope_path).collect::<Vec<_>>()
+        org_a_edges
+            .iter()
+            .map(|e| &e.scope_path)
+            .collect::<Vec<_>>()
     );
 
     for edge in &org_a_edges {
@@ -207,9 +261,27 @@ fn test_temporal_snapshot_correctness() {
         let conn = setup_test_db(&path);
 
         // Edge A: closed window 2023-Q1.
-        insert_edge(&conn, 1, 2, "alpha", "2023-01-01", Some("2023-03-31"), 1.0, "global");
+        insert_edge(
+            &conn,
+            1,
+            2,
+            "alpha",
+            "2023-01-01",
+            Some("2023-03-31"),
+            1.0,
+            "global",
+        );
         // Edge B: closed window 2023-Q2.
-        insert_edge(&conn, 2, 3, "beta", "2023-04-01", Some("2023-06-30"), 1.0, "global");
+        insert_edge(
+            &conn,
+            2,
+            3,
+            "beta",
+            "2023-04-01",
+            Some("2023-06-30"),
+            1.0,
+            "global",
+        );
         // Edge C: starts 2023-07-01, still open.
         insert_edge(&conn, 3, 4, "gamma", "2023-07-01", None, 1.0, "global");
         // Edge D: starts in the future relative to our queries.
@@ -234,8 +306,14 @@ fn test_temporal_snapshot_correctness() {
     assert_eq!(snap_aug[0].relation, "gamma");
 
     // At 2025-06-01: edges C and D both active.
-    let snap_2025 = graph.snapshot_at("global", "2025-06-01").expect("snap 2025");
-    assert_eq!(snap_2025.len(), 2, "both 'gamma' and 'delta' active in mid-2025");
+    let snap_2025 = graph
+        .snapshot_at("global", "2025-06-01")
+        .expect("snap 2025");
+    assert_eq!(
+        snap_2025.len(),
+        2,
+        "both 'gamma' and 'delta' active in mid-2025"
+    );
     let rels_2025: Vec<&str> = snap_2025.iter().map(|e| e.relation.as_str()).collect();
     assert!(rels_2025.contains(&"gamma"));
     assert!(rels_2025.contains(&"delta"));
@@ -344,8 +422,26 @@ fn test_refresh_picks_up_new_writes() {
     assert_eq!(before.len(), 0, "no edges should be visible before insert");
 
     // Now write new edges via the still-open SQLite connection.
-    insert_edge(&conn, 100, 101, "new_edge_a", "2024-01-01", None, 0.9, "global");
-    insert_edge(&conn, 101, 102, "new_edge_b", "2024-01-01", None, 0.8, "global");
+    insert_edge(
+        &conn,
+        100,
+        101,
+        "new_edge_a",
+        "2024-01-01",
+        None,
+        0.9,
+        "global",
+    );
+    insert_edge(
+        &conn,
+        101,
+        102,
+        "new_edge_b",
+        "2024-01-01",
+        None,
+        0.8,
+        "global",
+    );
     // Drop conn to ensure WAL is flushed before DuckDB re-attaches.
     drop(conn);
 
@@ -364,8 +460,14 @@ fn test_refresh_picks_up_new_writes() {
     );
 
     let rels: Vec<&str> = after.iter().map(|e| e.relation.as_str()).collect();
-    assert!(rels.contains(&"new_edge_a"), "'new_edge_a' not found after refresh");
-    assert!(rels.contains(&"new_edge_b"), "'new_edge_b' not found after refresh");
+    assert!(
+        rels.contains(&"new_edge_a"),
+        "'new_edge_a' not found after refresh"
+    );
+    assert!(
+        rels.contains(&"new_edge_b"),
+        "'new_edge_b' not found after refresh"
+    );
 
     cleanup(&path);
 }
@@ -400,7 +502,16 @@ fn test_graph_diff_between_timestamps() {
         );
 
         // Edge starting after t1: should appear as added at t2.
-        insert_edge(&conn, 2, 3, "added_later", "2024-06-01", None, 0.5, "global");
+        insert_edge(
+            &conn,
+            2,
+            3,
+            "added_later",
+            "2024-06-01",
+            None,
+            0.5,
+            "global",
+        );
 
         // Edge not yet started at either snapshot: invisible at both.
         insert_edge(&conn, 3, 4, "future", "2025-01-01", None, 1.0, "global");
@@ -431,17 +542,19 @@ fn test_graph_diff_between_timestamps() {
     assert_eq!(diff.removed[0].relation, "expired");
 
     // No edges changed (stable edge has same confidence at both times).
-    assert_eq!(
-        diff.changed.len(),
-        0,
-        "no edges should be marked changed"
-    );
+    assert_eq!(diff.changed.len(), 0, "no edges should be marked changed");
 
     // Verify the stable edge is in neither added nor removed sets.
     let added_rels: Vec<&str> = diff.added.iter().map(|e| e.relation.as_str()).collect();
     let removed_rels: Vec<&str> = diff.removed.iter().map(|e| e.relation.as_str()).collect();
-    assert!(!added_rels.contains(&"stable"), "'stable' must not appear in added");
-    assert!(!removed_rels.contains(&"stable"), "'stable' must not appear in removed");
+    assert!(
+        !added_rels.contains(&"stable"),
+        "'stable' must not appear in added"
+    );
+    assert!(
+        !removed_rels.contains(&"stable"),
+        "'stable' must not appear in removed"
+    );
 
     cleanup(&path);
 }

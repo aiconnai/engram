@@ -140,8 +140,8 @@ impl SessionEndHandler {
 
 /// Build a stateless handler suitable for tests and code paths that do
 /// not (yet) want cross-session injection wired up.
-pub fn create_handler(
-) -> impl Fn(LifecycleHook, &HookContext) -> Result<HookResult> + Send + Sync {
+pub fn create_handler() -> impl Fn(LifecycleHook, &HookContext) -> Result<HookResult> + Send + Sync
+{
     move |hook, context| SessionEndHandler::default().handle(hook, context)
 }
 

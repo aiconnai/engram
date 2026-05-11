@@ -774,10 +774,7 @@ fn test_recent_activity_returns_activities_field() {
         "Result must have 'activities' array, got: {}",
         data
     );
-    assert!(
-        data["count"].is_number(),
-        "Result must have 'count' field"
-    );
+    assert!(data["count"].is_number(), "Result must have 'count' field");
     assert!(
         data["timeframe"].is_string(),
         "Result must have 'timeframe' field"
@@ -792,10 +789,22 @@ fn test_recent_activity_returns_activities_field() {
     // Verify activity shape
     let activity = &activities[0];
     assert!(activity["id"].is_number(), "Activity must have 'id'");
-    assert!(activity["preview"].is_string(), "Activity must have 'preview'");
-    assert!(activity["memory_type"].is_string(), "Activity must have 'memory_type'");
-    assert!(activity["workspace"].is_string(), "Activity must have 'workspace'");
-    assert!(activity["created_at"].is_string(), "Activity must have 'created_at'");
+    assert!(
+        activity["preview"].is_string(),
+        "Activity must have 'preview'"
+    );
+    assert!(
+        activity["memory_type"].is_string(),
+        "Activity must have 'memory_type'"
+    );
+    assert!(
+        activity["workspace"].is_string(),
+        "Activity must have 'workspace'"
+    );
+    assert!(
+        activity["created_at"].is_string(),
+        "Activity must have 'created_at'"
+    );
 }
 
 #[test]
@@ -829,7 +838,9 @@ fn test_recent_activity_timeframe_1h() {
     assert!(resp.error.is_none(), "Expected no error: {:?}", resp.error);
 
     let result = resp.result.expect("Expected result");
-    let content = result["content"].as_array().expect("Expected content array");
+    let content = result["content"]
+        .as_array()
+        .expect("Expected content array");
     let text = content[0]["text"].as_str().expect("Expected text");
     let data: Value = serde_json::from_str(text).unwrap();
 
@@ -838,10 +849,7 @@ fn test_recent_activity_timeframe_1h() {
         Some("1h"),
         "Timeframe should echo '1h'"
     );
-    assert!(
-        data["activities"].is_array(),
-        "Must have activities array"
-    );
+    assert!(data["activities"].is_array(), "Must have activities array");
 }
 
 #[test]
@@ -878,7 +886,9 @@ fn test_recent_activity_limit_enforced() {
     assert!(resp.error.is_none(), "Expected no error: {:?}", resp.error);
 
     let result = resp.result.expect("Expected result");
-    let content = result["content"].as_array().expect("Expected content array");
+    let content = result["content"]
+        .as_array()
+        .expect("Expected content array");
     let text = content[0]["text"].as_str().expect("Expected text");
     let data: Value = serde_json::from_str(text).unwrap();
 
@@ -920,7 +930,9 @@ fn test_recent_activity_preview_truncated_at_100_chars() {
 
     let resp = handler.handle_request(req);
     let result = resp.result.expect("Expected result");
-    let content = result["content"].as_array().expect("Expected content array");
+    let content = result["content"]
+        .as_array()
+        .expect("Expected content array");
     let text = content[0]["text"].as_str().expect("Expected text");
     let data: Value = serde_json::from_str(text).unwrap();
 

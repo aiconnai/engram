@@ -1130,6 +1130,72 @@ pub fn memory_block_history(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+// ── RTK-inspired context preparation ──────────────────────────────────────────
+
+/// Prepare optimized context for an LLM using the RTK-inspired pipeline.
+///
+/// Pipeline: hybrid search → relevance filter → grouping → token-budget
+/// truncation. Returns the assembled context string plus metadata about
+/// token usage and group count.
+///
+/// Params:
+/// - `query` (string, required) — search query to retrieve memories for
+/// - `budget` (u64, optional, default: 4000) — token budget for the context
+/// - `workspace` (string, optional) — workspace filter
+pub fn memory_prepare_context(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::intelligence::integration_orchestrator::IntegrationOrchestrator;
+    use crate::search::hybrid_search;
+    use crate::types::SearchOptions;
+
+    let query = match params.get("query").and_then(|v| v.as_str()) {
+        Some(q) => q.to_string(),
+        None => return json!({"error": "query is required"}),
+    };
+
+    let budget = params
+        .get("budget")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(4000) as usize;
+
+    let search_opts = SearchOptions {
+        workspace: params
+            .get("workspace")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        limit: Some(50),
+        ..Default::default()
+    };
+
+    let query_embedding = ctx.embedder.embed(&query).ok();
+    let embedding_ref = query_embedding.as_deref();
+
+    let search_result = ctx.storage.with_connection(|conn| {
+        hybrid_search(
+            conn,
+            &query,
+            embedding_ref,
+            &search_opts,
+            &ctx.search_config,
+        )
+    });
+
+    let memories: Vec<_> = match search_result {
+        Ok(results) => results.into_iter().map(|r| r.memory).collect(),
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+
+    let orchestrator = IntegrationOrchestrator::new();
+    match orchestrator.prepare_context_for_llm(&query, &memories, budget) {
+        Ok(prepared) => json!({
+            "context": prepared.context,
+            "token_count": prepared.token_count,
+            "groups_count": prepared.groups_count,
+            "memory_count": memories.len(),
+        }),
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
 #[cfg(test)]
 mod context_tests {
     use super::safe_truncate;

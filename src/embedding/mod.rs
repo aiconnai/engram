@@ -17,10 +17,10 @@ mod provider;
 mod queue;
 mod tfidf;
 
-#[cfg(feature = "cohere")]
-pub mod cohere;
 #[cfg(feature = "multimodal")]
 pub mod clip;
+#[cfg(feature = "cohere")]
+pub mod cohere;
 #[cfg(feature = "ollama")]
 pub mod ollama;
 #[cfg(feature = "onnx-embed")]

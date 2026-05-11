@@ -110,8 +110,8 @@ fn build_injection(workspace: &str, items: &[pending_injections::PendingInjectio
     })
 }
 
-pub fn create_handler(
-) -> impl Fn(LifecycleHook, &HookContext) -> Result<HookResult> + Send + Sync {
+pub fn create_handler() -> impl Fn(LifecycleHook, &HookContext) -> Result<HookResult> + Send + Sync
+{
     move |hook, context| SessionStartHandler::default().handle(hook, context)
 }
 

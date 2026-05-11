@@ -276,8 +276,7 @@ mod tests {
     #[test]
     fn test_check_access_exact_match() {
         let conn = in_memory_conn();
-        grant_scope_access(&conn, "agent-1", "global/org:acme", "read", None)
-            .expect("grant read");
+        grant_scope_access(&conn, "agent-1", "global/org:acme", "read", None).expect("grant read");
         assert!(
             check_scope_access(&conn, "agent-1", "global/org:acme", "read")
                 .expect("check read exact"),
@@ -291,14 +290,13 @@ mod tests {
         // Grant at org level — should also satisfy access at user level
         grant_scope_access(&conn, "agent-1", "global/org:acme", "write", None).expect("grant");
 
-        let has_access = check_scope_access(
-            &conn,
-            "agent-1",
-            "global/org:acme/user:alice",
-            "write",
-        )
-        .expect("check");
-        assert!(has_access, "org-level write grant should satisfy user-level write check");
+        let has_access =
+            check_scope_access(&conn, "agent-1", "global/org:acme/user:alice", "write")
+                .expect("check");
+        assert!(
+            has_access,
+            "org-level write grant should satisfy user-level write check"
+        );
     }
 
     #[test]
@@ -307,7 +305,10 @@ mod tests {
         grant_scope_access(&conn, "agent-1", "global", "read", None).expect("grant read");
 
         let has_write = check_scope_access(&conn, "agent-1", "global", "write").expect("check");
-        assert!(!has_write, "read grant should not satisfy write requirement");
+        assert!(
+            !has_write,
+            "read grant should not satisfy write requirement"
+        );
     }
 
     #[test]

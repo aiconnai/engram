@@ -111,7 +111,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let path = resolve_db_path(db_path);
             let storage = open_storage(&path)?;
 
-            println!("engram-agent: running one cycle for workspace '{}'", workspace);
+            println!(
+                "engram-agent: running one cycle for workspace '{}'",
+                workspace
+            );
             println!("  database: {}", path);
             println!("  interval: {}s (single cycle mode)", interval);
 
@@ -126,7 +129,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             storage.with_connection(|conn| {
                 let result = agent.tick(conn)?;
 
-                println!("\nCycle {} completed in {}ms", result.cycle_number, result.duration_ms);
+                println!(
+                    "\nCycle {} completed in {}ms",
+                    result.cycle_number, result.duration_ms
+                );
                 println!("Actions decided: {}", result.actions.len());
 
                 for action in &result.actions {
@@ -176,7 +182,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let storage = open_storage(&path)?;
 
             if preview {
-                println!("engram-agent garden preview — workspace: '{}' (dry-run)", workspace);
+                println!(
+                    "engram-agent garden preview — workspace: '{}' (dry-run)",
+                    workspace
+                );
             } else {
                 println!("engram-agent garden — workspace: '{}'", workspace);
             }
@@ -195,7 +204,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  memories {}pruned: {}", label, report.memories_pruned);
                 println!("  memories {}merged: {}", label, report.memories_merged);
                 println!("  memories {}archived: {}", label, report.memories_archived);
-                println!("  memories {}compressed: {}", label, report.memories_compressed);
+                println!(
+                    "  memories {}compressed: {}",
+                    label, report.memories_compressed
+                );
                 println!("  tokens {}freed: {}", label, report.tokens_freed);
                 println!("  actions: {}", report.actions.len());
 

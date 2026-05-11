@@ -233,11 +233,17 @@ mod tests {
     fn test_filter_listing() {
         let filter = OutputFilter::new();
         // Create output with more than 5000 chars to pass the max_chars check
-        let output = (0..1000).map(|i| format!("file{}.rs with some padding", i)).collect::<Vec<_>>().join("\n");
+        let output = (0..1000)
+            .map(|i| format!("file{}.rs with some padding", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(output.len() > 5000, "Output should exceed max_chars");
         let filtered = filter.filter("ls -la", &output);
         // Should contain summary format
-        assert!(filtered.contains("files)"), "Should contain file count summary");
+        assert!(
+            filtered.contains("files)"),
+            "Should contain file count summary"
+        );
     }
     #[test]
     fn test_filter_git_status() {

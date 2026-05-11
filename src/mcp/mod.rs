@@ -2,10 +2,10 @@
 //!
 //! JSON-RPC over stdio for AI tool integration.
 
-pub mod handlers;
-pub mod http_transport;
 #[cfg(feature = "grpc")]
 pub mod grpc_transport;
+pub mod handlers;
+pub mod http_transport;
 pub mod prompts;
 pub mod protocol;
 pub mod resources;

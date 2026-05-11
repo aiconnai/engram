@@ -265,25 +265,26 @@ mod inner {
             let seq_len = input_ids.len();
 
             // Build ONNX Tensor values with shape [1, seq_len]
-            let ids_tensor = Tensor::from_array(([1, seq_len], input_ids.to_vec()))
-                .map_err(|e| {
+            let ids_tensor =
+                Tensor::from_array(([1, seq_len], input_ids.to_vec())).map_err(|e| {
                     EngramError::Embedding(format!("Failed to build input_ids tensor: {e}"))
                 })?;
 
-            let mask_tensor = Tensor::from_array(([1, seq_len], attention_mask.to_vec()))
-                .map_err(|e| {
+            let mask_tensor =
+                Tensor::from_array(([1, seq_len], attention_mask.to_vec())).map_err(|e| {
                     EngramError::Embedding(format!("Failed to build attention_mask tensor: {e}"))
                 })?;
 
             // token_type_ids: all zeros (single-sentence input)
-            let type_ids_tensor = Tensor::from_array(([1, seq_len], vec![0i64; seq_len]))
-                .map_err(|e| {
+            let type_ids_tensor =
+                Tensor::from_array(([1, seq_len], vec![0i64; seq_len])).map_err(|e| {
                     EngramError::Embedding(format!("Failed to build token_type_ids tensor: {e}"))
                 })?;
 
-            let mut session = self.session.lock().map_err(|e| {
-                EngramError::Embedding(format!("Failed to lock ONNX session: {e}"))
-            })?;
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|e| EngramError::Embedding(format!("Failed to lock ONNX session: {e}")))?;
 
             let outputs = session
                 .run(ort::inputs![
@@ -309,11 +310,10 @@ mod inner {
             let actual_seq_len = shape[1] as usize;
 
             // Squeeze batch dimension → [seq_len, hidden_size]
-            let token_embeddings = Array2::from_shape_vec(
-                (actual_seq_len, hidden_size),
-                data.to_vec(),
-            )
-            .map_err(|e| EngramError::Embedding(format!("Failed to reshape output: {e}")))?;
+            let token_embeddings =
+                Array2::from_shape_vec((actual_seq_len, hidden_size), data.to_vec()).map_err(
+                    |e| EngramError::Embedding(format!("Failed to reshape output: {e}")),
+                )?;
 
             // Validate hidden size matches configured dimensions
             if token_embeddings.ncols() != self.config.dimensions {

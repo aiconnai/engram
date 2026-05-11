@@ -157,16 +157,14 @@ pub fn snapshot_load(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let decrypt_key_bytes: Option<[u8; 32]> = match params
-        .get("decrypt_key")
-        .and_then(|v| v.as_str())
-    {
-        Some(hex) => match parse_hex_key(hex) {
-            Ok(key) => Some(key),
-            Err(e) => return json!({"error": format!("Invalid decrypt_key: {}", e)}),
-        },
-        None => None,
-    };
+    let decrypt_key_bytes: Option<[u8; 32]> =
+        match params.get("decrypt_key").and_then(|v| v.as_str()) {
+            Some(hex) => match parse_hex_key(hex) {
+                Ok(key) => Some(key),
+                Err(e) => return json!({"error": format!("Invalid decrypt_key: {}", e)}),
+            },
+            None => None,
+        };
 
     let path = Path::new(&path_str);
     let result = SnapshotLoader::load(

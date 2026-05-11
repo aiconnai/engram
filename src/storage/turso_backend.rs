@@ -612,7 +612,8 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
             let conn = self.conn.write().await;
 
             let now = Utc::now();
@@ -706,7 +707,8 @@ impl StorageBackend for TursoBackend {
             memories
                 .pop()
                 .ok_or_else(|| EngramError::NotFound(id))
-        }))
+        })
+        })
     }
 
     fn create_memories_batch(&self, inputs: Vec<CreateMemoryInput>) -> Result<BatchCreateResult> {
@@ -732,17 +734,19 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let sql = format!(
-                "SELECT {} FROM memories WHERE id = ? AND valid_to IS NULL",
-                MEMORY_COLUMNS
-            );
-            let memories = self
-                .query_memories(&sql, vec![libsql::Value::Integer(id)])
-                .await?;
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let sql = format!(
+                    "SELECT {} FROM memories WHERE id = ? AND valid_to IS NULL",
+                    MEMORY_COLUMNS
+                );
+                let memories = self
+                    .query_memories(&sql, vec![libsql::Value::Integer(id)])
+                    .await?;
 
-            Ok(memories.into_iter().next())
-        }))
+                Ok(memories.into_iter().next())
+            })
+        })
     }
 
     fn delete_memories_batch(&self, ids: Vec<MemoryId>) -> Result<BatchDeleteResult> {
@@ -769,7 +773,8 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
             let conn = self.conn.write().await;
             let now = Utc::now().to_rfc3339();
 
@@ -915,84 +920,88 @@ impl StorageBackend for TursoBackend {
                 .query_memories(&sql, vec![libsql::Value::Integer(id)])
                 .await?;
             memories.pop().ok_or_else(|| EngramError::NotFound(id))
-        }))
+        })
+        })
     }
 
     fn delete_memory(&self, id: MemoryId) -> Result<()> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.write().await;
-            let now = chrono::Utc::now().to_rfc3339();
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.write().await;
+                let now = chrono::Utc::now().to_rfc3339();
 
-            // Soft delete by setting valid_to
-            let affected = conn
-                .execute(
-                    "UPDATE memories SET valid_to = ? WHERE id = ? AND valid_to IS NULL",
-                    libsql::params![now, id],
-                )
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
+                // Soft delete by setting valid_to
+                let affected = conn
+                    .execute(
+                        "UPDATE memories SET valid_to = ? WHERE id = ? AND valid_to IS NULL",
+                        libsql::params![now, id],
+                    )
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
 
-            if affected == 0 {
-                return Err(EngramError::NotFound(id));
-            }
+                if affected == 0 {
+                    return Err(EngramError::NotFound(id));
+                }
 
-            Ok(())
-        }))
+                Ok(())
+            })
+        })
     }
 
     fn list_memories(&self, options: ListOptions) -> Result<Vec<Memory>> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let mut sql = format!(
-                "SELECT {} FROM memories WHERE valid_to IS NULL",
-                MEMORY_COLUMNS
-            );
-            let mut params: Vec<libsql::Value> = Vec::new();
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let mut sql = format!(
+                    "SELECT {} FROM memories WHERE valid_to IS NULL",
+                    MEMORY_COLUMNS
+                );
+                let mut params: Vec<libsql::Value> = Vec::new();
 
-            if let Some(ref workspace) = options.workspace {
-                sql.push_str(" AND workspace = ?");
-                params.push(libsql::Value::Text(workspace.clone()));
-            } else if let Some(ref workspaces) = options.workspaces {
-                if !workspaces.is_empty() {
-                    let placeholders = vec!["?"; workspaces.len()].join(", ");
-                    sql.push_str(&format!(" AND workspace IN ({})", placeholders));
-                    for workspace in workspaces {
-                        params.push(libsql::Value::Text(workspace.clone()));
+                if let Some(ref workspace) = options.workspace {
+                    sql.push_str(" AND workspace = ?");
+                    params.push(libsql::Value::Text(workspace.clone()));
+                } else if let Some(ref workspaces) = options.workspaces {
+                    if !workspaces.is_empty() {
+                        let placeholders = vec!["?"; workspaces.len()].join(", ");
+                        sql.push_str(&format!(" AND workspace IN ({})", placeholders));
+                        for workspace in workspaces {
+                            params.push(libsql::Value::Text(workspace.clone()));
+                        }
                     }
                 }
-            }
 
-            if let Some(ref scope) = options.scope {
-                sql.push_str(" AND scope_type = ?");
-                params.push(libsql::Value::Text(scope.scope_type().to_string()));
-                if let Some(scope_id) = scope.scope_id() {
-                    sql.push_str(" AND scope_id = ?");
-                    params.push(libsql::Value::Text(scope_id.to_string()));
-                } else {
-                    sql.push_str(" AND scope_id IS NULL");
+                if let Some(ref scope) = options.scope {
+                    sql.push_str(" AND scope_type = ?");
+                    params.push(libsql::Value::Text(scope.scope_type().to_string()));
+                    if let Some(scope_id) = scope.scope_id() {
+                        sql.push_str(" AND scope_id = ?");
+                        params.push(libsql::Value::Text(scope_id.to_string()));
+                    } else {
+                        sql.push_str(" AND scope_id IS NULL");
+                    }
                 }
-            }
 
-            if let Some(ref memory_type) = options.memory_type {
-                sql.push_str(" AND memory_type = ?");
-                params.push(libsql::Value::Text(memory_type.as_str().to_string()));
-            }
+                if let Some(ref memory_type) = options.memory_type {
+                    sql.push_str(" AND memory_type = ?");
+                    params.push(libsql::Value::Text(memory_type.as_str().to_string()));
+                }
 
-            if let Some(ref tier) = options.tier {
-                sql.push_str(" AND tier = ?");
-                params.push(libsql::Value::Text(tier.as_str().to_string()));
-            }
+                if let Some(ref tier) = options.tier {
+                    sql.push_str(" AND tier = ?");
+                    params.push(libsql::Value::Text(tier.as_str().to_string()));
+                }
 
-            if let Some(ref tags) = options.tags {
-                if !tags.is_empty() {
-                    let placeholders = vec!["?"; tags.len()].join(", ");
-                    sql.push_str(&format!(
-                        " AND id IN (
+                if let Some(ref tags) = options.tags {
+                    if !tags.is_empty() {
+                        let placeholders = vec!["?"; tags.len()].join(", ");
+                        sql.push_str(&format!(
+                            " AND id IN (
                             SELECT mt.memory_id
                             FROM memory_tags mt
                             JOIN tags t ON t.id = mt.tag_id
@@ -1000,44 +1009,45 @@ impl StorageBackend for TursoBackend {
                             GROUP BY mt.memory_id
                             HAVING COUNT(DISTINCT t.name) = ?
                         )",
-                        placeholders
-                    ));
-                    for tag in tags {
-                        params.push(libsql::Value::Text(tag.clone()));
+                            placeholders
+                        ));
+                        for tag in tags {
+                            params.push(libsql::Value::Text(tag.clone()));
+                        }
+                        params.push(libsql::Value::Integer(tags.len() as i64));
                     }
-                    params.push(libsql::Value::Integer(tags.len() as i64));
                 }
-            }
 
-            if !options.include_archived {
-                sql.push_str(" AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')");
-            }
+                if !options.include_archived {
+                    sql.push_str(" AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')");
+                }
 
-            let sort_field = options.sort_by.unwrap_or(SortField::CreatedAt);
-            let sort_order = options.sort_order.unwrap_or(SortOrder::Desc);
-            let sort_column = match sort_field {
-                SortField::CreatedAt => "created_at",
-                SortField::UpdatedAt => "updated_at",
-                SortField::LastAccessedAt => "last_accessed_at",
-                SortField::Importance => "importance",
-                SortField::AccessCount => "access_count",
-            };
-            let sort_dir = match sort_order {
-                SortOrder::Asc => "ASC",
-                SortOrder::Desc => "DESC",
-            };
-            sql.push_str(&format!(" ORDER BY {} {}", sort_column, sort_dir));
+                let sort_field = options.sort_by.unwrap_or(SortField::CreatedAt);
+                let sort_order = options.sort_order.unwrap_or(SortOrder::Desc);
+                let sort_column = match sort_field {
+                    SortField::CreatedAt => "created_at",
+                    SortField::UpdatedAt => "updated_at",
+                    SortField::LastAccessedAt => "last_accessed_at",
+                    SortField::Importance => "importance",
+                    SortField::AccessCount => "access_count",
+                };
+                let sort_dir = match sort_order {
+                    SortOrder::Asc => "ASC",
+                    SortOrder::Desc => "DESC",
+                };
+                sql.push_str(&format!(" ORDER BY {} {}", sort_column, sort_dir));
 
-            if let Some(limit) = options.limit {
-                sql.push_str(&format!(" LIMIT {}", limit));
-            }
+                if let Some(limit) = options.limit {
+                    sql.push_str(&format!(" LIMIT {}", limit));
+                }
 
-            if let Some(offset) = options.offset {
-                sql.push_str(&format!(" OFFSET {}", offset));
-            }
+                if let Some(offset) = options.offset {
+                    sql.push_str(&format!(" OFFSET {}", offset));
+                }
 
-            self.query_memories(&sql, params).await
-        }))
+                self.query_memories(&sql, params).await
+            })
+        })
     }
 
     fn count_memories(&self, options: ListOptions) -> Result<i64> {
@@ -1052,78 +1062,80 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            // Simple LIKE-based search (full hybrid search would need vector support)
-            let mut sql = format!(
-                "SELECT {} FROM memories WHERE valid_to IS NULL AND content LIKE ?",
-                MEMORY_COLUMNS
-            );
-            let mut params = vec![libsql::Value::Text(format!("%{}%", query))];
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                // Simple LIKE-based search (full hybrid search would need vector support)
+                let mut sql = format!(
+                    "SELECT {} FROM memories WHERE valid_to IS NULL AND content LIKE ?",
+                    MEMORY_COLUMNS
+                );
+                let mut params = vec![libsql::Value::Text(format!("%{}%", query))];
 
-            if !options.include_archived {
-                sql.push_str(" AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')");
-            }
+                if !options.include_archived {
+                    sql.push_str(" AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')");
+                }
 
-            if let Some(ref workspace) = options.workspace {
-                sql.push_str(" AND workspace = ?");
-                params.push(libsql::Value::Text(workspace.clone()));
-            } else if let Some(ref workspaces) = options.workspaces {
-                if !workspaces.is_empty() {
-                    let placeholders = vec!["?"; workspaces.len()].join(", ");
-                    sql.push_str(&format!(" AND workspace IN ({})", placeholders));
-                    for workspace in workspaces {
-                        params.push(libsql::Value::Text(workspace.clone()));
+                if let Some(ref workspace) = options.workspace {
+                    sql.push_str(" AND workspace = ?");
+                    params.push(libsql::Value::Text(workspace.clone()));
+                } else if let Some(ref workspaces) = options.workspaces {
+                    if !workspaces.is_empty() {
+                        let placeholders = vec!["?"; workspaces.len()].join(", ");
+                        sql.push_str(&format!(" AND workspace IN ({})", placeholders));
+                        for workspace in workspaces {
+                            params.push(libsql::Value::Text(workspace.clone()));
+                        }
                     }
                 }
-            }
 
-            if let Some(ref scope) = options.scope {
-                sql.push_str(" AND scope_type = ?");
-                params.push(libsql::Value::Text(scope.scope_type().to_string()));
-                if let Some(scope_id) = scope.scope_id() {
-                    sql.push_str(" AND scope_id = ?");
-                    params.push(libsql::Value::Text(scope_id.to_string()));
-                } else {
-                    sql.push_str(" AND scope_id IS NULL");
+                if let Some(ref scope) = options.scope {
+                    sql.push_str(" AND scope_type = ?");
+                    params.push(libsql::Value::Text(scope.scope_type().to_string()));
+                    if let Some(scope_id) = scope.scope_id() {
+                        sql.push_str(" AND scope_id = ?");
+                        params.push(libsql::Value::Text(scope_id.to_string()));
+                    } else {
+                        sql.push_str(" AND scope_id IS NULL");
+                    }
                 }
-            }
 
-            if let Some(ref memory_type) = options.memory_type {
-                sql.push_str(" AND memory_type = ?");
-                params.push(libsql::Value::Text(memory_type.as_str().to_string()));
-            } else if !options.include_transcripts {
-                sql.push_str(" AND memory_type != 'transcript_chunk'");
-            }
+                if let Some(ref memory_type) = options.memory_type {
+                    sql.push_str(" AND memory_type = ?");
+                    params.push(libsql::Value::Text(memory_type.as_str().to_string()));
+                } else if !options.include_transcripts {
+                    sql.push_str(" AND memory_type != 'transcript_chunk'");
+                }
 
-            if let Some(ref tier) = options.tier {
-                sql.push_str(" AND tier = ?");
-                params.push(libsql::Value::Text(tier.as_str().to_string()));
-            }
+                if let Some(ref tier) = options.tier {
+                    sql.push_str(" AND tier = ?");
+                    params.push(libsql::Value::Text(tier.as_str().to_string()));
+                }
 
-            sql.push_str(" ORDER BY importance DESC");
-            if let Some(limit) = options.limit {
-                sql.push_str(&format!(" LIMIT {}", limit));
-            } else {
-                sql.push_str(" LIMIT 20");
-            }
+                sql.push_str(" ORDER BY importance DESC");
+                if let Some(limit) = options.limit {
+                    sql.push_str(&format!(" LIMIT {}", limit));
+                } else {
+                    sql.push_str(" LIMIT 20");
+                }
 
-            let memories = self.query_memories(&sql, params).await?;
+                let memories = self.query_memories(&sql, params).await?;
 
-            Ok(memories
-                .into_iter()
-                .map(|memory| SearchResult {
-                    memory,
-                    score: 1.0,
-                    match_info: MatchInfo {
-                        strategy: SearchStrategy::KeywordOnly,
-                        matched_terms: vec![query.to_string()],
-                        highlights: Vec::new(),
-                        semantic_score: None,
-                        keyword_score: Some(1.0),
-                    },
-                })
-                .collect())
-        }))
+                Ok(memories
+                    .into_iter()
+                    .map(|memory| SearchResult {
+                        memory,
+                        score: 1.0,
+                        match_info: MatchInfo {
+                            strategy: SearchStrategy::KeywordOnly,
+                            matched_terms: vec![query.to_string()],
+                            highlights: Vec::new(),
+                            semantic_score: None,
+                            keyword_score: Some(1.0),
+                        },
+                    })
+                    .collect())
+            })
+        })
     }
 
     fn create_crossref(
@@ -1136,7 +1148,8 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
             let conn = self.conn.write().await;
             let now = Utc::now();
             let now_str = now.to_rfc3339();
@@ -1178,81 +1191,88 @@ impl StorageBackend for TursoBackend {
                 pinned: false,
                 metadata: HashMap::new(),
             })
-        }))
+        })
+        })
     }
 
     fn get_crossrefs(&self, memory_id: MemoryId) -> Result<Vec<CrossReference>> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.read().await;
-            let mut stmt = conn
-                .prepare(
-                    "SELECT from_id, to_id, edge_type, score, confidence, strength, source,
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.read().await;
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT from_id, to_id, edge_type, score, confidence, strength, source,
                         source_context, created_at, valid_from, valid_to, pinned, metadata
                  FROM crossrefs WHERE (from_id = ? OR to_id = ?) AND valid_to IS NULL",
-                )
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
+                    )
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
 
-            let rows = stmt
-                .query(libsql::params![memory_id, memory_id])
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
+                let rows = stmt
+                    .query(libsql::params![memory_id, memory_id])
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
 
-            let mut crossrefs = Vec::new();
-            let mut rows = rows;
+                let mut crossrefs = Vec::new();
+                let mut rows = rows;
 
-            while let Some(row) = rows
-                .next()
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?
-            {
-                let edge_type_str: String = row.get(2).unwrap_or_else(|_| "related_to".to_string());
-                let source_str: String = row.get(6).unwrap_or_else(|_| "auto".to_string());
-                let created_at_str: String = row.get(8).unwrap_or_else(|_| Utc::now().to_rfc3339());
-                let valid_from_str: String = row.get(9).unwrap_or_else(|_| Utc::now().to_rfc3339());
-                let valid_to_str: Option<String> = row.get(10).unwrap_or(None);
-                let metadata_str: String = row.get(12).unwrap_or_else(|_| "{}".to_string());
-                crossrefs.push(CrossReference {
-                    from_id: row.get(0).unwrap_or(0),
-                    to_id: row.get(1).unwrap_or(0),
-                    edge_type: edge_type_str.parse().unwrap_or(EdgeType::RelatedTo),
-                    score: row.get::<f64>(3).unwrap_or(0.0) as f32,
-                    confidence: row.get::<f64>(4).unwrap_or(1.0) as f32,
-                    strength: row.get::<f64>(5).unwrap_or(1.0) as f32,
-                    source: match source_str.as_str() {
-                        "manual" => RelationSource::Manual,
-                        "llm" => RelationSource::Llm,
-                        _ => RelationSource::Auto,
-                    },
-                    source_context: row.get(7).ok(),
-                    created_at: DateTime::parse_from_rfc3339(&created_at_str)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    valid_from: DateTime::parse_from_rfc3339(&valid_from_str)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    valid_to: valid_to_str.and_then(|s| {
-                        DateTime::parse_from_rfc3339(&s)
+                while let Some(row) = rows
+                    .next()
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?
+                {
+                    let edge_type_str: String =
+                        row.get(2).unwrap_or_else(|_| "related_to".to_string());
+                    let source_str: String = row.get(6).unwrap_or_else(|_| "auto".to_string());
+                    let created_at_str: String =
+                        row.get(8).unwrap_or_else(|_| Utc::now().to_rfc3339());
+                    let valid_from_str: String =
+                        row.get(9).unwrap_or_else(|_| Utc::now().to_rfc3339());
+                    let valid_to_str: Option<String> = row.get(10).unwrap_or(None);
+                    let metadata_str: String = row.get(12).unwrap_or_else(|_| "{}".to_string());
+                    crossrefs.push(CrossReference {
+                        from_id: row.get(0).unwrap_or(0),
+                        to_id: row.get(1).unwrap_or(0),
+                        edge_type: edge_type_str.parse().unwrap_or(EdgeType::RelatedTo),
+                        score: row.get::<f64>(3).unwrap_or(0.0) as f32,
+                        confidence: row.get::<f64>(4).unwrap_or(1.0) as f32,
+                        strength: row.get::<f64>(5).unwrap_or(1.0) as f32,
+                        source: match source_str.as_str() {
+                            "manual" => RelationSource::Manual,
+                            "llm" => RelationSource::Llm,
+                            _ => RelationSource::Auto,
+                        },
+                        source_context: row.get(7).ok(),
+                        created_at: DateTime::parse_from_rfc3339(&created_at_str)
                             .map(|dt| dt.with_timezone(&Utc))
-                            .ok()
-                    }),
-                    pinned: row.get::<i64>(11).unwrap_or(0) != 0,
-                    metadata: serde_json::from_str(&metadata_str).unwrap_or_default(),
-                });
-            }
+                            .unwrap_or_else(|_| Utc::now()),
+                        valid_from: DateTime::parse_from_rfc3339(&valid_from_str)
+                            .map(|dt| dt.with_timezone(&Utc))
+                            .unwrap_or_else(|_| Utc::now()),
+                        valid_to: valid_to_str.and_then(|s| {
+                            DateTime::parse_from_rfc3339(&s)
+                                .map(|dt| dt.with_timezone(&Utc))
+                                .ok()
+                        }),
+                        pinned: row.get::<i64>(11).unwrap_or(0) != 0,
+                        metadata: serde_json::from_str(&metadata_str).unwrap_or_default(),
+                    });
+                }
 
-            Ok(crossrefs)
-        }))
+                Ok(crossrefs)
+            })
+        })
     }
 
     fn delete_crossref(&self, from_id: MemoryId, to_id: MemoryId) -> Result<()> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
             let conn = self.conn.write().await;
             let now = chrono::Utc::now().to_rfc3339();
 
@@ -1262,46 +1282,49 @@ impl StorageBackend for TursoBackend {
             ).await.map_err(|e| EngramError::Storage(e.to_string()))?;
 
             Ok(())
-        }))
+        })
+        })
     }
 
     fn list_tags(&self) -> Result<Vec<(String, i64)>> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.read().await;
-            let mut stmt = conn
-                .prepare(
-                    "SELECT t.name, COUNT(mt.memory_id) as count
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.read().await;
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT t.name, COUNT(mt.memory_id) as count
                  FROM tags t
                  LEFT JOIN memory_tags mt ON t.id = mt.tag_id
                  LEFT JOIN memories m ON mt.memory_id = m.id AND m.valid_to IS NULL
                  GROUP BY t.id, t.name
                  ORDER BY count DESC",
-                )
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
+                    )
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
 
-            let rows = stmt
-                .query(())
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
-            let mut tags = Vec::new();
-            let mut rows = rows;
+                let rows = stmt
+                    .query(())
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
+                let mut tags = Vec::new();
+                let mut rows = rows;
 
-            while let Some(row) = rows
-                .next()
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?
-            {
-                let name: String = row.get(0).unwrap_or_default();
-                let count: i64 = row.get(1).unwrap_or(0);
-                tags.push((name, count));
-            }
+                while let Some(row) = rows
+                    .next()
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?
+                {
+                    let name: String = row.get(0).unwrap_or_default();
+                    let count: i64 = row.get(1).unwrap_or(0);
+                    tags.push((name, count));
+                }
 
-            Ok(tags)
-        }))
+                Ok(tags)
+            })
+        })
     }
 
     fn get_memories_by_tag(&self, tag: &str, limit: Option<usize>) -> Result<Vec<Memory>> {
@@ -1316,38 +1339,41 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.read().await;
-            let mut stmt = conn.prepare(
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.read().await;
+                let mut stmt = conn.prepare(
                 "SELECT workspace, COUNT(*) FROM memories WHERE valid_to IS NULL GROUP BY workspace"
             ).await.map_err(|e| EngramError::Storage(e.to_string()))?;
 
-            let rows = stmt
-                .query(())
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
-            let mut workspaces = Vec::new();
-            let mut rows = rows;
+                let rows = stmt
+                    .query(())
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
+                let mut workspaces = Vec::new();
+                let mut rows = rows;
 
-            while let Some(row) = rows
-                .next()
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?
-            {
-                let name: String = row.get(0).unwrap_or_else(|_| "default".to_string());
-                let count: i64 = row.get(1).unwrap_or(0);
-                workspaces.push((name, count));
-            }
+                while let Some(row) = rows
+                    .next()
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?
+                {
+                    let name: String = row.get(0).unwrap_or_else(|_| "default".to_string());
+                    let count: i64 = row.get(1).unwrap_or(0);
+                    workspaces.push((name, count));
+                }
 
-            Ok(workspaces)
-        }))
+                Ok(workspaces)
+            })
+        })
     }
 
     fn get_workspace_stats(&self, workspace: &str) -> Result<HashMap<String, i64>> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
             let conn = self.conn.read().await;
 
             let total: i64 = conn.query(
@@ -1379,92 +1405,97 @@ impl StorageBackend for TursoBackend {
             stats.insert("permanent_count".to_string(), permanent);
             stats.insert("daily_count".to_string(), daily);
             Ok(stats)
-        }))
+        })
+        })
     }
 
     fn move_to_workspace(&self, ids: Vec<MemoryId>, workspace: &str) -> Result<usize> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.write().await;
-            let mut moved = 0usize;
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.write().await;
+                let mut moved = 0usize;
 
-            for id in ids {
-                let result = conn
-                    .execute(
-                        "UPDATE memories SET workspace = ? WHERE id = ? AND valid_to IS NULL",
-                        libsql::params![workspace.to_string(), id],
-                    )
-                    .await;
+                for id in ids {
+                    let result = conn
+                        .execute(
+                            "UPDATE memories SET workspace = ? WHERE id = ? AND valid_to IS NULL",
+                            libsql::params![workspace.to_string(), id],
+                        )
+                        .await;
 
-                if result.is_ok() {
-                    moved += 1;
+                    if result.is_ok() {
+                        moved += 1;
+                    }
                 }
-            }
 
-            Ok(moved)
-        }))
+                Ok(moved)
+            })
+        })
     }
 
     fn get_stats(&self) -> Result<StorageStats> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.read().await;
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.read().await;
 
-            let memory_count: i64 = conn
-                .query("SELECT COUNT(*) FROM memories WHERE valid_to IS NULL", ())
-                .await
-                .ok()
-                .and_then(|mut r| futures::executor::block_on(r.next()).ok().flatten())
-                .map(|r| r.get(0).unwrap_or(0))
-                .unwrap_or(0);
+                let memory_count: i64 = conn
+                    .query("SELECT COUNT(*) FROM memories WHERE valid_to IS NULL", ())
+                    .await
+                    .ok()
+                    .and_then(|mut r| futures::executor::block_on(r.next()).ok().flatten())
+                    .map(|r| r.get(0).unwrap_or(0))
+                    .unwrap_or(0);
 
-            let crossref_count: i64 = conn
-                .query("SELECT COUNT(*) FROM crossrefs WHERE valid_to IS NULL", ())
-                .await
-                .ok()
-                .and_then(|mut r| futures::executor::block_on(r.next()).ok().flatten())
-                .map(|r| r.get(0).unwrap_or(0))
-                .unwrap_or(0);
+                let crossref_count: i64 = conn
+                    .query("SELECT COUNT(*) FROM crossrefs WHERE valid_to IS NULL", ())
+                    .await
+                    .ok()
+                    .and_then(|mut r| futures::executor::block_on(r.next()).ok().flatten())
+                    .map(|r| r.get(0).unwrap_or(0))
+                    .unwrap_or(0);
 
-            let tag_count: i64 = conn
-                .query("SELECT COUNT(DISTINCT tag_id) FROM memory_tags", ())
-                .await
-                .ok()
-                .and_then(|mut r| futures::executor::block_on(r.next()).ok().flatten())
-                .map(|r| r.get(0).unwrap_or(0))
-                .unwrap_or(0);
+                let tag_count: i64 = conn
+                    .query("SELECT COUNT(DISTINCT tag_id) FROM memory_tags", ())
+                    .await
+                    .ok()
+                    .and_then(|mut r| futures::executor::block_on(r.next()).ok().flatten())
+                    .map(|r| r.get(0).unwrap_or(0))
+                    .unwrap_or(0);
 
-            let schema_version: i32 = conn
-                .query("SELECT COALESCE(MAX(version), 0) FROM schema_version", ())
-                .await
-                .ok()
-                .and_then(|mut r| futures::executor::block_on(r.next()).ok().flatten())
-                .map(|r| r.get(0).unwrap_or(0))
-                .unwrap_or(0);
+                let schema_version: i32 = conn
+                    .query("SELECT COALESCE(MAX(version), 0) FROM schema_version", ())
+                    .await
+                    .ok()
+                    .and_then(|mut r| futures::executor::block_on(r.next()).ok().flatten())
+                    .map(|r| r.get(0).unwrap_or(0))
+                    .unwrap_or(0);
 
-            Ok(StorageStats {
-                total_memories: memory_count,
-                total_tags: tag_count,
-                total_crossrefs: crossref_count,
-                total_versions: 0,
-                total_identities: 0,
-                total_entities: 0,
-                db_size_bytes: 0,
-                memories_with_embeddings: 0,
-                memories_pending_embedding: 0,
-                last_sync: None,
-                sync_pending: false,
-                storage_mode: "turso".to_string(),
-                schema_version,
-                workspaces: HashMap::new(),
-                type_counts: HashMap::new(),
-                tier_counts: HashMap::new(),
+                Ok(StorageStats {
+                    total_memories: memory_count,
+                    total_tags: tag_count,
+                    total_crossrefs: crossref_count,
+                    total_versions: 0,
+                    total_identities: 0,
+                    total_entities: 0,
+                    db_size_bytes: 0,
+                    memories_with_embeddings: 0,
+                    memories_pending_embedding: 0,
+                    last_sync: None,
+                    sync_pending: false,
+                    storage_mode: "turso".to_string(),
+                    schema_version,
+                    workspaces: HashMap::new(),
+                    type_counts: HashMap::new(),
+                    tier_counts: HashMap::new(),
+                })
             })
-        }))
+        })
     }
 
     fn health_check(&self) -> Result<HealthStatus> {
@@ -1473,10 +1504,12 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        let result = tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.read().await;
-            conn.query("SELECT 1", ()).await
-        }));
+        let result = tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.read().await;
+                conn.query("SELECT 1", ()).await
+            })
+        });
 
         let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -1503,13 +1536,15 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.write().await;
-            conn.execute("VACUUM", ())
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
-            Ok(())
-        }))
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.write().await;
+                conn.execute("VACUUM", ())
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
+                Ok(())
+            })
+        })
     }
 
     fn backend_name(&self) -> &'static str {
@@ -1520,20 +1555,22 @@ impl StorageBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.read().await;
-            let version: i32 = conn
-                .query("SELECT COALESCE(MAX(version), 0) FROM schema_version", ())
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?
-                .next()
-                .await
-                .ok()
-                .flatten()
-                .map(|r| r.get(0).unwrap_or(0))
-                .unwrap_or(0);
-            Ok(version)
-        }))
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.read().await;
+                let version: i32 = conn
+                    .query("SELECT COALESCE(MAX(version), 0) FROM schema_version", ())
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?
+                    .next()
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|r| r.get(0).unwrap_or(0))
+                    .unwrap_or(0);
+                Ok(version)
+            })
+        })
     }
 }
 
@@ -1551,39 +1588,45 @@ impl TransactionalBackend for TursoBackend {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.write().await;
-            conn.execute(&format!("SAVEPOINT {}", name), ())
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
-            Ok(())
-        }))
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.write().await;
+                conn.execute(&format!("SAVEPOINT {}", name), ())
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
+                Ok(())
+            })
+        })
     }
 
     fn release_savepoint(&self, name: &str) -> Result<()> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.write().await;
-            conn.execute(&format!("RELEASE SAVEPOINT {}", name), ())
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
-            Ok(())
-        }))
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.write().await;
+                conn.execute(&format!("RELEASE SAVEPOINT {}", name), ())
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
+                Ok(())
+            })
+        })
     }
 
     fn rollback_to_savepoint(&self, name: &str) -> Result<()> {
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
-        tokio::task::block_in_place(|| rt.block_on(async {
-            let conn = self.conn.write().await;
-            conn.execute(&format!("ROLLBACK TO SAVEPOINT {}", name), ())
-                .await
-                .map_err(|e| EngramError::Storage(e.to_string()))?;
-            Ok(())
-        }))
+        tokio::task::block_in_place(|| {
+            rt.block_on(async {
+                let conn = self.conn.write().await;
+                conn.execute(&format!("ROLLBACK TO SAVEPOINT {}", name), ())
+                    .await
+                    .map_err(|e| EngramError::Storage(e.to_string()))?;
+                Ok(())
+            })
+        })
     }
 }
 
