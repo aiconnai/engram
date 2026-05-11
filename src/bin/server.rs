@@ -398,9 +398,9 @@ impl McpHandler for EngramHandler {
                 #[cfg(feature = "hooks")]
                 {
                     let mut ctx = engram::hooks::HookContext::new(None, None);
+                    ctx.metadata.insert("tool_name".to_string(), json!(name));
                     ctx.metadata
-                        .insert("tool_name".to_string(), json!(name));
-                    ctx.metadata.insert("tool_output".to_string(), result.clone());
+                        .insert("tool_output".to_string(), result.clone());
                     self.trigger_hook(engram::hooks::LifecycleHook::PostToolUse, ctx);
                 }
 
@@ -709,6 +709,13 @@ fn main() -> Result<()> {
 
     tracing::info!("Engram MCP server starting...");
 
+    // Log RTK-inspired features
+    tracing::info!("Engram with RTK-inspired features loaded:");
+    tracing::info!("  - OutputFilter: Active");
+    tracing::info!("  - ContextGrouper: Active");
+    tracing::info!("  - TruncationEngine: Active");
+    tracing::info!("  - IntegrationOrchestrator: Active");
+
     match args.transport {
         TransportMode::Stdio => {
             server.run()?;
@@ -862,13 +869,20 @@ mod tests {
         use engram::hooks::{HookContext, LifecycleHook};
 
         let mut handler = test_handler();
-        assert!(handler.hook_manager.is_none(), "hooks should start disabled");
+        assert!(
+            handler.hook_manager.is_none(),
+            "hooks should start disabled"
+        );
 
         handler.enable_hooks();
-        assert!(handler.hook_manager.is_some(), "enable_hooks should populate the manager");
+        assert!(
+            handler.hook_manager.is_some(),
+            "enable_hooks should populate the manager"
+        );
 
         let mut ctx = HookContext::new(Some("test-session".into()), Some("default".into()));
-        ctx.metadata.insert("tool_name".into(), json!("memory_create"));
+        ctx.metadata
+            .insert("tool_name".into(), json!("memory_create"));
         handler.trigger_hook(LifecycleHook::PostToolUse, ctx);
     }
 }

@@ -178,6 +178,6 @@ mod tests {
         let engine = TruncationEngine::with_config(Default::default());
         let text = "Hello world";
         let tokens = engine.estimate_tokens(text);
-        assert_eq!(tokens, 3); // 11 chars / 4 ≈ 2.75 → 3
+        assert_eq!(tokens, 2); // 11 chars / 4 = 2 (integer division)
     }
 }

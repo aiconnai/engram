@@ -1,59 +1,141 @@
-//! Integration Orchestrator for RTK-inspired output filtering
-//! Coordinates multiple intelligence components for optimal context injection
+//! RTK-inspired integration orchestrator for LLM context optimization
+//!
+//! Coordinates OutputFilter, ContextGrouper, TruncationEngine, and AutoConsolidator
+//! to provide a complete pipeline for reducing tokens sent to LLMs.
 
-use crate::intelligence::context_grouper::ContextGrouper;
-use crate::intelligence::truncation_engine::TruncationEngine;
+use crate::error::EngramError;
+use crate::intelligence::context_grouper::{ContextGrouper, MemoryGroup};
+use crate::intelligence::output_filter::OutputFilter;
+use crate::intelligence::truncation_engine::{TruncationConfig, TruncationEngine};
 use crate::types::Memory;
+use serde::Serialize;
+use std::collections::HashMap;
 
-/// Orchestrates the integration of multiple intelligence components
+/// Minimal auto-consolidator for scheduling memory consolidation
+pub struct AutoConsolidator;
+
+impl AutoConsolidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Schedule consolidation of similar memories
+    pub fn schedule_consolidation(&self, _memories: &[Memory]) -> Result<(), EngramError> {
+        // Minimal implementation - will be expanded in future iterations
+        Ok(())
+    }
+}
+
+/// Result of context preparation pipeline
+#[derive(Serialize)]
+pub struct PreparedContext {
+    pub context: String,
+    pub token_count: usize,
+    pub groups_count: usize,
+    pub consolidation_scheduled: bool,
+}
+
+/// Orchestrates all RTK-inspired components for optimal LLM context preparation
 pub struct IntegrationOrchestrator {
+    output_filter: OutputFilter,
     context_grouper: ContextGrouper,
     truncation_engine: TruncationEngine,
+    auto_consolidator: AutoConsolidator,
 }
 
 impl IntegrationOrchestrator {
     /// Create a new IntegrationOrchestrator with default components
     pub fn new() -> Self {
         Self {
+            output_filter: OutputFilter::new(),
             context_grouper: ContextGrouper::new(),
-            truncation_engine: TruncationEngine::with_config(Default::default()),
+            truncation_engine: TruncationEngine::with_config(TruncationConfig::default()),
+            auto_consolidator: AutoConsolidator::new(),
         }
     }
 
-    /// Process memories for optimal context injection
-    pub fn process_for_injection(&self, memories: &[Memory], token_budget: usize) -> String {
-        // Step 1: Group memories by topic
-        let groups = self.context_grouper.group_for_context(memories);
+    /// Complete pipeline for preparing context for LLM consumption
+    pub fn prepare_context_for_llm(
+        &self,
+        query: &str,
+        memories: &[Memory],
+        budget: usize,
+    ) -> Result<PreparedContext, EngramError> {
+        // 1. Filter irrelevant memories
+        let relevant = self.filter_irrelevant(memories, query);
 
-        // Step 2: Build injection prompt from groups
-        let mut injection = String::from("# Relevant Context\n\n");
-        
-        for group in groups {
-            injection.push_str(&format!("## {}\n{}\n\n", group.topic, group.summary));
+        // 2. Group by topic using ContextGrouper
+        let groups: Vec<MemoryGroup> = self.context_grouper.group_for_context(&relevant);
+
+        // 3. Truncate groups to fit token budget
+        let truncated_groups = self.truncation_engine.truncate_groups(&groups, budget);
+
+        // 4. Build final context string
+        let mut context = String::new();
+        for group in &truncated_groups {
+            context.push_str(&format!("## {}\n{}\n", group.topic, group.summary));
         }
 
-        // Step 3: Truncate if necessary
-        let truncated = self.truncation_engine.truncate_to_budget(&injection, token_budget);
-        
-        if truncated.len() < injection.len() {
-            format!("{}...(truncated)", truncated)
+        // 5. Check if consolidation is needed
+        let consolidation_scheduled = if self.should_consolidate(&relevant) {
+            self.auto_consolidator.schedule_consolidation(&relevant)?;
+            true
         } else {
-            injection
+            false
+        };
+
+        let token_count = self.truncation_engine.estimate_tokens(&context);
+
+        Ok(PreparedContext {
+            context,
+            token_count,
+            groups_count: groups.len(),
+            consolidation_scheduled,
+        })
+    }
+
+    /// Filter out memories irrelevant to the query
+    fn filter_irrelevant(&self, memories: &[Memory], query: &str) -> Vec<Memory> {
+        memories
+            .iter()
+            .filter(|m| self.is_relevant(m, query))
+            .cloned()
+            .collect()
+    }
+
+    /// Simple relevance heuristic: check if query terms appear in memory content
+    fn is_relevant(&self, memory: &Memory, query: &str) -> bool {
+        if query.is_empty() {
+            return true; // Empty query matches all memories
         }
+        let query_terms: Vec<&str> = query.split_whitespace().collect();
+        query_terms.iter().any(|term| memory.content.contains(term))
+    }
+
+    /// Determine if memory consolidation should be scheduled
+    fn should_consolidate(&self, memories: &[Memory]) -> bool {
+        // Schedule consolidation if we have many similar memories
+        memories.len() > 10
+    }
+}
+
+impl Default for IntegrationOrchestrator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{Memory, MemoryType};
     use chrono::Utc;
-    use std::collections::HashMap;
 
-    fn create_test_memory(id: i64, content: &str) -> Memory {
+    fn create_test_memory(id: i64, content: &str, memory_type: MemoryType) -> Memory {
         Memory {
             id,
             content: content.to_string(),
-            memory_type: crate::types::MemoryType::Note,
+            memory_type,
             tags: vec!["test".to_string()],
             metadata: HashMap::new(),
             importance: 0.5,
@@ -62,10 +144,10 @@ mod tests {
             updated_at: Utc::now(),
             last_accessed_at: None,
             owner_id: None,
-            visibility: Default::default(),
-            scope: Default::default(),
+            visibility: crate::types::Visibility::default(),
+            scope: crate::types::MemoryScope::default(),
             workspace: "default".to_string(),
-            tier: Default::default(),
+            tier: crate::types::MemoryTier::default(),
             version: 1,
             has_embedding: false,
             expires_at: None,
@@ -76,7 +158,7 @@ mod tests {
             procedure_success_count: 0,
             procedure_failure_count: 0,
             summary_of_id: None,
-            lifecycle_state: Default::default(),
+            lifecycle_state: crate::types::LifecycleState::default(),
             media_url: None,
         }
     }
@@ -84,20 +166,22 @@ mod tests {
     #[test]
     fn test_orchestrator_creation() {
         let orchestrator = IntegrationOrchestrator::new();
-        // Just test it creates successfully
         let _ = orchestrator;
     }
 
     #[test]
-    fn test_process_for_injection() {
+    fn test_prepare_context_for_llm() {
         let orchestrator = IntegrationOrchestrator::new();
-        
         let memories = vec![
-            create_test_memory(1, "User prefers dark mode"),
+            create_test_memory(1, "User prefers dark mode", MemoryType::Preference),
+            create_test_memory(2, "User likes coffee", MemoryType::Preference),
         ];
 
-        let result = orchestrator.process_for_injection(&memories, 1000);
-        assert!(!result.is_empty());
-        assert!(result.contains("Context"));
+        let result = orchestrator.prepare_context_for_llm("prefers dark mode", &memories, 4000);
+        assert!(result.is_ok());
+
+        let prepared = result.unwrap();
+        assert!(!prepared.context.is_empty());
+        assert!(prepared.token_count > 0);
     }
 }
