@@ -217,8 +217,8 @@ impl AutoConsolidator {
         })?;
 
         let _processed = candidates.len();
-        let mut summarized = 0usize;
-        let mut archived = 0usize;
+        let mut _summarized = 0usize;
+        let mut _archived = 0usize;
 
         // Process in batches of 5
         for chunk in candidates.chunks(5) {
@@ -227,14 +227,14 @@ impl AutoConsolidator {
                 storage.with_connection(|conn| find_near_duplicates(conn, 0.85, 10))
             {
                 if !duplicates.is_empty() {
-                    summarized += 1;
+                    _summarized += 1;
                 }
             }
 
             // Check for very low scores for archival
             for memory in chunk {
                 if memory.importance < 0.2 {
-                    archived += 1;
+                    _archived += 1;
                 }
             }
         }
