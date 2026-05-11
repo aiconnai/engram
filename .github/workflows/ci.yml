@@ -33,6 +33,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -46,6 +49,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
 
@@ -105,6 +111,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-llvm-cov
@@ -154,6 +163,10 @@ jobs:
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
+        # Tolerate missing gh-pages branch on first run / forks. The raw
+        # criterion artifacts still upload via the next step, so PR authors
+        # can inspect benchmark output even before history is established.
+        continue-on-error: true
         with:
           name: Engram Performance
           tool: cargo
