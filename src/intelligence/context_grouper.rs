@@ -66,20 +66,30 @@ impl ContextGrouper {
         result
     }
 
-    /// Extracts a topic from memory content using a simple heuristic
-    /// (Can be enhanced with existing BM25 or vector search)
+    /// Extracts a topic key from memory content.
+    ///
+    /// Strategy: lowercase, strip punctuation, drop stopwords, then use the
+    /// first remaining token as the group key. Coarse on purpose — two
+    /// memories sharing their leading content word land in the same group
+    /// (e.g. "Rust is..." and "Rust has..." → "rust"). For richer grouping,
+    /// callers should layer BM25/vector similarity on top.
     fn extract_topic(&self, content: &str) -> String {
-        let words: Vec<&str> = content
-            .split_whitespace()
-            .filter(|w| w.len() > 3) // Ignore short words
-            .take(5)
+        const STOPWORDS: &[&str] = &[
+            "the", "and", "for", "with", "that", "this", "user", "from", "into", "have", "has",
+            "was", "were", "are", "but", "not", "you", "your", "our", "their", "his", "her",
+            "its", "about",
+        ];
+
+        let cleaned: String = content
+            .chars()
+            .map(|c| if c.is_alphanumeric() { c } else { ' ' })
             .collect();
 
-        if words.is_empty() {
-            "general".to_string()
-        } else {
-            words.join(" ")
-        }
+        cleaned
+            .split_whitespace()
+            .map(|w| w.to_lowercase())
+            .find(|w| w.len() > 3 && !STOPWORDS.contains(&w.as_str()))
+            .unwrap_or_else(|| "general".to_string())
     }
 
     /// Summarizes a group of memories using existing summarization logic
@@ -173,11 +183,18 @@ mod tests {
     #[test]
     fn test_extract_topic() {
         let grouper = ContextGrouper::new();
+        // "User" is in stopwords, "prefers" is the first content word.
         let topic = grouper.extract_topic("User prefers dark mode in UI settings");
-        assert!(!topic.is_empty());
+        assert_eq!(topic, "prefers");
 
-        let empty_topic = grouper.extract_topic("a b c");
-        assert_eq!(empty_topic, "general");
+        // Same leading content word → same topic key.
+        assert_eq!(
+            grouper.extract_topic("Rust is a systems programming language"),
+            grouper.extract_topic("Rust has memory safety"),
+        );
+
+        // No tokens longer than 3 chars after stopwords → fallback.
+        assert_eq!(grouper.extract_topic("a b c"), "general");
     }
 
     #[test]
@@ -189,11 +206,24 @@ mod tests {
             create_test_memory(3, "Rust has memory safety"),
         ];
 
-        // The topic extractor will create different topics for these
-        // Let's just verify the function runs without error
-        let rust_memories = grouper.find_similar_by_topic("Rust", &memories);
-        // Topics are extracted per-memory, so they won't match exactly
-        // Just check that we can call the function
-        let _ = rust_memories;
+        let rust_memories = grouper.find_similar_by_topic("rust", &memories);
+        assert_eq!(rust_memories.len(), 2);
+        assert_eq!(rust_memories[0].id, 1);
+        assert_eq!(rust_memories[1].id, 3);
+    }
+
+    #[test]
+    fn groups_share_keys_for_similar_content() {
+        let grouper = ContextGrouper::new();
+        let memories = vec![
+            create_test_memory(1, "Rust ownership and borrowing"),
+            create_test_memory(2, "Rust traits and generics"),
+            create_test_memory(3, "Python decorators are cool"),
+        ];
+        let groups = grouper.group_for_context(&memories);
+        // 2 distinct topic keys ("rust" + "python"), not 3.
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].count, 2); // sorted desc by count
+        assert_eq!(groups[0].topic, "rust");
     }
 }

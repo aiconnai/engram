@@ -547,7 +547,6 @@ pub fn memory_block_archive(ctx: &HandlerContext, params: Value) -> Value {
 /// - `workspace` (string, optional) — workspace to search in
 /// - `include_types` (array of string, optional) — filter by memory type (e.g. ["note","episodic"])
 pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::intelligence::truncation_engine::{TruncationEngine, TruncationStrategy};
     use crate::search::hybrid_search;
     use crate::types::SearchOptions;
 
@@ -648,43 +647,48 @@ pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value
         });
     }
 
-    // Use TruncationEngine for intelligent truncation
-    let engine =
-        TruncationEngine::with_config(crate::intelligence::truncation_engine::TruncationConfig {
-            max_tokens: token_budget,
-            preserve_recent: 1000,
-            strategy: TruncationStrategy::Smart,
-        });
+    // Budget exceeded — proportionally truncate each memory's content.
+    let count = memories.len();
+    let budget_chars = token_budget * 4;
+    let header_chars = header.len();
+    let separator_chars = "\n\n".len() * (count.saturating_sub(1));
+    let overhead_per_block = 80usize;
+    let total_overhead = header_chars + separator_chars + overhead_per_block * count;
+    let available_content_chars = budget_chars.saturating_sub(total_overhead);
+    let chars_per_content = if count > 0 {
+        available_content_chars / count
+    } else {
+        0
+    };
 
-    // Build per-memory markdown blocks with truncation
-    let blocks: Vec<String> = memories
+    let truncated_blocks: Vec<String> = memories
         .iter()
         .map(|r| {
             let m = &r.memory;
             let tags_str = m.tags.join(", ");
-            // Use TruncationEngine to fit within budget
-            let budget_per = token_budget / memories.len().max(1);
-            let truncated_content = engine.truncate_to_budget(&m.content, budget_per);
+            let content = if m.content.len() > chars_per_content && chars_per_content > 0 {
+                format!("{}…", safe_truncate(&m.content, chars_per_content))
+            } else {
+                m.content.clone()
+            };
             format!(
                 "## [{}] Memory #{}\nCreated: {} | Tags: {}\n\n{}\n\n---",
                 m.memory_type.as_str(),
                 m.id,
                 m.created_at.to_rfc3339(),
                 tags_str,
-                truncated_content
+                content
             )
         })
         .collect();
 
-    let header = "# Relevant Context\n\n";
-    let final_prompt = format!("{}{}", header, blocks.join("\n\n"));
-    let tokens_used = engine.estimate_tokens(&final_prompt);
+    let final_prompt = format!("{}{}", header, truncated_blocks.join("\n\n"));
+    let tokens_used = final_prompt.len() / 4;
 
     json!({
         "prompt": final_prompt,
-        "memory_count": memories.len(),
-        "tokens_used": tokens_used,
-        "truncated": tokens_used > token_budget
+        "memory_count": count,
+        "tokens_used": tokens_used
     })
 }
 

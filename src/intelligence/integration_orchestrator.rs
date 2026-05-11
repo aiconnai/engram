@@ -1,30 +1,16 @@
 //! RTK-inspired integration orchestrator for LLM context optimization
 //!
-//! Coordinates OutputFilter, ContextGrouper, TruncationEngine, and AutoConsolidator
-//! to provide a complete pipeline for reducing tokens sent to LLMs.
+//! Coordinates OutputFilter, ContextGrouper, and TruncationEngine to provide
+//! a pipeline for reducing tokens sent to LLMs. Consolidation is intentionally
+//! NOT part of this pipeline — that responsibility lives in `session_end.rs`
+//! via the `pending_injections` queue (Sprint 3).
 
 use crate::error::EngramError;
 use crate::intelligence::context_grouper::{ContextGrouper, MemoryGroup};
-use crate::intelligence::output_filter::OutputFilter;
 use crate::intelligence::truncation_engine::{TruncationConfig, TruncationEngine};
 use crate::types::Memory;
 use serde::Serialize;
 use std::collections::HashMap;
-
-/// Minimal auto-consolidator for scheduling memory consolidation
-pub struct AutoConsolidator;
-
-impl AutoConsolidator {
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// Schedule consolidation of similar memories
-    pub fn schedule_consolidation(&self, _memories: &[Memory]) -> Result<(), EngramError> {
-        // Minimal implementation - will be expanded in future iterations
-        Ok(())
-    }
-}
 
 /// Result of context preparation pipeline
 #[derive(Serialize)]
@@ -32,25 +18,20 @@ pub struct PreparedContext {
     pub context: String,
     pub token_count: usize,
     pub groups_count: usize,
-    pub consolidation_scheduled: bool,
 }
 
 /// Orchestrates all RTK-inspired components for optimal LLM context preparation
 pub struct IntegrationOrchestrator {
-    output_filter: OutputFilter,
     context_grouper: ContextGrouper,
     truncation_engine: TruncationEngine,
-    auto_consolidator: AutoConsolidator,
 }
 
 impl IntegrationOrchestrator {
     /// Create a new IntegrationOrchestrator with default components
     pub fn new() -> Self {
         Self {
-            output_filter: OutputFilter::new(),
             context_grouper: ContextGrouper::new(),
             truncation_engine: TruncationEngine::with_config(TruncationConfig::default()),
-            auto_consolidator: AutoConsolidator::new(),
         }
     }
 
@@ -61,28 +42,14 @@ impl IntegrationOrchestrator {
         memories: &[Memory],
         budget: usize,
     ) -> Result<PreparedContext, EngramError> {
-        // 1. Filter irrelevant memories
         let relevant = self.filter_irrelevant(memories, query);
-
-        // 2. Group by topic using ContextGrouper
         let groups: Vec<MemoryGroup> = self.context_grouper.group_for_context(&relevant);
-
-        // 3. Truncate groups to fit token budget
         let truncated_groups = self.truncation_engine.truncate_groups(&groups, budget);
 
-        // 4. Build final context string
         let mut context = String::new();
         for group in &truncated_groups {
             context.push_str(&format!("## {}\n{}\n", group.topic, group.summary));
         }
-
-        // 5. Check if consolidation is needed
-        let consolidation_scheduled = if self.should_consolidate(&relevant) {
-            self.auto_consolidator.schedule_consolidation(&relevant)?;
-            true
-        } else {
-            false
-        };
 
         let token_count = self.truncation_engine.estimate_tokens(&context);
 
@@ -90,11 +57,9 @@ impl IntegrationOrchestrator {
             context,
             token_count,
             groups_count: groups.len(),
-            consolidation_scheduled,
         })
     }
 
-    /// Filter out memories irrelevant to the query
     fn filter_irrelevant(&self, memories: &[Memory], query: &str) -> Vec<Memory> {
         memories
             .iter()
@@ -103,19 +68,12 @@ impl IntegrationOrchestrator {
             .collect()
     }
 
-    /// Simple relevance heuristic: check if query terms appear in memory content
     fn is_relevant(&self, memory: &Memory, query: &str) -> bool {
         if query.is_empty() {
-            return true; // Empty query matches all memories
+            return true;
         }
         let query_terms: Vec<&str> = query.split_whitespace().collect();
         query_terms.iter().any(|term| memory.content.contains(term))
-    }
-
-    /// Determine if memory consolidation should be scheduled
-    fn should_consolidate(&self, memories: &[Memory]) -> bool {
-        // Schedule consolidation if we have many similar memories
-        memories.len() > 10
     }
 }
 

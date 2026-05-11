@@ -1,41 +1,15 @@
 use std::collections::HashMap;
 
-/// Regra de filtragem associada a um padrão de comando
-struct FilterRule {
-    name: String,
-}
-
-impl FilterRule {
-    fn new(name: &str, _filter_fn: Box<dyn Fn(&str) -> String + Send + Sync>) -> Self {
-        Self {
-            name: name.to_string(),
-        }
-    }
-}
-
 /// Filtro de saída de comandos para redução de tokens em LLMs
 /// Inspirado no RTK (https://github.com/rtk-ai/rtk)
 pub struct OutputFilter {
     max_chars: usize,
-    #[allow(dead_code)]
-    filters: Vec<FilterRule>,
 }
 
 impl OutputFilter {
     /// Cria um novo OutputFilter com configurações padrão
     pub fn new() -> Self {
-        Self {
-            max_chars: 5000,
-            filters: vec![
-                FilterRule::new("ls", Box::new(|_| String::new())),
-                FilterRule::new("cat", Box::new(|_| String::new())),
-                FilterRule::new("git", Box::new(|_| String::new())),
-                FilterRule::new("grep", Box::new(|_| String::new())),
-                FilterRule::new("cargo", Box::new(|_| String::new())),
-                FilterRule::new("npm", Box::new(|_| String::new())),
-                FilterRule::new("pytest", Box::new(|_| String::new())),
-            ],
-        }
+        Self { max_chars: 5000 }
     }
 
     /// Filtra saída de comando Bash antes de enviar para LLM
@@ -82,7 +56,6 @@ impl OutputFilter {
     /// Redução: ~80%
     fn filter_listing(&self, output: &str) -> String {
         let lines: Vec<&str> = output.lines().collect();
-        println!("DEBUG: lines.len() = {}", lines.len());
         if lines.len() <= 20 {
             return output.to_string();
         }
@@ -256,7 +229,6 @@ mod tests {
         assert_eq!(filter.filter("ls", output), output);
     }
 
-    #[test]
     #[test]
     fn test_filter_listing() {
         let filter = OutputFilter::new();

@@ -2,10 +2,10 @@
 //!
 //! Run with: cargo run --bin truncation_demo
 
-use engram::intelligence::truncation_engine::TruncationEngine;
+use engram::intelligence::truncation_engine::{TruncationConfig, TruncationEngine};
 
 fn main() {
-    let engine = TruncationEngine::new();
+    let engine = TruncationEngine::with_config(TruncationConfig::default());
 
     // Example 1: Long log (10,000 chars)
     let long_log = "2024-01-01 10:00:00 INFO Starting...\n".repeat(100);

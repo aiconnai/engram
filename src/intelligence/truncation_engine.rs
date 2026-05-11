@@ -85,7 +85,13 @@ impl TruncationEngine {
             }
             TruncationStrategy::PreserveRecent => {
                 // Keep the most recent content (end of the string)
-                let start = content.len().saturating_sub(budget_chars);
+                // Advance start to the next valid UTF-8 char boundary
+                let raw_start = content.len().saturating_sub(budget_chars);
+                let start = content
+                    .char_indices()
+                    .map(|(i, _)| i)
+                    .find(|&i| i >= raw_start)
+                    .unwrap_or(content.len());
                 let recent = &content[start..];
                 format!("...{}", recent)
             }
@@ -171,6 +177,52 @@ mod tests {
         let result = engine.truncate_to_budget(content, 20);
         // Should break at sentence boundary
         assert!(result.contains("First sentence"));
+    }
+
+    #[test]
+    fn preserve_recent_keeps_tail() {
+        let engine = TruncationEngine::with_config(TruncationConfig {
+            max_tokens: 5,
+            preserve_recent: 5,
+            strategy: TruncationStrategy::PreserveRecent,
+        });
+        // budget_tokens=5 → budget_chars=20 → keep last 20 chars of input.
+        let content = "ABCDEFGHIJ".repeat(5); // 50 chars
+        let result = engine.truncate_to_budget(&content, 5);
+        assert!(result.starts_with("..."));
+        assert!(result.ends_with("ABCDEFGHIJ"));
+        // Recent slice + "..." prefix; budget is approximate.
+        assert!(result.len() <= content.len() + 3);
+    }
+
+    #[test]
+    fn preserve_recent_handles_multibyte_boundary() {
+        // Regression test for the UTF-8 boundary fix: slicing into the
+        // middle of a multi-byte codepoint must not panic.
+        let engine = TruncationEngine::with_config(TruncationConfig {
+            max_tokens: 2,
+            preserve_recent: 2,
+            strategy: TruncationStrategy::PreserveRecent,
+        });
+        // Mix of ASCII + multi-byte chars. Each "é" is 2 bytes.
+        let content = "café résumé naïve crème brûlée";
+        // Must not panic regardless of where the budget boundary lands.
+        let result = engine.truncate_to_budget(content, 2);
+        assert!(result.starts_with("..."));
+        assert!(content.ends_with(&result[3..]));
+    }
+
+    #[test]
+    fn preserve_recent_returns_full_content_when_under_budget() {
+        let engine = TruncationEngine::with_config(TruncationConfig {
+            max_tokens: 100,
+            preserve_recent: 100,
+            strategy: TruncationStrategy::PreserveRecent,
+        });
+        let content = "short";
+        let result = engine.truncate_to_budget(content, 100);
+        // Under-budget content is returned as-is, no "..." prefix.
+        assert_eq!(result, "short");
     }
 
     #[test]
