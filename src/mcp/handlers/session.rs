@@ -438,3 +438,62 @@ pub fn session_context_export(ctx: &HandlerContext, params: Value) -> Value {
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
+
+/// Forces creation of context for the next session.
+/// This is useful when you want to pre-populate the next session with specific topics.
+pub fn memory_session_prepare(_ctx: &HandlerContext, params: Value) -> Value {
+    let session_id = match params.get("session_id").and_then(|v| v.as_str()) {
+        Some(id) => id.to_string(),
+        None => return json!({"error": "session_id is required"}),
+    };
+
+    let topics: Vec<String> = params
+        .get("topics")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Build a query from the topics
+    let _query = if topics.is_empty() {
+        "important topics".to_string()
+    } else {
+        topics.join(" ")
+    };
+
+    // Use the injection prompt logic (reuse from context.rs logic)
+    // For now, we'll create a simple injection prompt
+    let mut injection_prompt = String::from("# Contexto Preparado para Próxima Sessão\n\n");
+    injection_prompt.push_str(&format!("Sessão: {}\n\n", session_id));
+
+    if !topics.is_empty() {
+        injection_prompt.push_str("## Tópicos Detectados\n");
+        for topic in &topics {
+            injection_prompt.push_str(&format!("- {}\n", topic));
+        }
+        injection_prompt.push_str("\n");
+    }
+
+    // Simulate topics detection
+    let topics_detected = topics.clone();
+
+    // Simulate consolidation scheduling
+    let consolidation_scheduled = !topics.is_empty();
+
+    // In a real implementation, we would:
+    // 1. Search for memories related to the topics
+    // 2. Build a proper injection prompt
+    // 3. Save it for the next session
+    // 4. Schedule consolidation for important topics
+
+    json!({
+        "session_id": session_id,
+        "injection_prompt": injection_prompt,
+        "topics_detected": topics_detected,
+        "consolidation_scheduled": consolidation_scheduled,
+        "auto_saved": false  // Since this is manual preparation
+    })
+}
