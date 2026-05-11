@@ -667,14 +667,15 @@ fn main() -> Result<()> {
                 // Drain in a loop until the queue is empty (or we hit one
                 // batch that returns 0). This catches up faster after a
                 // backlog without waiting `interval` between batches.
+                // drain_pending_embeddings owns its lock discipline — it
+                // releases the connection lock around the embed_batch call
+                // so other DB ops aren't blocked by the network round-trip.
                 loop {
-                    let result = drain_storage.with_connection(|conn| {
-                        engram::embedding::drain_pending_embeddings(
-                            conn,
-                            drain_embedder.as_ref(),
-                            batch_size,
-                        )
-                    });
+                    let result = engram::embedding::drain_pending_embeddings(
+                        &drain_storage,
+                        drain_embedder.as_ref(),
+                        batch_size,
+                    );
 
                     match result {
                         Ok(0) => break,
