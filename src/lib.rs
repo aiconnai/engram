@@ -12,6 +12,8 @@ pub mod app_state;
 pub mod attestation;
 pub mod auth;
 pub mod bench;
+#[cfg(feature = "dream-phase")]
+pub mod dream;
 pub mod embedding;
 pub mod error;
 pub mod graph;
