@@ -1897,6 +1897,51 @@ fn migrate_v38(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Widen `search_feedback.signal` CHECK constraint from {useful, irrelevant}
+/// to {useful, irrelevant, outdated, conflict} so the new feedback handler
+/// can persist all four signal types with distinct semantics.
+///
+/// SQLite cannot ALTER a CHECK constraint in place; we recreate the table.
+fn migrate_v39(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v39: Widening search_feedback.signal CHECK constraint...");
+
+    conn.execute_batch(
+        r#"
+        CREATE TABLE search_feedback_v39 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            query TEXT NOT NULL,
+            query_embedding_hash TEXT,
+            memory_id INTEGER NOT NULL,
+            signal TEXT NOT NULL CHECK(signal IN ('useful', 'irrelevant', 'outdated', 'conflict')),
+            rank_position INTEGER,
+            original_score REAL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            workspace TEXT DEFAULT 'default'
+        );
+
+        INSERT INTO search_feedback_v39
+            (id, query, query_embedding_hash, memory_id, signal,
+             rank_position, original_score, created_at, workspace)
+        SELECT id, query, query_embedding_hash, memory_id, signal,
+               rank_position, original_score, created_at, workspace
+        FROM search_feedback;
+
+        DROP TABLE search_feedback;
+        ALTER TABLE search_feedback_v39 RENAME TO search_feedback;
+
+        CREATE INDEX IF NOT EXISTS idx_feedback_memory ON search_feedback(memory_id);
+        CREATE INDEX IF NOT EXISTS idx_feedback_query ON search_feedback(query);
+        CREATE INDEX IF NOT EXISTS idx_feedback_workspace ON search_feedback(workspace);
+
+        INSERT INTO schema_version (version) VALUES (39);
+        "#,
+    )?;
+
+    tracing::info!("Migration v39 complete: search_feedback signal types widened");
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
