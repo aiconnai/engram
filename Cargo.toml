@@ -15,27 +15,44 @@ readme = "README.md"
 [lib]
 name = "engram"
 path = "src/lib.rs"
+# Benches live in `benches/` (Criterion, harness = false). Disable the
+# default libtest bench harness here so `cargo bench -- --output-format
+# bencher` does not try to run the lib's test binary and fail.
+bench = false
 
 [[bin]]
 name = "engram-server"
 path = "src/bin/server.rs"
+bench = false
 
 [[bin]]
 name = "engram-cli"
 path = "src/bin/cli.rs"
+bench = false
 
 [[bin]]
 name = "engram-bench"
 path = "src/bin/bench.rs"
+bench = false
 
 [[bin]]
 name = "engram-watcher"
 path = "src/bin/watcher.rs"
 required-features = ["watcher"]
+bench = false
 
 [[bin]]
 name = "engram-agent"
 path = "src/bin/agent.rs"
+bench = false
+
+# Implicit binary from src/main.rs (matches package name). Listed
+# explicitly so `bench = false` applies — otherwise `cargo bench` tries
+# to invoke its libtest harness and chokes on `--output-format bencher`.
+[[bin]]
+name = "engram-core"
+path = "src/main.rs"
+bench = false
 
 [features]
 default = ["cloud", "openai"]
