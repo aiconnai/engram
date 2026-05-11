@@ -455,7 +455,7 @@ impl ReflectionEngine {
         }
 
         let mut sorted: Vec<(String, usize)> = freq.into_iter().collect();
-        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
         let top_themes: Vec<String> = sorted.into_iter().take(5).map(|(w, _)| w).collect();
 
         let insights: Vec<String> = top_themes
@@ -566,7 +566,7 @@ impl ReflectionEngine {
             }
         }
         let mut top_kw: Vec<(String, usize)> = kw_freq.into_iter().collect();
-        top_kw.sort_by(|a, b| b.1.cmp(&a.1));
+        top_kw.sort_by_key(|b| std::cmp::Reverse(b.1));
         let top_keywords: Vec<String> = top_kw.into_iter().take(3).map(|(k, _)| k).collect();
         if !top_keywords.is_empty() {
             insights.push(format!(

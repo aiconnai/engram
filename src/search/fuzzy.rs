@@ -139,7 +139,7 @@ impl FuzzyEngine {
         }
 
         // Sort by frequency (descending)
-        suggestions.sort_by(|a, b| b.1.cmp(&a.1));
+        suggestions.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         suggestions
             .into_iter()

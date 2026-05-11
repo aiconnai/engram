@@ -906,20 +906,14 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
         .filter(|def| {
             if let Some(t) = tier_filter {
                 match t {
-                    "essential" => {
-                        if def.tier != ToolTier::Essential {
-                            return false;
-                        }
+                    "essential" if def.tier != ToolTier::Essential => {
+                        return false;
                     }
-                    "standard" => {
-                        if def.tier != ToolTier::Standard {
-                            return false;
-                        }
+                    "standard" if def.tier != ToolTier::Standard => {
+                        return false;
                     }
-                    "advanced" => {
-                        if def.tier != ToolTier::Advanced {
-                            return false;
-                        }
+                    "advanced" if def.tier != ToolTier::Advanced => {
+                        return false;
                     }
                     _ => {}
                 }

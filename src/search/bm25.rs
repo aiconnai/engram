@@ -132,6 +132,10 @@ pub fn bm25_search_complete_with_scope_path(
 
     // Note: snippet() is not available with external content FTS5 tables
     // We generate highlights manually from the content instead
+    // NOTE: Columns must match what memory_from_row() reads. Missing columns
+    // here trigger silent defaults (e.g. workspace -> "default", tier ->
+    // "permanent", lifecycle_state -> Active) instead of panicking, which
+    // historically masked wrong values in BM25 results (issue #10).
     let mut sql = String::from(
         r#"
         SELECT
@@ -139,6 +143,7 @@ pub fn bm25_search_complete_with_scope_path(
             m.created_at, m.updated_at, m.last_accessed_at, m.owner_id,
             m.visibility, m.version, m.has_embedding, m.metadata,
             m.scope_type, m.scope_id, m.expires_at,
+            m.workspace, m.tier, m.lifecycle_state,
             bm25(memories_fts) as score
         FROM memories_fts fts
         JOIN memories m ON fts.rowid = m.id

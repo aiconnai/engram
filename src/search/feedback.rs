@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS search_feedback (
     query TEXT NOT NULL,
     query_embedding_hash TEXT,
     memory_id INTEGER NOT NULL,
-    signal TEXT NOT NULL CHECK(signal IN ('useful', 'irrelevant')),
+    signal TEXT NOT NULL CHECK(signal IN ('useful', 'irrelevant', 'outdated', 'conflict')),
     rank_position INTEGER,
     original_score REAL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -37,11 +37,19 @@ CREATE INDEX IF NOT EXISTS idx_feedback_workspace ON search_feedback(workspace);
 // ---------------------------------------------------------------------------
 
 /// Feedback signal: whether a search result was helpful.
+///
+/// Variants:
+/// - `Useful` (alias `helpful`) — result was relevant
+/// - `Irrelevant` (alias `not_helpful`) — result was off-topic
+/// - `Outdated` — result was relevant but stale; weaker negative than Irrelevant
+/// - `Conflict` — result contradicts other knowledge; stronger negative
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FeedbackSignal {
     Useful,
     Irrelevant,
+    Outdated,
+    Conflict,
 }
 
 impl FeedbackSignal {
@@ -49,13 +57,17 @@ impl FeedbackSignal {
         match self {
             FeedbackSignal::Useful => "useful",
             FeedbackSignal::Irrelevant => "irrelevant",
+            FeedbackSignal::Outdated => "outdated",
+            FeedbackSignal::Conflict => "conflict",
         }
     }
 
     fn from_str(s: &str) -> Result<Self> {
         match s {
-            "useful" => Ok(FeedbackSignal::Useful),
-            "irrelevant" => Ok(FeedbackSignal::Irrelevant),
+            "useful" | "helpful" => Ok(FeedbackSignal::Useful),
+            "irrelevant" | "not_helpful" => Ok(FeedbackSignal::Irrelevant),
+            "outdated" => Ok(FeedbackSignal::Outdated),
+            "conflict" => Ok(FeedbackSignal::Conflict),
             other => Err(EngramError::InvalidInput(format!(
                 "unknown feedback signal: {other}"
             ))),
@@ -365,9 +377,15 @@ pub fn compute_feedback_boosts(
                 1.0
             };
 
+            // Negative signals carry different magnitudes:
+            // - Irrelevant: result was off-topic (weight 1.0)
+            // - Outdated:   result was relevant but stale (weight 0.5)
+            // - Conflict:   result contradicts other knowledge (weight 1.5)
             match row.signal {
                 FeedbackSignal::Useful => weighted_useful += weight,
                 FeedbackSignal::Irrelevant => weighted_irrelevant += weight,
+                FeedbackSignal::Outdated => weighted_irrelevant += weight * 0.5,
+                FeedbackSignal::Conflict => weighted_irrelevant += weight * 1.5,
             }
             weighted_total += weight;
         }

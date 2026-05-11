@@ -95,19 +95,13 @@ impl ClipEmbedder {
     /// Returns `EngramError::Config` if `OPENAI_API_KEY` is not set.
     pub fn from_env() -> Result<Self> {
         let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-            EngramError::Config(
-                "OPENAI_API_KEY is required for CLIP embeddings".to_string(),
-            )
+            EngramError::Config("OPENAI_API_KEY is required for CLIP embeddings".to_string())
         })?;
         Ok(Self::new(api_key))
     }
 
     /// Async version: generate an image embedding by describing the image first.
-    pub async fn embed_image_async(
-        &self,
-        image_bytes: &[u8],
-        mime_type: &str,
-    ) -> Result<Vec<f32>> {
+    pub async fn embed_image_async(&self, image_bytes: &[u8], mime_type: &str) -> Result<Vec<f32>> {
         // Step 1: get a vision provider from the environment
         let vision = VisionProviderFactory::from_env().map_err(|e| {
             EngramError::Config(format!(

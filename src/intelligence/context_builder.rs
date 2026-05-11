@@ -167,7 +167,7 @@ impl ContextBuilder {
         let sorted_memories: Vec<&MemoryEntry> = match strategy {
             Strategy::Recency => {
                 let mut m: Vec<&MemoryEntry> = memories.iter().collect();
-                m.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+                m.sort_by_key(|b| std::cmp::Reverse(b.created_at));
                 m
             }
             _ => memories.iter().collect(),

@@ -370,9 +370,7 @@ pub fn scan_project(ctx: &HandlerContext, params: Value) -> Value {
         let chain = AttestationChain::new(ctx.storage.clone());
         for file in &discovered {
             let content_bytes = file.content.as_bytes();
-            if let Err(e) =
-                chain.log_document(content_bytes, &file.filename, None, &[], None)
-            {
+            if let Err(e) = chain.log_document(content_bytes, &file.filename, None, &[], None) {
                 tracing::warn!(
                     "Attestation hook (scan_project): failed to log '{}': {}",
                     file.filename,

@@ -1,0 +1,235 @@
+//! Truncation Engine for intelligent context truncation (RTK-inspired)
+//! Provides smart truncation strategies for fitting context within token budgets
+
+use crate::intelligence::context_grouper::MemoryGroup;
+use serde::{Deserialize, Serialize};
+
+/// Strategy for truncating content
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum TruncationStrategy {
+    /// Simple character-based truncation
+    Simple,
+    /// Smart truncation preserving sentence boundaries
+    Smart,
+    /// Preserve most recent content (sliding window)
+    PreserveRecent,
+}
+
+/// Configuration for the truncation engine
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TruncationConfig {
+    /// Maximum tokens for the output
+    pub max_tokens: usize,
+    /// Number of tokens to preserve for recent content
+    pub preserve_recent: usize,
+    /// Truncation strategy to use
+    pub strategy: TruncationStrategy,
+}
+
+impl Default for TruncationConfig {
+    fn default() -> Self {
+        Self {
+            max_tokens: 2000,
+            preserve_recent: 1000,
+            strategy: TruncationStrategy::Smart,
+        }
+    }
+}
+
+/// Engine for intelligently truncating content to fit token budgets
+pub struct TruncationEngine {
+    config: TruncationConfig,
+}
+
+impl TruncationEngine {
+    /// Create a new TruncationEngine with the given config
+    pub fn with_config(config: TruncationConfig) -> Self {
+        Self { config }
+    }
+
+    /// Truncate content to fit within a token budget
+    pub fn truncate_to_budget(&self, content: &str, budget_tokens: usize) -> String {
+        let budget_chars = budget_tokens * 4; // rough estimate: 1 token ≈ 4 chars
+
+        if content.len() <= budget_chars {
+            return content.to_string();
+        }
+
+        match self.config.strategy {
+            TruncationStrategy::Simple => {
+                let truncated = content.chars().take(budget_chars).collect::<String>();
+                format!("{}...", truncated)
+            }
+            TruncationStrategy::Smart => {
+                // Try to break at sentence boundaries
+                let mut result = String::new();
+                let mut char_count = 0;
+
+                for sentence in content.split('.') {
+                    let sentence_with_period = format!("{}.", sentence);
+                    if char_count + sentence_with_period.len() <= budget_chars {
+                        result.push_str(&sentence_with_period);
+                        char_count += sentence_with_period.len();
+                    } else {
+                        break;
+                    }
+                }
+
+                if result.is_empty() {
+                    // Fallback to simple truncation
+                    let truncated = content.chars().take(budget_chars - 3).collect::<String>();
+                    format!("{}...", truncated)
+                } else {
+                    result
+                }
+            }
+            TruncationStrategy::PreserveRecent => {
+                // Keep the most recent content (end of the string)
+                // Advance start to the next valid UTF-8 char boundary
+                let raw_start = content.len().saturating_sub(budget_chars);
+                let start = content
+                    .char_indices()
+                    .map(|(i, _)| i)
+                    .find(|&i| i >= raw_start)
+                    .unwrap_or(content.len());
+                let recent = &content[start..];
+                format!("...{}", recent)
+            }
+        }
+    }
+
+    /// Truncate a list of MemoryGroups to fit within a token budget
+    /// Returns truncated groups with summaries trimmed as needed
+    pub fn truncate_groups(
+        &self,
+        groups: &[MemoryGroup],
+        budget_tokens: usize,
+    ) -> Vec<MemoryGroup> {
+        let budget_chars = budget_tokens * 4; // rough estimate
+        let mut result = Vec::new();
+        let mut used_chars = 0;
+
+        for group in groups {
+            let group_chars = group.topic.len() + group.summary.len() + 10; // +10 for formatting
+
+            if used_chars + group_chars <= budget_chars {
+                result.push(group.clone());
+                used_chars += group_chars;
+            } else {
+                // Try to add a truncated version
+                let remaining = budget_chars.saturating_sub(used_chars);
+                if remaining > 50 {
+                    // Only add if we have reasonable space
+                    let mut truncated_group = group.clone();
+                    let max_summary_chars = remaining.saturating_sub(group.topic.len() + 10);
+                    if group.summary.len() > max_summary_chars {
+                        truncated_group.summary = format!(
+                            "{}...",
+                            group
+                                .summary
+                                .chars()
+                                .take(max_summary_chars - 3)
+                                .collect::<String>()
+                        );
+                    }
+                    result.push(truncated_group);
+                }
+                break; // Budget exhausted
+            }
+        }
+
+        result
+    }
+
+    /// Estimate the number of tokens in a string
+    pub fn estimate_tokens(&self, text: &str) -> usize {
+        text.len() / 4 // rough estimate
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_truncation() {
+        let engine = TruncationEngine::with_config(TruncationConfig {
+            max_tokens: 10,
+            preserve_recent: 5,
+            strategy: TruncationStrategy::Simple,
+        });
+
+        let content = "This is a long piece of content that needs to be truncated";
+        let result = engine.truncate_to_budget(content, 10);
+        assert!(result.len() <= 43); // 10 tokens * 4 chars + "..."
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_smart_truncation() {
+        let engine = TruncationEngine::with_config(TruncationConfig {
+            max_tokens: 20,
+            preserve_recent: 10,
+            strategy: TruncationStrategy::Smart,
+        });
+
+        let content = "First sentence. Second sentence. Third sentence. Fourth sentence.";
+        let result = engine.truncate_to_budget(content, 20);
+        // Should break at sentence boundary
+        assert!(result.contains("First sentence"));
+    }
+
+    #[test]
+    fn preserve_recent_keeps_tail() {
+        let engine = TruncationEngine::with_config(TruncationConfig {
+            max_tokens: 5,
+            preserve_recent: 5,
+            strategy: TruncationStrategy::PreserveRecent,
+        });
+        // budget_tokens=5 → budget_chars=20 → keep last 20 chars of input.
+        let content = "ABCDEFGHIJ".repeat(5); // 50 chars
+        let result = engine.truncate_to_budget(&content, 5);
+        assert!(result.starts_with("..."));
+        assert!(result.ends_with("ABCDEFGHIJ"));
+        // Recent slice + "..." prefix; budget is approximate.
+        assert!(result.len() <= content.len() + 3);
+    }
+
+    #[test]
+    fn preserve_recent_handles_multibyte_boundary() {
+        // Regression test for the UTF-8 boundary fix: slicing into the
+        // middle of a multi-byte codepoint must not panic.
+        let engine = TruncationEngine::with_config(TruncationConfig {
+            max_tokens: 2,
+            preserve_recent: 2,
+            strategy: TruncationStrategy::PreserveRecent,
+        });
+        // Mix of ASCII + multi-byte chars. Each "é" is 2 bytes.
+        let content = "café résumé naïve crème brûlée";
+        // Must not panic regardless of where the budget boundary lands.
+        let result = engine.truncate_to_budget(content, 2);
+        assert!(result.starts_with("..."));
+        assert!(content.ends_with(&result[3..]));
+    }
+
+    #[test]
+    fn preserve_recent_returns_full_content_when_under_budget() {
+        let engine = TruncationEngine::with_config(TruncationConfig {
+            max_tokens: 100,
+            preserve_recent: 100,
+            strategy: TruncationStrategy::PreserveRecent,
+        });
+        let content = "short";
+        let result = engine.truncate_to_budget(content, 100);
+        // Under-budget content is returned as-is, no "..." prefix.
+        assert_eq!(result, "short");
+    }
+
+    #[test]
+    fn test_estimate_tokens() {
+        let engine = TruncationEngine::with_config(Default::default());
+        let text = "Hello world";
+        let tokens = engine.estimate_tokens(text);
+        assert_eq!(tokens, 2); // 11 chars / 4 = 2 (integer division)
+    }
+}

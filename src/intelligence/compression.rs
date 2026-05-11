@@ -200,7 +200,7 @@ impl ContextBudgetResult {
 
             // Find largest memories
             let mut sorted = memory_tokens.clone();
-            sorted.sort_by(|a, b| b.tokens.cmp(&a.tokens));
+            sorted.sort_by_key(|b| std::cmp::Reverse(b.tokens));
 
             if let Some(largest) = sorted.first() {
                 suggestions.push(format!(

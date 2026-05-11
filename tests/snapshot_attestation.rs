@@ -7,11 +7,11 @@
 
 #![cfg(feature = "agent-portability")]
 
-use engram::attestation::{AttestationChain, AttestationFilter};
 use engram::attestation::types::ChainStatus;
+use engram::attestation::{AttestationChain, AttestationFilter};
 use engram::snapshot::{LoadStrategy, SnapshotBuilder, SnapshotLoader};
-use engram::storage::Storage;
 use engram::storage::queries::create_memory;
+use engram::storage::Storage;
 use engram::types::CreateMemoryInput;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -108,9 +108,8 @@ fn scenario_3_provenance_columns_set() {
         .expect("build snapshot");
 
     let dst = open_storage();
-    let result =
-        SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("loaded_ws"), None)
-            .expect("load snapshot");
+    let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("loaded_ws"), None)
+        .expect("load snapshot");
 
     assert_eq!(result.memories_loaded, 1);
 
@@ -124,7 +123,10 @@ fn scenario_3_provenance_columns_set() {
             .expect("prepare stmt");
         let row = stmt
             .query_row([], |r| {
-                Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?))
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                ))
             })
             .expect("query row");
 
@@ -135,7 +137,10 @@ fn scenario_3_provenance_columns_set() {
             "snapshot_origin should be an .egm filename, got: {}",
             origin
         );
-        assert!(!loaded_at.is_empty(), "snapshot_loaded_at should be non-empty");
+        assert!(
+            !loaded_at.is_empty(),
+            "snapshot_loaded_at should be non-empty"
+        );
         Ok(())
     })
     .expect("provenance check");
@@ -163,7 +168,13 @@ fn scenario_4_attestation_after_load() {
     // Log the snapshot file attestation manually (as snapshot_load handler does)
     let archive_bytes = std::fs::read(&path).expect("read archive bytes");
     let record = chain
-        .log_document(&archive_bytes, "test_snapshot.egm", Some("test-agent"), &[], None)
+        .log_document(
+            &archive_bytes,
+            "test_snapshot.egm",
+            Some("test-agent"),
+            &[],
+            None,
+        )
         .expect("log_document");
 
     assert!(!record.document_hash.is_empty());
@@ -174,7 +185,10 @@ fn scenario_4_attestation_after_load() {
     let found = chain
         .verify_document(&archive_bytes)
         .expect("verify_document");
-    assert!(found.is_some(), "attestation record should exist for snapshot");
+    assert!(
+        found.is_some(),
+        "attestation record should exist for snapshot"
+    );
     let found_record = found.unwrap();
     assert_eq!(found_record.document_name, "test_snapshot.egm");
 
@@ -231,8 +245,7 @@ fn scenario_6_encrypted_wrong_key_fails() {
 
     let dst = open_storage();
     let wrong_key = [0xFFu8; 32];
-    let result =
-        SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, None, Some(&wrong_key));
+    let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, None, Some(&wrong_key));
 
     assert!(
         result.is_err(),
@@ -258,7 +271,10 @@ fn scenario_7_signed_snapshot_flag() {
 
     // Manifest should be marked as signed
     assert!(manifest.signed, "manifest.signed should be true");
-    assert!(!manifest.encrypted, "signed-only snapshot should not be encrypted");
+    assert!(
+        !manifest.encrypted,
+        "signed-only snapshot should not be encrypted"
+    );
 
     // Inspect: signed flag persists in stored manifest
     let info = SnapshotLoader::inspect(&path).expect("inspect signed snapshot");
@@ -292,9 +308,7 @@ fn scenario_8_list_attestation_records() {
         .expect("log gamma");
 
     // List all
-    let all = chain
-        .list(&AttestationFilter::default())
-        .expect("list all");
+    let all = chain.list(&AttestationFilter::default()).expect("list all");
     assert_eq!(all.len(), 3);
 
     // Filter by agent_id
@@ -325,13 +339,15 @@ fn scenario_9_dry_run_no_insert() {
         .expect("build snapshot");
 
     let dst = open_storage();
-    let result =
-        SnapshotLoader::load(&dst, &path, LoadStrategy::DryRun, Some("dr_target"), None)
-            .expect("dry run load");
+    let result = SnapshotLoader::load(&dst, &path, LoadStrategy::DryRun, Some("dr_target"), None)
+        .expect("dry run load");
 
     // DryRun reports what WOULD happen — memories_loaded is a preview count.
     // It does not actually insert anything; the database must remain empty.
-    assert_eq!(result.memories_loaded, 2, "DryRun should report 2 would-be-loaded memories");
+    assert_eq!(
+        result.memories_loaded, 2,
+        "DryRun should report 2 would-be-loaded memories"
+    );
 
     // Confirm the destination is truly empty (no rows inserted)
     let count: i64 = dst

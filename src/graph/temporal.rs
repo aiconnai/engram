@@ -387,12 +387,7 @@ pub fn detect_contradictions(conn: &Connection) -> Result<Vec<(TemporalEdge, Tem
 /// When `scope_path` is `Some(prefix)`, the diff is limited to edges within
 /// that scope hierarchy. When `None`, all scopes are compared (backward
 /// compatible).
-pub fn diff(
-    conn: &Connection,
-    t1: &str,
-    t2: &str,
-    scope_path: Option<&str>,
-) -> Result<GraphDiff> {
+pub fn diff(conn: &Connection, t1: &str, t2: &str, scope_path: Option<&str>) -> Result<GraphDiff> {
     let snap1 = snapshot_at(conn, t1, scope_path)?;
     let snap2 = snapshot_at(conn, t2, scope_path)?;
 
@@ -865,8 +860,7 @@ mod tests {
         )
         .unwrap();
 
-        let d =
-            diff(&conn, "2022-07-01T00:00:00Z", "2024-01-01T00:00:00Z", None).expect("diff");
+        let d = diff(&conn, "2022-07-01T00:00:00Z", "2024-01-01T00:00:00Z", None).expect("diff");
 
         // The triple is present at both timestamps, but via a different edge id.
         assert_eq!(d.changed.len(), 1);
@@ -1005,7 +999,11 @@ mod tests {
         // Filter to "global" includes all descendants (hierarchical prefix matching).
         // "global" matches exactly, and "global/org:acme" matches via LIKE 'global/%'.
         let global_tree = snapshot_at(&conn, "2025-01-01T00:00:00Z", Some("global")).unwrap();
-        assert_eq!(global_tree.len(), 2, "global scope tree should include its child org:acme");
+        assert_eq!(
+            global_tree.len(),
+            2,
+            "global scope tree should include its child org:acme"
+        );
 
         // Filter to "global/org:acme" → only the acme edge (no further children here).
         let acme_only =
@@ -1085,16 +1083,12 @@ mod tests {
         //   - the exact "global/mbras" edge
         //   - "global/mbras/broker_alice" (child)
         // but NOT "global/other".
-        let mbras_snap =
-            snapshot_at(&conn, "2025-01-01T00:00:00Z", Some("global/mbras")).unwrap();
+        let mbras_snap = snapshot_at(&conn, "2025-01-01T00:00:00Z", Some("global/mbras")).unwrap();
         assert_eq!(
             mbras_snap.len(),
             2,
             "expected 2 edges under global/mbras, got: {:?}",
-            mbras_snap
-                .iter()
-                .map(|e| &e.scope_path)
-                .collect::<Vec<_>>()
+            mbras_snap.iter().map(|e| &e.scope_path).collect::<Vec<_>>()
         );
 
         let scope_paths: Vec<&str> = mbras_snap.iter().map(|e| e.scope_path.as_str()).collect();

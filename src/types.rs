@@ -331,7 +331,10 @@ impl MemoryType {
 
     /// Returns true if this type is a multimodal (media) memory
     pub fn is_multimodal(&self) -> bool {
-        matches!(self, MemoryType::Image | MemoryType::Audio | MemoryType::Video)
+        matches!(
+            self,
+            MemoryType::Image | MemoryType::Audio | MemoryType::Video
+        )
     }
 }
 
@@ -734,7 +737,7 @@ pub struct EmbeddingConfig {
     /// OpenAI API key (for openai model)
     pub api_key: Option<String>,
     /// OpenAI-compatible API base URL (for OpenRouter, Azure, etc.)
-    /// Default: https://api.openai.com/v1
+    /// Default: `<https://api.openai.com/v1>`
     pub base_url: Option<String>,
     /// Embedding model name override (e.g., "text-embedding-3-small", "openai/text-embedding-3-small")
     pub embedding_model: Option<String>,

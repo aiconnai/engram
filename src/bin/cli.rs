@@ -6,17 +6,17 @@ use std::io::{self, Write};
 
 use clap::{Parser, Subcommand};
 
+#[cfg(feature = "agent-portability")]
+use engram::attestation::{AttestationChain, AttestationFilter};
 use engram::embedding::create_embedder;
 use engram::error::Result;
 use engram::graph::KnowledgeGraph;
 use engram::search::{hybrid_search, SearchConfig};
+#[cfg(feature = "agent-portability")]
+use engram::snapshot::{LoadStrategy, SnapshotBuilder, SnapshotLoader};
 use engram::storage::queries::*;
 use engram::storage::Storage;
 use engram::types::*;
-#[cfg(feature = "agent-portability")]
-use engram::attestation::{AttestationChain, AttestationFilter};
-#[cfg(feature = "agent-portability")]
-use engram::snapshot::{LoadStrategy, SnapshotBuilder, SnapshotLoader};
 #[cfg(feature = "agent-portability")]
 use std::str::FromStr as _;
 

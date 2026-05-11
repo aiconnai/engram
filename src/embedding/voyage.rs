@@ -212,6 +212,8 @@ mod tests {
     /// A lightweight stub that mimics VoyageEmbedder behaviour without HTTP.
     struct StubVoyageEmbedder {
         dimensions: usize,
+        // Preserved for parity with the real VoyageEmbedder HTTP client field.
+        #[allow(dead_code)]
         model: String,
     }
 

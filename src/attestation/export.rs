@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn test_export_json_roundtrip() {
         let record = sample_record();
-        let json = export_json(&[record.clone()]).unwrap();
+        let json = export_json(std::slice::from_ref(&record)).unwrap();
         let parsed: Vec<AttestationRecord> = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].document_name, "report.txt");

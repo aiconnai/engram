@@ -47,6 +47,7 @@ async fn test_turso_crud() {
         event_duration_seconds: None,
         trigger_pattern: None,
         summary_of_id: None,
+        media_url: None,
     };
 
     let memory = backend.create_memory(input).unwrap();
@@ -67,6 +68,7 @@ async fn test_turso_crud() {
         ttl_seconds: None,
         event_time: None,
         trigger_pattern: None,
+        media_url: None,
     };
     let updated = backend.update_memory(memory.id, update).unwrap();
     assert_eq!(updated.content, "Updated Turso memory");

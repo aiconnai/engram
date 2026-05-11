@@ -80,12 +80,8 @@ impl SnapshotLoader {
         };
 
         // Determine the workspace name
-        let resolved_workspace = Self::resolve_workspace(
-            strategy,
-            target_workspace,
-            &manifest,
-            &memories,
-        );
+        let resolved_workspace =
+            Self::resolve_workspace(strategy, target_workspace, &manifest, &memories);
 
         // DryRun: return counts without making changes
         if strategy == LoadStrategy::DryRun {
@@ -225,9 +221,8 @@ impl SnapshotLoader {
         let mut json = String::new();
         entry.read_to_string(&mut json)?;
 
-        serde_json::from_str(&json).map_err(|e| {
-            EngramError::Storage(format!("Failed to parse snapshot manifest: {}", e))
-        })
+        serde_json::from_str(&json)
+            .map_err(|e| EngramError::Storage(format!("Failed to parse snapshot manifest: {}", e)))
     }
 
     /// Read memories and edges from a plaintext archive
@@ -278,9 +273,8 @@ impl SnapshotLoader {
         let mut json = String::new();
         entry.read_to_string(&mut json)?;
 
-        serde_json::from_str(&json).map_err(|e| {
-            EngramError::Storage(format!("Failed to parse {}: {}", name, e))
-        })
+        serde_json::from_str(&json)
+            .map_err(|e| EngramError::Storage(format!("Failed to parse {}: {}", name, e)))
     }
 
     /// Read and deserialize a JSON file from an inner in-memory archive
@@ -295,9 +289,8 @@ impl SnapshotLoader {
         let mut json = String::new();
         entry.read_to_string(&mut json)?;
 
-        serde_json::from_str(&json).map_err(|e| {
-            EngramError::Storage(format!("Failed to parse {}: {}", name, e))
-        })
+        serde_json::from_str(&json)
+            .map_err(|e| EngramError::Storage(format!("Failed to parse {}: {}", name, e)))
     }
 
     /// Determine the workspace name to use based on strategy and inputs
@@ -383,9 +376,9 @@ impl SnapshotLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::Storage;
     use crate::snapshot::builder::SnapshotBuilder;
     use crate::storage::queries::create_memory;
+    use crate::storage::Storage;
     use crate::types::{CreateMemoryInput, DedupMode, MemoryScope, MemoryTier, MemoryType};
     use tempfile::tempdir;
 
@@ -505,9 +498,14 @@ mod tests {
             .expect("build_encrypted");
 
         let dst = make_storage();
-        let result =
-            SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("loaded-ws"), Some(&key))
-                .expect("load encrypted");
+        let result = SnapshotLoader::load(
+            &dst,
+            &path,
+            LoadStrategy::Merge,
+            Some("loaded-ws"),
+            Some(&key),
+        )
+        .expect("load encrypted");
 
         assert_eq!(result.memories_loaded, 1);
     }
@@ -549,8 +547,9 @@ mod tests {
         let dst = make_storage();
         insert_test_memory(&dst, "Pre-existing memory", "replace-ws");
 
-        let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Replace, Some("replace-ws"), None)
-            .expect("load replace");
+        let result =
+            SnapshotLoader::load(&dst, &path, LoadStrategy::Replace, Some("replace-ws"), None)
+                .expect("load replace");
 
         assert_eq!(result.strategy, LoadStrategy::Replace);
         // The new memory from the snapshot should be loaded
@@ -567,7 +566,8 @@ mod tests {
             // Only the snapshot memory should be active
             assert_eq!(count, 1);
             Ok(())
-        }).expect("count query");
+        })
+        .expect("count query");
     }
 
     #[test]

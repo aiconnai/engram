@@ -161,7 +161,7 @@ mod inner {
             let hash = fnv1a_hash(token.as_bytes());
             // Reserve 0..=103 for special tokens; spread the rest across the
             // typical BERT vocabulary range.
-            104 + (hash % (30522 - 104)) as i64
+            104 + (hash % (30522 - 104))
         }
 
         /// Tokenize a text string into a padded/truncated sequence of token ids
@@ -246,7 +246,7 @@ mod inner {
         /// L2-normalise a vector in place.
         ///
         /// If the norm is zero (all-zero vector) the vector is left unchanged.
-        pub fn l2_normalize(v: &mut Vec<f32>) {
+        pub fn l2_normalize(v: &mut [f32]) {
             let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
             if norm > 0.0 {
                 for x in v.iter_mut() {
@@ -265,25 +265,26 @@ mod inner {
             let seq_len = input_ids.len();
 
             // Build ONNX Tensor values with shape [1, seq_len]
-            let ids_tensor = Tensor::from_array(([1, seq_len], input_ids.to_vec()))
-                .map_err(|e| {
+            let ids_tensor =
+                Tensor::from_array(([1, seq_len], input_ids.to_vec())).map_err(|e| {
                     EngramError::Embedding(format!("Failed to build input_ids tensor: {e}"))
                 })?;
 
-            let mask_tensor = Tensor::from_array(([1, seq_len], attention_mask.to_vec()))
-                .map_err(|e| {
+            let mask_tensor =
+                Tensor::from_array(([1, seq_len], attention_mask.to_vec())).map_err(|e| {
                     EngramError::Embedding(format!("Failed to build attention_mask tensor: {e}"))
                 })?;
 
             // token_type_ids: all zeros (single-sentence input)
-            let type_ids_tensor = Tensor::from_array(([1, seq_len], vec![0i64; seq_len]))
-                .map_err(|e| {
+            let type_ids_tensor =
+                Tensor::from_array(([1, seq_len], vec![0i64; seq_len])).map_err(|e| {
                     EngramError::Embedding(format!("Failed to build token_type_ids tensor: {e}"))
                 })?;
 
-            let mut session = self.session.lock().map_err(|e| {
-                EngramError::Embedding(format!("Failed to lock ONNX session: {e}"))
-            })?;
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|e| EngramError::Embedding(format!("Failed to lock ONNX session: {e}")))?;
 
             let outputs = session
                 .run(ort::inputs![
@@ -302,18 +303,17 @@ mod inner {
             if shape.len() != 3 || shape[0] != 1 {
                 return Err(EngramError::Embedding(format!(
                     "Expected 3D output tensor [1, seq_len, hidden_size], got shape {:?}",
-                    &*shape
+                    shape
                 )));
             }
             let hidden_size = shape[2] as usize;
             let actual_seq_len = shape[1] as usize;
 
             // Squeeze batch dimension → [seq_len, hidden_size]
-            let token_embeddings = Array2::from_shape_vec(
-                (actual_seq_len, hidden_size),
-                data.to_vec(),
-            )
-            .map_err(|e| EngramError::Embedding(format!("Failed to reshape output: {e}")))?;
+            let token_embeddings =
+                Array2::from_shape_vec((actual_seq_len, hidden_size), data.to_vec()).map_err(
+                    |e| EngramError::Embedding(format!("Failed to reshape output: {e}")),
+                )?;
 
             // Validate hidden size matches configured dimensions
             if token_embeddings.ncols() != self.config.dimensions {
@@ -452,7 +452,7 @@ mod inner {
                     return id;
                 }
                 let hash = fnv1a_hash(token.as_bytes());
-                104 + (hash % (30522 - 104)) as i64
+                104 + (hash % (30522 - 104))
             }
 
             fn tokenize(&self, text: &str) -> (Vec<i64>, Vec<i64>) {

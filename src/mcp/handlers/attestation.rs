@@ -10,8 +10,9 @@ use serde_json::{json, Value};
 
 use super::HandlerContext;
 
-use crate::attestation::{export_csv, export_json, export_merkle_proof, AttestationChain,
-    AttestationFilter, MerkleTree};
+use crate::attestation::{
+    export_csv, export_json, export_merkle_proof, AttestationChain, AttestationFilter, MerkleTree,
+};
 
 // ── attestation_log ───────────────────────────────────────────────────────────
 
@@ -126,14 +127,8 @@ pub fn attestation_chain_verify(ctx: &HandlerContext, _params: Value) -> Value {
 /// - `document_name` (string, optional) — filter by name substring
 /// - `export_format` (string, optional) — "json", "csv", or "merkle_proof"
 pub fn attestation_list(ctx: &HandlerContext, params: Value) -> Value {
-    let limit = params
-        .get("limit")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(50) as usize;
-    let offset = params
-        .get("offset")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0) as usize;
+    let limit = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(50) as usize;
+    let offset = params.get("offset").and_then(|v| v.as_i64()).unwrap_or(0) as usize;
     let agent_id = params
         .get("agent_id")
         .and_then(|v| v.as_str())

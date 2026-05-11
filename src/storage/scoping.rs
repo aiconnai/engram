@@ -324,7 +324,7 @@ pub fn scope_tree(conn: &Connection) -> Result<Vec<ScopeNode>> {
 /// Recursively nest nodes into a proper tree.
 fn build_tree(mut nodes: Vec<ScopeNode>) -> Result<Vec<ScopeNode>> {
     // Process from deepest to shallowest so we can attach children.
-    nodes.sort_by(|a, b| (b.scope.level as usize).cmp(&(a.scope.level as usize)));
+    nodes.sort_by_key(|b| std::cmp::Reverse(b.scope.level as usize));
 
     // We'll accumulate root nodes here.
     let mut roots: Vec<ScopeNode> = Vec::new();
