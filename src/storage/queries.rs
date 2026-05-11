@@ -3459,10 +3459,8 @@ pub fn get_sync_delta(conn: &Connection, since_version: i64) -> Result<SyncDelta
                 "created" => {
                     created_ids.insert(memory_id);
                 }
-                "updated" => {
-                    if !created_ids.contains(&memory_id) {
-                        updated_ids.insert(memory_id);
-                    }
+                "updated" if !created_ids.contains(&memory_id) => {
+                    updated_ids.insert(memory_id);
                 }
                 "deleted" => {
                     created_ids.remove(&memory_id);

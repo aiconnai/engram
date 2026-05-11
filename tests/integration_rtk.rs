@@ -251,62 +251,9 @@ fn test_budget_truncation() {
 
 #[test]
 fn test_individual_components() {
-    // Test that individual components can be created
-    let output_filter = OutputFilter::new();
-    let context_grouper = ContextGrouper::new();
-    let truncation_engine = TruncationEngine::with_config(Default::default());
-
-    // If we get here, all components were created successfully
-    assert!(true);
-}
-
-#[test]
-fn test_consolidation_scheduling() {
-    let orchestrator = IntegrationOrchestrator::new();
-
-    // Create many memories to trigger consolidation
-    let many_memories: Vec<Memory> = (0..15)
-        .map(|i| Memory {
-            id: i as i64,
-            content: format!("Memory number {} with some content here", i),
-            memory_type: MemoryType::Note,
-            tags: vec!["test".to_string()],
-            metadata: HashMap::new(),
-            importance: 0.5,
-            access_count: 0,
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
-            last_accessed_at: None,
-            owner_id: None,
-            visibility: engram::types::Visibility::default(),
-            scope: engram::types::MemoryScope::default(),
-            workspace: "default".to_string(),
-            tier: engram::types::MemoryTier::default(),
-            version: 1,
-            has_embedding: false,
-            expires_at: None,
-            content_hash: None,
-            event_time: None,
-            event_duration_seconds: None,
-            trigger_pattern: None,
-            procedure_success_count: 0,
-            procedure_failure_count: 0,
-            summary_of_id: None,
-            lifecycle_state: engram::types::LifecycleState::default(),
-            media_url: None,
-        })
-        .collect();
-
-    let query = ""; // Empty query should match all memories
-    let result = orchestrator
-        .prepare_context_for_llm(query, &many_memories, 4000)
-        .unwrap();
-
-    // With >10 memories, consolidation should be scheduled
-    assert!(
-        result.consolidation_scheduled,
-        "Consolidation should be scheduled for many memories"
-    );
+    let _output_filter = OutputFilter::new();
+    let _context_grouper = ContextGrouper::new();
+    let _truncation_engine = TruncationEngine::with_config(Default::default());
 }
 
 #[test]
@@ -330,7 +277,6 @@ fn test_prepared_context_serialization() {
         context: "Test context".to_string(),
         token_count: 100,
         groups_count: 2,
-        consolidation_scheduled: true,
     };
 
     let serialized = serde_json::to_string(&context);
@@ -340,5 +286,4 @@ fn test_prepared_context_serialization() {
     assert!(json.contains("context"));
     assert!(json.contains("token_count"));
     assert!(json.contains("groups_count"));
-    assert!(json.contains("consolidation_scheduled"));
 }

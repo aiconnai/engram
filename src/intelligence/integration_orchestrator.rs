@@ -10,7 +10,6 @@ use crate::intelligence::context_grouper::{ContextGrouper, MemoryGroup};
 use crate::intelligence::truncation_engine::{TruncationConfig, TruncationEngine};
 use crate::types::Memory;
 use serde::Serialize;
-use std::collections::HashMap;
 
 /// Result of context preparation pipeline
 #[derive(Serialize)]
@@ -88,6 +87,7 @@ mod tests {
     use super::*;
     use crate::types::{Memory, MemoryType};
     use chrono::Utc;
+    use std::collections::HashMap;
 
     fn create_test_memory(id: i64, content: &str, memory_type: MemoryType) -> Memory {
         Memory {

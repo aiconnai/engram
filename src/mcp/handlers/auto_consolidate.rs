@@ -95,7 +95,7 @@ pub fn memory_auto_consolidate(_ctx: &HandlerContext, params: Value) -> Value {
         }
         "set_interval" => {
             let interval = match params.get("interval_seconds").and_then(|v| v.as_u64()) {
-                Some(i) if i >= 60 && i <= 86400 => i,
+                Some(i) if (60..=86400).contains(&i) => i,
                 _ => return json!({"error": "interval_seconds must be between 60 and 86400"}),
             };
             unsafe {

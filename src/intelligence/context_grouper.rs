@@ -28,6 +28,12 @@ pub struct ContextGrouper {
     pub min_similarity: f32,
 }
 
+impl Default for ContextGrouper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContextGrouper {
     /// Creates a new ContextGrouper with default settings
     pub fn new() -> Self {
@@ -62,7 +68,7 @@ impl ContextGrouper {
             .collect();
 
         // 3. Sort by group size (largest first) for relevance
-        result.sort_by(|a, b| b.count.cmp(&a.count));
+        result.sort_by_key(|g| std::cmp::Reverse(g.count));
         result
     }
 

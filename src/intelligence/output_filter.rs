@@ -6,6 +6,12 @@ pub struct OutputFilter {
     max_chars: usize,
 }
 
+impl Default for OutputFilter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OutputFilter {
     /// Cria um novo OutputFilter com configurações padrão
     pub fn new() -> Self {

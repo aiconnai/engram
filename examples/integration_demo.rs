@@ -173,10 +173,6 @@ fn main() {
             println!("=== Prepared Context ===");
             println!("Token count: {}", prepared.token_count);
             println!("Groups created: {}", prepared.groups_count);
-            println!(
-                "Consolidation scheduled: {}",
-                prepared.consolidation_scheduled
-            );
             println!("\n--- Context Content ---\n{}", prepared.context);
             println!("\n=== Token Reduction Summary ===");
             println!(

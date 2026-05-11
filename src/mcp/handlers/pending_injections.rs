@@ -30,7 +30,7 @@ pub fn pending_injections_count(ctx: &HandlerContext, params: Value) -> Value {
 pub fn pending_injections_cleanup(ctx: &HandlerContext, _params: Value) -> Value {
     match ctx
         .storage
-        .with_connection(|conn| pending_injections::cleanup_expired(conn))
+        .with_connection(pending_injections::cleanup_expired)
     {
         Ok(n) => json!({"removed": n}),
         Err(e) => json!({"error": e.to_string()}),
@@ -90,7 +90,7 @@ mod tests {
             })
             .unwrap();
         let removed = storage
-            .with_connection(|c| pending_injections::cleanup_expired(c))
+            .with_connection(pending_injections::cleanup_expired)
             .unwrap();
         assert_eq!(removed, 1);
         let leftover = storage
