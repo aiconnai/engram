@@ -9,7 +9,7 @@ A quick guide to installing Engram, connecting it to your AI tools, and storing 
 ### From Source (Recommended)
 
 ```bash
-git clone https://github.com/limaronaldo/engram.git
+git clone https://github.com/aiconnai/engram.git
 cd engram/engram
 cargo install --path .
 ```
@@ -18,24 +18,24 @@ This installs two binaries: `engram-server` and `engram-cli`.
 
 ### Pre-built Binaries
 
-Download from [GitHub Releases](https://github.com/limaronaldo/engram/releases):
+Download from [GitHub Releases](https://github.com/aiconnai/engram/releases):
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/limaronaldo/engram/releases/latest/download/engram-server-macos-arm64 -o engram-server
-curl -L https://github.com/limaronaldo/engram/releases/latest/download/engram-cli-macos-arm64 -o engram-cli
+curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-server-macos-arm64 -o engram-server
+curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-cli-macos-arm64 -o engram-cli
 chmod +x engram-server engram-cli
 sudo mv engram-server engram-cli /usr/local/bin/
 
 # macOS (Intel)
-curl -L https://github.com/limaronaldo/engram/releases/latest/download/engram-server-macos-x86_64 -o engram-server
-curl -L https://github.com/limaronaldo/engram/releases/latest/download/engram-cli-macos-x86_64 -o engram-cli
+curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-server-macos-x86_64 -o engram-server
+curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-cli-macos-x86_64 -o engram-cli
 chmod +x engram-server engram-cli
 sudo mv engram-server engram-cli /usr/local/bin/
 
 # Linux (x86_64)
-curl -L https://github.com/limaronaldo/engram/releases/latest/download/engram-server-linux-x86_64 -o engram-server
-curl -L https://github.com/limaronaldo/engram/releases/latest/download/engram-cli-linux-x86_64 -o engram-cli
+curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-server-linux-x86_64 -o engram-server
+curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-cli-linux-x86_64 -o engram-cli
 chmod +x engram-server engram-cli
 sudo mv engram-server engram-cli /usr/local/bin/
 ```
@@ -43,13 +43,13 @@ sudo mv engram-server engram-cli /usr/local/bin/
 ### Homebrew (macOS)
 
 ```bash
-brew install limaronaldo/engram/engram
+brew install aiconnai/engram/engram
 ```
 
 ### Docker
 
 ```bash
-docker run -v engram-data:/data ghcr.io/limaronaldo/engram-server:latest
+docker run -v engram-data:/data ghcr.io/aiconnai/engram-server:latest
 ```
 
 ---

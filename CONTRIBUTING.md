@@ -43,7 +43,7 @@ git clone https://github.com/YOUR_USERNAME/engram.git
 cd engram
 
 # Add upstream remote
-git remote add upstream https://github.com/limaronaldo/engram.git
+git remote add upstream https://github.com/aiconnai/engram.git
 
 # Install Rust (if needed)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -232,7 +232,7 @@ engram/
 
 ## Getting Help
 
-- Open a [Discussion](https://github.com/limaronaldo/engram/discussions) for questions
+- Open a [Discussion](https://github.com/aiconnai/engram/discussions) for questions
 - Check existing issues and discussions
 - Read the [README](README.md) and documentation
 

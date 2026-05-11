@@ -64,7 +64,7 @@ engram-cli search "why did we choose postgres"
 cargo install engram-core
 
 # Or from source
-git clone https://github.com/limaronaldo/engram.git
+git clone https://github.com/aiconnai/engram.git
 cd engram && cargo install --path .
 
 # Run as MCP server (Claude Code, Cursor, VS Code MCP clients, etc.)
