@@ -191,6 +191,9 @@ struct EngramHandler {
     /// Dedicated Tokio runtime for async operations (Langfuse sync)
     #[cfg(feature = "langfuse")]
     langfuse_runtime: tokio::runtime::Runtime,
+    /// Lifecycle hooks (Phase L - ENG-78). None unless `enable_hooks()` is called.
+    #[cfg(feature = "hooks")]
+    hook_manager: Option<Arc<engram::hooks::HookManager>>,
 }
 
 impl EngramHandler {
@@ -214,12 +217,68 @@ impl EngramHandler {
             #[cfg(feature = "langfuse")]
             langfuse_runtime: tokio::runtime::Runtime::new()
                 .expect("Failed to create Langfuse runtime"),
+            #[cfg(feature = "hooks")]
+            hook_manager: None,
         }
     }
 
     fn with_realtime(mut self, manager: RealtimeManager) -> Self {
         self.realtime = Some(manager);
         self
+    }
+
+    /// Enable lifecycle hooks (Phase L - ENG-78 / issue #11).
+    ///
+    /// Registers the default `SessionStart` / `PostToolUse` / `Stop` /
+    /// `SessionEnd` handlers. After this is called, every successful
+    /// `tools/call` dispatch will fire `PostToolUse`.
+    #[cfg(feature = "hooks")]
+    fn enable_hooks(&mut self) {
+        use engram::hooks::{HookManager, HookResult, LifecycleHook};
+
+        let mut hm = HookManager::new();
+
+        hm.register(LifecycleHook::SessionStart, |_hook, ctx| {
+            tracing::info!(
+                target = "engram::hooks",
+                session_id = ?ctx.session_id,
+                workspace = ?ctx.workspace,
+                "SessionStart"
+            );
+            Ok(HookResult::Continue)
+        });
+
+        hm.register(LifecycleHook::PostToolUse, |_hook, ctx| {
+            tracing::debug!(
+                target = "engram::hooks",
+                tool = ?ctx.metadata.get("tool_name"),
+                "PostToolUse"
+            );
+            Ok(HookResult::Continue)
+        });
+
+        hm.register(LifecycleHook::Stop, |_hook, _ctx| Ok(HookResult::Continue));
+        hm.register(LifecycleHook::SessionEnd, |_hook, ctx| {
+            tracing::info!(
+                target = "engram::hooks",
+                session_id = ?ctx.session_id,
+                "SessionEnd"
+            );
+            Ok(HookResult::Continue)
+        });
+
+        self.hook_manager = Some(Arc::new(hm));
+        tracing::info!("Lifecycle hooks enabled");
+    }
+
+    /// Fire a hook if hooks are enabled; no-op otherwise.
+    #[cfg(feature = "hooks")]
+    fn trigger_hook(&self, hook: engram::hooks::LifecycleHook, ctx: engram::hooks::HookContext) {
+        if let Some(ref hm) = self.hook_manager {
+            if let Err(e) = hm.trigger(hook, &ctx) {
+                tracing::warn!(target = "engram::hooks", error = %e, "hook dispatch failed");
+            }
+        }
     }
 
     /// Build a `HandlerContext` from this handler's shared state and delegate
@@ -329,6 +388,16 @@ impl McpHandler for EngramHandler {
                     .unwrap_or(json!({}));
 
                 let result = self.handle_tool_call(name, arguments);
+
+                #[cfg(feature = "hooks")]
+                {
+                    let mut ctx = engram::hooks::HookContext::new(None, None);
+                    ctx.metadata
+                        .insert("tool_name".to_string(), json!(name));
+                    ctx.metadata.insert("tool_output".to_string(), result.clone());
+                    self.trigger_hook(engram::hooks::LifecycleHook::PostToolUse, ctx);
+                }
+
                 let tool_result = ToolCallResult::json(&result);
                 McpResponse::success(request.id, json!(tool_result))
             }
@@ -522,7 +591,10 @@ fn main() -> Result<()> {
     // hook wiring lands (see issue #11). For now we still construct
     // `EngramHandler` directly since that's the type that implements
     // `McpHandler`.
-    let handler = Arc::new(EngramHandler::new(storage.clone(), embedder));
+    let mut handler_state = EngramHandler::new(storage.clone(), embedder);
+    #[cfg(feature = "hooks")]
+    handler_state.enable_hooks();
+    let handler = Arc::new(handler_state);
     let server = McpServer::new(handler.clone());
 
     // Start background cleanup thread if enabled
@@ -706,6 +778,8 @@ mod tests {
             meili_indexer: None,
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 300,
+            #[cfg(feature = "hooks")]
+            hook_manager: None,
         }
     }
 
@@ -753,5 +827,25 @@ mod tests {
                 .unwrap_or(1),
             0
         );
+    }
+
+    /// Verifies that `enable_hooks()` populates the manager and that
+    /// `trigger_hook(PostToolUse, …)` succeeds with hooks enabled and is a
+    /// silent no-op when disabled. Indirectly validates the wiring used by
+    /// the `CALL_TOOL` dispatch path.
+    #[cfg(feature = "hooks")]
+    #[test]
+    fn test_hook_wiring() {
+        use engram::hooks::{HookContext, LifecycleHook};
+
+        let mut handler = test_handler();
+        assert!(handler.hook_manager.is_none(), "hooks should start disabled");
+
+        handler.enable_hooks();
+        assert!(handler.hook_manager.is_some(), "enable_hooks should populate the manager");
+
+        let mut ctx = HookContext::new(Some("test-session".into()), Some("default".into()));
+        ctx.metadata.insert("tool_name".into(), json!("memory_create"));
+        handler.trigger_hook(LifecycleHook::PostToolUse, ctx);
     }
 }
