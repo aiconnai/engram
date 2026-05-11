@@ -382,9 +382,13 @@ pub fn drain_pending_embeddings(
 ) -> Result<usize> {
     use rusqlite::params;
 
-    // ── Phase 1: acquire lock briefly to claim a batch ──────────────────────
-    let claimed: Vec<(MemoryId, String)> = storage.with_connection(|conn| {
-        let mut stmt = conn.prepare(
+    // ── Phase 1: claim a batch atomically ───────────────────────────────────
+    // Wrap SELECT + mark-as-processing in a transaction so a hypothetical
+    // second drainer can't claim the same rows between the two statements.
+    // Today only one drain thread is spawned, but the transaction is cheap
+    // and removes the race as a class.
+    let claimed: Vec<(MemoryId, String)> = storage.with_transaction(|tx| {
+        let mut stmt = tx.prepare(
             "SELECT eq.memory_id, m.content
              FROM embedding_queue eq
              JOIN memories m ON eq.memory_id = m.id
@@ -403,7 +407,7 @@ pub fn drain_pending_embeddings(
         if !rows.is_empty() {
             let now = Utc::now().to_rfc3339();
             for &(id, _) in &rows {
-                conn.execute(
+                tx.execute(
                     "UPDATE embedding_queue SET status = 'processing', started_at = ?
                      WHERE memory_id = ?",
                     params![now, id],
