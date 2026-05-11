@@ -48,6 +48,8 @@ pub mod session_indexing;
 pub mod suggestions;
 pub mod synthesis;
 
+// RTK-inspired components (Phase 10)
+pub mod context_grouper;
 
 pub use auto_capture::{
     AutoCaptureConfig, AutoCaptureEngine, CaptureCandidate, CaptureType, ConversationTracker,
