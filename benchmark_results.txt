@@ -1,11 +1,1199 @@
-Baseline:
-entity_extractor_new/default: 4.9578 ms
-entity_extraction/extract_mixed: 17.144 µs
+    Finished `bench` profile [optimized] target(s) in 1.38s
+     Running unittests src/lib.rs (target/release/deps/engram-61ed1295786030b7)
 
-Optimized (Regex Lazy):
-entity_extractor_new/default: 7.4451 µs
-entity_extraction/extract_mixed: 16.766 µs
+running 773 tests
+test auth::permissions::tests::test_admin_set ... ignored
+test auth::permissions::tests::test_merge ... ignored
+test auth::permissions::tests::test_permission_set_basic ... ignored
+test auth::permissions::tests::test_serialization ... ignored
+test auth::permissions::tests::test_standard_user ... ignored
+test auth::tests::test_anonymous_context ... ignored
+test auth::tests::test_auth_context_permissions ... ignored
+test auth::tests::test_init_auth_tables ... ignored
+test auth::tests::test_system_context ... ignored
+test auth::tokens::tests::test_create_and_validate_api_key ... ignored
+test auth::tokens::tests::test_expired_key ... ignored
+test auth::tokens::tests::test_list_keys ... ignored
+test auth::tokens::tests::test_revoke_key ... ignored
+test auth::tokens::tests::test_validate_invalid_key ... ignored
+test auth::users::tests::test_create_and_get_user ... ignored
+test auth::users::tests::test_delete_user ... ignored
+test auth::users::tests::test_get_user_by_username ... ignored
+test auth::users::tests::test_list_users ... ignored
+test auth::users::tests::test_update_user ... ignored
+test auth::users::tests::test_verify_password ... ignored
+test bench::locomo::tests::test_locomo_generates_correct_conversation_count ... ignored
+test bench::locomo::tests::test_locomo_metrics_range ... ignored
+test bench::locomo::tests::test_locomo_runs_in_memory ... ignored
+test bench::longmemeval::tests::test_all_dimensions_present ... ignored
+test bench::longmemeval::tests::test_longmemeval_runs ... ignored
+test bench::longmemeval::tests::test_scores_in_range ... ignored
+test bench::longmemeval::tests::test_weighted_score_with_custom_weights ... ignored
+test bench::membench::tests::test_membench_metrics_present ... ignored
+test bench::membench::tests::test_membench_runs ... ignored
+test bench::membench::tests::test_mrr_computation ... ignored
+test bench::membench::tests::test_ndcg_at_k_computation ... ignored
+test bench::membench::tests::test_ndcg_range ... ignored
+test bench::membench::tests::test_throughput_positive ... ignored
+test bench::tests::test_report_csv ... ignored
+test bench::tests::test_report_json ... ignored
+test bench::tests::test_report_markdown ... ignored
+test bench::tests::test_result_serialization ... ignored
+test bench::tests::test_suite_add_and_run ... ignored
+test bench::tests::test_suite_creation ... ignored
+test embedding::cache::tests::test_access_updates_lru ... ignored
+test embedding::cache::tests::test_basic_operations ... ignored
+test embedding::cache::tests::test_clear ... ignored
+test embedding::cache::tests::test_lru_eviction ... ignored
+test embedding::cache::tests::test_stats_tracking ... ignored
+test embedding::cache::tests::test_update_existing ... ignored
+test embedding::cache::tests::test_zero_copy ... ignored
+test embedding::provider::tests::test_count ... ignored
+test embedding::provider::tests::test_default_returns_first_registered ... ignored
+test embedding::provider::tests::test_embed_via_registry_provider ... ignored
+test embedding::provider::tests::test_get_unknown_returns_none ... ignored
+test embedding::provider::tests::test_list_preserves_insertion_order ... ignored
+test embedding::provider::tests::test_list_returns_all_providers ... ignored
+test embedding::provider::tests::test_provider_info_fields ... ignored
+test embedding::provider::tests::test_register_and_get_by_id ... ignored
+test embedding::provider::tests::test_register_replaces_existing_id ... ignored
+test embedding::provider::tests::test_set_default_changes_default ... ignored
+test embedding::provider::tests::test_set_default_unknown_returns_error ... ignored
+test embedding::queue::tests::test_embedding_queue ... ignored
+test embedding::queue::tests::test_get_embedding_length_mismatch ... ignored
+test embedding::tests::test_cosine_similarity ... ignored
+test embedding::tests::test_tfidf_embedder ... ignored
+test embedding::tfidf::tests::test_tfidf_basic ... ignored
+test embedding::tfidf::tests::test_tfidf_empty ... ignored
+test embedding::tfidf::tests::test_tfidf_normalized ... ignored
+test embedding::tfidf::tests::test_tfidf_similarity ... ignored
+test graph::coactivation::tests::test_coactivation_count_increments ... ignored
+test graph::coactivation::tests::test_empty_graph ... ignored
+test graph::coactivation::tests::test_get_coactivation_graph_returns_sorted_neighbors ... ignored
+test graph::coactivation::tests::test_record_coactivation_creates_edges ... ignored
+test graph::coactivation::tests::test_report_stats ... ignored
+test graph::coactivation::tests::test_single_memory_no_self_loops ... ignored
+test graph::coactivation::tests::test_strength_increases_with_repeated_coactivation ... ignored
+test graph::coactivation::tests::test_strengthen_single_edge ... ignored
+test graph::coactivation::tests::test_suggest_related_returns_top_k ... ignored
+test graph::coactivation::tests::test_weaken_unused_decays_and_prunes ... ignored
+test graph::conflicts::tests::test_detect_all_multiple_types ... ignored
+test graph::conflicts::tests::test_detect_contradiction ... ignored
+test graph::conflicts::tests::test_detect_cycle ... ignored
+test graph::conflicts::tests::test_detect_orphan ... ignored
+test graph::conflicts::tests::test_detect_temporal_inconsistency ... ignored
+test graph::conflicts::tests::test_no_conflicts_clean_graph ... ignored
+test graph::conflicts::tests::test_resolve_already_resolved_returns_error ... ignored
+test graph::conflicts::tests::test_resolve_keep_newer ... ignored
+test graph::conflicts::tests::test_save_and_list_conflicts ... ignored
+test graph::temporal::tests::test_add_edge_and_retrieve ... ignored
+test graph::temporal::tests::test_add_edge_with_scope ... ignored
+test graph::temporal::tests::test_auto_invalidation_on_new_edge ... ignored
+test graph::temporal::tests::test_detect_contradictions ... ignored
+test graph::temporal::tests::test_diff_between_timestamps ... ignored
+test graph::temporal::tests::test_diff_detects_changed_edge ... ignored
+test graph::temporal::tests::test_edge_with_json_properties ... ignored
+test graph::temporal::tests::test_empty_graph_operations ... ignored
+test graph::temporal::tests::test_invalidate_edge_manually ... ignored
+test graph::temporal::tests::test_invalidate_nonexistent_edge_returns_not_found ... ignored
+test graph::temporal::tests::test_relationship_timeline_chronological ... ignored
+test graph::temporal::tests::test_scope_prefix_matching ... ignored
+test graph::temporal::tests::test_snapshot_at ... ignored
+test graph::temporal::tests::test_snapshot_at_with_scope_filter ... ignored
+test graph::tests::test_community_detection ... ignored
+test graph::tests::test_graph_filter ... ignored
+test graph::tests::test_graph_stats ... ignored
+test graph::tests::test_neighborhood ... ignored
+test graph::tests::test_to_dot ... ignored
+test graph::tests::test_truncate_label ... ignored
+test graph::triplets::tests::test_knowledge_stats_empty_table ... ignored
+test graph::triplets::tests::test_knowledge_stats_with_data ... ignored
+test graph::triplets::tests::test_match_by_object ... ignored
+test graph::triplets::tests::test_match_by_predicate ... ignored
+test graph::triplets::tests::test_match_by_subject ... ignored
+test graph::triplets::tests::test_match_case_insensitive ... ignored
+test graph::triplets::tests::test_match_subject_and_predicate ... ignored
+test graph::triplets::tests::test_no_matches_returns_empty ... ignored
+test graph::triplets::tests::test_query_knowledge_by_entity ... ignored
+test graph::triplets::tests::test_query_knowledge_multiple_entities ... ignored
+test graph::triplets::tests::test_query_knowledge_no_entities_returns_empty ... ignored
+test graph::triplets::tests::test_transitive_confidence_product ... ignored
+test graph::triplets::tests::test_transitive_inference_max_hops_zero ... ignored
+test graph::triplets::tests::test_transitive_inference_no_matching_predicate ... ignored
+test graph::triplets::tests::test_transitive_inference_two_hops ... ignored
+test graph::triplets::tests::test_wildcard_match_returns_all ... ignored
+test intelligence::agent_loop::tests::test_configure_updates_config ... ignored
+test intelligence::agent_loop::tests::test_garden_action_in_first_tick ... ignored
+test intelligence::agent_loop::tests::test_max_actions_per_cycle_capped ... ignored
+test intelligence::agent_loop::tests::test_metrics_track_cycles ... ignored
+test intelligence::agent_loop::tests::test_new_agent_not_running ... ignored
+test intelligence::agent_loop::tests::test_should_garden_timing ... ignored
+test intelligence::agent_loop::tests::test_start_stop_lifecycle ... ignored
+test intelligence::agent_loop::tests::test_status_returns_state_snapshot ... ignored
+test intelligence::agent_loop::tests::test_tick_empty_workspace ... ignored
+test intelligence::agent_loop::tests::test_tick_increments_state ... ignored
+test intelligence::agent_loop::tests::test_tick_produces_prune_actions ... ignored
+test intelligence::agent_loop::tests::test_uptime_zero_when_not_started ... ignored
+test intelligence::auto_capture::tests::test_auto_capture_action_item ... ignored
+test intelligence::auto_capture::tests::test_auto_capture_decision ... ignored
+test intelligence::auto_capture::tests::test_auto_capture_learning ... ignored
+test intelligence::auto_capture::tests::test_auto_capture_preference ... ignored
+test intelligence::auto_capture::tests::test_capture_to_memory ... ignored
+test intelligence::auto_capture::tests::test_conversation_tracker ... ignored
+test intelligence::auto_capture::tests::test_disabled_capture ... ignored
+test intelligence::auto_capture::tests::test_ignore_greetings ... ignored
+test intelligence::auto_capture::tests::test_ignore_short_text ... ignored
+test intelligence::auto_capture::tests::test_pending_captures ... ignored
+test intelligence::auto_capture::tests::test_suggest_tags ... ignored
+test intelligence::auto_tagging::tests::test_action_keywords ... ignored
+test intelligence::auto_tagging::tests::test_confidence_sorting ... ignored
+test intelligence::auto_tagging::tests::test_custom_mappings ... ignored
+test intelligence::auto_tagging::tests::test_excludes_existing_tags ... ignored
+test intelligence::auto_tagging::tests::test_max_tags_limit ... ignored
+test intelligence::auto_tagging::tests::test_memory_type_tagging ... ignored
+test intelligence::auto_tagging::tests::test_pattern_matching ... ignored
+test intelligence::auto_tagging::tests::test_structure_detection ... ignored
+test intelligence::auto_tagging::tests::test_tech_keyword_detection ... ignored
+test intelligence::compression::tests::test_context_budget_over ... ignored
+test intelligence::compression::tests::test_context_budget_under ... ignored
+test intelligence::compression::tests::test_count_tokens_known_model ... ignored
+test intelligence::compression::tests::test_count_tokens_unknown_model_no_encoding ... ignored
+test intelligence::compression::tests::test_count_tokens_unknown_model_with_encoding ... ignored
+test intelligence::compression::tests::test_detect_encoding ... ignored
+test intelligence::compression_semantic::tests::test_batch_compression ... ignored
+test intelligence::compression_semantic::tests::test_compression_ratio_computed ... ignored
+test intelligence::compression_semantic::tests::test_decompress_produces_non_empty_text ... ignored
+test intelligence::compression_semantic::tests::test_deduplication_removes_near_duplicates ... ignored
+test intelligence::compression_semantic::tests::test_empty_input_handled ... ignored
+test intelligence::compression_semantic::tests::test_entity_extraction_proper_nouns ... ignored
+test intelligence::compression_semantic::tests::test_filler_removal_reduces_content ... ignored
+test intelligence::compression_semantic::tests::test_jaccard_disjoint_sentences ... ignored
+test intelligence::compression_semantic::tests::test_jaccard_identical_sentences ... ignored
+test intelligence::compression_semantic::tests::test_number_date_extraction ... ignored
+test intelligence::compression_semantic::tests::test_short_text_returned_verbatim ... ignored
+test intelligence::compression_semantic::tests::test_whitespace_only_input_handled ... ignored
+test intelligence::consolidation::tests::test_find_candidates ... ignored
+test intelligence::consolidation::tests::test_jaccard_similarity ... ignored
+test intelligence::consolidation::tests::test_strategy_selection ... ignored
+test intelligence::consolidation_offline::tests::test_consolidation_saves_to_table ... ignored
+test intelligence::consolidation_offline::tests::test_empty_workspace_returns_empty_report ... ignored
+test intelligence::consolidation_offline::tests::test_find_groups_no_overlap_returns_empty ... ignored
+test intelligence::consolidation_offline::tests::test_find_groups_overlapping_content ... ignored
+test intelligence::consolidation_offline::tests::test_get_consolidation_sources_round_trip ... ignored
+test intelligence::consolidation_offline::tests::test_list_consolidations_order ... ignored
+test intelligence::consolidation_offline::tests::test_merge_group_deduplicates_sentences ... ignored
+test intelligence::consolidation_offline::tests::test_report_counts_correct ... ignored
+test intelligence::consolidation_offline::tests::test_tag_similarity_grouping ... ignored
+test intelligence::consolidation_offline::tests::test_temporal_proximity_grouping ... ignored
+test intelligence::consolidation_offline::tests::test_token_savings_computed ... ignored
+test intelligence::content_utils::tests::test_compact_preview_empty ... ignored
+test intelligence::content_utils::tests::test_compact_preview_long ... ignored
+test intelligence::content_utils::tests::test_compact_preview_multiline ... ignored
+test intelligence::content_utils::tests::test_compact_preview_short ... ignored
+test intelligence::content_utils::tests::test_compact_preview_whitespace_only ... ignored
+test intelligence::content_utils::tests::test_content_stats ... ignored
+test intelligence::content_utils::tests::test_content_stats_empty ... ignored
+test intelligence::content_utils::tests::test_soft_trim_long_content ... ignored
+test intelligence::content_utils::tests::test_soft_trim_preserves_head_and_tail ... ignored
+test intelligence::content_utils::tests::test_soft_trim_short_content ... ignored
+test intelligence::content_utils::tests::test_soft_trim_unicode ... ignored
+test intelligence::content_utils::tests::test_soft_trim_word_boundaries ... ignored
+test intelligence::context_builder::tests::test_balanced_proportional_allocation ... ignored
+test intelligence::context_builder::tests::test_empty_sections_skipped ... ignored
+test intelligence::context_builder::tests::test_estimate_tokens_delegation ... ignored
+test intelligence::context_builder::tests::test_greedy_fills_high_priority_first ... ignored
+test intelligence::context_builder::tests::test_overflow_truncation ... ignored
+test intelligence::context_builder::tests::test_recency_prefers_newer_memories ... ignored
+test intelligence::context_builder::tests::test_simple_token_counter_accuracy ... ignored
+test intelligence::context_builder::tests::test_total_budget_respected ... ignored
+test intelligence::context_compression::tests::test_adaptive_escalation ... ignored
+test intelligence::context_compression::tests::test_all_memories_exceed_budget_returns_partial ... ignored
+test intelligence::context_compression::tests::test_budget_enforcement ... ignored
+test intelligence::context_compression::tests::test_budget_reflects_configured_total ... ignored
+test intelligence::context_compression::tests::test_compress_single_none_returns_unchanged ... ignored
+test intelligence::context_compression::tests::test_empty_input ... ignored
+test intelligence::context_compression::tests::test_heavy_compression_extracts_facts ... ignored
+test intelligence::context_compression::tests::test_light_compression_removes_filler ... ignored
+test intelligence::context_compression::tests::test_medium_compression_keeps_first_sentence ... ignored
+test intelligence::context_compression::tests::test_single_memory_fits_at_none ... ignored
+test intelligence::context_compression::tests::test_token_estimation ... ignored
+test intelligence::context_quality::tests::test_conflict_type_parsing ... ignored
+test intelligence::context_quality::tests::test_cosine_similarity ... ignored
+test intelligence::context_quality::tests::test_text_similarity ... ignored
+test intelligence::document_ingest::tests::test_chunk_text_small ... ignored
+test intelligence::document_ingest::tests::test_chunk_text_with_overlap ... ignored
+test intelligence::document_ingest::tests::test_compute_hash ... ignored
+test intelligence::document_ingest::tests::test_document_format_detection ... ignored
+test intelligence::document_ingest::tests::test_ingest_config_default ... ignored
+test intelligence::document_ingest::tests::test_ingest_idempotent ... ignored
+test intelligence::document_ingest::tests::test_invalid_chunk_size ... ignored
+test intelligence::document_ingest::tests::test_invalid_overlap ... ignored
+test intelligence::document_ingest::tests::test_markdown_sections ... ignored
+test intelligence::document_ingest::tests::test_pdf_empty_is_error ... ignored
+test intelligence::emotional::tests::test_empty_text ... ignored
+test intelligence::emotional::tests::test_intensifiers_boost_magnitude ... ignored
+test intelligence::emotional::tests::test_mixed_sentiment ... ignored
+test intelligence::emotional::tests::test_negation_flips_negative ... ignored
+test intelligence::emotional::tests::test_negation_flips_positive ... ignored
+test intelligence::emotional::tests::test_negative_sentiment ... ignored
+test intelligence::emotional::tests::test_positive_sentiment ... ignored
+test intelligence::emotional::tests::test_reflection_analytical ... ignored
+test intelligence::emotional::tests::test_reflection_surface ... ignored
+test intelligence::emotional::tests::test_save_and_list_reflections ... ignored
+test intelligence::emotional::tests::test_sentiment_timeline ... ignored
+test intelligence::emotional::tests::test_whitespace_only_text ... ignored
+test intelligence::entities::tests::test_confidence_threshold ... ignored
+test intelligence::entities::tests::test_entity_type_parsing ... ignored
+test intelligence::entities::tests::test_extract_concepts ... ignored
+test intelligence::entities::tests::test_extract_dates ... ignored
+test intelligence::entities::tests::test_extract_mentions ... ignored
+test intelligence::entities::tests::test_extract_organizations ... ignored
+test intelligence::entities::tests::test_extract_urls ... ignored
+test intelligence::entity_extraction::tests::test_deduplication ... ignored
+test intelligence::entity_extraction::tests::test_empty_input ... ignored
+test intelligence::entity_extraction::tests::test_extract_emails ... ignored
+test intelligence::entity_extraction::tests::test_extract_mentions ... ignored
+test intelligence::entity_extraction::tests::test_extract_names ... ignored
+test intelligence::entity_extraction::tests::test_max_entities_bound ... ignored
+test intelligence::entity_extraction::tests::test_never_panics_on_bad_input ... ignored
+test intelligence::entity_extraction::tests::test_normalization_invariant ... ignored
+test intelligence::fact_extraction::tests::test_confidence_range ... ignored
+test intelligence::fact_extraction::tests::test_conversation_processing ... ignored
+test intelligence::fact_extraction::tests::test_dedup_same_fact ... ignored
+test intelligence::fact_extraction::tests::test_empty_text ... ignored
+test intelligence::fact_extraction::tests::test_extract_is_pattern ... ignored
+test intelligence::fact_extraction::tests::test_extract_lives_in ... ignored
+test intelligence::fact_extraction::tests::test_extract_multiple_facts ... ignored
+test intelligence::fact_extraction::tests::test_extract_structured_field ... ignored
+test intelligence::fact_extraction::tests::test_extract_works_at ... ignored
+test intelligence::fact_extraction::tests::test_storage_create_and_list ... ignored
+test intelligence::fact_extraction::tests::test_storage_delete_for_memory ... ignored
+test intelligence::fact_extraction::tests::test_storage_fact_graph ... ignored
+test intelligence::fact_extraction::tests::test_storage_list_filter_by_source ... ignored
+test intelligence::fact_extraction::tests::test_title_case ... ignored
+test intelligence::gardening::tests::test_dry_run_does_not_modify ... ignored
+test intelligence::gardening::tests::test_empty_workspace_returns_empty_report ... ignored
+test intelligence::gardening::tests::test_garden_archives_old_memories ... ignored
+test intelligence::gardening::tests::test_garden_merges_duplicates ... ignored
+test intelligence::gardening::tests::test_garden_preview_returns_report_without_modifying ... ignored
+test intelligence::gardening::tests::test_garden_prunes_low_score ... ignored
+test intelligence::gardening::tests::test_garden_score_ranges ... ignored
+test intelligence::gardening::tests::test_garden_undo_unarchives_memories ... ignored
+test intelligence::gardening::tests::test_jaccard_similarity ... ignored
+test intelligence::gardening::tests::test_save_and_list_reports ... ignored
+test intelligence::memory_update::tests::test_apply_archive ... ignored
+test intelligence::memory_update::tests::test_apply_flag ... ignored
+test intelligence::memory_update::tests::test_apply_merge ... ignored
+test intelligence::memory_update::tests::test_apply_replace ... ignored
+test intelligence::memory_update::tests::test_create_and_list_update_log ... ignored
+test intelligence::memory_update::tests::test_detect_contradiction ... ignored
+test intelligence::memory_update::tests::test_detect_correction ... ignored
+test intelligence::memory_update::tests::test_detect_obsolescence ... ignored
+test intelligence::memory_update::tests::test_detect_supplement ... ignored
+test intelligence::memory_update::tests::test_empty_workspace_returns_empty ... ignored
+test intelligence::memory_update::tests::test_no_conflict_when_unrelated ... ignored
+test intelligence::natural_language::tests::test_detect_create ... ignored
+test intelligence::natural_language::tests::test_detect_search ... ignored
+test intelligence::natural_language::tests::test_extract_date_filter ... ignored
+test intelligence::natural_language::tests::test_extract_ids ... ignored
+test intelligence::natural_language::tests::test_extract_limit ... ignored
+test intelligence::natural_language::tests::test_extract_memory_type ... ignored
+test intelligence::natural_language::tests::test_extract_tags ... ignored
+test intelligence::natural_language::tests::test_question_as_search ... ignored
+test intelligence::proactive::tests::test_coverage_report_with_varied_data ... ignored
+test intelligence::proactive::tests::test_empty_workspace ... ignored
+test intelligence::proactive::tests::test_gap_detection_with_questions ... ignored
+test intelligence::proactive::tests::test_interest_tracker_workspace_isolation ... ignored
+test intelligence::proactive::tests::test_interest_tracking ... ignored
+test intelligence::proactive::tests::test_no_temporal_gap_within_7_days ... ignored
+test intelligence::proactive::tests::test_suggest_acquisitions_limit ... ignored
+test intelligence::proactive::tests::test_suggest_acquisitions_priority_order ... ignored
+test intelligence::proactive::tests::test_temporal_gap_detection ... ignored
+test intelligence::proactive::tests::test_weak_area_low_importance ... ignored
+test intelligence::project_context::tests::test_engine_default_config ... ignored
+test intelligence::project_context::tests::test_file_format_detection ... ignored
+test intelligence::project_context::tests::test_file_to_memory ... ignored
+test intelligence::project_context::tests::test_hash_content ... ignored
+test intelligence::project_context::tests::test_instruction_file_type_detection ... ignored
+test intelligence::project_context::tests::test_markdown_heading_parsing ... ignored
+test intelligence::project_context::tests::test_markdown_parser ... ignored
+test intelligence::project_context::tests::test_plaintext_parser ... ignored
+test intelligence::project_context::tests::test_section_to_memory ... ignored
+test intelligence::project_context::tests::test_slugify ... ignored
+test intelligence::project_context::tests::test_yaml_parser ... ignored
+test intelligence::quality::tests::test_overall_score ... ignored
+test intelligence::quality::tests::test_quality_grade ... ignored
+test intelligence::quality::tests::test_score_completeness ... ignored
+test intelligence::quality::tests::test_suggestions_generation ... ignored
+test intelligence::salience::tests::test_frequency_scaling ... ignored
+test intelligence::salience::tests::test_importance_weight ... ignored
+test intelligence::salience::tests::test_lifecycle_suggestion ... ignored
+test intelligence::salience::tests::test_priority_queue ... ignored
+test intelligence::salience::tests::test_recency_decay ... ignored
+test intelligence::salience::tests::test_score_bounds ... ignored
+test intelligence::session_context::tests::test_add_memory_to_session ... ignored
+test intelligence::session_context::tests::test_context_role_parsing ... ignored
+test intelligence::session_context::tests::test_create_session ... ignored
+test intelligence::session_context::tests::test_end_session ... ignored
+test intelligence::session_context::tests::test_get_session_context ... ignored
+test intelligence::session_indexing::tests::test_chunk_by_char_count ... ignored
+test intelligence::session_indexing::tests::test_chunk_by_message_count ... ignored
+test intelligence::session_indexing::tests::test_empty_conversation ... ignored
+test intelligence::session_indexing::tests::test_format_chunk_content ... ignored
+test intelligence::session_indexing::tests::test_truncate_long_message ... ignored
+test intelligence::suggestions::tests::test_conversation_context_keyword_extraction ... ignored
+test intelligence::suggestions::tests::test_create_suggestion ... ignored
+test intelligence::suggestions::tests::test_keyword_score ... ignored
+test intelligence::suggestions::tests::test_needs_review ... ignored
+test intelligence::suggestions::tests::test_recency_score ... ignored
+test intelligence::suggestions::tests::test_suggestion_generation ... ignored
+test intelligence::synthesis::tests::test_append_strategy_concatenates ... ignored
+test intelligence::synthesis::tests::test_buffer_eviction_when_full ... ignored
+test intelligence::synthesis::tests::test_check_and_synthesize_empty_buffer ... ignored
+test intelligence::synthesis::tests::test_check_and_synthesize_returns_some ... ignored
+test intelligence::synthesis::tests::test_detect_overlap_above_threshold ... ignored
+test intelligence::synthesis::tests::test_empty_content_handled ... ignored
+test intelligence::synthesis::tests::test_jaccard_similarity_basic ... ignored
+test intelligence::synthesis::tests::test_merge_strategy_combines_content ... ignored
+test intelligence::synthesis::tests::test_no_overlap_below_threshold ... ignored
+test intelligence::synthesis::tests::test_replace_strategy_keeps_newer ... ignored
+test intelligence::synthesis::tests::test_tokens_saved_replace_strategy ... ignored
+test mcp::handlers::agent::tests::test_deregister ... ignored
+test mcp::handlers::agent::tests::test_get_nonexistent ... ignored
+test mcp::handlers::agent::tests::test_heartbeat ... ignored
+test mcp::handlers::agent::tests::test_list_agents ... ignored
+test mcp::handlers::agent::tests::test_list_by_namespace ... ignored
+test mcp::handlers::agent::tests::test_register_and_get ... ignored
+test mcp::handlers::agent::tests::test_register_missing_id ... ignored
+test mcp::handlers::agent::tests::test_update_capabilities ... ignored
+test mcp::handlers::context::context_tests::test_build_context_backward_compat ... ignored
+test mcp::handlers::context::context_tests::test_build_context_depth_clamped_to_max ... ignored
+test mcp::handlers::context::context_tests::test_build_context_depth_expansion ... ignored
+test mcp::handlers::context::context_tests::test_build_context_include_graph ... ignored
+test mcp::handlers::context::context_tests::test_build_context_include_types_filters ... ignored
+test mcp::handlers::context::context_tests::test_build_context_timeframe_filters ... ignored
+test mcp::handlers::context::context_tests::test_safe_truncate_ascii ... ignored
+test mcp::handlers::context::context_tests::test_safe_truncate_empty ... ignored
+test mcp::handlers::context::context_tests::test_safe_truncate_exact_boundary ... ignored
+test mcp::handlers::context::context_tests::test_safe_truncate_multibyte_cjk ... ignored
+test mcp::handlers::context::context_tests::test_safe_truncate_multibyte_emoji ... ignored
+test mcp::handlers::context::context_tests::test_safe_truncate_within_limit ... ignored
+test mcp::handlers::context::context_tests::test_safe_truncate_zero ... ignored
+test mcp::handlers::handoff::tests::test_build_bootstrap_prompt_empty ... ignored
+test mcp::handlers::handoff::tests::test_build_bootstrap_prompt_truncates_long_content ... ignored
+test mcp::handlers::handoff::tests::test_build_bootstrap_prompt_with_all_sections ... ignored
+test mcp::handlers::markdown_export::tests::test_build_index_markdown_header ... ignored
+test mcp::handlers::markdown_export::tests::test_format_memory_markdown_basic ... ignored
+test mcp::handlers::markdown_export::tests::test_format_memory_markdown_no_links_section_when_empty ... ignored
+test mcp::handlers::markdown_export::tests::test_format_memory_markdown_with_links ... ignored
+test mcp::handlers::markdown_export::tests::test_parse_tags_comma_separated ... ignored
+test mcp::handlers::markdown_export::tests::test_parse_tags_empty ... ignored
+test mcp::handlers::markdown_export::tests::test_parse_tags_json_array ... ignored
+test mcp::handlers::markdown_export::tests::test_pluralize_type_already_plural ... ignored
+test mcp::handlers::markdown_export::tests::test_pluralize_type_note ... ignored
+test mcp::handlers::markdown_export::tests::test_pluralize_type_summary ... ignored
+test mcp::handlers::markdown_export::tests::test_pluralize_type_todo ... ignored
+test mcp::handlers::markdown_export::tests::test_sanitize_filename_all_special_chars ... ignored
+test mcp::handlers::markdown_export::tests::test_sanitize_filename_basic ... ignored
+test mcp::handlers::markdown_export::tests::test_sanitize_filename_empty_input ... ignored
+test mcp::handlers::markdown_export::tests::test_sanitize_filename_preserves_alphanumeric ... ignored
+test mcp::handlers::markdown_export::tests::test_sanitize_filename_trims_dashes ... ignored
+test mcp::handlers::markdown_export::tests::test_sanitize_filename_truncates_long_input ... ignored
+test mcp::handlers::memory_crud::privacy_tests::test_empty_string ... ignored
+test mcp::handlers::memory_crud::privacy_tests::test_entirely_private ... ignored
+test mcp::handlers::memory_crud::privacy_tests::test_multiline_private_content ... ignored
+test mcp::handlers::memory_crud::privacy_tests::test_multiple_private_tags ... ignored
+test mcp::handlers::memory_crud::privacy_tests::test_no_private_tags ... ignored
+test mcp::handlers::memory_crud::privacy_tests::test_single_private_tag ... ignored
+test mcp::handlers::memory_crud::privacy_tests::test_unclosed_tag ... ignored
+test mcp::http_transport::tests::test_auth_no_key_configured_always_passes ... ignored
+test mcp::http_transport::tests::test_auth_rejection_no_header ... ignored
+test mcp::http_transport::tests::test_check_bearer_bad_scheme ... ignored
+test mcp::http_transport::tests::test_check_bearer_invalid_token ... ignored
+test mcp::http_transport::tests::test_check_bearer_missing_header ... ignored
+test mcp::http_transport::tests::test_check_bearer_valid ... ignored
+test mcp::http_transport::tests::test_event_type_filter_matches ... ignored
+test mcp::http_transport::tests::test_events_query_parsed_event_types_all_unknown_returns_none ... ignored
+test mcp::http_transport::tests::test_events_query_parsed_event_types_multiple ... ignored
+test mcp::http_transport::tests::test_events_query_parsed_event_types_none ... ignored
+test mcp::http_transport::tests::test_events_query_parsed_event_types_single ... ignored
+test mcp::http_transport::tests::test_events_query_parsed_event_types_with_spaces ... ignored
+test mcp::http_transport::tests::test_keep_alive_interval_is_30s ... ignored
+test mcp::http_transport::tests::test_last_event_id_header_missing_is_none ... ignored
+test mcp::http_transport::tests::test_last_event_id_header_non_numeric_is_none ... ignored
+test mcp::http_transport::tests::test_last_event_id_header_valid ... ignored
+test mcp::http_transport::tests::test_last_event_id_header_zero ... ignored
+test mcp::http_transport::tests::test_parse_event_type_known ... ignored
+test mcp::http_transport::tests::test_parse_event_type_unknown_is_none ... ignored
+test mcp::http_transport::tests::test_realtime_event_to_sse_with_seq_id ... ignored
+test mcp::http_transport::tests::test_realtime_event_to_sse_without_seq_id_no_id_field ... ignored
+test mcp::http_transport::tests::test_replay_events_after_last_id ... ignored
+test mcp::http_transport::tests::test_retry_constant_is_3000ms ... ignored
+test mcp::http_transport::tests::test_sse_event_serialization ... ignored
+test mcp::http_transport::tests::test_sse_event_type_to_str_all_variants ... ignored
+test mcp::prompts::tests::test_create_knowledge_base_default_workspace ... ignored
+test mcp::prompts::tests::test_create_knowledge_base_missing_path_returns_error ... ignored
+test mcp::prompts::tests::test_create_knowledge_base_with_required_args ... ignored
+test mcp::prompts::tests::test_daily_review_no_workspace ... ignored
+test mcp::prompts::tests::test_daily_review_with_workspace ... ignored
+test mcp::prompts::tests::test_list_prompts_have_descriptions ... ignored
+test mcp::prompts::tests::test_list_prompts_returns_five_prompts ... ignored
+test mcp::prompts::tests::test_prompt_content_type_is_text ... ignored
+test mcp::prompts::tests::test_search_and_organize_missing_query_returns_error ... ignored
+test mcp::prompts::tests::test_search_and_organize_with_query ... ignored
+test mcp::prompts::tests::test_seed_entity_default_entity_type ... ignored
+test mcp::prompts::tests::test_seed_entity_missing_entity_name_returns_error ... ignored
+test mcp::prompts::tests::test_seed_entity_with_all_args ... ignored
+test mcp::prompts::tests::test_session_handoff_default_workspace ... ignored
+test mcp::prompts::tests::test_session_handoff_missing_session_id_returns_error ... ignored
+test mcp::prompts::tests::test_session_handoff_with_required_args ... ignored
+test mcp::prompts::tests::test_unknown_prompt_returns_error ... ignored
+test mcp::tools::tests::test_annotations_serialize_with_camel_case_keys ... ignored
+test mcp::tools::tests::test_destructive_tools_have_annotation ... ignored
+test mcp::tools::tests::test_essential_tools_present ... ignored
+test mcp::tools::tests::test_idempotent_tools_have_annotation ... ignored
+test mcp::tools::tests::test_mutating_tool_has_no_hints ... ignored
+test mcp::tools::tests::test_read_only_tools_have_annotation ... ignored
+test mcp::tools::tests::test_recent_activity_tool_is_defined_as_read_only ... ignored
+test mcp::tools::tests::test_tier_distribution ... ignored
+test mcp::tools::tests::test_tool_definitions_all_parseable ... ignored
+test realtime::server::tests::test_broadcast_stamps_sequential_ids ... ignored
+test realtime::server::tests::test_clone_shares_buffer ... ignored
+test realtime::server::tests::test_get_events_after_large_id_returns_empty ... ignored
+test realtime::server::tests::test_get_events_after_last_id_returns_empty ... ignored
+test realtime::server::tests::test_get_events_after_returns_correct_subset ... ignored
+test realtime::server::tests::test_get_events_after_zero_returns_all ... ignored
+test realtime::server::tests::test_realtime_manager ... ignored
+test realtime::server::tests::test_ring_buffer_does_not_exceed_max_size ... ignored
+test realtime::server::tests::test_ring_buffer_evicts_oldest_when_full ... ignored
+test realtime::server::tests::test_seq_id_starts_at_one ... ignored
+test realtime::server::tests::test_subscription_filter ... ignored
+test search::aggregation::tests::test_group_by_sql_expr ... ignored
+test search::bm25::tests::test_escape_fts5_query_injection_attempts ... ignored
+test search::bm25::tests::test_escape_fts5_query_quoted_phrase ... ignored
+test search::bm25::tests::test_escape_fts5_query_real_world ... ignored
+test search::bm25::tests::test_escape_fts5_query_simple ... ignored
+test search::bm25::tests::test_escape_fts5_query_whitespace ... ignored
+test search::bm25::tests::test_escape_fts5_term_empty ... ignored
+test search::bm25::tests::test_escape_fts5_term_operators ... ignored
+test search::bm25::tests::test_escape_fts5_term_simple ... ignored
+test search::bm25::tests::test_escape_fts5_term_special_chars ... ignored
+test search::bm25::tests::test_escape_fts5_term_with_quotes ... ignored
+test search::bm25::tests::test_escape_fts5_term_with_spaces ... ignored
+test search::bm25::tests::test_extract_matched_terms ... ignored
+test search::bm25::tests::test_extract_matched_terms_no_match ... ignored
+test search::bm25::tests::test_extract_matched_terms_partial ... ignored
+test search::bm25::tests::test_generate_highlights ... ignored
+test search::bm25::tests::test_generate_highlights_no_match ... ignored
+test search::explain::tests::test_batch_assigns_correct_ranks ... ignored
+test search::explain::tests::test_contribution_percentages_sum_to_100 ... ignored
+test search::explain::tests::test_equal_signals_have_roughly_equal_contributions ... ignored
+test search::explain::tests::test_explanation_text_contains_rank_and_top_signal ... ignored
+test search::explain::tests::test_rerank_score_included_when_active ... ignored
+test search::explain::tests::test_rerank_score_none_when_inactive ... ignored
+test search::explain::tests::test_single_result_has_all_fields ... ignored
+test search::explain::tests::test_top_signals_sorted_descending ... ignored
+test search::explain::tests::test_zero_scores_handled_gracefully ... ignored
+test search::feedback::tests::test_apply_boosts_modifies_scores ... ignored
+test search::feedback::tests::test_boost_clamping ... ignored
+test search::feedback::tests::test_boost_mostly_irrelevant ... ignored
+test search::feedback::tests::test_boost_mostly_useful ... ignored
+test search::feedback::tests::test_boost_no_feedback ... ignored
+test search::feedback::tests::test_boost_smoothing_prevents_extremes ... ignored
+test search::feedback::tests::test_compute_boosts_empty_ids ... ignored
+test search::feedback::tests::test_delete_feedback ... ignored
+test search::feedback::tests::test_delete_nonexistent_feedback ... ignored
+test search::feedback::tests::test_get_feedback_for_query ... ignored
+test search::feedback::tests::test_query_similarity_weighting ... ignored
+test search::feedback::tests::test_record_and_retrieve_feedback ... ignored
+test search::feedback::tests::test_record_irrelevant_signal ... ignored
+test search::feedback::tests::test_record_useful_signal ... ignored
+test search::feedback::tests::test_stats_avg_rank ... ignored
+test search::feedback::tests::test_stats_counts_and_ratios ... ignored
+test search::feedback::tests::test_stats_top_memories ... ignored
+test search::feedback::tests::test_stats_workspace_filter ... ignored
+test search::fuzzy::tests::test_damerau_levenshtein ... ignored
+test search::fuzzy::tests::test_fuzzy_engine ... ignored
+test search::fuzzy::tests::test_levenshtein ... ignored
+test search::fuzzy::tests::test_suggestions ... ignored
+test search::hybrid::tests::test_rrf_formula ... ignored
+test search::metadata::tests::test_comparison_operators ... ignored
+test search::metadata::tests::test_empty_in_operator ... ignored
+test search::metadata::tests::test_empty_nin_operator ... ignored
+test search::metadata::tests::test_exists_operator ... ignored
+test search::metadata::tests::test_in_operator ... ignored
+test search::metadata::tests::test_nested_path ... ignored
+test search::metadata::tests::test_simple_equality ... ignored
+test search::mmr::tests::test_cosine_similarity_identical ... ignored
+test search::mmr::tests::test_cosine_similarity_orthogonal ... ignored
+test search::mmr::tests::test_cosine_similarity_zero_vector ... ignored
+test search::mmr::tests::test_mmr_balanced ... ignored
+test search::mmr::tests::test_mmr_empty_candidates ... ignored
+test search::mmr::tests::test_mmr_pure_diversity ... ignored
+test search::mmr::tests::test_mmr_pure_relevance ... ignored
+test search::mmr::tests::test_mmr_single_candidate ... ignored
+test search::mmr::tests::test_mmr_top_k_limit ... ignored
+test search::rerank::tests::test_entity_match_boost ... ignored
+test search::rerank::tests::test_exact_match_boost ... ignored
+test search::rerank::tests::test_importance_boost ... ignored
+test search::rerank::tests::test_multi_signal_rerank ... ignored
+test search::rerank::tests::test_reranker_preserves_order_when_disabled ... ignored
+test search::rerank::tests::test_term_overlap ... ignored
+test search::result_cache::tests::test_cache_invalidation ... ignored
+test search::result_cache::tests::test_cache_miss ... ignored
+test search::result_cache::tests::test_cache_put_get ... ignored
+test search::result_cache::tests::test_different_filters_different_cache ... ignored
+test search::result_cache::tests::test_similarity_lookup ... ignored
+test search::result_cache::tests::test_stats ... ignored
+test search::semantic_cache::tests::test_cache_hit ... ignored
+test search::semantic_cache::tests::test_cache_hit_similar ... ignored
+test search::semantic_cache::tests::test_cache_miss_below_threshold ... ignored
+test search::semantic_cache::tests::test_capacity_eviction ... ignored
+test search::semantic_cache::tests::test_clear ... ignored
+test search::semantic_cache::tests::test_cosine_similarity_empty ... ignored
+test search::semantic_cache::tests::test_cosine_similarity_identical ... ignored
+test search::semantic_cache::tests::test_cosine_similarity_length_mismatch ... ignored
+test search::semantic_cache::tests::test_cosine_similarity_orthogonal ... ignored
+test search::semantic_cache::tests::test_invalidate_memory ... ignored
+test search::semantic_cache::tests::test_invalidate_memory_does_not_remove_unrelated ... ignored
+test search::semantic_cache::tests::test_stats ... ignored
+test search::semantic_cache::tests::test_ttl_expiration ... ignored
+test search::tests::test_strategy_selection ... ignored
+test search::utility::tests::test_apply_utility_boost ... ignored
+test search::utility::tests::test_batch_decay_returns_affected_count ... ignored
+test search::utility::tests::test_boost_clamp_bounds ... ignored
+test search::utility::tests::test_initial_score_default_when_no_feedback ... ignored
+test search::utility::tests::test_irrelevant_retrievals_lower_score ... ignored
+test search::utility::tests::test_q_value_formula_single_not_useful ... ignored
+test search::utility::tests::test_q_value_formula_single_useful ... ignored
+test search::utility::tests::test_record_and_retrieve_utility ... ignored
+test search::utility::tests::test_temporal_decay_reduces_score ... ignored
+test search::utility::tests::test_useful_retrievals_boost_score ... ignored
+test search::utility::tests::test_utility_stats ... ignored
+test storage::agent_registry::tests::test_deregister_agent ... ignored
+test storage::agent_registry::tests::test_deregister_nonexistent ... ignored
+test storage::agent_registry::tests::test_get_agents_in_namespace ... ignored
+test storage::agent_registry::tests::test_heartbeat_nonexistent_returns_none ... ignored
+test storage::agent_registry::tests::test_heartbeat_updates_timestamp ... ignored
+test storage::agent_registry::tests::test_list_agents_with_filter ... ignored
+test storage::agent_registry::tests::test_register_and_get_agent ... ignored
+test storage::agent_registry::tests::test_register_duplicate_updates ... ignored
+test storage::agent_registry::tests::test_register_empty_agent_id_fails ... ignored
+test storage::agent_registry::tests::test_update_capabilities ... ignored
+test storage::audit::tests::test_audit_action_roundtrip ... ignored
+test storage::audit::tests::test_calculate_diff ... ignored
+test storage::auto_linker::tests::test_auto_link_stats_empty_returns_empty_object ... ignored
+test storage::auto_linker::tests::test_auto_link_stats_returns_counts ... ignored
+test storage::auto_linker::tests::test_insert_auto_link_creates_a_link ... ignored
+test storage::auto_linker::tests::test_insert_auto_link_different_type_is_not_duplicate ... ignored
+test storage::auto_linker::tests::test_insert_auto_link_is_idempotent ... ignored
+test storage::auto_linker::tests::test_list_auto_links_ordered_by_score_descending ... ignored
+test storage::auto_linker::tests::test_list_auto_links_returns_results ... ignored
+test storage::auto_linker::tests::test_max_links_per_memory_is_respected ... ignored
+test storage::auto_linker::tests::test_parse_timestamp_to_secs_invalid_returns_none ... ignored
+test storage::auto_linker::tests::test_parse_timestamp_to_secs_rfc3339 ... ignored
+test storage::auto_linker::tests::test_parse_timestamp_to_secs_sqlite_format ... ignored
+test storage::auto_linker::tests::test_run_semantic_linker_processes_memories_and_creates_links ... ignored
+test storage::auto_linker::tests::test_temporal_linker_creates_link_for_close_memories ... ignored
+test storage::auto_linker::tests::test_temporal_linker_empty_database_returns_zero ... ignored
+test storage::auto_linker::tests::test_temporal_linker_idempotent ... ignored
+test storage::auto_linker::tests::test_temporal_linker_max_links_per_memory_respected ... ignored
+test storage::auto_linker::tests::test_temporal_linker_min_overlap_secs_restricts_candidates ... ignored
+test storage::auto_linker::tests::test_temporal_linker_no_link_outside_window ... ignored
+test storage::auto_linker::tests::test_temporal_linker_workspace_filter ... ignored
+test storage::auto_linker::tests::test_temporal_score_formula_closer_means_higher_score ... ignored
+test storage::auto_linker::tests::test_threshold_filtering_lower_threshold_creates_more_links ... ignored
+test storage::confidence::tests::test_confidence_decay ... ignored
+test storage::confidence::tests::test_confidence_decay_double_half_life ... ignored
+test storage::confidence::tests::test_confidence_no_decay_for_new ... ignored
+test storage::connection::tests::test_cloud_folder_detection ... ignored
+test storage::connection::tests::test_open_in_memory ... ignored
+test storage::connection::tests::test_storage_modes ... ignored
+test storage::entity_queries::tests::test_entity_search ... ignored
+test storage::entity_queries::tests::test_link_entity_to_memory ... ignored
+test storage::entity_queries::tests::test_upsert_and_find_entity ... ignored
+test storage::filter::tests::test_backwards_compatible_direct_value ... ignored
+test storage::filter::tests::test_comparison_operators ... ignored
+test storage::filter::tests::test_empty_and_array_produces_true ... ignored
+test storage::filter::tests::test_empty_condition_rejected ... ignored
+test storage::filter::tests::test_empty_or_array_produces_false ... ignored
+test storage::filter::tests::test_exists_operator ... ignored
+test storage::filter::tests::test_field_path_parsing ... ignored
+test storage::filter::tests::test_metadata_path_double_dot ... ignored
+test storage::filter::tests::test_metadata_path_empty ... ignored
+test storage::filter::tests::test_metadata_path_valid_characters ... ignored
+test storage::filter::tests::test_mixed_and_with_field_rejected ... ignored
+test storage::filter::tests::test_mixed_nested_rejected ... ignored
+test storage::filter::tests::test_mixed_or_with_field_rejected ... ignored
+test storage::filter::tests::test_nested_and_or_accepted ... ignored
+test storage::filter::tests::test_not_exists_operator ... ignored
+test storage::filter::tests::test_parse_and_conditions ... ignored
+test storage::filter::tests::test_parse_nested_and_or ... ignored
+test storage::filter::tests::test_parse_or_conditions ... ignored
+test storage::filter::tests::test_parse_simple_eq ... ignored
+test storage::filter::tests::test_pure_and_accepted ... ignored
+test storage::filter::tests::test_pure_or_accepted ... ignored
+test storage::filter::tests::test_sql_injection_prevention_backslash ... ignored
+test storage::filter::tests::test_sql_injection_prevention_brackets ... ignored
+test storage::filter::tests::test_sql_injection_prevention_quotes ... ignored
+test storage::filter::tests::test_sql_injection_prevention_semicolon ... ignored
+test storage::filter::tests::test_string_contains ... ignored
+test storage::filter::tests::test_tags_comparison_operators_rejected ... ignored
+test storage::filter::tests::test_tags_direct_value_uses_exists ... ignored
+test storage::filter::tests::test_tags_eq_uses_exists ... ignored
+test storage::filter::tests::test_tags_exists_false ... ignored
+test storage::filter::tests::test_tags_exists_true ... ignored
+test storage::filter::tests::test_tags_neq_uses_not_exists ... ignored
+test storage::graph_queries::tests::test_edge_type_filter ... ignored
+test storage::graph_queries::tests::test_entity_based_connections ... ignored
+test storage::graph_queries::tests::test_find_path ... ignored
+test storage::graph_queries::tests::test_multi_hop_traversal ... ignored
+test storage::graph_queries::tests::test_traversal_direction ... ignored
+test storage::identity_links::tests::test_alias_conflict ... ignored
+test storage::identity_links::tests::test_create_identity ... ignored
+test storage::identity_links::tests::test_normalize_alias ... ignored
+test storage::identity_links::tests::test_resolve_alias ... ignored
+test storage::image_storage::tests::test_build_cloud_key_audio ... ignored
+test storage::image_storage::tests::test_build_cloud_key_image ... ignored
+test storage::image_storage::tests::test_build_cloud_url_default_s3 ... ignored
+test storage::image_storage::tests::test_build_cloud_url_with_public_domain ... ignored
+test storage::image_storage::tests::test_build_cloud_url_with_s3_endpoint ... ignored
+test storage::image_storage::tests::test_content_type_detection ... ignored
+test storage::image_storage::tests::test_is_cloud_url ... ignored
+test storage::image_storage::tests::test_local_storage ... ignored
+test storage::image_storage::tests::test_parse_data_uri ... ignored
+test storage::image_storage::tests::test_sync_to_cloud_empty_table_dry_run ... ignored
+test storage::image_storage::tests::test_sync_to_cloud_no_bucket_returns_error ... ignored
+test storage::memory_blocks::tests::test_archive_non_overflowing_returns_none ... ignored
+test storage::memory_blocks::tests::test_archive_overflow_truncates_and_returns_excess ... ignored
+test storage::memory_blocks::tests::test_create_and_get_block ... ignored
+test storage::memory_blocks::tests::test_create_empty_name_returns_error ... ignored
+test storage::memory_blocks::tests::test_delete_block ... ignored
+test storage::memory_blocks::tests::test_delete_nonexistent_returns_error ... ignored
+test storage::memory_blocks::tests::test_get_history_with_limit ... ignored
+test storage::memory_blocks::tests::test_get_nonexistent_returns_none ... ignored
+test storage::memory_blocks::tests::test_list_blocks_returns_all ... ignored
+test storage::memory_blocks::tests::test_update_increments_version ... ignored
+test storage::memory_blocks::tests::test_update_logs_edit_history ... ignored
+test storage::memory_blocks::tests::test_update_nonexistent_returns_error ... ignored
+test storage::migrations::tests::test_auto_links_table_exists ... ignored
+test storage::migrations::tests::test_auto_links_unique_pair_type ... ignored
+test storage::migrations::tests::test_fresh_db_reaches_v19 ... ignored
+test storage::migrations::tests::test_media_assets_hash_uniqueness ... ignored
+test storage::migrations::tests::test_media_assets_table_exists ... ignored
+test storage::migrations::tests::test_memory_clusters_table_exists ... ignored
+test storage::migrations::tests::test_schema_version_constant_is_19 ... ignored
+test storage::migrations::tests::test_upgrade_from_v17_to_v19 ... ignored
+test storage::queries::tests::test_advanced_filter_and_or ... ignored
+test storage::queries::tests::test_advanced_filter_comparison_operators ... ignored
+test storage::queries::tests::test_advanced_filter_eq ... ignored
+test storage::queries::tests::test_advanced_filter_exists ... ignored
+test storage::queries::tests::test_advanced_filter_nested_and_or ... ignored
+test storage::queries::tests::test_advanced_filter_tags_contains ... ignored
+test storage::queries::tests::test_cleanup_expired_memories ... ignored
+test storage::queries::tests::test_content_hash_computation ... ignored
+test storage::queries::tests::test_content_hash_stored_on_create ... ignored
+test storage::queries::tests::test_create_audio_memory_with_media_url ... ignored
+test storage::queries::tests::test_create_image_memory_with_media_url ... ignored
+test storage::queries::tests::test_create_image_memory_without_media_url ... ignored
+test storage::queries::tests::test_create_video_memory_with_media_url ... ignored
+test storage::queries::tests::test_dedup_mode_allow ... ignored
+test storage::queries::tests::test_dedup_mode_merge ... ignored
+test storage::queries::tests::test_dedup_mode_reject ... ignored
+test storage::queries::tests::test_dedup_mode_skip ... ignored
+test storage::queries::tests::test_dedup_scope_isolation ... ignored
+test storage::queries::tests::test_expired_memories_excluded_from_queries ... ignored
+test storage::queries::tests::test_find_duplicates_exact_hash ... ignored
+test storage::queries::tests::test_find_similar_by_embedding ... ignored
+test storage::queries::tests::test_get_memory_returns_media_url ... ignored
+test storage::queries::tests::test_list_memories_metadata_filter_types ... ignored
+test storage::queries::tests::test_memory_scope_can_access ... ignored
+test storage::queries::tests::test_memory_scope_isolation ... ignored
+test storage::queries::tests::test_memory_ttl_creation ... ignored
+test storage::queries::tests::test_memory_type_is_multimodal ... ignored
+test storage::queries::tests::test_schema_migration_v34_idempotent ... ignored
+test storage::queries::tests::test_set_memory_expiration ... ignored
+test storage::queries::tests::test_update_memory_recalculates_hash ... ignored
+test storage::queries::tests::test_update_memory_sets_media_url ... ignored
+test storage::scope_grants::tests::test_check_access_admin_satisfies_all ... ignored
+test storage::scope_grants::tests::test_check_access_ancestor_propagation ... ignored
+test storage::scope_grants::tests::test_check_access_exact_match ... ignored
+test storage::scope_grants::tests::test_check_access_insufficient_permission ... ignored
+test storage::scope_grants::tests::test_check_access_no_grant_returns_false ... ignored
+test storage::scope_grants::tests::test_grant_and_get ... ignored
+test storage::scope_grants::tests::test_grant_empty_agent_id_fails ... ignored
+test storage::scope_grants::tests::test_grant_invalid_permissions_fails ... ignored
+test storage::scope_grants::tests::test_grant_upsert_updates_permissions ... ignored
+test storage::scope_grants::tests::test_list_grants_for_agent ... ignored
+test storage::scope_grants::tests::test_permission_hierarchy ... ignored
+test storage::scope_grants::tests::test_revoke_access ... ignored
+test storage::scope_grants::tests::test_revoke_nonexistent_returns_false ... ignored
+test storage::scoping::tests::test_ancestors ... ignored
+test storage::scoping::tests::test_contains_child_does_not_contain_parent ... ignored
+test storage::scoping::tests::test_contains_parent_contains_child ... ignored
+test storage::scoping::tests::test_contains_self_true ... ignored
+test storage::scoping::tests::test_contains_sibling_false ... ignored
+test storage::scoping::tests::test_display_memory_scope ... ignored
+test storage::scoping::tests::test_display_scope_level ... ignored
+test storage::scoping::tests::test_get_scope_not_found ... ignored
+test storage::scoping::tests::test_global_has_no_parent ... ignored
+test storage::scoping::tests::test_list_scopes ... ignored
+test storage::scoping::tests::test_move_scope ... ignored
+test storage::scoping::tests::test_parent ... ignored
+test storage::scoping::tests::test_parse_global ... ignored
+test storage::scoping::tests::test_parse_invalid_prefix ... ignored
+test storage::scoping::tests::test_parse_org ... ignored
+test storage::scoping::tests::test_parse_too_deep ... ignored
+test storage::scoping::tests::test_parse_user ... ignored
+test storage::scoping::tests::test_scope_tree ... ignored
+test storage::scoping::tests::test_search_scoped_ancestor_inheritance ... ignored
+test storage::scoping::tests::test_set_and_get_scope ... ignored
+test storage::scoping::tests::test_set_scope_not_found ... ignored
+test storage::sqlite_backend::tests::test_create_in_memory ... ignored
+test storage::sqlite_backend::tests::test_crud_operations ... ignored
+test storage::sqlite_backend::tests::test_get_stats ... ignored
+test storage::sqlite_backend::tests::test_health_check ... ignored
+test storage::temporal::tests::test_temporal_query_options_as_of ... ignored
+test storage::temporal::tests::test_temporal_query_options_default ... ignored
+test storage::temporal::tests::test_temporal_query_options_time_range ... ignored
+test sync::conflict::detector::tests::test_content_conflict ... ignored
+test sync::conflict::detector::tests::test_delete_modify_detection ... ignored
+test sync::conflict::detector::tests::test_metadata_only_conflict ... ignored
+test sync::conflict::detector::tests::test_no_conflict_same_content ... ignored
+test sync::conflict::detector::tests::test_non_overlapping_changes ... ignored
+test sync::conflict::merge::tests::test_merge_both_same_change ... ignored
+test sync::conflict::merge::tests::test_merge_metadata_map ... ignored
+test sync::conflict::merge::tests::test_merge_no_conflict ... ignored
+test sync::conflict::merge::tests::test_merge_tags ... ignored
+test sync::conflict::merge::tests::test_merge_with_conflict ... ignored
+test sync::conflict::resolver::tests::test_conflict_queue ... ignored
+test sync::conflict::resolver::tests::test_resolve_keep_local ... ignored
+test sync::conflict::resolver::tests::test_resolve_keep_remote ... ignored
+test sync::conflict::resolver::tests::test_resolve_take_longer ... ignored
+test sync::conflict::resolver::tests::test_suggest_strategy ... ignored
+test sync::conflict::tests::test_auto_resolvable_conflict ... ignored
+test sync::conflict::tests::test_conflict_creation ... ignored
+test sync::conflict::tests::test_different_content_different_hash ... ignored
+test sync::conflict::tests::test_memory_version_hash ... ignored
 
-Optimized (Regex + HashSet Lazy):
-entity_extractor_new/default: 6.3822 µs
-entity_extraction/extract_mixed: 14.904 µs
+test result: ok. 0 passed; 0 failed; 773 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/agent.rs (target/release/deps/engram_agent-f3e3922774ac535c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/bench.rs (target/release/deps/engram_bench-e88e693b8e83247d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/cli.rs (target/release/deps/engram_cli-cf1fa58c73f875e3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/engram_core-4569c6684acf74af)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/server.rs (target/release/deps/engram_server-2fc12e1c9b6e5244)
+
+running 1 test
+test tests::test_tool_ingest_document_idempotent ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/community_detection.rs (target/release/deps/community_detection-f639ad2b3061cfb5)
+Gnuplot not found, using plotters backend
+Benchmarking community_detection/detect_communities_500_nodes
+Benchmarking community_detection/detect_communities_500_nodes: Warming up for 3.0000 s
+Benchmarking community_detection/detect_communities_500_nodes: Collecting 10 samples in estimated 5.3054 s (715 iterations)
+Benchmarking community_detection/detect_communities_500_nodes: Analyzing
+community_detection/detect_communities_500_nodes
+                        time:   [7.3036 ms 7.4908 ms 7.7689 ms]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+
+     Running benches/entity_extraction.rs (target/release/deps/entity_extraction-353b41b0b6c536d8)
+Gnuplot not found, using plotters backend
+Benchmarking entity_extractor_new/default
+Benchmarking entity_extractor_new/default: Warming up for 3.0000 s
+Benchmarking entity_extractor_new/default: Collecting 100 samples in estimated 5.0153 s (1.4M iterations)
+Benchmarking entity_extractor_new/default: Analyzing
+entity_extractor_new/default
+                        time:   [3.4741 µs 3.5661 µs 3.6759 µs]
+                        thrpt:  [272.04 Kelem/s 280.42 Kelem/s 287.84 Kelem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  3 (3.00%) high mild
+  6 (6.00%) high severe
+
+Benchmarking entity_extraction/extract_mixed
+Benchmarking entity_extraction/extract_mixed: Warming up for 3.0000 s
+Benchmarking entity_extraction/extract_mixed: Collecting 100 samples in estimated 5.0451 s (409k iterations)
+Benchmarking entity_extraction/extract_mixed: Analyzing
+entity_extraction/extract_mixed
+                        time:   [13.333 µs 13.497 µs 13.706 µs]
+                        thrpt:  [15.308 MiB/s 15.545 MiB/s 15.735 MiB/s]
+Found 11 outliers among 100 measurements (11.00%)
+  2 (2.00%) high mild
+  9 (9.00%) high severe
+
+     Running benches/mcp_dispatch.rs (target/release/deps/mcp_dispatch-dd7c306c3bd0f3b2)
+Gnuplot not found, using plotters backend
+Benchmarking mcp_dispatch_memory_create/memory_create
+Benchmarking mcp_dispatch_memory_create/memory_create: Warming up for 3.0000 s
+Benchmarking mcp_dispatch_memory_create/memory_create: Collecting 100 samples in estimated 5.1317 s (25k iterations)
+Benchmarking mcp_dispatch_memory_create/memory_create: Analyzing
+mcp_dispatch_memory_create/memory_create
+                        time:   [210.61 µs 214.96 µs 219.36 µs]
+                        thrpt:  [4.5588 Kelem/s 4.6521 Kelem/s 4.7481 Kelem/s]
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+
+Benchmarking mcp_dispatch_memory_search/memory_search
+Benchmarking mcp_dispatch_memory_search/memory_search: Warming up for 3.0000 s
+Benchmarking mcp_dispatch_memory_search/memory_search: Collecting 100 samples in estimated 6.0028 s (10k iterations)
+Benchmarking mcp_dispatch_memory_search/memory_search: Analyzing
+mcp_dispatch_memory_search/memory_search
+                        time:   [574.94 µs 584.19 µs 594.85 µs]
+                        thrpt:  [1.6811 Kelem/s 1.7118 Kelem/s 1.7393 Kelem/s]
+Found 11 outliers among 100 measurements (11.00%)
+  3 (3.00%) low mild
+  5 (5.00%) high mild
+  3 (3.00%) high severe
+
+Benchmarking mcp_dispatch_memory_list/memory_list
+Benchmarking mcp_dispatch_memory_list/memory_list: Warming up for 3.0000 s
+Benchmarking mcp_dispatch_memory_list/memory_list: Collecting 100 samples in estimated 6.2856 s (20k iterations)
+Benchmarking mcp_dispatch_memory_list/memory_list: Analyzing
+mcp_dispatch_memory_list/memory_list
+                        time:   [315.20 µs 321.13 µs 327.43 µs]
+                        thrpt:  [3.0541 Kelem/s 3.1140 Kelem/s 3.1726 Kelem/s]
+Found 14 outliers among 100 measurements (14.00%)
+  3 (3.00%) low severe
+  3 (3.00%) low mild
+  4 (4.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking mcp_dispatch_memory_stats/memory_stats
+Benchmarking mcp_dispatch_memory_stats/memory_stats: Warming up for 3.0000 s
+Benchmarking mcp_dispatch_memory_stats/memory_stats: Collecting 100 samples in estimated 5.3747 s (40k iterations)
+Benchmarking mcp_dispatch_memory_stats/memory_stats: Analyzing
+mcp_dispatch_memory_stats/memory_stats
+                        time:   [124.25 µs 127.19 µs 130.68 µs]
+                        thrpt:  [7.6522 Kelem/s 7.8620 Kelem/s 8.0482 Kelem/s]
+Found 15 outliers among 100 measurements (15.00%)
+  4 (4.00%) low mild
+  5 (5.00%) high mild
+  6 (6.00%) high severe
+
+Benchmarking mcp_dispatch_error_path/unknown_tool
+Benchmarking mcp_dispatch_error_path/unknown_tool: Warming up for 3.0000 s
+Benchmarking mcp_dispatch_error_path/unknown_tool: Collecting 100 samples in estimated 5.0005 s (19M iterations)
+Benchmarking mcp_dispatch_error_path/unknown_tool: Analyzing
+mcp_dispatch_error_path/unknown_tool
+                        time:   [272.53 ns 283.78 ns 297.46 ns]
+                        thrpt:  [3.3618 Melem/s 3.5238 Melem/s 3.6694 Melem/s]
+Found 5 outliers among 100 measurements (5.00%)
+  2 (2.00%) high mild
+  3 (3.00%) high severe
+
+     Running benches/memory_ops.rs (target/release/deps/memory_ops-d33835d8b5234eb8)
+Gnuplot not found, using plotters backend
+Benchmarking memory_create/no_embedding
+Benchmarking memory_create/no_embedding: Warming up for 3.0000 s
+Benchmarking memory_create/no_embedding: Collecting 100 samples in estimated 5.0542 s (25k iterations)
+Benchmarking memory_create/no_embedding: Analyzing
+memory_create/no_embedding
+                        time:   [205.26 µs 207.97 µs 210.97 µs]
+                        thrpt:  [4.7401 Kelem/s 4.8085 Kelem/s 4.8718 Kelem/s]
+Found 7 outliers among 100 measurements (7.00%)
+  3 (3.00%) low mild
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+
+Benchmarking memory_get/by_id
+Benchmarking memory_get/by_id: Warming up for 3.0000 s
+Benchmarking memory_get/by_id: Collecting 100 samples in estimated 5.0319 s (91k iterations)
+Benchmarking memory_get/by_id: Analyzing
+memory_get/by_id        time:   [54.565 µs 55.304 µs 56.180 µs]
+                        thrpt:  [17.800 Kelem/s 18.082 Kelem/s 18.327 Kelem/s]
+Found 12 outliers among 100 measurements (12.00%)
+  1 (1.00%) low severe
+  2 (2.00%) low mild
+  4 (4.00%) high mild
+  5 (5.00%) high severe
+
+Benchmarking memory_list/limit/10
+Benchmarking memory_list/limit/10: Warming up for 3.0000 s
+Benchmarking memory_list/limit/10: Collecting 100 samples in estimated 5.4259 s (40k iterations)
+Benchmarking memory_list/limit/10: Analyzing
+memory_list/limit/10    time:   [125.40 µs 126.87 µs 128.44 µs]
+                        thrpt:  [77.857 Kelem/s 78.818 Kelem/s 79.743 Kelem/s]
+Found 8 outliers among 100 measurements (8.00%)
+  4 (4.00%) low severe
+  2 (2.00%) low mild
+  2 (2.00%) high mild
+Benchmarking memory_list/with_tag_filter/10
+Benchmarking memory_list/with_tag_filter/10: Warming up for 3.0000 s
+Benchmarking memory_list/with_tag_filter/10: Collecting 100 samples in estimated 6.2774 s (20k iterations)
+Benchmarking memory_list/with_tag_filter/10: Analyzing
+memory_list/with_tag_filter/10
+                        time:   [333.95 µs 340.47 µs 346.19 µs]
+                        thrpt:  [28.886 Kelem/s 29.371 Kelem/s 29.945 Kelem/s]
+Benchmarking memory_list/limit/50
+Benchmarking memory_list/limit/50: Warming up for 3.0000 s
+Benchmarking memory_list/limit/50: Collecting 100 samples in estimated 5.0574 s (10k iterations)
+Benchmarking memory_list/limit/50: Analyzing
+memory_list/limit/50    time:   [483.93 µs 494.71 µs 505.99 µs]
+                        thrpt:  [98.817 Kelem/s 101.07 Kelem/s 103.32 Kelem/s]
+Found 13 outliers among 100 measurements (13.00%)
+  2 (2.00%) low mild
+  2 (2.00%) high mild
+  9 (9.00%) high severe
+Benchmarking memory_list/with_tag_filter/50
+Benchmarking memory_list/with_tag_filter/50: Warming up for 3.0000 s
+Benchmarking memory_list/with_tag_filter/50: Collecting 100 samples in estimated 8.0585 s (10k iterations)
+Benchmarking memory_list/with_tag_filter/50: Analyzing
+memory_list/with_tag_filter/50
+                        time:   [778.35 µs 791.89 µs 805.79 µs]
+                        thrpt:  [62.051 Kelem/s 63.140 Kelem/s 64.238 Kelem/s]
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+Benchmarking memory_list/limit/100
+Benchmarking memory_list/limit/100: Warming up for 3.0000 s
+Benchmarking memory_list/limit/100: Collecting 100 samples in estimated 8.7310 s (10k iterations)
+Benchmarking memory_list/limit/100: Analyzing
+memory_list/limit/100   time:   [826.44 µs 836.75 µs 850.80 µs]
+                        thrpt:  [117.54 Kelem/s 119.51 Kelem/s 121.00 Kelem/s]
+Found 6 outliers among 100 measurements (6.00%)
+  1 (1.00%) low mild
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+Benchmarking memory_list/with_tag_filter/100
+Benchmarking memory_list/with_tag_filter/100: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.5s, enable flat sampling, or reduce sample count to 60.
+Benchmarking memory_list/with_tag_filter/100: Collecting 100 samples in estimated 5.5075 s (5050 iterations)
+Benchmarking memory_list/with_tag_filter/100: Analyzing
+memory_list/with_tag_filter/100
+                        time:   [1.0658 ms 1.0955 ms 1.1312 ms]
+                        thrpt:  [88.403 Kelem/s 91.280 Kelem/s 93.825 Kelem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  2 (2.00%) low mild
+  2 (2.00%) high mild
+  5 (5.00%) high severe
+
+Benchmarking crossref/create
+Benchmarking crossref/create: Warming up for 3.0000 s
+Benchmarking crossref/create: Collecting 100 samples in estimated 5.1670 s (141k iterations)
+Benchmarking crossref/create: Analyzing
+crossref/create         time:   [35.687 µs 36.478 µs 37.326 µs]
+Found 9 outliers among 100 measurements (9.00%)
+  2 (2.00%) low severe
+  1 (1.00%) low mild
+  5 (5.00%) high mild
+  1 (1.00%) high severe
+Benchmarking crossref/get_related
+Benchmarking crossref/get_related: Warming up for 3.0000 s
+Benchmarking crossref/get_related: Collecting 100 samples in estimated 5.0315 s (227k iterations)
+Benchmarking crossref/get_related: Analyzing
+crossref/get_related    time:   [21.156 µs 21.714 µs 22.226 µs]
+Found 15 outliers among 100 measurements (15.00%)
+  2 (2.00%) low severe
+  12 (12.00%) low mild
+  1 (1.00%) high mild
+
+Benchmarking get_stats
+Benchmarking get_stats: Warming up for 3.0000 s
+Benchmarking get_stats: Collecting 100 samples in estimated 5.9135 s (15k iterations)
+Benchmarking get_stats: Analyzing
+get_stats               time:   [326.80 µs 333.79 µs 342.06 µs]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+
+     Running benches/search.rs (target/release/deps/search-b7baeb2670337a8d)
+Gnuplot not found, using plotters backend
+Benchmarking bm25_search/query/authentication
+Benchmarking bm25_search/query/authentication: Warming up for 3.0000 s
+Benchmarking bm25_search/query/authentication: Collecting 100 samples in estimated 5.0216 s (25k iterations)
+Benchmarking bm25_search/query/authentication: Analyzing
+bm25_search/query/authentication
+                        time:   [197.21 µs 202.31 µs 208.12 µs]
+Found 8 outliers among 100 measurements (8.00%)
+  3 (3.00%) high mild
+  5 (5.00%) high severe
+Benchmarking bm25_search/query/database migration
+Benchmarking bm25_search/query/database migration: Warming up for 3.0000 s
+Benchmarking bm25_search/query/database migration: Collecting 100 samples in estimated 6.1503 s (25k iterations)
+Benchmarking bm25_search/query/database migration: Analyzing
+bm25_search/query/database migration
+                        time:   [225.60 µs 229.36 µs 234.17 µs]
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+Benchmarking bm25_search/query/React hooks optimization
+Benchmarking bm25_search/query/React hooks optimization: Warming up for 3.0000 s
+Benchmarking bm25_search/query/React hooks optimization: Collecting 100 samples in estimated 5.3823 s (20k iterations)
+Benchmarking bm25_search/query/React hooks optimization: Analyzing
+bm25_search/query/React hooks optimization
+                        time:   [264.67 µs 271.30 µs 278.70 µs]
+Found 10 outliers among 100 measurements (10.00%)
+  6 (6.00%) high mild
+  4 (4.00%) high severe
+Benchmarking bm25_search/query/API rate limiting Redis
+Benchmarking bm25_search/query/API rate limiting Redis: Warming up for 3.0000 s
+Benchmarking bm25_search/query/API rate limiting Redis: Collecting 100 samples in estimated 6.2192 s (20k iterations)
+Benchmarking bm25_search/query/API rate limiting Redis: Analyzing
+bm25_search/query/API rate limiting Redis
+                        time:   [301.29 µs 305.88 µs 311.48 µs]
+Found 10 outliers among 100 measurements (10.00%)
+  8 (8.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking hybrid_search/query_type/short
+Benchmarking hybrid_search/query_type/short: Warming up for 3.0000 s
+Benchmarking hybrid_search/query_type/short: Collecting 100 samples in estimated 5.1847 s (126k iterations)
+Benchmarking hybrid_search/query_type/short: Analyzing
+hybrid_search/query_type/short
+                        time:   [39.953 µs 40.445 µs 41.066 µs]
+Found 10 outliers among 100 measurements (10.00%)
+  3 (3.00%) low mild
+  5 (5.00%) high mild
+  2 (2.00%) high severe
+Benchmarking hybrid_search/query_type/medium
+Benchmarking hybrid_search/query_type/medium: Warming up for 3.0000 s
+Benchmarking hybrid_search/query_type/medium: Collecting 100 samples in estimated 6.7698 s (15k iterations)
+Benchmarking hybrid_search/query_type/medium: Analyzing
+hybrid_search/query_type/medium
+                        time:   [431.01 µs 443.91 µs 457.86 µs]
+Found 11 outliers among 100 measurements (11.00%)
+  7 (7.00%) high mild
+  4 (4.00%) high severe
+Benchmarking hybrid_search/query_type/long
+Benchmarking hybrid_search/query_type/long: Warming up for 3.0000 s
+Benchmarking hybrid_search/query_type/long: Collecting 100 samples in estimated 5.1504 s (50k iterations)
+Benchmarking hybrid_search/query_type/long: Analyzing
+hybrid_search/query_type/long
+                        time:   [93.441 µs 94.743 µs 96.175 µs]
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+
+Benchmarking tfidf_embedding/text_length/short
+Benchmarking tfidf_embedding/text_length/short: Warming up for 3.0000 s
+Benchmarking tfidf_embedding/text_length/short: Collecting 100 samples in estimated 5.0020 s (5.3M iterations)
+Benchmarking tfidf_embedding/text_length/short: Analyzing
+tfidf_embedding/text_length/short
+                        time:   [915.01 ns 941.21 ns 979.27 ns]
+Found 5 outliers among 100 measurements (5.00%)
+  2 (2.00%) high mild
+  3 (3.00%) high severe
+Benchmarking tfidf_embedding/text_length/medium
+Benchmarking tfidf_embedding/text_length/medium: Warming up for 3.0000 s
+Benchmarking tfidf_embedding/text_length/medium: Collecting 100 samples in estimated 5.0115 s (1.6M iterations)
+Benchmarking tfidf_embedding/text_length/medium: Analyzing
+tfidf_embedding/text_length/medium
+                        time:   [2.8756 µs 2.9399 µs 3.0103 µs]
+Found 11 outliers among 100 measurements (11.00%)
+  4 (4.00%) low mild
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+Benchmarking tfidf_embedding/text_length/long
+Benchmarking tfidf_embedding/text_length/long: Warming up for 3.0000 s
+Benchmarking tfidf_embedding/text_length/long: Collecting 100 samples in estimated 5.0138 s (758k iterations)
+Benchmarking tfidf_embedding/text_length/long: Analyzing
+tfidf_embedding/text_length/long
+                        time:   [6.0906 µs 6.1374 µs 6.1853 µs]
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+Benchmarking tfidf_embedding/batch_100
+Benchmarking tfidf_embedding/batch_100: Warming up for 3.0000 s
+Benchmarking tfidf_embedding/batch_100: Collecting 100 samples in estimated 5.0636 s (20k iterations)
+Benchmarking tfidf_embedding/batch_100: Analyzing
+tfidf_embedding/batch_100
+                        time:   [248.09 µs 252.63 µs 259.16 µs]
+Found 7 outliers among 100 measurements (7.00%)
+  2 (2.00%) low mild
+  5 (5.00%) high severe
+
+Benchmarking fuzzy_search/typo_type/1_char_typo
+Benchmarking fuzzy_search/typo_type/1_char_typo: Warming up for 3.0000 s
+Benchmarking fuzzy_search/typo_type/1_char_typo: Collecting 100 samples in estimated 5.0515 s (207k iterations)
+Benchmarking fuzzy_search/typo_type/1_char_typo: Analyzing
+fuzzy_search/typo_type/1_char_typo
+                        time:   [21.007 µs 21.275 µs 21.564 µs]
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) low mild
+  3 (3.00%) high mild
+Benchmarking fuzzy_search/typo_type/2_char_typo
+Benchmarking fuzzy_search/typo_type/2_char_typo: Warming up for 3.0000 s
+Benchmarking fuzzy_search/typo_type/2_char_typo: Collecting 100 samples in estimated 5.0712 s (242k iterations)
+Benchmarking fuzzy_search/typo_type/2_char_typo: Analyzing
+fuzzy_search/typo_type/2_char_typo
+                        time:   [20.858 µs 21.090 µs 21.322 µs]
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+Benchmarking fuzzy_search/typo_type/transposition
+Benchmarking fuzzy_search/typo_type/transposition: Warming up for 3.0000 s
+Benchmarking fuzzy_search/typo_type/transposition: Collecting 100 samples in estimated 5.0035 s (212k iterations)
+Benchmarking fuzzy_search/typo_type/transposition: Analyzing
+fuzzy_search/typo_type/transposition
+                        time:   [20.962 µs 21.183 µs 21.450 µs]
+Found 11 outliers among 100 measurements (11.00%)
+  2 (2.00%) low mild
+  3 (3.00%) high mild
+  6 (6.00%) high severe
+
+Benchmarking search_scale/memories/100
+Benchmarking search_scale/memories/100: Warming up for 3.0000 s
+Benchmarking search_scale/memories/100: Collecting 50 samples in estimated 5.0236 s (23k iterations)
+Benchmarking search_scale/memories/100: Analyzing
+search_scale/memories/100
+                        time:   [208.54 µs 211.05 µs 213.96 µs]
+                        thrpt:  [467.39 Kelem/s 473.81 Kelem/s 479.53 Kelem/s]
+Found 5 outliers among 50 measurements (10.00%)
+  3 (6.00%) high mild
+  2 (4.00%) high severe
+Benchmarking search_scale/memories/1000
+Benchmarking search_scale/memories/1000: Warming up for 3.0000 s
+Benchmarking search_scale/memories/1000: Collecting 50 samples in estimated 5.5543 s (10k iterations)
+Benchmarking search_scale/memories/1000: Analyzing
+search_scale/memories/1000
+                        time:   [510.78 µs 515.65 µs 521.20 µs]
+                        thrpt:  [1.9186 Melem/s 1.9393 Melem/s 1.9578 Melem/s]
+Found 7 outliers among 50 measurements (14.00%)
+  5 (10.00%) high mild
+  2 (4.00%) high severe
+Benchmarking search_scale/memories/10000
+Benchmarking search_scale/memories/10000: Warming up for 3.0000 s
+Benchmarking search_scale/memories/10000: Collecting 50 samples in estimated 5.9692 s (2550 iterations)
+Benchmarking search_scale/memories/10000: Analyzing
+search_scale/memories/10000
+                        time:   [2.1634 ms 2.2271 ms 2.2998 ms]
+                        thrpt:  [4.3482 Melem/s 4.4902 Melem/s 4.6223 Melem/s]
+Found 3 outliers among 50 measurements (6.00%)
+  3 (6.00%) high mild
+
+     Running benches/traversal.rs (target/release/deps/traversal-b553388382caa0df)
+Gnuplot not found, using plotters backend
+Benchmarking traversal/bfs_depth_3
+Benchmarking traversal/bfs_depth_3: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.8s, enable flat sampling, or reduce sample count to 60.
+Benchmarking traversal/bfs_depth_3: Collecting 100 samples in estimated 5.8302 s (5050 iterations)
+Benchmarking traversal/bfs_depth_3: Analyzing
+traversal/bfs_depth_3   time:   [1.2069 ms 1.2314 ms 1.2613 ms]
+Found 6 outliers among 100 measurements (6.00%)
+  1 (1.00%) low severe
+  1 (1.00%) low mild
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+
