@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 37;
+pub const SCHEMA_VERSION: i32 = 38;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -170,8 +170,12 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         migrate_v36(conn)?;
     }
 
-    if current_version < SCHEMA_VERSION {
+    if current_version < 37 {
         migrate_v37(conn)?;
+    }
+
+    if current_version < SCHEMA_VERSION {
+        migrate_v38(conn)?;
     }
 
     Ok(())
@@ -1858,6 +1862,41 @@ fn migrate_v37(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_v38(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v38: Creating pending_injections table...");
+
+    conn.execute_batch(
+        r#"
+        -- Queue of injection payloads to be consumed at the next SessionStart
+        -- for a given workspace. The producer (SessionEnd hook) writes one row
+        -- per relevant outgoing session; the consumer (SessionStart hook)
+        -- reads-and-deletes oldest-first.
+        --
+        -- This decouples the two hooks: SessionEnd cannot know the *next*
+        -- session id, so it cannot target a specific session. Workspace is
+        -- the routing key, and FIFO within a workspace preserves intent
+        -- order when multiple agents end overlapping sessions.
+        CREATE TABLE IF NOT EXISTS pending_injections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            source_session_id TEXT,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pending_injections_workspace
+            ON pending_injections(workspace, created_at);
+
+        INSERT INTO schema_version (version) VALUES (38);
+        "#,
+    )?;
+
+    tracing::info!("Migration v38 complete: pending_injections table created");
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1879,12 +1918,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 37);
+        assert_eq!(version, 38);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 37);
+        assert_eq!(SCHEMA_VERSION, 38);
     }
 
     #[test]
@@ -2039,7 +2078,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 37, "should reach v37 after full migration");
+        assert_eq!(version, 38, "should reach v38 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
