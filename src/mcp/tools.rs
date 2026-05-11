@@ -1525,66 +1525,6 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         tier: ToolTier::Advanced,
     },
     ToolDef {
-        name: "memory_consolidate_batch",
-        description: "Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories. Defaults to dry-run; returns a structured report of actions taken (or that would be taken). Composes existing find_near_duplicates, detect_conflicts, and archive-old logic — does not introduce a new background scheduler.",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "workspace": {"type": "string", "default": "default", "description": "Workspace to consolidate"},
-                "dry_run": {"type": "boolean", "default": true, "description": "Shortcut overriding policy.dry_run. When true, no memories are mutated."},
-                "policy": {
-                    "type": "object",
-                    "properties": {
-                        "duplicate_threshold": {"type": "number", "default": 0.92, "description": "Min similarity (0..1) to merge a duplicate pair"},
-                        "conflict_auto_resolve": {"type": "boolean", "default": false, "description": "If true, apply automatic resolution to detected conflicts"},
-                        "summarize_age_days": {"type": "integer", "default": 90, "description": "Memories older than this are eligible for summarization. <=0 disables the phase."},
-                        "max_actions_per_run": {"type": "integer", "default": 50, "description": "Hard ceiling on actions taken in a single run"},
-                        "dry_run": {"type": "boolean", "default": true}
-                    }
-                }
-            }
-        }"#,
-        annotations: ToolAnnotations::destructive(),
-        tier: ToolTier::Advanced,
-    },
-    ToolDef {
-        name: "memory_consolidation_history",
-        description: "List recent auto-consolidation runs for a workspace (or all workspaces). Returns the most recent runs newest-first with their full reports.",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "workspace": {"type": "string", "description": "Filter to a single workspace. Omit for all workspaces."},
-                "limit": {"type": "integer", "default": 20, "minimum": 1, "maximum": 1000}
-            }
-        }"#,
-        annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Advanced,
-    },
-    // Auto-Consolidation Control (Phase 4+)
-    ToolDef {
-        name: "memory_auto_consolidate",
-        description: "Control the automatic memory consolidation loop. Enable/disable, set interval, or get status. This is a maintenance loop (not an AI agent) that periodically consolidates low-utility memories.",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["enable", "disable", "set_interval", "get_status"],
-                    "description": "Action to perform: enable/disable the loop, set interval, or get current status"
-                },
-                "interval_seconds": {
-                    "type": "integer",
-                    "description": "New interval in seconds (only used with set_interval action)",
-                    "minimum": 60,
-                    "maximum": 86400
-                }
-            },
-            "required": ["action"]
-        }"#,
-        annotations: ToolAnnotations::mutating(),
-        tier: ToolTier::Standard,
-    },
-    ToolDef {
         name: "memory_archive_old",
         description: "Archive old, low-importance memories by creating summaries. Moves originals to archived state.",
         schema: r#"{
@@ -2378,21 +2318,6 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
             "required": ["session_id"]
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Advanced,
-    },
-    // Nova ferramenta para preparar contexto cross-session
-    ToolDef {
-        name: "memory_session_prepare",
-        description: "Forces creation of context for the next session. Prepares injection prompt and detects topics for consolidation.",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "session_id": {"type": "string", "description": "Session ID to prepare context for"},
-                "topics": {"type": "array", "items": {"type": "string"}, "description": "Optional list of topics to include in context"}
-            },
-            "required": ["session_id"]
-        }"#,
-        annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
     // Phase 9: Context Quality (ENG-48 to ENG-66)
@@ -3228,7 +3153,11 @@ mod tests {
             "essential: {}",
             essential
         );
-        assert!(standard >= 40 && standard <= 60, "standard: {}", standard);
+        assert!(
+            standard >= 40 && standard <= 60,
+            "standard: {}",
+            standard
+        );
         // Advanced count depends on feature flags (19 feature-gated tools are Advanced)
         assert!(advanced >= 80, "advanced: {}", advanced);
         assert_eq!(essential + standard + advanced, TOOL_DEFINITIONS.len());
