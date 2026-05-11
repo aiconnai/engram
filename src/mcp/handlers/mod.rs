@@ -18,6 +18,7 @@ pub mod autonomous;
 pub mod compression;
 pub mod context;
 pub mod document_ingest;
+#[cfg(feature = "dream-phase")]
 pub mod dream;
 pub mod evolution;
 pub mod graph;
@@ -32,6 +33,7 @@ pub mod quality;
 pub mod retrieval;
 pub mod search;
 pub mod session;
+pub mod smart_retrieve;
 pub mod stats;
 pub mod summarize;
 pub mod sync;
@@ -119,6 +121,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
 
         // ── Search ───────────────────────────────────────────────────────────
         "memory_search" => search::memory_search(ctx, params),
+        "memory_smart_retrieve" => smart_retrieve::memory_smart_retrieve(ctx, params),
         "memory_search_suggest" => search::search_suggest(ctx, params),
         "memory_search_by_identity" => search::memory_search_by_identity(ctx, params),
         "memory_session_search" => search::memory_session_search(ctx, params),
@@ -242,6 +245,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_ingest_document" => document_ingest::ingest_document(ctx, params),
 
         // ── Dream Phase ──────────────────────────────────────────────────────
+        #[cfg(feature = "dream-phase")]
         "dream_run_now" => dream::dream_run_now(ctx, params),
 
         // ── Summarization & archival ──────────────────────────────────────────

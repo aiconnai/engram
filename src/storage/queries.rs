@@ -5766,6 +5766,7 @@ mod tests {
 }
 
 /// Insert a Dream Phase run report (Phase D - Issue #12)
+#[cfg(feature = "dream-phase")]
 pub fn insert_dream_run(conn: &Connection, report: &crate::dream::DreamReport) -> Result<i64> {
     let report_json = serde_json::to_string(report).map_err(|e| EngramError::Internal(e.to_string()))?;
     
