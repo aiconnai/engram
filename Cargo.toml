@@ -70,6 +70,9 @@ emergent-graph = []
 # Lifecycle hooks (session start/end, post-tool-use, stop)
 hooks = []
 
+# Dream Phase: periodic background consolidation of memories (#12)
+dream-phase = []
+
 # Ollama local embedding backend
 ollama = []
 
