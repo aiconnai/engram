@@ -21,7 +21,7 @@ use tonic::{Code, Request};
 
 use engram::embedding::{create_embedder, EmbeddingCache};
 use engram::mcp::grpc_transport::proto::mcp_service_client::McpServiceClient;
-use engram::mcp::grpc_transport::proto::{McpRequest as ProtoRequest, SubscribeRequest};
+use engram::mcp::grpc_transport::proto::McpRequest as ProtoRequest;
 use engram::mcp::grpc_transport::serve_grpc;
 use engram::mcp::{
     get_tool_definitions, handlers, methods, InitializeResult, McpHandler, McpRequest, McpResponse,

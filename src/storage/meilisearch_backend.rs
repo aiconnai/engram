@@ -136,6 +136,7 @@ fn build_memory_from_doc(doc: MeilisearchMemory) -> Memory {
         procedure_failure_count: doc.procedure_failure_count,
         summary_of_id: doc.summary_of_id,
         lifecycle_state: doc.lifecycle_state.parse().unwrap_or_default(),
+        media_url: None,
     }
 }
 
@@ -364,6 +365,7 @@ fn build_memory_from_input(
         procedure_failure_count: 0,
         summary_of_id: input.summary_of_id,
         lifecycle_state: LifecycleState::Active,
+        media_url: None,
     })
 }
 

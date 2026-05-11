@@ -15,13 +15,13 @@ fn main() {
 
     // Example 2: File with error
     let file_with_error = "line 1\nline 2\nERROR: something failed\nline 1000";
-    let truncated = engine.truncate_to_budget(&file_with_error, 500);
+    let truncated = engine.truncate_to_budget(file_with_error, 500);
     println!("\nFile original: {} chars", file_with_error.len());
     println!("File truncated: {} chars", truncated.len());
     println!("Contains ERROR: {}", truncated.contains("ERROR"));
 
     // Example 3: Multiple memories (mock)
-    let memories = vec![
+    let memories = [
         "Memory 1: User prefers dark mode".repeat(100),
         "Memory 2: User likes coffee".repeat(100),
         "Memory 3: User works on Engram".repeat(100),

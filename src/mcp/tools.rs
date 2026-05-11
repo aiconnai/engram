@@ -3219,12 +3219,8 @@ mod tests {
             .iter()
             .filter(|t| t.tier == ToolTier::Advanced)
             .count();
-        assert!(
-            essential >= 18 && essential <= 25,
-            "essential: {}",
-            essential
-        );
-        assert!(standard >= 40 && standard <= 60, "standard: {}", standard);
+        assert!((18..=25).contains(&essential), "essential: {}", essential);
+        assert!((40..=60).contains(&standard), "standard: {}", standard);
         // Advanced count depends on feature flags (19 feature-gated tools are Advanced)
         assert!(advanced >= 80, "advanced: {}", advanced);
         assert_eq!(essential + standard + advanced, TOOL_DEFINITIONS.len());

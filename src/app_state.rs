@@ -7,12 +7,10 @@ use crate::embedding::{Embedder, EmbeddingCache};
 #[cfg(feature = "hooks")]
 use crate::hooks::{HookContext, HookManager, HookResult, LifecycleHook};
 use crate::realtime::RealtimeManager;
-#[cfg(feature = "meilisearch")]
-use crate::search::MeilisearchIndexer;
 use crate::search::{FuzzyEngine, SearchConfig};
-#[cfg(feature = "meilisearch")]
-use crate::storage::MeilisearchBackend;
 use crate::storage::Storage;
+#[cfg(feature = "meilisearch")]
+use crate::storage::{MeilisearchBackend, MeilisearchIndexer};
 use std::sync::Arc;
 
 /// Application state shared across MCP handlers.

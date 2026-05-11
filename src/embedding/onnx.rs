@@ -161,7 +161,7 @@ mod inner {
             let hash = fnv1a_hash(token.as_bytes());
             // Reserve 0..=103 for special tokens; spread the rest across the
             // typical BERT vocabulary range.
-            104 + (hash % (30522 - 104)) as i64
+            104 + (hash % (30522 - 104))
         }
 
         /// Tokenize a text string into a padded/truncated sequence of token ids
@@ -303,7 +303,7 @@ mod inner {
             if shape.len() != 3 || shape[0] != 1 {
                 return Err(EngramError::Embedding(format!(
                     "Expected 3D output tensor [1, seq_len, hidden_size], got shape {:?}",
-                    &*shape
+                    shape
                 )));
             }
             let hidden_size = shape[2] as usize;
@@ -452,7 +452,7 @@ mod inner {
                     return id;
                 }
                 let hash = fnv1a_hash(token.as_bytes());
-                104 + (hash % (30522 - 104)) as i64
+                104 + (hash % (30522 - 104))
             }
 
             fn tokenize(&self, text: &str) -> (Vec<i64>, Vec<i64>) {

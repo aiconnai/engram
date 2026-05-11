@@ -89,7 +89,7 @@ impl HookManager {
     {
         self.handlers
             .entry(hook)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(Box::new(handler));
     }
 

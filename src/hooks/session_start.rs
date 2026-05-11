@@ -12,18 +12,10 @@ use crate::hooks::session_end::SessionEndPayload;
 use crate::storage::{pending_injections, Storage};
 use crate::Result;
 
+#[derive(Default)]
 pub struct SessionStartHandler {
     pub storage: Option<Storage>,
     pub auto_inject: bool,
-}
-
-impl Default for SessionStartHandler {
-    fn default() -> Self {
-        Self {
-            storage: None,
-            auto_inject: false,
-        }
-    }
 }
 
 impl SessionStartHandler {

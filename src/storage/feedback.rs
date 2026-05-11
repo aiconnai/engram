@@ -170,7 +170,7 @@ mod tests {
         processor.process_feedback(2, "helpful", &conn).unwrap();
 
         // Then give negative feedback
-        let (score, scheduled) = processor.process_feedback(2, "not_helpful", &conn).unwrap();
+        let (score, _scheduled) = processor.process_feedback(2, "not_helpful", &conn).unwrap();
         assert!(score >= 0.0);
         // Might not be scheduled unless score drops below 0.2
     }

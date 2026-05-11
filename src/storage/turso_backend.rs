@@ -559,6 +559,7 @@ impl TursoBackend {
             procedure_failure_count,
             summary_of_id,
             lifecycle_state,
+            media_url: None,
         })
     }
 

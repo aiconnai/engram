@@ -538,7 +538,7 @@ fn main() -> Result<()> {
     #[cfg(feature = "meilisearch")]
     let mut meili_indexer_for_handler: Option<Arc<MeilisearchIndexer>> = None;
     #[cfg(feature = "meilisearch")]
-    let meili_sync_interval = args.meilisearch_sync_interval;
+    let _meili_sync_interval = args.meilisearch_sync_interval;
 
     #[cfg(feature = "meilisearch")]
     {
