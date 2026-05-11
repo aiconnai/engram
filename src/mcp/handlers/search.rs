@@ -310,6 +310,7 @@ pub fn memory_explain_search(_ctx: &HandlerContext, params: Value) -> Value {
 
 pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
     use crate::search::feedback::{record_feedback, FeedbackSignal};
+    use crate::storage::feedback::FeedbackProcessor;
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q,
@@ -321,10 +322,20 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
         None => return json!({"error": "memory_id is required"}),
     };
 
-    let signal = match params.get("signal").and_then(|v| v.as_str()) {
-        Some("useful") => FeedbackSignal::Useful,
-        Some("irrelevant") => FeedbackSignal::Irrelevant,
-        _ => return json!({"error": "signal must be 'useful' or 'irrelevant'"}),
+    // Accept both legacy aliases (helpful/not_helpful) and canonical names
+    // (useful/irrelevant/outdated/conflict). All four canonical signals are
+    // distinct in storage and produce different boost magnitudes downstream.
+    let (feedback_signal, signal_str): (FeedbackSignal, &str) = match params
+        .get("signal")
+        .and_then(|v| v.as_str())
+    {
+        Some("useful") | Some("helpful") => (FeedbackSignal::Useful, "helpful"),
+        Some("irrelevant") | Some("not_helpful") => (FeedbackSignal::Irrelevant, "not_helpful"),
+        Some("outdated") => (FeedbackSignal::Outdated, "outdated"),
+        Some("conflict") => (FeedbackSignal::Conflict, "conflict"),
+        _ => {
+            return json!({"error": "signal must be 'helpful'/'useful', 'not_helpful'/'irrelevant', 'outdated', or 'conflict'"});
+        }
     };
 
     let rank_position = params
@@ -342,16 +353,29 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
+            // 1. Record the feedback in the search feedback table
             let fb = record_feedback(
                 conn,
                 query,
                 memory_id,
-                signal,
+                feedback_signal,
                 rank_position,
                 original_score,
                 workspace,
             )?;
-            Ok(json!(fb))
+
+            // 2. Process feedback through the feedback loop (adjust utility + possibly consolidate)
+            let processor = FeedbackProcessor::new();
+            let (new_score, scheduled) = processor.process_feedback(memory_id, signal_str, conn)?;
+
+            // 3. Return enriched response
+            let mut result = json!(fb);
+            if let Some(obj) = result.as_object_mut() {
+                obj.insert("utility_score_after".to_string(), json!(new_score));
+                obj.insert("scheduled_for_consolidation".to_string(), json!(scheduled));
+            }
+
+            Ok(result)
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
@@ -571,10 +595,7 @@ pub fn memory_expand(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::get_memory;
 
     let ids: Vec<i64> = match params.get("ids").and_then(|v| v.as_array()) {
-        Some(arr) => arr
-            .iter()
-            .filter_map(|v| v.as_i64())
-            .collect(),
+        Some(arr) => arr.iter().filter_map(|v| v.as_i64()).collect(),
         None => return json!({"error": "ids array is required"}),
     };
 

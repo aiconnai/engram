@@ -37,6 +37,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+#[cfg(target_os = "macos")]
 use std::process::Command;
 use std::time::Duration;
 

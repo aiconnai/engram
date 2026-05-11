@@ -55,9 +55,7 @@ pub fn ingest_document(ctx: &HandlerContext, params: Value) -> Value {
                     .unwrap_or_else(|| input.path.clone());
                 // Read file bytes for attestation (best-effort — skip on I/O error).
                 if let Ok(bytes) = std::fs::read(&input.path) {
-                    if let Err(e) =
-                        chain.log_document(&bytes, &doc_name, None, &[], None)
-                    {
+                    if let Err(e) = chain.log_document(&bytes, &doc_name, None, &[], None) {
                         tracing::warn!(
                             "Attestation hook (ingest_document): failed to log '{}': {}",
                             doc_name,

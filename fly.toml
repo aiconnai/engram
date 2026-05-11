@@ -1,0 +1,22 @@
+app = "your-engram-mcp"
+primary_region = "gru"
+
+[env]
+  ENGRAM_TRANSPORT = "http"
+  ENGRAM_HTTP_PORT = "8080"
+  ENGRAM_DB_PATH = "/data/memories.db"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = 256
+
+[mounts]
+  source = "engram_data"
+  destination = "/data"

@@ -136,6 +136,7 @@ fn build_memory_from_doc(doc: MeilisearchMemory) -> Memory {
         procedure_failure_count: doc.procedure_failure_count,
         summary_of_id: doc.summary_of_id,
         lifecycle_state: doc.lifecycle_state.parse().unwrap_or_default(),
+        media_url: None,
     }
 }
 
@@ -364,6 +365,7 @@ fn build_memory_from_input(
         procedure_failure_count: 0,
         summary_of_id: input.summary_of_id,
         lifecycle_state: LifecycleState::Active,
+        media_url: None,
     })
 }
 
@@ -839,7 +841,7 @@ impl StorageBackend for MeilisearchBackend {
             .into_iter()
             .map(|(tag, count)| (tag, count as i64))
             .collect();
-        tags.sort_by(|a, b| b.1.cmp(&a.1));
+        tags.sort_by_key(|b| std::cmp::Reverse(b.1));
         Ok(tags)
     }
 
@@ -864,7 +866,7 @@ impl StorageBackend for MeilisearchBackend {
             .into_iter()
             .map(|(ws, count)| (ws, count as i64))
             .collect();
-        workspaces.sort_by(|a, b| b.1.cmp(&a.1));
+        workspaces.sort_by_key(|b| std::cmp::Reverse(b.1));
         Ok(workspaces)
     }
 

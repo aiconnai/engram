@@ -102,7 +102,10 @@ mod tests {
         let plaintext = b"hello engram snapshot";
 
         let ciphertext = encrypt_aes256(plaintext, &key).expect("encrypt");
-        assert!(ciphertext.len() > 12, "ciphertext should be longer than nonce");
+        assert!(
+            ciphertext.len() > 12,
+            "ciphertext should be longer than nonce"
+        );
         assert_ne!(&ciphertext[12..], plaintext);
 
         let decrypted = decrypt_aes256(&ciphertext, &key).expect("decrypt");

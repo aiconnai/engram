@@ -31,7 +31,7 @@ const DEFAULT_MAX_BUFFERED_EVENTS: usize = 500;
 ///
 /// Each event broadcast through [`RealtimeManager::broadcast`] is:
 /// 1. Assigned a monotonically-increasing `seq_id`.
-/// 2. Pushed into an in-memory ring buffer (capacity [`DEFAULT_MAX_BUFFERED_EVENTS`]).
+/// 2. Pushed into an in-memory ring buffer (capacity 500).
 /// 3. Sent over the tokio broadcast channel for live subscribers.
 ///
 /// Clients that reconnect with a `Last-Event-Id` header can call

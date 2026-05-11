@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 38;
+pub const SCHEMA_VERSION: i32 = 39;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -174,8 +174,12 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         migrate_v37(conn)?;
     }
 
-    if current_version < SCHEMA_VERSION {
+    if current_version < 38 {
         migrate_v38(conn)?;
+    }
+
+    if current_version < SCHEMA_VERSION {
+        migrate_v39(conn)?;
     }
 
     Ok(())
@@ -1897,6 +1901,51 @@ fn migrate_v38(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Widen `search_feedback.signal` CHECK constraint from {useful, irrelevant}
+/// to {useful, irrelevant, outdated, conflict} so the new feedback handler
+/// can persist all four signal types with distinct semantics.
+///
+/// SQLite cannot ALTER a CHECK constraint in place; we recreate the table.
+fn migrate_v39(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v39: Widening search_feedback.signal CHECK constraint...");
+
+    conn.execute_batch(
+        r#"
+        CREATE TABLE search_feedback_v39 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            query TEXT NOT NULL,
+            query_embedding_hash TEXT,
+            memory_id INTEGER NOT NULL,
+            signal TEXT NOT NULL CHECK(signal IN ('useful', 'irrelevant', 'outdated', 'conflict')),
+            rank_position INTEGER,
+            original_score REAL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            workspace TEXT DEFAULT 'default'
+        );
+
+        INSERT INTO search_feedback_v39
+            (id, query, query_embedding_hash, memory_id, signal,
+             rank_position, original_score, created_at, workspace)
+        SELECT id, query, query_embedding_hash, memory_id, signal,
+               rank_position, original_score, created_at, workspace
+        FROM search_feedback;
+
+        DROP TABLE search_feedback;
+        ALTER TABLE search_feedback_v39 RENAME TO search_feedback;
+
+        CREATE INDEX IF NOT EXISTS idx_feedback_memory ON search_feedback(memory_id);
+        CREATE INDEX IF NOT EXISTS idx_feedback_query ON search_feedback(query);
+        CREATE INDEX IF NOT EXISTS idx_feedback_workspace ON search_feedback(workspace);
+
+        INSERT INTO schema_version (version) VALUES (39);
+        "#,
+    )?;
+
+    tracing::info!("Migration v39 complete: search_feedback signal types widened");
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1918,12 +1967,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 38);
+        assert_eq!(version, 39);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 38);
+        assert_eq!(SCHEMA_VERSION, 39);
     }
 
     #[test]
@@ -2078,7 +2127,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 38, "should reach v38 after full migration");
+        assert_eq!(version, 39, "should reach v39 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn

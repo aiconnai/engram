@@ -14,10 +14,9 @@ use super::HandlerContext;
 /// everything from the opening tag to the end of the string is removed.
 ///
 /// # Examples
-/// ```
-/// // "Hello world" — private section stripped
-/// // Input:  "Hello <private>secret</private> world"
-/// // Output: "Hello  world"
+/// ```text
+/// Input:  "Hello <private>secret</private> world"
+/// Output: "Hello  world"
 /// ```
 fn strip_private_content(content: &str) -> String {
     let mut result = String::with_capacity(content.len());
@@ -1025,17 +1024,26 @@ mod privacy_tests {
 
     #[test]
     fn test_single_private_tag() {
-        assert_eq!(strip_private_content("Hello <private>secret</private> world"), "Hello  world");
+        assert_eq!(
+            strip_private_content("Hello <private>secret</private> world"),
+            "Hello  world"
+        );
     }
 
     #[test]
     fn test_multiple_private_tags() {
-        assert_eq!(strip_private_content("a <private>1</private> b <private>2</private> c"), "a  b  c");
+        assert_eq!(
+            strip_private_content("a <private>1</private> b <private>2</private> c"),
+            "a  b  c"
+        );
     }
 
     #[test]
     fn test_multiline_private_content() {
-        assert_eq!(strip_private_content("start\n<private>\nline one\nline two\n</private>\nend"), "start\n\nend");
+        assert_eq!(
+            strip_private_content("start\n<private>\nline one\nline two\n</private>\nend"),
+            "start\n\nend"
+        );
     }
 
     #[test]
@@ -1045,11 +1053,17 @@ mod privacy_tests {
 
     #[test]
     fn test_entirely_private() {
-        assert_eq!(strip_private_content("<private>everything is private</private>"), "");
+        assert_eq!(
+            strip_private_content("<private>everything is private</private>"),
+            ""
+        );
     }
 
     #[test]
     fn test_unclosed_tag() {
-        assert_eq!(strip_private_content("visible <private>dangling content"), "visible ");
+        assert_eq!(
+            strip_private_content("visible <private>dangling content"),
+            "visible "
+        );
     }
 }

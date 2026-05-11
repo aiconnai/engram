@@ -222,7 +222,7 @@ impl Reranker for CrossEncoderReranker {
         // Process in batches to respect memory constraints
         let mut raw_scores: Vec<f32> = Vec::with_capacity(inputs.len());
         for chunk in inputs.chunks(self.config.batch_size) {
-            let batch_scores = self.score_batch(&chunk.to_vec())?;
+            let batch_scores = self.score_batch(chunk)?;
             raw_scores.extend(batch_scores);
         }
 
@@ -396,6 +396,7 @@ mod tests {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: LifecycleState::Active,
+            media_url: None,
         }
     }
 
@@ -493,7 +494,7 @@ mod tests {
         for c in &result {
             let score = c.rerank_score.unwrap();
             assert!(
-                score >= 0.0 && score <= 1.0,
+                (0.0..=1.0).contains(&score),
                 "Score {score} is outside [0, 1]"
             );
         }

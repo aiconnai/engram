@@ -190,7 +190,8 @@ mod tests {
             "INSERT INTO pending_injections (workspace, payload, created_at, expires_at)
              VALUES ('ws', 'stale', ?, ?)",
             params![past.clone(), past],
-        ).unwrap();
+        )
+        .unwrap();
         // And a fresh row
         enqueue(&c, "ws", "fresh", None, None).unwrap();
 
@@ -207,7 +208,8 @@ mod tests {
             "INSERT INTO pending_injections (workspace, payload, created_at, expires_at)
              VALUES ('ws', 'old', ?, ?)",
             params![past.clone(), past],
-        ).unwrap();
+        )
+        .unwrap();
         enqueue(&c, "ws", "new", None, None).unwrap();
 
         let removed = cleanup_expired(&c).unwrap();

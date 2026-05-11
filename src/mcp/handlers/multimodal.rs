@@ -382,9 +382,7 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
         };
         let rt = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
-            Err(e) => {
-                return json!({"error": format!("Failed to create async runtime: {}", e)})
-            }
+            Err(e) => return json!({"error": format!("Failed to create async runtime: {}", e)}),
         };
         match rt.block_on(provider.describe_image(input, opts)) {
             Ok(desc) => Some(desc.text),
@@ -454,7 +452,8 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
-            let results = hybrid_search(conn, &query_text, embedding_ref, &options, &search_config)?;
+            let results =
+                hybrid_search(conn, &query_text, embedding_ref, &options, &search_config)?;
             Ok(results)
         })
         .map(|results| {
@@ -485,9 +484,12 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
 /// Returns: `{ assets_examined, assets_already_synced, assets_uploaded, assets_failed, errors, dry_run }`
 #[cfg(all(feature = "multimodal", feature = "cloud"))]
 pub fn memory_sync_media(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::storage::image_storage::{ImageStorageConfig, MediaSyncReport, sync_to_cloud};
+    use crate::storage::image_storage::{sync_to_cloud, ImageStorageConfig, MediaSyncReport};
 
-    let dry_run = params.get("dry_run").and_then(|v| v.as_bool()).unwrap_or(false);
+    let dry_run = params
+        .get("dry_run")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     // Build config from environment variables (same approach as existing cloud sync)
     let config = ImageStorageConfig {
@@ -684,7 +686,10 @@ mod tests {
     fn test_search_by_image_missing_param() {
         let ctx = make_ctx();
         let result = memory_search_by_image(&ctx, json!({}));
-        assert!(result.get("error").is_some(), "should error without image_path");
+        assert!(
+            result.get("error").is_some(),
+            "should error without image_path"
+        );
         assert!(
             result["error"].as_str().unwrap().contains("image_path"),
             "error should mention image_path"

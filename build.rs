@@ -12,8 +12,7 @@ fn compile_protos() {
         .build_client(true)
         // Emit file descriptor set so gRPC reflection can be added later
         .file_descriptor_set_path(
-            std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap())
-                .join("mcp_descriptor.bin"),
+            std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("mcp_descriptor.bin"),
         )
         .compile_protos(&["proto/mcp.proto"], &["proto/"])
         .expect("Failed to compile proto/mcp.proto");

@@ -143,7 +143,12 @@ fn extract_list(value: &Value, keys: &[&str]) -> Vec<Value> {
 }
 
 /// Run `memory_search` for the query and return its results. Empty on error.
-fn call_search(ctx: &HandlerContext, query: &str, limit: u64, workspace: Option<&str>) -> Vec<Value> {
+fn call_search(
+    ctx: &HandlerContext,
+    query: &str,
+    limit: u64,
+    workspace: Option<&str>,
+) -> Vec<Value> {
     let mut params = json!({ "query": query, "limit": limit });
     if let Some(ws) = workspace {
         params["workspace"] = json!(ws);
@@ -179,7 +184,12 @@ fn strip_intent_markers(query: &str) -> String {
 }
 
 /// Run `memory_related` and return its results. Best-effort — empty on error.
-fn call_related(ctx: &HandlerContext, query: &str, limit: u64, workspace: Option<&str>) -> Vec<Value> {
+fn call_related(
+    ctx: &HandlerContext,
+    query: &str,
+    limit: u64,
+    workspace: Option<&str>,
+) -> Vec<Value> {
     let cleaned = strip_intent_markers(query);
     // `memory_related` needs a seed id. We fetch one via search first.
     let seed = call_search(ctx, &cleaned, 1, workspace);
@@ -268,7 +278,7 @@ pub fn memory_smart_retrieve(ctx: &HandlerContext, params: Value) -> Value {
             match extract_id(&entry) {
                 Some(id) if seen_ids.insert(id) => merged.push(entry),
                 None => merged.push(entry), // entries without ids still surface
-                _ => {} // duplicate, skip
+                _ => {}                     // duplicate, skip
             }
             if merged.len() >= limit as usize {
                 break;

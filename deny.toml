@@ -27,6 +27,7 @@ allow = [
     "CC0-1.0",
     "BSL-1.0",
     "CDLA-Permissive-2.0",  # webpki-roots
+    "OpenSSL",              # aws-lc-sys (legacy BoringSSL imports via rustls/jsonwebtoken)
 ]
 confidence-threshold = 0.8
 

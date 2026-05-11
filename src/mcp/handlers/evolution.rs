@@ -109,10 +109,7 @@ pub fn memory_sentiment_timeline(ctx: &HandlerContext, params: Value) -> Value {
         .get("to")
         .and_then(|v| v.as_str())
         .unwrap_or("9999-12-31T23:59:59Z");
-    let limit: i64 = params
-        .get("limit")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(50);
+    let limit: i64 = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
 
     let analyzer = SentimentAnalyzer::new();
 
@@ -129,16 +126,13 @@ pub fn memory_sentiment_timeline(ctx: &HandlerContext, params: Value) -> Value {
             )?;
 
             let rows = stmt
-                .query_map(
-                    rusqlite::params![workspace, from, to, limit],
-                    |row| {
-                        Ok((
-                            row.get::<_, i64>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, String>(2)?,
-                        ))
-                    },
-                )?
+                .query_map(rusqlite::params![workspace, from, to, limit], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })?
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(crate::error::EngramError::Database)?;
 

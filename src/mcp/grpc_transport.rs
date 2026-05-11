@@ -202,10 +202,9 @@ impl McpService for GrpcMcpService {
 
         let sub_req = request.into_inner();
 
-        let realtime = self
-            .realtime
-            .as_ref()
-            .ok_or_else(|| Status::unavailable("Real-time events are not enabled on this server"))?;
+        let realtime = self.realtime.as_ref().ok_or_else(|| {
+            Status::unavailable("Real-time events are not enabled on this server")
+        })?;
 
         // Parse requested event type filters (empty = all).
         let type_filters: Vec<EventType> = sub_req
@@ -258,8 +257,8 @@ impl McpService for GrpcMcpService {
                         })
                         .collect::<String>();
 
-                    let data_json = serde_json::to_string(&event)
-                        .unwrap_or_else(|_| "{}".to_string());
+                    let data_json =
+                        serde_json::to_string(&event).unwrap_or_else(|_| "{}".to_string());
 
                     Some(Ok(McpEvent {
                         event_type,
@@ -415,10 +414,7 @@ mod tests {
     #[test]
     fn auth_passes_with_correct_bearer_token() {
         let mut metadata = MetadataMap::new();
-        metadata.insert(
-            "authorization",
-            "Bearer secret".parse().unwrap(),
-        );
+        metadata.insert("authorization", "Bearer secret".parse().unwrap());
         let key = Some("secret".to_string());
         assert!(check_auth(&metadata, &key).is_ok());
     }
@@ -426,10 +422,7 @@ mod tests {
     #[test]
     fn auth_fails_with_wrong_bearer_token() {
         let mut metadata = MetadataMap::new();
-        metadata.insert(
-            "authorization",
-            "Bearer wrong".parse().unwrap(),
-        );
+        metadata.insert("authorization", "Bearer wrong".parse().unwrap());
         let key = Some("secret".to_string());
         let result = check_auth(&metadata, &key);
         assert!(result.is_err());
@@ -451,7 +444,11 @@ mod tests {
             ("sync_failed", EventType::SyncFailed),
         ];
         for (input, expected) in cases {
-            assert_eq!(parse_event_type(input), Some(expected), "failed for {input}");
+            assert_eq!(
+                parse_event_type(input),
+                Some(expected),
+                "failed for {input}"
+            );
         }
         assert_eq!(parse_event_type("unknown"), None);
     }
@@ -472,7 +469,10 @@ mod tests {
         assert_eq!(inner.id, "99");
         match inner.result {
             Some(proto::mcp_response::Result::ResultJson(json)) => {
-                assert!(json.contains("initialize"), "expected method echo in result");
+                assert!(
+                    json.contains("initialize"),
+                    "expected method echo in result"
+                );
             }
             other => panic!("unexpected result: {:?}", other),
         }
@@ -491,10 +491,8 @@ mod tests {
             params_json: "{}".to_string(),
         };
         let mut req = Request::new(proto_req);
-        req.metadata_mut().insert(
-            "authorization",
-            "Bearer wrong-token".parse().unwrap(),
-        );
+        req.metadata_mut()
+            .insert("authorization", "Bearer wrong-token".parse().unwrap());
         let err = svc.call(req).await.unwrap_err();
         assert_eq!(err.code(), tonic::Code::Unauthenticated);
     }

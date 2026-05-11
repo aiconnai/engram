@@ -521,12 +521,7 @@ pub fn build_cloud_url(
     if let Some(domain) = public_domain {
         format!("https://{}/{}", domain.trim_end_matches('/'), key)
     } else if let Some(endpoint) = s3_endpoint {
-        format!(
-            "{}/{}/{}",
-            endpoint.trim_end_matches('/'),
-            s3_bucket,
-            key
-        )
+        format!("{}/{}/{}", endpoint.trim_end_matches('/'), s3_bucket, key)
     } else {
         format!("https://{}.s3.amazonaws.com/{}", s3_bucket, key)
     }
@@ -575,9 +570,8 @@ pub fn sync_to_cloud(
     };
 
     // Query all media assets
-    let mut stmt = conn.prepare(
-        "SELECT id, memory_id, file_hash, file_path, mime_type FROM media_assets",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, memory_id, file_hash, file_path, mime_type FROM media_assets")?;
 
     struct AssetRow {
         id: i64,
@@ -620,7 +614,10 @@ pub fn sync_to_cloud(
             continue;
         }
 
-        let mime_type = asset.mime_type.as_deref().unwrap_or("application/octet-stream");
+        let mime_type = asset
+            .mime_type
+            .as_deref()
+            .unwrap_or("application/octet-stream");
         let cloud_key = build_cloud_key(asset.memory_id, &asset.file_hash, mime_type);
         let cloud_url = build_cloud_url(
             &bucket,
@@ -637,9 +634,7 @@ pub fn sync_to_cloud(
 
         // Read the local file
         // Strip "local://" prefix if present
-        let local_path = file_path
-            .strip_prefix("local://")
-            .unwrap_or(&file_path);
+        let local_path = file_path.strip_prefix("local://").unwrap_or(&file_path);
 
         let file_data = match std::fs::read(local_path) {
             Ok(d) => d,
@@ -665,10 +660,9 @@ pub fn sync_to_cloud(
             }
             Err(e) => {
                 report.assets_failed += 1;
-                report.errors.push(format!(
-                    "Failed to upload asset id={}: {}",
-                    asset.id, e
-                ));
+                report
+                    .errors
+                    .push(format!("Failed to upload asset id={}: {}", asset.id, e));
             }
         }
     }
@@ -727,7 +721,8 @@ pub fn download_from_cloud(file_url: &str) -> crate::error::Result<Vec<u8>> {
         #[cfg(not(any(feature = "cloud", feature = "multimodal")))]
         {
             return Err(crate::error::EngramError::Config(
-                "Downloading from cloud URLs requires the 'cloud' or 'multimodal' feature".to_string(),
+                "Downloading from cloud URLs requires the 'cloud' or 'multimodal' feature"
+                    .to_string(),
             ));
         }
     }
@@ -860,10 +855,7 @@ mod tests {
     #[test]
     fn test_build_cloud_url_default_s3() {
         let url = build_cloud_url("my-bucket", None, None, "media/42/abc.png");
-        assert_eq!(
-            url,
-            "https://my-bucket.s3.amazonaws.com/media/42/abc.png"
-        );
+        assert_eq!(url, "https://my-bucket.s3.amazonaws.com/media/42/abc.png");
     }
 
     #[test]

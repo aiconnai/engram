@@ -455,10 +455,8 @@ fn extract_markdown_sections(content: &str) -> Vec<DocumentSection> {
                     current_content.push('`');
                 }
             }
-            Event::SoftBreak | Event::HardBreak => {
-                if !in_heading {
-                    current_content.push('\n');
-                }
+            Event::SoftBreak | Event::HardBreak if !in_heading => {
+                current_content.push('\n');
             }
             _ => {}
         }

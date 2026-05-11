@@ -121,12 +121,18 @@ impl TemporalGraph {
     fn try_load_pgq(conn: &DuckdbConnection, _sqlite_path: &str) -> bool {
         // Install extension — may fail if the registry is unavailable.
         if let Err(e) = conn.execute_batch("INSTALL duckpgq FROM community;") {
-            warn!("duckpgq install failed (graph pattern matching unavailable): {}", e);
+            warn!(
+                "duckpgq install failed (graph pattern matching unavailable): {}",
+                e
+            );
             return false;
         }
 
         if let Err(e) = conn.execute_batch("LOAD duckpgq;") {
-            warn!("duckpgq load failed (graph pattern matching unavailable): {}", e);
+            warn!(
+                "duckpgq load failed (graph pattern matching unavailable): {}",
+                e
+            );
             return false;
         }
 
@@ -171,8 +177,7 @@ impl TemporalGraph {
     /// DuckDB session.
     pub fn refresh(&self) -> Result<()> {
         // Detach the existing catalog.
-        self.conn
-            .execute_batch("DETACH engram;")?;
+        self.conn.execute_batch("DETACH engram;")?;
 
         // Re-attach read-only.
         self.conn.execute_batch(&format!(
@@ -180,7 +185,10 @@ impl TemporalGraph {
             path = self.sqlite_path
         ))?;
 
-        debug!("TemporalGraph: re-attached SQLite at '{}'", self.sqlite_path);
+        debug!(
+            "TemporalGraph: re-attached SQLite at '{}'",
+            self.sqlite_path
+        );
         Ok(())
     }
 
@@ -195,11 +203,7 @@ impl TemporalGraph {
     /// - `scope_path` starts with `scope`
     /// - `valid_from <= timestamp`
     /// - `valid_to IS NULL OR valid_to >= timestamp`
-    pub fn snapshot_at(
-        &self,
-        scope: &str,
-        timestamp: &str,
-    ) -> Result<Vec<DuckDbTemporalEdge>> {
+    pub fn snapshot_at(&self, scope: &str, timestamp: &str) -> Result<Vec<DuckDbTemporalEdge>> {
         let scope_pattern = format!("{}%", scope);
         let sql = "
             SELECT id, from_id, to_id, relation, valid_from, valid_to, confidence, scope_path
@@ -210,21 +214,18 @@ impl TemporalGraph {
             ORDER BY id ASC
         ";
         let mut stmt = self.conn.prepare(sql)?;
-        let rows = stmt.query_map(
-            params![scope_pattern, timestamp, timestamp],
-            |row| {
-                Ok(DuckDbTemporalEdge {
-                    id: row.get(0)?,
-                    from_id: row.get(1)?,
-                    to_id: row.get(2)?,
-                    relation: row.get(3)?,
-                    valid_from: row.get(4)?,
-                    valid_to: row.get(5)?,
-                    confidence: row.get::<_, f64>(6)? as f32,
-                    scope_path: row.get(7)?,
-                })
-            },
-        )?;
+        let rows = stmt.query_map(params![scope_pattern, timestamp, timestamp], |row| {
+            Ok(DuckDbTemporalEdge {
+                id: row.get(0)?,
+                from_id: row.get(1)?,
+                to_id: row.get(2)?,
+                relation: row.get(3)?,
+                valid_from: row.get(4)?,
+                valid_to: row.get(5)?,
+                confidence: row.get::<_, f64>(6)? as f32,
+                scope_path: row.get(7)?,
+            })
+        })?;
 
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(EngramError::from)
@@ -237,12 +238,7 @@ impl TemporalGraph {
     /// - `removed` — edges present in t1 but not t2
     /// - `changed` — edges present in both snapshots but with differing
     ///   `confidence` or `valid_to`; tuple is (t1_edge, t2_edge)
-    pub fn graph_diff(
-        &self,
-        scope: &str,
-        t1: &str,
-        t2: &str,
-    ) -> Result<DuckDbGraphDiff> {
+    pub fn graph_diff(&self, scope: &str, t1: &str, t2: &str) -> Result<DuckDbGraphDiff> {
         let snap1 = self.snapshot_at(scope, t1)?;
         let snap2 = self.snapshot_at(scope, t2)?;
 
@@ -278,7 +274,11 @@ impl TemporalGraph {
             }
         }
 
-        Ok(DuckDbGraphDiff { added, removed, changed })
+        Ok(DuckDbGraphDiff {
+            added,
+            removed,
+            changed,
+        })
     }
 
     /// Return the full history of edges between `from_id` and `to_id` within
@@ -299,21 +299,18 @@ impl TemporalGraph {
             ORDER BY valid_from DESC
         ";
         let mut stmt = self.conn.prepare(sql)?;
-        let rows = stmt.query_map(
-            params![scope_pattern, from_id, to_id],
-            |row| {
-                Ok(DuckDbTemporalEdge {
-                    id: row.get(0)?,
-                    from_id: row.get(1)?,
-                    to_id: row.get(2)?,
-                    relation: row.get(3)?,
-                    valid_from: row.get(4)?,
-                    valid_to: row.get(5)?,
-                    confidence: row.get::<_, f64>(6)? as f32,
-                    scope_path: row.get(7)?,
-                })
-            },
-        )?;
+        let rows = stmt.query_map(params![scope_pattern, from_id, to_id], |row| {
+            Ok(DuckDbTemporalEdge {
+                id: row.get(0)?,
+                from_id: row.get(1)?,
+                to_id: row.get(2)?,
+                relation: row.get(3)?,
+                valid_from: row.get(4)?,
+                valid_to: row.get(5)?,
+                confidence: row.get::<_, f64>(6)? as f32,
+                scope_path: row.get(7)?,
+            })
+        })?;
 
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(EngramError::from)
@@ -379,7 +376,13 @@ impl TemporalGraph {
 
         let mut stmt = self.conn.prepare(sql)?;
         let rows = stmt.query_map(
-            params![start_id, scope_pattern, max_hops as i32, scope_pattern, end_id],
+            params![
+                start_id,
+                scope_pattern,
+                max_hops as i32,
+                scope_pattern,
+                end_id
+            ],
             |row| {
                 Ok(PathStep {
                     path: row.get(0)?,
@@ -390,9 +393,7 @@ impl TemporalGraph {
 
         let mut steps = Vec::new();
         for row in rows {
-            steps.push(
-                row.map_err(|e| EngramError::Storage(format!("DuckDB row error: {}", e)))?,
-            );
+            steps.push(row.map_err(|e| EngramError::Storage(format!("DuckDB row error: {}", e)))?);
         }
 
         debug!(
@@ -468,9 +469,7 @@ impl TemporalGraph {
 
         let mut steps = Vec::new();
         for row in rows {
-            steps.push(
-                row.map_err(|e| EngramError::Storage(format!("DuckDB row error: {}", e)))?,
-            );
+            steps.push(row.map_err(|e| EngramError::Storage(format!("DuckDB row error: {}", e)))?);
         }
 
         debug!(
@@ -496,7 +495,8 @@ mod tests {
     /// expected by `TemporalGraph` (v33 tables).
     fn setup_sqlite(path: &str) -> rusqlite::Connection {
         let conn = rusqlite::Connection::open(path).expect("open sqlite");
-        conn.execute_batch(r#"
+        conn.execute_batch(
+            r#"
             CREATE TABLE IF NOT EXISTS graph_entities (
                 id          TEXT PRIMARY KEY,
                 scope_path  TEXT NOT NULL DEFAULT 'global',
@@ -519,7 +519,9 @@ mod tests {
                 scope_path  TEXT NOT NULL DEFAULT 'global',
                 created_at  TEXT NOT NULL DEFAULT (datetime('now'))
             );
-        "#).expect("create tables");
+        "#,
+        )
+        .expect("create tables");
         conn
     }
 
@@ -538,7 +540,9 @@ mod tests {
             "INSERT INTO temporal_edges
                 (from_id, to_id, relation, valid_from, valid_to, confidence, scope_path)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            rusqlite::params![from_id, to_id, relation, valid_from, valid_to, confidence, scope_path],
+            rusqlite::params![
+                from_id, to_id, relation, valid_from, valid_to, confidence, scope_path
+            ],
         )
         .expect("insert edge");
     }
@@ -624,7 +628,16 @@ mod tests {
         let sqlite = setup_sqlite(path_str);
 
         // Edge A: active 2024-01-01 → 2024-06-30 (closed)
-        insert_edge(&sqlite, 1, 2, "knows", "2024-01-01", Some("2024-06-30"), 0.9, "global");
+        insert_edge(
+            &sqlite,
+            1,
+            2,
+            "knows",
+            "2024-01-01",
+            Some("2024-06-30"),
+            0.9,
+            "global",
+        );
         // Edge B: active 2024-01-01 → open (still active)
         insert_edge(&sqlite, 1, 3, "follows", "2024-01-01", None, 0.8, "global");
         // Edge C: starts in the future (2025-01-01), should not appear at 2024-03-01
@@ -634,14 +647,18 @@ mod tests {
         let graph = TemporalGraph::new(path_str).expect("new");
 
         // Snapshot mid-year 2024: should see edges A and B, not C.
-        let snap = graph.snapshot_at("global", "2024-03-01").expect("snapshot_at");
+        let snap = graph
+            .snapshot_at("global", "2024-03-01")
+            .expect("snapshot_at");
         assert_eq!(snap.len(), 2, "expected 2 edges active at 2024-03-01");
         let relations: Vec<&str> = snap.iter().map(|e| e.relation.as_str()).collect();
         assert!(relations.contains(&"knows"), "edge A should be included");
         assert!(relations.contains(&"follows"), "edge B should be included");
 
         // Snapshot after edge A expired: should see only B and C.
-        let snap2 = graph.snapshot_at("global", "2024-08-01").expect("snapshot_at late");
+        let snap2 = graph
+            .snapshot_at("global", "2024-08-01")
+            .expect("snapshot_at late");
         assert_eq!(snap2.len(), 1, "expected 1 edge active at 2024-08-01");
         assert_eq!(snap2[0].relation, "follows");
 
@@ -660,7 +677,16 @@ mod tests {
         // Edge present at both t1 and t2 (no change).
         insert_edge(&sqlite, 1, 2, "knows", "2024-01-01", None, 1.0, "global");
         // Edge present at t1 but expired before t2 (removed).
-        insert_edge(&sqlite, 1, 3, "follows", "2024-01-01", Some("2024-03-31"), 1.0, "global");
+        insert_edge(
+            &sqlite,
+            1,
+            3,
+            "follows",
+            "2024-01-01",
+            Some("2024-03-31"),
+            1.0,
+            "global",
+        );
         // Edge starting after t1 (added at t2).
         insert_edge(&sqlite, 2, 3, "linked", "2024-06-01", None, 0.5, "global");
         drop(sqlite);
@@ -692,8 +718,26 @@ mod tests {
         let sqlite = setup_sqlite(path_str);
 
         // Three versions of the same 1→2 relationship, plus an unrelated edge.
-        insert_edge(&sqlite, 1, 2, "knows", "2022-01-01", Some("2022-12-31"), 0.5, "global");
-        insert_edge(&sqlite, 1, 2, "knows", "2023-01-01", Some("2023-12-31"), 0.75, "global");
+        insert_edge(
+            &sqlite,
+            1,
+            2,
+            "knows",
+            "2022-01-01",
+            Some("2022-12-31"),
+            0.5,
+            "global",
+        );
+        insert_edge(
+            &sqlite,
+            1,
+            2,
+            "knows",
+            "2023-01-01",
+            Some("2023-12-31"),
+            0.75,
+            "global",
+        );
         insert_edge(&sqlite, 1, 2, "knows", "2024-01-01", None, 0.9, "global");
         // Unrelated: different pair.
         insert_edge(&sqlite, 3, 4, "linked", "2024-01-01", None, 1.0, "global");
@@ -725,10 +769,37 @@ mod tests {
         let sqlite = setup_sqlite(path_str);
 
         // Two edges in "project/alpha" scope.
-        insert_edge(&sqlite, 1, 2, "depends", "2024-01-01", None, 1.0, "project/alpha");
-        insert_edge(&sqlite, 2, 3, "depends", "2024-01-01", None, 1.0, "project/alpha/sub");
+        insert_edge(
+            &sqlite,
+            1,
+            2,
+            "depends",
+            "2024-01-01",
+            None,
+            1.0,
+            "project/alpha",
+        );
+        insert_edge(
+            &sqlite,
+            2,
+            3,
+            "depends",
+            "2024-01-01",
+            None,
+            1.0,
+            "project/alpha/sub",
+        );
         // One edge in a sibling scope — must NOT appear in "project/alpha" snapshots.
-        insert_edge(&sqlite, 3, 4, "depends", "2024-01-01", None, 1.0, "project/beta");
+        insert_edge(
+            &sqlite,
+            3,
+            4,
+            "depends",
+            "2024-01-01",
+            None,
+            1.0,
+            "project/beta",
+        );
         // One edge in parent scope — must NOT appear (prefix match is strict on scope arg).
         insert_edge(&sqlite, 4, 5, "depends", "2024-01-01", None, 1.0, "project");
         drop(sqlite);
@@ -863,7 +934,11 @@ mod tests {
             .find_neighbors("global", 1, 2)
             .expect("find_neighbors");
 
-        assert_eq!(neighbors.len(), 4, "4 nodes reachable within 2 hops from Alice");
+        assert_eq!(
+            neighbors.len(),
+            4,
+            "4 nodes reachable within 2 hops from Alice"
+        );
 
         let depth1: Vec<_> = neighbors.iter().filter(|n| n.depth == 1).collect();
         let depth2: Vec<_> = neighbors.iter().filter(|n| n.depth == 2).collect();

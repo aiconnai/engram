@@ -93,27 +93,15 @@ pub struct AgentState {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgentAction {
     /// A memory should be pruned because its garden score is critically low.
-    Prune {
-        memory_id: i64,
-        reason: String,
-    },
+    Prune { memory_id: i64, reason: String },
     /// Two or more memories should be merged (similar content).
-    Merge {
-        source_ids: Vec<i64>,
-    },
+    Merge { source_ids: Vec<i64> },
     /// A memory should be archived (old but not deleted).
-    Archive {
-        memory_id: i64,
-    },
+    Archive { memory_id: i64 },
     /// A knowledge gap was detected — suggest creating a new memory.
-    Suggest {
-        hint: String,
-        priority: u8,
-    },
+    Suggest { hint: String, priority: u8 },
     /// A full garden maintenance run was executed.
-    Garden {
-        report_summary: String,
-    },
+    Garden { report_summary: String },
 }
 
 /// Performance and health metrics for the agent.
@@ -357,7 +345,11 @@ impl MemoryAgent {
         }
 
         // Update acquisition timestamp when we scanned for gaps
-        if !acquisition_suggestions.is_empty() || decided.iter().any(|a| matches!(a, AgentAction::Suggest { .. })) {
+        if !acquisition_suggestions.is_empty()
+            || decided
+                .iter()
+                .any(|a| matches!(a, AgentAction::Suggest { .. }))
+        {
             self.state.last_acquisition_at = Some(now_str.clone());
         }
 
@@ -409,10 +401,7 @@ impl MemoryAgent {
 
     /// Compute current performance metrics from accumulated state.
     pub fn metrics(&self) -> AgentMetrics {
-        let uptime_secs = self
-            .started_at
-            .map(|t| t.elapsed().as_secs())
-            .unwrap_or(0);
+        let uptime_secs = self.started_at.map(|t| t.elapsed().as_secs()).unwrap_or(0);
 
         AgentMetrics {
             cycles: self.state.cycles,
@@ -517,7 +506,10 @@ mod tests {
         assert!(agent.is_running(), "agent should be running after start()");
 
         agent.stop();
-        assert!(!agent.is_running(), "agent should not be running after stop()");
+        assert!(
+            !agent.is_running(),
+            "agent should not be running after stop()"
+        );
 
         // Uptime should be non-zero after start (even if tiny)
         let m = agent.metrics();
@@ -605,7 +597,10 @@ mod tests {
             .any(|a| matches!(a, AgentAction::Prune { .. }));
 
         // The gardener (dry-run, prune_threshold=0.2) should flag this memory
-        assert!(has_prune, "expected at least one Prune action for stale memory");
+        assert!(
+            has_prune,
+            "expected at least one Prune action for stale memory"
+        );
     }
 
     // -------------------------------------------------------------------------

@@ -25,10 +25,7 @@ impl MerkleTree {
         }
 
         // Collect leaf hashes
-        let leaves: Vec<String> = records
-            .iter()
-            .map(|r| r.record_hash.clone())
-            .collect();
+        let leaves: Vec<String> = records.iter().map(|r| r.record_hash.clone()).collect();
 
         let mut levels: Vec<Vec<String>> = Vec::new();
         levels.push(leaves);
@@ -172,7 +169,7 @@ mod tests {
     #[test]
     fn test_single_leaf() {
         let rec = make_record("aabbcc", "a.txt");
-        let tree = MerkleTree::build(&[rec.clone()]);
+        let tree = MerkleTree::build(std::slice::from_ref(&rec));
         assert_eq!(tree.root(), Some(rec.record_hash.as_str()));
 
         let proof = tree.generate_proof(0).unwrap();
@@ -219,14 +216,23 @@ mod tests {
         let storage = Storage::open_in_memory().unwrap();
         let chain = AttestationChain::new(storage);
 
-        let r1 = chain.log_document(b"doc1", "d1.txt", None, &[], None).unwrap();
-        let r2 = chain.log_document(b"doc2", "d2.txt", None, &[], None).unwrap();
-        let r3 = chain.log_document(b"doc3", "d3.txt", None, &[], None).unwrap();
+        let r1 = chain
+            .log_document(b"doc1", "d1.txt", None, &[], None)
+            .unwrap();
+        let r2 = chain
+            .log_document(b"doc2", "d2.txt", None, &[], None)
+            .unwrap();
+        let r3 = chain
+            .log_document(b"doc3", "d3.txt", None, &[], None)
+            .unwrap();
 
         let tree = MerkleTree::build(&[r1, r2, r3]);
         for i in 0..3 {
             let proof = tree.generate_proof(i).unwrap();
-            assert!(MerkleTree::verify_proof(&proof), "real chain proof {i} failed");
+            assert!(
+                MerkleTree::verify_proof(&proof),
+                "real chain proof {i} failed"
+            );
         }
     }
 
@@ -238,7 +244,8 @@ mod tests {
 
         let mut proof = tree.generate_proof(0).unwrap();
         // Tamper with the root
-        proof.root_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        proof.root_hash =
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_string();
         assert!(!MerkleTree::verify_proof(&proof));
     }
 }

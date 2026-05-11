@@ -257,12 +257,8 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         }
 
         // ── Pending injections (cross-session queue) ─────────────────────────
-        "pending_injections_count" => {
-            pending_injections::pending_injections_count(ctx, params)
-        }
-        "pending_injections_cleanup" => {
-            pending_injections::pending_injections_cleanup(ctx, params)
-        }
+        "pending_injections_count" => pending_injections::pending_injections_count(ctx, params),
+        "pending_injections_cleanup" => pending_injections::pending_injections_cleanup(ctx, params),
 
         // ── Summarization & archival ──────────────────────────────────────────
         "memory_summarize" => summarize::memory_summarize(ctx, params),
@@ -356,6 +352,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
 
         // ── Context engineering / fact extraction ────────────────────────────
         "memory_get_injection_prompt" => context::memory_get_injection_prompt(ctx, params),
+        "memory_prepare_context" => context::memory_prepare_context(ctx, params),
         "memory_observe_tool_use" => context::memory_observe_tool_use(ctx, params),
         "memory_archive_tool_output" => context::memory_archive_tool_output(ctx, params),
         "memory_get_archived_output" => context::memory_get_archived_output(ctx, params),

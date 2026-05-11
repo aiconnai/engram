@@ -103,6 +103,18 @@ struct Args {
     #[arg(long, env = "ENGRAM_CLEANUP_INTERVAL", default_value = "3600")]
     cleanup_interval_seconds: u64,
 
+    /// Embedding drain interval in seconds (0 = disabled)
+    /// When enabled, pending entries in the embedding_queue table are drained
+    /// at this interval. Without this, memories accumulate without embeddings.
+    #[arg(long, env = "ENGRAM_EMBEDDING_DRAIN_INTERVAL", default_value = "30")]
+    embedding_drain_interval_seconds: u64,
+
+    /// Max embeddings to compute per drain cycle (one batch call to the
+    /// embedder). Larger values reduce API overhead but increase latency
+    /// per cycle.
+    #[arg(long, env = "ENGRAM_EMBEDDING_DRAIN_BATCH", default_value = "32")]
+    embedding_drain_batch_size: usize,
+
     /// Compression scheduler interval in seconds (0 = disabled)
     /// Auto-summarizes old, rarely-accessed memories at this interval
     #[arg(long, env = "ENGRAM_COMPRESSION_INTERVAL", default_value = "0")]
@@ -194,8 +206,11 @@ struct EngramHandler {
     /// Meilisearch sync interval config
     #[cfg(feature = "meilisearch")]
     meili_sync_interval: u64,
-    /// Dedicated Tokio runtime for async operations (Langfuse sync)
+    /// Dedicated Tokio runtime for async operations (Langfuse sync).
+    /// Kept alive here so the runtime outlives the handler; wiring to
+    /// actual Langfuse calls lands in a follow-up task.
     #[cfg(feature = "langfuse")]
+    #[allow(dead_code)]
     langfuse_runtime: tokio::runtime::Runtime,
     /// Lifecycle hooks (Phase L - ENG-78). None unless `enable_hooks()` is called.
     #[cfg(feature = "hooks")]
@@ -228,6 +243,10 @@ impl EngramHandler {
         }
     }
 
+    // Preserved for the WebSocket feature that wires realtime events to the handler;
+    // not yet called from `main` while WebSocket transport is gated behind ws_port > 0
+    // and uses a separate path.
+    #[allow(dead_code)]
     fn with_realtime(mut self, manager: RealtimeManager) -> Self {
         self.realtime = Some(manager);
         self
@@ -398,9 +417,9 @@ impl McpHandler for EngramHandler {
                 #[cfg(feature = "hooks")]
                 {
                     let mut ctx = engram::hooks::HookContext::new(None, None);
+                    ctx.metadata.insert("tool_name".to_string(), json!(name));
                     ctx.metadata
-                        .insert("tool_name".to_string(), json!(name));
-                    ctx.metadata.insert("tool_output".to_string(), result.clone());
+                        .insert("tool_output".to_string(), result.clone());
                     self.trigger_hook(engram::hooks::LifecycleHook::PostToolUse, ctx);
                 }
 
@@ -522,11 +541,11 @@ fn main() -> Result<()> {
     }
 
     #[cfg(feature = "meilisearch")]
-    let mut meili_backend_for_handler: Option<Arc<MeilisearchBackend>> = None;
+    let mut _meili_backend_for_handler: Option<Arc<MeilisearchBackend>> = None;
     #[cfg(feature = "meilisearch")]
-    let mut meili_indexer_for_handler: Option<Arc<MeilisearchIndexer>> = None;
+    let mut _meili_indexer_for_handler: Option<Arc<MeilisearchIndexer>> = None;
     #[cfg(feature = "meilisearch")]
-    let meili_sync_interval = args.meilisearch_sync_interval;
+    let _meili_sync_interval = args.meilisearch_sync_interval;
 
     #[cfg(feature = "meilisearch")]
     {
@@ -535,7 +554,7 @@ fn main() -> Result<()> {
                 url,
                 args.meilisearch_api_key.as_deref(),
             )?);
-            meili_backend_for_handler = Some(meili.clone());
+            _meili_backend_for_handler = Some(meili.clone());
 
             if args.meilisearch_indexer {
                 let sqlite_backend = SqliteBackend::new(config.clone())?;
@@ -544,7 +563,7 @@ fn main() -> Result<()> {
                     meili.clone(),
                     args.meilisearch_sync_interval,
                 ));
-                meili_indexer_for_handler = Some(indexer.clone());
+                _meili_indexer_for_handler = Some(indexer.clone());
 
                 let indexer_bg = indexer.clone();
                 std::thread::spawn(move || {
@@ -597,7 +616,7 @@ fn main() -> Result<()> {
     // hook wiring lands (see issue #11). For now we still construct
     // `EngramHandler` directly since that's the type that implements
     // `McpHandler`.
-    let mut handler_state = EngramHandler::new(storage.clone(), embedder);
+    let mut handler_state = EngramHandler::new(storage.clone(), embedder.clone());
     #[cfg(feature = "hooks")]
     handler_state.enable_hooks();
     let handler = Arc::new(handler_state);
@@ -627,6 +646,56 @@ fn main() -> Result<()> {
                     }
                     Err(e) => {
                         tracing::error!("Error cleaning up expired memories: {}", e);
+                    }
+                }
+            }
+        });
+    }
+
+    // Start background embedding drain thread if enabled. This drains the
+    // SQL `embedding_queue` table — without it, memories accumulate with
+    // status='pending' forever and never get embeddings (issue #10).
+    if args.embedding_drain_interval_seconds > 0 {
+        let drain_storage = storage.clone();
+        let drain_embedder = embedder.clone();
+        let interval = std::time::Duration::from_secs(args.embedding_drain_interval_seconds);
+        let batch_size = args.embedding_drain_batch_size;
+
+        std::thread::spawn(move || {
+            tracing::info!(
+                "Embedding drain thread started (interval: {}s, batch: {})",
+                interval.as_secs(),
+                batch_size,
+            );
+
+            loop {
+                std::thread::sleep(interval);
+
+                // Drain in a loop until the queue is empty (or we hit one
+                // batch that returns 0). This catches up faster after a
+                // backlog without waiting `interval` between batches.
+                // drain_pending_embeddings owns its lock discipline — it
+                // releases the connection lock around the embed_batch call
+                // so other DB ops aren't blocked by the network round-trip.
+                loop {
+                    let result = engram::embedding::drain_pending_embeddings(
+                        &drain_storage,
+                        drain_embedder.as_ref(),
+                        batch_size,
+                    );
+
+                    match result {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            tracing::info!("Embedding drain processed {} memories", n);
+                            if n < batch_size {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Embedding drain error: {}", e);
+                            break;
+                        }
                     }
                 }
             }
@@ -708,6 +777,13 @@ fn main() -> Result<()> {
     }
 
     tracing::info!("Engram MCP server starting...");
+
+    // Log RTK-inspired features
+    tracing::info!("Engram with RTK-inspired features loaded:");
+    tracing::info!("  - OutputFilter: Active");
+    tracing::info!("  - ContextGrouper: Active");
+    tracing::info!("  - TruncationEngine: Active");
+    tracing::info!("  - IntegrationOrchestrator: Active");
 
     match args.transport {
         TransportMode::Stdio => {
@@ -862,13 +938,20 @@ mod tests {
         use engram::hooks::{HookContext, LifecycleHook};
 
         let mut handler = test_handler();
-        assert!(handler.hook_manager.is_none(), "hooks should start disabled");
+        assert!(
+            handler.hook_manager.is_none(),
+            "hooks should start disabled"
+        );
 
         handler.enable_hooks();
-        assert!(handler.hook_manager.is_some(), "enable_hooks should populate the manager");
+        assert!(
+            handler.hook_manager.is_some(),
+            "enable_hooks should populate the manager"
+        );
 
         let mut ctx = HookContext::new(Some("test-session".into()), Some("default".into()));
-        ctx.metadata.insert("tool_name".into(), json!("memory_create"));
+        ctx.metadata
+            .insert("tool_name".into(), json!("memory_create"));
         handler.trigger_hook(LifecycleHook::PostToolUse, ctx);
     }
 }

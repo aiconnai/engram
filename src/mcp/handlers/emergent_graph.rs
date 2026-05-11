@@ -125,7 +125,7 @@ pub fn memory_list_auto_links(ctx: &HandlerContext, params: Value) -> Value {
 #[cfg(feature = "emergent-graph")]
 pub fn memory_auto_link_stats(ctx: &HandlerContext, _params: Value) -> Value {
     ctx.storage
-        .with_connection(|conn| auto_link_stats(conn))
+        .with_connection(auto_link_stats)
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
