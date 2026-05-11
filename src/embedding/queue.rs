@@ -431,46 +431,44 @@ pub fn drain_pending_embeddings(
     let dimensions = embedder.dimensions();
 
     // ── Phase 3: re-acquire lock to persist results ─────────────────────────
-    storage.with_connection(|conn| {
-        match &embed_result {
-            Ok(embeddings) => {
-                let now = Utc::now().to_rfc3339();
-                for (id, embedding) in memory_ids.iter().zip(embeddings.iter()) {
-                    let embedding_bytes: Vec<u8> =
-                        embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
+    storage.with_connection(|conn| match &embed_result {
+        Ok(embeddings) => {
+            let now = Utc::now().to_rfc3339();
+            for (id, embedding) in memory_ids.iter().zip(embeddings.iter()) {
+                let embedding_bytes: Vec<u8> =
+                    embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
 
-                    conn.execute(
-                        "INSERT OR REPLACE INTO embeddings
+                conn.execute(
+                    "INSERT OR REPLACE INTO embeddings
                          (memory_id, embedding, model, dimensions, created_at)
                          VALUES (?, ?, ?, ?, ?)",
-                        params![id, embedding_bytes, &model, dimensions, now],
-                    )?;
+                    params![id, embedding_bytes, &model, dimensions, now],
+                )?;
 
-                    conn.execute(
-                        "UPDATE memories SET has_embedding = 1 WHERE id = ?",
-                        params![id],
-                    )?;
+                conn.execute(
+                    "UPDATE memories SET has_embedding = 1 WHERE id = ?",
+                    params![id],
+                )?;
 
-                    conn.execute(
-                        "UPDATE embedding_queue SET status = 'complete', completed_at = ?
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'complete', completed_at = ?
                          WHERE memory_id = ?",
-                        params![now, id],
-                    )?;
-                }
-                Ok(memory_ids.len())
+                    params![now, id],
+                )?;
             }
-            Err(e) => {
-                let error_msg = e.to_string();
-                for &id in &memory_ids {
-                    conn.execute(
-                        "UPDATE embedding_queue SET status = 'failed', error = ?,
+            Ok(memory_ids.len())
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            for &id in &memory_ids {
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', error = ?,
                          retry_count = retry_count + 1
                          WHERE memory_id = ?",
-                        params![error_msg, id],
-                    )?;
-                }
-                Err(EngramError::Embedding(error_msg))
+                    params![error_msg, id],
+                )?;
             }
+            Err(EngramError::Embedding(error_msg))
         }
     })
 }
