@@ -179,6 +179,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "session_context_update_summary" => session::session_context_update_summary(ctx, params),
         "session_context_end" => session::session_context_end(ctx, params),
         "session_context_export" => session::session_context_export(ctx, params),
+        "memory_session_prepare" => session::memory_session_prepare(ctx, params),
         "session_land" => handoff::session_land(ctx, params),
 
         // ── Lifecycle ────────────────────────────────────────────────────────
