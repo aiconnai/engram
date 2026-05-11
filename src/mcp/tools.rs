@@ -743,6 +743,17 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
+    // Dream Phase
+    ToolDef {
+        name: "dream_run_now",
+        description: "Manually trigger the Dream Phase (background consolidation) across all workspaces. This process compresses old memories and identifies patterns while the agent is 'sleeping'.",
+        schema: r#"{
+            "type": "object",
+            "properties": {}
+        }"#,
+        annotations: ToolAnnotations::idempotent(),
+        tier: ToolTier::Advanced,
+    },
     // Workspace Management
     ToolDef {
         name: "workspace_list",

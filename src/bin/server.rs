@@ -165,6 +165,12 @@ struct Args {
     #[cfg(feature = "meilisearch")]
     #[arg(long, env = "MEILISEARCH_SYNC_INTERVAL", default_value = "60")]
     meilisearch_sync_interval: u64,
+
+    /// Dream Phase interval in seconds (0 = disabled)
+    /// Periodic background consolidation of memories
+    #[cfg(feature = "dream-phase")]
+    #[arg(long, env = "ENGRAM_DREAM_INTERVAL", default_value = "0")]
+    dream_interval_seconds: u64,
 }
 
 /// MCP request handler
@@ -663,6 +669,23 @@ fn main() -> Result<()> {
                 }
             }
         });
+    }
+
+    // Start Dream Phase scheduler if enabled
+    #[cfg(feature = "dream-phase")]
+    if args.dream_interval_seconds > 0 {
+        let dream_storage = Arc::new(storage.clone());
+        let dream_config = engram::dream::DreamConfig {
+            interval: std::time::Duration::from_secs(args.dream_interval_seconds),
+            ..Default::default()
+        };
+
+        // The scheduler runs in its own Tokio task
+        engram::dream::spawn_scheduler(dream_storage, dream_config);
+        tracing::info!(
+            "Dream Phase scheduler started (interval: {}s)",
+            args.dream_interval_seconds
+        );
     }
 
     // Start WebSocket server in background if ws_port > 0.
