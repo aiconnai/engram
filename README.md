@@ -63,9 +63,9 @@ engram-cli search "why did we choose postgres"
 # Install from crates.io
 cargo install engram-core
 
-# Or from source (código Rust está em engram/engram/)
+# Or from source
 git clone https://github.com/limaronaldo/engram.git
-cd engram/engram && cargo install --path .
+cd engram && cargo install --path .
 
 # Run as MCP server (Claude Code, Cursor, VS Code MCP clients, etc.)
 engram-server --mcp
@@ -73,10 +73,6 @@ engram-server --mcp
 # Or run as HTTP API
 engram-server --http --port 8080
 ```
-
-**Nota**: O código Rust está no diretório `engram/engram/`, não na raiz do repositório.
-
----
 
 ## Why Engram
 

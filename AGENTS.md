@@ -10,40 +10,37 @@ Engram é um sistema de memória persistente para agentes de IA, construído em 
 ## Estrutura do Projeto
 ```
 engram/
-├── engram/              # Código principal Rust (crate: engram-core)
-│   ├── src/
-│   │   ├── lib.rs      # Ponto de entrada da biblioteca
-│   │   ├── main.rs     # Binário do servidor (engram-server)
-│   │   ├── hooks/      # Lifecycle hooks (session_end, etc.)
-│   │   ├── storage/    # Camada de banco de dados e migrações
-│   │   ├── search/     # Busca híbrida e embeddings
-│   │   ├── mcp/        # Implementação do protocolo MCP
-│   │   └── ...
-│   └── Cargo.toml
+├── src/                # Código principal Rust (crate: engram-core)
+│   ├── lib.rs          # Ponto de entrada da biblioteca
+│   ├── bin/            # Binários (engram-server, engram-cli, ...)
+│   ├── hooks/          # Lifecycle hooks (session_end, etc.)
+│   ├── storage/        # Camada de banco de dados e migrações
+│   ├── search/         # Busca híbrida e embeddings
+│   ├── mcp/            # Implementação do protocolo MCP
+│   └── ...
 ├── sdks/
 │   ├── python/         # SDK Python assíncrono (EngramClient)
 │   └── typescript/     # SDK TypeScript (EngramClient)
 ├── tests/              # Testes de integração Rust
 ├── docs/               # Documentação adicional
+├── Cargo.toml
 └── README.md           # Documentação principal
 ```
-
-**Nota**: O código Rust está em `engram/engram/`, não na raiz. Para compilar: `cd engram && cargo build`
 
 ## Como Rodar Localmente
 ```bash
 # Clone o repositório
 git clone https://github.com/limaronaldo/engram.git
-cd engram/engram
+cd engram
 
 # Compile
 cargo build --release
 
 # Rode como servidor MCP (para Claude Code, Cursor, etc.)
-../target/release/engram-server --mcp
+./target/release/engram-server --mcp
 
 # Ou como API HTTP
-../target/release/engram-server --http --port 8080
+./target/release/engram-server --http --port 8080
 ```
 
 ## Padrões de Código Importantes
@@ -68,8 +65,7 @@ cargo build --release
 
 ## Armadilhas Conhecidas (Gotchas)
 1. **Schema Version Mismatch**: Testes em `storage/migrations.rs` têm versão hardcoded. Ao atualizar schema, atualize também os testes.
-2. **Caminho do Código Rust**: O crate principal está em `engram/engram/`, não na raiz.
-3. **Python Built-ins**: O parâmetro `filter` em `EngramClient.list()` foi renomeado para `filter_` para evitar sombra do built-in.
+2. **Python Built-ins**: O parâmetro `filter` em `EngramClient.list()` foi renomeado para `filter_` para evitar sombra do built-in.
 4. **TypeScript Syntax**: Verifique cuidadosamente o fechamento de tipos em métodos que retornam objetos complexos (ex: `Promise<{...}>`).
 
 ## Ferramentas MCP Disponíveis
@@ -80,8 +76,8 @@ O Engram expõe 155+ ferramentas via MCP. Principais:
 - `memory_temporal_contradictions`, `memory_scope_set`
 
 ## Onde Encontrar O Que
-- **Hooks de ciclo de vida**: `engram/src/hooks/`
-- **Implementação MCP**: `engram/src/mcp/`
+- **Hooks de ciclo de vida**: `src/hooks/`
+- **Implementação MCP**: `src/mcp/`
 - **Cliente Python**: `sdks/python/engram_client/client.py`
 - **Cliente TypeScript**: `sdks/typescript/src/index.ts`
 - **Testes de integração**: `tests/*.rs`
@@ -90,10 +86,10 @@ O Engram expõe 155+ ferramentas via MCP. Principais:
 ## Comandos Úteis para Agentes
 ```bash
 # Verificar código Rust
-cd engram && cargo clippy && cargo fmt --check
+cargo clippy && cargo fmt --check
 
 # Rodar testes Rust
-cd engram && cargo test
+cargo test
 
 # Verificar tipos TypeScript (se node disponível)
 cd sdks/typescript && npm run type-check
