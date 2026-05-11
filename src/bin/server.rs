@@ -12,10 +12,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use engram::embedding::create_embedder;
 use engram::error::Result;
 use engram::mcp::{
-    get_prompt, get_tool_definitions_tiered, handlers, http_transport, list_prompts, list_resources,
-    methods, read_resource, InitializeResult, McpHandler, McpRequest, McpResponse, McpServer,
-    PromptCapabilities, ResourceCapabilities, ServerCapabilities, ToolCallResult, ToolsCapability,
-    MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
+    get_prompt, get_tool_definitions_tiered, handlers, http_transport, list_prompts,
+    list_resources, methods, read_resource, InitializeResult, McpHandler, McpRequest, McpResponse,
+    McpServer, PromptCapabilities, ResourceCapabilities, ServerCapabilities, ToolCallResult,
+    ToolsCapability, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
 };
 use engram::realtime::{RealtimeManager, RealtimeServer};
 use engram::search::{FuzzyEngine, SearchConfig};
@@ -515,18 +515,14 @@ fn main() -> Result<()> {
     // the HTTP SSE endpoint (GET /v1/events) can share the same broadcast channel.
     let realtime_manager = Some(RealtimeManager::new());
 
-    // Create handler and server
-    let mut handler = EngramHandler::new(storage.clone(), embedder);
-    if let Some(ref manager) = realtime_manager {
-        handler = handler.with_realtime(manager.clone());
-    }
-    #[cfg(feature = "meilisearch")]
-    {
-        handler.meili = meili_backend_for_handler;
-        handler.meili_indexer = meili_indexer_for_handler;
-        handler.meili_sync_interval = meili_sync_interval;
-    }
-    let handler = Arc::new(handler);
+    // Create MCP request handler.
+    //
+    // Note: a parallel `engram::app_state::AppState` type exists in the lib
+    // and is intended to eventually replace `EngramHandler` once the lifecycle
+    // hook wiring lands (see issue #11). For now we still construct
+    // `EngramHandler` directly since that's the type that implements
+    // `McpHandler`.
+    let handler = Arc::new(EngramHandler::new(storage.clone(), embedder));
     let server = McpServer::new(handler.clone());
 
     // Start background cleanup thread if enabled

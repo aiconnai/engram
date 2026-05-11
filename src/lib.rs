@@ -7,6 +7,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::large_enum_variant)]
 
+pub mod app_state;
 #[cfg(feature = "agent-portability")]
 pub mod attestation;
 pub mod auth;
