@@ -21,6 +21,7 @@
 
 pub mod agent_loop;
 pub mod auto_capture;
+pub mod auto_consolidate;
 pub mod auto_tagging;
 pub mod compression;
 pub mod compression_semantic;
@@ -46,6 +47,7 @@ pub mod session_context;
 pub mod session_indexing;
 pub mod suggestions;
 pub mod synthesis;
+
 
 pub use auto_capture::{
     AutoCaptureConfig, AutoCaptureEngine, CaptureCandidate, CaptureType, ConversationTracker,

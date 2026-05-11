@@ -27,6 +27,9 @@ use crate::error::Result;
 use crate::intelligence::consolidation_offline::{
     ConsolidationConfig, ConsolidationReport, OfflineConsolidator,
 };
+use crate::intelligence::auto_consolidate::{
+    run_consolidation, ConsolidationCounts, ConsolidationPolicy,
+};
 use crate::storage::Storage;
 
 /// Configuration for the Dream Phase runner.
@@ -43,6 +46,12 @@ pub struct DreamConfig {
     /// this many seconds. Should be a small multiple of the expected pass
     /// duration. Defaults to 300s (5 min).
     pub lock_ttl_seconds: u64,
+    /// Policy for the post-consolidation auto-consolidation pass that runs
+    /// inside each workspace's dream pass. The default is conservative
+    /// (`dry_run = true`) so dream-phase consumers get observability without
+    /// new destructive behavior. Set `dry_run = false` to opt into auto-merge
+    /// and archive-eligible decisions.
+    pub auto_consolidate: ConsolidationPolicy,
 }
 
 impl Default for DreamConfig {
@@ -52,6 +61,7 @@ impl Default for DreamConfig {
             consolidation: ConsolidationConfig::default(),
             owner_id: uuid::Uuid::new_v4().to_string(),
             lock_ttl_seconds: 300,
+            auto_consolidate: ConsolidationPolicy::default(),
         }
     }
 }
@@ -93,6 +103,11 @@ pub struct DreamWorkspaceReport {
     pub tokens_before: usize,
     pub tokens_after: usize,
     pub tokens_saved: usize,
+    /// Counts from the auto-consolidation phase that runs after the offline
+    /// consolidator. `None` when the phase was disabled or the call failed —
+    /// auto-consolidate is best-effort and never aborts the dream pass.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub auto_consolidate: Option<ConsolidationCounts>,
 }
 
 impl From<(&str, ConsolidationReport)> for DreamWorkspaceReport {
@@ -105,6 +120,7 @@ impl From<(&str, ConsolidationReport)> for DreamWorkspaceReport {
             tokens_before: r.tokens_before,
             tokens_after: r.tokens_after,
             tokens_saved: r.tokens_saved,
+            auto_consolidate: None,
         }
     }
 }
@@ -157,7 +173,41 @@ pub fn run_once_workspace(
 
         Ok(r)
     })?;
-    Ok((workspace, report).into())
+
+    let mut workspace_report: DreamWorkspaceReport = (workspace, report).into();
+
+    // ── Auto-consolidation phase (best-effort) ──────────────────────────
+    // The offline consolidator above handles content-overlap / tag / temporal
+    // grouping. `run_consolidation` is a second, complementary pass that
+    // surfaces near-duplicate pairs and conflicts detected by the
+    // `context_quality` heuristics. A failure here must not abort the dream
+    // pass — log and continue with `auto_consolidate = None`.
+    match run_consolidation(storage, workspace, &config.auto_consolidate) {
+        Ok(report) => {
+            let counts = report.counts();
+            tracing::debug!(
+                target = "engram::dream",
+                workspace = %workspace,
+                dry_run = report.dry_run,
+                duplicates_merged = counts.duplicates_merged,
+                conflicts_resolved = counts.conflicts_resolved,
+                summarized = counts.summarized,
+                skipped = counts.skipped,
+                "auto-consolidate phase finished"
+            );
+            workspace_report.auto_consolidate = Some(counts);
+        }
+        Err(e) => {
+            tracing::warn!(
+                target = "engram::dream",
+                workspace = %workspace,
+                error = %e,
+                "auto-consolidate phase failed; continuing"
+            );
+        }
+    }
+
+    Ok(workspace_report)
 }
 
 /// Run a dream pass across every workspace known to storage.
