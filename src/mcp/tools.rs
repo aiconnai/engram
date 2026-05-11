@@ -275,6 +275,26 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         tier: ToolTier::Essential,
     },
     ToolDef {
+        name: "memory_smart_retrieve",
+        description: "Intent-aware unified retrieval. Classifies the query (lookup, exploration, context, path) and dispatches to the right combination of internal retrievers, then merges and dedupes results. Returns audit fields `intents_used` and `strategies_called`.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language query"},
+                "limit": {"type": "integer", "default": 10, "minimum": 1, "maximum": 100},
+                "workspace": {"type": "string", "description": "Optional workspace filter"},
+                "force_intents": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["lookup", "exploration", "context", "path"]},
+                    "description": "Override the classifier (for testing/debugging)"
+                }
+            },
+            "required": ["query"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Essential,
+    },
+    ToolDef {
         name: "memory_search_suggest",
         description: "Get search suggestions and typo corrections",
         schema: r#"{
