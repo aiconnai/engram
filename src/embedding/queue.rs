@@ -346,6 +346,114 @@ pub fn retry_failed_embeddings(conn: &Connection, max_retries: i32) -> Result<Ve
     Ok(ids)
 }
 
+/// Drain up to `batch_size` pending entries from the SQL `embedding_queue`
+/// table, compute their embeddings, and persist them.
+///
+/// This is the SQL-backed counterpart to `EmbeddingWorker::process_batch`,
+/// which drains an in-memory channel that is currently never wired to memory
+/// creation. The channel-based path remains for future use; this function is
+/// what the server actually invokes on a periodic schedule.
+///
+/// On success, each processed memory has:
+///   - a row in `embeddings`
+///   - `memories.has_embedding = 1`
+///   - `embedding_queue.status = 'complete'`
+///
+/// On failure, the queue rows are marked `failed` with the error message and
+/// `retry_count` is incremented so `retry_failed_embeddings` can re-queue
+/// them later.
+///
+/// Returns the number of memories processed (success or failure). Returns 0
+/// when the queue is empty.
+///
+/// Fixes #10 sintoma A.
+pub fn drain_pending_embeddings(
+    conn: &Connection,
+    embedder: &dyn Embedder,
+    batch_size: usize,
+) -> Result<usize> {
+    use rusqlite::params;
+
+    // Pull pending memory_ids and their content in one go.
+    let mut stmt = conn.prepare(
+        "SELECT eq.memory_id, m.content
+         FROM embedding_queue eq
+         JOIN memories m ON eq.memory_id = m.id
+         WHERE eq.status = 'pending' AND m.valid_to IS NULL
+         ORDER BY eq.queued_at
+         LIMIT ?",
+    )?;
+
+    let rows: Vec<(MemoryId, String)> = stmt
+        .query_map(params![batch_size as i64], |row| {
+            Ok((row.get::<_, MemoryId>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+
+    if rows.is_empty() {
+        return Ok(0);
+    }
+
+    let memory_ids: Vec<MemoryId> = rows.iter().map(|(id, _)| *id).collect();
+    let contents: Vec<&str> = rows.iter().map(|(_, c)| c.as_str()).collect();
+
+    // Mark as processing so concurrent drainers don't pick up the same rows.
+    let now = Utc::now().to_rfc3339();
+    for &id in &memory_ids {
+        let _ = conn.execute(
+            "UPDATE embedding_queue SET status = 'processing', started_at = ?
+             WHERE memory_id = ?",
+            params![now, id],
+        );
+    }
+
+    match embedder.embed_batch(&contents) {
+        Ok(embeddings) => {
+            let model = embedder.model_name();
+            let dimensions = embedder.dimensions();
+            let now = Utc::now().to_rfc3339();
+
+            for (id, embedding) in memory_ids.iter().zip(embeddings.iter()) {
+                let embedding_bytes: Vec<u8> =
+                    embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
+
+                conn.execute(
+                    "INSERT OR REPLACE INTO embeddings
+                     (memory_id, embedding, model, dimensions, created_at)
+                     VALUES (?, ?, ?, ?, ?)",
+                    params![id, embedding_bytes, model, dimensions, now],
+                )?;
+
+                conn.execute(
+                    "UPDATE memories SET has_embedding = 1 WHERE id = ?",
+                    params![id],
+                )?;
+
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'complete', completed_at = ?
+                     WHERE memory_id = ?",
+                    params![now, id],
+                )?;
+            }
+
+            Ok(memory_ids.len())
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            for &id in &memory_ids {
+                let _ = conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', error = ?,
+                     retry_count = retry_count + 1
+                     WHERE memory_id = ?",
+                    params![error_msg, id],
+                );
+            }
+            Err(e)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -32,7 +32,9 @@ pub use cache::{EmbeddingCache, EmbeddingCacheStats};
 #[cfg(feature = "multimodal")]
 pub use clip::{ClipEmbedder, MultimodalEmbedder, CLIP_PROVIDER_NAME};
 pub use provider::{EmbeddingProvider, EmbeddingProviderInfo, EmbeddingRegistry};
-pub use queue::{get_embedding, get_embedding_status, EmbeddingQueue, EmbeddingWorker};
+pub use queue::{
+    drain_pending_embeddings, get_embedding, get_embedding_status, EmbeddingQueue, EmbeddingWorker,
+};
 pub use tfidf::TfIdfEmbedder;
 
 use std::sync::Arc;

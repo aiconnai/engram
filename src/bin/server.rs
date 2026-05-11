@@ -103,6 +103,18 @@ struct Args {
     #[arg(long, env = "ENGRAM_CLEANUP_INTERVAL", default_value = "3600")]
     cleanup_interval_seconds: u64,
 
+    /// Embedding drain interval in seconds (0 = disabled)
+    /// When enabled, pending entries in the embedding_queue table are drained
+    /// at this interval. Without this, memories accumulate without embeddings.
+    #[arg(long, env = "ENGRAM_EMBEDDING_DRAIN_INTERVAL", default_value = "30")]
+    embedding_drain_interval_seconds: u64,
+
+    /// Max embeddings to compute per drain cycle (one batch call to the
+    /// embedder). Larger values reduce API overhead but increase latency
+    /// per cycle.
+    #[arg(long, env = "ENGRAM_EMBEDDING_DRAIN_BATCH", default_value = "32")]
+    embedding_drain_batch_size: usize,
+
     /// Compression scheduler interval in seconds (0 = disabled)
     /// Auto-summarizes old, rarely-accessed memories at this interval
     #[arg(long, env = "ENGRAM_COMPRESSION_INTERVAL", default_value = "0")]
@@ -597,7 +609,7 @@ fn main() -> Result<()> {
     // hook wiring lands (see issue #11). For now we still construct
     // `EngramHandler` directly since that's the type that implements
     // `McpHandler`.
-    let mut handler_state = EngramHandler::new(storage.clone(), embedder);
+    let mut handler_state = EngramHandler::new(storage.clone(), embedder.clone());
     #[cfg(feature = "hooks")]
     handler_state.enable_hooks();
     let handler = Arc::new(handler_state);
@@ -627,6 +639,55 @@ fn main() -> Result<()> {
                     }
                     Err(e) => {
                         tracing::error!("Error cleaning up expired memories: {}", e);
+                    }
+                }
+            }
+        });
+    }
+
+    // Start background embedding drain thread if enabled. This drains the
+    // SQL `embedding_queue` table — without it, memories accumulate with
+    // status='pending' forever and never get embeddings (issue #10).
+    if args.embedding_drain_interval_seconds > 0 {
+        let drain_storage = storage.clone();
+        let drain_embedder = embedder.clone();
+        let interval = std::time::Duration::from_secs(args.embedding_drain_interval_seconds);
+        let batch_size = args.embedding_drain_batch_size;
+
+        std::thread::spawn(move || {
+            tracing::info!(
+                "Embedding drain thread started (interval: {}s, batch: {})",
+                interval.as_secs(),
+                batch_size,
+            );
+
+            loop {
+                std::thread::sleep(interval);
+
+                // Drain in a loop until the queue is empty (or we hit one
+                // batch that returns 0). This catches up faster after a
+                // backlog without waiting `interval` between batches.
+                loop {
+                    let result = drain_storage.with_connection(|conn| {
+                        engram::embedding::drain_pending_embeddings(
+                            conn,
+                            drain_embedder.as_ref(),
+                            batch_size,
+                        )
+                    });
+
+                    match result {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            tracing::info!("Embedding drain processed {} memories", n);
+                            if n < batch_size {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Embedding drain error: {}", e);
+                            break;
+                        }
                     }
                 }
             }
