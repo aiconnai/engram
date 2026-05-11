@@ -310,7 +310,7 @@ impl KnowledgeGraph {
         // Find hub nodes (top 10 by degree)
         let mut degree_list: Vec<(MemoryId, usize)> =
             degree.iter().map(|(&k, &v)| (k, v)).collect();
-        degree_list.sort_by(|a, b| b.1.cmp(&a.1));
+        degree_list.sort_by_key(|b| std::cmp::Reverse(b.1));
         let hub_nodes: Vec<(MemoryId, usize)> = degree_list.into_iter().take(10).collect();
 
         // Count isolated nodes
@@ -906,7 +906,7 @@ impl KnowledgeGraph {
             .collect();
 
         // Sort by size (largest first)
-        clusters.sort_by(|a, b| b.members.len().cmp(&a.members.len()));
+        clusters.sort_by_key(|b| std::cmp::Reverse(b.members.len()));
 
         // Renumber IDs
         for (i, cluster) in clusters.iter_mut().enumerate() {

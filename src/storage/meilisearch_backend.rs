@@ -841,7 +841,7 @@ impl StorageBackend for MeilisearchBackend {
             .into_iter()
             .map(|(tag, count)| (tag, count as i64))
             .collect();
-        tags.sort_by(|a, b| b.1.cmp(&a.1));
+        tags.sort_by_key(|b| std::cmp::Reverse(b.1));
         Ok(tags)
     }
 
@@ -866,7 +866,7 @@ impl StorageBackend for MeilisearchBackend {
             .into_iter()
             .map(|(ws, count)| (ws, count as i64))
             .collect();
-        workspaces.sort_by(|a, b| b.1.cmp(&a.1));
+        workspaces.sort_by_key(|b| std::cmp::Reverse(b.1));
         Ok(workspaces)
     }
 

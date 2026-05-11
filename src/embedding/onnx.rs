@@ -246,7 +246,7 @@ mod inner {
         /// L2-normalise a vector in place.
         ///
         /// If the norm is zero (all-zero vector) the vector is left unchanged.
-        pub fn l2_normalize(v: &mut Vec<f32>) {
+        pub fn l2_normalize(v: &mut [f32]) {
             let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
             if norm > 0.0 {
                 for x in v.iter_mut() {

@@ -206,8 +206,11 @@ struct EngramHandler {
     /// Meilisearch sync interval config
     #[cfg(feature = "meilisearch")]
     meili_sync_interval: u64,
-    /// Dedicated Tokio runtime for async operations (Langfuse sync)
+    /// Dedicated Tokio runtime for async operations (Langfuse sync).
+    /// Kept alive here so the runtime outlives the handler; wiring to
+    /// actual Langfuse calls lands in a follow-up task.
     #[cfg(feature = "langfuse")]
+    #[allow(dead_code)]
     langfuse_runtime: tokio::runtime::Runtime,
     /// Lifecycle hooks (Phase L - ENG-78). None unless `enable_hooks()` is called.
     #[cfg(feature = "hooks")]
@@ -240,6 +243,10 @@ impl EngramHandler {
         }
     }
 
+    // Preserved for the WebSocket feature that wires realtime events to the handler;
+    // not yet called from `main` while WebSocket transport is gated behind ws_port > 0
+    // and uses a separate path.
+    #[allow(dead_code)]
     fn with_realtime(mut self, manager: RealtimeManager) -> Self {
         self.realtime = Some(manager);
         self
@@ -534,9 +541,9 @@ fn main() -> Result<()> {
     }
 
     #[cfg(feature = "meilisearch")]
-    let mut meili_backend_for_handler: Option<Arc<MeilisearchBackend>> = None;
+    let mut _meili_backend_for_handler: Option<Arc<MeilisearchBackend>> = None;
     #[cfg(feature = "meilisearch")]
-    let mut meili_indexer_for_handler: Option<Arc<MeilisearchIndexer>> = None;
+    let mut _meili_indexer_for_handler: Option<Arc<MeilisearchIndexer>> = None;
     #[cfg(feature = "meilisearch")]
     let _meili_sync_interval = args.meilisearch_sync_interval;
 
@@ -547,7 +554,7 @@ fn main() -> Result<()> {
                 url,
                 args.meilisearch_api_key.as_deref(),
             )?);
-            meili_backend_for_handler = Some(meili.clone());
+            _meili_backend_for_handler = Some(meili.clone());
 
             if args.meilisearch_indexer {
                 let sqlite_backend = SqliteBackend::new(config.clone())?;
@@ -556,7 +563,7 @@ fn main() -> Result<()> {
                     meili.clone(),
                     args.meilisearch_sync_interval,
                 ));
-                meili_indexer_for_handler = Some(indexer.clone());
+                _meili_indexer_for_handler = Some(indexer.clone());
 
                 let indexer_bg = indexer.clone();
                 std::thread::spawn(move || {

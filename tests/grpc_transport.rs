@@ -37,6 +37,9 @@ use engram::types::EmbeddingConfig;
 
 /// A complete `McpHandler` backed by in-memory storage, suitable for tests.
 struct TestHandler {
+    // Storage is kept alive here to prevent the in-memory DB from being dropped
+    // while the handler is still in use.
+    #[allow(dead_code)]
     storage: Storage,
     ctx: handlers::HandlerContext,
 }

@@ -197,8 +197,7 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
         .get("depth")
         .and_then(|v| v.as_u64())
         .unwrap_or(1)
-        .min(3)
-        .max(1) as usize;
+        .clamp(1, 3) as usize;
 
     let timeframe = params
         .get("timeframe")
@@ -655,11 +654,7 @@ pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value
     let overhead_per_block = 80usize;
     let total_overhead = header_chars + separator_chars + overhead_per_block * count;
     let available_content_chars = budget_chars.saturating_sub(total_overhead);
-    let chars_per_content = if count > 0 {
-        available_content_chars / count
-    } else {
-        0
-    };
+    let chars_per_content = available_content_chars.checked_div(count).unwrap_or(0);
 
     let truncated_blocks: Vec<String> = memories
         .iter()
@@ -1067,11 +1062,9 @@ pub fn memory_get_working_memory(ctx: &HandlerContext, params: Value) -> Value {
     let archive_reserved = archive_section.len() / 4;
     let obs_count = observations.len();
     let content_budget_chars = (token_budget.saturating_sub(500 + archive_reserved)) * 4;
-    let chars_per_obs = if obs_count > 0 {
-        content_budget_chars / obs_count
-    } else {
-        content_budget_chars
-    };
+    let chars_per_obs = content_budget_chars
+        .checked_div(obs_count)
+        .unwrap_or(content_budget_chars);
 
     // Build markdown.
     let mut md = format!(

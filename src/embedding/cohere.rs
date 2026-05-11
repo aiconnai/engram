@@ -210,6 +210,8 @@ mod tests {
     /// A lightweight stub that mimics CohereEmbedder behaviour without HTTP.
     struct StubCohereEmbedder {
         dimensions: usize,
+        // Preserved for parity with the real CohereEmbedder HTTP client field.
+        #[allow(dead_code)]
         model: String,
     }
 

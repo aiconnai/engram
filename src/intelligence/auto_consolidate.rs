@@ -168,6 +168,9 @@ pub fn run_consolidation(
             /// This is NOT an AI agent — it's a maintenance loop that periodically
             /// scans memories below a utility threshold and performs deduplication,
             /// summarization, and archival.
+            // Dormant until the consolidation scheduling loop is wired up; preserved
+            // so the implementation is not lost and can be activated without rewrite.
+            #[allow(dead_code)]
             pub struct AutoConsolidator {
                 /// How often the consolidation loop runs (default: 1 hour)
                 pub interval: Duration,
@@ -190,6 +193,8 @@ pub fn run_consolidation(
                 }
             }
 
+            // Dormant methods preserved alongside the struct; see #[allow(dead_code)] above.
+            #[allow(dead_code)]
             impl AutoConsolidator {
                 /// Create a new AutoConsolidator with custom settings
                 pub fn new(interval: Duration, utility_threshold: f32, enabled: bool) -> Self {
@@ -447,11 +452,15 @@ mod tests {
 
     #[test]
     fn validate_rejects_bad_inputs() {
-        let mut p = ConsolidationPolicy::default();
-        p.duplicate_threshold = 1.5;
+        let p = ConsolidationPolicy {
+            duplicate_threshold: 1.5,
+            ..Default::default()
+        };
         assert!(p.validate().is_err());
-        p = ConsolidationPolicy::default();
-        p.max_actions_per_run = 0;
+        let p = ConsolidationPolicy {
+            max_actions_per_run: 0,
+            ..Default::default()
+        };
         assert!(p.validate().is_err());
     }
 

@@ -164,8 +164,7 @@ fn create_test_memories() -> Vec<Memory> {
 #[test]
 fn test_integration_orchestrator_creation() {
     let _orchestrator = IntegrationOrchestrator::new();
-    // If we get here, creation succeeded
-    assert!(true);
+    // If we get here, creation succeeded — no assertion needed.
 }
 
 #[test]

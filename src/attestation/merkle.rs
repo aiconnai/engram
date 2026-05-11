@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn test_single_leaf() {
         let rec = make_record("aabbcc", "a.txt");
-        let tree = MerkleTree::build(&[rec.clone()]);
+        let tree = MerkleTree::build(std::slice::from_ref(&rec));
         assert_eq!(tree.root(), Some(rec.record_hash.as_str()));
 
         let proof = tree.generate_proof(0).unwrap();
