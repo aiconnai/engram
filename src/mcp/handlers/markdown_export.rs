@@ -1,7 +1,7 @@
 //! Markdown export handler — human-readable memory export.
 //!
 //! Exports memories as Markdown files with YAML frontmatter and
-//! wiki-style [[links]] for browsing and version control.
+//! wiki-style `[[links]]` for browsing and version control.
 //! Inspired by Basic Memory's Markdown-first approach.
 
 use std::collections::HashMap;

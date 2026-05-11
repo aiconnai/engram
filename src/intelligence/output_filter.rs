@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 /// Filtro de saída de comandos para redução de tokens em LLMs
-/// Inspirado no RTK (https://github.com/rtk-ai/rtk)
+/// Inspirado no RTK (<https://github.com/rtk-ai/rtk>)
 pub struct OutputFilter {
     max_chars: usize,
 }

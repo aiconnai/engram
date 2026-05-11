@@ -87,7 +87,7 @@ impl OpenAIEmbedder {
     ///
     /// # Arguments
     /// * `api_key` - API key for authentication
-    /// * `base_url` - API base URL (e.g., "https://openrouter.ai/api/v1" for OpenRouter)
+    /// * `base_url` - API base URL (e.g., `<https://openrouter.ai/api/v1>` for OpenRouter)
     /// * `model` - Model name (e.g., "openai/text-embedding-3-small" for OpenRouter)
     /// * `dimensions` - Expected embedding dimensions (must match model output)
     pub fn with_config(
@@ -261,7 +261,7 @@ impl Embedder for OpenAIEmbedder {
 /// - `"openai"`: Requires `openai` feature and API key
 ///
 /// For OpenAI-compatible APIs (OpenRouter, Azure, etc.), set:
-/// - `base_url`: API endpoint (e.g., "https://openrouter.ai/api/v1")
+/// - `base_url`: API endpoint (e.g., `<https://openrouter.ai/api/v1>`)
 /// - `embedding_model`: Model name (e.g., "openai/text-embedding-3-small")
 /// - `dimensions`: Expected output dimensions
 pub fn create_embedder(config: &EmbeddingConfig) -> Result<Arc<dyn Embedder>> {

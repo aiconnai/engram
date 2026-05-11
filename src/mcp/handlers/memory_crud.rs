@@ -14,10 +14,9 @@ use super::HandlerContext;
 /// everything from the opening tag to the end of the string is removed.
 ///
 /// # Examples
-/// ```
-/// // "Hello world" — private section stripped
-/// // Input:  "Hello <private>secret</private> world"
-/// // Output: "Hello  world"
+/// ```text
+/// Input:  "Hello <private>secret</private> world"
+/// Output: "Hello  world"
 /// ```
 fn strip_private_content(content: &str) -> String {
     let mut result = String::with_capacity(content.len());
