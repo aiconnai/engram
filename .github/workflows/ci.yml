@@ -60,7 +60,7 @@ jobs:
             integration_tests+=(--test "$(basename "$test_file" .rs)")
           done
 
-          cargo test --features full --lib "${integration_tests[@]}"
+          cargo test --features full --lib "${integration_tests[@]}" -- --test-threads=1
 
       - name: Test local embedding backend
         run: cargo test --features local-embeddings --lib embedding::onnx
