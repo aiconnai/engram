@@ -39,10 +39,10 @@ fn make_cargo_build_output(lines: usize) -> String {
 fn make_git_log_output(commits: usize) -> String {
     let mut out = String::new();
     for i in 0..commits {
+        let hash = format!("{:040x}", i);
+        let day = (i % 30) + 1;
         out.push_str(&format!(
             "commit {hash}\nAuthor: Dev User <dev@example.com>\nDate:   Mon May {day} 10:{i:02}:00 2026 +0000\n\n    feat(module-{i}): implement feature {i}\n\n    Detailed description of feature {i}. This commit adds several components\n    including the core logic, tests, and documentation updates.\n\n",
-            hash = format!("{:040x}", i),
-            day = (i % 30) + 1,
         ));
     }
     out
