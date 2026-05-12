@@ -53,7 +53,19 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all-features
+      - name: Test library and integration tests
+        run: |
+          integration_tests=()
+          for test_file in tests/*.rs; do
+            integration_tests+=(--test "$(basename "$test_file" .rs)")
+          done
+
+          cargo test --all-features --lib "${integration_tests[@]}"
+
+      - name: Test binary unit tests
+        run: |
+          cargo test --bin engram-server
+          cargo test --features watcher --bin engram-watcher
 
   # Property tests (critical for vector store + parsers)
   property-tests:
@@ -120,7 +132,16 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate coverage
-        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+        run: |
+          cargo llvm-cov clean --workspace
+
+          integration_tests=()
+          for test_file in tests/*.rs; do
+            integration_tests+=(--test "$(basename "$test_file" .rs)")
+          done
+
+          cargo llvm-cov --all-features --no-report --lib "${integration_tests[@]}"
+          cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Check coverage threshold
         # Threshold reflects current repo reality (~60% with --all-features).
@@ -128,7 +149,7 @@ jobs:
         # 0% coverage because they require external services or unfinished
         # implementations to test. Raise this incrementally as new tests land.
         run: |
-          cargo llvm-cov --all-features --fail-under-lines 55
+          cargo llvm-cov report --fail-under-lines 55
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
