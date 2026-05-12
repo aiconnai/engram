@@ -3,6 +3,8 @@
 //! Command-line interface for memory management.
 
 use std::io::{self, Write};
+#[cfg(feature = "onnx-embed")]
+use std::path::Path;
 
 use clap::{Parser, Subcommand};
 
@@ -17,6 +19,8 @@ use engram::snapshot::{LoadStrategy, SnapshotBuilder, SnapshotLoader};
 use engram::storage::queries::*;
 use engram::storage::Storage;
 use engram::types::*;
+#[cfg(feature = "onnx-embed")]
+use sha2::{Digest, Sha256};
 #[cfg(feature = "agent-portability")]
 use std::str::FromStr as _;
 
@@ -117,6 +121,12 @@ enum Commands {
     },
     /// Interactive mode
     Interactive,
+    /// Manage local embedding models
+    #[cfg(feature = "onnx-embed")]
+    Model {
+        #[command(subcommand)]
+        action: ModelAction,
+    },
     /// Create, load, or inspect .egm snapshots
     #[cfg(feature = "agent-portability")]
     Snapshot {
@@ -196,6 +206,25 @@ enum AttestAction {
     },
 }
 
+#[cfg(feature = "onnx-embed")]
+#[derive(Subcommand)]
+enum ModelAction {
+    /// Download a local embedding model into the cache
+    Download {
+        /// Model registry name
+        #[arg(default_value = "minilm-l6-v2")]
+        name: String,
+    },
+    /// List local embedding models
+    List,
+    /// Print the local cache path for a model
+    Path {
+        /// Model registry name
+        #[arg(default_value = "minilm-l6-v2")]
+        name: String,
+    },
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -211,6 +240,11 @@ fn main() -> Result<()> {
         auto_sync: false,
         sync_debounce_ms: 5000,
     };
+
+    #[cfg(feature = "onnx-embed")]
+    if let Commands::Model { action } = &cli.command {
+        return handle_model_action(action);
+    }
 
     let storage = Storage::open(config)?;
 
@@ -688,9 +722,131 @@ fn main() -> Result<()> {
 
             println!("Goodbye!");
         }
+
+        #[cfg(feature = "onnx-embed")]
+        Commands::Model { .. } => unreachable!("model commands are handled before storage opens"),
     }
 
     Ok(())
+}
+
+#[cfg(feature = "onnx-embed")]
+fn handle_model_action(action: &ModelAction) -> Result<()> {
+    use engram::embedding::onnx_registry::{default_model_dir, find_model, REGISTRY};
+    use engram::error::EngramError;
+
+    match action {
+        ModelAction::List => {
+            for entry in REGISTRY {
+                let dir = default_model_dir();
+                let installed = model_files_present(&dir);
+                let status = if installed {
+                    "installed"
+                } else {
+                    "not installed"
+                };
+                println!(
+                    "{}\t{}\t{} dims\tmax_seq_len={}",
+                    entry.name, status, entry.dimensions, entry.max_seq_len
+                );
+            }
+        }
+        ModelAction::Path { name } => {
+            let entry = find_model(name).ok_or_else(|| {
+                EngramError::InvalidInput(format!("Unknown local embedding model: {name}"))
+            })?;
+            let dir = default_model_dir_for(entry.name);
+            println!("{}", dir.display());
+        }
+        ModelAction::Download { name } => {
+            let entry = find_model(name).ok_or_else(|| {
+                EngramError::InvalidInput(format!("Unknown local embedding model: {name}"))
+            })?;
+            let dir = default_model_dir_for(entry.name);
+            std::fs::create_dir_all(&dir)?;
+
+            download_file(entry.model_url, entry.model_sha256, &dir.join("model.onnx"))?;
+            download_file(
+                entry.tokenizer_url,
+                entry.tokenizer_sha256,
+                &dir.join("tokenizer.json"),
+            )?;
+
+            println!("Downloaded {} to {}", entry.name, dir.display());
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "onnx-embed")]
+fn default_model_dir_for(name: &str) -> std::path::PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("engram")
+        .join("models")
+        .join(name)
+}
+
+#[cfg(feature = "onnx-embed")]
+fn model_files_present(dir: &Path) -> bool {
+    dir.join("model.onnx").is_file() && dir.join("tokenizer.json").is_file()
+}
+
+#[cfg(feature = "onnx-embed")]
+fn download_file(url: &str, expected_sha256: &str, target: &Path) -> Result<()> {
+    use engram::error::EngramError;
+
+    if target.is_file()
+        && sha256_file(target)? == expected_sha256_or_current(expected_sha256, target)?
+    {
+        println!("{} already present", target.display());
+        return Ok(());
+    }
+
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| EngramError::Config(format!("Failed to create download runtime: {e}")))?;
+    let bytes = runtime.block_on(async {
+        let response = reqwest::Client::new().get(url).send().await?;
+        let response = response.error_for_status()?;
+        response.bytes().await
+    })?;
+
+    let actual_hash = sha256_bytes(&bytes);
+    if !expected_sha256.is_empty() && actual_hash != expected_sha256 {
+        return Err(EngramError::Config(format!(
+            "SHA-256 mismatch for {url}: expected {expected_sha256}, got {actual_hash}"
+        )));
+    }
+
+    let tmp = target.with_extension(format!("tmp.{}", std::process::id()));
+    std::fs::write(&tmp, &bytes)?;
+    std::fs::rename(&tmp, target)?;
+    println!("Downloaded {}", target.display());
+
+    Ok(())
+}
+
+#[cfg(feature = "onnx-embed")]
+fn expected_sha256_or_current(expected: &str, target: &Path) -> Result<String> {
+    if expected.is_empty() {
+        sha256_file(target)
+    } else {
+        Ok(expected.to_string())
+    }
+}
+
+#[cfg(feature = "onnx-embed")]
+fn sha256_file(path: &Path) -> Result<String> {
+    let bytes = std::fs::read(path)?;
+    Ok(sha256_bytes(&bytes))
+}
+
+#[cfg(feature = "onnx-embed")]
+fn sha256_bytes(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hex::encode(hasher.finalize())
 }
 
 fn truncate(s: &str, max: usize) -> String {

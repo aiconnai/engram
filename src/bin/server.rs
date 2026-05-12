@@ -62,9 +62,13 @@ struct Args {
     #[arg(long, env = "ENGRAM_CLOUD_ENCRYPT")]
     encrypt: bool,
 
-    /// Embedding model (openai, tfidf)
+    /// Embedding model (tfidf, local, openai)
     #[arg(long, env = "ENGRAM_EMBEDDING_MODEL", default_value = "tfidf")]
     embedding_model: String,
+
+    /// Local ONNX model directory (contains model.onnx and tokenizer.json)
+    #[arg(long, env = "ENGRAM_ONNX_MODEL_DIR")]
+    onnx_model_dir: Option<String>,
 
     /// OpenAI API key
     #[arg(long, env = "OPENAI_API_KEY")]
@@ -585,7 +589,7 @@ fn main() -> Result<()> {
         if args.embedding_model == "openai" {
             1536 // Default for text-embedding-3-small
         } else {
-            384 // Default for TF-IDF
+            384 // Default for TF-IDF and local MiniLM
         }
     });
 
@@ -598,7 +602,7 @@ fn main() -> Result<()> {
             Some(args.openai_base_url)
         },
         embedding_model: Some(args.openai_embedding_model),
-        model_path: None,
+        model_path: args.onnx_model_dir,
         dimensions,
         batch_size: 100,
     };
