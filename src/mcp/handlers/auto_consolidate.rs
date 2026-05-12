@@ -177,7 +177,11 @@ pub fn run_auto_consolidator_tick(
     let policy = ConsolidationPolicy {
         dry_run: false,
         max_actions_per_run: hot_ids.len().max(50),
-        hot_ids: if hot_ids.is_empty() { None } else { Some(hot_ids) },
+        hot_ids: if hot_ids.is_empty() {
+            None
+        } else {
+            Some(hot_ids)
+        },
         ..Default::default()
     };
     run_consolidation(storage, workspace, &policy)

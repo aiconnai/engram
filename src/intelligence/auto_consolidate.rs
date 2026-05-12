@@ -307,7 +307,10 @@ pub fn run_consolidation(
                 .into_iter()
                 .filter(|m| {
                     let is_old = m.created_at < cutoff;
-                    let is_hot = policy.hot_ids.as_ref().map_or(false, |ids| ids.contains(&m.id));
+                    let is_hot = policy
+                        .hot_ids
+                        .as_ref()
+                        .map_or(false, |ids| ids.contains(&m.id));
                     (is_old || is_hot)
                         && i64::from(m.access_count) < policy.max_access_count_for_archival
                         && m.importance <= policy.max_importance_for_archival
@@ -321,11 +324,15 @@ pub fn run_consolidation(
         let tracker = UtilityTracker::new();
         let mut scored: Vec<(i64, f64)> = storage.with_connection(|conn| {
             let mut out = Vec::with_capacity(candidates.len());
-            
+
             // Fix N+1: Batch fetch feedback stats
             let mut feedback_stats = std::collections::HashMap::new();
             if !candidates.is_empty() {
-                let ids_str = candidates.iter().map(|m| m.id.to_string()).collect::<Vec<_>>().join(",");
+                let ids_str = candidates
+                    .iter()
+                    .map(|m| m.id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
                 let sql = format!(
                     "SELECT memory_id, COUNT(*), SUM(CASE WHEN was_useful = 0 THEN 1 ELSE 0 END) \
                      FROM utility_feedback WHERE memory_id IN ({}) GROUP BY memory_id",
@@ -333,7 +340,11 @@ pub fn run_consolidation(
                 );
                 let mut stmt = conn.prepare(&sql)?;
                 let rows = stmt.query_map([], |row| {
-                    Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?))
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
                 })?;
                 for r in rows {
                     if let Ok((mid, count, negative)) = r {
@@ -347,8 +358,9 @@ pub fn run_consolidation(
                     .get_utility(conn, m.id)
                     .map(|u| u.score)
                     .unwrap_or(0.5);
-                
-                let (feedback_events, not_useful) = feedback_stats.get(&m.id).copied().unwrap_or((0, 0));
+
+                let (feedback_events, not_useful) =
+                    feedback_stats.get(&m.id).copied().unwrap_or((0, 0));
 
                 // Skip if below the minimum feedback threshold (not enough signal).
                 if feedback_events > 0
