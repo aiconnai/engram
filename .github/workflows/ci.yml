@@ -56,12 +56,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Test library and integration tests
         run: |
-          integration_tests=()
-          for test_file in tests/*.rs; do
-            integration_tests+=(--test "$(basename "$test_file" .rs)")
-          done
+          export CARGO_BUILD_JOBS=1
 
-          cargo test --features "$CI_FEATURES" --lib "${integration_tests[@]}" -- --test-threads=1
+          cargo test --features "$CI_FEATURES" --lib -- --test-threads=1
+
+          for test_file in tests/*.rs; do
+            test_name="$(basename "$test_file" .rs)"
+            cargo test --features "$CI_FEATURES" --test "$test_name" -- --test-threads=1
+          done
 
       - name: Test local embedding backend
         run: cargo test --features local-embeddings --lib embedding::onnx
@@ -140,14 +142,17 @@ jobs:
 
       - name: Generate coverage
         run: |
+          export CARGO_BUILD_JOBS=1
+
           cargo llvm-cov clean --workspace
 
-          integration_tests=()
+          cargo llvm-cov --features "$CI_FEATURES" --no-report --lib
+
           for test_file in tests/*.rs; do
-            integration_tests+=(--test "$(basename "$test_file" .rs)")
+            test_name="$(basename "$test_file" .rs)"
+            cargo llvm-cov --features "$CI_FEATURES" --no-report --test "$test_name"
           done
 
-          cargo llvm-cov --features "$CI_FEATURES" --no-report --lib "${integration_tests[@]}"
           cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Check coverage threshold
