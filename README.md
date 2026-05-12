@@ -57,6 +57,12 @@ engram-cli search "why did we choose postgres"
 
 ---
 
+## Use Engram In Your Repository
+
+See [Using Engram From Another Repository](docs/USING_ENGRAM_IN_A_REPO.md) for a practical setup guide covering MCP config, repo-local databases, agent instructions, CLI usage, HTTP access, and local embeddings.
+
+---
+
 ### Quick Start
 
 ```bash
