@@ -393,6 +393,23 @@ pub fn memory_feedback_stats(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+pub fn memory_explain_utility(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::search::utility::UtilityTracker;
+
+    let memory_id = match params.get("memory_id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return json!({"error": "memory_id is required"}),
+    };
+
+    ctx.storage
+        .with_connection(|conn| {
+            let tracker = UtilityTracker::new();
+            let explanation = tracker.explain_utility(conn, memory_id)?;
+            Ok(json!(explanation))
+        })
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
 // ── Compact Search + Expand ──────────────────────────────────────────────────
 
 /// Return a compact summary of search results (id, title, created_at, tags).

@@ -251,6 +251,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "dream_run_now" => dream::dream_run_now(ctx, params),
 
         // ── Auto-consolidation ────────────────────────────────────────────────
+        "memory_auto_consolidate" => auto_consolidate::memory_auto_consolidate(ctx, params),
         "memory_consolidate_batch" => auto_consolidate::memory_consolidate_batch(ctx, params),
         "memory_consolidation_history" => {
             auto_consolidate::memory_consolidation_history(ctx, params)
@@ -384,6 +385,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_explain_search" => search::memory_explain_search(ctx, params),
         "memory_feedback" => search::memory_feedback(ctx, params),
         "memory_feedback_stats" => search::memory_feedback_stats(ctx, params),
+        "memory_explain_utility" => search::memory_explain_utility(ctx, params),
 
         // ── Compact search + expand ──────────────────────────────────────────
         "memory_search_compact" => search::memory_search_compact(ctx, params),

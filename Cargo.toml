@@ -292,6 +292,10 @@ harness = false
 name = "mcp_dispatch"
 harness = false
 
+[[bench]]
+name = "token_reduction"
+harness = false
+
 [profile.release]
 lto = true
 codegen-units = 1

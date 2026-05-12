@@ -36,6 +36,24 @@ pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
         if let Some(v) = p.get("dry_run").and_then(|v| v.as_bool()) {
             policy.dry_run = v;
         }
+        if let Some(v) = p.get("utility_threshold").and_then(|v| v.as_f64()) {
+            policy.utility_threshold = v;
+        }
+        if let Some(v) = p.get("min_feedback_events").and_then(|v| v.as_i64()) {
+            policy.min_feedback_events = v;
+        }
+        if let Some(v) = p.get("max_access_count_for_archival").and_then(|v| v.as_i64()) {
+            policy.max_access_count_for_archival = v;
+        }
+        if let Some(v) = p.get("utility_weight").and_then(|v| v.as_f64()) {
+            policy.utility_weight = v;
+        }
+        if let Some(v) = p.get("age_weight").and_then(|v| v.as_f64()) {
+            policy.age_weight = v;
+        }
+        if let Some(v) = p.get("feedback_weight").and_then(|v| v.as_f64()) {
+            policy.feedback_weight = v;
+        }
     }
     // Top-level `dry_run` is allowed as a shortcut — it overrides whatever
     // came in `policy.dry_run` since callers reach for it most often.

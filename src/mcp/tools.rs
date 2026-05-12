@@ -1463,6 +1463,19 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Standard,
     },
+    ToolDef {
+        name: "memory_explain_utility",
+        description: "Explain why a memory has its current utility score. Returns the full feedback history summary (useful vs. not-useful retrievals), how much temporal decay has been applied, and a plain-English narrative. Useful for debugging or auditing memory quality.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "integer", "description": "ID of the memory to explain"}
+            },
+            "required": ["memory_id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
     // Phase 2: Context Compression Engine
     ToolDef {
         name: "memory_summarize",
@@ -1522,6 +1535,23 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
             "required": ["memory_ids", "model", "budget"]
         }"#,
         annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "memory_auto_consolidate",
+        description: "Enable, disable, configure, or inspect the automatic consolidation scheduler. Use action='enable'/'disable' to toggle it, 'set_interval' with interval_seconds to change the period (60–86400), or 'get_status' to inspect current settings.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["enable", "disable", "set_interval", "get_status"]
+                },
+                "interval_seconds": {"type": "integer", "minimum": 60, "maximum": 86400}
+            },
+            "required": ["action"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
     ToolDef {

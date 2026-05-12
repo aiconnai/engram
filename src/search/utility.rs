@@ -77,6 +77,28 @@ pub struct UtilityScore {
     pub last_retrieved: String,
 }
 
+/// Detailed explanation of a single memory's utility score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UtilityExplanation {
+    pub memory_id: i64,
+    /// Final score after temporal decay.
+    pub current_score: f64,
+    /// Score before temporal decay was applied.
+    pub pre_decay_score: f64,
+    /// Amount removed by temporal decay.
+    pub decay_applied: f64,
+    pub total_retrievals: i64,
+    pub useful_count: i64,
+    pub not_useful_count: i64,
+    pub last_retrieved: String,
+    /// Up to 5 most-recent queries that triggered retrieval.
+    pub recent_queries: Vec<String>,
+    /// Whether the score is below the standard 0.2 consolidation threshold.
+    pub below_consolidation_threshold: bool,
+    /// One-sentence human-readable explanation.
+    pub narrative: String,
+}
+
 /// Aggregated utility statistics across all (or a filtered subset of) memories.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UtilityStats {
@@ -374,6 +396,110 @@ impl UtilityTracker {
             avg_score,
             top_useful,
             bottom_useful,
+        })
+    }
+
+    // -----------------------------------------------------------------------
+    // Explanation surface
+    // -----------------------------------------------------------------------
+
+    /// Return a human-readable explanation of why `memory_id` has its current
+    /// utility score, including the feedback history summary, temporal decay
+    /// applied, and whether it is below the standard consolidation threshold.
+    pub fn explain_utility(&self, conn: &Connection, memory_id: i64) -> Result<UtilityExplanation> {
+        let mut stmt = conn.prepare(
+            "SELECT was_useful, query, timestamp FROM utility_feedback
+             WHERE memory_id = ?1
+             ORDER BY timestamp ASC, id ASC",
+        )?;
+
+        struct Row {
+            was_useful: bool,
+            query: String,
+            timestamp: String,
+        }
+
+        let rows: Vec<Row> = stmt
+            .query_map(rusqlite::params![memory_id], |r| {
+                Ok(Row {
+                    was_useful: r.get::<_, bool>(0)?,
+                    query: r.get::<_, String>(1)?,
+                    timestamp: r.get::<_, String>(2)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        if rows.is_empty() {
+            return Ok(UtilityExplanation {
+                memory_id,
+                current_score: self.config.initial_score,
+                pre_decay_score: self.config.initial_score,
+                decay_applied: 0.0,
+                total_retrievals: 0,
+                useful_count: 0,
+                not_useful_count: 0,
+                last_retrieved: String::new(),
+                recent_queries: Vec::new(),
+                below_consolidation_threshold: self.config.initial_score < 0.2,
+                narrative: format!(
+                    "No feedback recorded. Score is the default initial value ({:.2}).",
+                    self.config.initial_score
+                ),
+            });
+        }
+
+        let mut q = self.config.initial_score;
+        let mut useful_count = 0_i64;
+        for row in &rows {
+            let reward = if row.was_useful { 1.0 } else { -0.5 };
+            q += self.config.learning_rate * (reward - q);
+            if row.was_useful {
+                useful_count += 1;
+            }
+        }
+        let pre_decay = q.clamp(0.0, 1.0);
+
+        let last_retrieved = rows.last().map(|r| r.timestamp.clone()).unwrap_or_default();
+        let decayed = self.apply_decay(pre_decay, &last_retrieved).clamp(0.0, 1.0);
+        let decay_applied = pre_decay - decayed;
+
+        let not_useful_count = rows.len() as i64 - useful_count;
+        let recent_queries: Vec<String> = rows
+            .iter()
+            .rev()
+            .take(5)
+            .map(|r| r.query.clone())
+            .collect();
+
+        let narrative = format!(
+            "Score {:.3}: {}/{} retrievals useful (α={:.2}). Temporal decay removed {:.3} \
+             (γ={:.2}/day, last retrieved {}). {}",
+            decayed,
+            useful_count,
+            rows.len(),
+            self.config.learning_rate,
+            decay_applied,
+            self.config.decay_factor,
+            if last_retrieved.is_empty() { "never".to_owned() } else { last_retrieved.clone() },
+            if decayed < 0.2 {
+                "Below consolidation threshold (0.2) — candidate for consolidation."
+            } else {
+                "Above consolidation threshold."
+            }
+        );
+
+        Ok(UtilityExplanation {
+            memory_id,
+            current_score: decayed,
+            pre_decay_score: pre_decay,
+            decay_applied,
+            total_retrievals: rows.len() as i64,
+            useful_count,
+            not_useful_count,
+            last_retrieved,
+            recent_queries,
+            below_consolidation_threshold: decayed < 0.2,
+            narrative,
         })
     }
 

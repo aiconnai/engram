@@ -21,6 +21,20 @@ pub struct ConsolidationPolicy {
     pub summarize_age_days: i64,
     pub max_actions_per_run: usize,
     pub dry_run: bool,
+    /// Utility score (0–1) below which a memory is a consolidation candidate.
+    /// Combined with age and access frequency for a composite score.
+    pub utility_threshold: f64,
+    /// Minimum number of retrieval feedback events before utility gating applies.
+    /// Memories with fewer events are exempt (not enough signal).
+    pub min_feedback_events: i64,
+    /// Maximum access count (from `memories.access_count`) for age-based archival.
+    /// Frequently accessed memories are skipped even if old.
+    pub max_access_count_for_archival: i64,
+    /// Weight of the utility score in the composite consolidation priority score.
+    /// Composite = utility_weight*(1-utility) + age_weight*age_factor + feedback_weight*negative_ratio
+    pub utility_weight: f64,
+    pub age_weight: f64,
+    pub feedback_weight: f64,
 }
 
 impl Default for ConsolidationPolicy {
@@ -31,6 +45,12 @@ impl Default for ConsolidationPolicy {
             summarize_age_days: 90,
             max_actions_per_run: 50,
             dry_run: true,
+            utility_threshold: 0.3,
+            min_feedback_events: 3,
+            max_access_count_for_archival: 10,
+            utility_weight: 0.5,
+            age_weight: 0.3,
+            feedback_weight: 0.2,
         }
     }
 }
@@ -45,6 +65,12 @@ impl ConsolidationPolicy {
         }
         if self.max_actions_per_run == 0 {
             return Err("max_actions_per_run must be > 0".to_string());
+        }
+        if !(0.0..=1.0).contains(&self.utility_threshold) {
+            return Err(format!(
+                "utility_threshold must be in [0.0, 1.0], got {}",
+                self.utility_threshold
+            ));
         }
         Ok(())
     }
@@ -325,11 +351,12 @@ pub fn run_consolidation(
     }
 
     if action_budget > 0 && policy.summarize_age_days > 0 {
+        use crate::search::utility::UtilityTracker;
         let cutoff = Utc::now() - Duration::days(policy.summarize_age_days);
-        let archived: Vec<i64> = storage.with_connection(|conn| {
+        let candidates: Vec<crate::types::Memory> = storage.with_connection(|conn| {
             let opts = ListOptions {
                 workspace: Some(workspace.to_string()),
-                limit: Some(action_budget as i64),
+                limit: Some((action_budget * 10) as i64),
                 ..Default::default()
             };
             let memories = list_memories(conn, &opts)?;
@@ -337,14 +364,61 @@ pub fn run_consolidation(
                 .into_iter()
                 .filter(|m| {
                     m.created_at < cutoff
-                        && m.importance <= 0.5
-                        && m.access_count < 5
+                        && i64::from(m.access_count) < policy.max_access_count_for_archival
                         && m.memory_type != MemoryType::Summary
                         && m.memory_type != MemoryType::Checkpoint
                 })
-                .map(|m| m.id)
                 .collect())
         })?;
+
+        // Rank candidates by composite score combining utility, age, and feedback.
+        let tracker = UtilityTracker::new();
+        let mut scored: Vec<(i64, f64)> = storage.with_connection(|conn| {
+            let mut out = Vec::with_capacity(candidates.len());
+            for m in &candidates {
+                let utility_score = tracker.get_utility(conn, m.id).map(|u| u.score)
+                    .unwrap_or(0.5);
+                let feedback_events = conn.query_row(
+                    "SELECT COUNT(*) FROM utility_feedback WHERE memory_id = ?1",
+                    rusqlite::params![m.id], |r| r.get::<_, i64>(0),
+                ).unwrap_or(0);
+
+                // Skip if below the minimum feedback threshold (not enough signal).
+                if feedback_events > 0 && feedback_events < policy.min_feedback_events
+                    && utility_score >= policy.utility_threshold {
+                    continue;
+                }
+
+                let not_useful: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM utility_feedback WHERE memory_id = ?1 AND was_useful = 0",
+                    rusqlite::params![m.id], |r| r.get::<_, i64>(0),
+                ).unwrap_or(0);
+                let negative_ratio = if feedback_events > 0 {
+                    not_useful as f64 / feedback_events as f64
+                } else {
+                    0.0
+                };
+
+                let age_days = (Utc::now() - m.created_at).num_days().max(0) as f64;
+                let age_factor = (age_days / policy.summarize_age_days as f64).clamp(0.0, 1.0);
+
+                let composite = policy.utility_weight * (1.0 - utility_score)
+                    + policy.age_weight * age_factor
+                    + policy.feedback_weight * negative_ratio;
+
+                out.push((m.id, composite));
+            }
+            Ok(out)
+        })?;
+
+        // Sort descending: highest composite = most ready for consolidation.
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        let archived: Vec<i64> = scored.into_iter()
+            .take(action_budget)
+            .map(|(id, _)| id)
+            .collect();
+
         if !archived.is_empty() {
             actions.push(ConsolidationAction::Summarized {
                 memory_ids: archived,
@@ -472,6 +546,7 @@ mod tests {
             summarize_age_days: 30,
             max_actions_per_run: 10,
             dry_run: false,
+            ..Default::default()
         };
         let s = serde_json::to_string(&p).unwrap();
         assert_eq!(p, serde_json::from_str(&s).unwrap());
