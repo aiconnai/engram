@@ -464,12 +464,8 @@ impl UtilityTracker {
         let decay_applied = pre_decay - decayed;
 
         let not_useful_count = rows.len() as i64 - useful_count;
-        let recent_queries: Vec<String> = rows
-            .iter()
-            .rev()
-            .take(5)
-            .map(|r| r.query.clone())
-            .collect();
+        let recent_queries: Vec<String> =
+            rows.iter().rev().take(5).map(|r| r.query.clone()).collect();
 
         let narrative = format!(
             "Score {:.3}: {}/{} retrievals useful (α={:.2}). Temporal decay removed {:.3} \
@@ -480,7 +476,11 @@ impl UtilityTracker {
             self.config.learning_rate,
             decay_applied,
             self.config.decay_factor,
-            if last_retrieved.is_empty() { "never".to_owned() } else { last_retrieved.clone() },
+            if last_retrieved.is_empty() {
+                "never".to_owned()
+            } else {
+                last_retrieved.clone()
+            },
             if decayed < 0.2 {
                 "Below consolidation threshold (0.2) — candidate for consolidation."
             } else {

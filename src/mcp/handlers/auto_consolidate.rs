@@ -7,7 +7,9 @@
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::error::EngramError;
 use crate::intelligence::auto_consolidate::{list_history, run_consolidation, ConsolidationPolicy};
+use crate::storage::Storage;
 
 pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
     let workspace = params
@@ -42,7 +44,10 @@ pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
         if let Some(v) = p.get("min_feedback_events").and_then(|v| v.as_i64()) {
             policy.min_feedback_events = v;
         }
-        if let Some(v) = p.get("max_access_count_for_archival").and_then(|v| v.as_i64()) {
+        if let Some(v) = p
+            .get("max_access_count_for_archival")
+            .and_then(|v| v.as_i64())
+        {
             policy.max_access_count_for_archival = v;
         }
         if let Some(v) = p.get("utility_weight").and_then(|v| v.as_f64()) {
@@ -53,6 +58,18 @@ pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
         }
         if let Some(v) = p.get("feedback_weight").and_then(|v| v.as_f64()) {
             policy.feedback_weight = v;
+        }
+        if let Some(v) = p.get("hot_ids").and_then(|v| v.as_array()) {
+            policy.hot_ids = Some(v.iter().filter_map(|id| id.as_i64()).collect());
+        }
+        if let Some(v) = p.get("composite_cutoff").and_then(|v| v.as_f64()) {
+            policy.composite_cutoff = v;
+        }
+        if let Some(v) = p
+            .get("max_importance_for_archival")
+            .and_then(|v| v.as_f64())
+        {
+            policy.max_importance_for_archival = v as f32;
         }
     }
     // Top-level `dry_run` is allowed as a shortcut — it overrides whatever
@@ -91,12 +108,127 @@ pub fn memory_consolidation_history(ctx: &HandlerContext, params: Value) -> Valu
     }
 }
 
-// Global static AutoConsolidator state (simple approach)
+// Process-wide auto-consolidator scheduler state. Both fields are atomics so the
+// MCP handler can update them safely from any tokio worker thread; the actual
+// scheduler loop (when wired by the binary) reads these on each tick.
 static AUTO_CONSOLIDATOR_ENABLED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
-static mut AUTO_CONSOLIDATOR_INTERVAL: u64 = 3600; // 1 hour default
+static AUTO_CONSOLIDATOR_INTERVAL_SECS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(3600);
+static AUTO_CONSOLIDATOR_SCHEDULER_STARTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
-pub fn memory_auto_consolidate(_ctx: &HandlerContext, params: Value) -> Value {
+/// Public accessors so the server's scheduler thread can poll these settings
+/// without going through the MCP handler.
+pub fn auto_consolidator_enabled() -> bool {
+    AUTO_CONSOLIDATOR_ENABLED.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+pub fn auto_consolidator_interval_secs() -> u64 {
+    AUTO_CONSOLIDATOR_INTERVAL_SECS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// Process-wide queue of memory IDs that the feedback loop has flagged for
+/// consolidation. The scheduler thread (when wired) drains this on each tick.
+static PENDING_CONSOLIDATION: std::sync::Mutex<Vec<i64>> = std::sync::Mutex::new(Vec::new());
+
+/// Adapter implementing `AutoConsolidatorTrait` over the process-wide queue.
+pub struct QueueingConsolidator;
+
+impl crate::storage::feedback::AutoConsolidatorTrait for QueueingConsolidator {
+    fn schedule_consolidation(&self, memory_ids: &[i64]) -> crate::error::Result<()> {
+        let mut q = PENDING_CONSOLIDATION.lock().map_err(|_| {
+            EngramError::Internal("pending consolidation queue lock poisoned".into())
+        })?;
+        q.extend_from_slice(memory_ids);
+        Ok(())
+    }
+}
+
+/// Drain (and clear) all currently queued memory IDs.
+pub fn drain_pending_consolidation() -> Vec<i64> {
+    PENDING_CONSOLIDATION
+        .lock()
+        .map(|mut q| std::mem::take(&mut *q))
+        .unwrap_or_default()
+}
+
+/// Number of pending entries — exposed for status/diagnostics.
+pub fn pending_consolidation_count() -> usize {
+    PENDING_CONSOLIDATION.lock().map(|q| q.len()).unwrap_or(0)
+}
+
+pub fn auto_consolidator_status() -> Value {
+    json!({
+        "enabled": auto_consolidator_enabled(),
+        "interval_seconds": auto_consolidator_interval_secs(),
+        "pending_consolidation_count": pending_consolidation_count(),
+        "scheduler_started": AUTO_CONSOLIDATOR_SCHEDULER_STARTED
+            .load(std::sync::atomic::Ordering::SeqCst),
+        "note": "Maintenance loop only; runs inside this server process."
+    })
+}
+
+pub fn run_auto_consolidator_tick(
+    storage: &Storage,
+    workspace: &str,
+) -> crate::error::Result<crate::intelligence::auto_consolidate::ConsolidationReport> {
+    let hot_ids = drain_pending_consolidation();
+    let policy = ConsolidationPolicy {
+        dry_run: false,
+        max_actions_per_run: hot_ids.len().max(50),
+        hot_ids: if hot_ids.is_empty() { None } else { Some(hot_ids) },
+        ..Default::default()
+    };
+    run_consolidation(storage, workspace, &policy)
+}
+
+fn ensure_auto_consolidator_scheduler(storage: Storage) -> bool {
+    if AUTO_CONSOLIDATOR_SCHEDULER_STARTED
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        )
+        .is_err()
+    {
+        return false;
+    }
+
+    std::thread::spawn(move || loop {
+        let interval = std::time::Duration::from_secs(auto_consolidator_interval_secs());
+        std::thread::sleep(interval);
+
+        if !auto_consolidator_enabled() {
+            continue;
+        }
+
+        match run_auto_consolidator_tick(&storage, "default") {
+            Ok(report) => {
+                let counts = report.counts();
+                if counts.duplicates_merged > 0
+                    || counts.conflicts_resolved > 0
+                    || counts.summarized > 0
+                    || counts.skipped > 0
+                {
+                    tracing::info!(
+                        "Auto-consolidation tick completed: duplicates={}, conflicts={}, summarized={}, skipped={}",
+                        counts.duplicates_merged,
+                        counts.conflicts_resolved,
+                        counts.summarized,
+                        counts.skipped,
+                    );
+                }
+            }
+            Err(e) => tracing::error!("Auto-consolidation scheduler error: {}", e),
+        }
+    });
+
+    true
+}
+
+pub fn memory_auto_consolidate(ctx: &HandlerContext, params: Value) -> Value {
     let action = match params.get("action").and_then(|v| v.as_str()) {
         Some(a) => a,
         None => return json!({"error": "action is required"}),
@@ -105,7 +237,13 @@ pub fn memory_auto_consolidate(_ctx: &HandlerContext, params: Value) -> Value {
     match action {
         "enable" => {
             AUTO_CONSOLIDATOR_ENABLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            json!({"status": "enabled"})
+            let scheduler_started_now = ensure_auto_consolidator_scheduler(ctx.storage.clone());
+            json!({
+                "status": "enabled",
+                "scheduler_started_now": scheduler_started_now,
+                "scheduler_started": AUTO_CONSOLIDATOR_SCHEDULER_STARTED
+                    .load(std::sync::atomic::Ordering::SeqCst),
+            })
         }
         "disable" => {
             AUTO_CONSOLIDATOR_ENABLED.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -116,20 +254,10 @@ pub fn memory_auto_consolidate(_ctx: &HandlerContext, params: Value) -> Value {
                 Some(i) if (60..=86400).contains(&i) => i,
                 _ => return json!({"error": "interval_seconds must be between 60 and 86400"}),
             };
-            unsafe {
-                AUTO_CONSOLIDATOR_INTERVAL = interval;
-            }
+            AUTO_CONSOLIDATOR_INTERVAL_SECS.store(interval, std::sync::atomic::Ordering::SeqCst);
             json!({"status": "interval_set", "interval_seconds": interval})
         }
-        "get_status" => {
-            let enabled = AUTO_CONSOLIDATOR_ENABLED.load(std::sync::atomic::Ordering::SeqCst);
-            let interval = unsafe { AUTO_CONSOLIDATOR_INTERVAL };
-            json!({
-                "enabled": enabled,
-                "interval_seconds": interval,
-                "note": "This is a maintenance loop, not an AI agent"
-            })
-        }
+        "get_status" => auto_consolidator_status(),
         _ => json!({"error": format!("Unknown action: {}", action)}),
     }
 }
@@ -137,7 +265,38 @@ pub fn memory_auto_consolidate(_ctx: &HandlerContext, params: Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::feedback::AutoConsolidatorTrait;
     use serde_json::json;
+
+    static QUEUE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn status_payload_reports_pending_consolidation_count() {
+        let _guard = QUEUE_TEST_LOCK.lock().expect("queue test lock");
+        let _ = drain_pending_consolidation();
+        QueueingConsolidator
+            .schedule_consolidation(&[10, 11])
+            .expect("queue");
+
+        let status = auto_consolidator_status();
+        assert_eq!(status["pending_consolidation_count"], json!(2));
+
+        let _ = drain_pending_consolidation();
+    }
+
+    #[test]
+    fn auto_consolidator_tick_drains_pending_queue() {
+        let _guard = QUEUE_TEST_LOCK.lock().expect("queue test lock");
+        let _ = drain_pending_consolidation();
+        QueueingConsolidator
+            .schedule_consolidation(&[42])
+            .expect("queue");
+
+        let storage = Storage::open_in_memory().expect("storage");
+        let _ = run_auto_consolidator_tick(&storage, "default").expect("tick");
+
+        assert_eq!(pending_consolidation_count(), 0);
+    }
 
     #[test]
     fn parses_partial_policy_with_defaults() {
@@ -148,6 +307,8 @@ mod tests {
             "policy": {
                 "duplicate_threshold": 0.85,
                 "max_actions_per_run": 5,
+                "composite_cutoff": 0.4,
+                "max_importance_for_archival": 0.45,
             },
             "dry_run": false,
         });
@@ -158,12 +319,23 @@ mod tests {
             if let Some(v) = p.get("max_actions_per_run").and_then(|v| v.as_u64()) {
                 policy.max_actions_per_run = v as usize;
             }
+            if let Some(v) = p.get("composite_cutoff").and_then(|v| v.as_f64()) {
+                policy.composite_cutoff = v;
+            }
+            if let Some(v) = p
+                .get("max_importance_for_archival")
+                .and_then(|v| v.as_f64())
+            {
+                policy.max_importance_for_archival = v as f32;
+            }
         }
         if let Some(v) = params.get("dry_run").and_then(|v| v.as_bool()) {
             policy.dry_run = v;
         }
         assert_eq!(policy.duplicate_threshold, 0.85);
         assert_eq!(policy.max_actions_per_run, 5);
+        assert_eq!(policy.composite_cutoff, 0.4);
+        assert_eq!(policy.max_importance_for_archival, 0.45);
         assert!(!policy.dry_run);
         // Untouched fields keep their defaults.
         assert!(!policy.conflict_auto_resolve);

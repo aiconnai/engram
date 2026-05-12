@@ -60,7 +60,10 @@ impl FeedbackProcessor {
     }
 
     /// Attach an auto-consolidator that is invoked when a score drops below the threshold.
-    pub fn with_consolidator<T: AutoConsolidatorTrait + 'static>(mut self, consolidator: Arc<T>) -> Self {
+    pub fn with_consolidator<T: AutoConsolidatorTrait + 'static>(
+        mut self,
+        consolidator: Arc<T>,
+    ) -> Self {
         self.auto_consolidator = Some(consolidator as Arc<dyn AutoConsolidatorTrait>);
         self
     }
@@ -74,11 +77,17 @@ impl FeedbackProcessor {
         signal: &str,
         conn: &Connection,
     ) -> Result<(f64, bool)> {
-        let was_useful = match signal {
-            "helpful" => true,
-            _ => false,
+        // Record with signal-tagged query so explain_utility can show which
+        // negative signal drove a decay (helpful/not_helpful/outdated/conflict).
+        let (was_useful, signal_tag) = match signal {
+            "helpful" => (true, "feedback:helpful"),
+            "not_helpful" => (false, "feedback:not_helpful"),
+            "outdated" => (false, "feedback:outdated"),
+            "conflict" => (false, "feedback:conflict"),
+            other => (false, other),
         };
-        self.tracker.record_retrieval(conn, memory_id, was_useful, "feedback")?;
+        self.tracker
+            .record_retrieval(conn, memory_id, was_useful, signal_tag)?;
 
         let new_score = self.tracker.get_utility(conn, memory_id)?.score;
 

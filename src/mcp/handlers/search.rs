@@ -364,8 +364,12 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
                 workspace,
             )?;
 
-            // 2. Process feedback through the feedback loop (adjust utility + possibly consolidate)
-            let processor = FeedbackProcessor::new();
+            // 2. Process feedback through the feedback loop. Attach the
+            // process-wide queueing consolidator so low-utility memories are
+            // enqueued for the auto-consolidation scheduler to pick up.
+            let consolidator =
+                std::sync::Arc::new(crate::mcp::handlers::auto_consolidate::QueueingConsolidator);
+            let processor = FeedbackProcessor::new().with_consolidator(consolidator);
             let (new_score, scheduled) = processor.process_feedback(memory_id, signal_str, conn)?;
 
             // 3. Return enriched response

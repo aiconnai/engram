@@ -35,6 +35,15 @@ pub struct ConsolidationPolicy {
     pub utility_weight: f64,
     pub age_weight: f64,
     pub feedback_weight: f64,
+    /// Minimum composite score required to actually summarize an aged memory.
+    /// Memories below this threshold are eligible (old, low-access) but not
+    /// strong enough candidates — keeps high-importance/no-negative-feedback
+    /// memories alive even if they are old.
+    pub composite_cutoff: f64,
+    /// Maximum importance value still eligible for age-based archival.
+    /// Memories above this stay regardless of age.
+    pub max_importance_for_archival: f32,
+    pub hot_ids: Option<Vec<i64>>,
 }
 
 impl Default for ConsolidationPolicy {
@@ -51,6 +60,9 @@ impl Default for ConsolidationPolicy {
             utility_weight: 0.5,
             age_weight: 0.3,
             feedback_weight: 0.2,
+            composite_cutoff: 0.5,
+            max_importance_for_archival: 0.5,
+            hot_ids: None,
         }
     }
 }
@@ -70,6 +82,36 @@ impl ConsolidationPolicy {
             return Err(format!(
                 "utility_threshold must be in [0.0, 1.0], got {}",
                 self.utility_threshold
+            ));
+        }
+        if self.min_feedback_events < 0 {
+            return Err(format!(
+                "min_feedback_events must be >= 0, got {}",
+                self.min_feedback_events
+            ));
+        }
+        if self.max_access_count_for_archival < 0 {
+            return Err(format!(
+                "max_access_count_for_archival must be >= 0, got {}",
+                self.max_access_count_for_archival
+            ));
+        }
+        for (name, value) in [
+            ("utility_weight", self.utility_weight),
+            ("age_weight", self.age_weight),
+            ("feedback_weight", self.feedback_weight),
+            ("composite_cutoff", self.composite_cutoff),
+        ] {
+            if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+                return Err(format!("{name} must be in [0.0, 1.0], got {value}"));
+            }
+        }
+        if !self.max_importance_for_archival.is_finite()
+            || !(0.0..=1.0).contains(&self.max_importance_for_archival)
+        {
+            return Err(format!(
+                "max_importance_for_archival must be in [0.0, 1.0], got {}",
+                self.max_importance_for_archival
             ));
         }
         Ok(())
@@ -119,6 +161,25 @@ impl ConsolidationReport {
             }
         }
         c
+    }
+
+    /// Memory IDs that should be removed from the normal injected context
+    /// surface after applying this report.
+    pub fn effective_removed_memory_ids(&self) -> HashSet<i64> {
+        let mut removed = HashSet::new();
+        for action in &self.actions {
+            match action {
+                ConsolidationAction::DuplicateMerged { merged, .. } => {
+                    removed.insert(*merged);
+                }
+                ConsolidationAction::Summarized { memory_ids, .. } => {
+                    removed.extend(memory_ids.iter().copied());
+                }
+                ConsolidationAction::ConflictResolved { .. }
+                | ConsolidationAction::Skipped { .. } => {}
+            }
+        }
+        removed
     }
 }
 
@@ -189,124 +250,6 @@ pub fn run_consolidation(
                     cand.similarity_score, policy.duplicate_threshold
                 ),
             });
-            /// A periodic auto-consolidation engine that runs inside the Rust server.
-            ///
-            /// This is NOT an AI agent — it's a maintenance loop that periodically
-            /// scans memories below a utility threshold and performs deduplication,
-            /// summarization, and archival.
-            // Dormant until the consolidation scheduling loop is wired up; preserved
-            // so the implementation is not lost and can be activated without rewrite.
-            #[allow(dead_code)]
-            pub struct AutoConsolidator {
-                /// How often the consolidation loop runs (default: 1 hour)
-                pub interval: Duration,
-                /// Utility score threshold below which memories are candidates (default: 0.3)
-                pub utility_threshold: f32,
-                /// Whether auto-consolidation is enabled (default: false)
-                pub enabled: bool,
-                /// Last consolidation report for status queries
-                last_report: Option<ConsolidationReport>,
-            }
-
-            impl Default for AutoConsolidator {
-                fn default() -> Self {
-                    Self {
-                        interval: Duration::hours(1),
-                        utility_threshold: 0.3,
-                        enabled: false,
-                        last_report: None,
-                    }
-                }
-            }
-
-            // Dormant methods preserved alongside the struct; see #[allow(dead_code)] above.
-            #[allow(dead_code)]
-            impl AutoConsolidator {
-                /// Create a new AutoConsolidator with custom settings
-                pub fn new(interval: Duration, utility_threshold: f32, enabled: bool) -> Self {
-                    Self {
-                        interval,
-                        utility_threshold,
-                        enabled,
-                        last_report: None,
-                    }
-                }
-
-                /// Check if auto-consolidation is enabled
-                pub fn is_enabled(&self) -> bool {
-                    self.enabled
-                }
-
-                /// Enable or disable auto-consolidation
-                pub fn set_enabled(&mut self, enabled: bool) {
-                    self.enabled = enabled;
-                }
-
-                /// Set the consolidation interval
-                pub fn set_interval(&mut self, interval: Duration) {
-                    self.interval = interval;
-                }
-
-                /// Get the last consolidation report
-                pub fn get_last_report(&self) -> Option<&ConsolidationReport> {
-                    self.last_report.as_ref()
-                }
-
-                /// Run one consolidation pass and return a report.
-                pub fn run(&mut self, storage: &Storage) -> Result<ConsolidationReport> {
-                    let started_at = Utc::now();
-
-                    // Fetch memories with low utility scores
-                    let candidates: Vec<crate::types::Memory> =
-                        storage.with_connection(|conn| {
-                            let opts = ListOptions {
-                                limit: Some(100),
-                                sort_by: Some(crate::types::SortField::Importance),
-                                sort_order: Some(crate::types::SortOrder::Asc),
-                                ..Default::default()
-                            };
-                            let memories = list_memories(conn, &opts)?;
-                            Ok(memories
-                                .into_iter()
-                                .filter(|m| m.importance < self.utility_threshold)
-                                .collect())
-                        })?;
-
-                    let _processed = candidates.len();
-                    let mut _summarized = 0usize;
-                    let mut _archived = 0usize;
-
-                    // Process in batches of 5
-                    for chunk in candidates.chunks(5) {
-                        // Detect duplicates
-                        if let Ok(duplicates) =
-                            storage.with_connection(|conn| find_near_duplicates(conn, 0.85, 10))
-                        {
-                            if !duplicates.is_empty() {
-                                _summarized += 1;
-                            }
-                        }
-
-                        // Check for very low scores for archival
-                        for memory in chunk {
-                            if memory.importance < 0.2 {
-                                _archived += 1;
-                            }
-                        }
-                    }
-
-                    let report = ConsolidationReport {
-                        workspace: "default".to_string(),
-                        started_at,
-                        finished_at: Utc::now(),
-                        dry_run: false,
-                        actions: vec![],
-                    };
-
-                    self.last_report = Some(report.clone());
-                    Ok(report)
-                }
-            }
             continue;
         }
         actions.push(ConsolidationAction::DuplicateMerged {
@@ -363,8 +306,11 @@ pub fn run_consolidation(
             Ok(memories
                 .into_iter()
                 .filter(|m| {
-                    m.created_at < cutoff
+                    let is_old = m.created_at < cutoff;
+                    let is_hot = policy.hot_ids.as_ref().map_or(false, |ids| ids.contains(&m.id));
+                    (is_old || is_hot)
                         && i64::from(m.access_count) < policy.max_access_count_for_archival
+                        && m.importance <= policy.max_importance_for_archival
                         && m.memory_type != MemoryType::Summary
                         && m.memory_type != MemoryType::Checkpoint
                 })
@@ -375,24 +321,43 @@ pub fn run_consolidation(
         let tracker = UtilityTracker::new();
         let mut scored: Vec<(i64, f64)> = storage.with_connection(|conn| {
             let mut out = Vec::with_capacity(candidates.len());
+            
+            // Fix N+1: Batch fetch feedback stats
+            let mut feedback_stats = std::collections::HashMap::new();
+            if !candidates.is_empty() {
+                let ids_str = candidates.iter().map(|m| m.id.to_string()).collect::<Vec<_>>().join(",");
+                let sql = format!(
+                    "SELECT memory_id, COUNT(*), SUM(CASE WHEN was_useful = 0 THEN 1 ELSE 0 END) \
+                     FROM utility_feedback WHERE memory_id IN ({}) GROUP BY memory_id",
+                    ids_str
+                );
+                let mut stmt = conn.prepare(&sql)?;
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?))
+                })?;
+                for r in rows {
+                    if let Ok((mid, count, negative)) = r {
+                        feedback_stats.insert(mid, (count, negative));
+                    }
+                }
+            }
+
             for m in &candidates {
-                let utility_score = tracker.get_utility(conn, m.id).map(|u| u.score)
+                let utility_score = tracker
+                    .get_utility(conn, m.id)
+                    .map(|u| u.score)
                     .unwrap_or(0.5);
-                let feedback_events = conn.query_row(
-                    "SELECT COUNT(*) FROM utility_feedback WHERE memory_id = ?1",
-                    rusqlite::params![m.id], |r| r.get::<_, i64>(0),
-                ).unwrap_or(0);
+                
+                let (feedback_events, not_useful) = feedback_stats.get(&m.id).copied().unwrap_or((0, 0));
 
                 // Skip if below the minimum feedback threshold (not enough signal).
-                if feedback_events > 0 && feedback_events < policy.min_feedback_events
-                    && utility_score >= policy.utility_threshold {
+                if feedback_events > 0
+                    && feedback_events < policy.min_feedback_events
+                    && utility_score >= policy.utility_threshold
+                {
                     continue;
                 }
 
-                let not_useful: i64 = conn.query_row(
-                    "SELECT COUNT(*) FROM utility_feedback WHERE memory_id = ?1 AND was_useful = 0",
-                    rusqlite::params![m.id], |r| r.get::<_, i64>(0),
-                ).unwrap_or(0);
                 let negative_ratio = if feedback_events > 0 {
                     not_useful as f64 / feedback_events as f64
                 } else {
@@ -413,18 +378,6 @@ pub fn run_consolidation(
 
         // Sort descending: highest composite = most ready for consolidation.
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        let archived: Vec<i64> = scored.into_iter()
-            .take(action_budget)
-            .map(|(id, _)| id)
-            .collect();
-
-        if !archived.is_empty() {
-            actions.push(ConsolidationAction::Summarized {
-                memory_ids: archived,
-                summary_id: None,
-            });
-        }
     }
 
     let report = ConsolidationReport {
@@ -539,6 +492,47 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_bad_new_policy_fields() {
+        let bad_policies = [
+            ConsolidationPolicy {
+                min_feedback_events: -1,
+                ..Default::default()
+            },
+            ConsolidationPolicy {
+                max_access_count_for_archival: -1,
+                ..Default::default()
+            },
+            ConsolidationPolicy {
+                utility_weight: -0.1,
+                ..Default::default()
+            },
+            ConsolidationPolicy {
+                age_weight: -0.1,
+                ..Default::default()
+            },
+            ConsolidationPolicy {
+                feedback_weight: -0.1,
+                ..Default::default()
+            },
+            ConsolidationPolicy {
+                composite_cutoff: 1.1,
+                ..Default::default()
+            },
+            ConsolidationPolicy {
+                max_importance_for_archival: 1.1,
+                ..Default::default()
+            },
+        ];
+
+        for policy in bad_policies {
+            assert!(
+                policy.validate().is_err(),
+                "policy should be rejected: {policy:?}"
+            );
+        }
+    }
+
+    #[test]
     fn policy_roundtrips_json() {
         let p = ConsolidationPolicy {
             duplicate_threshold: 0.95,
@@ -581,6 +575,35 @@ mod tests {
         let c = r.counts();
         assert_eq!(c.duplicates_merged, 1);
         assert_eq!(c.skipped, 1);
+    }
+
+    #[test]
+    fn effective_removed_memory_ids_include_merged_and_summarized_sources() {
+        let r = ConsolidationReport {
+            workspace: "x".into(),
+            started_at: Utc::now(),
+            finished_at: Utc::now(),
+            dry_run: false,
+            actions: vec![
+                ConsolidationAction::DuplicateMerged {
+                    kept: 1,
+                    merged: 2,
+                    similarity: 0.96,
+                },
+                ConsolidationAction::Summarized {
+                    memory_ids: vec![3, 4],
+                    summary_id: Some(9),
+                },
+            ],
+        };
+
+        let removed = r.effective_removed_memory_ids();
+        assert_eq!(removed.len(), 3);
+        assert!(removed.contains(&2));
+        assert!(removed.contains(&3));
+        assert!(removed.contains(&4));
+        assert!(!removed.contains(&1));
+        assert!(!removed.contains(&9));
     }
 
     #[test]

@@ -616,7 +616,7 @@ fn main() -> Result<()> {
     // hook wiring lands (see issue #11). For now we still construct
     // `EngramHandler` directly since that's the type that implements
     // `McpHandler`.
-    let mut handler_state = EngramHandler::new(storage.clone(), embedder.clone());
+    #[allow(unused_mut)] let mut handler_state = EngramHandler::new(storage.clone(), embedder.clone());
     #[cfg(feature = "hooks")]
     handler_state.enable_hooks();
     let handler = Arc::new(handler_state);
