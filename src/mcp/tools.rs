@@ -1463,6 +1463,19 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Standard,
     },
+    ToolDef {
+        name: "memory_explain_utility",
+        description: "Explain why a memory has its current utility score. Returns the full feedback history summary (useful vs. not-useful retrievals), how much temporal decay has been applied, and a plain-English narrative. Useful for debugging or auditing memory quality.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "integer", "description": "ID of the memory to explain"}
+            },
+            "required": ["memory_id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
     // Phase 2: Context Compression Engine
     ToolDef {
         name: "memory_summarize",
@@ -1525,6 +1538,23 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         tier: ToolTier::Advanced,
     },
     ToolDef {
+        name: "memory_auto_consolidate",
+        description: "Enable, disable, configure, or inspect the automatic consolidation scheduler. Use action='enable'/'disable' to toggle it, 'set_interval' with interval_seconds to change the period (60–86400), or 'get_status' to inspect current settings.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["enable", "disable", "set_interval", "get_status"]
+                },
+                "interval_seconds": {"type": "integer", "minimum": 60, "maximum": 86400}
+            },
+            "required": ["action"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
         name: "memory_consolidate_batch",
         description: "Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories. Defaults to dry-run; returns a structured report of actions taken (or that would be taken).",
         schema: r#"{
@@ -1539,7 +1569,15 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
                         "conflict_auto_resolve": {"type": "boolean", "default": false},
                         "summarize_age_days": {"type": "integer", "default": 90},
                         "max_actions_per_run": {"type": "integer", "default": 50},
-                        "dry_run": {"type": "boolean", "default": true}
+                        "dry_run": {"type": "boolean", "default": true},
+                        "utility_threshold": {"type": "number", "default": 0.3, "minimum": 0, "maximum": 1},
+                        "min_feedback_events": {"type": "integer", "default": 3, "minimum": 0},
+                        "max_access_count_for_archival": {"type": "integer", "default": 10, "minimum": 0},
+                        "utility_weight": {"type": "number", "default": 0.5, "minimum": 0, "maximum": 1},
+                        "age_weight": {"type": "number", "default": 0.3, "minimum": 0, "maximum": 1},
+                        "feedback_weight": {"type": "number", "default": 0.2, "minimum": 0, "maximum": 1},
+                        "composite_cutoff": {"type": "number", "default": 0.5, "minimum": 0, "maximum": 1},
+                        "max_importance_for_archival": {"type": "number", "default": 0.5, "minimum": 0, "maximum": 1}
                     }
                 }
             }

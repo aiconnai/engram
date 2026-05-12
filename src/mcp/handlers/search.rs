@@ -364,8 +364,12 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
                 workspace,
             )?;
 
-            // 2. Process feedback through the feedback loop (adjust utility + possibly consolidate)
-            let processor = FeedbackProcessor::new();
+            // 2. Process feedback through the feedback loop. Attach the
+            // process-wide queueing consolidator so low-utility memories are
+            // enqueued for the auto-consolidation scheduler to pick up.
+            let consolidator =
+                std::sync::Arc::new(crate::mcp::handlers::auto_consolidate::QueueingConsolidator);
+            let processor = FeedbackProcessor::new().with_consolidator(consolidator);
             let (new_score, scheduled) = processor.process_feedback(memory_id, signal_str, conn)?;
 
             // 3. Return enriched response
@@ -389,6 +393,23 @@ pub fn memory_feedback_stats(ctx: &HandlerContext, params: Value) -> Value {
         .with_connection(|conn| {
             let stats = feedback_stats(conn, workspace)?;
             Ok(json!(stats))
+        })
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+pub fn memory_explain_utility(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::search::utility::UtilityTracker;
+
+    let memory_id = match params.get("memory_id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return json!({"error": "memory_id is required"}),
+    };
+
+    ctx.storage
+        .with_connection(|conn| {
+            let tracker = UtilityTracker::new();
+            let explanation = tracker.explain_utility(conn, memory_id)?;
+            Ok(json!(explanation))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
