@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  CI_FEATURES: cloud,openai,pdf,langfuse,turso,meilisearch,watcher,multimodal,emergent-graph,ollama,cohere,voyage,retrieval-excellence,context-engineering,temporal-graph,duckdb-graph,compression,agentic-evolution,advanced-graph,autonomous-agent,agent-portability,grpc
 
 jobs:
   # =============================================================================
@@ -60,10 +61,13 @@ jobs:
             integration_tests+=(--test "$(basename "$test_file" .rs)")
           done
 
-          cargo test --features full --lib "${integration_tests[@]}" -- --test-threads=1
+          cargo test --features "$CI_FEATURES" --lib "${integration_tests[@]}" -- --test-threads=1
 
       - name: Test local embedding backend
         run: cargo test --features local-embeddings --lib embedding::onnx
+
+      - name: Test neural rerank backend
+        run: cargo test --features neural-rerank --lib search::neural_rerank
 
       - name: Test binary unit tests
         run: |
@@ -143,11 +147,11 @@ jobs:
             integration_tests+=(--test "$(basename "$test_file" .rs)")
           done
 
-          cargo llvm-cov --features full --no-report --lib "${integration_tests[@]}"
+          cargo llvm-cov --features "$CI_FEATURES" --no-report --lib "${integration_tests[@]}"
           cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Check coverage threshold
-        # Threshold reflects current repo reality (~60% with --features full).
+        # Threshold reflects current repo reality (~60% with CI feature set).
         # Features like sync/cloud, meilisearch_indexer, temporal-graph have
         # 0% coverage because they require external services or unfinished
         # implementations to test. Raise this incrementally as new tests land.
