@@ -310,7 +310,7 @@ pub fn run_consolidation(
                     let is_hot = policy
                         .hot_ids
                         .as_ref()
-                        .map_or(false, |ids| ids.contains(&m.id));
+                        .is_some_and(|ids| ids.contains(&m.id));
                     (is_old || is_hot)
                         && i64::from(m.access_count) < policy.max_access_count_for_archival
                         && m.importance <= policy.max_importance_for_archival
@@ -346,10 +346,8 @@ pub fn run_consolidation(
                         row.get::<_, i64>(2)?,
                     ))
                 })?;
-                for r in rows {
-                    if let Ok((mid, count, negative)) = r {
-                        feedback_stats.insert(mid, (count, negative));
-                    }
+                for (mid, count, negative) in rows.flatten() {
+                    feedback_stats.insert(mid, (count, negative));
                 }
             }
 
