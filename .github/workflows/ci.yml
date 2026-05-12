@@ -60,7 +60,10 @@ jobs:
             integration_tests+=(--test "$(basename "$test_file" .rs)")
           done
 
-          cargo test --all-features --lib "${integration_tests[@]}"
+          cargo test --features full --lib "${integration_tests[@]}"
+
+      - name: Test local embedding backend
+        run: cargo test --features local-embeddings --lib embedding::onnx
 
       - name: Test binary unit tests
         run: |
@@ -140,11 +143,11 @@ jobs:
             integration_tests+=(--test "$(basename "$test_file" .rs)")
           done
 
-          cargo llvm-cov --all-features --no-report --lib "${integration_tests[@]}"
+          cargo llvm-cov --features full --no-report --lib "${integration_tests[@]}"
           cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Check coverage threshold
-        # Threshold reflects current repo reality (~60% with --all-features).
+        # Threshold reflects current repo reality (~60% with --features full).
         # Features like sync/cloud, meilisearch_indexer, temporal-graph have
         # 0% coverage because they require external services or unfinished
         # implementations to test. Raise this incrementally as new tests land.

@@ -139,7 +139,7 @@ agent-portability = ["dep:zip", "dep:ed25519-dalek", "dep:aes-gcm"]
 grpc = ["dep:tonic", "dep:prost", "dep:tonic-build"]
 
 # All features
-full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "emergent-graph", "ollama", "cohere", "voyage", "local-embeddings", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "agent-portability", "grpc"]
+full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "emergent-graph", "ollama", "cohere", "voyage", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "agent-portability", "grpc"]
 
 [dependencies]
 # Async runtime
