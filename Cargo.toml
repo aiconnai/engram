@@ -99,8 +99,11 @@ cohere = []
 # Voyage AI embedding backend
 voyage = []
 
+# Local sentence-transformer embedding backend
+local-embeddings = ["onnx-embed"]
+
 # ONNX-based local embedding models
-onnx-embed = ["dep:ort", "dep:ndarray"]
+onnx-embed = ["dep:ort", "dep:ndarray", "dep:tokenizers", "dep:reqwest"]
 
 # Neural cross-encoder reranking via ONNX
 neural-rerank = ["dep:ort", "dep:ndarray"]
@@ -136,7 +139,7 @@ agent-portability = ["dep:zip", "dep:ed25519-dalek", "dep:aes-gcm"]
 grpc = ["dep:tonic", "dep:prost", "dep:tonic-build"]
 
 # All features
-full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "emergent-graph", "ollama", "cohere", "voyage", "onnx-embed", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "agent-portability", "grpc"]
+full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "emergent-graph", "ollama", "cohere", "voyage", "local-embeddings", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "agent-portability", "grpc"]
 
 [dependencies]
 # Async runtime
@@ -242,6 +245,7 @@ ort = { version = "2.0.0-rc.12", optional = true, default-features = false, feat
     "api-24",
 ] }
 ndarray = { version = "0.16", optional = true }
+tokenizers = { version = "0.20", optional = true, default-features = false, features = ["onig"] }
 
 # TOML config parsing (watcher feature)
 toml = { version = "0.8", optional = true }
