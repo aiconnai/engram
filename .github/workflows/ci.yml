@@ -53,7 +53,14 @@ jobs:
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free Linux runner disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          docker system prune -af || true
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
       - name: Test library and integration tests
         run: |
           export CARGO_BUILD_JOBS=1
@@ -135,7 +142,13 @@ jobs:
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free Linux runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          docker system prune -af || true
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
