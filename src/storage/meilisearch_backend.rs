@@ -912,12 +912,14 @@ impl StorageBackend for MeilisearchBackend {
                     latency_ms: 0.0,
                     error: None,
                     details: HashMap::new(),
+                    derived_indexes: Vec::new(),
                 }),
                 Err(e) => Ok(HealthStatus {
                     healthy: false,
                     latency_ms: 0.0,
                     error: Some(e.to_string()),
                     details: HashMap::new(),
+                    derived_indexes: Vec::new(),
                 }),
             }
         })

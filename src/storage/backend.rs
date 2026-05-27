@@ -60,6 +60,43 @@ pub struct HealthStatus {
     pub latency_ms: f64,
     pub error: Option<String>,
     pub details: HashMap<String, String>,
+    #[serde(default)]
+    pub derived_indexes: Vec<DerivedIndexHealth>,
+}
+
+/// Read-only health summary for a derived index.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DerivedIndexHealth {
+    pub name: String,
+    pub kind: DerivedIndexKind,
+    pub status: DerivedIndexStatus,
+    pub source_count: i64,
+    pub indexed_count: i64,
+    pub pending_count: i64,
+    pub stale_count: i64,
+    pub failed_count: i64,
+    pub orphaned_count: i64,
+    pub details: HashMap<String, String>,
+}
+
+/// Type of derived index being reported.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DerivedIndexKind {
+    Embedding,
+    FullText,
+    Graph,
+    External,
+}
+
+/// Health state for a derived index.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DerivedIndexStatus {
+    Healthy,
+    Backlogged,
+    Degraded,
+    Unavailable,
 }
 
 /// Core storage backend trait for Engram (ENG-14)

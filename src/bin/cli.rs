@@ -15,8 +15,9 @@ use engram::search::{hybrid_search, SearchConfig};
 #[cfg(feature = "agent-portability")]
 use engram::snapshot::{LoadStrategy, SnapshotBuilder, SnapshotLoader};
 use engram::storage::queries::*;
-use engram::storage::Storage;
+use engram::storage::{health_check_storage, HealthStatus, Storage};
 use engram::types::*;
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "agent-portability")]
 use std::str::FromStr as _;
 
@@ -88,6 +89,11 @@ enum Commands {
     },
     /// Show statistics
     Stats,
+    /// Read-only maintenance and storage diagnostics
+    Maintenance {
+        #[command(subcommand)]
+        action: MaintenanceAction,
+    },
     /// Export knowledge graph
     Graph {
         /// Output format (html, json)
@@ -128,6 +134,16 @@ enum Commands {
     Attest {
         #[command(subcommand)]
         action: AttestAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum MaintenanceAction {
+    /// Show storage health and maintenance status without mutating the database
+    Status {
+        /// Emit JSON instead of human-readable output
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -329,6 +345,17 @@ fn main() -> Result<()> {
             let stats = storage.with_connection(get_stats)?;
             println!("{}", serde_json::to_string_pretty(&stats)?);
         }
+
+        Commands::Maintenance { action } => match action {
+            MaintenanceAction::Status { json } => {
+                let status = maintenance_status(&storage)?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                } else {
+                    print_maintenance_status(&status);
+                }
+            }
+        },
 
         Commands::Graph {
             format,
@@ -693,11 +720,154 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MaintenanceStatus {
+    #[serde(flatten)]
+    health: HealthStatus,
+    stats: MaintenanceStats,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MaintenanceStats {
+    total_memories: i64,
+    total_tags: i64,
+    total_crossrefs: i64,
+    total_versions: i64,
+    memories_with_embeddings: i64,
+    memories_pending_embedding: i64,
+    sync_pending: bool,
+    storage_mode: String,
+    schema_version: i32,
+    db_size_bytes: i64,
+}
+
+fn maintenance_status(storage: &Storage) -> Result<MaintenanceStatus> {
+    let health = storage_health(storage)?;
+    let stats = storage.with_connection(get_stats)?;
+
+    Ok(MaintenanceStatus {
+        health,
+        stats: MaintenanceStats {
+            total_memories: stats.total_memories,
+            total_tags: stats.total_tags,
+            total_crossrefs: stats.total_crossrefs,
+            total_versions: stats.total_versions,
+            memories_with_embeddings: stats.memories_with_embeddings,
+            memories_pending_embedding: stats.memories_pending_embedding,
+            sync_pending: stats.sync_pending,
+            storage_mode: stats.storage_mode,
+            schema_version: stats.schema_version,
+            db_size_bytes: stats.db_size_bytes,
+        },
+    })
+}
+
+fn storage_health(storage: &Storage) -> Result<HealthStatus> {
+    health_check_storage(storage)
+}
+
+fn print_maintenance_status(status: &MaintenanceStatus) {
+    println!(
+        "Storage: {}",
+        if status.health.healthy {
+            "healthy"
+        } else {
+            "unhealthy"
+        }
+    );
+    println!("Latency: {:.2} ms", status.health.latency_ms);
+    println!("Database: {}", status.health.details["db_path"]);
+    println!("Storage mode: {}", status.stats.storage_mode);
+    println!("Schema version: {}", status.stats.schema_version);
+    println!("Database size: {} bytes", status.stats.db_size_bytes);
+    println!("Memories: {}", status.stats.total_memories);
+    println!(
+        "Embeddings: {} ready, {} pending",
+        status.stats.memories_with_embeddings, status.stats.memories_pending_embedding
+    );
+    println!("Tags: {}", status.stats.total_tags);
+    println!("Cross-refs: {}", status.stats.total_crossrefs);
+    println!("Versions: {}", status.stats.total_versions);
+    println!("Sync pending: {}", status.stats.sync_pending);
+
+    if let Some(error) = &status.health.error {
+        println!("Error: {}", error);
+    }
+}
+
 fn truncate(s: &str, max: usize) -> String {
     let first_line = s.lines().next().unwrap_or(s);
     if first_line.len() <= max {
         first_line.to_string()
     } else {
         format!("{}...", &first_line[..max - 3])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+    use tempfile::TempDir;
+
+    fn test_storage() -> (TempDir, Storage) {
+        let dir = tempfile::tempdir().expect("temporary directory should be created");
+        let db_path = dir.path().join("memories.db").to_string_lossy().to_string();
+        let config = StorageConfig {
+            db_path,
+            storage_mode: StorageMode::Local,
+            cloud_uri: None,
+            encrypt_cloud: false,
+            confidence_half_life_days: 30.0,
+            auto_sync: false,
+            sync_debounce_ms: 5000,
+        };
+        let storage = Storage::open(config).expect("file storage should open");
+        (dir, storage)
+    }
+
+    fn table_counts(conn: &Connection) -> Result<(i64, i64, i64)> {
+        Ok((
+            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))?,
+            conn.query_row("SELECT COUNT(*) FROM memory_versions", [], |row| row.get(0))?,
+            conn.query_row("SELECT COUNT(*) FROM embedding_queue", [], |row| row.get(0))?,
+        ))
+    }
+
+    #[test]
+    fn maintenance_status_matches_storage_health_shape() {
+        let (_dir, storage) = test_storage();
+
+        let status = maintenance_status(&storage).expect("status should be collected");
+        let json = serde_json::to_value(status).expect("status should serialize");
+
+        assert!(json["healthy"].is_boolean());
+        assert!(json["latency_ms"].is_number());
+        assert!(json["error"].is_null() || json["error"].is_string());
+        assert!(json["details"]["db_path"]
+            .as_str()
+            .expect("db_path should be a string")
+            .ends_with("memories.db"));
+        if let Some(storage_mode) = json["details"]["storage_mode"].as_str() {
+            assert_eq!(storage_mode, "Local");
+        }
+        assert!(json["derived_indexes"].is_array());
+        assert_eq!(json["stats"]["total_memories"], 0);
+        assert!(json["stats"]["schema_version"].is_number());
+    }
+
+    #[test]
+    fn maintenance_status_is_read_only_for_storage_tables() {
+        let (_dir, storage) = test_storage();
+
+        let before = storage
+            .with_connection(table_counts)
+            .expect("initial counts should be readable");
+        let _ = maintenance_status(&storage).expect("status should be collected");
+        let after = storage
+            .with_connection(table_counts)
+            .expect("final counts should be readable");
+
+        assert_eq!(before, after);
     }
 }

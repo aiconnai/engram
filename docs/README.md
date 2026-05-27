@@ -7,6 +7,7 @@
 - `OPERATIONS.md`: SLOs, alerts, backup/restore, and incident playbooks.
 - `CONTROL_PLANE_SCHEMA.sql`: Postgres schema for the cloud control plane.
 - `SCHEMA.md`: Local Engram SQLite schema and migrations.
+- `rfcs/`: Proposed design records and product-boundary RFCs.
 
 ## Notes
 

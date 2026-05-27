@@ -59,8 +59,9 @@ pub use auto_linker::{
 };
 pub use backend::{
     BatchCreateResult as BackendBatchCreateResult, BatchDeleteResult as BackendBatchDeleteResult,
-    CloudSyncBackend, HealthStatus, StorageBackend, StorageStats, SyncDelta as BackendSyncDelta,
-    SyncResult, SyncState, TransactionalBackend,
+    CloudSyncBackend, DerivedIndexHealth, DerivedIndexKind, DerivedIndexStatus, HealthStatus,
+    StorageBackend, StorageStats, SyncDelta as BackendSyncDelta, SyncResult, SyncState,
+    TransactionalBackend,
 };
 #[cfg(feature = "emergent-graph")]
 pub use clustering::{
@@ -147,7 +148,7 @@ pub use queries::{
 pub use scope_grants::{
     check_scope_access, grant_scope_access, list_grants_for_agent, revoke_scope_access, ScopeGrant,
 };
-pub use sqlite_backend::SqliteBackend;
+pub use sqlite_backend::{health_check_storage, SqliteBackend};
 pub use temporal::{
     MemorySnapshot, StateDiff, TemporalMemory, TemporalQueryEngine, TemporalQueryOptions,
 };

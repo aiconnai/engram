@@ -614,6 +614,15 @@ CREATE TABLE embedding_queue (
 );
 ```
 
+Queue hygiene policy:
+
+- `pending` rows are eligible for workers to claim.
+- `processing` rows are considered stale after 15 minutes without completion.
+- Stale `processing` rows are requeued by the explicit queue hygiene path while `retry_count < 3`; the hygiene pass increments `retry_count`.
+- Stale `processing` rows with `retry_count >= 3` are marked `failed`.
+- Failed rows are not retried by read-only health checks. They can be requeued only through explicit retry/repair paths.
+- Health/status reporting is read-only and reports pending, processing, stale processing, failed, retryable failed, exhausted failed, and max retry count.
+
 #### memories_fts (FTS5 Virtual Table)
 
 Full-text search with BM25 scoring.
@@ -627,6 +636,27 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
 ```
 
 Kept in sync via `AFTER INSERT`, `AFTER DELETE`, and `AFTER UPDATE` triggers on the `memories` table.
+
+#### Derived Index Health Contract
+
+Storage health includes a read-only `derived_indexes` list. Each entry reports:
+
+- `name`: physical derived index/table name.
+- `kind`: `embedding`, `full_text`, `graph`, or `external`.
+- `status`: `healthy`, `backlogged`, `degraded`, or `unavailable`.
+- `source_count`: source records considered by the index.
+- `indexed_count`: records currently present in the derived index.
+- `pending_count`: queued or in-flight work, when applicable.
+- `stale_count`: stale or missing derived rows, when applicable.
+- `failed_count`: failed index work, when applicable.
+- `orphaned_count`: derived rows whose source record no longer exists or is no longer live.
+- `details`: index-specific counters.
+
+SQLite currently reports:
+
+- `embeddings`: embedding rows plus durable queue health. Backlog is healthy-but-pending; stale processing rows, failed rows, orphaned rows, or `has_embedding` flag mismatches are degraded.
+- `memories_fts`: BM25/FTS5 mirror of `memories`. Missing or orphaned FTS rows are degraded.
+- `crossrefs`: graph/related-memory index. Live crossrefs with missing or non-live endpoints are degraded.
 
 ---
 

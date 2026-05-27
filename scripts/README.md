@@ -13,6 +13,18 @@ This ensures you catch performance issues early and have a clear record of when 
 
 ## Scripts
 
+### `generate-mcp-reference.sh`
+
+Generates the MCP tool reference from `src/mcp/tools.rs`.
+
+```bash
+# Update docs/MCP_TOOLS.md
+./scripts/generate-mcp-reference.sh
+
+# Fail if the generated reference is stale
+./scripts/generate-mcp-reference.sh --check
+```
+
 ### `bench-baseline.sh`
 
 Saves a Criterion benchmark baseline with a given name.

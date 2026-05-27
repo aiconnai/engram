@@ -33,7 +33,10 @@ pub use cache::{EmbeddingCache, EmbeddingCacheStats};
 pub use clip::{ClipEmbedder, MultimodalEmbedder, CLIP_PROVIDER_NAME};
 pub use provider::{EmbeddingProvider, EmbeddingProviderInfo, EmbeddingRegistry};
 pub use queue::{
-    drain_pending_embeddings, get_embedding, get_embedding_status, EmbeddingQueue, EmbeddingWorker,
+    drain_pending_embeddings, get_embedding, get_embedding_queue_health, get_embedding_status,
+    requeue_stale_processing_embeddings, EmbeddingQueue, EmbeddingQueueHealth,
+    EmbeddingQueueHygieneReport, EmbeddingWorker, DEFAULT_MAX_EMBEDDING_RETRIES,
+    DEFAULT_STALE_PROCESSING_AFTER,
 };
 pub use tfidf::TfIdfEmbedder;
 
