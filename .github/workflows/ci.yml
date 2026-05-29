@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  CI_FEATURES: cloud,openai,pdf,langfuse,turso,meilisearch,watcher,multimodal,emergent-graph,ollama,cohere,voyage,retrieval-excellence,context-engineering,temporal-graph,duckdb-graph,compression,agentic-evolution,advanced-graph,autonomous-agent,agent-portability,grpc
 
 jobs:
   # =============================================================================
@@ -52,8 +53,35 @@ jobs:
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free Linux runner disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          docker system prune -af || true
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all-features
+        with:
+          cache-targets: false
+      - name: Test library and integration tests
+        run: |
+          export CARGO_BUILD_JOBS=1
+
+          cargo test --features "$CI_FEATURES" --lib -- --test-threads=1
+
+          for test_file in tests/*.rs; do
+            test_name="$(basename "$test_file" .rs)"
+            cargo test --features "$CI_FEATURES" --test "$test_name" -- --test-threads=1
+          done
+
+      - name: Test local embedding backend
+        run: cargo test --features local-embeddings --lib embedding::onnx
+
+      - name: Test neural rerank backend
+        run: cargo test --features neural-rerank --lib search::neural_rerank
+
+      - name: Test binary unit tests
+        run: |
+          cargo test --bin engram-server
+          cargo test --features watcher --bin engram-watcher
 
   # Property tests (critical for vector store + parsers)
   property-tests:
@@ -114,21 +142,39 @@ jobs:
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free Linux runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          docker system prune -af || true
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate coverage
-        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+        run: |
+          export CARGO_BUILD_JOBS=1
+
+          cargo llvm-cov clean --workspace
+
+          cargo llvm-cov --features "$CI_FEATURES" --no-report --lib
+
+          for test_file in tests/*.rs; do
+            test_name="$(basename "$test_file" .rs)"
+            cargo llvm-cov --features "$CI_FEATURES" --no-report --test "$test_name"
+          done
+
+          cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Check coverage threshold
-        # Threshold reflects current repo reality (~60% with --all-features).
+        # Threshold reflects current repo reality (~60% with CI feature set).
         # Features like sync/cloud, meilisearch_indexer, temporal-graph have
         # 0% coverage because they require external services or unfinished
         # implementations to test. Raise this incrementally as new tests land.
         run: |
-          cargo llvm-cov --all-features --fail-under-lines 55
+          cargo llvm-cov report --fail-under-lines 55
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4

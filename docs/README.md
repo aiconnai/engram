@@ -8,6 +8,7 @@
 - `CONTROL_PLANE_SCHEMA.sql`: Postgres schema for the cloud control plane.
 - `SCHEMA.md`: Local Engram SQLite schema and migrations.
 - `rfcs/`: Proposed design records and product-boundary RFCs.
+- `USING_ENGRAM_IN_A_REPO.md`: How another repository connects to Engram through MCP, CLI, or HTTP.
 
 ## Notes
 
