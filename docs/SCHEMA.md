@@ -307,7 +307,7 @@ CREATE TABLE crossrefs (
 );
 ```
 
-**Edge Types:** `related_to`, `supersedes`, `contradicts`, `depends_on`, `derived_from`, `mentions`, `part_of`
+**Edge Types:** `related_to`, `supersedes`, `contradicts`, `depends_on`, `implements`, `extends`, `references`, `blocks`, `follows_up`
 
 ---
 
@@ -966,14 +966,12 @@ Hebbian learning edges tracking co-accessed memory pairs.
 
 ```sql
 CREATE TABLE coactivation_edges (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    memory_a_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    memory_b_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    from_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    to_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
     strength REAL NOT NULL DEFAULT 0.1,
-    co_access_count INTEGER NOT NULL DEFAULT 1,
-    last_coactivated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(memory_a_id, memory_b_id)
+    coactivation_count INTEGER NOT NULL DEFAULT 1,
+    last_coactivated TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (from_id, to_id)
 );
 ```
 
@@ -985,14 +983,10 @@ Knowledge graph conflict tracking (contradictions, cycles, orphans).
 CREATE TABLE graph_conflicts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     conflict_type TEXT NOT NULL,    -- 'contradiction', 'cycle', 'orphan'
-    entity_a TEXT,
-    entity_b TEXT,
-    edge_id INTEGER,
+    edge_ids TEXT NOT NULL DEFAULT '[]',
     description TEXT NOT NULL,
     severity TEXT NOT NULL DEFAULT 'medium',
-    resolved INTEGER NOT NULL DEFAULT 0,
-    resolution TEXT,
-    detected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resolution_strategy TEXT,
     resolved_at TEXT
 );
 ```
@@ -1026,10 +1020,12 @@ Log of autonomous gardening operations.
 ```sql
 CREATE TABLE garden_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    operation TEXT NOT NULL,       -- 'dedup', 'compress', 'prune', 'link'
-    memory_id INTEGER REFERENCES memories(id) ON DELETE SET NULL,
-    details TEXT NOT NULL DEFAULT '{}',
-    undone INTEGER NOT NULL DEFAULT 0,
+    workspace TEXT NOT NULL DEFAULT 'default',
+    actions TEXT NOT NULL DEFAULT '[]',
+    memories_pruned INTEGER NOT NULL DEFAULT 0,
+    memories_merged INTEGER NOT NULL DEFAULT 0,
+    memories_archived INTEGER NOT NULL DEFAULT 0,
+    tokens_freed INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -1042,10 +1038,8 @@ Log of agent queries for proactive acquisition analysis.
 CREATE TABLE query_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     query TEXT NOT NULL,
-    result_count INTEGER NOT NULL DEFAULT 0,
     workspace TEXT,
-    agent_id TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 

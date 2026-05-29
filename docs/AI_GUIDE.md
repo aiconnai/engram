@@ -324,7 +324,7 @@ Converts a `daily` memory to `permanent`. Clears `expires_at`.
   "name": "memory_boost",
   "arguments": {
     "id": 42,
-    "boost": 0.1
+    "boost_amount": 0.1
   }
 }
 ```
@@ -443,8 +443,8 @@ Query events by time range:
 {
   "name": "memory_get_timeline",
   "arguments": {
-    "start": "2026-03-01T00:00:00Z",
-    "end": "2026-03-31T23:59:59Z",
+    "start_time": "2026-03-01T00:00:00Z",
+    "end_time": "2026-03-31T23:59:59Z",
     "workspace": "ops",
     "limit": 50
   }
@@ -485,7 +485,7 @@ Query procedures filtered by success rate:
 {
   "name": "memory_get_procedures",
   "arguments": {
-    "trigger": "deploy",
+    "trigger_pattern": "deploy",
     "min_success_rate": 0.8,
     "workspace": "ops"
   }
@@ -529,15 +529,15 @@ Query procedures filtered by success rate:
 {
   "name": "memory_link",
   "arguments": {
-    "source_id": 10,
-    "target_id": 20,
-    "relation": "depends_on",
+    "from_id": 10,
+    "to_id": 20,
+    "edge_type": "depends_on",
     "weight": 0.9
   }
 }
 ```
 
-**Built-in relation types:** `related_to`, `depends_on`, `caused_by`, `derived_from`, `supersedes`, `contradicts`, `supports`, `part_of`, `example_of`
+**Built-in edge types:** `related_to`, `supersedes`, `contradicts`, `depends_on`, `implements`, `extends`, `references`, `blocks`, `follows_up`
 
 ### Get Related Memories
 
@@ -1761,6 +1761,102 @@ Timeframe options: `"1h"`, `"24h"`, `"7d"`, `"30d"`.
 - **timeframe**: Filter to recent memories only
 - **include_types**: Restrict to specific memory types
 - **include_graph**: Include entity relationship edges in response
+
+---
+
+## Salience
+
+Controls how memories surface in retrieval based on computed importance and recency signals.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `salience_get` | Get salience score for a memory | `id` |
+| `salience_set_importance` | Override base importance score | `id`, `importance` (0.0–1.0) |
+| `salience_boost` | Temporarily boost salience | `id`, `boost_amount`, `duration_hours` |
+| `salience_demote` | Temporarily reduce salience | `id`, `demote_amount` |
+| `salience_decay_run` | Trigger a decay pass for a workspace | `workspace` |
+| `salience_stats` | Salience distribution stats for a workspace | `workspace` |
+| `salience_history` | Salience score history over time | `id`, `limit` |
+| `salience_top` | Top-N memories by current salience | `workspace`, `limit`, `memory_type` |
+
+---
+
+## Quality
+
+Quality scoring, duplicate detection, conflict resolution, and source trust management.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `quality_score` | Compute quality score for a memory | `id` |
+| `quality_report` | Quality summary for a workspace | `workspace` |
+| `quality_find_duplicates` | Scan for near-duplicate memories | `workspace`, `threshold` |
+| `quality_get_duplicates` | Retrieve previously found duplicate sets | `workspace` |
+| `quality_find_conflicts` | Detect contradicting memories | `workspace` |
+| `quality_get_conflicts` | Retrieve previously found conflicts | `workspace` |
+| `quality_resolve_conflict` | Mark a conflict as resolved with a strategy | `conflict_id`, `resolution_strategy`, `winning_id` |
+| `quality_improve` | Apply automated quality improvements to a memory | `id` |
+
+---
+
+## Session Context
+
+Manage per-session memory windows for context-aware retrieval and export.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `session_context_create` | Create a new session context | `session_id`, `workspace`, `description` |
+| `session_context_add_memory` | Add a memory to the session window | `session_id`, `memory_id` |
+| `session_context_remove_memory` | Remove a memory from the session window | `session_id`, `memory_id` |
+| `session_context_get` | Get session context and its memories | `session_id` |
+| `session_context_list` | List all active session contexts | `workspace` |
+| `session_context_search` | Search within a session's memory window | `session_id`, `query` |
+| `session_context_update_summary` | Update the session's running summary | `session_id`, `summary` |
+| `session_context_end` | Close a session and optionally export | `session_id` |
+| `session_context_export` | Export session context as structured data | `session_id`, `format` |
+
+---
+
+## Scope & Access Control
+
+Hierarchical memory scoping with `global/org/project/agent` path structure and per-agent access grants.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `memory_scope_set` | Set scope path on a memory | `id`, `scope_path` |
+| `memory_scope_get` | Get the scope path of a memory | `id` |
+| `memory_scope_list` | List memories under a scope path | `scope_path`, `recursive` |
+| `memory_grant_access` | Grant read/write access to an agent | `scope_path`, `agent_id`, `permission` |
+| `memory_revoke_access` | Revoke an agent's access grant | `scope_path`, `agent_id` |
+| `memory_list_grants` | List all grants for a scope path | `scope_path` |
+| `memory_check_access` | Check if an agent can access a scope | `scope_path`, `agent_id`, `permissions` |
+
+---
+
+## Workspaces
+
+Manage isolated memory namespaces.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `workspace_list` | List all workspaces | — |
+| `workspace_stats` | Memory counts and stats for a workspace | `workspace` |
+| `workspace_move` | Move memories from one workspace to another | `from_workspace`, `to_workspace`, `filter` |
+| `workspace_delete` | Delete a workspace and all its memories | `workspace`, `confirm` |
+
+---
+
+## Smart Retrieve
+
+Intent-aware unified retrieval — combines semantic search, graph traversal, and temporal context in a single call.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `memory_smart_retrieve` | Retrieve memories matching an intent-aware query | `query`, `intent` (`explore`/`focus`/`recent`), `workspace`, `limit` |
+
+**Intent values:**
+- `explore` — broad semantic search, favours diversity
+- `focus` — precision retrieval, top matches only
+- `recent` — recency-weighted, useful for "what was I just working on?"
 
 ---
 

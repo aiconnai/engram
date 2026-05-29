@@ -243,8 +243,85 @@ This enables cross-machine synchronization with encrypted storage.
 | `ENGRAM_DB_PATH` | SQLite database path | `~/.local/share/engram/memories.db` |
 | `ENGRAM_STORAGE_URI` | S3 URI for cloud sync | (local only) |
 | `ENGRAM_CLOUD_ENCRYPT` | Enable AES-256 encryption | `false` |
-| `ENGRAM_EMBEDDING_MODEL` | `tfidf` (default) or `openai` | `tfidf` |
+| `ENGRAM_EMBEDDING_MODEL` | Embedding provider. Values: `tfidf` (default, no API key needed), `openai` (requires `OPENAI_API_KEY`), `local` (local ONNX model, requires `ENGRAM_ONNX_MODEL_DIR`; build with `--features onnx-embed`), `clip` (multimodal; `--features multimodal`), `ollama` (`--features ollama`), `cohere` (`--features cohere`), `voyage` (`--features voyage`) | `tfidf` |
+| `ENGRAM_ONNX_MODEL_DIR` | Path to directory containing `model.onnx` and `tokenizer.json`. Required when `ENGRAM_EMBEDDING_MODEL=local`. | — |
 | `OPENAI_API_KEY` | Required for OpenAI embeddings | - |
+
+---
+
+---
+
+## Using the SDKs
+
+Engram ships Python and TypeScript clients that wrap the MCP HTTP transport.
+
+### Installation
+
+```bash
+pip install engram-client        # Python
+npm install engram-client        # TypeScript / Node
+```
+
+### Python quickstart
+
+```python
+import asyncio
+from engram_client import EngramClient
+
+async def main():
+    async with EngramClient(
+        base_url="http://localhost:3100",
+        api_key="your-api-key",
+        tenant="default",
+    ) as client:
+        # Create a memory
+        mem = await client.create(
+            "Discovered that the auth bug is in middleware ordering",
+            tags=["bug", "auth"],
+            importance=0.8,
+        )
+
+        # Search memories
+        results = await client.search("auth middleware", limit=5)
+        for r in results:
+            print(r["content"])
+
+        # Find related memories
+        related = await client.related(mem["id"], limit=3)
+
+        # Create a daily note
+        await client.create_daily("Debugging session: fixed auth ordering issue")
+
+asyncio.run(main())
+```
+
+### TypeScript quickstart
+
+```typescript
+import { EngramClient } from 'engram-client';
+
+const client = new EngramClient({
+  baseUrl: 'http://localhost:3100',
+  apiKey: 'your-api-key',
+  tenant: 'default',
+});
+
+// Create a memory
+const mem = await client.create(
+  'Discovered that the auth bug is in middleware ordering',
+  { tags: ['bug', 'auth'], importance: 0.8 },
+);
+
+// Search memories
+const results = await client.search('auth middleware', { limit: 5 });
+results.forEach(r => console.log(r.content));
+
+// Find related memories
+const related = await client.related(mem.id, { limit: 3 });
+
+// Create a daily note
+await client.createDaily('Debugging session: fixed auth ordering issue');
+```
 
 ---
 

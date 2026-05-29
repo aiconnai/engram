@@ -1,6 +1,6 @@
 # Engram Cloud Architecture
 
-**Date:** 2026-01-30  
+**Date:** 2026-05-27 *(updated to reflect v32–v39 migration phases)*  
 **Goal:** Hosted SaaS that monetizes convenience (multi-tenant + ops) while keeping Engram core open source.
 
 ## Product Line
@@ -113,3 +113,62 @@ Metrics:
 - API keys hashed at rest; prefix stored for lookup
 - Key rotation + revoke immediately
 - Encrypted backups in R2
+
+---
+
+## Storage Backends (OSS)
+
+The open-source core supports multiple pluggable storage backends:
+
+| Backend | Feature flag | Use case |
+|---------|-------------|----------|
+| **SQLite** (default) | *(always on)* | Primary embedded store; BM25 FTS via SQLite FTS5 |
+| **Turso / libSQL** | `turso` | Distributed SQLite for cloud deployments (Phase 6 / ENG-54) |
+| **Meilisearch** | `meilisearch` | Full-text search complement/replacement for SQLite FTS (Phase 7 / ENG-58) |
+| **Image Storage** | `cloud` | R2 or local storage for multimodal memory assets (`media_url` on memories, v34) |
+
+---
+
+## Embedding Backends (OSS)
+
+All providers live in `src/embedding/` and share a common async queue + cache layer (`queue.rs`, `cache.rs`):
+
+| Provider | Feature flag | Notes |
+|----------|-------------|-------|
+| TF-IDF | *(default)* | No API key required |
+| OpenAI | `openai` | Requires `OPENAI_API_KEY` |
+| ONNX / local | `onnx-embed` / `local-embeddings` | Runs sentence-transformers locally; requires `ENGRAM_ONNX_MODEL_DIR` |
+| CLIP | `multimodal` | Image + text embeddings for multimodal memories |
+| Ollama | `ollama` | Local LLM-backed embeddings via Ollama |
+| Cohere | `cohere` | Cohere Embed API |
+| Voyage AI | `voyage` | Voyage AI embeddings |
+
+---
+
+## Core Subsystems Added in v32–v39
+
+### Scoping & Access Control (v24/v31)
+`src/storage/scoping.rs`, `src/storage/scope_grants.rs`
+
+Hierarchical memory scoping with `global/org/project/agent` path structure. Per-agent grants with `read`/`write` permissions. Memories inherit scope from their workspace; cross-scope access requires an explicit grant.
+
+### Agent Portability (`agent-portability` feature, v32)
+Snapshot provenance columns on memories (`snapshot_origin`, `snapshot_loaded_at`). `attestation_log` table provides a tamper-evident audit trail for knowledge ingestion from external agents.
+
+### DuckDB Graph (`duckdb-graph` feature, v33)
+Analytical graph queries over memory relationships. `graph_entities` table; `scope_path` on `temporal_edges` for tenant isolation. Enables SPARQL-like traversal at scale.
+
+### Dream Phase (`dream-phase` feature, v35/v36)
+Periodic background consolidation during idle time. `dream_runs` + `dream_locks` tables; advisory locking prevents concurrent runs. Merges duplicates, prunes stale memories, archives low-salience content.
+
+### Auto-Consolidation Audit (v37)
+`consolidation_runs` table logs every merge/conflict-resolve/summarize pass per workspace with token savings metrics.
+
+### Pending Injections (v38)
+`src/storage/pending_injections.rs` — FIFO queue written by `SessionEnd` hook, consumed by `SessionStart` hook. Workspace-keyed; enables memories queued during a session to be injected into the next context window automatically.
+
+### Auto-Linker (`emergent-graph` feature)
+`src/storage/auto_linker.rs` — Hebbian-style automatic relationship detection. `coactivation_edges` table (v30) tracks co-accessed memory pairs; strength decays over time and increases on repeated co-access.
+
+### Lifecycle Hooks (`hooks` feature)
+Hook points: `SessionStart`, `SessionEnd`, `PostToolUse`, `Stop`. Used by agent runtimes to trigger consolidation, inject pending memories, and record tool-use provenance.
