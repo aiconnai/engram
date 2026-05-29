@@ -66,11 +66,22 @@ cargo test
 
 3. Add tests for new functionality
 
-4. Run the test suite:
+4. Run the test/lint gate for PRs:
    ```bash
-   cargo test
-   cargo clippy
-   cargo fmt --check
+   make ci
+   # or
+   just ci
+   # Equivalent to (and intentionally includes):
+   # cargo fmt --all -- --check
+   # cargo clippy --all-targets --all-features -- -D warnings
+   # core tests (lib + integration loop, matching required GitHub job)
+   # ./scripts/generate-mcp-reference.sh --check
+   # cargo doc --no-deps --document-private-items
+   ```
+
+   Optional local pre-commit hook:
+   ```bash
+   git config core.hooksPath .githooks
    ```
 
 5. Commit with clear messages:

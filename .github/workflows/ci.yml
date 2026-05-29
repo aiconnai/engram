@@ -5,15 +5,41 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Extended / expensive checks run on a schedule so normal PRs stay cheap
+    - cron: "0 6 * * *"
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  CI_FEATURES: cloud,openai,pdf,langfuse,turso,meilisearch,watcher,multimodal,emergent-graph,ollama,cohere,voyage,retrieval-excellence,context-engineering,temporal-graph,duckdb-graph,compression,agentic-evolution,advanced-graph,autonomous-agent,agent-portability,grpc
+
+# =============================================================================
+# CI Policy (as of 2026-05)
+#
+# Required to be green on every PR (cheap + deterministic):
+#   - fmt
+#   - clippy
+#   - test (ubuntu-latest only)
+#   - docs (includes ./scripts/generate-mcp-reference.sh --check)
+#
+# These four jobs protect main. Contributors should run `make ci` or `just ci`
+# locally before pushing.
+#
+# Everything else (macOS, property-tests, golden-tests, coverage, benchmarks,
+# cargo-deny, security-audit) is "extended". It runs on schedule and on
+# manual dispatch. It does NOT block PRs by default.
+#
+# This keeps GitHub Actions as an enforceable gate without incurring high
+# per-PR costs (especially macOS minutes and long-running jobs).
+#
+# To change what is "required", update branch protection rules on GitHub
+# to only mark the four jobs above as required.
+# =============================================================================
 
 jobs:
   # =============================================================================
-  # Fast checks (run on every PR)
+  # Required on every PR (must stay fast and cheap)
   # =============================================================================
 
   fmt:
@@ -40,13 +66,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
+  # Required on every PR (Ubuntu only — fast, cheap, deterministic)
   test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    name: Test (ubuntu-latest)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -54,7 +77,6 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Free Linux runner disk space
-        if: runner.os == 'Linux'
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
           docker system prune -af || true
@@ -63,6 +85,7 @@ jobs:
           cache-targets: false
       - name: Test library and integration tests
         run: |
+          source scripts/ci-features.env
           export CARGO_BUILD_JOBS=1
 
           cargo test --features "$CI_FEATURES" --lib -- --test-threads=1
@@ -73,20 +96,49 @@ jobs:
           done
 
       - name: Test local embedding backend
-        run: cargo test --features local-embeddings --lib embedding::onnx
+        run: |
+          source scripts/ci-features.env
+          cargo test --features local-embeddings --lib embedding::onnx
 
       - name: Test neural rerank backend
-        run: cargo test --features neural-rerank --lib search::neural_rerank
+        run: |
+          source scripts/ci-features.env
+          cargo test --features neural-rerank --lib search::neural_rerank
 
       - name: Test binary unit tests
         run: |
+          source scripts/ci-features.env
           cargo test --bin engram-server
           cargo test --features watcher --bin engram-watcher
+
+  # Extended / expensive macOS testing. Only runs on schedule + manual trigger.
+  # Not required for PR merge (avoids high macOS minute costs).
+  test-macos:
+    name: Test (macos-latest)
+    runs-on: macos-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: Swatinem/rust-cache@v2
+      - name: macOS smoke test
+        run: |
+          source scripts/ci-features.env
+          cargo test --features "$CI_FEATURES" --lib -- --test-threads=1 || true
+
+  # =============================================================================
+  # Extended checks (run on schedule + manual dispatch, not required for PRs)
+  # These are valuable but expensive or non-deterministic.
+  # =============================================================================
 
   # Property tests (critical for vector store + parsers)
   property-tests:
     name: Property Tests
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -99,6 +151,7 @@ jobs:
   golden-tests:
     name: Golden Tests
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -112,6 +165,7 @@ jobs:
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2
@@ -121,6 +175,7 @@ jobs:
   deny:
     name: Cargo Deny
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
@@ -134,6 +189,7 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -155,6 +211,7 @@ jobs:
 
       - name: Generate coverage
         run: |
+          source scripts/ci-features.env
           export CARGO_BUILD_JOBS=1
 
           cargo llvm-cov clean --workspace
@@ -191,6 +248,7 @@ jobs:
   bench-check:
     name: Bench Compile Check
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -200,6 +258,7 @@ jobs:
   bench:
     name: Benchmark Regression Check
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
       pull-requests: write
@@ -228,7 +287,7 @@ jobs:
           comment-on-alert: true
           comment-always: ${{ github.event_name == 'pull_request' }}
           # Fail if any benchmark regresses by more than 15%
-          alert-threshold: '115%'
+          alert-threshold: "115%"
           fail-on-alert: ${{ github.event_name == 'pull_request' }}
           # Store history in gh-pages branch
           gh-pages-branch: gh-pages
