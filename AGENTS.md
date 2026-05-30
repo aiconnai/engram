@@ -88,6 +88,16 @@ O Engram expõe 155+ ferramentas via MCP. Principais:
 # Verificar código Rust
 cargo clippy && cargo fmt --check
 
+# Rodar os gates obrigatórios de CI localmente (equivalente ao que deve estar
+# verde no PR): formato, lint, testes core (Linux) e documentação.
+make ci
+# ou
+just ci
+# Para ignorar falhas de validações opcionais localmente (ex.: dependências ausentes):
+# CI_ALLOW_OPTIONAL_TEST_FAILURES=1 make ci
+# Opcional: instale o hook local de pre-commit
+git config core.hooksPath .githooks
+
 # Rodar testes Rust
 cargo test
 

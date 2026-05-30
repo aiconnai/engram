@@ -25,6 +25,8 @@ pub mod cohere;
 pub mod ollama;
 #[cfg(feature = "onnx-embed")]
 pub mod onnx;
+#[cfg(feature = "onnx-embed")]
+pub mod onnx_registry;
 #[cfg(feature = "voyage")]
 pub mod voyage;
 
@@ -33,7 +35,10 @@ pub use cache::{EmbeddingCache, EmbeddingCacheStats};
 pub use clip::{ClipEmbedder, MultimodalEmbedder, CLIP_PROVIDER_NAME};
 pub use provider::{EmbeddingProvider, EmbeddingProviderInfo, EmbeddingRegistry};
 pub use queue::{
-    drain_pending_embeddings, get_embedding, get_embedding_status, EmbeddingQueue, EmbeddingWorker,
+    drain_pending_embeddings, get_embedding, get_embedding_queue_health, get_embedding_status,
+    requeue_stale_processing_embeddings, EmbeddingQueue, EmbeddingQueueHealth,
+    EmbeddingQueueHygieneReport, EmbeddingWorker, DEFAULT_MAX_EMBEDDING_RETRIES,
+    DEFAULT_STALE_PROCESSING_AFTER,
 };
 pub use tfidf::TfIdfEmbedder;
 
@@ -288,6 +293,7 @@ impl Embedder for OpenAIEmbedder {
 /// Available models depend on enabled features:
 /// - `"tfidf"`: Always available, no external dependencies
 /// - `"openai"`: Requires `openai` feature and API key
+/// - `"local"` / `"onnx"`: Requires `local-embeddings` feature and a downloaded ONNX model
 ///
 /// For OpenAI-compatible APIs (OpenRouter, Azure, etc.), set:
 /// - `base_url`: API endpoint (e.g., `<https://openrouter.ai/api/v1>`)
@@ -319,9 +325,18 @@ pub fn create_embedder(config: &EmbeddingConfig) -> Result<Arc<dyn Embedder>> {
         "openai" => Err(EngramError::Config(
             "OpenAI embeddings require the 'openai' feature to be enabled. Build with: cargo build --features openai".to_string(),
         )),
+        #[cfg(feature = "onnx-embed")]
+        "local" | "onnx" => {
+            let model_dir = onnx::resolve_model_dir(config.model_path.as_deref());
+            Ok(Arc::new(onnx::OnnxEmbedder::from_dir(&model_dir)?))
+        }
+        #[cfg(not(feature = "onnx-embed"))]
+        "local" | "onnx" => Err(EngramError::Config(
+            "Local sentence-transformer embeddings require the 'local-embeddings' feature. Build with: cargo build --features local-embeddings, then run: engram-cli model download minilm-l6-v2 and set ENGRAM_EMBEDDING_MODEL=local".to_string(),
+        )),
         "tfidf" => Ok(Arc::new(TfIdfEmbedder::new(config.dimensions))),
         _ => Err(EngramError::Config(format!(
-            "Unknown embedding model: '{}'. Use 'openai' or 'tfidf'",
+            "Unknown embedding model: '{}'. Use 'tfidf', 'local', or 'openai'",
             config.model
         ))),
     }
@@ -366,5 +381,41 @@ mod tests {
         let embedder = TfIdfEmbedder::new(384);
         let embedding = embedder.embed("Hello world").unwrap();
         assert_eq!(embedding.len(), 384);
+    }
+
+    #[cfg(not(feature = "local-embeddings"))]
+    #[test]
+    fn test_local_embedder_requires_feature_when_disabled() {
+        let config = EmbeddingConfig {
+            model: "local".to_string(),
+            ..EmbeddingConfig::default()
+        };
+
+        let err = match create_embedder(&config) {
+            Ok(_) => panic!("local backend should require opt-in feature"),
+            Err(err) => err,
+        };
+        let msg = err.to_string();
+
+        assert!(msg.contains("local-embeddings"), "{msg}");
+        assert!(msg.contains("ENGRAM_EMBEDDING_MODEL=local"), "{msg}");
+    }
+
+    #[cfg(not(feature = "local-embeddings"))]
+    #[test]
+    fn test_onnx_alias_requires_feature_when_disabled() {
+        let config = EmbeddingConfig {
+            model: "onnx".to_string(),
+            ..EmbeddingConfig::default()
+        };
+
+        let err = match create_embedder(&config) {
+            Ok(_) => panic!("onnx alias should require opt-in feature"),
+            Err(err) => err,
+        };
+        let msg = err.to_string();
+
+        assert!(msg.contains("local-embeddings"), "{msg}");
+        assert!(msg.contains("ENGRAM_EMBEDDING_MODEL=local"), "{msg}");
     }
 }

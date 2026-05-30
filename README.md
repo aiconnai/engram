@@ -57,6 +57,12 @@ engram-cli search "why did we choose postgres"
 
 ---
 
+## Use Engram In Your Repository
+
+See [Using Engram From Another Repository](docs/USING_ENGRAM_IN_A_REPO.md) for a practical setup guide covering MCP config, repo-local databases, agent instructions, CLI usage, HTTP access, and local embeddings.
+
+---
+
 ### Quick Start
 
 ```bash
@@ -415,7 +421,8 @@ If you built from source instead of installing via Homebrew, use the full path t
 | `ENGRAM_DB_PATH` | SQLite database path | `~/.local/share/engram/memories.db` |
 | `ENGRAM_STORAGE_URI` | S3/R2 URI for cloud sync | - |
 | `ENGRAM_CLOUD_ENCRYPT` | AES-256-GCM encryption | `false` |
-| `ENGRAM_EMBEDDING_MODEL` | Embedding model (`tfidf`, `openai`) | `tfidf` |
+| `ENGRAM_EMBEDDING_MODEL` | Embedding model (`tfidf`, `local`, `openai`) | `tfidf` |
+| `ENGRAM_ONNX_MODEL_DIR` | Local embedding model directory (`model.onnx` + `tokenizer.json`) | platform data dir |
 | `ENGRAM_CLEANUP_INTERVAL` | Expired memory cleanup interval (seconds) | `3600` |
 | `ENGRAM_WS_PORT` | WebSocket server port (0 = disabled) | `0` |
 | `OPENAI_API_KEY` | OpenAI API key (for `openai` embeddings) | - |
@@ -423,6 +430,18 @@ If you built from source instead of installing via Homebrew, use the full path t
 | `MEILISEARCH_API_KEY` | Meilisearch API key | - |
 | `MEILISEARCH_INDEXER` | Enable background sync to Meilisearch | `false` |
 | `MEILISEARCH_SYNC_INTERVAL` | Sync interval in seconds | `60` |
+
+### Local embeddings
+
+Local sentence-transformer embeddings are opt-in and keep the default binary small:
+
+```bash
+cargo build --features local-embeddings
+./target/debug/engram-cli model download minilm-l6-v2
+ENGRAM_EMBEDDING_MODEL=local ./target/debug/engram-server
+```
+
+This backend uses ONNX Runtime with `all-MiniLM-L6-v2` (384 dimensions). The model is downloaded explicitly and is not bundled into the binary.
 
 ---
 

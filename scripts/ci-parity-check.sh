@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# Validate that local CI wrappers and workflow stay aligned on shared CI settings.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_FILE="$SCRIPT_DIR/../.github/workflows/ci.yml"
+CI_FEATURES_FILE="$SCRIPT_DIR/ci-features.env"
+
+if [[ ! -f "$CI_FEATURES_FILE" ]]; then
+  echo "error: missing $CI_FEATURES_FILE"
+  exit 1
+fi
+
+source "$CI_FEATURES_FILE"
+
+if [[ -z "${CI_FEATURES:-}" ]]; then
+  echo "error: CI_FEATURES in $CI_FEATURES_FILE is empty"
+  exit 1
+fi
+
+printf 'Using CI_FEATURES: %s\n' "$CI_FEATURES"
+
+status=0
+
+check_file() {
+  local file="$1"
+  local pattern="$2"
+  local message="$3"
+  if ! rg -q --fixed-strings -- "$pattern" "$file"; then
+    echo "error: $message"
+    status=1
+  fi
+}
+
+check_file_regex() {
+  local file="$1"
+  local pattern="$2"
+  local message="$3"
+  if ! rg -q --pcre2 "$pattern" "$file"; then
+    echo "error: $message"
+    status=1
+  fi
+}
+
+check_file_regex "$SCRIPT_DIR/ci.sh" 'source .*/ci-features\.env' "scripts/ci.sh is not loading ci-features.env"
+check_file "$WORKFLOW_FILE" "source scripts/ci-features.env" "GitHub workflow is not loading ci-features.env"
+check_file "Makefile" "CI_FEATURES :=" "Makefile does not read CI_FEATURES from ci-features.env"
+check_file "justfile" "ci_features :=" "justfile does not read CI_FEATURES from ci-features.env"
+check_file "$WORKFLOW_FILE" '--features "$CI_FEATURES"' "GitHub workflow missing expected --features \"$CI_FEATURES\" usage"
+check_file "Makefile" 'cargo test --features local-embeddings --lib embedding::onnx' "Makefile test target does not include local-embeddings smoke test"
+check_file "Makefile" 'CARGO_BUILD_JOBS=1 cargo test --bin engram-server' "Makefile test target does not set single-job build threads for engram-server"
+check_file "Makefile" 'cargo test --features watcher --bin engram-watcher' "Makefile test target does not include engram-watcher binary test"
+check_file "justfile" 'cargo test --features local-embeddings --lib embedding::onnx' "justfile test target does not include local-embeddings smoke test"
+check_file "justfile" 'CARGO_BUILD_JOBS=1 cargo test --bin engram-server' "justfile test target does not set single-job build threads for engram-server"
+check_file "justfile" 'cargo test --features watcher --bin engram-watcher' "justfile test target does not include engram-watcher binary test"
+
+if rg -q '^  CI_FEATURES:' "$WORKFLOW_FILE"; then
+  echo "error: workflow still hard-codes CI_FEATURES in top-level env; remove duplication"
+  status=1
+fi
+
+if [[ $status -ne 0 ]]; then
+  exit 1
+fi
+
+echo "✅ CI parity checks passed."

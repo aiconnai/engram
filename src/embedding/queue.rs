@@ -4,7 +4,7 @@
 //! The queue supports batching for efficient API usage.
 
 use async_channel::{bounded, Receiver, Sender};
-use chrono::Utc;
+use chrono::{Duration as ChronoDuration, Utc};
 use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use std::sync::Arc;
@@ -15,11 +15,38 @@ use super::{create_embedder, Embedder};
 use crate::error::{EngramError, Result};
 use crate::types::{EmbeddingConfig, EmbeddingState, EmbeddingStatus, MemoryId};
 
+/// Default age after which an in-flight SQL queue row is considered abandoned.
+pub const DEFAULT_STALE_PROCESSING_AFTER: Duration = Duration::from_secs(15 * 60);
+
+/// Default retry budget for queue hygiene and health accounting.
+pub const DEFAULT_MAX_EMBEDDING_RETRIES: i32 = 3;
+
 /// Message for the embedding queue
 #[derive(Debug)]
 pub struct EmbeddingRequest {
     pub memory_id: MemoryId,
     pub content: String,
+}
+
+/// Read-only summary of durable embedding queue health.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmbeddingQueueHealth {
+    pub pending: i64,
+    pub processing: i64,
+    pub stale_processing: i64,
+    pub complete: i64,
+    pub failed: i64,
+    pub retryable_failed: i64,
+    pub exhausted_failed: i64,
+    pub max_retry_count: i32,
+    pub oldest_pending_seconds: Option<i64>,
+}
+
+/// Result of a queue hygiene pass over stale `processing` rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmbeddingQueueHygieneReport {
+    pub requeued_stale: i64,
+    pub failed_exhausted: i64,
 }
 
 /// Embedding queue for async processing
@@ -346,6 +373,130 @@ pub fn retry_failed_embeddings(conn: &Connection, max_retries: i32) -> Result<Ve
     Ok(ids)
 }
 
+/// Return a read-only health summary for the durable embedding queue.
+pub fn get_embedding_queue_health(
+    conn: &Connection,
+    stale_after: Duration,
+    max_retries: i32,
+) -> Result<EmbeddingQueueHealth> {
+    let stale_cutoff = stale_cutoff_rfc3339(stale_after)?;
+
+    let pending = count_queue_status(conn, "pending")?;
+    let processing = count_queue_status(conn, "processing")?;
+    let complete = count_queue_status(conn, "complete")?;
+    let failed = count_queue_status(conn, "failed")?;
+
+    let stale_processing: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue
+         WHERE status = 'processing' AND started_at IS NOT NULL AND started_at <= ?",
+        params![stale_cutoff],
+        |row| row.get(0),
+    )?;
+
+    let retryable_failed: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue
+         WHERE status = 'failed' AND retry_count < ?",
+        params![max_retries],
+        |row| row.get(0),
+    )?;
+
+    let exhausted_failed: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue
+         WHERE status = 'failed' AND retry_count >= ?",
+        params![max_retries],
+        |row| row.get(0),
+    )?;
+
+    let max_retry_count = conn
+        .query_row(
+            "SELECT COALESCE(MAX(retry_count), 0) FROM embedding_queue",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let oldest_pending_at: Option<String> = conn.query_row(
+        "SELECT MIN(queued_at) FROM embedding_queue WHERE status = 'pending'",
+        [],
+        |row| row.get(0),
+    )?;
+    let oldest_pending_seconds = oldest_pending_at.and_then(|queued_at| {
+        chrono::DateTime::parse_from_rfc3339(&queued_at)
+            .ok()
+            .map(|dt| (Utc::now() - dt.with_timezone(&Utc)).num_seconds().max(0))
+    });
+
+    Ok(EmbeddingQueueHealth {
+        pending,
+        processing,
+        stale_processing,
+        complete,
+        failed,
+        retryable_failed,
+        exhausted_failed,
+        max_retry_count,
+        oldest_pending_seconds,
+    })
+}
+
+/// Requeue abandoned `processing` rows, or fail them if their retry budget is exhausted.
+///
+/// This is the explicit repair path for stale in-flight work. Health checks do
+/// not call this function.
+pub fn requeue_stale_processing_embeddings(
+    conn: &Connection,
+    stale_after: Duration,
+    max_retries: i32,
+) -> Result<EmbeddingQueueHygieneReport> {
+    let stale_cutoff = stale_cutoff_rfc3339(stale_after)?;
+    let now = Utc::now().to_rfc3339();
+
+    let requeued_stale = conn.execute(
+        "UPDATE embedding_queue
+         SET status = 'pending',
+             started_at = NULL,
+             error = NULL,
+             retry_count = retry_count + 1,
+             queued_at = ?
+         WHERE status = 'processing'
+           AND started_at IS NOT NULL
+           AND started_at <= ?
+           AND retry_count < ?",
+        params![now, stale_cutoff, max_retries],
+    )? as i64;
+
+    let failed_exhausted = conn.execute(
+        "UPDATE embedding_queue
+         SET status = 'failed',
+             error = 'embedding processing lease expired after retry budget',
+             completed_at = ?
+         WHERE status = 'processing'
+           AND started_at IS NOT NULL
+           AND started_at <= ?
+           AND retry_count >= ?",
+        params![now, stale_cutoff, max_retries],
+    )? as i64;
+
+    Ok(EmbeddingQueueHygieneReport {
+        requeued_stale,
+        failed_exhausted,
+    })
+}
+
+fn count_queue_status(conn: &Connection, status: &str) -> Result<i64> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue WHERE status = ?",
+        params![status],
+        |row| row.get(0),
+    )?)
+}
+
+fn stale_cutoff_rfc3339(stale_after: Duration) -> Result<String> {
+    let stale_after = ChronoDuration::from_std(stale_after)
+        .map_err(|_| EngramError::InvalidInput("stale_after duration is too large".to_string()))?;
+    Ok((Utc::now() - stale_after).to_rfc3339())
+}
+
 /// Drain up to `batch_size` pending entries from the SQL `embedding_queue`
 /// table, compute their embeddings, and persist them.
 ///
@@ -479,6 +630,7 @@ mod tests {
     use crate::storage::queries::create_memory;
     use crate::storage::Storage;
     use crate::types::{CreateMemoryInput, MemoryType};
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_embedding_queue() {
@@ -535,5 +687,156 @@ mod tests {
                 }
             })
             .unwrap();
+    }
+
+    #[test]
+    fn test_embedding_queue_health_counts_stale_and_retries() {
+        let storage = Storage::open_in_memory().unwrap();
+
+        storage
+            .with_connection(|conn| {
+                let pending = create_memory(conn, &test_memory_input("pending"))?;
+                let processing = create_memory(conn, &test_memory_input("processing"))?;
+                let failed_retryable =
+                    create_memory(conn, &test_memory_input("failed retryable"))?;
+                let failed_exhausted =
+                    create_memory(conn, &test_memory_input("failed exhausted"))?;
+
+                let old_started_at = (Utc::now() - ChronoDuration::minutes(30)).to_rfc3339();
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'processing', started_at = ? WHERE memory_id = ?",
+                    params![old_started_at, processing.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 1 WHERE memory_id = ?",
+                    params![failed_retryable.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 3 WHERE memory_id = ?",
+                    params![failed_exhausted.id],
+                )?;
+
+                let health =
+                    get_embedding_queue_health(conn, Duration::from_secs(15 * 60), 3)?;
+
+                assert_eq!(health.pending, 1);
+                assert_eq!(health.processing, 1);
+                assert_eq!(health.stale_processing, 1);
+                assert_eq!(health.failed, 2);
+                assert_eq!(health.retryable_failed, 1);
+                assert_eq!(health.exhausted_failed, 1);
+                assert_eq!(health.max_retry_count, 3);
+                assert!(health.oldest_pending_seconds.is_some());
+
+                let _ = pending;
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_requeue_stale_processing_respects_retry_budget() {
+        let storage = Storage::open_in_memory().unwrap();
+
+        storage
+            .with_connection(|conn| {
+                let retryable = create_memory(conn, &test_memory_input("retryable"))?;
+                let exhausted = create_memory(conn, &test_memory_input("exhausted"))?;
+                let fresh = create_memory(conn, &test_memory_input("fresh"))?;
+
+                let old_started_at = (Utc::now() - ChronoDuration::minutes(30)).to_rfc3339();
+                let fresh_started_at = Utc::now().to_rfc3339();
+                conn.execute(
+                    "UPDATE embedding_queue
+                     SET status = 'processing', started_at = ?, retry_count = 1
+                     WHERE memory_id = ?",
+                    params![old_started_at, retryable.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue
+                     SET status = 'processing', started_at = ?, retry_count = 3
+                     WHERE memory_id = ?",
+                    params![old_started_at, exhausted.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue
+                     SET status = 'processing', started_at = ?, retry_count = 0
+                     WHERE memory_id = ?",
+                    params![fresh_started_at, fresh.id],
+                )?;
+
+                let report =
+                    requeue_stale_processing_embeddings(conn, Duration::from_secs(15 * 60), 3)?;
+                assert_eq!(report.requeued_stale, 1);
+                assert_eq!(report.failed_exhausted, 1);
+
+                let retryable_state = queue_state(conn, retryable.id)?;
+                let exhausted_state = queue_state(conn, exhausted.id)?;
+                let fresh_state = queue_state(conn, fresh.id)?;
+
+                assert_eq!(retryable_state, ("pending".to_string(), 2));
+                assert_eq!(exhausted_state, ("failed".to_string(), 3));
+                assert_eq!(fresh_state, ("processing".to_string(), 0));
+
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_drain_does_not_requeue_stale_processing_rows() {
+        let storage = Storage::open_in_memory().unwrap();
+        let memory_id = storage
+            .with_connection(|conn| {
+                let memory = create_memory(conn, &test_memory_input("stale processing"))?;
+                let old_started_at = (Utc::now() - ChronoDuration::minutes(30)).to_rfc3339();
+                conn.execute(
+                    "UPDATE embedding_queue
+                     SET status = 'processing', started_at = ?, retry_count = 1
+                     WHERE memory_id = ?",
+                    params![old_started_at, memory.id],
+                )?;
+                Ok(memory.id)
+            })
+            .unwrap();
+
+        let embedder = crate::embedding::TfIdfEmbedder::new(8);
+        let processed = drain_pending_embeddings(&storage, &embedder, 10).unwrap();
+        assert_eq!(processed, 0);
+
+        let state = storage
+            .with_connection(|conn| queue_state(conn, memory_id))
+            .unwrap();
+        assert_eq!(state, ("processing".to_string(), 1));
+    }
+
+    fn queue_state(conn: &Connection, memory_id: MemoryId) -> Result<(String, i32)> {
+        Ok(conn.query_row(
+            "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+            params![memory_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?)
+    }
+
+    fn test_memory_input(content: &str) -> CreateMemoryInput {
+        CreateMemoryInput {
+            content: content.to_string(),
+            memory_type: MemoryType::Note,
+            tags: vec![],
+            metadata: HashMap::new(),
+            importance: None,
+            scope: Default::default(),
+            workspace: None,
+            tier: Default::default(),
+            defer_embedding: false,
+            ttl_seconds: None,
+            dedup_mode: Default::default(),
+            dedup_threshold: None,
+            event_time: None,
+            event_duration_seconds: None,
+            trigger_pattern: None,
+            summary_of_id: None,
+            media_url: None,
+        }
     }
 }

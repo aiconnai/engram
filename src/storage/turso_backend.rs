@@ -1523,12 +1523,14 @@ impl StorageBackend for TursoBackend {
                     ("backend".to_string(), "turso".to_string()),
                     ("url".to_string(), self.config.url.clone()),
                 ]),
+                derived_indexes: Vec::new(),
             }),
             Err(e) => Ok(HealthStatus {
                 healthy: false,
                 latency_ms,
                 error: Some(e.to_string()),
                 details: HashMap::new(),
+                derived_indexes: Vec::new(),
             }),
         }
     }
