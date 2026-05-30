@@ -539,6 +539,11 @@ fn main() -> Result<()> {
     // Open storage
     let storage = Storage::open(config.clone())?;
 
+    // Singleton lock: only one mutating worker/server may own a storage path
+    // (#24). Held for the lifetime of `main`; released automatically on exit.
+    // A second server on the same path exits here with a clear error.
+    let _storage_lock = engram::storage::StorageLock::acquire(&config.db_path, "engram-server")?;
+
     // Check for storage mode warning
     if let Some(warning) = storage.storage_mode_warning() {
         tracing::warn!("{}", warning);

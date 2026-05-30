@@ -31,6 +31,7 @@ pub mod filter;
 pub mod graph_queries;
 pub mod identity_links;
 pub mod image_storage;
+mod lock;
 pub mod memory_blocks;
 mod migrations;
 pub mod pending_injections;
@@ -88,6 +89,7 @@ pub use image_storage::{
     migrate_images, parse_data_uri, upload_image, ImageRef, ImageStorageConfig, LocalImageStorage,
     MigrationResult, UploadedImage,
 };
+pub use lock::{LockInfo, StorageLock};
 #[cfg(feature = "meilisearch")]
 pub use meilisearch_backend::MeilisearchBackend;
 #[cfg(feature = "meilisearch")]
