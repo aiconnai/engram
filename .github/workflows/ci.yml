@@ -16,7 +16,6 @@ env:
 
 permissions:
   contents: read
-  checks: write
 
 # =============================================================================
 # CI Policy (as of 2026-05)
