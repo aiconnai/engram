@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use super::migrations::run_migrations;
 use crate::error::Result;
-use crate::types::{StorageConfig, StorageMode};
+use crate::types::{CompactOp, CompactReport, StorageConfig, StorageMode};
 
 /// Storage engine wrapping SQLite with connection pooling
 pub struct Storage {
@@ -198,6 +198,177 @@ impl Storage {
         let conn = self.conn.lock();
         conn.execute_batch("VACUUM;")?;
         Ok(())
+    }
+
+    /// Build a storage compaction report (issue #22).
+    ///
+    /// With `apply = false` (dry-run) nothing is mutated. With `apply = true`,
+    /// completed/failed embedding-queue rows are pruned, the WAL is
+    /// checkpointed, and the database is VACUUMed — but VACUUM runs only when
+    /// there is enough free disk space for the rewrite.
+    pub fn compact(&self, apply: bool) -> Result<CompactReport> {
+        #[cfg(unix)]
+        #[allow(clippy::unnecessary_cast)]
+        fn available_disk_bytes(path: &str) -> Option<i64> {
+            use std::ffi::CString;
+            use std::os::unix::ffi::OsStrExt;
+            // Stat the parent dir so this works even before the file exists.
+            let p = Path::new(path);
+            let target = match p.parent() {
+                Some(parent) if !parent.as_os_str().is_empty() => parent,
+                _ => p,
+            };
+            let cpath = CString::new(target.as_os_str().as_bytes()).ok()?;
+            // SAFETY: `cpath` is a valid NUL-terminated path; `stat` is zeroed
+            // before being filled by statvfs(3).
+            unsafe {
+                let mut stat: libc::statvfs = std::mem::zeroed();
+                if libc::statvfs(cpath.as_ptr(), &mut stat) == 0 {
+                    let avail = (stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64);
+                    Some(avail.min(i64::MAX as u64) as i64)
+                } else {
+                    None
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        fn available_disk_bytes(_path: &str) -> Option<i64> {
+            None
+        }
+
+        let conn = self.conn.lock();
+
+        let page_size: i64 = conn
+            .query_row("PRAGMA page_size", [], |r| r.get(0))
+            .unwrap_or(0);
+        let page_count: i64 = conn
+            .query_row("PRAGMA page_count", [], |r| r.get(0))
+            .unwrap_or(0);
+        let freelist_count: i64 = conn
+            .query_row("PRAGMA freelist_count", [], |r| r.get(0))
+            .unwrap_or(0);
+        let db_size_bytes = page_size * page_count;
+        let reclaimable_bytes = page_size * freelist_count;
+
+        let queue_complete_prunable: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM embedding_queue WHERE status = 'complete'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        let queue_failed_prunable: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        let orphan_embeddings: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM embeddings WHERE memory_id NOT IN (SELECT id FROM memories)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+
+        let sidecar = |suffix: &str| -> i64 {
+            if self.config.db_path == ":memory:" {
+                return 0;
+            }
+            std::fs::metadata(format!("{}{}", self.config.db_path, suffix))
+                .map(|m| m.len() as i64)
+                .unwrap_or(0)
+        };
+        let wal_bytes = sidecar("-wal");
+        let shm_bytes = sidecar("-shm");
+
+        let free_space = available_disk_bytes(&self.config.db_path);
+        let free_space_bytes = free_space.unwrap_or(-1);
+        // VACUUM rewrites the DB into a temp file, needing ~db_size extra bytes.
+        let vacuum_safe = matches!(free_space, Some(free) if free >= db_size_bytes);
+
+        let mut operations = Vec::new();
+
+        let mut prune_complete = CompactOp {
+            name: "prune_complete_queue".to_string(),
+            candidates: queue_complete_prunable,
+            applied: false,
+            skipped_reason: None,
+        };
+        if apply {
+            // DELETE of zero rows is a harmless no-op; running it unconditionally
+            // in apply mode lets the operation report as applied rather than dry-run.
+            conn.execute("DELETE FROM embedding_queue WHERE status = 'complete'", [])?;
+            prune_complete.applied = true;
+        }
+        operations.push(prune_complete);
+
+        let mut prune_failed = CompactOp {
+            name: "prune_failed_queue".to_string(),
+            candidates: queue_failed_prunable,
+            applied: false,
+            skipped_reason: None,
+        };
+        if apply {
+            conn.execute("DELETE FROM embedding_queue WHERE status = 'failed'", [])?;
+            prune_failed.applied = true;
+        }
+        operations.push(prune_failed);
+
+        let mut checkpoint = CompactOp {
+            name: "checkpoint_wal".to_string(),
+            candidates: wal_bytes,
+            applied: false,
+            skipped_reason: None,
+        };
+        if apply {
+            if self.config.storage_mode == StorageMode::Local {
+                conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+                checkpoint.applied = true;
+            } else {
+                checkpoint.skipped_reason = Some("not in local/WAL mode".to_string());
+            }
+        }
+        operations.push(checkpoint);
+
+        let mut vacuum = CompactOp {
+            name: "vacuum".to_string(),
+            candidates: reclaimable_bytes,
+            applied: false,
+            skipped_reason: None,
+        };
+        if apply {
+            if vacuum_safe {
+                conn.execute_batch("VACUUM;")?;
+                vacuum.applied = true;
+            } else {
+                vacuum.skipped_reason = Some(match free_space {
+                    Some(free) => {
+                        format!(
+                            "insufficient free space: {free} available, need >= {db_size_bytes}"
+                        )
+                    }
+                    None => "free space could not be determined".to_string(),
+                });
+            }
+        }
+        operations.push(vacuum);
+
+        Ok(CompactReport {
+            applied: apply,
+            db_size_bytes,
+            wal_bytes,
+            shm_bytes,
+            freelist_count,
+            reclaimable_bytes,
+            queue_complete_prunable,
+            queue_failed_prunable,
+            orphan_embeddings,
+            free_space_bytes,
+            vacuum_safe,
+            operations,
+        })
     }
 
     /// Get configuration

@@ -1977,6 +1977,7 @@ dependencies = [
  "hex",
  "jsonrpc-core",
  "levenshtein",
+ "libc",
  "libsql",
  "meilisearch-sdk",
  "ndarray 0.16.1",

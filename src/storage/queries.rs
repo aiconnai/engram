@@ -3875,12 +3875,241 @@ pub fn release_dream_lock(conn: &Connection, lock_id: &str, owner_id: &str) -> R
     Ok(())
 }
 
+/// Rebuild derived indexes (issue #23): the FTS5 index and/or the embedding
+/// queue for memories missing embeddings.
+///
+/// Derived indexes are disposable — this never mutates canonical `memories` or
+/// their versions. With `apply = false` (dry-run) it only reports counts and
+/// drift. The same shape is intended to host future external-backend rebuilds.
+pub fn rebuild_derived_indexes(
+    conn: &Connection,
+    rebuild_fts: bool,
+    requeue_embeddings: bool,
+    apply: bool,
+) -> Result<RebuildReport> {
+    let memories: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM memories WHERE valid_to IS NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let memories_total: i64 = conn
+        .query_row("SELECT COUNT(*) FROM memories", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    let fts_count = || -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM memories_fts_docsize", [], |r| {
+            r.get(0)
+        })
+        .or_else(|_| conn.query_row("SELECT COUNT(*) FROM memories_fts", [], |r| r.get(0)))
+        .unwrap_or(0)
+    };
+    let fts_indexed_before = fts_count();
+    let fts_drift_before = (memories_total - fts_indexed_before).abs();
+
+    let embeddings_present: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM memories WHERE has_embedding = 1 AND valid_to IS NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let embeddings_missing: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM memories WHERE has_embedding = 0 AND valid_to IS NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+
+    let mut fts_rebuilt = false;
+    let mut embeddings_requeued = 0i64;
+
+    if apply {
+        if rebuild_fts {
+            // FTS5 'rebuild' reads columns straight from the content table, but
+            // this external-content index is fed by triggers (tags is always '',
+            // metadata comes from the memories row), so 'rebuild' fails with
+            // "no such column". Reset the index and re-populate with the same
+            // expression the insert trigger uses.
+            conn.execute_batch(
+                "INSERT INTO memories_fts(memories_fts) VALUES('delete-all'); \
+                 INSERT INTO memories_fts(rowid, content, tags, metadata) \
+                     SELECT id, content, '', metadata FROM memories;",
+            )?;
+            fts_rebuilt = true;
+        }
+        if requeue_embeddings {
+            embeddings_requeued = conn.execute(
+                "INSERT INTO embedding_queue (memory_id, status) \
+                 SELECT id, 'pending' FROM memories WHERE has_embedding = 0 AND valid_to IS NULL \
+                 ON CONFLICT(memory_id) DO UPDATE SET \
+                   status = 'pending', error = NULL, retry_count = 0, started_at = NULL, completed_at = NULL",
+                [],
+            )? as i64;
+        }
+    }
+
+    let fts_indexed_after = fts_count();
+    let fts_drift_after = (memories_total - fts_indexed_after).abs();
+
+    Ok(RebuildReport {
+        applied: apply,
+        memories,
+        fts_targeted: rebuild_fts,
+        fts_indexed_before,
+        fts_indexed_after,
+        fts_drift_before,
+        fts_drift_after,
+        fts_rebuilt,
+        embeddings_targeted: requeue_embeddings,
+        embeddings_present,
+        embeddings_missing,
+        embeddings_requeued,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::storage::Storage;
     use serde_json::json;
     use std::collections::HashMap;
+
+    #[test]
+    fn test_compact_dry_run_is_noop() {
+        let storage = Storage::open_in_memory().unwrap();
+        let report = storage.compact(false).unwrap();
+        assert!(!report.applied);
+        assert!(report.db_size_bytes > 0);
+        assert!(report.operations.iter().all(|op| !op.applied));
+        assert_eq!(report.queue_complete_prunable, 0);
+        assert_eq!(report.orphan_embeddings, 0);
+    }
+
+    #[test]
+    fn test_compact_prunes_complete_queue_on_apply() {
+        let storage = Storage::open_in_memory().unwrap();
+        storage
+            .with_connection(|conn| {
+                let m = create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "queued".to_string(),
+                        memory_type: MemoryType::Note,
+                        tags: vec![],
+                        metadata: HashMap::new(),
+                        importance: None,
+                        scope: Default::default(),
+                        workspace: None,
+                        tier: Default::default(),
+                        defer_embedding: true,
+                        ttl_seconds: None,
+                        dedup_mode: Default::default(),
+                        dedup_threshold: None,
+                        event_time: None,
+                        event_duration_seconds: None,
+                        trigger_pattern: None,
+                        summary_of_id: None,
+                        media_url: None,
+                    },
+                )?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO embedding_queue (memory_id, status) VALUES (?1, 'complete')",
+                    params![m.id],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        assert_eq!(
+            storage.compact(false).unwrap().queue_complete_prunable,
+            1,
+            "dry-run should see one prunable completed row"
+        );
+
+        let applied = storage.compact(true).unwrap();
+        assert!(applied.applied);
+        let op = applied
+            .operations
+            .iter()
+            .find(|o| o.name == "prune_complete_queue")
+            .expect("prune_complete_queue op present");
+        assert!(op.applied, "completed-queue prune should run on apply");
+
+        assert_eq!(
+            storage.compact(false).unwrap().queue_complete_prunable,
+            0,
+            "completed rows should be gone after apply"
+        );
+    }
+
+    #[test]
+    fn test_rebuild_derived_indexes() {
+        let storage = Storage::open_in_memory().unwrap();
+        storage
+            .with_connection(|conn| {
+                for content in ["x", "y"] {
+                    create_memory(
+                        conn,
+                        &CreateMemoryInput {
+                            content: content.to_string(),
+                            memory_type: MemoryType::Note,
+                            tags: vec![],
+                            metadata: HashMap::new(),
+                            importance: None,
+                            scope: Default::default(),
+                            workspace: None,
+                            tier: Default::default(),
+                            defer_embedding: true,
+                            ttl_seconds: None,
+                            dedup_mode: Default::default(),
+                            dedup_threshold: None,
+                            event_time: None,
+                            event_duration_seconds: None,
+                            trigger_pattern: None,
+                            summary_of_id: None,
+                            media_url: None,
+                        },
+                    )?;
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        // Dry-run reports without mutating.
+        let dry = storage
+            .with_transaction(|conn| rebuild_derived_indexes(conn, true, true, false))
+            .unwrap();
+        assert!(!dry.applied);
+        assert_eq!(dry.memories, 2);
+        assert_eq!(dry.embeddings_missing, 2);
+        assert!(!dry.fts_rebuilt);
+        assert_eq!(dry.embeddings_requeued, 0);
+
+        // Apply rebuilds FTS and requeues the two unembedded memories.
+        let applied = storage
+            .with_transaction(|conn| rebuild_derived_indexes(conn, true, true, true))
+            .unwrap();
+        assert!(applied.applied);
+        assert!(applied.fts_rebuilt);
+        assert_eq!(applied.embeddings_requeued, 2);
+        assert_eq!(applied.fts_drift_after, 0);
+        assert_eq!(applied.memories, 2, "canonical memories are preserved");
+
+        // The two memories now have pending queue rows.
+        let pending: i64 = storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM embedding_queue WHERE status = 'pending'",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(pending, 2);
+    }
 
     #[test]
     fn test_list_memories_metadata_filter_types() {

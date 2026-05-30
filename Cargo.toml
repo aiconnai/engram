@@ -148,6 +148,8 @@ tokio = { version = "1.35", features = ["full"] }
 # Database
 rusqlite = { version = "0.31", features = ["bundled", "vtab", "functions", "trace"] }
 deadpool-sqlite = "0.8"
+# statvfs free-space checks before VACUUM (#22) + flock singleton lock (#24)
+libc = "0.2"
 
 # Vector search (sqlite-vec)
 sqlite-vec = "0.1"
