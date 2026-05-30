@@ -50,8 +50,10 @@ check_file "Makefile" "CI_FEATURES :=" "Makefile does not read CI_FEATURES from 
 check_file "justfile" "ci_features :=" "justfile does not read CI_FEATURES from ci-features.env"
 check_file "$WORKFLOW_FILE" '--features "$CI_FEATURES"' "GitHub workflow missing expected --features \"$CI_FEATURES\" usage"
 check_file "Makefile" 'cargo test --features local-embeddings --lib embedding::onnx' "Makefile test target does not include local-embeddings smoke test"
+check_file "Makefile" 'CARGO_BUILD_JOBS=1 cargo test --bin engram-server' "Makefile test target does not set single-job build threads for engram-server"
 check_file "Makefile" 'cargo test --features watcher --bin engram-watcher' "Makefile test target does not include engram-watcher binary test"
 check_file "justfile" 'cargo test --features local-embeddings --lib embedding::onnx' "justfile test target does not include local-embeddings smoke test"
+check_file "justfile" 'CARGO_BUILD_JOBS=1 cargo test --bin engram-server' "justfile test target does not set single-job build threads for engram-server"
 check_file "justfile" 'cargo test --features watcher --bin engram-watcher' "justfile test target does not include engram-watcher binary test"
 
 if rg -q '^  CI_FEATURES:' "$WORKFLOW_FILE"; then
