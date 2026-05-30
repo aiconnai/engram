@@ -1,0 +1,20 @@
+# Gitleaks false positives for Engram (Rust + GitHub Actions project)
+# These are common in Rust dependency files, test fixtures, and docs.
+
+# Generic token patterns in lockfiles and generated docs
+.*Cargo.lock
+.*package-lock.json
+.*yarn.lock
+
+# Test fixtures and example code
+.*tests/fixtures/.*
+.*examples/.*
+
+# Markdown docs with "token" in context of AI / embeddings (very noisy)
+.*\.md
+
+# GitHub Actions token usage (legitimate)
+.*\.github/workflows/.*GITHUB_TOKEN
+
+# Common Rust crate false positives
+.*registry/src/.*

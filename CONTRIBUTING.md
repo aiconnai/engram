@@ -75,6 +75,8 @@ cargo test
    # cargo fmt --all -- --check
    # cargo clippy --all-targets --all-features -- -D warnings
    # core tests (lib + integration loop, matching required GitHub job)
+   # To allow optional backend/binary checks to fail locally:
+   # CI_ALLOW_OPTIONAL_TEST_FAILURES=1 make ci
    # ./scripts/generate-mcp-reference.sh --check
    # cargo doc --no-deps --document-private-items
    ```

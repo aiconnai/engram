@@ -49,6 +49,10 @@ check_file "$WORKFLOW_FILE" "source scripts/ci-features.env" "GitHub workflow is
 check_file "Makefile" "CI_FEATURES :=" "Makefile does not read CI_FEATURES from ci-features.env"
 check_file "justfile" "ci_features :=" "justfile does not read CI_FEATURES from ci-features.env"
 check_file "$WORKFLOW_FILE" '--features "$CI_FEATURES"' "GitHub workflow missing expected --features \"$CI_FEATURES\" usage"
+check_file "Makefile" 'cargo test --features local-embeddings --lib embedding::onnx' "Makefile test target does not include local-embeddings smoke test"
+check_file "Makefile" 'cargo test --features watcher --bin engram-watcher' "Makefile test target does not include engram-watcher binary test"
+check_file "justfile" 'cargo test --features local-embeddings --lib embedding::onnx' "justfile test target does not include local-embeddings smoke test"
+check_file "justfile" 'cargo test --features watcher --bin engram-watcher' "justfile test target does not include engram-watcher binary test"
 
 if rg -q '^  CI_FEATURES:' "$WORKFLOW_FILE"; then
   echo "error: workflow still hard-codes CI_FEATURES in top-level env; remove duplication"

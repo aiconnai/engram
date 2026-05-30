@@ -30,8 +30,12 @@ test:
 	CARGO_BUILD_JOBS=1 cargo test --features $(CI_FEATURES) --lib -- --test-threads=1
 	@for test_file in tests/*.rs; do \
 		test_name="$$(basename "$$test_file" .rs)" ; \
-		CARGO_BUILD_JOBS=1 cargo test --features $(CI_FEATURES) --test "$$test_name" -- --test-threads=1 || true; \
+		CARGO_BUILD_JOBS=1 cargo test --features $(CI_FEATURES) --test "$$test_name" -- --test-threads=1; \
 	done
+	CARGO_BUILD_JOBS=1 cargo test --features local-embeddings --lib embedding::onnx
+	CARGO_BUILD_JOBS=1 cargo test --features neural-rerank --lib search::neural_rerank
+	cargo test --bin engram-server
+	CARGO_BUILD_JOBS=1 cargo test --features watcher --bin engram-watcher
 
 .PHONY: docs
 docs:
