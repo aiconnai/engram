@@ -125,8 +125,8 @@ Store the token outside the repository. For example:
 
 ```bash
 mkdir -p ~/.config/engram
-printf "%s\n" "your-token-here" > ~/.config/engram/your-engram-mcp-http-api-key
-chmod 600 ~/.config/engram/your-engram-mcp-http-api-key
+printf "%s\n" "your-token-here" > ~/.config/engram/engram-mcp-http-api-key
+chmod 600 ~/.config/engram/engram-mcp-http-api-key
 ```
 
 Do not commit this token.
@@ -190,7 +190,7 @@ engram-cli create "Run cargo fmt --check, cargo clippy, and cargo test before PR
 Call the cloud MCP endpoint with the project workspace:
 
 ```bash
-TOKEN=$(cat ~/.config/engram/your-engram-mcp-http-api-key)
+TOKEN=$(cat ~/.config/engram/engram-mcp-http-api-key)
 
 curl -X POST https://your-engram-mcp.fly.dev/mcp \
   -H "Authorization: Bearer $TOKEN" \
@@ -232,7 +232,7 @@ MCP prompt:
 Cloud MCP search:
 
 ```bash
-TOKEN=$(cat ~/.config/engram/your-engram-mcp-http-api-key)
+TOKEN=$(cat ~/.config/engram/engram-mcp-http-api-key)
 
 curl -X POST https://your-engram-mcp.fly.dev/mcp \
   -H "Authorization: Bearer $TOKEN" \
@@ -310,7 +310,7 @@ curl -X POST http://localhost:8080/mcp \
 Use the shared cloud endpoint:
 
 ```bash
-TOKEN=$(cat ~/.config/engram/your-engram-mcp-http-api-key)
+TOKEN=$(cat ~/.config/engram/engram-mcp-http-api-key)
 
 curl -X POST https://your-engram-mcp.fly.dev/mcp \
   -H "Authorization: Bearer $TOKEN" \

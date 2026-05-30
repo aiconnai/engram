@@ -1,0 +1,31 @@
+# Gitleaks configuration for Engram.
+#
+# Extends the default gitleaks ruleset and allowlists known FALSE POSITIVES so
+# the secret scan stays clean once the repository is public. None of these are
+# secrets:
+#   - src/embedding/onnx_registry.rs: SHA-256 checksums of PUBLIC HuggingFace
+#     models (64-char hex that the generic-api-key rule misfires on).
+#   - tests/watcher_integration.rs: integration-test fixtures using obviously
+#     fake API keys (sk_test_integration, sk_live_abc123).
+#
+# NOTE: gitleaks reads .gitleaks.toml automatically from the repo root. The
+# previous .gitleaksignore used path globs, which that file does NOT support
+# (it only accepts finding fingerprints in the form commit:file:rule:line), so
+# it silenced nothing. This config replaces it.
+title = "Engram gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known false positives: public model checksums and test fixtures"
+paths = [
+  '''src/embedding/onnx_registry\.rs''',
+  '''tests/watcher_integration\.rs''',
+]
+regexes = [
+  # Fake/test API keys used in unit tests and doc-comments across the crate.
+  '''sk_test_[A-Za-z0-9_]+''',
+  '''sk_live_abc123''',
+  '''(pa|co)-test-[A-Za-z0-9-]+''',
+]

@@ -2,6 +2,7 @@
 # Rust / Cargo
 # =============================================================================
 /target/
+engram-wasm/target/
 debug/
 release/
 **/*.rs.bk

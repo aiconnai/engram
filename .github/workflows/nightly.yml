@@ -6,6 +6,11 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
+# Least-privilege default for GITHUB_TOKEN. bench-full opts into contents:write
+# for its own job below.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
