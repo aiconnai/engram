@@ -684,6 +684,76 @@ pub struct StorageStats {
     pub tier_counts: HashMap<String, i64>,
 }
 
+/// A single operation within a [`CompactReport`] (issue #22).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompactOp {
+    /// Operation name, e.g. `prune_complete_queue`, `checkpoint_wal`, `vacuum`.
+    pub name: String,
+    /// Rows or bytes the operation would affect (or did affect when applied).
+    pub candidates: i64,
+    /// Whether the operation actually ran (false in dry-run or when skipped).
+    pub applied: bool,
+    /// Why the operation was skipped, when applicable.
+    pub skipped_reason: Option<String>,
+}
+
+/// Result of a storage compaction (issue #22), in dry-run or apply mode.
+///
+/// Building it in dry-run mode never mutates the database. `VACUUM` is only
+/// executed in apply mode and only when there is enough free disk space.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CompactReport {
+    /// False for a dry-run (no mutations performed).
+    pub applied: bool,
+    /// On-disk size in bytes (`page_count * page_size`).
+    pub db_size_bytes: i64,
+    /// Size of the `-wal` sidecar file in bytes (0 if absent).
+    pub wal_bytes: i64,
+    /// Size of the `-shm` sidecar file in bytes (0 if absent).
+    pub shm_bytes: i64,
+    /// Pages on the freelist.
+    pub freelist_count: i64,
+    /// Bytes reclaimable by `VACUUM` (`freelist_count * page_size`).
+    pub reclaimable_bytes: i64,
+    /// Completed embedding-queue rows that can be pruned.
+    pub queue_complete_prunable: i64,
+    /// Failed embedding-queue rows that can be pruned.
+    pub queue_failed_prunable: i64,
+    /// Embedding rows whose owning memory no longer exists.
+    pub orphan_embeddings: i64,
+    /// Free bytes on the database's filesystem (-1 when unknown).
+    pub free_space_bytes: i64,
+    /// Whether a `VACUUM` is considered safe (enough free space for a rewrite).
+    pub vacuum_safe: bool,
+    /// Individual operations and their status.
+    pub operations: Vec<CompactOp>,
+}
+
+/// Result of rebuilding derived indexes (issue #23), dry-run or applied.
+///
+/// Derived indexes (FTS, embeddings) are disposable; rebuilding never touches
+/// canonical `memories` or their versions.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RebuildReport {
+    /// False for a dry-run (no mutations performed).
+    pub applied: bool,
+    /// Live canonical memories (preserved by any rebuild).
+    pub memories: i64,
+    pub fts_targeted: bool,
+    pub fts_indexed_before: i64,
+    pub fts_indexed_after: i64,
+    pub fts_drift_before: i64,
+    pub fts_drift_after: i64,
+    pub fts_rebuilt: bool,
+    pub embeddings_targeted: bool,
+    /// Live memories that currently have an embedding.
+    pub embeddings_present: i64,
+    /// Live memories missing an embedding (requeue candidates).
+    pub embeddings_missing: i64,
+    /// Memories re-enqueued for embedding (apply mode).
+    pub embeddings_requeued: i64,
+}
+
 /// Configuration for the storage engine
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {

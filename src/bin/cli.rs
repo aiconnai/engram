@@ -155,6 +155,32 @@ enum MaintenanceAction {
         #[arg(long)]
         json: bool,
     },
+    /// Report (dry-run) or apply compaction: prune queue, checkpoint WAL, and
+    /// VACUUM when there is enough free disk space
+    Compact {
+        /// Perform the operations (default is a read-only dry-run)
+        #[arg(long)]
+        apply: bool,
+        /// Emit JSON instead of human-readable text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Report (dry-run) or apply a rebuild of derived indexes — the FTS index
+    /// and embedding requeue. Canonical memories are never touched
+    Rebuild {
+        /// Rebuild the FTS index (if neither flag is set, both are rebuilt)
+        #[arg(long)]
+        fts: bool,
+        /// Requeue memories missing embeddings (if neither flag is set, both)
+        #[arg(long)]
+        embeddings: bool,
+        /// Perform the rebuild (default is a read-only dry-run)
+        #[arg(long)]
+        apply: bool,
+        /// Emit JSON instead of human-readable text
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[cfg(feature = "agent-portability")]
@@ -387,6 +413,101 @@ fn main() -> Result<()> {
                     println!("{}", serde_json::to_string_pretty(&status)?);
                 } else {
                     print_maintenance_status(&status);
+                }
+            }
+            MaintenanceAction::Compact { apply, json } => {
+                let r = storage.compact(apply)?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&r)?);
+                } else {
+                    println!(
+                        "Storage compaction ({})",
+                        if r.applied { "APPLIED" } else { "dry-run" }
+                    );
+                    println!("  database size:        {} bytes", r.db_size_bytes);
+                    println!(
+                        "  WAL / SHM:            {} / {} bytes",
+                        r.wal_bytes, r.shm_bytes
+                    );
+                    println!(
+                        "  reclaimable (VACUUM): {} bytes ({} free page(s))",
+                        r.reclaimable_bytes, r.freelist_count
+                    );
+                    println!(
+                        "  queue prunable:       {} complete, {} failed",
+                        r.queue_complete_prunable, r.queue_failed_prunable
+                    );
+                    println!("  orphan embeddings:    {}", r.orphan_embeddings);
+                    let free = if r.free_space_bytes < 0 {
+                        "unknown".to_string()
+                    } else {
+                        format!("{} bytes", r.free_space_bytes)
+                    };
+                    println!(
+                        "  free space:           {} (vacuum safe: {})",
+                        free, r.vacuum_safe
+                    );
+                    println!("  operations:");
+                    for op in &r.operations {
+                        let status = if op.applied {
+                            "applied".to_string()
+                        } else if let Some(reason) = &op.skipped_reason {
+                            format!("skipped ({reason})")
+                        } else {
+                            "dry-run".to_string()
+                        };
+                        println!(
+                            "    - {:<22} candidates={} [{}]",
+                            op.name, op.candidates, status
+                        );
+                    }
+                    if !r.applied {
+                        println!("  (dry-run; re-run with --apply to execute)");
+                    }
+                }
+            }
+            MaintenanceAction::Rebuild {
+                fts,
+                embeddings,
+                apply,
+                json,
+            } => {
+                // If neither target is named, rebuild both.
+                let (do_fts, do_embeddings) = if !fts && !embeddings {
+                    (true, true)
+                } else {
+                    (fts, embeddings)
+                };
+                let r = storage.with_transaction(|conn| {
+                    rebuild_derived_indexes(conn, do_fts, do_embeddings, apply)
+                })?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&r)?);
+                } else {
+                    println!(
+                        "Derived-index rebuild ({})",
+                        if r.applied { "APPLIED" } else { "dry-run" }
+                    );
+                    println!("  live memories (preserved): {}", r.memories);
+                    if r.fts_targeted {
+                        println!(
+                            "  FTS: indexed {} -> {}, drift {} -> {} (rebuilt: {})",
+                            r.fts_indexed_before,
+                            r.fts_indexed_after,
+                            r.fts_drift_before,
+                            r.fts_drift_after,
+                            r.fts_rebuilt
+                        );
+                    }
+                    if r.embeddings_targeted {
+                        println!(
+                            "  embeddings: {} present, {} missing, {} requeued",
+                            r.embeddings_present, r.embeddings_missing, r.embeddings_requeued
+                        );
+                    }
+                    if !r.applied {
+                        println!("  (dry-run; re-run with --apply to execute)");
+                    }
                 }
             }
         },
