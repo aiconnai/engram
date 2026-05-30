@@ -1,0 +1,9 @@
+# Gitleaks false positives for Engram (Rust + GitHub Actions project)
+.*Cargo.lock
+.*package-lock.json
+.*yarn.lock
+.*tests/fixtures/.*
+.*examples/.*
+.*\.md
+.*\.github/workflows/.*GITHUB_TOKEN
+.*registry/src/.*
