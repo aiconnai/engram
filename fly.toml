@@ -1,5 +1,5 @@
-app = "your-engram-app"
-primary_region = "your-region"
+app = "your-engram-mcp"
+primary_region = "gru"
 
 [env]
   ENGRAM_TRANSPORT = "http"
