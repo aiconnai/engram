@@ -10,6 +10,11 @@ on:
     # Extended / expensive checks run on a schedule so normal PRs stay cheap
     - cron: "0 6 * * *"
 
+# Least-privilege default for GITHUB_TOKEN. Jobs that need more (bench, audit)
+# opt in with their own job-level `permissions:` block below.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -166,6 +171,12 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # audit-check opens an issue (and posts a check run) when an advisory is
+    # found, so it needs more than the read-only top-level default.
+    permissions:
+      contents: read
+      issues: write
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2
