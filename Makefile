@@ -34,7 +34,7 @@ test:
 	done
 	CARGO_BUILD_JOBS=1 cargo test --features local-embeddings --lib embedding::onnx
 	CARGO_BUILD_JOBS=1 cargo test --features neural-rerank --lib search::neural_rerank
-	cargo test --bin engram-server
+	CARGO_BUILD_JOBS=1 cargo test --bin engram-server
 	CARGO_BUILD_JOBS=1 cargo test --features watcher --bin engram-watcher
 
 .PHONY: docs
