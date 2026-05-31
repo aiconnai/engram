@@ -681,6 +681,29 @@ fn sqlite_table_exists(conn: &rusqlite::Connection, table_name: &str) -> Result<
 mod tests {
     use super::*;
     use crate::types::{MemoryScope, MemoryTier, MemoryType};
+    use rusqlite::params;
+
+    fn test_memory_input(content: &str) -> CreateMemoryInput {
+        CreateMemoryInput {
+            content: content.to_string(),
+            memory_type: MemoryType::Note,
+            tags: vec!["health".to_string()],
+            metadata: HashMap::new(),
+            importance: Some(0.5),
+            scope: MemoryScope::Global,
+            workspace: Some("default".to_string()),
+            tier: MemoryTier::Permanent,
+            defer_embedding: true,
+            ttl_seconds: None,
+            dedup_mode: crate::types::DedupMode::Allow,
+            dedup_threshold: None,
+            event_time: None,
+            event_duration_seconds: None,
+            trigger_pattern: None,
+            summary_of_id: None,
+            media_url: None,
+        }
+    }
 
     #[test]
     fn test_create_in_memory() {
@@ -748,6 +771,168 @@ mod tests {
             .expect("graph health");
         assert_eq!(graph.kind, DerivedIndexKind::Graph);
         assert_eq!(graph.status, DerivedIndexStatus::Healthy);
+    }
+
+    #[test]
+    fn test_health_check_reports_fts_degraded_when_rows_missing() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        backend
+            .create_memory(test_memory_input("fts-1 missing row"))
+            .unwrap();
+        backend
+            .create_memory(test_memory_input("fts-2 missing row"))
+            .unwrap();
+
+        backend
+            .storage()
+            .with_connection(|conn| {
+                // Remove all indexed rows to make FTS source-index drift visible.
+                conn.execute(
+                    "INSERT INTO memories_fts(memories_fts) VALUES('delete-all')",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let health = backend.health_check().unwrap();
+        let fts = health
+            .derived_indexes
+            .iter()
+            .find(|index| index.name == "memories_fts")
+            .expect("fts health");
+        assert_eq!(fts.kind, DerivedIndexKind::FullText);
+        assert_eq!(fts.status, DerivedIndexStatus::Degraded);
+        assert_eq!(fts.stale_count, 2);
+    }
+
+    #[test]
+    fn test_health_check_reports_graph_degraded_for_orphaned_crossrefs() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        let source = backend
+            .create_memory(test_memory_input("crossref source"))
+            .unwrap();
+        let target = backend
+            .create_memory(test_memory_input("crossref target"))
+            .unwrap();
+
+        backend
+            .create_crossref(source.id, target.id, EdgeType::RelatedTo, 0.8)
+            .unwrap();
+
+        backend
+            .storage()
+            .with_connection(|conn| {
+                conn.execute(
+                    "UPDATE memories SET valid_to = ? WHERE id = ?",
+                    params![chrono::Utc::now().to_rfc3339(), source.id],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let health = backend.health_check().unwrap();
+        let graph = health
+            .derived_indexes
+            .iter()
+            .find(|index| index.name == "crossrefs")
+            .expect("graph health");
+        assert_eq!(graph.kind, DerivedIndexKind::Graph);
+        assert_eq!(graph.status, DerivedIndexStatus::Degraded);
+        assert_eq!(graph.orphaned_count, 1);
+    }
+
+    #[test]
+    fn test_health_check_reports_embedding_degraded_for_failed_queue_rows() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        let memory = backend
+            .create_memory(test_memory_input("failed queue row"))
+            .unwrap();
+
+        backend
+            .storage()
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO embedding_queue (memory_id, status, queued_at, retry_count)
+                     VALUES (?, 'failed', datetime('now'), 0)",
+                    params![memory.id],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let health = backend.health_check().unwrap();
+        let embeddings = health
+            .derived_indexes
+            .iter()
+            .find(|index| index.name == "embeddings")
+            .expect("embedding health");
+        assert_eq!(embeddings.kind, DerivedIndexKind::Embedding);
+        assert_eq!(embeddings.status, DerivedIndexStatus::Degraded);
+        assert_eq!(embeddings.failed_count, 1);
+    }
+
+    #[test]
+    fn test_health_check_reports_embedding_degraded_for_stale_queue_rows() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        let memory = backend
+            .create_memory(test_memory_input("stale queue row"))
+            .unwrap();
+
+        backend
+            .storage()
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO embedding_queue (memory_id, status, queued_at, started_at, retry_count)
+                     VALUES (?, 'processing', datetime('now'), datetime('now','-1 hour'), 0)",
+                    params![memory.id],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let health = backend.health_check().unwrap();
+        let embeddings = health
+            .derived_indexes
+            .iter()
+            .find(|index| index.name == "embeddings")
+            .expect("embedding health");
+        assert_eq!(embeddings.kind, DerivedIndexKind::Embedding);
+        assert_eq!(embeddings.status, DerivedIndexStatus::Degraded);
+        assert_eq!(embeddings.stale_count, 1);
+    }
+
+    #[test]
+    fn test_health_check_reports_embedding_degraded_for_flag_mismatch() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        let memory = backend
+            .create_memory(test_memory_input("flag mismatch"))
+            .unwrap();
+
+        backend
+            .storage()
+            .with_connection(|conn| {
+                // Mark as embedded without an embeddings row.
+                conn.execute(
+                    "UPDATE memories SET has_embedding = 1 WHERE id = ?",
+                    params![memory.id],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let health = backend.health_check().unwrap();
+        let embeddings = health
+            .derived_indexes
+            .iter()
+            .find(|index| index.name == "embeddings")
+            .expect("embedding health");
+        assert_eq!(embeddings.kind, DerivedIndexKind::Embedding);
+        assert_eq!(embeddings.status, DerivedIndexStatus::Degraded);
+        assert_eq!(embeddings.pending_count, 0);
+        assert_eq!(embeddings.indexed_count, 0);
+        assert_eq!(embeddings.stale_count, 0);
+        assert_eq!(embeddings.orphaned_count, 0);
     }
 
     #[test]

@@ -323,3 +323,22 @@ da stack de compressão.
     protegendo os SDKs Python/TypeScript existentes.
   - `fixed_corpus_ratio_recall` passou a usar piso fixo explícito de 7/9,
     em vez de derivar o floor da execução atual.
+
+## 2026-05-31 — ENG-1295 / #26 passo 3: output humano de manutenção
+
+### Ações realizadas
+
+- Extraída renderização de `maintenance-status` para
+  `write_maintenance_status<W: Write>`.
+- `print_maintenance_status` permanece como wrapper sobre stdout.
+- A saída humana agora inclui `Derived indexes:` com nome, tipo, status e
+  contadores principais (`source`, `indexed`, `pending`, `stale`, `failed`,
+  `orphaned`).
+- Adicionado teste `maintenance_status_human_output_includes_derived_indexes`.
+
+### Verificações
+
+- `cargo fmt --all -- --check` — PASS.
+- `cargo test maintenance_status` — PASS.
+- `cargo test test_health_check_reports_` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.

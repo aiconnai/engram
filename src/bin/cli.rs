@@ -924,32 +924,75 @@ fn storage_health(storage: &Storage) -> Result<HealthStatus> {
     health_check_storage(storage)
 }
 
-fn print_maintenance_status(status: &MaintenanceStatus) {
-    println!(
+fn json_enum_name<T: Serialize + std::fmt::Debug>(value: T) -> String {
+    serde_json::to_string(&value)
+        .unwrap_or_else(|_| format!("{value:?}"))
+        .trim_matches('"')
+        .to_string()
+}
+
+fn write_maintenance_status<W: std::io::Write>(
+    mut writer: W,
+    status: &MaintenanceStatus,
+) -> Result<()> {
+    writeln!(
+        writer,
         "Storage: {}",
         if status.health.healthy {
             "healthy"
         } else {
             "unhealthy"
         }
-    );
-    println!("Latency: {:.2} ms", status.health.latency_ms);
-    println!("Database: {}", status.health.details["db_path"]);
-    println!("Storage mode: {}", status.stats.storage_mode);
-    println!("Schema version: {}", status.stats.schema_version);
-    println!("Database size: {} bytes", status.stats.db_size_bytes);
-    println!("Memories: {}", status.stats.total_memories);
-    println!(
+    )?;
+    writeln!(writer, "Latency: {:.2} ms", status.health.latency_ms)?;
+    writeln!(writer, "Database: {}", status.health.details["db_path"])?;
+    writeln!(writer, "Storage mode: {}", status.stats.storage_mode)?;
+    writeln!(writer, "Schema version: {}", status.stats.schema_version)?;
+    writeln!(
+        writer,
+        "Database size: {} bytes",
+        status.stats.db_size_bytes
+    )?;
+    writeln!(writer, "Memories: {}", status.stats.total_memories)?;
+    writeln!(
+        writer,
         "Embeddings: {} ready, {} pending",
         status.stats.memories_with_embeddings, status.stats.memories_pending_embedding
-    );
-    println!("Tags: {}", status.stats.total_tags);
-    println!("Cross-refs: {}", status.stats.total_crossrefs);
-    println!("Versions: {}", status.stats.total_versions);
-    println!("Sync pending: {}", status.stats.sync_pending);
+    )?;
+    writeln!(writer, "Tags: {}", status.stats.total_tags)?;
+    writeln!(writer, "Cross-refs: {}", status.stats.total_crossrefs)?;
+    writeln!(writer, "Versions: {}", status.stats.total_versions)?;
+    writeln!(writer, "Sync pending: {}", status.stats.sync_pending)?;
+
+    if !status.health.derived_indexes.is_empty() {
+        writeln!(writer, "Derived indexes:")?;
+        for index in &status.health.derived_indexes {
+            writeln!(
+                writer,
+                "  {} ({}): {} source={} indexed={} pending={} stale={} failed={} orphaned={}",
+                index.name,
+                json_enum_name(index.kind),
+                json_enum_name(index.status),
+                index.source_count,
+                index.indexed_count,
+                index.pending_count,
+                index.stale_count,
+                index.failed_count,
+                index.orphaned_count
+            )?;
+        }
+    }
 
     if let Some(error) = &status.health.error {
-        println!("Error: {}", error);
+        writeln!(writer, "Error: {}", error)?;
+    }
+
+    Ok(())
+}
+
+fn print_maintenance_status(status: &MaintenanceStatus) {
+    if let Err(e) = write_maintenance_status(std::io::stdout(), status) {
+        eprintln!("Failed to write maintenance status: {}", e);
     }
 }
 
@@ -1146,5 +1189,23 @@ mod tests {
             .expect("final counts should be readable");
 
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn maintenance_status_human_output_includes_derived_indexes() {
+        let (_dir, storage) = test_storage();
+        let status = maintenance_status(&storage).expect("status should be collected");
+        let mut output = Vec::new();
+
+        write_maintenance_status(&mut output, &status).expect("status should render");
+        let text = String::from_utf8(output).expect("output should be utf8");
+
+        assert!(text.contains("Derived indexes:"));
+        assert!(text.contains("embeddings (embedding):"));
+        assert!(text.contains("memories_fts (full_text):"));
+        assert!(text.contains("crossrefs (graph):"));
+        assert!(text.contains("source="));
+        assert!(text.contains("indexed="));
+        assert!(text.contains("orphaned="));
     }
 }

@@ -107,6 +107,20 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   retornou `POST-GATE PASS`.
 - Observação: o artefato é `Codex/manual`, não cross-CLI independente.
 
+## ENG-1295 / #26 — passo 3
+
+- `maintenance-status` humano agora imprime seção `Derived indexes:` com
+  `embeddings`, `memories_fts` e `crossrefs`.
+- A renderização foi extraída para `write_maintenance_status<W: Write>` para
+  permitir teste sem captura global de stdout.
+- Novo teste:
+  `maintenance_status_human_output_includes_derived_indexes`.
+- Verificações:
+  - `cargo fmt --all -- --check` — PASS.
+  - `cargo test maintenance_status` — PASS.
+  - `cargo test test_health_check_reports_` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+
 ---
 
 **Nota**: Este arquivo é atualizado manualmente ao final de cada iteração significativa ou ao final de sessões. O log detalhado fica no arquivo apontado por `Active plan`.
