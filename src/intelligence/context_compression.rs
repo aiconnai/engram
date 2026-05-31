@@ -9,6 +9,7 @@
 //! - `Medium` — extractive summary (first sentence + entity sentences)
 //! - `Heavy`  — key facts only (entities, numbers, dates)
 
+use crate::intelligence::token_counter::TiktokenCounter;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -79,6 +80,8 @@ pub struct CompressedEntry {
     pub tokens_used: usize,
     /// Which compression level was applied.
     pub compression_level: CompressionLevel,
+    /// Tokenizer used to produce token counts (e.g. `"cl100k_base"` or `"chars/4"`).
+    pub tokenizer_id: String,
 }
 
 /// A snapshot of token budget state.
@@ -122,14 +125,45 @@ pub struct MemoryInput {
 pub struct ContextCompressor {
     budget_tokens: usize,
     used_tokens: usize,
+    /// Optional accurate tokenizer; falls back to chars/4 when `None`.
+    token_counter: Option<TiktokenCounter>,
 }
 
 impl ContextCompressor {
-    /// Create a new compressor with the given token budget.
+    /// Create a new compressor with the given token budget (uses chars/4 heuristic).
     pub fn new(budget_tokens: usize) -> Self {
         Self {
             budget_tokens,
             used_tokens: 0,
+            token_counter: None,
+        }
+    }
+
+    /// Create a compressor that uses an accurate tiktoken-rs counter instead of chars/4.
+    pub fn with_token_counter(budget_tokens: usize, counter: TiktokenCounter) -> Self {
+        Self {
+            budget_tokens,
+            used_tokens: 0,
+            token_counter: Some(counter),
+        }
+    }
+
+    /// Return the tokenizer identifier string for diagnostic metadata.
+    fn tokenizer_id(&self) -> String {
+        match &self.token_counter {
+            Some(c) => c.encoding_name().to_string(),
+            None => "chars/4".to_string(),
+        }
+    }
+
+    /// Count tokens, using tiktoken if available, else chars/4.
+    fn count(&self, text: &str) -> usize {
+        match &self.token_counter {
+            Some(c) => {
+                use crate::intelligence::context_builder::TokenCounter;
+                c.count_tokens(text)
+            }
+            None => Self::estimate_tokens(text),
         }
     }
 
@@ -334,9 +368,11 @@ impl ContextCompressor {
         self.used_tokens = 0;
         let mut skipped_ids: Vec<i64> = Vec::new();
 
+        let tokenizer_id = self.tokenizer_id();
+
         for idx in indexed {
             let mem = &memories[idx];
-            let original_tokens = Self::estimate_tokens(&mem.content);
+            let original_tokens = self.count(&mem.content);
 
             // Try each compression level in escalating order
             let levels = [
@@ -350,7 +386,7 @@ impl ContextCompressor {
 
             for &level in &levels {
                 let compressed = Self::compress_single(&mem.content, level);
-                let tokens = Self::estimate_tokens(&compressed);
+                let tokens = self.count(&compressed);
 
                 if self.used_tokens + tokens <= self.budget_tokens {
                     chosen = Some((level, compressed, tokens));
@@ -366,6 +402,7 @@ impl ContextCompressor {
                     compressed_content,
                     tokens_used: tokens,
                     compression_level: level,
+                    tokenizer_id: tokenizer_id.clone(),
                 });
             } else {
                 warn!(

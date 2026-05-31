@@ -141,6 +141,15 @@ impl ContextBuilder {
         Self { counter }
     }
 
+    /// Create a builder that uses tiktoken-rs for accurate token counting.
+    ///
+    /// Falls back to `cl100k_base` if the model name is not recognised.
+    pub fn with_tiktoken(model: &str) -> Self {
+        use crate::intelligence::token_counter::{TiktokenCounter, TiktokenTokenCounter};
+        let inner = TiktokenCounter::with_fallback(model);
+        Self::new(Box::new(TiktokenTokenCounter(inner)))
+    }
+
     /// Estimate token count for `text` using the internal counter.
     pub fn estimate_tokens(&self, text: &str) -> usize {
         self.counter.count_tokens(text)

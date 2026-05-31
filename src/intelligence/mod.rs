@@ -52,6 +52,7 @@ pub mod synthesis;
 pub mod context_grouper;
 pub mod integration_orchestrator;
 pub mod output_filter;
+pub mod token_counter;
 pub mod truncation_engine;
 
 pub use auto_capture::{
@@ -122,6 +123,9 @@ pub use context_quality::{
     QualityIssue, QualityReport, QualitySuggestion, ResolutionType, SourceTrustScore,
     ValidationStatus,
 };
+
+// Issue #30: Unified token counting and chunking
+pub use token_counter::{TextChunk, TiktokenCounter, TiktokenTokenCounter, TokenBudgetResult, TokenChunker};
 
 // RML-1208: Semantic Structured Compression
 pub use compression_semantic::{CompressedMemory, CompressionConfig, SemanticCompressor};
