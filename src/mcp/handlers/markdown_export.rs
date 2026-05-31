@@ -383,10 +383,9 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
     let mut files_detail: Vec<Value> = Vec::new();
 
     for file_path in &md_files {
-        let file_str = match file_path.to_str() {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
+        if file_path.to_str().is_none() {
+            continue;
+        }
         let filename = file_path
             .file_name()
             .and_then(|f| f.to_str())
