@@ -68,28 +68,86 @@ impl SqliteBackend {
 pub fn health_check_storage(storage: &Storage) -> Result<HealthStatus> {
     let start = Instant::now();
 
+    let storage_mode_warning = storage.storage_mode_warning();
+    let db_path = storage.db_path().to_string();
+
     let result = storage.with_connection(|conn| {
         conn.query_row("SELECT 1", [], |_| Ok(()))?;
-        sqlite_derived_index_health(conn)
+
+        let quick_check: String = conn.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
+        let quick_check_ok = quick_check == "ok";
+        let quick_check_status = if quick_check_ok {
+            "ok".to_string()
+        } else {
+            quick_check
+        };
+
+        let page_size: i64 = conn.query_row("PRAGMA page_size", [], |row| row.get(0))?;
+        let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
+        let freelist_count: i64 = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
+        let reclaimable_bytes = page_size * freelist_count;
+        let db_size_bytes = page_size * page_count;
+
+        let derived_indexes = sqlite_derived_index_health(conn)?;
+
+        Ok((
+            derived_indexes,
+            quick_check_status,
+            quick_check_ok,
+            page_size,
+            page_count,
+            db_size_bytes,
+            freelist_count,
+            reclaimable_bytes,
+        ))
     });
 
     let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
-    let db_path = storage.db_path().to_string();
 
     match result {
-        Ok(derived_indexes) => Ok(HealthStatus {
-            healthy: true,
-            latency_ms,
-            error: None,
-            details: HashMap::from([
+        Ok((
+            derived_indexes,
+            quick_check,
+            quick_check_ok,
+            page_size,
+            page_count,
+            db_size_bytes,
+            freelist_count,
+            reclaimable_bytes,
+        )) => {
+            let mut details = HashMap::from([
                 ("db_path".to_string(), db_path),
                 (
                     "storage_mode".to_string(),
                     format!("{:?}", storage.storage_mode()),
                 ),
-            ]),
-            derived_indexes,
-        }),
+                ("quick_check".to_string(), quick_check.clone()),
+                ("page_size".to_string(), page_size.to_string()),
+                ("page_count".to_string(), page_count.to_string()),
+                ("db_size_bytes".to_string(), db_size_bytes.to_string()),
+                ("freelist_count".to_string(), freelist_count.to_string()),
+                (
+                    "reclaimable_bytes".to_string(),
+                    reclaimable_bytes.to_string(),
+                ),
+            ]);
+            if let Some(warning) = storage_mode_warning {
+                details.insert("warning".to_string(), warning);
+            }
+
+            let healthy = quick_check_ok;
+            Ok(HealthStatus {
+                healthy,
+                latency_ms,
+                error: if healthy {
+                    None
+                } else {
+                    Some(format!("quick_check failed: {quick_check}"))
+                },
+                details,
+                derived_indexes,
+            })
+        }
         Err(e) => Ok(HealthStatus {
             healthy: false,
             latency_ms,
@@ -539,6 +597,30 @@ fn sqlite_embedding_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHe
          LEFT JOIN memories m ON m.id = e.memory_id
          WHERE m.id IS NULL OR m.valid_to IS NOT NULL",
     )?;
+    let (embedding_profile_rows, embedding_profile_bytes_total, embedding_profile_bytes_avg) = conn
+        .query_row(
+            "SELECT
+                COUNT(*),
+                COALESCE(SUM(LENGTH(embedding)), 0),
+                COALESCE(CAST(AVG(LENGTH(embedding)) AS INTEGER), 0)
+             FROM embeddings",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            },
+        )?;
+    let (embedding_profile_bytes_min, embedding_profile_bytes_max) = conn.query_row(
+        "SELECT
+            COALESCE(MIN(LENGTH(embedding)), 0),
+            COALESCE(MAX(LENGTH(embedding)), 0)
+         FROM embeddings",
+        [],
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+    )?;
 
     let status = if queue.stale_processing > 0
         || queue.failed > 0
@@ -630,6 +712,26 @@ fn sqlite_embedding_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHe
                 queue.retry_count_3_plus.to_string(),
             ),
             (
+                "embedding_profile_rows".to_string(),
+                embedding_profile_rows.to_string(),
+            ),
+            (
+                "embedding_profile_bytes_total".to_string(),
+                embedding_profile_bytes_total.to_string(),
+            ),
+            (
+                "embedding_profile_bytes_avg".to_string(),
+                embedding_profile_bytes_avg.to_string(),
+            ),
+            (
+                "embedding_profile_bytes_min".to_string(),
+                embedding_profile_bytes_min.to_string(),
+            ),
+            (
+                "embedding_profile_bytes_max".to_string(),
+                embedding_profile_bytes_max.to_string(),
+            ),
+            (
                 "flagged_without_embedding_row".to_string(),
                 flagged_without_row.to_string(),
             ),
@@ -679,7 +781,10 @@ fn sqlite_fts_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHealth> 
         stale_count: missing,
         failed_count: 0,
         orphaned_count: orphaned,
-        details: HashMap::from([("missing_rows".to_string(), missing.to_string())]),
+        details: HashMap::from([
+            ("missing_rows".to_string(), missing.to_string()),
+            ("drift_rows".to_string(), missing.to_string()),
+        ]),
     })
 }
 

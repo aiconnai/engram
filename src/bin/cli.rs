@@ -1000,11 +1000,38 @@ fn write_maintenance_status<W: std::io::Write>(
     writeln!(writer, "Database: {}", status.health.details["db_path"])?;
     writeln!(writer, "Storage mode: {}", status.stats.storage_mode)?;
     writeln!(writer, "Schema version: {}", status.stats.schema_version)?;
-    writeln!(
-        writer,
-        "Database size: {} bytes",
-        status.stats.db_size_bytes
-    )?;
+    if let Some(quick_check) = status.health.details.get("quick_check") {
+        writeln!(writer, "PRAGMA quick_check: {}", quick_check)?;
+    }
+    if let (
+        Some(page_size),
+        Some(page_count),
+        Some(db_size_bytes),
+        Some(freelist_count),
+        Some(reclaimable_bytes),
+    ) = (
+        status.health.details.get("page_size"),
+        status.health.details.get("page_count"),
+        status.health.details.get("db_size_bytes"),
+        status.health.details.get("freelist_count"),
+        status.health.details.get("reclaimable_bytes"),
+    ) {
+        writeln!(
+            writer,
+            "Database pages: {} pages @ {} bytes ({} free, {} reclaimable bytes)",
+            page_count, page_size, freelist_count, reclaimable_bytes
+        )?;
+        writeln!(writer, "Database size: {} bytes", db_size_bytes)?;
+    } else {
+        writeln!(
+            writer,
+            "Database size: {} bytes",
+            status.stats.db_size_bytes
+        )?;
+    }
+    if let Some(warning) = status.health.details.get("warning") {
+        writeln!(writer, "Warning: {}", warning)?;
+    }
     writeln!(writer, "Memories: {}", status.stats.total_memories)?;
     writeln!(
         writer,
@@ -1132,6 +1159,51 @@ fn write_maintenance_status<W: std::io::Write>(
                     retry_count_2,
                     retry_count_3_plus,
                 )?;
+
+                let embedding_profile_rows = index
+                    .details
+                    .get("embedding_profile_rows")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let embedding_profile_bytes_total = index
+                    .details
+                    .get("embedding_profile_bytes_total")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let embedding_profile_bytes_avg = index
+                    .details
+                    .get("embedding_profile_bytes_avg")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let embedding_profile_bytes_min = index
+                    .details
+                    .get("embedding_profile_bytes_min")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let embedding_profile_bytes_max = index
+                    .details
+                    .get("embedding_profile_bytes_max")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                writeln!(
+                    writer,
+                    "    embedding profile: rows={} total_bytes={} avg_bytes={} min_bytes={} max_bytes={}",
+                    embedding_profile_rows,
+                    embedding_profile_bytes_total,
+                    embedding_profile_bytes_avg,
+                    embedding_profile_bytes_min,
+                    embedding_profile_bytes_max
+                )?;
+            }
+
+            if index.name == "memories_fts" {
+                let drift = index
+                    .details
+                    .get("drift_rows")
+                    .or_else(|| index.details.get("missing_rows"))
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                writeln!(writer, "    drift: {}", drift)?;
             }
         }
     }
@@ -1361,6 +1433,12 @@ mod tests {
         if let Some(storage_mode) = json["details"]["storage_mode"].as_str() {
             assert_eq!(storage_mode, "Local");
         }
+        assert_eq!(json["details"]["quick_check"].as_str(), Some("ok"));
+        assert!(json["details"]["page_size"].is_string());
+        assert!(json["details"]["page_count"].is_string());
+        assert!(json["details"]["db_size_bytes"].is_string());
+        assert!(json["details"]["freelist_count"].is_string());
+        assert!(json["details"]["reclaimable_bytes"].is_string());
         assert!(json["derived_indexes"].is_array());
         assert_eq!(json["stats"]["total_memories"], 0);
         assert!(json["stats"]["schema_version"].is_number());
@@ -1394,6 +1472,11 @@ mod tests {
             "retry_count_1",
             "retry_count_2",
             "retry_count_3_plus",
+            "embedding_profile_rows",
+            "embedding_profile_bytes_total",
+            "embedding_profile_bytes_avg",
+            "embedding_profile_bytes_min",
+            "embedding_profile_bytes_max",
         ] {
             assert!(
                 details.contains_key(key),
@@ -1415,6 +1498,50 @@ mod tests {
             .expect("final counts should be readable");
 
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn maintenance_status_includes_sqlite_health_contract() {
+        let (_dir, storage) = test_storage();
+        let status = maintenance_status(&storage).expect("status should be collected");
+        let mut output = Vec::new();
+
+        write_maintenance_status(&mut output, &status).expect("status should render");
+        let text = String::from_utf8(output).expect("output should be utf8");
+
+        assert!(text.contains("PRAGMA quick_check: ok"));
+        assert!(text.contains("Database pages:"));
+        assert!(text.contains("embedding profile: rows="));
+        assert!(text.contains("drift:"));
+    }
+
+    #[test]
+    fn maintenance_status_reports_warning_for_cloud_path() {
+        let dir = tempfile::tempdir().expect("temporary directory should be created");
+        let db_path = dir
+            .path()
+            .join("my_dropbox_backup")
+            .join("memories.db")
+            .to_string_lossy()
+            .to_string();
+        let config = StorageConfig {
+            db_path,
+            storage_mode: StorageMode::Local,
+            cloud_uri: None,
+            encrypt_cloud: false,
+            confidence_half_life_days: 30.0,
+            auto_sync: false,
+            sync_debounce_ms: 5000,
+        };
+        let storage = Storage::open(config).expect("file storage should open");
+        let status = maintenance_status(&storage).expect("status should be collected");
+
+        let warning = status
+            .health
+            .details
+            .get("warning")
+            .expect("warning should be present for cloud-like path");
+        assert!(warning.contains("WAL mode"));
     }
 
     #[test]
