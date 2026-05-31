@@ -100,7 +100,7 @@ Use the same `mcpServers.engram` JSON block in your client's MCP config location
 
 ### Verify Connection
 
-Once configured, your AI tool will have access to 136+ MCP tools. Ask it to run `memory_stats` to verify the connection is working.
+Once configured, your AI tool will have access to the MCP tools listed in [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Ask it to run `memory_stats` to verify the connection is working.
 
 ---
 

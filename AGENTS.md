@@ -69,7 +69,7 @@ cargo build --release
 3. **TypeScript Syntax**: Verifique cuidadosamente o fechamento de tipos em métodos que retornam objetos complexos (ex: `Promise<{...}>`).
 
 ## Ferramentas MCP Disponíveis
-O Engram expõe 155+ ferramentas via MCP. Principais:
+O Engram expõe as ferramentas MCP documentadas em [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Principais:
 - `memory_create`, `memory_search`, `memory_list`
 - `memory_create_daily` (memórias efêmeras)
 - `identity_create`, `identity_resolve`
