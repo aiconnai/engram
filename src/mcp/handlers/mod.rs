@@ -24,6 +24,7 @@ pub mod dream;
 pub mod evolution;
 pub mod graph;
 pub mod handoff;
+pub mod harness;
 pub mod identity;
 pub mod lifecycle;
 pub mod markdown_export;
@@ -181,6 +182,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "session_context_end" => session::session_context_end(ctx, params),
         "session_context_export" => session::session_context_export(ctx, params),
         "session_land" => handoff::session_land(ctx, params),
+        "harness_record" => harness::handle_harness_record(ctx, params),
 
         // ── Lifecycle ────────────────────────────────────────────────────────
         "lifecycle_status" => lifecycle::lifecycle_status(ctx, params),
