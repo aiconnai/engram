@@ -1,6 +1,6 @@
 # Engram — Complete AI Agent Guide
 
-> **Version:** 0.20.0 | **Protocol:** MCP 2025-11-25 | **Tools:** 220+ | **Schema:** v34
+> **Version:** 0.20.0 | **Protocol:** MCP 2025-11-25 | **Tools:** [generated reference](docs/MCP_TOOLS.md) | **Schema:** v34
 
 This guide teaches AI agents how to use every Engram capability — from basic CRUD to cloud sync, multimodal memory, knowledge packaging, and multi-agent coordination.
 
@@ -1572,23 +1572,23 @@ Every tool includes MCP 2025-11-25 annotations:
 
 ## 24. Progressive Tool Discovery
 
-Engram exposes 220+ tools. To avoid overwhelming agents, tools are organized into three tiers:
+Engram exposes the generated tool set shown in the MCP reference. To avoid overwhelming agents, tools are organized into three tiers:
 
-| Tier | Count | Description |
-|------|-------|-------------|
-| **Essential** | ~20 | Core tools every agent needs: CRUD, search, stats, sessions |
-| **Standard** | ~57 | Common operations: lifecycle, quality, identity, context engineering |
-| **Advanced** | ~104 | Specialized: compression, evolution, attestation, multimodal |
+| Tier | Description |
+|------|-------------|
+| **Essential** | Core tools every agent needs: CRUD, search, stats, sessions |
+| **Standard** | Common operations: lifecycle, quality, identity, context engineering |
+| **Advanced** | Specialized: compression, evolution, attestation, multimodal |
 
 ### Controlling Exposure
 
 Set `ENGRAM_TOOL_TIER` to control which tools are listed:
 
 ```bash
-# Only essential tools (~20) — great for simple agents
+# Only essential tools — great for simple agents
 ENGRAM_TOOL_TIER=essential cargo run --bin engram-server
 
-# Essential + standard (~77) — recommended for most agents
+# Essential + standard — recommended for most agents
 ENGRAM_TOOL_TIER=standard cargo run --bin engram-server
 
 # All tools (default, backward compatible)
@@ -1860,5 +1860,5 @@ Intent-aware unified retrieval — combines semantic search, graph traversal, an
 
 ---
 
-*Engram v0.20.0 — AI Memory Engine*
-*220+ MCP tools | Hybrid search | Knowledge graphs | Cloud sync | Multimodal | Agent portability | Progressive discovery*
+*Engram v0.20.0 — AI Memory Engine*  
+*MCP tool reference: [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) (generated) | Hybrid search | Knowledge graphs | Cloud sync | Multimodal | Agent portability | Progressive discovery*

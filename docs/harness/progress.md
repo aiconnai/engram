@@ -179,6 +179,15 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `cargo check --tests --features meilisearch` — PASS.
   - `bash docs/harness/bin/doctor.sh` — PASS.
 
+## ENG-1296 / #27 — Generate MCP tools reference from code (partial)
+
+- Documentação passou a usar a referência gerada como fonte principal:
+  - `README.md` (`Available MCP Tools`) agora aponta para `docs/MCP_TOOLS.md` e para o gerador.
+  - `docs/AI_GUIDE.md` remove contagens manuais e passa a referenciar `docs/MCP_TOOLS.md` como origem.
+- Validação:
+  - `./scripts/generate-mcp-reference.sh --check` — PASS.
+- O fechamento de #27 ainda depende de eliminar/normalizar quaisquer contagens ou listagens manuais remanescentes fora desse escopo.
+
 ---
 
 **Nota**: Este arquivo é atualizado manualmente ao final de cada iteração significativa ou ao final de sessões. O log detalhado fica no arquivo apontado por `Active plan`.
