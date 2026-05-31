@@ -4,7 +4,7 @@
 
 This reference is generated from `src/mcp/tools.rs`.
 
-Total tools: **194**
+Total tools: **199**
 
 ## Summary
 
@@ -204,6 +204,11 @@ Total tools: **194**
 | `recent_activity` | essential | readOnlyHint | none |
 | `discover_tools` | essential | readOnlyHint | none |
 | `memory_prepare_context` | advanced | readOnlyHint | `query` |
+| `harness_record` | advanced | mutating (no MCP hints) | `kind`, `summary` |
+| `harness_status` | advanced | readOnlyHint | none |
+| `harness_handoff` | advanced | mutating (no MCP hints) | `current_goal`, `next_steps` |
+| `harness_verify` | advanced | mutating (no MCP hints) | `command`, `exit_code`, `output_summary` |
+| `memory_import_markdown` | advanced | mutating (no MCP hints) | `input_dir` |
 
 ## Tools
 
@@ -2921,3 +2926,100 @@ Prepare optimized context for LLM using RTK-inspired pipeline (filter, group, tr
 | `query` | `string` | yes | Query to prepare context for |
 | `budget` | `integer` | no | Token budget for prepared context Default: `4000`. |
 | `workspace` | `string` | no | Optional workspace filter |
+
+### `harness_record`
+
+Record a durable harness event (decision, handoff, failed_attempt, verification_result, risk, assumption, bug_reproduction, issue_update) with structured metadata for cross-session continuity. Use instead of memory_create when capturing work-state evidence rather than facts.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `kind`, `summary`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `kind` | `string` | yes | The harness event kind Allowed: `decision`, `handoff`, `failed_attempt`, `bug_reproduction`, `verification_result`, `risk`, `assumption`, `issue_update`. |
+| `summary` | `string` | yes | Concise summary of the event (1-500 chars) Max length: `500`. |
+| `details` | `string` | no | Optional additional context appended to the summary Max length: `8000`. |
+| `source_paths` | `array` | no | File paths relevant to this event Items: `string`. |
+| `command` | `string` | no | CLI/shell command that produced this evidence |
+| `issue_number` | `integer` | no | Related GitHub issue number |
+| `commit_sha` | `string` | no | Related git commit SHA |
+| `evidence_refs` | `array` | no | Free-form references (URLs, paths, IDs) Items: `string`. |
+| `importance` | `number` | no | Importance score (0-1) Default: `0.7`. Minimum: `0`. Maximum: `1`. |
+| `workspace` | `string` | no | Workspace scope (default: 'default') |
+
+### `harness_status`
+
+Assemble current project state from harness memory records and optional git state. Returns current objective, active issues, recent decisions, known blockers, last verification, last handoff, and a suggested next action. Token-budget aware; degrades gracefully when git is unavailable.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace scope (default: 'default') |
+| `max_records` | `integer` | no | Max recent harness records to include Default: `10`. Minimum: `1`. Maximum: `50`. |
+| `token_budget` | `integer` | no | Approximate max tokens for the output (chars/4 heuristic) Default: `2000`. |
+| `include_git` | `boolean` | no | Attempt to collect git branch/status/log state Default: `true`. |
+
+### `harness_handoff`
+
+Generate a structured handoff packet for next-agent continuity: current goal, files touched, decisions, tests run/not run, risks, blockers, and next steps. Optionally persists as a harness record. Does NOT claim completion unless verification_evidence is provided.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `current_goal`, `next_steps`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `current_goal` | `string` | yes | What the agent was working toward Max length: `300`. |
+| `files_touched` | `array` | no | Paths modified this session Items: `string`. |
+| `decisions_made` | `array` | no | Short decision summaries Items: `string`. |
+| `tests_run` | `array` | no | Test commands/names that were run Items: `string`. |
+| `tests_not_run` | `array` | no | Tests known to be missing or skipped Items: `string`. |
+| `known_risks` | `array` | no | Open risks Items: `string`. |
+| `blockers` | `array` | no | Things blocking progress Items: `string`. |
+| `next_steps` | `array` | yes | Recommended actions for the next agent Items: `string`. Min items: `1`. |
+| `issue_numbers` | `array` | no | Related GitHub issue numbers Items: `integer`. |
+| `plan_doc_paths` | `array` | no | Paths to relevant plan docs Items: `string`. |
+| `verification_evidence` | `string` | no | Evidence that work is complete (test count, command output summary) |
+| `persist` | `boolean` | no | Persist the handoff as a harness record Default: `true`. |
+| `workspace` | `string` | no | Workspace scope (default: 'default') |
+
+### `harness_verify`
+
+Record a verification command outcome with exit code, output summary, and optional evidence path/hash. Supports negative evidence (failures, skips with reason). Surfaces in harness_status as last_verification and feeds harness_handoff completion gating.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `command`, `exit_code`, `output_summary`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `command` | `string` | yes | The command that was run (e.g. 'cargo test --lib') Max length: `200`. |
+| `exit_code` | `integer` | yes | Process exit code (0 = success) |
+| `passed` | `boolean` | no | Explicit pass/fail; derived from exit_code == 0 if omitted |
+| `output_summary` | `string` | yes | Concise summary (e.g. '873 tests passed, 0 failed') Max length: `500`. |
+| `evidence_path` | `string` | no | Path to the full output file or log |
+| `evidence_hash` | `string` | no | SHA-256 of the full output for integrity |
+| `skipped_reason` | `string` | no | If skipped, why (negative evidence) |
+| `issue_numbers` | `array` | no | Linked GitHub issues Items: `integer`. |
+| `memory_ids` | `array` | no | Linked memory IDs Items: `integer`. |
+| `importance` | `number` | no | Importance score (0-1) Default: `0.8`. Minimum: `0`. Maximum: `1`. |
+| `workspace` | `string` | no | Workspace scope (default: 'default') |
+
+### `memory_import_markdown`
+
+Import memories from Markdown files with engram_ frontmatter (RFC 0004). Review mode by default (confirm: false) — returns a staged list without writing. Detects drift via content_hash and version conflicts via engram_version. Ignores non-engram_ frontmatter keys (Obsidian-safe).
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `input_dir`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `input_dir` | `string` | yes | Directory to scan recursively for .md files |
+| `workspace` | `string` | no | Override workspace (default: from each file's engram_workspace) |
+| `confirm` | `boolean` | no | Apply writes. When false (default), dry-run review only Default: `false`. |
+| `force_version` | `boolean` | no | Bypass version conflict checks Default: `false`. |
