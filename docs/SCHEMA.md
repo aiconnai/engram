@@ -662,6 +662,11 @@ Storage health includes a read-only `derived_indexes` list. Each entry reports:
 - `orphaned_count`: derived rows whose source record no longer exists or is no longer live.
 - `details`: index-specific counters.
 
+All backends should emit this shape consistently. For backends that do not
+currently expose per-index health internals, they still MUST include at least
+one `DerivedIndexHealth` entry with `kind=external` (for example, `memories`)
+to preserve machine-readable contracts.
+
 SQLite currently reports:
 
 - `embeddings`: embedding rows plus durable queue health. Backlog is healthy-but-pending; stale processing rows, failed rows, orphaned rows, or `has_embedding` flag mismatches are degraded.

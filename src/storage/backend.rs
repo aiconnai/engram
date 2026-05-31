@@ -79,6 +79,30 @@ pub struct DerivedIndexHealth {
     pub details: HashMap<String, String>,
 }
 
+impl DerivedIndexHealth {
+    /// Create a health record for a backend-provided or external derived index.
+    pub fn external(
+        name: impl Into<String>,
+        status: DerivedIndexStatus,
+        source_count: i64,
+        indexed_count: i64,
+        details: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            kind: DerivedIndexKind::External,
+            status,
+            source_count,
+            indexed_count,
+            pending_count: 0,
+            stale_count: 0,
+            failed_count: 0,
+            orphaned_count: 0,
+            details,
+        }
+    }
+}
+
 /// Type of derived index being reported.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

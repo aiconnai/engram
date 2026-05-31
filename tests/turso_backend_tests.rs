@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use engram::storage::{StorageBackend, TursoBackend};
+use engram::storage::{DerivedIndexKind, DerivedIndexStatus, StorageBackend, TursoBackend};
 use engram::types::*;
 
 #[tokio::test]
@@ -23,6 +23,28 @@ async fn test_turso_health_check() {
     let backend = TursoBackend::in_memory().await.unwrap();
     let health = backend.health_check().unwrap();
     assert!(health.healthy);
+    assert!(!health.derived_indexes.is_empty());
+
+    let memories_index = health
+        .derived_indexes
+        .iter()
+        .find(|index| index.name == "memories")
+        .unwrap();
+    assert_eq!(memories_index.kind, DerivedIndexKind::External);
+    assert_eq!(memories_index.source_count, 0);
+    assert_eq!(memories_index.indexed_count, 0);
+    assert_eq!(memories_index.pending_count, 0);
+    assert!(matches!(
+        memories_index.status,
+        DerivedIndexStatus::Healthy | DerivedIndexStatus::Unavailable
+    ));
+    assert_eq!(
+        memories_index
+            .details
+            .get("index")
+            .expect("detail key should include index name"),
+        "memories"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

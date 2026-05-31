@@ -45,8 +45,9 @@ use crate::types::{
 };
 
 use super::backend::{
-    BatchCreateResult, BatchDeleteResult, CloudSyncBackend, HealthStatus, StorageBackend,
-    StorageStats, SyncDelta, SyncResult, SyncState, TransactionalBackend,
+    BatchCreateResult, BatchDeleteResult, CloudSyncBackend, DerivedIndexHealth, DerivedIndexStatus,
+    HealthStatus, StorageBackend, StorageStats, SyncDelta, SyncResult, SyncState,
+    TransactionalBackend,
 };
 
 const MEMORY_COLUMNS: &str = "id, content, memory_type, importance, access_count, created_at, updated_at, last_accessed_at, owner_id, visibility, version, has_embedding, metadata, scope_type, scope_id, workspace, tier, expires_at, content_hash, event_time, event_duration_seconds, trigger_pattern, procedure_success_count, procedure_failure_count, summary_of_id, lifecycle_state";
@@ -1523,14 +1524,52 @@ impl StorageBackend for TursoBackend {
                     ("backend".to_string(), "turso".to_string()),
                     ("url".to_string(), self.config.url.clone()),
                 ]),
-                derived_indexes: Vec::new(),
+                derived_indexes: self
+                    .get_stats()
+                    .ok()
+                    .map(|stats| {
+                        vec![DerivedIndexHealth::external(
+                            "memories",
+                            DerivedIndexStatus::Healthy,
+                            stats.total_memories,
+                            stats.total_memories,
+                            HashMap::from([("index".to_string(), "memories".to_string())]),
+                        )]
+                    })
+                    .unwrap_or_else(|| {
+                        vec![DerivedIndexHealth::external(
+                            "memories",
+                            DerivedIndexStatus::Unavailable,
+                            0,
+                            0,
+                            HashMap::from([
+                                ("index".to_string(), "memories".to_string()),
+                                (
+                                    "error".to_string(),
+                                    "failed to read index stats".to_string(),
+                                ),
+                            ]),
+                        )]
+                    }),
             }),
             Err(e) => Ok(HealthStatus {
                 healthy: false,
                 latency_ms,
                 error: Some(e.to_string()),
-                details: HashMap::new(),
-                derived_indexes: Vec::new(),
+                details: HashMap::from([
+                    ("backend".to_string(), "turso".to_string()),
+                    ("url".to_string(), self.config.url.clone()),
+                ]),
+                derived_indexes: vec![DerivedIndexHealth::external(
+                    "memories",
+                    DerivedIndexStatus::Unavailable,
+                    0,
+                    0,
+                    HashMap::from([
+                        ("index".to_string(), "memories".to_string()),
+                        ("error".to_string(), e.to_string()),
+                    ]),
+                )],
             }),
         }
     }

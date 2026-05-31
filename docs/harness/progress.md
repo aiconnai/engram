@@ -165,6 +165,20 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `CHEATSHEET_CUTOVER.md` permanece fora do commit; é checklist operacional
     de deploy/cutover e não faz parte da política de higiene da fila.
 
+## ENG-1296 / #26 — Define derived index health contract for external backends
+
+- Padronizado `DerivedIndexHealth` para backends externos:
+  - adicionado construtor `DerivedIndexHealth::external(...)` em `backend.rs`;
+  - `meilisearch` e `turso` passam a preencher `derived_indexes` com entrada `kind=external`
+    (com contadores base e status explícito), em vez de retornar vetor vazio.
+- Contrato em `docs/SCHEMA.md` ajustado para exigir representação consistente de
+  derived indexes também em backends sem analítica interna por índice.
+- Validação:
+  - `cargo test test_turso_health_check --test turso_backend_tests --features turso -- --nocapture` — PASS.
+  - `cargo clippy --all-targets --tests -- -D warnings` — PASS.
+  - `cargo check --tests --features meilisearch` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+
 ---
 
 **Nota**: Este arquivo é atualizado manualmente ao final de cada iteração significativa ou ao final de sessões. O log detalhado fica no arquivo apontado por `Active plan`.

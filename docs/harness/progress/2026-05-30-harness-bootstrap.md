@@ -416,3 +416,32 @@ ação de manutenção dedicada.
 - `cargo test maintenance_queue_hygiene_dry_run_does_not_mutate_and_apply_updates -- --nocapture` — PASS.
 - `cargo test maintenance_status_human_output_includes_embedding_queue_state_counters -- --nocapture` — PASS.
 - `bash docs/harness/bin/bootstrap.sh && bash docs/harness/bin/doctor.sh` — PASS.
+
+## 2026-05-31 — ENG-1296 / #26 contrato de derived index para backends externos
+
+### Contexto da sessão
+
+Depois de estabilizar a saúde de índices derivados no SQLite, a iteração define o
+shape mínimo para backends externos não retornarem uma lista vazia de
+`derived_indexes`.
+
+### Ações realizadas
+
+- Adicionado `DerivedIndexHealth::external(...)` como construtor padronizado para
+  índices derivados externos.
+- `meilisearch` e `turso` agora retornam entrada `memories` com `kind=external`
+  em health checks, incluindo status `unavailable` e detalhe de erro quando a
+  leitura do índice/estatísticas falha.
+- `docs/SCHEMA.md` documenta que backends sem analítica interna por índice ainda
+  devem emitir ao menos uma entrada `kind=external`.
+- `tests/turso_backend_tests.rs` valida o shape mínimo do contrato em Turso.
+
+### Verificações
+
+- `cargo fmt --all -- --check` — PASS.
+- `cargo clippy --all-targets --tests -- -D warnings` — PASS.
+- `cargo test test_turso_health_check --test turso_backend_tests --features turso -- --nocapture` — PASS.
+- `cargo test maintenance_status_matches_storage_health_shape -- --nocapture` — PASS.
+- `cargo check --tests --features meilisearch` — PASS.
+- `cargo check --tests --features turso` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
