@@ -980,6 +980,63 @@ fn write_maintenance_status<W: std::io::Write>(
                 index.failed_count,
                 index.orphaned_count
             )?;
+
+            if index.name == "embeddings" {
+                let pending = index
+                    .details
+                    .get("pending")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let processing = index
+                    .details
+                    .get("processing")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let stale_processing = index
+                    .details
+                    .get("stale_processing")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let failed = index
+                    .details
+                    .get("failed")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let retryable_failed = index
+                    .details
+                    .get("retryable_failed")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let exhausted_failed = index
+                    .details
+                    .get("exhausted_failed")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let max_retry_count = index
+                    .details
+                    .get("max_retry_count")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let oldest_pending_age = index
+                    .details
+                    .get("oldest_pending_age")
+                    .or_else(|| index.details.get("oldest_pending_age_seconds"))
+                    .map(String::as_str)
+                    .unwrap_or("none");
+
+                writeln!(
+                    writer,
+                    "    queue-state: pending={} processing={} stale_processing={} failed={} retryable_failed={} exhausted_failed={} max_retry_count={} oldest_pending_age={}",
+                    pending,
+                    processing,
+                    stale_processing,
+                    failed,
+                    retryable_failed,
+                    exhausted_failed,
+                    max_retry_count,
+                    oldest_pending_age
+                )?;
+            }
         }
     }
 
@@ -1127,8 +1184,31 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::Connection;
+    use rusqlite::{params, Connection};
+    use std::collections::HashMap;
     use tempfile::TempDir;
+
+    fn memory_input(content: &str) -> CreateMemoryInput {
+        CreateMemoryInput {
+            content: content.to_string(),
+            memory_type: MemoryType::Note,
+            tags: vec![],
+            metadata: HashMap::new(),
+            importance: None,
+            scope: Default::default(),
+            workspace: None,
+            tier: Default::default(),
+            defer_embedding: false,
+            ttl_seconds: None,
+            dedup_mode: DedupMode::Allow,
+            dedup_threshold: None,
+            event_time: None,
+            event_duration_seconds: None,
+            trigger_pattern: None,
+            summary_of_id: None,
+            media_url: None,
+        }
+    }
 
     fn test_storage() -> (TempDir, Storage) {
         let dir = tempfile::tempdir().expect("temporary directory should be created");
@@ -1174,6 +1254,35 @@ mod tests {
         assert!(json["derived_indexes"].is_array());
         assert_eq!(json["stats"]["total_memories"], 0);
         assert!(json["stats"]["schema_version"].is_number());
+
+        let embedding_index = json["derived_indexes"]
+            .as_array()
+            .and_then(|indexes| {
+                indexes
+                    .iter()
+                    .find(|index| index["name"].as_str() == Some("embeddings"))
+            })
+            .expect("embedding derived index should be present in health payload");
+
+        let details = embedding_index["details"]
+            .as_object()
+            .expect("details should be object");
+        for key in [
+            "pending",
+            "processing",
+            "stale_processing",
+            "failed",
+            "retryable_failed",
+            "exhausted_failed",
+            "max_retry_count",
+            "oldest_pending_age",
+            "oldest_pending_age_seconds",
+        ] {
+            assert!(
+                details.contains_key(key),
+                "details missing queue state key: {key}"
+            );
+        }
     }
 
     #[test]
@@ -1207,5 +1316,52 @@ mod tests {
         assert!(text.contains("source="));
         assert!(text.contains("indexed="));
         assert!(text.contains("orphaned="));
+    }
+
+    #[test]
+    fn maintenance_status_human_output_includes_embedding_queue_state_counters() {
+        let (_dir, storage) = test_storage();
+        let stale_time = (chrono::Utc::now() - chrono::Duration::minutes(30)).to_rfc3339();
+        let old_pending_time = (chrono::Utc::now() - chrono::Duration::minutes(20)).to_rfc3339();
+
+        storage
+            .with_connection(|conn| {
+                let pending = create_memory(conn, &memory_input("state counter pending"))?;
+                let processing =
+                    create_memory(conn, &memory_input("state counter processing"))?;
+                let retryable_failed =
+                    create_memory(conn, &memory_input("state counter retryable"))?;
+                let exhausted_failed =
+                    create_memory(conn, &memory_input("state counter exhausted"))?;
+
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'processing', started_at = ?, retry_count = 0 WHERE memory_id = ?",
+                    params![stale_time, processing.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET queued_at = ?, status = 'pending' WHERE memory_id = ?",
+                    params![old_pending_time, pending.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 1 WHERE memory_id = ?",
+                    params![retryable_failed.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 4 WHERE memory_id = ?",
+                    params![exhausted_failed.id],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let status = maintenance_status(&storage).expect("status should be collected");
+        let mut output = Vec::new();
+
+        write_maintenance_status(&mut output, &status).expect("status should render");
+        let text = String::from_utf8(output).expect("output should be utf8");
+
+        assert!(text.contains(
+            "queue-state: pending=1 processing=1 stale_processing=1 failed=2 retryable_failed=1 exhausted_failed=1 max_retry_count=4 oldest_pending_age="
+        ));
     }
 }

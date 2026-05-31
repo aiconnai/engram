@@ -342,3 +342,37 @@ da stack de compressão.
 - `cargo test maintenance_status` — PASS.
 - `cargo test test_health_check_reports_` — PASS.
 - `bash docs/harness/bin/doctor.sh` — PASS.
+
+## 2026-05-31 — ENG-1296 / #32 endurecimento da superfície operacional da fila
+
+### Contexto da sessão
+
+Com a base de `maintenance-status` estabilizada pelo #26, a iteração reaproveita a
+superfície existente para expor detalhes operacionais de fila com granularidade útil
+para diagnóstico e degradação.
+
+### Ações realizadas
+
+- Atualizado `src/storage/sqlite_backend.rs`:
+  - `sqlite_embedding_health` agora inclui em `details` os contadores de fila
+    `pending`, `processing`, `stale_processing`, `failed`,
+    `retryable_failed`, `exhausted_failed`, `max_retry_count`.
+  - Adicionado `oldest_pending_age` e mantido alias legível
+    `oldest_pending_age_seconds`.
+- Atualizado `src/bin/cli.rs`:
+  - `maintenance-status` humano renderiza linha `queue-state` com os novos
+    contadores.
+  - Aceita fallback de chave legada `oldest_pending_age_seconds`.
+- Adicionados testes para cobertura de forma/estado:
+  - `maintenance_status_matches_storage_health_shape`
+  - `maintenance_status_human_output_includes_embedding_queue_state_counters`
+  - `test_health_check_embedding_details_include_queue_state_counters`.
+
+### Verificações
+
+- `cargo test maintenance_status_ -- --nocapture` — PASS.
+- `cargo test test_health_check_embedding_details_include_queue_state_counters -- --nocapture` — PASS.
+- `cargo test embedding_queue_health_counts_stale_and_retries -- --nocapture` — PASS.
+- `cargo clippy --all-targets --tests -- -D warnings` — PASS.
+- `cargo fmt --all -- --check` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.

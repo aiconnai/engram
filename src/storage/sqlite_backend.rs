@@ -553,6 +553,11 @@ fn sqlite_embedding_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHe
         DerivedIndexStatus::Healthy
     };
 
+    let oldest_pending_age = match queue.oldest_pending_seconds {
+        Some(age) => age.to_string(),
+        None => "none".to_string(),
+    };
+
     Ok(DerivedIndexHealth {
         name: "embeddings".to_string(),
         kind: DerivedIndexKind::Embedding,
@@ -564,6 +569,13 @@ fn sqlite_embedding_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHe
         failed_count: queue.failed,
         orphaned_count: orphaned,
         details: HashMap::from([
+            ("pending".to_string(), queue.pending.to_string()),
+            ("processing".to_string(), queue.processing.to_string()),
+            (
+                "stale_processing".to_string(),
+                queue.stale_processing.to_string(),
+            ),
+            ("failed".to_string(), queue.failed.to_string()),
             (
                 "retryable_failed".to_string(),
                 queue.retryable_failed.to_string(),
@@ -576,6 +588,8 @@ fn sqlite_embedding_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHe
                 "max_retry_count".to_string(),
                 queue.max_retry_count.to_string(),
             ),
+            ("oldest_pending_age".to_string(), oldest_pending_age.clone()),
+            ("oldest_pending_age_seconds".to_string(), oldest_pending_age),
             (
                 "flagged_without_embedding_row".to_string(),
                 flagged_without_row.to_string(),
@@ -900,6 +914,72 @@ mod tests {
         assert_eq!(embeddings.kind, DerivedIndexKind::Embedding);
         assert_eq!(embeddings.status, DerivedIndexStatus::Degraded);
         assert_eq!(embeddings.stale_count, 1);
+    }
+
+    #[test]
+    fn test_health_check_embedding_details_include_queue_state_counters() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        let pending = backend
+            .create_memory(test_memory_input("state counter pending"))
+            .unwrap();
+        let processing = backend
+            .create_memory(test_memory_input("state counter processing"))
+            .unwrap();
+        let retryable_failed = backend
+            .create_memory(test_memory_input("state counter retryable failed"))
+            .unwrap();
+        let exhausted_failed = backend
+            .create_memory(test_memory_input("state counter exhausted failed"))
+            .unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        backend
+            .storage()
+            .with_connection(|conn| {
+                let stale_started = (chrono::Utc::now() - chrono::Duration::minutes(30)).to_rfc3339();
+                let old_pending = (chrono::Utc::now() - chrono::Duration::minutes(15)).to_rfc3339();
+
+                conn.execute(
+                    "INSERT OR REPLACE INTO embedding_queue (memory_id, status, queued_at)
+                     VALUES (?, 'pending', ?)",
+                    params![pending.id, old_pending],
+                )?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO embedding_queue (memory_id, status, queued_at, started_at, retry_count)
+                     VALUES (?, 'processing', ?, ?, 0)",
+                    params![processing.id, now, stale_started],
+                )?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO embedding_queue (memory_id, status, queued_at, retry_count)
+                     VALUES (?, 'failed', ?, 1)",
+                    params![retryable_failed.id, now],
+                )?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO embedding_queue (memory_id, status, queued_at, retry_count)
+                     VALUES (?, 'failed', ?, 4)",
+                    params![exhausted_failed.id, now],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let health = backend.health_check().unwrap();
+        let embeddings = health
+            .derived_indexes
+            .iter()
+            .find(|index| index.name == "embeddings")
+            .expect("embedding health");
+
+        assert_eq!(embeddings.status, DerivedIndexStatus::Degraded);
+        assert_eq!(embeddings.details["pending"], "1");
+        assert_eq!(embeddings.details["processing"], "1");
+        assert_eq!(embeddings.details["stale_processing"], "1");
+        assert_eq!(embeddings.details["failed"], "2");
+        assert_eq!(embeddings.details["retryable_failed"], "1");
+        assert_eq!(embeddings.details["exhausted_failed"], "1");
+        assert_eq!(embeddings.details["max_retry_count"], "4");
+        assert_ne!(embeddings.details["oldest_pending_age"], "none");
+        assert_ne!(embeddings.details["oldest_pending_age_seconds"], "none");
     }
 
     #[test]

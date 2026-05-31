@@ -121,6 +121,21 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `cargo test test_health_check_reports_` — PASS.
   - `bash docs/harness/bin/doctor.sh` — PASS.
 
+## ENG-1296 / #32 — harden queue and operational hygiene surface
+
+- Auditoria de superfície de fila de embeddings aplicada em health + status operacional:
+  - Incluídos em `derived_indexes[embeddings].details`: `pending`, `processing`,
+    `stale_processing`, `failed`, `retryable_failed`, `exhausted_failed`,
+    `max_retry_count`, `oldest_pending_age` (+ alias
+    `oldest_pending_age_seconds`).
+  - Saída humana de `maintenance-status` agora exibe linha `queue-state` com esses contadores (com fallback estável para chave legada `oldest_pending_age_seconds`).
+- Testes/regressões validados:
+  - `cargo test maintenance_status_ -- --nocapture` — PASS.
+  - `cargo test test_health_check_embedding_details_include_queue_state_counters -- --nocapture` — PASS.
+  - `cargo test embedding_queue_health_counts_stale_and_retries -- --nocapture` — PASS.
+  - `cargo clippy --all-targets --tests -- -D warnings` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+
 ---
 
 **Nota**: Este arquivo é atualizado manualmente ao final de cada iteração significativa ou ao final de sessões. O log detalhado fica no arquivo apontado por `Active plan`.
