@@ -8,19 +8,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use sha2::{Digest, Sha256};
 use serde_json::{json, Value};
 
 use super::HandlerContext;
-
-// ── Hash helper ───────────────────────────────────────────────────────────────
-
-/// Compute SHA-256 of a string, returning `sha256:<hex>`.
-fn content_hash(content: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(content.as_bytes());
-    format!("sha256:{:x}", hasher.finalize())
-}
+use crate::storage::queries::compute_content_hash;
 
 // ── Frontmatter parsing ───────────────────────────────────────────────────────
 
@@ -198,7 +189,8 @@ fn compute_file_subdir(group: &str, mem: &Value) -> Option<String> {
         }
         "entity" => {
             let tags_str = mem.get("tags").and_then(|v| v.as_str()).unwrap_or("");
-            let tags = parse_tags(tags_str);
+            let mut tags = parse_tags(tags_str);
+            tags.sort(); // deterministic: first alphabetically
             Some(tags.into_iter().next().unwrap_or_else(|| "untagged".to_string()))
         }
         _ => None,
@@ -348,9 +340,14 @@ pub fn memory_export_markdown(ctx: &HandlerContext, params: Value) -> Value {
 /// - `confirm` (bool, optional, default false) — if false, dry-run only
 /// - `force_version` (bool, optional, default false) — bypass version conflict check
 pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
-    let input_dir = match params.get("input_dir").and_then(|v| v.as_str()) {
+    let input_dir_raw = match params.get("input_dir").and_then(|v| v.as_str()) {
         Some(d) => d.to_string(),
         None => return json!({"error": "input_dir is required"}),
+    };
+    let input_dir = match std::fs::canonicalize(&input_dir_raw) {
+        Ok(p) if p.is_dir() => p.to_string_lossy().to_string(),
+        Ok(_) => return json!({"error": "input_dir is not a directory"}),
+        Err(e) => return json!({"error": format!("input_dir invalid: {}", e)}),
     };
 
     let workspace_override = params
@@ -412,12 +409,22 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
             .and_then(|s| s.parse().ok())
             .unwrap_or(-1);
 
+        if engram_id == -1 {
+            files_detail.push(json!({
+                "file": filename,
+                "engram_id": null,
+                "status": "skipped",
+                "reason": "no valid engram_id in frontmatter"
+            }));
+            continue;
+        }
+
         let file_version: i64 = fm
             .get("engram_version")
             .and_then(|s| s.parse().ok())
             .unwrap_or(1);
 
-        let current_hash = content_hash(&body);
+        let current_hash = compute_content_hash(body.trim());
 
         // Look up in DB
         let db_state_result: Result<Option<(String, i64)>, crate::error::EngramError> =
@@ -484,7 +491,7 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(0.5);
                     let tags_csv = fm.get("engram_tags_list").cloned().unwrap_or_default();
-                    let hash = content_hash(&body);
+                    let hash = compute_content_hash(body.trim());
 
                     let create_result: Result<(), _> = ctx.storage.with_connection(|conn| {
                         conn.execute(
@@ -546,12 +553,30 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
             ImportStatus::PendingUpdate => {
                 count_pending += 1;
                 if confirm {
-                    let hash = content_hash(&body);
+                    let hash = compute_content_hash(body.trim());
+                    let importance: f64 = fm.get("engram_importance").and_then(|s| s.parse().ok()).unwrap_or(0.5);
+                    let mem_type = fm.get("engram_type").cloned().unwrap_or_else(|| "note".to_string());
+                    let scope = fm.get("engram_scope").cloned().unwrap_or_else(|| "user".to_string());
+                    let workspace_val = workspace_override.clone()
+                        .or_else(|| fm.get("engram_workspace").cloned())
+                        .unwrap_or_else(|| "default".to_string());
+                    let tags_csv = fm.get("engram_tags_list").cloned().unwrap_or_default();
                     let update_result: Result<(), _> = ctx.storage.with_connection(|conn| {
                         conn.execute(
-                            "UPDATE memories SET content = ?1, updated_at = datetime('now'), version = version + 1, content_hash = ?2 WHERE id = ?3",
-                            rusqlite::params![body.trim(), hash, engram_id],
+                            "UPDATE memories SET content = ?1, updated_at = datetime('now'), version = version + 1, content_hash = ?2, importance = ?3, memory_type = ?4, scope = ?5, workspace = ?6 WHERE id = ?7",
+                            rusqlite::params![body.trim(), hash, importance, mem_type, scope, workspace_val, engram_id],
                         )?;
+                        // Re-sync tags from frontmatter
+                        if !tags_csv.is_empty() {
+                            conn.execute("DELETE FROM memory_tags WHERE memory_id = ?1", rusqlite::params![engram_id])?;
+                            for tag_name in tags_csv.split(',') {
+                                let tag_name = tag_name.trim();
+                                if tag_name.is_empty() { continue; }
+                                conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?1)", rusqlite::params![tag_name])?;
+                                let tag_id: i64 = conn.query_row("SELECT id FROM tags WHERE name = ?1", rusqlite::params![tag_name], |r| r.get(0))?;
+                                conn.execute("INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES (?1, ?2)", rusqlite::params![engram_id, tag_id])?;
+                            }
+                        }
                         Ok(())
                     });
 
@@ -733,7 +758,7 @@ fn format_memory_markdown(
         .and_then(|m| m.get("source_session"))
         .and_then(|v| v.as_str());
 
-    let hash = content_hash(content);
+    let hash = compute_content_hash(content.trim());
 
     let mut md = String::new();
 
@@ -869,7 +894,7 @@ fn parse_tags(tags_str: &str) -> Vec<String> {
 fn sanitize_filename(s: &str) -> String {
     let cleaned: String = s
         .chars()
-        .take(50)
+        .take(40)
         .map(|c| {
             if c.is_alphanumeric() || c == '-' || c == '_' {
                 c
@@ -925,7 +950,7 @@ mod tests {
     fn test_sanitize_filename_truncates_long_input() {
         let long_input = "a".repeat(100);
         let result = sanitize_filename(&long_input);
-        assert!(result.len() <= 50);
+        assert!(result.len() <= 40);
     }
 
     #[test]
@@ -1158,15 +1183,15 @@ mod tests {
 
     #[test]
     fn test_content_hash_prefix() {
-        let h = content_hash("hello");
+        let h = compute_content_hash("hello");
         assert!(h.starts_with("sha256:"), "hash must have sha256: prefix");
         assert_eq!(h.len(), 7 + 64, "sha256 hex is 64 chars");
     }
 
     #[test]
     fn test_content_hash_deterministic() {
-        assert_eq!(content_hash("abc"), content_hash("abc"));
-        assert_ne!(content_hash("abc"), content_hash("xyz"));
+        assert_eq!(compute_content_hash("abc"), compute_content_hash("abc"));
+        assert_ne!(compute_content_hash("abc"), compute_content_hash("xyz"));
     }
 
     // ── parse_frontmatter helper ───────────────────────────────────────
@@ -1311,7 +1336,8 @@ mod tests {
             "tags": "rust,arch"
         });
         let subdir = compute_file_subdir("entity", &mem);
-        assert_eq!(subdir.as_deref(), Some("rust"));
+        // sorted alphabetically: "arch" < "rust"
+        assert_eq!(subdir.as_deref(), Some("arch"));
     }
 
     #[test]
