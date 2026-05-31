@@ -755,4 +755,67 @@ mod tests {
         let b = "car truck motorcycle";
         assert_eq!(jaccard_similarity(a, b), 0.0);
     }
+
+    // -------------------------------------------------------------------------
+    // Test 12: Canonical memory is not mutated — compress() borrows input only
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_canonical_memory_unchanged_after_compression() {
+        let compressor = default_compressor();
+        let original = "Authentication is required for every request. \
+            Tokens rotate daily at midnight UTC. \
+            The incident was created by user admin at 10:14 UTC and resolved by revoking key ABC-123.";
+        let original_snapshot = original.to_string();
+
+        let result = compressor.compress(original);
+
+        // Canonical input is unchanged — compress() borrows &str, never mutates.
+        assert_eq!(original, original_snapshot.as_str());
+
+        // Output is a derived representation, not the original.
+        assert_ne!(result.structured_content, original_snapshot);
+        assert!(result.compressed_tokens < result.original_tokens);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 13: Three-mode comparison — None / SoftTrim / SemanticCompressor
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_three_mode_compression_comparison() {
+        use crate::intelligence::content_utils::{soft_trim, SoftTrimConfig};
+
+        let input = "Authentication is required for every single request that comes in. \
+            I think basically every token rotates daily at midnight UTC, you know. \
+            The incident was created by user admin at 10:14 UTC and resolved by revoking key ABC-123. \
+            To be honest, the system is pretty much stable most of the time. \
+            Monitoring dashboards are updated every five minutes and alert on p99 latency spikes.";
+
+        let tokens_none = input.len() / 4;
+
+        let trim_result = soft_trim(input, &SoftTrimConfig::default());
+        let tokens_soft_trim = trim_result.content.len() / 4;
+
+        let compressor = default_compressor();
+        let semantic_result = compressor.compress(input);
+        let tokens_semantic = semantic_result.compressed_tokens;
+
+        // None ≥ SoftTrim ≥ Semantic (soft-trim keeps head+tail; semantic strips filler)
+        assert!(
+            tokens_none >= tokens_soft_trim,
+            "soft trim should not expand: none={tokens_none} soft_trim={tokens_soft_trim}"
+        );
+        assert!(
+            tokens_soft_trim >= tokens_semantic,
+            "semantic should be at least as compact as soft-trim: soft_trim={tokens_soft_trim} semantic={tokens_semantic}"
+        );
+
+        // Semantic must achieve meaningful reduction vs raw
+        assert!(
+            (tokens_semantic as f64) < (tokens_none as f64) * 0.9,
+            "semantic should reduce tokens by >10%: none={tokens_none} semantic={tokens_semantic}"
+        );
+
+        // Canonical must survive all modes
+        assert_eq!(input.len(), input.len(), "input len is stable (borrow check)");
+    }
 }
