@@ -74,10 +74,13 @@ pub fn handle_harness_record(ctx: &HandlerContext, params: Value) -> Value {
     };
 
     // ── Extract optional params ──────────────────────────────────────────────
-    let details = params
-        .get("details")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    let details = match params.get("details").and_then(|v| v.as_str()) {
+        Some(d) if d.len() > 8000 => {
+            return json!({"error": "details must be ≤ 8000 characters"});
+        }
+        Some(d) => Some(d.to_string()),
+        None => None,
+    };
 
     let workspace = params
         .get("workspace")
@@ -324,9 +327,17 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
 
     // Build response, truncating from bottom if over budget
     loop {
+        // current_objective: extracted from the most recent handoff's current_goal
+        let current_objective = last_handoff
+            .as_ref()
+            .and_then(|h| h["metadata"]["current_goal"].as_str().or_else(|| h["summary"].as_str()))
+            .map(|s| s.chars().take(200).collect::<String>());
+
         let candidate = json!({
             "workspace": workspace,
             "generated_at": generated_at,
+            "current_objective": current_objective,
+            "active_issues": recent_issue_updates,
             "recent_decisions": decisions,
             "known_blockers": blockers,
             "last_verification": last_verification,
@@ -336,6 +347,8 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
             "suggested_next_action": suggested_next_action,
         });
         let serialized = candidate.to_string();
+        // Token budget enforced with chars/4 heuristic (not BPE).
+        // Actual tiktoken count may differ by ~20-30%.
         let estimated_tokens = serialized.len() / 4;
         if estimated_tokens <= token_budget
             || (decisions.is_empty() && blockers.is_empty() && recent_issue_updates.is_empty())
@@ -357,9 +370,16 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
     }
 
     // Fallback (should not normally be reached)
-    let final_val = json!({
+    let current_objective = last_handoff
+        .as_ref()
+        .and_then(|h| h["metadata"]["current_goal"].as_str().or_else(|| h["summary"].as_str()))
+        .map(|s| s.chars().take(200).collect::<String>());
+
+    json!({
         "workspace": workspace,
         "generated_at": generated_at,
+        "current_objective": current_objective,
+        "active_issues": recent_issue_updates,
         "recent_decisions": decisions,
         "known_blockers": blockers,
         "last_verification": last_verification,
@@ -368,8 +388,7 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
         "git_state": git_state,
         "suggested_next_action": suggested_next_action,
         "token_estimate": 0,
-    });
-    final_val
+    })
 }
 
 /// Generate a structured handoff packet for next-agent continuity.
@@ -488,7 +507,12 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
             .join("\n");
         let full_content = format!("{}\n\nNext steps:\n{}", current_goal, steps_text);
         let content = if full_content.len() > 1000 {
-            full_content[..1000].to_string()
+            // Truncate at a char boundary to avoid panicking on multi-byte UTF-8.
+            let mut boundary = 1000;
+            while !full_content.is_char_boundary(boundary) {
+                boundary -= 1;
+            }
+            full_content[..boundary].to_string()
         } else {
             full_content
         };

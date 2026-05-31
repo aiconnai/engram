@@ -4,8 +4,23 @@
 //! [`TokenChunker`] (token-aware text splitting with overlap), and
 //! [`TokenBudgetResult`] (metadata about a compression run).
 
+use std::sync::OnceLock;
+
+use tiktoken_rs::CoreBPE;
+
 use crate::intelligence::compression::{detect_encoding, TokenEncoding};
 use crate::intelligence::context_builder::TokenCounter;
+
+// BPE tables are expensive to initialize — cache them process-wide.
+fn cl100k() -> &'static CoreBPE {
+    static LOCK: OnceLock<CoreBPE> = OnceLock::new();
+    LOCK.get_or_init(|| tiktoken_rs::cl100k_base().expect("cl100k_base init"))
+}
+
+fn o200k() -> &'static CoreBPE {
+    static LOCK: OnceLock<CoreBPE> = OnceLock::new();
+    LOCK.get_or_init(|| tiktoken_rs::o200k_base().expect("o200k_base init"))
+}
 
 // ---------------------------------------------------------------------------
 // TiktokenCounter
@@ -44,21 +59,19 @@ impl TiktokenCounter {
     /// Encode `text` to token IDs.
     pub(crate) fn encode(&self, text: &str) -> Vec<usize> {
         let bpe = match self.encoding {
-            TokenEncoding::Cl100kBase => tiktoken_rs::cl100k_base(),
-            TokenEncoding::O200kBase => tiktoken_rs::o200k_base(),
+            TokenEncoding::Cl100kBase => cl100k(),
+            TokenEncoding::O200kBase => o200k(),
         };
-        bpe.map(|enc| enc.encode_with_special_tokens(text))
-            .unwrap_or_default()
+        bpe.encode_with_special_tokens(text)
     }
 
     /// Decode token IDs back to a `String`.
     fn decode(&self, ids: &[usize]) -> String {
         let bpe = match self.encoding {
-            TokenEncoding::Cl100kBase => tiktoken_rs::cl100k_base(),
-            TokenEncoding::O200kBase => tiktoken_rs::o200k_base(),
+            TokenEncoding::Cl100kBase => cl100k(),
+            TokenEncoding::O200kBase => o200k(),
         };
-        bpe.and_then(|enc| enc.decode(ids.to_vec()))
-            .unwrap_or_default()
+        bpe.decode(ids.to_vec()).unwrap_or_default()
     }
 }
 

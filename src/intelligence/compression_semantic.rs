@@ -815,7 +815,8 @@ mod tests {
             "semantic should reduce tokens by >10%: none={tokens_none} semantic={tokens_semantic}"
         );
 
-        // Canonical must survive all modes
-        assert_eq!(input.len(), input.len(), "input len is stable (borrow check)");
+        // Canonical must survive all modes — none of the compressors mutate the input.
+        // Verify a known substring is still present after all three paths ran.
+        assert!(input.contains("Authentication is required"), "original input unchanged after compression");
     }
 }

@@ -30,7 +30,7 @@ engram_type: note                      # Memory.memory_type
 engram_created_at: 2026-05-31T02:07:00Z  # Memory.created_at (RFC 3339 / UTC)
 engram_updated_at: 2026-05-31T04:00:00Z  # Memory.updated_at (RFC 3339 / UTC)
 engram_content_hash: sha256:abc123...  # Memory.content_hash — detect drift on re-import
-engram_source_session: sess_abc        # Memory.metadata["source_session"] if present (optional)
+engram_source_session: sess_abc        # Memory.metadata["source_session"] — present only when set (optional)
 engram_importance: 0.8                 # Memory.importance (0.0–1.0)
 engram_tags:                           # Memory.tags
   - rust
@@ -53,7 +53,7 @@ engram_version: 3                      # Memory.version — last known canonical
 | `engram_created_at` | `created_at` | RFC 3339, always UTC (`Z` suffix). |
 | `engram_updated_at` | `updated_at` | RFC 3339, always UTC. |
 | `engram_content_hash` | `content_hash` | `sha256:<hex>` prefix. Used for drift detection. |
-| `engram_source_session` | `metadata["source_session"]` | Optional. Omitted if absent. |
+| `engram_source_session` | `metadata["source_session"]` | **Required in frontmatter when present in metadata.** Omitted entirely if metadata key is absent. |
 | `engram_importance` | `importance` | Float 0.0–1.0. |
 | `engram_tags` | `tags` | YAML sequence. Empty list is `[]`. |
 | `engram_tier` | `tier` | `permanent` or `daily`. |
