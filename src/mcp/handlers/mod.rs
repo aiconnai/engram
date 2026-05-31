@@ -183,6 +183,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "session_context_export" => session::session_context_export(ctx, params),
         "session_land" => handoff::session_land(ctx, params),
         "harness_record" => harness::handle_harness_record(ctx, params),
+        "harness_status" => harness::handle_harness_status(ctx, params),
 
         // ── Lifecycle ────────────────────────────────────────────────────────
         "lifecycle_status" => lifecycle::lifecycle_status(ctx, params),
