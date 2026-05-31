@@ -1,8 +1,9 @@
 # Fase 2.2 — Decisão #29: Search Index v2 RFC
 
-**Data:** 2026-05-31  
-**Issue:** #29 (`Create Search Index v2 RFC`)  
-**Status da decisão:** Parcial / pre-contrato (necessário RFC formal em `docs/rfcs` antes do início de código).
+**Data:** 2026-05-31
+**Issue:** #29 (`Create Search Index v2 RFC`)
+**Status da decisão:** Formalizada (RFC emitido e aceita).
+RFC principal: `docs/rfcs/0003-search-index-v2.md` (Aceita).
 
 ## Evidência no main
 
@@ -16,15 +17,16 @@
 
 ## Decisão operacional
 
-1. **Emissão imediata desta issue (#29) está bloqueada até entrega de RFC formal** em `docs/rfcs` com:
+1. **Emissão de #29 foi concluída com RFC formal** em `docs/rfcs` com:
    - comparação explícita dos caminhos (FTS5 atual, Meilisearch, Tantivy/ANN, Fallback),
    - critérios de degradação e migração (foco em não regressão e local-first),
    - guardrails pós-incident (`schema/rebuild`, orphan handling, drift detectável),
    - plano de rollback e limpeza de dados.
-2. **Regra inicial (sem novo código):**
+2. **Resultado operacional formal:**
    - manter SQLite+FTS5 como base funcional principal de busca;
-   - manter Meilisearch como opção opcional de backend (feature-gated), sem prometer semântica ANN/HNSW de v2 no produto OSS até RFC concluída;
-   - alinhar #26 (contrato de `derived_index` health) antes de qualquer comparação final.
+   - manter Meilisearch como opção opcional de backend (`feature-gated`);
+   - não adotar ainda Tantivy/Manticore/ANN-HNSW como padrão sem RFC/benchmark dedicado;
+   - manter #26 (contrato de `derived_index` health) e guardrails de rebuild/health/drift/disposability como pré-requisito para qualquer backend externo novo.
 
 ## Ação derivada
 
