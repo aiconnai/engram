@@ -376,3 +376,38 @@ para diagnóstico e degradação.
 - `cargo clippy --all-targets --tests -- -D warnings` — PASS.
 - `cargo fmt --all -- --check` — PASS.
 - `bash docs/harness/bin/doctor.sh` — PASS.
+
+## 2026-05-31 — ENG-1296 / #25 política explícita de higiene da fila
+
+### Contexto da sessão
+
+A iteração fecha a transição de visibilidade operacional para controle explícito:
+health/status continuam read-only, e reparos de `embedding_queue` passam por uma
+ação de manutenção dedicada.
+
+### Ações realizadas
+
+- Adicionado `EmbeddingQueueHygieneConfig` com thresholds de stale processing,
+  retry budget e retenção de linhas `complete`.
+- Expandido `EmbeddingQueueHealth` com zero-retry failed, idades oldest
+  processing/failed e buckets de retry.
+- Adicionado `run_embedding_queue_hygiene` com dry-run/apply para:
+  - requeue de `processing` stale ainda dentro do budget;
+  - marcação como `failed` para stale exhausted;
+  - requeue explícito de `failed` retryable;
+  - prune de linhas `complete` além da retenção.
+- Adicionado `maintenance queue-hygiene` no CLI com `--apply`,
+  `--dry-run`, `--requeue-failed` e `--json`.
+- Atualizados `maintenance-status`, `sqlite_embedding_health` e `docs/SCHEMA.md`
+  para refletir os novos campos e a política operacional.
+
+### Verificações
+
+- `cargo fmt --all -- --check` — PASS.
+- `cargo clippy --all-targets --tests -- -D warnings` — PASS.
+- `cargo test maintenance_status_ -- --nocapture` — PASS.
+- `cargo test test_health_check_embedding_details_include_queue_state_counters -- --nocapture` — PASS.
+- `cargo test test_embedding_queue_health_counts_stale_and_retries -- --nocapture` — PASS.
+- `cargo test test_embedding_queue_hygiene_dry_run_does_not_mutate_and_apply_can_repair -- --nocapture` — PASS.
+- `cargo test maintenance_queue_hygiene_dry_run_does_not_mutate_and_apply_updates -- --nocapture` — PASS.
+- `bash docs/harness/bin/bootstrap.sh && bash docs/harness/bin/doctor.sh` — PASS.

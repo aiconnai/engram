@@ -10,7 +10,10 @@ use clap::{Parser, Subcommand};
 
 #[cfg(feature = "agent-portability")]
 use engram::attestation::{AttestationChain, AttestationFilter};
-use engram::embedding::create_embedder;
+use engram::embedding::{
+    create_embedder, run_embedding_queue_hygiene, EmbeddingQueueHygieneConfig,
+    EmbeddingQueueHygieneReport, DEFAULT_COMPLETE_RETENTION,
+};
 use engram::error::Result;
 use engram::graph::KnowledgeGraph;
 use engram::search::{hybrid_search, SearchConfig};
@@ -178,6 +181,21 @@ enum MaintenanceAction {
         #[arg(long)]
         apply: bool,
         /// Emit JSON instead of human-readable text
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run explicit queue hygiene: stale repair, optional failed retries, and complete-row retention pruning
+    QueueHygiene {
+        /// Explicitly requeue failed rows with retry budget left
+        #[arg(long)]
+        requeue_failed: bool,
+        /// Perform writes (default is a read-only dry-run)
+        #[arg(long)]
+        apply: bool,
+        /// Keep dry-run explicit when you do not want to mutate
+        #[arg(long)]
+        dry_run: bool,
+        /// Emit JSON instead of human-readable output
         #[arg(long)]
         json: bool,
     },
@@ -413,6 +431,26 @@ fn main() -> Result<()> {
                     println!("{}", serde_json::to_string_pretty(&status)?);
                 } else {
                     print_maintenance_status(&status);
+                }
+            }
+            MaintenanceAction::QueueHygiene {
+                requeue_failed,
+                apply,
+                dry_run,
+                json,
+            } => {
+                if apply && dry_run {
+                    eprintln!("--apply and --dry-run are mutually exclusive");
+                    std::process::exit(1);
+                }
+                if dry_run {
+                    eprintln!("WARNING: --dry-run requested explicitly; mutation will be skipped.");
+                }
+                let r = run_embedding_queue_maintenance(&storage, requeue_failed, apply)?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&r)?);
+                } else {
+                    print_maintenance_queue_hygiene(&r, apply);
                 }
             }
             MaintenanceAction::Compact { apply, json } => {
@@ -920,6 +958,20 @@ fn maintenance_status(storage: &Storage) -> Result<MaintenanceStatus> {
     })
 }
 
+fn run_embedding_queue_maintenance(
+    storage: &Storage,
+    requeue_failed: bool,
+    apply: bool,
+) -> Result<EmbeddingQueueHygieneReport> {
+    let config = EmbeddingQueueHygieneConfig {
+        complete_retention: DEFAULT_COMPLETE_RETENTION,
+        ..Default::default()
+    };
+    storage.with_connection(|conn| {
+        run_embedding_queue_hygiene(conn, &config, requeue_failed, apply, true)
+    })
+}
+
 fn storage_health(storage: &Storage) -> Result<HealthStatus> {
     health_check_storage(storage)
 }
@@ -1002,6 +1054,11 @@ fn write_maintenance_status<W: std::io::Write>(
                     .get("failed")
                     .map(String::as_str)
                     .unwrap_or("0");
+                let zero_retry_failed = index
+                    .details
+                    .get("zero_retry_failed")
+                    .map(String::as_str)
+                    .unwrap_or("0");
                 let retryable_failed = index
                     .details
                     .get("retryable_failed")
@@ -1023,18 +1080,33 @@ fn write_maintenance_status<W: std::io::Write>(
                     .or_else(|| index.details.get("oldest_pending_age_seconds"))
                     .map(String::as_str)
                     .unwrap_or("none");
+                let oldest_processing_age = index
+                    .details
+                    .get("oldest_processing_age")
+                    .or_else(|| index.details.get("oldest_processing_age_seconds"))
+                    .map(String::as_str)
+                    .unwrap_or("none");
+                let oldest_failed_age = index
+                    .details
+                    .get("oldest_failed_age")
+                    .or_else(|| index.details.get("oldest_failed_age_seconds"))
+                    .map(String::as_str)
+                    .unwrap_or("none");
 
                 writeln!(
                     writer,
-                    "    queue-state: pending={} processing={} stale_processing={} failed={} retryable_failed={} exhausted_failed={} max_retry_count={} oldest_pending_age={}",
+                    "    queue-state: pending={} processing={} stale_processing={} failed={} zero_retry_failed={} retryable_failed={} exhausted_failed={} max_retry_count={} oldest_pending_age={} oldest_processing_age={} oldest_failed_age={}",
                     pending,
                     processing,
                     stale_processing,
                     failed,
+                    zero_retry_failed,
                     retryable_failed,
                     exhausted_failed,
                     max_retry_count,
-                    oldest_pending_age
+                    oldest_pending_age,
+                    oldest_processing_age,
+                    oldest_failed_age,
                 )?;
             }
         }
@@ -1045,6 +1117,20 @@ fn write_maintenance_status<W: std::io::Write>(
     }
 
     Ok(())
+}
+
+fn print_maintenance_queue_hygiene(r: &EmbeddingQueueHygieneReport, apply: bool) {
+    println!(
+        "Embedding queue hygiene ({})",
+        if apply { "APPLIED" } else { "dry-run" }
+    );
+    println!("  stale rows requeued:   {}", r.requeued_stale);
+    println!("  stale rows failed:     {}", r.failed_exhausted);
+    println!("  failed rows requeued:  {}", r.requeued_failed);
+    println!("  complete rows pruned:  {}", r.pruned_complete);
+    if !apply {
+        println!("  (dry-run; re-run with --apply to execute)");
+    }
 }
 
 fn print_maintenance_status(status: &MaintenanceStatus) {
@@ -1272,11 +1358,14 @@ mod tests {
             "processing",
             "stale_processing",
             "failed",
+            "zero_retry_failed",
             "retryable_failed",
             "exhausted_failed",
             "max_retry_count",
             "oldest_pending_age",
             "oldest_pending_age_seconds",
+            "oldest_processing_age",
+            "oldest_failed_age",
         ] {
             assert!(
                 details.contains_key(key),
@@ -1333,6 +1422,8 @@ mod tests {
                     create_memory(conn, &memory_input("state counter retryable"))?;
                 let exhausted_failed =
                     create_memory(conn, &memory_input("state counter exhausted"))?;
+                let zero_retry_failed =
+                    create_memory(conn, &memory_input("state counter zero retry"))?;
 
                 conn.execute(
                     "UPDATE embedding_queue SET status = 'processing', started_at = ?, retry_count = 0 WHERE memory_id = ?",
@@ -1350,6 +1441,10 @@ mod tests {
                     "UPDATE embedding_queue SET status = 'failed', retry_count = 4 WHERE memory_id = ?",
                     params![exhausted_failed.id],
                 )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 0 WHERE memory_id = ?",
+                    params![zero_retry_failed.id],
+                )?;
                 Ok(())
             })
             .unwrap();
@@ -1361,7 +1456,160 @@ mod tests {
         let text = String::from_utf8(output).expect("output should be utf8");
 
         assert!(text.contains(
-            "queue-state: pending=1 processing=1 stale_processing=1 failed=2 retryable_failed=1 exhausted_failed=1 max_retry_count=4 oldest_pending_age="
+            "queue-state: pending=1 processing=1 stale_processing=1 failed=3 zero_retry_failed=1 retryable_failed=2 exhausted_failed=1 max_retry_count=4 oldest_pending_age="
         ));
+    }
+
+    #[test]
+    fn maintenance_queue_hygiene_dry_run_does_not_mutate_and_apply_updates() {
+        let (_dir, storage) = test_storage();
+        let (stale_retryable, stale_exhausted, stale_fresh, failed_retryable, complete_recent, complete_old) =
+            storage.with_connection(|conn| {
+                let stale_retryable = create_memory(conn, &memory_input("queue-hygiene stale retryable"))?;
+                let stale_exhausted = create_memory(conn, &memory_input("queue-hygiene stale exhausted"))?;
+                let stale_fresh = create_memory(conn, &memory_input("queue-hygiene stale fresh"))?;
+                let failed_retryable = create_memory(conn, &memory_input("queue-hygiene failed retryable"))?;
+                let complete_recent = create_memory(conn, &memory_input("queue-hygiene complete recent"))?;
+                let complete_old = create_memory(conn, &memory_input("queue-hygiene complete old"))?;
+
+                let old_started_at = (chrono::Utc::now() - chrono::Duration::minutes(30)).to_rfc3339();
+                let fresh_started_at = chrono::Utc::now().to_rfc3339();
+                let old_completed = (chrono::Utc::now() - chrono::Duration::days(30)).to_rfc3339();
+                let new_completed = (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339();
+
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'processing', started_at = ?, retry_count = 1 WHERE memory_id = ?",
+                    params![old_started_at, stale_retryable.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'processing', started_at = ?, retry_count = 3 WHERE memory_id = ?",
+                    params![old_started_at, stale_exhausted.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'processing', started_at = ?, retry_count = 0 WHERE memory_id = ?",
+                    params![fresh_started_at, stale_fresh.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 1 WHERE memory_id = ?",
+                    params![failed_retryable.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'complete', queued_at = ?, completed_at = ? WHERE memory_id = ?",
+                    params![old_completed, old_completed, complete_old.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'complete', queued_at = ?, completed_at = ? WHERE memory_id = ?",
+                    params![new_completed, new_completed, complete_recent.id],
+                )?;
+                Ok((
+                    stale_retryable.id,
+                    stale_exhausted.id,
+                    stale_fresh.id,
+                    failed_retryable.id,
+                    complete_recent.id,
+                    complete_old.id,
+                ))
+            })
+            .unwrap();
+
+        let dry_run = run_embedding_queue_maintenance(&storage, true, false).unwrap();
+        assert_eq!(dry_run.requeued_stale, 1);
+        assert_eq!(dry_run.failed_exhausted, 1);
+        assert_eq!(dry_run.requeued_failed, 1);
+        assert_eq!(dry_run.pruned_complete, 1);
+
+        let before = storage
+            .with_connection(|conn| {
+                let stale_retryable_state = conn.query_row(
+                    "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+                    params![stale_retryable],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
+                )?;
+                let stale_exhausted_state = conn.query_row(
+                    "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+                    params![stale_exhausted],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
+                )?;
+                let stale_fresh_state = conn.query_row(
+                    "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+                    params![stale_fresh],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
+                )?;
+                let failed_retryable_state = conn.query_row(
+                    "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+                    params![failed_retryable],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
+                )?;
+                let old_complete = conn.query_row(
+                "SELECT COUNT(*) FROM embedding_queue WHERE status = 'complete' AND memory_id = ?",
+                params![complete_old],
+                |row| row.get::<_, i64>(0),
+            )?;
+                Ok((
+                    stale_retryable_state,
+                    stale_exhausted_state,
+                    stale_fresh_state,
+                    failed_retryable_state,
+                    old_complete,
+                ))
+            })
+            .unwrap();
+        assert_eq!(before.0, ("processing".to_string(), 1));
+        assert_eq!(before.1, ("processing".to_string(), 3));
+        assert_eq!(before.2, ("processing".to_string(), 0));
+        assert_eq!(before.3, ("failed".to_string(), 1));
+        assert_eq!(before.4, 1);
+
+        let applied = run_embedding_queue_maintenance(&storage, true, true).unwrap();
+        assert_eq!(applied.requeued_stale, 1);
+        assert_eq!(applied.failed_exhausted, 1);
+        assert_eq!(applied.requeued_failed, 1);
+        assert_eq!(applied.pruned_complete, 1);
+
+        let after = storage.with_connection(|conn| {
+            let stale_retryable_state = conn
+                .query_row(
+                    "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+                    params![stale_retryable],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
+                )?;
+            let stale_exhausted_state = conn
+                .query_row(
+                    "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+                    params![stale_exhausted],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
+                )?;
+            let stale_fresh_state = conn
+                .query_row(
+                    "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+                    params![stale_fresh],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
+                )?;
+            let failed_retryable_state = conn
+                .query_row(
+                    "SELECT status, retry_count FROM embedding_queue WHERE memory_id = ?",
+                    params![failed_retryable],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
+                )?;
+            let complete_count = conn.query_row(
+                "SELECT COUNT(*) FROM embedding_queue WHERE status = 'complete' AND memory_id IN (?, ?)",
+                params![complete_recent, complete_old],
+                |row| row.get::<_, i64>(0),
+            )?;
+            Ok((
+                stale_retryable_state,
+                stale_exhausted_state,
+                stale_fresh_state,
+                failed_retryable_state,
+                complete_count,
+            ))
+        })
+        .unwrap();
+
+        assert_eq!(after.0, ("pending".to_string(), 2));
+        assert_eq!(after.1, ("failed".to_string(), 3));
+        assert_eq!(after.2, ("processing".to_string(), 0));
+        assert_eq!(after.3, ("pending".to_string(), 2));
+        assert_eq!(after.4, 1);
     }
 }

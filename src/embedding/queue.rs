@@ -7,6 +7,7 @@ use async_channel::{bounded, Receiver, Sender};
 use chrono::{Duration as ChronoDuration, Utc};
 use parking_lot::Mutex;
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
@@ -20,6 +21,27 @@ pub const DEFAULT_STALE_PROCESSING_AFTER: Duration = Duration::from_secs(15 * 60
 
 /// Default retry budget for queue hygiene and health accounting.
 pub const DEFAULT_MAX_EMBEDDING_RETRIES: i32 = 3;
+
+/// Default age after which completed embedding rows are eligible for retention pruning.
+pub const DEFAULT_COMPLETE_RETENTION: Duration = Duration::from_secs(14 * 24 * 60 * 60);
+
+/// Parameters that govern explicit embedding-queue hygiene.
+#[derive(Debug, Clone, Copy)]
+pub struct EmbeddingQueueHygieneConfig {
+    pub stale_processing_after: Duration,
+    pub max_retries: i32,
+    pub complete_retention: Duration,
+}
+
+impl Default for EmbeddingQueueHygieneConfig {
+    fn default() -> Self {
+        Self {
+            stale_processing_after: DEFAULT_STALE_PROCESSING_AFTER,
+            max_retries: DEFAULT_MAX_EMBEDDING_RETRIES,
+            complete_retention: DEFAULT_COMPLETE_RETENTION,
+        }
+    }
+}
 
 /// Message for the embedding queue
 #[derive(Debug)]
@@ -38,15 +60,24 @@ pub struct EmbeddingQueueHealth {
     pub failed: i64,
     pub retryable_failed: i64,
     pub exhausted_failed: i64,
+    pub zero_retry_failed: i64,
     pub max_retry_count: i32,
     pub oldest_pending_seconds: Option<i64>,
+    pub oldest_processing_age_seconds: Option<i64>,
+    pub oldest_failed_age_seconds: Option<i64>,
+    pub retry_count_0: i64,
+    pub retry_count_1: i64,
+    pub retry_count_2: i64,
+    pub retry_count_3_plus: i64,
 }
 
-/// Result of a queue hygiene pass over stale `processing` rows.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Result of an explicit queue hygiene pass.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmbeddingQueueHygieneReport {
     pub requeued_stale: i64,
     pub failed_exhausted: i64,
+    pub requeued_failed: i64,
+    pub pruned_complete: i64,
 }
 
 /// Embedding queue for async processing
@@ -379,7 +410,21 @@ pub fn get_embedding_queue_health(
     stale_after: Duration,
     max_retries: i32,
 ) -> Result<EmbeddingQueueHealth> {
-    let stale_cutoff = stale_cutoff_rfc3339(stale_after)?;
+    let config = EmbeddingQueueHygieneConfig {
+        stale_processing_after: stale_after,
+        max_retries,
+        complete_retention: DEFAULT_COMPLETE_RETENTION,
+    };
+    get_embedding_queue_health_with_config(conn, &config)
+}
+
+/// Return a read-only health summary for the durable embedding queue using
+/// an explicit hygiene policy.
+pub fn get_embedding_queue_health_with_config(
+    conn: &Connection,
+    config: &EmbeddingQueueHygieneConfig,
+) -> Result<EmbeddingQueueHealth> {
+    let stale_cutoff = stale_cutoff_rfc3339(config.stale_processing_after)?;
 
     let pending = count_queue_status(conn, "pending")?;
     let processing = count_queue_status(conn, "processing")?;
@@ -396,15 +441,31 @@ pub fn get_embedding_queue_health(
     let retryable_failed: i64 = conn.query_row(
         "SELECT COUNT(*) FROM embedding_queue
          WHERE status = 'failed' AND retry_count < ?",
-        params![max_retries],
+        params![config.max_retries],
         |row| row.get(0),
     )?;
 
     let exhausted_failed: i64 = conn.query_row(
         "SELECT COUNT(*) FROM embedding_queue
          WHERE status = 'failed' AND retry_count >= ?",
-        params![max_retries],
+        params![config.max_retries],
         |row| row.get(0),
+    )?;
+
+    let zero_retry_failed: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue
+         WHERE status = 'failed' AND retry_count = 0",
+        [],
+        |row| row.get(0),
+    )?;
+
+    let oldest_processing_age_seconds =
+        oldest_timestamp_seconds(conn, "processing", Some("started_at"))?;
+
+    let oldest_failed_age_seconds = oldest_timestamp_seconds(
+        conn,
+        "failed",
+        Some("COALESCE(completed_at, started_at, queued_at)"),
     )?;
 
     let max_retry_count = conn
@@ -414,6 +475,27 @@ pub fn get_embedding_queue_health(
             |row| row.get(0),
         )
         .unwrap_or(0);
+
+    let retry_count_0 = conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed' AND retry_count = 0",
+        [],
+        |row| row.get(0),
+    )?;
+    let retry_count_1 = conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed' AND retry_count = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let retry_count_2 = conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed' AND retry_count = 2",
+        [],
+        |row| row.get(0),
+    )?;
+    let retry_count_3_plus = conn.query_row(
+        "SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed' AND retry_count >= ?",
+        params![config.max_retries],
+        |row| row.get(0),
+    )?;
 
     let oldest_pending_at: Option<String> = conn.query_row(
         "SELECT MIN(queued_at) FROM embedding_queue WHERE status = 'pending'",
@@ -434,14 +516,128 @@ pub fn get_embedding_queue_health(
         failed,
         retryable_failed,
         exhausted_failed,
+        zero_retry_failed,
         max_retry_count,
         oldest_pending_seconds,
+        oldest_processing_age_seconds,
+        oldest_failed_age_seconds,
+        retry_count_0,
+        retry_count_1,
+        retry_count_2,
+        retry_count_3_plus,
+    })
+}
+
+/// Explicit repair pass over stale queue work.
+///
+/// This function is non-invasive when `apply == false` (dry-run).
+/// In read-only mode it only reports candidate counts.
+pub fn run_embedding_queue_hygiene(
+    conn: &Connection,
+    config: &EmbeddingQueueHygieneConfig,
+    requeue_retryable_failed: bool,
+    apply: bool,
+    prune_complete: bool,
+) -> Result<EmbeddingQueueHygieneReport> {
+    let stale_cutoff = stale_cutoff_rfc3339(config.stale_processing_after)?;
+    let now = Utc::now().to_rfc3339();
+    let retention_cutoff = complete_retention_cutoff_rfc3339(config.complete_retention)?;
+    let stale_processing_where =
+        "status = 'processing' AND started_at IS NOT NULL AND started_at <= ? AND retry_count < ?";
+    let failed_retryable_where = "status = 'failed' AND retry_count < ? AND retry_count >= 0";
+    let failed_exhausted_where =
+        "status = 'processing' AND started_at IS NOT NULL AND started_at <= ? AND retry_count >= ?";
+    let complete_prunable_where =
+        "status = 'complete' AND COALESCE(completed_at, queued_at) IS NOT NULL AND COALESCE(completed_at, queued_at) <= ?";
+
+    let requeued_stale = if apply {
+        conn.execute(
+            &format!(
+                "UPDATE embedding_queue SET status = 'pending', started_at = NULL, error = NULL, \
+                 retry_count = retry_count + 1, queued_at = ? WHERE {stale_processing_where}"
+            ),
+            params![now, stale_cutoff, config.max_retries],
+        )? as i64
+    } else {
+        conn.query_row(
+            &format!("SELECT COUNT(*) FROM embedding_queue WHERE {stale_processing_where}"),
+            params![stale_cutoff, config.max_retries],
+            |row| row.get(0),
+        )?
+    };
+
+    let failed_exhausted = if apply {
+        conn.execute(
+            &format!(
+                "UPDATE embedding_queue
+                 SET status = 'failed',
+                     error = 'embedding processing lease expired after retry budget',
+                     completed_at = ?
+                 WHERE {failed_exhausted_where}"
+            ),
+            params![now, stale_cutoff, config.max_retries],
+        )? as i64
+    } else {
+        conn.query_row(
+            &format!("SELECT COUNT(*) FROM embedding_queue WHERE {failed_exhausted_where}"),
+            params![stale_cutoff, config.max_retries],
+            |row| row.get(0),
+        )?
+    };
+
+    let requeued_failed = if requeue_retryable_failed {
+        if apply {
+            conn.execute(
+                &format!(
+                    "UPDATE embedding_queue
+                     SET status = 'pending',
+                         error = NULL,
+                         retry_count = retry_count + 1,
+                         queued_at = ?,
+                         started_at = NULL
+                     WHERE {failed_retryable_where}"
+                ),
+                params![now, config.max_retries],
+            )? as i64
+        } else {
+            conn.query_row(
+                &format!("SELECT COUNT(*) FROM embedding_queue WHERE {failed_retryable_where}"),
+                params![config.max_retries],
+                |row| row.get(0),
+            )?
+        }
+    } else {
+        0
+    };
+
+    let pruned_complete = if prune_complete && config.complete_retention.as_secs() > 0 {
+        if apply {
+            conn.execute(
+                &format!("DELETE FROM embedding_queue WHERE {complete_prunable_where}"),
+                params![retention_cutoff],
+            )? as i64
+        } else {
+            conn.query_row(
+                &format!("SELECT COUNT(*) FROM embedding_queue WHERE {complete_prunable_where}"),
+                params![retention_cutoff],
+                |row| row.get(0),
+            )?
+        }
+    } else {
+        0
+    };
+
+    Ok(EmbeddingQueueHygieneReport {
+        requeued_stale,
+        failed_exhausted,
+        requeued_failed,
+        pruned_complete,
     })
 }
 
 /// Requeue abandoned `processing` rows, or fail them if their retry budget is exhausted.
 ///
-/// This is the explicit repair path for stale in-flight work. Health checks do
+/// This is an explicit repair path for stale in-flight work. Health checks do
 /// not call this function.
 pub fn requeue_stale_processing_embeddings(
     conn: &Connection,
@@ -480,6 +676,8 @@ pub fn requeue_stale_processing_embeddings(
     Ok(EmbeddingQueueHygieneReport {
         requeued_stale,
         failed_exhausted,
+        requeued_failed: 0,
+        pruned_complete: 0,
     })
 }
 
@@ -495,6 +693,34 @@ fn stale_cutoff_rfc3339(stale_after: Duration) -> Result<String> {
     let stale_after = ChronoDuration::from_std(stale_after)
         .map_err(|_| EngramError::InvalidInput("stale_after duration is too large".to_string()))?;
     Ok((Utc::now() - stale_after).to_rfc3339())
+}
+
+fn complete_retention_cutoff_rfc3339(complete_retention: Duration) -> Result<String> {
+    let complete_retention = ChronoDuration::from_std(complete_retention).map_err(|_| {
+        EngramError::InvalidInput("complete_retention duration is too large".to_string())
+    })?;
+    Ok((Utc::now() - complete_retention).to_rfc3339())
+}
+
+fn oldest_timestamp_seconds(
+    conn: &Connection,
+    status: &str,
+    ts_expr: Option<&str>,
+) -> Result<Option<i64>> {
+    let ts_sql = ts_expr.unwrap_or("queued_at");
+    let oldest: Option<String> = conn.query_row(
+        &format!(
+            "SELECT MIN({}) FROM embedding_queue WHERE status = ? AND {} IS NOT NULL",
+            ts_sql, ts_sql
+        ),
+        params![status],
+        |row| row.get(0),
+    )?;
+    Ok(oldest.and_then(|ts| {
+        chrono::DateTime::parse_from_rfc3339(&ts)
+            .ok()
+            .map(|dt| (Utc::now() - dt.with_timezone(&Utc)).num_seconds().max(0))
+    }))
 }
 
 /// Drain up to `batch_size` pending entries from the SQL `embedding_queue`
@@ -701,8 +927,10 @@ mod tests {
                     create_memory(conn, &test_memory_input("failed retryable"))?;
                 let failed_exhausted =
                     create_memory(conn, &test_memory_input("failed exhausted"))?;
+                let failed_zero = create_memory(conn, &test_memory_input("failed zero retry"))?;
 
                 let old_started_at = (Utc::now() - ChronoDuration::minutes(30)).to_rfc3339();
+                let old_started_or_completed = (Utc::now() - ChronoDuration::minutes(90)).to_rfc3339();
                 conn.execute(
                     "UPDATE embedding_queue SET status = 'processing', started_at = ? WHERE memory_id = ?",
                     params![old_started_at, processing.id],
@@ -715,6 +943,12 @@ mod tests {
                     "UPDATE embedding_queue SET status = 'failed', retry_count = 3 WHERE memory_id = ?",
                     params![failed_exhausted.id],
                 )?;
+                conn.execute(
+                    "UPDATE embedding_queue
+                     SET status = 'failed', retry_count = 0, completed_at = ?
+                     WHERE memory_id = ?",
+                    params![old_started_or_completed, failed_zero.id],
+                )?;
 
                 let health =
                     get_embedding_queue_health(conn, Duration::from_secs(15 * 60), 3)?;
@@ -722,11 +956,18 @@ mod tests {
                 assert_eq!(health.pending, 1);
                 assert_eq!(health.processing, 1);
                 assert_eq!(health.stale_processing, 1);
-                assert_eq!(health.failed, 2);
-                assert_eq!(health.retryable_failed, 1);
+                assert_eq!(health.failed, 3);
+                assert_eq!(health.retryable_failed, 2);
                 assert_eq!(health.exhausted_failed, 1);
+                assert_eq!(health.zero_retry_failed, 1);
                 assert_eq!(health.max_retry_count, 3);
+                assert_eq!(health.retry_count_0, 1);
+                assert_eq!(health.retry_count_1, 1);
+                assert_eq!(health.retry_count_2, 0);
+                assert_eq!(health.retry_count_3_plus, 1);
                 assert!(health.oldest_pending_seconds.is_some());
+                assert!(health.oldest_processing_age_seconds.is_some());
+                assert!(health.oldest_failed_age_seconds.is_some());
 
                 let _ = pending;
                 Ok(())
@@ -781,6 +1022,133 @@ mod tests {
                 Ok(())
             })
             .unwrap();
+    }
+
+    #[test]
+    fn test_embedding_queue_hygiene_dry_run_does_not_mutate_and_apply_can_repair() {
+        let storage = Storage::open_in_memory().unwrap();
+        let (stale_retryable, stale_exhausted, stale_fresh, failed_retryable, complete_recent, complete_old) =
+            storage.with_connection(|conn| {
+                let stale_retryable = create_memory(conn, &test_memory_input("stale retryable"))?;
+                let stale_exhausted = create_memory(conn, &test_memory_input("stale exhausted"))?;
+                let stale_fresh = create_memory(conn, &test_memory_input("processing fresh"))?;
+                let failed_retryable = create_memory(conn, &test_memory_input("failed retryable"))?;
+                let complete_recent = create_memory(conn, &test_memory_input("complete new"))?;
+                let complete_old = create_memory(conn, &test_memory_input("complete old"))?;
+
+                let old_started_at = (Utc::now() - ChronoDuration::minutes(30)).to_rfc3339();
+                let fresh_started_at = Utc::now().to_rfc3339();
+                let old_completed = (Utc::now() - ChronoDuration::days(30)).to_rfc3339();
+                let new_completed = (Utc::now() - ChronoDuration::minutes(10)).to_rfc3339();
+
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'processing', started_at = ?, retry_count = 1 WHERE memory_id = ?",
+                    params![old_started_at, stale_retryable.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'processing', started_at = ?, retry_count = 3 WHERE memory_id = ?",
+                    params![old_started_at, stale_exhausted.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'processing', started_at = ?, retry_count = 0 WHERE memory_id = ?",
+                    params![fresh_started_at, stale_fresh.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 1 WHERE memory_id = ?",
+                    params![failed_retryable.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'complete', queued_at = ?, completed_at = ? WHERE memory_id = ?",
+                    params![old_completed, old_completed, complete_old.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'complete', queued_at = ?, completed_at = ? WHERE memory_id = ?",
+                    params![new_completed, new_completed, complete_recent.id],
+                )?;
+
+                Ok((
+                    stale_retryable.id,
+                    stale_exhausted.id,
+                    stale_fresh.id,
+                    failed_retryable.id,
+                    complete_recent.id,
+                    complete_old.id,
+                ))
+            })
+            .unwrap();
+
+        let config = EmbeddingQueueHygieneConfig {
+            complete_retention: Duration::from_secs(24 * 60 * 60),
+            ..Default::default()
+        };
+
+        let dry_run = storage
+            .with_connection(|conn| run_embedding_queue_hygiene(conn, &config, true, false, true))
+            .unwrap();
+        assert_eq!(dry_run.requeued_stale, 1);
+        assert_eq!(dry_run.failed_exhausted, 1);
+        assert_eq!(dry_run.requeued_failed, 1);
+        assert_eq!(dry_run.pruned_complete, 1);
+
+        let before = storage
+            .with_connection(|conn| {
+                let stale_retryable_state = queue_state(conn, stale_retryable)?;
+                let stale_exhausted_state = queue_state(conn, stale_exhausted)?;
+                let stale_fresh_state = queue_state(conn, stale_fresh)?;
+                let failed_retryable_state = queue_state(conn, failed_retryable)?;
+                let old_complete = conn.query_row(
+                "SELECT COUNT(*) FROM embedding_queue WHERE status = 'complete' AND memory_id = ?",
+                params![complete_old],
+                |row| row.get::<_, i64>(0),
+            )?;
+                Ok((
+                    stale_retryable_state,
+                    stale_exhausted_state,
+                    stale_fresh_state,
+                    failed_retryable_state,
+                    old_complete,
+                ))
+            })
+            .unwrap();
+
+        assert_eq!(before.0, ("processing".to_string(), 1));
+        assert_eq!(before.1, ("processing".to_string(), 3));
+        assert_eq!(before.2, ("processing".to_string(), 0));
+        assert_eq!(before.3, ("failed".to_string(), 1));
+        assert_eq!(before.4, 1);
+
+        let applied = storage
+            .with_connection(|conn| run_embedding_queue_hygiene(conn, &config, true, true, true))
+            .unwrap();
+        assert_eq!(applied.requeued_stale, 1);
+        assert_eq!(applied.failed_exhausted, 1);
+        assert_eq!(applied.requeued_failed, 1);
+        assert_eq!(applied.pruned_complete, 1);
+
+        let after = storage.with_connection(|conn| {
+            let stale_retryable_state = queue_state(conn, stale_retryable)?;
+            let stale_exhausted_state = queue_state(conn, stale_exhausted)?;
+            let stale_fresh_state = queue_state(conn, stale_fresh)?;
+            let failed_retryable_state = queue_state(conn, failed_retryable)?;
+            let complete_count = conn.query_row(
+                "SELECT COUNT(*) FROM embedding_queue WHERE status = 'complete' AND memory_id IN (?, ?)",
+                params![complete_recent, complete_old],
+                |row| row.get::<_, i64>(0),
+            )?;
+            Ok((
+                stale_retryable_state,
+                stale_exhausted_state,
+                stale_fresh_state,
+                failed_retryable_state,
+                complete_count,
+            ))
+        }).unwrap();
+
+        assert_eq!(after.0, ("pending".to_string(), 2));
+        assert_eq!(after.1, ("failed".to_string(), 3));
+        assert_eq!(after.2, ("processing".to_string(), 0));
+        assert_eq!(after.3, ("pending".to_string(), 2));
+        assert_eq!(after.4, 1);
     }
 
     #[test]

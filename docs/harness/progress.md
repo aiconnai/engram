@@ -136,6 +136,32 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `cargo clippy --all-targets --tests -- -D warnings` — PASS.
   - `bash docs/harness/bin/doctor.sh` — PASS.
 
+## ENG-1296 / #25 — Add embedding queue hygiene policy
+
+- Formalização da política de operação da fila: budget de retry e retenção para `complete` (via constants config in `src/embedding/queue.rs`).
+- `maintenance queue-hygiene` adicionado ao CLI com fluxo explícito de reparo:
+  - `--dry-run` (padrão) para não mutar
+  - `--apply` para executar mudanças
+  - `--requeue-failed` para incluir requeue de `failed` com orçamento restante
+- Expansão de saúde: `zero_retry_failed`, idades `oldest_processing_age` /
+  `oldest_failed_age`, e buckets de `retry_count`.
+- Estado de saúde e saída humana de `maintenance-status` continuam read-only.
+- Testes adicionados/estendidos em Rust para cobertura de:
+  - `health` (contadores e idades)
+  - path de hygiene em modo dry-run vs apply
+  - output de status e comportamento não mutável por padrão.
+- Verificações na iteração:
+  - `cargo fmt --all -- --check` — PASS.
+  - `cargo clippy --all-targets --tests -- -D warnings` — PASS.
+  - `cargo test maintenance_status_ -- --nocapture` — PASS.
+  - `cargo test test_health_check_embedding_details_include_queue_state_counters -- --nocapture` — PASS.
+  - `cargo test test_embedding_queue_health_counts_stale_and_retries -- --nocapture` — PASS.
+  - `cargo test test_embedding_queue_hygiene_dry_run_does_not_mutate_and_apply_can_repair -- --nocapture` — PASS.
+  - `cargo test maintenance_queue_hygiene_dry_run_does_not_mutate_and_apply_updates -- --nocapture` — PASS.
+- Decisão de escopo:
+  - `CHEATSHEET_CUTOVER.md` permanece fora do commit; é checklist operacional
+    de deploy/cutover e não faz parte da política de higiene da fila.
+
 ---
 
 **Nota**: Este arquivo é atualizado manualmente ao final de cada iteração significativa ou ao final de sessões. O log detalhado fica no arquivo apontado por `Active plan`.

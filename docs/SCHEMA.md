@@ -617,11 +617,21 @@ CREATE TABLE embedding_queue (
 Queue hygiene policy:
 
 - `pending` rows are eligible for workers to claim.
-- `processing` rows are considered stale after 15 minutes without completion.
-- Stale `processing` rows are requeued by the explicit queue hygiene path while `retry_count < 3`; the hygiene pass increments `retry_count`.
-- Stale `processing` rows with `retry_count >= 3` are marked `failed`.
-- Failed rows are not retried by read-only health checks. They can be requeued only through explicit retry/repair paths.
-- Health/status reporting is read-only and reports pending, processing, stale processing, failed, retryable failed, exhausted failed, and max retry count.
+- `processing` rows are considered stale when `queued_at`/`started_at` age exceeds a
+  configurable `stale_processing_after` threshold (default: 15 minutes).
+- Stale `processing` rows are requeued by the explicit `maintenance queue-hygiene`
+  path while `retry_count < max_retries`; the pass increments `retry_count`.
+- Stale `processing` rows with `retry_count >= max_retries` are marked `failed`.
+- Optional explicit repair can requeue failed rows with `retry_count < max_retries`.
+- `complete` rows older than `complete_retention` (default: 14 days) are eligible
+  for retention pruning during `maintenance queue-hygiene --apply`.
+- Health/status reporting is read-only and reports pending, processing, stale
+  processing, failed, zero-retry failed, retryable failed, exhausted failed,
+  oldest pending/processing/failed ages, max retry count, and retry buckets.
+- `maintenance queue-hygiene` is the explicit mutating control plane:
+  - default is read-only (dry-run),
+  - `--apply` writes state changes,
+  - `--requeue-failed` enables failed-row requeue attempts.
 
 #### memories_fts (FTS5 Virtual Table)
 

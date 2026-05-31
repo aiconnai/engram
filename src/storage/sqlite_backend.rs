@@ -577,6 +577,10 @@ fn sqlite_embedding_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHe
             ),
             ("failed".to_string(), queue.failed.to_string()),
             (
+                "zero_retry_failed".to_string(),
+                queue.zero_retry_failed.to_string(),
+            ),
+            (
                 "retryable_failed".to_string(),
                 queue.retryable_failed.to_string(),
             ),
@@ -590,6 +594,41 @@ fn sqlite_embedding_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHe
             ),
             ("oldest_pending_age".to_string(), oldest_pending_age.clone()),
             ("oldest_pending_age_seconds".to_string(), oldest_pending_age),
+            (
+                "oldest_processing_age".to_string(),
+                queue
+                    .oldest_processing_age_seconds
+                    .map(|age| age.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+            ),
+            (
+                "oldest_processing_age_seconds".to_string(),
+                queue
+                    .oldest_processing_age_seconds
+                    .map(|age| age.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+            ),
+            (
+                "oldest_failed_age".to_string(),
+                queue
+                    .oldest_failed_age_seconds
+                    .map(|age| age.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+            ),
+            (
+                "oldest_failed_age_seconds".to_string(),
+                queue
+                    .oldest_failed_age_seconds
+                    .map(|age| age.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+            ),
+            ("retry_count_0".to_string(), queue.retry_count_0.to_string()),
+            ("retry_count_1".to_string(), queue.retry_count_1.to_string()),
+            ("retry_count_2".to_string(), queue.retry_count_2.to_string()),
+            (
+                "retry_count_3_plus".to_string(),
+                queue.retry_count_3_plus.to_string(),
+            ),
             (
                 "flagged_without_embedding_row".to_string(),
                 flagged_without_row.to_string(),
