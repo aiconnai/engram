@@ -372,6 +372,189 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
     final_val
 }
 
+/// Generate a structured handoff packet for next-agent continuity.
+///
+/// Params:
+/// - `current_goal` (string, required, ≤300 chars)
+/// - `files_touched` (array of strings, optional)
+/// - `decisions_made` (array of strings, optional)
+/// - `tests_run` (array of strings, optional)
+/// - `tests_not_run` (array of strings, optional)
+/// - `known_risks` (array of strings, optional)
+/// - `blockers` (array of strings, optional)
+/// - `next_steps` (array of strings, required, min 1 item)
+/// - `issue_numbers` (array of integers, optional)
+/// - `plan_doc_paths` (array of strings, optional)
+/// - `verification_evidence` (string, optional)
+/// - `persist` (bool, optional, default true)
+/// - `workspace` (string, optional, defaults to "default")
+pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
+    // ── Validate current_goal ────────────────────────────────────────────────
+    let current_goal = match params.get("current_goal").and_then(|v| v.as_str()) {
+        Some(g) => g.to_string(),
+        None => return json!({"error": "current_goal is required"}),
+    };
+    if current_goal.len() > 300 {
+        return json!({"error": "current_goal must be 300 characters or fewer"});
+    }
+
+    // ── Validate next_steps ──────────────────────────────────────────────────
+    let next_steps: Vec<String> = match params.get("next_steps").and_then(|v| v.as_array()) {
+        Some(arr) => arr.iter().filter_map(|v| v.as_str().map(String::from)).collect(),
+        None => return json!({"error": "next_steps is required"}),
+    };
+    if next_steps.is_empty() {
+        return json!({"error": "next_steps must have at least one item"});
+    }
+
+    // ── Extract optional params ──────────────────────────────────────────────
+    let files_touched: Vec<String> = params
+        .get("files_touched")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let decisions_made: Vec<String> = params
+        .get("decisions_made")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let tests_run: Vec<String> = params
+        .get("tests_run")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let tests_not_run: Vec<String> = params
+        .get("tests_not_run")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let known_risks: Vec<String> = params
+        .get("known_risks")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let blockers: Vec<String> = params
+        .get("blockers")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let issue_numbers: Vec<i64> = params
+        .get("issue_numbers")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_i64()).collect())
+        .unwrap_or_default();
+
+    let plan_doc_paths: Vec<String> = params
+        .get("plan_doc_paths")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let verification_evidence = params
+        .get("verification_evidence")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let persist = params
+        .get("persist")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let workspace = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default")
+        .to_string();
+
+    // ── Completion claim ─────────────────────────────────────────────────────
+    let has_evidence = verification_evidence
+        .as_deref()
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+
+    // ── Persist if requested ─────────────────────────────────────────────────
+    let (handoff_id, created_at, persisted) = if persist {
+        // Build content (≤1000 chars)
+        let steps_text: String = next_steps
+            .iter()
+            .map(|s| format!("- {}", s))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let full_content = format!("{}\n\nNext steps:\n{}", current_goal, steps_text);
+        let content = if full_content.len() > 1000 {
+            full_content[..1000].to_string()
+        } else {
+            full_content
+        };
+
+        let mut metadata: HashMap<String, Value> = HashMap::new();
+        metadata.insert("harness_kind".to_string(), json!("handoff"));
+        metadata.insert("files_touched".to_string(), json!(files_touched));
+        metadata.insert("decisions_made".to_string(), json!(decisions_made));
+        metadata.insert("tests_run".to_string(), json!(tests_run));
+        metadata.insert("tests_not_run".to_string(), json!(tests_not_run));
+        metadata.insert("known_risks".to_string(), json!(known_risks));
+        metadata.insert("blockers".to_string(), json!(blockers));
+        metadata.insert("issue_numbers".to_string(), json!(issue_numbers));
+        metadata.insert("plan_doc_paths".to_string(), json!(plan_doc_paths));
+        metadata.insert("verification_evidence".to_string(), json!(verification_evidence));
+
+        let input = crate::types::CreateMemoryInput {
+            content,
+            memory_type: crate::types::MemoryType::Checkpoint,
+            tags: vec!["harness".to_string(), "handoff".to_string()],
+            metadata,
+            importance: Some(0.9),
+            workspace: Some(workspace.clone()),
+            tier: crate::types::MemoryTier::Permanent,
+            ..Default::default()
+        };
+
+        match ctx
+            .storage
+            .with_transaction(|conn| crate::storage::queries::create_memory(conn, &input))
+        {
+            Ok(memory) => (Some(memory.id), memory.created_at.to_rfc3339(), true),
+            Err(e) => return json!({"error": format!("Failed to persist handoff: {}", e)}),
+        }
+    } else {
+        (None, chrono::Utc::now().to_rfc3339(), false)
+    };
+
+    // ── Build response ───────────────────────────────────────────────────────
+    let mut response = json!({
+        "handoff_id": handoff_id,
+        "workspace": workspace,
+        "current_goal": current_goal,
+        "files_touched": files_touched,
+        "decisions_made": decisions_made,
+        "tests_run": tests_run,
+        "tests_not_run": tests_not_run,
+        "known_risks": known_risks,
+        "blockers": blockers,
+        "next_steps": next_steps,
+        "issue_numbers": issue_numbers,
+        "plan_doc_paths": plan_doc_paths,
+        "verification_evidence": verification_evidence,
+        "completion_claimed": has_evidence,
+        "persisted": persisted,
+        "created_at": created_at,
+    });
+
+    if !has_evidence {
+        response["completion_warning"] =
+            json!("No verification evidence provided. Do not claim this work is complete.");
+    }
+
+    response
+}
+
 /// Run a shell command and return trimmed stdout, or None on error.
 fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
     std::process::Command::new(cmd)
@@ -640,6 +823,87 @@ mod tests {
         assert!(result.get("error").is_none(), "unexpected error: {}", result);
         let decisions = result["recent_decisions"].as_array().unwrap();
         assert!(decisions.len() < 20, "expected truncation, got {} decisions", decisions.len());
+    }
+
+    // ── harness_handoff tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_harness_handoff_basic() {
+        let ctx = test_ctx();
+        let result = handle_harness_handoff(
+            &ctx,
+            json!({
+                "current_goal": "Implement search index v2",
+                "files_touched": ["src/search.rs", "src/index.rs"],
+                "decisions_made": ["Use BM25 scoring"],
+                "tests_run": ["cargo test --lib"],
+                "next_steps": ["Review PR #34", "Run full CI"],
+                "verification_evidence": "873 tests passed",
+            }),
+        );
+        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(result["handoff_id"].as_i64().is_some(), "expected handoff_id, got: {}", result);
+        assert_eq!(result["completion_claimed"], true);
+        assert_eq!(result["persisted"], true);
+        assert_eq!(result["current_goal"], "Implement search index v2");
+    }
+
+    #[test]
+    fn test_harness_handoff_no_verification_evidence() {
+        let ctx = test_ctx();
+        let result = handle_harness_handoff(
+            &ctx,
+            json!({
+                "current_goal": "Fix bug in parser",
+                "next_steps": ["Run cargo test"],
+            }),
+        );
+        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert_eq!(result["completion_claimed"], false);
+        assert!(result["completion_warning"].as_str().is_some());
+        let warning = result["completion_warning"].as_str().unwrap();
+        assert!(warning.contains("No verification evidence"), "got: {}", warning);
+    }
+
+    #[test]
+    fn test_harness_handoff_no_persist() {
+        let ctx = test_ctx();
+        let result = handle_harness_handoff(
+            &ctx,
+            json!({
+                "current_goal": "Draft only handoff",
+                "next_steps": ["Check logs"],
+                "persist": false,
+            }),
+        );
+        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(result["handoff_id"].is_null(), "expected null handoff_id, got: {}", result);
+        assert_eq!(result["persisted"], false);
+    }
+
+    #[test]
+    fn test_harness_handoff_missing_goal() {
+        let ctx = test_ctx();
+        let result = handle_harness_handoff(
+            &ctx,
+            json!({
+                "next_steps": ["Do something"],
+            }),
+        );
+        assert!(result.get("error").is_some(), "expected error, got: {}", result);
+    }
+
+    #[test]
+    fn test_harness_handoff_empty_next_steps() {
+        let ctx = test_ctx();
+        let result = handle_harness_handoff(
+            &ctx,
+            json!({
+                "current_goal": "Some goal",
+                "next_steps": [],
+            }),
+        );
+        assert!(result.get("error").is_some(), "expected error, got: {}", result);
     }
 
     #[test]
