@@ -1092,10 +1092,30 @@ fn write_maintenance_status<W: std::io::Write>(
                     .or_else(|| index.details.get("oldest_failed_age_seconds"))
                     .map(String::as_str)
                     .unwrap_or("none");
+                let retry_count_0 = index
+                    .details
+                    .get("retry_count_0")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let retry_count_1 = index
+                    .details
+                    .get("retry_count_1")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let retry_count_2 = index
+                    .details
+                    .get("retry_count_2")
+                    .map(String::as_str)
+                    .unwrap_or("0");
+                let retry_count_3_plus = index
+                    .details
+                    .get("retry_count_3_plus")
+                    .map(String::as_str)
+                    .unwrap_or("0");
 
                 writeln!(
                     writer,
-                    "    queue-state: pending={} processing={} stale_processing={} failed={} zero_retry_failed={} retryable_failed={} exhausted_failed={} max_retry_count={} oldest_pending_age={} oldest_processing_age={} oldest_failed_age={}",
+                    "    queue-state: pending={} processing={} stale_processing={} failed={} zero_retry_failed={} retryable_failed={} exhausted_failed={} max_retry_count={} oldest_pending_age={} oldest_processing_age={} oldest_failed_age={} retry_count_0={} retry_count_1={} retry_count_2={} retry_count_3+={}",
                     pending,
                     processing,
                     stale_processing,
@@ -1107,6 +1127,10 @@ fn write_maintenance_status<W: std::io::Write>(
                     oldest_pending_age,
                     oldest_processing_age,
                     oldest_failed_age,
+                    retry_count_0,
+                    retry_count_1,
+                    retry_count_2,
+                    retry_count_3_plus,
                 )?;
             }
         }
@@ -1366,6 +1390,10 @@ mod tests {
             "oldest_pending_age_seconds",
             "oldest_processing_age",
             "oldest_failed_age",
+            "retry_count_0",
+            "retry_count_1",
+            "retry_count_2",
+            "retry_count_3_plus",
         ] {
             assert!(
                 details.contains_key(key),
@@ -1458,6 +1486,10 @@ mod tests {
         assert!(text.contains(
             "queue-state: pending=1 processing=1 stale_processing=1 failed=3 zero_retry_failed=1 retryable_failed=2 exhausted_failed=1 max_retry_count=4 oldest_pending_age="
         ));
+        assert!(text.contains("retry_count_0=1"));
+        assert!(text.contains("retry_count_1=1"));
+        assert!(text.contains("retry_count_2=0"));
+        assert!(text.contains("retry_count_3+=1"));
     }
 
     #[test]

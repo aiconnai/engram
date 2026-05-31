@@ -398,6 +398,9 @@ ação de manutenção dedicada.
   - prune de linhas `complete` além da retenção.
 - Adicionado `maintenance queue-hygiene` no CLI com `--apply`,
   `--dry-run`, `--requeue-failed` e `--json`.
+- Ajustada a semântica dos buckets de retry para `retry_count_3_plus` ficar fixa em
+  `>=3` (independente de `max_retries`), e inclusão desses buckets na saída humana
+  de `maintenance-status`.
 - Atualizados `maintenance-status`, `sqlite_embedding_health` e `docs/SCHEMA.md`
   para refletir os novos campos e a política operacional.
 
@@ -408,6 +411,8 @@ ação de manutenção dedicada.
 - `cargo test maintenance_status_ -- --nocapture` — PASS.
 - `cargo test test_health_check_embedding_details_include_queue_state_counters -- --nocapture` — PASS.
 - `cargo test test_embedding_queue_health_counts_stale_and_retries -- --nocapture` — PASS.
+- `cargo test test_embedding_queue_health_retry_buckets_are_stable_vs_config -- --nocapture` — PASS.
 - `cargo test test_embedding_queue_hygiene_dry_run_does_not_mutate_and_apply_can_repair -- --nocapture` — PASS.
 - `cargo test maintenance_queue_hygiene_dry_run_does_not_mutate_and_apply_updates -- --nocapture` — PASS.
+- `cargo test maintenance_status_human_output_includes_embedding_queue_state_counters -- --nocapture` — PASS.
 - `bash docs/harness/bin/bootstrap.sh && bash docs/harness/bin/doctor.sh` — PASS.

@@ -25,6 +25,9 @@ pub const DEFAULT_MAX_EMBEDDING_RETRIES: i32 = 3;
 /// Default age after which completed embedding rows are eligible for retention pruning.
 pub const DEFAULT_COMPLETE_RETENTION: Duration = Duration::from_secs(14 * 24 * 60 * 60);
 
+/// Retry count bucket threshold for health reporting.
+const RETRY_COUNT_BUCKET_3_PLUS: i32 = 3;
+
 /// Parameters that govern explicit embedding-queue hygiene.
 #[derive(Debug, Clone, Copy)]
 pub struct EmbeddingQueueHygieneConfig {
@@ -493,7 +496,7 @@ pub fn get_embedding_queue_health_with_config(
     )?;
     let retry_count_3_plus = conn.query_row(
         "SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed' AND retry_count >= ?",
-        params![config.max_retries],
+        params![RETRY_COUNT_BUCKET_3_PLUS],
         |row| row.get(0),
     )?;
 
@@ -970,6 +973,58 @@ mod tests {
                 assert!(health.oldest_failed_age_seconds.is_some());
 
                 let _ = pending;
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_embedding_queue_health_retry_buckets_are_stable_vs_config() {
+        let storage = Storage::open_in_memory().unwrap();
+
+        storage
+            .with_connection(|conn| {
+                let retry_zero = create_memory(conn, &test_memory_input("retry zero"))?;
+                let retry_one = create_memory(conn, &test_memory_input("retry one"))?;
+                let retry_two = create_memory(conn, &test_memory_input("retry two"))?;
+                let retry_three = create_memory(conn, &test_memory_input("retry three"))?;
+                let retry_many = create_memory(conn, &test_memory_input("retry many"))?;
+
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 0 WHERE memory_id = ?",
+                    params![retry_zero.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 1 WHERE memory_id = ?",
+                    params![retry_one.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 2 WHERE memory_id = ?",
+                    params![retry_two.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 3 WHERE memory_id = ?",
+                    params![retry_three.id],
+                )?;
+                conn.execute(
+                    "UPDATE embedding_queue SET status = 'failed', retry_count = 5 WHERE memory_id = ?",
+                    params![retry_many.id],
+                )?;
+
+                let config = EmbeddingQueueHygieneConfig {
+                    max_retries: 1,
+                    ..Default::default()
+                };
+                let health = get_embedding_queue_health_with_config(conn, &config)?;
+
+                assert_eq!(health.retry_count_0, 1);
+                assert_eq!(health.retry_count_1, 1);
+                assert_eq!(health.retry_count_2, 1);
+                assert_eq!(health.retry_count_3_plus, 2);
+                assert_eq!(health.max_retry_count, 5);
+                assert_eq!(health.retryable_failed, 1);
+                assert_eq!(health.exhausted_failed, 4);
+
                 Ok(())
             })
             .unwrap();

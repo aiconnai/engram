@@ -145,6 +145,9 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `--requeue-failed` para incluir requeue de `failed` com orçamento restante
 - Expansão de saúde: `zero_retry_failed`, idades `oldest_processing_age` /
   `oldest_failed_age`, e buckets de `retry_count`.
+- Ajuste adicional de observabilidade: buckets `retry_count_0/1/2/3+` passaram a
+  usar semântica fixa (`3+` para `>=3`) independente do `max_retries` configurado,
+  e passaram a aparecer também na saída humana de `maintenance-status`.
 - Estado de saúde e saída humana de `maintenance-status` continuam read-only.
 - Testes adicionados/estendidos em Rust para cobertura de:
   - `health` (contadores e idades)
