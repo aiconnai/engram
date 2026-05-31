@@ -185,6 +185,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "harness_record" => harness::handle_harness_record(ctx, params),
         "harness_status" => harness::handle_harness_status(ctx, params),
         "harness_handoff" => harness::handle_harness_handoff(ctx, params),
+        "harness_verify" => harness::handle_harness_verify(ctx, params),
 
         // ── Lifecycle ────────────────────────────────────────────────────────
         "lifecycle_status" => lifecycle::lifecycle_status(ctx, params),
