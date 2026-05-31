@@ -6,14 +6,12 @@ on:
     # Docs-only changes don't need the (heavy) build/test pipeline.
     paths-ignore:
       - '**.md'
-      - 'docs/**'
       - '.air/**'
       - 'LICENSE'
   pull_request:
     branches: [main]
     paths-ignore:
       - '**.md'
-      - 'docs/**'
       - '.air/**'
       - 'LICENSE'
   workflow_dispatch:

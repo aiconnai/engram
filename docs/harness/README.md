@@ -1,0 +1,239 @@
+# Engram Harness — Operational Discipline
+
+Disciplina operacional do repositório `aiconnai/engram`.
+
+O harness existe para manter o trabalho retomável, auditável e de alta qualidade entre sessões de agentes (Claude Code CLI, Grok Build TUI, Codex, Cursor, etc.) e entre humanos + agentes. Ele fornece spec feed-forward, invariants duros, gates mensuráveis (locais + cross-model review), reviews persistidos como artefatos, e progresso registrado de forma canônica.
+
+Se um agente futuro (ou você em outra sessão) não consegue responder rapidamente:
+
+- Qual é a tarefa ativa?
+- Quais regras não mudam nunca?
+- Quais checks bloqueiam o progresso?
+- O que mudou desde a última sessão e onde isso foi registrado?
+
+...então o harness está incompleto.
+
+## Filosofia
+
+> **The terminal is the product.**
+
+Este harness foi desenhado para agentes que *vivem* no terminal (Grok Build TUI, Claude Code CLI, etc.), não para UIs bonitas com chat embutido. O CLI é a interface de mais alto leverage: já instalada, profundamente treinada nos modelos, self-documenting, infinitamente composable, baixa latência, zero chrome.
+
+O harness não é "outra interface de chat". É o conjunto de camadas (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) que vive *dentro* do repo, onde o trabalho real acontece.
+
+Engram é especialmente adequado para isso porque ele *é* um Memory Manager para agentes. O harness de engram pode (e deve) eventualmente dogfood o próprio engram para armazenar sessões, decisões, reviews e eventos de verificação.
+
+## Contrato de Bootstrap (Obrigatório)
+
+Todo agente / sessão começa por:
+
+```bash
+bash docs/harness/bin/bootstrap.sh
+```
+
+O bootstrap é:
+
+- Rápido (< 500ms)
+- Read-only (sem side effects)
+- Determinístico
+- Limite: ~50 linhas de output
+
+Ele imprime:
+
+- Branch + dirty/clean state
+- Último commit
+- Sprint/tarefa ativa (de `progress.md`)
+- Último verdict de review cross-model
+- Último resultado de sensores
+- Ordem de leitura obrigatória
+
+Se o bootstrap indicar arquivos ausentes, drift, review sem verdict ou output excessivo, rode:
+
+```bash
+bash docs/harness/bin/doctor.sh
+```
+
+`doctor.sh` é read-only e valida a consistência interna do harness (drift entre SPEC/progress, scripts executáveis, referências à policy local, etc.). Ele **bloqueia** mudanças no harness quando há inconsistência.
+
+## Estrutura
+
+| Caminho                        | Papel |
+|--------------------------------|-------|
+| `README.md`                    | Guia operacional e fluxo de trabalho |
+| `SPEC.md`                      | Escopo curto da sprint/tarefa ativa (mutável por tarefa) |
+| `INVARIANTS.md`                | Regras de processo invioláveis (canônico sobre docs divergentes) |
+| `GATES.md`                     | Sensores, thresholds, retry policy, exclusões documentadas, fake-success patterns |
+| `CODE_REVIEW_POLICY.md`        | Política local consumida pelo review-gate (cross-model / cross-CLI) |
+| `progress.md`                  | Estado vivo curto: sprint, task, último review, último sensor, commit |
+| `progress/*.md`                | Logs permanentes por sprint/tarefa (detalhados) |
+| `known-issues/*.md`            | Incidentes externos que justificam exclusão auditável de sensor |
+| `reviews/*.md`                 | Artefatos permanentes de pre/post review (versionados por iteração) |
+| `bin/bootstrap.sh`             | Orientação rápida da sessão (obrigatório no início) |
+| `bin/doctor.sh`                | Consistência read-only do harness |
+| `bin/sensors.sh`               | Gate determinístico principal (wrapping `just ci` ou `make ci` + harness checks) |
+| `bin/review-gate.sh`           | Gate de review cross-CLI / cross-model (generalizado) |
+| `bin/check-commit-msg.sh`      | Validador de Conventional Commit com scope |
+
+## Leitura Obrigatória (em ordem)
+
+Antes de editar código, docs de processo, ou planejar qualquer mudança significativa, leia nesta ordem:
+
+1. `docs/harness/SPEC.md` — escopo da sprint/tarefa ativa
+2. `docs/harness/INVARIANTS.md` — regras duras de processo (vence conflitos)
+3. `docs/harness/GATES.md` — critérios de sensores e review
+4. `docs/harness/CODE_REVIEW_POLICY.md` — política de julgamento para o reviewer externo
+5. `docs/harness/progress.md` — estado vivo
+6. O active plan apontado em `Active plan`
+7. `AGENTS.md` (raiz) e `Claude.md` / docs de onboarding relevantes
+8. `INVARIANTS.md` (raiz) — data invariants do sistema de memória
+9. `STANDARDS.md` + `ERRORS_AND_LESSONS.md`
+
+`INVARIANTS.md` (harness) vence qualquer conflito com AGENTS.md, Claude.md, specs antigas ou memória de sessão. Mudanças reais em invariants exigem ADR em `docs/decisions/` + PR revisado sob os gates anteriores.
+
+## Loop por Tarefa (Obrigatório para Mudanças que Alteram Estado)
+
+```bash
+# 1. Orientar a sessão (obrigatório)
+bash docs/harness/bin/bootstrap.sh
+
+# 2. Review prévio (advisory, mas findings são input obrigatório)
+bash docs/harness/bin/review-gate.sh pre <task-id>
+
+# 3. Implementar a menor mudança correta
+#    Rust: TDD onde aplicável, clippy limpo, cobertura de comportamentos alterados.
+#    Use `just ci` localmente para paridade com GitHub (ou `make ci` onde `just` não estiver disponível).
+
+# 4. Rodar sensores determinísticos (hard gate)
+bash docs/harness/bin/sensors.sh
+
+# 5. Review pós-mudança (hard gate — PASS exigido)
+bash docs/harness/bin/review-gate.sh post <task-id>
+
+# 6. Atualizar memória canônica (obrigatório)
+$EDITOR docs/harness/progress.md
+$EDITOR docs/harness/progress/<active-plan-filename>.md
+
+# 7. Validar mensagem de commit
+bash docs/harness/bin/check-commit-msg.sh --message "<type>(<scope>): <description>"
+
+# 8. Commitar arquivos específicos (nunca "git add .")
+git add <arquivos específicos>
+git commit -m "<type>(<scope>): <description>"
+```
+
+Não pule a atualização de progresso. `progress.md` + o log da sprint são a **memória canônica** do repositório para agentes futuros.
+
+## Task IDs, Scopes e Commits
+
+Use task IDs curtos, estáveis e rastreáveis (ex.: `harness-bootstrap`, `mcp-harness-memory-v1`, `rfc-0001-impl`).
+
+Commits devem ser machine-parseable e task-scoped:
+
+```bash
+bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): add bootstrap and doctor scripts"
+```
+
+Formato aceito (alinhado com Conventional Commits + escopos engram):
+
+```
+type(scope): concise subject
+```
+
+Tipos comuns: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `ci`, `chore`, `revert`.
+
+Scopes recomendados: `harness`, `mcp`, `storage`, `search`, `intelligence`, `hooks`, `sdk-python`, `sdk-ts`, `cli`, `server`, `ci`, ou identificadores de issue/RFC (`engra-22`, `rfc-0001`).
+
+Sem `Co-Authored-By` ou trailers de atribuição de IA.
+
+## Sensores (Camada Determinística)
+
+`sensors.sh` é o gate local principal. Ele invoca:
+
+- `just ci` (preferencial) ou `make ci` (fallback): fmt + clippy -D warnings + testes com paridade Linux + docs + MCP reference
+- Verificação de harness doctor
+- Outros checks específicos de engram (ex.: snapshot tests, property tests, embedding cache bounds, etc.)
+
+Resultado mais recente fica em `docs/harness/.sensors-last`.
+
+Exclusões documentadas (apenas para dependências externas temporárias, ex.: APIs de embedding pagos indisponíveis) seguem contrato rigoroso via `--exclude-sensor`, `--known-issue` e `--reason`, com registro prévio em progress e known-issues/.
+
+## Review Gate (Camada Cross-Model / Cross-CLI)
+
+`review-gate.sh` implementa o princípio de **Single-Process Judgment**:
+
+- O agente que *escreve* o código não deve ser o juiz final da sua própria saída.
+- Usa outro CLI/modelo (Claude Code, Grok Build, Codex, local via Ollama, etc.) como reviewer independente.
+
+Modos:
+
+- `pre <task-id>` — advisory (sempre sai 0). Findings viram input obrigatório antes de codar.
+- `post <task-id>` — hard gate. `FAIL` bloqueia commit/PR.
+- `post <task-id> --range=main..HEAD` — para fechamento de sprint/PR.
+
+O script:
+
+- Monta prompt rico com: SPEC, INVARIANTS, GATES, CODE_REVIEW_POLICY, fake-success patterns específicos de Rust/engram/MCP, diff (excluindo artefatos do próprio harness para evitar loops).
+- Suporta múltiplos backends de reviewer via env `REVIEWER_CLI` ou flags.
+- Escreve artefatos versionados (v1-post.md, v2-post.md...) em `reviews/`.
+- Suporta continuity: em reruns de post após FAIL, injeta achados anteriores relevantes.
+- Tem modo self-test.
+
+Política de retry: 2 FAILs consecutivos no mesmo task → escalar para humano. Não tentar 3ª iteração.
+
+## Critério de Done
+
+Uma tarefa só está pronta quando:
+
+- [ ] Bootstrap lido + SPEC/INVARIANTS/GATES/POLICY lidos
+- [ ] Pre-gate rodado (ou skip registrado)
+- [ ] Menor mudança correta implementada + TDD/verificações apropriadas
+- [ ] `just ci` / `sensors.sh` passou limpo (ou exclusão documentada válida)
+- [ ] Post-gate retornou `PASS ...`
+- [ ] `progress.md` + log da sprint atualizados
+- [ ] Review artifacts relevantes preservados
+- [ ] Mensagem de commit validada e arquivos específicos commitados
+- [ ] Evidência adicional registrada para mudanças em MCP surface, storage schema, hooks, embeddings, sync, ou breaking changes em SDKs
+
+## Situações que Exigem Cuidado Extra
+
+- **Schema / Migrations** (`storage/migrations.rs`): Atualizar `SCHEMA_VERSION`. Testes têm versão hardcoded em alguns lugares — atualizar também. Nunca quebrar monotonicidade de IDs.
+- **MCP Tools**: Mudança na superfície de 155+ tools exige atualização de `scripts/generate-mcp-reference.sh` output, docs/MCP_TOOLS.md, e testes de protocolo. Coordenação com SDKs Python/TS.
+- **Hooks / Intelligence / Consolidation**: Comportamento não-determinístico ou com side effects em produção exige dry-run + evidência.
+- **Embeddings / ONNX / Cache**: Mudanças aqui afetam benchmarks, tamanho de binário, e qualidade de retrieval. Exigem baseline comparison quando relevante.
+- **Harness em si**: Mudança em `docs/harness/bin/`, INVARIANTS, GATES ou CODE_REVIEW_POLICY exige rodar doctor + sensors + post-gate.
+- **Cross-SDK**: Mudança em Python ou TypeScript SDKs que quebra contrato com o core Rust exige testes de integração e possivelmente versão de crate.
+
+## Integração com Agentes Atuais (Claude Code + Grok Build)
+
+O harness é agnóstico a CLI. O bootstrap funciona em qualquer um.
+
+Para review cross-CLI (o cenário atual do usuário):
+
+- Rode `review-gate.sh post ...` — ele prepara o prompt completo.
+- Cole o prompt no outro CLI (o "reviewer").
+- Salve a resposta completa em `reviews/YYYY-MM-DD-<task>-vN-post.md`.
+- O parser extrai o `PASS`/`FAIL` do artefato.
+
+Futuramente, podemos adicionar suporte direto a exec não-interativo quando as CLIs suportarem (ex.: `grok build --exec "prompt..."` ou equivalente).
+
+## Dogfooding com o Próprio Engram
+
+Porque engram *é* o Memory Manager ideal para harnesses:
+
+- Reviews, decisões, sessões de agente, eventos de verificação podem ser armazenados via MCP tools (`memory_create`, `memory_create_section`, identities para agentes, etc.).
+- Hooks (`session_end`, etc.) podem registrar resumos de harness events.
+- O RFC `docs/rfcs/0001-harness-memory-product-boundary.md` define o boundary exato do que Harness Memory deve e não deve capturar.
+
+Trabalho futuro (ENGRA-22+): ingestão automática de eventos de harness (commits, reviews, gate results) para o próprio engram, com provenance forte e exclusão de segredos/raw logs.
+
+## Referências
+
+- RFC 0001: Harness Memory Product Boundary (`docs/rfcs/0001-harness-memory-product-boundary.md`)
+- Root `INVARIANTS.md` (data invariants do sistema)
+- `STANDARDS.md`, `ERRORS_AND_LESSONS.md`, `AGENTS.md`, `Claude.md`
+- `just ci` / `scripts/ci.sh` — gates obrigatórios de CI
+- `docs/MCP_TOOLS.md` — superfície completa de tools expostas via MCP
+
+---
+
+**Cutoff de obrigatoriedade**: O harness entra em vigor a partir da adoção inicial deste conjunto de docs e scripts. PRs anteriores não são retroativamente afetados, mas todo trabalho subsequente segue este README, GATES e INVARIANTS do harness.

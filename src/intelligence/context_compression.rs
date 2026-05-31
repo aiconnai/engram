@@ -10,6 +10,7 @@
 //! - `Heavy`  — key facts only (entities, numbers, dates)
 
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 // ---------------------------------------------------------------------------
 // Common English stopwords (~30 words)
@@ -89,6 +90,17 @@ pub struct TokenBudget {
     pub used: usize,
     /// Remaining capacity (`total - used`).
     pub remaining: usize,
+}
+
+/// Result returned by compression runs that need diagnostics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompressionPlan {
+    /// Compressed entries that fit within the budget.
+    pub entries: Vec<CompressedEntry>,
+    /// Memory IDs that were skipped because no level fits the remaining budget.
+    pub skipped_ids: Vec<i64>,
+    /// Budget summary after compression.
+    pub budget: TokenBudget,
 }
 
 /// Simple memory representation used as compression input.
@@ -288,6 +300,27 @@ impl ContextCompressor {
     ///
     /// Returns the ordered list of successfully compressed entries.
     pub fn compress_for_context(memories: &[MemoryInput], budget: usize) -> Vec<CompressedEntry> {
+        let mut compressor = Self::new(budget);
+        compressor
+            .compress_for_context_with_diagnostics(memories)
+            .entries
+    }
+
+    /// Adaptively compress a slice of memories and return rich diagnostics.
+    ///
+    /// Algorithm:
+    /// 1. Sort memories by importance (descending) — most important get
+    ///    processed first and receive lighter compression.
+    /// 2. For each memory, try compression levels in order:
+    ///    `None → Light → Medium → Heavy`.
+    /// 3. The first level that fits the remaining budget is used.
+    /// 4. If even `Heavy` doesn't fit, the memory is skipped and recorded.
+    ///
+    /// Returns compressed entries, skipped IDs, and final budget state.
+    pub fn compress_for_context_with_diagnostics(
+        &mut self,
+        memories: &[MemoryInput],
+    ) -> CompressionPlan {
         // Sort by importance descending (clone indices to preserve original IDs)
         let mut indexed: Vec<usize> = (0..memories.len()).collect();
         indexed.sort_unstable_by(|&a, &b| {
@@ -298,7 +331,8 @@ impl ContextCompressor {
         });
 
         let mut entries: Vec<CompressedEntry> = Vec::new();
-        let mut used: usize = 0;
+        self.used_tokens = 0;
+        let mut skipped_ids: Vec<i64> = Vec::new();
 
         for idx in indexed {
             let mem = &memories[idx];
@@ -318,14 +352,14 @@ impl ContextCompressor {
                 let compressed = Self::compress_single(&mem.content, level);
                 let tokens = Self::estimate_tokens(&compressed);
 
-                if used + tokens <= budget {
+                if self.used_tokens + tokens <= self.budget_tokens {
                     chosen = Some((level, compressed, tokens));
                     break;
                 }
             }
 
             if let Some((level, compressed_content, tokens)) = chosen {
-                used += tokens;
+                self.used_tokens += tokens;
                 entries.push(CompressedEntry {
                     original_id: mem.id,
                     original_tokens,
@@ -333,18 +367,24 @@ impl ContextCompressor {
                     tokens_used: tokens,
                     compression_level: level,
                 });
+            } else {
+                warn!(
+                    "ContextCompressor skipped memory {} ({} tokens): could not fit even at heavy compression",
+                    mem.id, original_tokens
+                );
+                skipped_ids.push(mem.id);
             }
-            // else: memory skipped — does not fit even at Heavy
         }
 
-        entries
+        CompressionPlan {
+            entries,
+            skipped_ids,
+            budget: self.budget(),
+        }
     }
 
     /// Current budget state of this compressor instance.
     ///
-    /// Note: `compress_for_context` is a free function that does not mutate
-    /// the compressor. Call this after manually tracking usage with
-    /// `estimate_tokens`, or use it to inspect the configured budget.
     pub fn budget(&self) -> TokenBudget {
         let used = self.used_tokens;
         let remaining = self.budget_tokens.saturating_sub(used);
@@ -612,6 +652,39 @@ mod tests {
             entries.is_empty(),
             "nothing should fit in a budget of 1 token"
         );
+    }
+
+    #[test]
+    fn test_compress_for_context_with_diagnostics_reports_skips() {
+        let memories = vec![
+            MemoryInput {
+                id: 1,
+                content: "A".repeat(1000),
+                importance: 0.9,
+            },
+            MemoryInput {
+                id: 2,
+                content: "B".repeat(1000),
+                importance: 0.8,
+            },
+            MemoryInput {
+                id: 3,
+                content: "C".repeat(1000),
+                importance: 0.7,
+            },
+        ];
+
+        let mut compressor = ContextCompressor::new(1);
+        let result = compressor.compress_for_context_with_diagnostics(&memories);
+
+        assert!(
+            result.entries.is_empty(),
+            "nothing should fit in a budget of 1 token"
+        );
+        assert_eq!(result.skipped_ids, vec![1, 2, 3]);
+        assert_eq!(result.budget.used, 0);
+        assert_eq!(result.budget.total, 1);
+        assert_eq!(compressor.budget().used, 0);
     }
 
     // 6. Token estimation accuracy

@@ -1,0 +1,562 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: harness-bootstrap
+**Mode**: post
+**Date (UTC)**: 2026-05-31
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+
+## Diff Under Review
+
+```diff
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index d87b37b..595cebe 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -9 +8,0 @@ on:
+-      - 'docs/**'
+@@ -16 +14,0 @@ on:
+-      - 'docs/**'
+diff --git a/AGENTS.md b/AGENTS.md
+index 88e8a8b..939d5e4 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -85,0 +86,17 @@ O Engram expõe 155+ ferramentas via MCP. Principais:
++## Harness de Desenvolvimento (Obrigatório no Início de Toda Sessão)
++
++Antes de qualquer planejamento ou edição, rode:
++
++```bash
++bash docs/harness/bin/bootstrap.sh
++```
++
++Em seguida leia (em ordem):
++- `docs/harness/SPEC.md`
++- `docs/harness/INVARIANTS.md`
++- `docs/harness/GATES.md`
++- `docs/harness/CODE_REVIEW_POLICY.md`
++- `docs/harness/progress.md`
++
++O harness garante que o trabalho seja retomável entre agentes (Claude Code CLI, Grok Build TUI, etc.) e entre sessões. Ele implementa as camadas de Context Engine, Planner, Memory Manager e Verifier diretamente no repositório.
++
+@@ -87,0 +105,6 @@ O Engram expõe 155+ ferramentas via MCP. Principais:
++# Harness bootstrap + gates (obrigatório)
++bash docs/harness/bin/bootstrap.sh
++bash docs/harness/bin/doctor.sh
++bash docs/harness/bin/sensors.sh          # runs just ci + doctor (pode demorar)
++bash docs/harness/bin/review-gate.sh pre harness-bootstrap
++
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 71cabed..b4910c0 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -67,0 +68,14 @@ engram/
++## Harness Discipline (Required at Session Start)
++
++Every agent session must begin with:
++
++```bash
++bash docs/harness/bin/bootstrap.sh
++```
++
++Then read in order: `docs/harness/SPEC.md`, `docs/harness/INVARIANTS.md`,
++`docs/harness/GATES.md`, `docs/harness/CODE_REVIEW_POLICY.md`,
++`docs/harness/progress.md`.
++
++This operational harness (inspired by proven backend patterns) ensures resumable, auditable, high-signal work across Claude Code CLI and Grok Build TUI.
++
+@@ -70,0 +85,6 @@ engram/
++```bash
++bash docs/harness/bin/bootstrap.sh
++bash docs/harness/bin/doctor.sh
++bash docs/harness/bin/sensors.sh   # full deterministic gates (wraps just ci)
++```
++
+@@ -82,0 +103 @@ cargo run
++just ci
+diff --git a/benches/token_reduction.rs b/benches/token_reduction.rs
+index bb2d0c4..03f5a5d 100644
+--- a/benches/token_reduction.rs
++++ b/benches/token_reduction.rs
+@@ -9,0 +10 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
++use engram::intelligence::compression_semantic::CompressedMemory;
+@@ -57,0 +59,135 @@ fn make_repetitive_text(size_chars: usize) -> String {
++struct SemanticBenchmarkCase {
++    input: &'static str,
++    required_facts: &'static [&'static str],
++}
++
++const FIXED_CORPUS_MIN_RECALL: f64 = 7.0 / 9.0;
++const FIXED_CORPUS_MIN_COVERED_FACTS: usize = 7;
++
++fn fixed_semantic_corpus() -> Vec<SemanticBenchmarkCase> {
++    vec![
++        SemanticBenchmarkCase {
++            input: "Error 404 on /api/v1/memories indicates a missing resource. \
++                The caller retried once, then returned a fallback response with empty cache. \
++                Follow-up log: `POST /api/v1/memories` returned status 404 in 120 ms.",
++            required_facts: &["Error 404", "/api/v1/memories", "fallback response"],
++        },
++        SemanticBenchmarkCase {
++            input: "Storage profile switched to vector mode. \
++                Engine version 2.4.1 writes to table `memory_vectors` using HNSW. \
++                Query timeout is configured at 250ms and should raise a soft timeout warning.",
++            required_facts: &["2.4.1", "HNSW", "250ms"],
++        },
++        SemanticBenchmarkCase {
++            input: "Authentication is required for every request and tokens rotate daily. \
++                The incident was created by user `admin` at 10:14 UTC and resolved by revoking key ABC-123.",
++            required_facts: &["Authentication", "10:14 UTC", "ABC-123"],
++        },
++    ]
++}
++
++fn semantic_ratio_and_recall_stats() -> (f64, f64, usize, usize) {
++    use engram::intelligence::compression_semantic::{CompressionConfig, SemanticCompressor};
++
++    let corpus = fixed_semantic_corpus();
++    let compressor = SemanticCompressor::new(CompressionConfig::default());
++    let mut total_ratio = 0.0f64;
++    let mut covered_facts = 0usize;
++    let mut expected_facts = 0usize;
++
++    for case in &corpus {
++        let result: CompressedMemory = compressor.compress(case.input);
++        total_ratio += result.ratio as f64;
++
++        for fact in case.required_facts {
++            expected_facts += 1;
++            if result.structured_content.contains(fact)
++                || result.key_facts.iter().any(|s| s.contains(fact))
++            {
++                covered_facts += 1;
++            }
++        }
++    }
++
++    let avg_ratio = if corpus.is_empty() {
++        0.0
++    } else {
++        total_ratio / corpus.len() as f64
++    };
++    let recall = if expected_facts == 0 {
++        1.0
++    } else {
++        covered_facts as f64 / expected_facts as f64
++    };
++
++    (avg_ratio, recall, covered_facts, expected_facts)
++}
++
++fn bench_semantic_compression_ratio(c: &mut Criterion) {
++    use engram::intelligence::compression_semantic::{CompressionConfig, SemanticCompressor};
++
++    let (baseline_ratio, baseline_recall, covered, expected) = semantic_ratio_and_recall_stats();
++    println!(
++        "token_reduction/semantic_compression/ratio_recall avg_ratio={baseline_ratio:.4} avg_recall={baseline_recall:.4} covered_facts={covered}/{expected}"
++    );
++    assert!(
++        baseline_recall >= FIXED_CORPUS_MIN_RECALL && covered >= FIXED_CORPUS_MIN_COVERED_FACTS,
++        "fixed corpus baseline recall too low: {covered}/{expected} ({baseline_recall:.4})"
++    );
++
++    let corpus = fixed_semantic_corpus();
++    let mut group = c.benchmark_group("token_reduction/semantic_compression");
++    group.sample_size(20);
++
++    let total_input_tokens: usize = corpus
++        .iter()
++        .map(|entry| entry.input.len().div_ceil(4))
++        .sum();
++    group.throughput(Throughput::Elements(total_input_tokens as u64));
++
++    group.bench_function("fixed_corpus_ratio_recall", |b| {
++        let compressor = SemanticCompressor::new(CompressionConfig::default());
++
++        b.iter(|| {
++            let mut total_ratio = 0.0f64;
++            let mut covered_facts = 0usize;
++            let mut expected_facts = 0usize;
++
++            for case in &corpus {
++                let result = compressor.compress(black_box(case.input));
++                total_ratio += result.ratio as f64;
++
++                for fact in case.required_facts {
++                    expected_facts += 1;
++                    if result.structured_content.contains(fact)
++                        || result.key_facts.iter().any(|s| s.contains(fact))
++                    {
++                        covered_facts += 1;
++                    }
++                }
++            }
++
++            let avg_ratio = if corpus.is_empty() {
++                0.0
++            } else {
++                total_ratio / corpus.len() as f64
++            };
++            let recall = if expected_facts == 0 {
++                1.0
++            } else {
++                covered_facts as f64 / expected_facts as f64
++            };
++
++            assert!(
++                recall >= FIXED_CORPUS_MIN_RECALL && covered_facts >= FIXED_CORPUS_MIN_COVERED_FACTS,
++                "recall baseline dropped: {covered_facts}/{expected_facts} (floor {FIXED_CORPUS_MIN_RECALL:.4})"
++            );
++            assert!(avg_ratio <= 1.0, "ratio should be <= 1.0");
++            black_box(avg_ratio);
++            black_box(recall);
++        });
++    });
++
++    group.finish();
++}
++
+@@ -381,0 +518 @@ criterion_group!(
++    bench_semantic_compression_ratio,
+diff --git a/src/intelligence/compression_semantic.rs b/src/intelligence/compression_semantic.rs
+index 461bea1..8cb0f47 100644
+--- a/src/intelligence/compression_semantic.rs
++++ b/src/intelligence/compression_semantic.rs
+@@ -417 +417,32 @@ fn jaccard_similarity(a: &str, b: &str) -> f64 {
+-/// Deduplicate sentences where Jaccard similarity > 0.6.
++/// Extract technical terms that materially change meaning (URLs, IDs, paths).
++fn technical_tokens(text: &str) -> Vec<String> {
++    text.split_whitespace()
++        .map(|token| {
++            token
++                .trim_start_matches(|c: char| !c.is_alphanumeric() && c != '/')
++                .trim_end_matches(|c: char| !c.is_alphanumeric())
++        })
++        .filter(|token| !token.is_empty())
++        .filter(|token| token.contains('/') || token.chars().any(|c| c.is_ascii_digit()))
++        .map(|token| token.to_lowercase())
++        .collect()
++}
++
++/// Returns `true` when two sentences share high Jaccard overlap but
++/// differ materially on technical tokens that should likely prevent dedupe.
++fn has_distinct_technical_content(a: &str, b: &str) -> bool {
++    let a_tokens = technical_tokens(a);
++    let b_tokens = technical_tokens(b);
++
++    if a_tokens.is_empty() || b_tokens.is_empty() {
++        return false;
++    }
++
++    let a_set: HashSet<&str> = a_tokens.iter().map(|s| s.as_str()).collect();
++    let b_set: HashSet<&str> = b_tokens.iter().map(|s| s.as_str()).collect();
++
++    a_set != b_set
++}
++
++/// Deduplicate sentences where Jaccard similarity > 0.6, unless they
++/// diverge on high-signal technical tokens (paths/IDs).
+@@ -424 +455,3 @@ fn deduplicate_sentences(sentences: &[String]) -> Vec<String> {
+-            if jaccard_similarity(sentence, existing) > 0.6 {
++            if jaccard_similarity(sentence, existing) > 0.6
++                && !has_distinct_technical_content(sentence, existing)
++            {
+@@ -584,0 +618,46 @@ mod tests {
++    #[test]
++    fn test_deduplication_preserves_distinct_technical_endpoints() {
++        let sentences = vec![
++            "Error 404 on /api/v1/memories indicates missing resource.".to_string(),
++            "Error 404 on /api/v1/search indicates invalid query parameters.".to_string(),
++            "Error 404 on /api/v1/search indicates invalid query parameters.".to_string(), // exact duplicate
++        ];
++        let deduped = deduplicate_sentences(&sentences);
++
++        assert_eq!(deduped.len(), 2);
++        assert!(
++            deduped.iter().any(|s| s.contains("/api/v1/memories")),
++            "expected /api/v1/memories to remain"
++        );
++        assert!(
++            deduped.iter().any(|s| s.contains("/api/v1/search")),
++            "expected /api/v1/search to remain"
++        );
++    }
++
++    #[test]
++    fn test_technical_tokens_normalize_trailing_punctuation() {
++        let tokens = technical_tokens("GET /api/v1/memories. failed for trace-123, not v1.2.3.");
++
++        assert!(tokens.contains(&"/api/v1/memories".to_string()));
++        assert!(!tokens.contains(&"/api/v1/memories.".to_string()));
++        assert!(tokens.contains(&"trace-123".to_string()));
++        assert!(tokens.contains(&"v1.2.3".to_string()));
++    }
++
++    #[test]
++    fn test_deduplication_preserves_superset_technical_facts() {
++        let sentences = vec![
++            "Error 404 on /api/v1/search indicates invalid query parameters.".to_string(),
++            "Error 404 on /api/v1/search indicates invalid query parameters after 120ms."
++                .to_string(),
++        ];
++        let deduped = deduplicate_sentences(&sentences);
++
++        assert_eq!(deduped.len(), 2);
++        assert!(
++            deduped.iter().any(|s| s.contains("120ms")),
++            "expected richer technical fact to remain"
++        );
++    }
++
+diff --git a/src/intelligence/context_compression.rs b/src/intelligence/context_compression.rs
+index 7f83a78..35191d2 100644
+--- a/src/intelligence/context_compression.rs
++++ b/src/intelligence/context_compression.rs
+@@ -12,0 +13 @@ use serde::{Deserialize, Serialize};
++use tracing::warn;
+@@ -93,0 +95,11 @@ pub struct TokenBudget {
++/// Result returned by compression runs that need diagnostics.
++#[derive(Debug, Clone, Serialize, Deserialize)]
++pub struct CompressionPlan {
++    /// Compressed entries that fit within the budget.
++    pub entries: Vec<CompressedEntry>,
++    /// Memory IDs that were skipped because no level fits the remaining budget.
++    pub skipped_ids: Vec<i64>,
++    /// Budget summary after compression.
++    pub budget: TokenBudget,
++}
++
+@@ -290,0 +303,21 @@ impl ContextCompressor {
++        let mut compressor = Self::new(budget);
++        compressor
++            .compress_for_context_with_diagnostics(memories)
++            .entries
++    }
++
++    /// Adaptively compress a slice of memories and return rich diagnostics.
++    ///
++    /// Algorithm:
++    /// 1. Sort memories by importance (descending) — most important get
++    ///    processed first and receive lighter compression.
++    /// 2. For each memory, try compression levels in order:
++    ///    `None → Light → Medium → Heavy`.
++    /// 3. The first level that fits the remaining budget is used.
++    /// 4. If even `Heavy` doesn't fit, the memory is skipped and recorded.
++    ///
++    /// Returns compressed entries, skipped IDs, and final budget state.
++    pub fn compress_for_context_with_diagnostics(
++        &mut self,
++        memories: &[MemoryInput],
++    ) -> CompressionPlan {
+@@ -301 +334,2 @@ impl ContextCompressor {
+-        let mut used: usize = 0;
++        self.used_tokens = 0;
++        let mut skipped_ids: Vec<i64> = Vec::new();
+@@ -321 +355 @@ impl ContextCompressor {
+-                if used + tokens <= budget {
++                if self.used_tokens + tokens <= self.budget_tokens {
+@@ -328 +362 @@ impl ContextCompressor {
+-                used += tokens;
++                self.used_tokens += tokens;
+@@ -335,0 +370,6 @@ impl ContextCompressor {
++            } else {
++                warn!(
++                    "ContextCompressor skipped memory {} ({} tokens): could not fit even at heavy compression",
++                    mem.id, original_tokens
++                );
++                skipped_ids.push(mem.id);
+@@ -337 +376,0 @@ impl ContextCompressor {
+-            // else: memory skipped — does not fit even at Heavy
+@@ -340 +379,5 @@ impl ContextCompressor {
+-        entries
++        CompressionPlan {
++            entries,
++            skipped_ids,
++            budget: self.budget(),
++        }
+@@ -345,3 +387,0 @@ impl ContextCompressor {
+-    /// Note: `compress_for_context` is a free function that does not mutate
+-    /// the compressor. Call this after manually tracking usage with
+-    /// `estimate_tokens`, or use it to inspect the configured budget.
+@@ -616,0 +657,33 @@ mod tests {
++    #[test]
++    fn test_compress_for_context_with_diagnostics_reports_skips() {
++        let memories = vec![
++            MemoryInput {
++                id: 1,
++                content: "A".repeat(1000),
++                importance: 0.9,
++            },
++            MemoryInput {
++                id: 2,
++                content: "B".repeat(1000),
++                importance: 0.8,
++            },
++            MemoryInput {
++                id: 3,
++                content: "C".repeat(1000),
++                importance: 0.7,
++            },
++        ];
++
++        let mut compressor = ContextCompressor::new(1);
++        let result = compressor.compress_for_context_with_diagnostics(&memories);
++
++        assert!(
++            result.entries.is_empty(),
++            "nothing should fit in a budget of 1 token"
++        );
++        assert_eq!(result.skipped_ids, vec![1, 2, 3]);
++        assert_eq!(result.budget.used, 0);
++        assert_eq!(result.budget.total, 1);
++        assert_eq!(compressor.budget().used, 0);
++    }
++
+diff --git a/src/mcp/handlers/compression.rs b/src/mcp/handlers/compression.rs
+index b57e0fb..2e4aa01 100644
+--- a/src/mcp/handlers/compression.rs
++++ b/src/mcp/handlers/compression.rs
+@@ -80,0 +81 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
++        .or_else(|| params.get("memory_ids"))
+@@ -107,2 +108,3 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
+-        let entries = ContextCompressor::compress_for_context(&inputs, token_budget);
+-        let total_tokens: usize = entries.iter().map(|e| e.tokens_used).sum();
++        let mut compressor = ContextCompressor::new(token_budget);
++        let compression = compressor.compress_for_context_with_diagnostics(&inputs);
++        let total_tokens: usize = compression.entries.iter().map(|e| e.tokens_used).sum();
+@@ -113 +115,2 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
+-            "memories_included": entries.len(),
++            "memories_included": compression.entries.len(),
++            "memories_skipped": compression.skipped_ids.len(),
+@@ -115 +118,4 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
+-            "entries": entries,
++            "budget_used": compression.budget.used,
++            "budget_remaining": compression.budget.remaining,
++            "skipped_memory_ids": compression.skipped_ids,
++            "entries": compression.entries,
+diff --git a/tests/v070_integration_tests.rs b/tests/v070_integration_tests.rs
+index 8b6cb23..2635156 100644
+--- a/tests/v070_integration_tests.rs
++++ b/tests/v070_integration_tests.rs
+@@ -15,0 +16 @@ use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResul
++use engram::storage::queries::create_memory;
+@@ -17 +18 @@ use engram::storage::Storage;
+-use engram::types::EmbeddingConfig;
++use engram::types::{CreateMemoryInput, EmbeddingConfig};
+@@ -40,0 +42,13 @@ fn test_ctx() -> handlers::HandlerContext {
++fn add_memory(ctx: &handlers::HandlerContext, content: &str, importance: f32) -> i64 {
++    ctx.storage
++        .with_transaction(|conn| {
++            let input = CreateMemoryInput {
++                content: content.to_string(),
++                importance: Some(importance),
++                ..Default::default()
++            };
++            create_memory(conn, &input).map(|memory| memory.id)
++        })
++        .expect("create memory")
++}
++
+@@ -66,0 +81,47 @@ fn test_agent_register_and_get_via_dispatch() {
++#[test]
++fn test_memory_compress_for_context_reports_skip_metadata() {
++    let ctx = test_ctx();
++    let first = add_memory(&ctx, &"A".repeat(1000), 0.9);
++    let second = add_memory(&ctx, &"B".repeat(1000), 0.8);
++
++    let result = handlers::dispatch(
++        &ctx,
++        "memory_compress_for_context",
++        json!({
++            "ids": [first, second],
++            "token_budget": 1
++        }),
++    );
++
++    assert_eq!(result["token_budget"], 1);
++    assert_eq!(result["memories_input"], 2);
++    assert_eq!(result["memories_included"], 0);
++    assert_eq!(result["memories_skipped"], 2);
++    assert_eq!(result["budget_used"], 0);
++    assert_eq!(result["budget_remaining"], 1);
++    assert_eq!(result["skipped_memory_ids"], json!([first, second]));
++    assert_eq!(result["entries"], json!([]));
++    assert!(result.get("error").is_none());
++}
++
++#[test]
++fn test_memory_compress_for_context_accepts_memory_ids_alias() {
++    let ctx = test_ctx();
++    let memory_id = add_memory(&ctx, "Short memory that fits comfortably.", 0.9);
++
++    let result = handlers::dispatch(
++        &ctx,
++        "memory_compress_for_context",
++        json!({
++            "memory_ids": [memory_id],
++            "token_budget": 100
++        }),
++    );
++
++    assert_eq!(result["memories_input"], 1);
++    assert_eq!(result["memories_included"], 1);
++    assert_eq!(result["memories_skipped"], 0);
++    assert!(result["budget_remaining"].as_u64().unwrap() < 100);
++    assert!(result.get("error").is_none());
++}
++
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

@@ -414,14 +414,47 @@ fn jaccard_similarity(a: &str, b: &str) -> f64 {
     }
 }
 
-/// Deduplicate sentences where Jaccard similarity > 0.6.
+/// Extract technical terms that materially change meaning (URLs, IDs, paths).
+fn technical_tokens(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .map(|token| {
+            token
+                .trim_start_matches(|c: char| !c.is_alphanumeric() && c != '/')
+                .trim_end_matches(|c: char| !c.is_alphanumeric())
+        })
+        .filter(|token| !token.is_empty())
+        .filter(|token| token.contains('/') || token.chars().any(|c| c.is_ascii_digit()))
+        .map(|token| token.to_lowercase())
+        .collect()
+}
+
+/// Returns `true` when two sentences share high Jaccard overlap but
+/// differ materially on technical tokens that should likely prevent dedupe.
+fn has_distinct_technical_content(a: &str, b: &str) -> bool {
+    let a_tokens = technical_tokens(a);
+    let b_tokens = technical_tokens(b);
+
+    if a_tokens.is_empty() || b_tokens.is_empty() {
+        return false;
+    }
+
+    let a_set: HashSet<&str> = a_tokens.iter().map(|s| s.as_str()).collect();
+    let b_set: HashSet<&str> = b_tokens.iter().map(|s| s.as_str()).collect();
+
+    a_set != b_set
+}
+
+/// Deduplicate sentences where Jaccard similarity > 0.6, unless they
+/// diverge on high-signal technical tokens (paths/IDs).
 /// Keeps the first of each near-duplicate group.
 fn deduplicate_sentences(sentences: &[String]) -> Vec<String> {
     let mut kept: Vec<String> = Vec::new();
 
     'outer: for sentence in sentences {
         for existing in &kept {
-            if jaccard_similarity(sentence, existing) > 0.6 {
+            if jaccard_similarity(sentence, existing) > 0.6
+                && !has_distinct_technical_content(sentence, existing)
+            {
                 continue 'outer;
             }
         }
@@ -580,6 +613,52 @@ mod tests {
             sentences.len()
         );
         assert!(deduped.iter().any(|s| s.contains("Dogs")));
+    }
+
+    #[test]
+    fn test_deduplication_preserves_distinct_technical_endpoints() {
+        let sentences = vec![
+            "Error 404 on /api/v1/memories indicates missing resource.".to_string(),
+            "Error 404 on /api/v1/search indicates invalid query parameters.".to_string(),
+            "Error 404 on /api/v1/search indicates invalid query parameters.".to_string(), // exact duplicate
+        ];
+        let deduped = deduplicate_sentences(&sentences);
+
+        assert_eq!(deduped.len(), 2);
+        assert!(
+            deduped.iter().any(|s| s.contains("/api/v1/memories")),
+            "expected /api/v1/memories to remain"
+        );
+        assert!(
+            deduped.iter().any(|s| s.contains("/api/v1/search")),
+            "expected /api/v1/search to remain"
+        );
+    }
+
+    #[test]
+    fn test_technical_tokens_normalize_trailing_punctuation() {
+        let tokens = technical_tokens("GET /api/v1/memories. failed for trace-123, not v1.2.3.");
+
+        assert!(tokens.contains(&"/api/v1/memories".to_string()));
+        assert!(!tokens.contains(&"/api/v1/memories.".to_string()));
+        assert!(tokens.contains(&"trace-123".to_string()));
+        assert!(tokens.contains(&"v1.2.3".to_string()));
+    }
+
+    #[test]
+    fn test_deduplication_preserves_superset_technical_facts() {
+        let sentences = vec![
+            "Error 404 on /api/v1/search indicates invalid query parameters.".to_string(),
+            "Error 404 on /api/v1/search indicates invalid query parameters after 120ms."
+                .to_string(),
+        ];
+        let deduped = deduplicate_sentences(&sentences);
+
+        assert_eq!(deduped.len(), 2);
+        assert!(
+            deduped.iter().any(|s| s.contains("120ms")),
+            "expected richer technical fact to remain"
+        );
     }
 
     // -------------------------------------------------------------------------

@@ -65,9 +65,29 @@ engram/
 
 ---
 
+## Harness Discipline (Required at Session Start)
+
+Every agent session must begin with:
+
+```bash
+bash docs/harness/bin/bootstrap.sh
+```
+
+Then read in order: `docs/harness/SPEC.md`, `docs/harness/INVARIANTS.md`,
+`docs/harness/GATES.md`, `docs/harness/CODE_REVIEW_POLICY.md`,
+`docs/harness/progress.md`.
+
+This operational harness (inspired by proven backend patterns) ensures resumable, auditable, high-signal work across Claude Code CLI and Grok Build TUI.
+
 ## Common Commands
 
 <!-- [inferred] -->
+```bash
+bash docs/harness/bin/bootstrap.sh
+bash docs/harness/bin/doctor.sh
+bash docs/harness/bin/sensors.sh   # full deterministic gates (wraps just ci)
+```
+
 ```bash
 pip install -r requirements.txt  # or: pip install -e .
 ```
@@ -80,6 +100,7 @@ npm install
 cargo build
 cargo test
 cargo run
+just ci
 ```
 
 ---

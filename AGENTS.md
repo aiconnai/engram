@@ -83,8 +83,31 @@ O Engram expõe 155+ ferramentas via MCP. Principais:
 - **Testes de integração**: `tests/*.rs`
 - **Documentação da API**: `REFERENCE.md` (Engram Cloud), `INVARIANTS.md` (regras do projeto)
 
+## Harness de Desenvolvimento (Obrigatório no Início de Toda Sessão)
+
+Antes de qualquer planejamento ou edição, rode:
+
+```bash
+bash docs/harness/bin/bootstrap.sh
+```
+
+Em seguida leia (em ordem):
+- `docs/harness/SPEC.md`
+- `docs/harness/INVARIANTS.md`
+- `docs/harness/GATES.md`
+- `docs/harness/CODE_REVIEW_POLICY.md`
+- `docs/harness/progress.md`
+
+O harness garante que o trabalho seja retomável entre agentes (Claude Code CLI, Grok Build TUI, etc.) e entre sessões. Ele implementa as camadas de Context Engine, Planner, Memory Manager e Verifier diretamente no repositório.
+
 ## Comandos Úteis para Agentes
 ```bash
+# Harness bootstrap + gates (obrigatório)
+bash docs/harness/bin/bootstrap.sh
+bash docs/harness/bin/doctor.sh
+bash docs/harness/bin/sensors.sh          # runs just ci + doctor (pode demorar)
+bash docs/harness/bin/review-gate.sh pre harness-bootstrap
+
 # Verificar código Rust
 cargo clippy && cargo fmt --check
 

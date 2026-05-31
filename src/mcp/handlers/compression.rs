@@ -78,6 +78,7 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
 
     let ids: Vec<i64> = params
         .get("ids")
+        .or_else(|| params.get("memory_ids"))
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_i64()).collect())
         .unwrap_or_default();
@@ -104,15 +105,20 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
             }
         }
 
-        let entries = ContextCompressor::compress_for_context(&inputs, token_budget);
-        let total_tokens: usize = entries.iter().map(|e| e.tokens_used).sum();
+        let mut compressor = ContextCompressor::new(token_budget);
+        let compression = compressor.compress_for_context_with_diagnostics(&inputs);
+        let total_tokens: usize = compression.entries.iter().map(|e| e.tokens_used).sum();
 
         Ok(json!({
             "token_budget": token_budget,
             "memories_input": inputs.len(),
-            "memories_included": entries.len(),
+            "memories_included": compression.entries.len(),
+            "memories_skipped": compression.skipped_ids.len(),
             "total_tokens": total_tokens,
-            "entries": entries,
+            "budget_used": compression.budget.used,
+            "budget_remaining": compression.budget.remaining,
+            "skipped_memory_ids": compression.skipped_ids,
+            "entries": compression.entries,
         }))
     });
 

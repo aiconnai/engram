@@ -13,8 +13,9 @@ use serde_json::json;
 use engram::embedding::{create_embedder, EmbeddingCache};
 use engram::mcp::{get_tool_definitions, handlers};
 use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
+use engram::storage::queries::create_memory;
 use engram::storage::Storage;
-use engram::types::EmbeddingConfig;
+use engram::types::{CreateMemoryInput, EmbeddingConfig};
 
 fn test_ctx() -> handlers::HandlerContext {
     let storage = Storage::open_in_memory().expect("in-memory storage");
@@ -36,6 +37,19 @@ fn test_ctx() -> handlers::HandlerContext {
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
     }
+}
+
+fn add_memory(ctx: &handlers::HandlerContext, content: &str, importance: f32) -> i64 {
+    ctx.storage
+        .with_transaction(|conn| {
+            let input = CreateMemoryInput {
+                content: content.to_string(),
+                importance: Some(importance),
+                ..Default::default()
+            };
+            create_memory(conn, &input).map(|memory| memory.id)
+        })
+        .expect("create memory")
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +76,53 @@ fn test_agent_register_and_get_via_dispatch() {
     let get_result = handlers::dispatch(&ctx, "agent_get", json!({"agent_id": "test-agent-1"}));
     assert_eq!(get_result["display_name"], "Test Agent");
     assert!(get_result.get("error").is_none());
+}
+
+#[test]
+fn test_memory_compress_for_context_reports_skip_metadata() {
+    let ctx = test_ctx();
+    let first = add_memory(&ctx, &"A".repeat(1000), 0.9);
+    let second = add_memory(&ctx, &"B".repeat(1000), 0.8);
+
+    let result = handlers::dispatch(
+        &ctx,
+        "memory_compress_for_context",
+        json!({
+            "ids": [first, second],
+            "token_budget": 1
+        }),
+    );
+
+    assert_eq!(result["token_budget"], 1);
+    assert_eq!(result["memories_input"], 2);
+    assert_eq!(result["memories_included"], 0);
+    assert_eq!(result["memories_skipped"], 2);
+    assert_eq!(result["budget_used"], 0);
+    assert_eq!(result["budget_remaining"], 1);
+    assert_eq!(result["skipped_memory_ids"], json!([first, second]));
+    assert_eq!(result["entries"], json!([]));
+    assert!(result.get("error").is_none());
+}
+
+#[test]
+fn test_memory_compress_for_context_accepts_memory_ids_alias() {
+    let ctx = test_ctx();
+    let memory_id = add_memory(&ctx, "Short memory that fits comfortably.", 0.9);
+
+    let result = handlers::dispatch(
+        &ctx,
+        "memory_compress_for_context",
+        json!({
+            "memory_ids": [memory_id],
+            "token_budget": 100
+        }),
+    );
+
+    assert_eq!(result["memories_input"], 1);
+    assert_eq!(result["memories_included"], 1);
+    assert_eq!(result["memories_skipped"], 0);
+    assert!(result["budget_remaining"].as_u64().unwrap() < 100);
+    assert!(result.get("error").is_none());
 }
 
 #[test]

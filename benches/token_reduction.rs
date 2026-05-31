@@ -7,6 +7,7 @@
 //! Run with: `cargo bench --bench token_reduction`
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use engram::intelligence::compression_semantic::CompressedMemory;
 use engram::intelligence::output_filter::OutputFilter;
 use engram::intelligence::truncation_engine::TruncationEngine;
 
@@ -53,6 +54,141 @@ fn make_repetitive_text(size_chars: usize) -> String {
     let repeats = (size_chars / fragment.len()) + 1;
     let full = fragment.repeat(repeats);
     full[..size_chars.min(full.len())].to_string()
+}
+
+struct SemanticBenchmarkCase {
+    input: &'static str,
+    required_facts: &'static [&'static str],
+}
+
+const FIXED_CORPUS_MIN_RECALL: f64 = 7.0 / 9.0;
+const FIXED_CORPUS_MIN_COVERED_FACTS: usize = 7;
+
+fn fixed_semantic_corpus() -> Vec<SemanticBenchmarkCase> {
+    vec![
+        SemanticBenchmarkCase {
+            input: "Error 404 on /api/v1/memories indicates a missing resource. \
+                The caller retried once, then returned a fallback response with empty cache. \
+                Follow-up log: `POST /api/v1/memories` returned status 404 in 120 ms.",
+            required_facts: &["Error 404", "/api/v1/memories", "fallback response"],
+        },
+        SemanticBenchmarkCase {
+            input: "Storage profile switched to vector mode. \
+                Engine version 2.4.1 writes to table `memory_vectors` using HNSW. \
+                Query timeout is configured at 250ms and should raise a soft timeout warning.",
+            required_facts: &["2.4.1", "HNSW", "250ms"],
+        },
+        SemanticBenchmarkCase {
+            input: "Authentication is required for every request and tokens rotate daily. \
+                The incident was created by user `admin` at 10:14 UTC and resolved by revoking key ABC-123.",
+            required_facts: &["Authentication", "10:14 UTC", "ABC-123"],
+        },
+    ]
+}
+
+fn semantic_ratio_and_recall_stats() -> (f64, f64, usize, usize) {
+    use engram::intelligence::compression_semantic::{CompressionConfig, SemanticCompressor};
+
+    let corpus = fixed_semantic_corpus();
+    let compressor = SemanticCompressor::new(CompressionConfig::default());
+    let mut total_ratio = 0.0f64;
+    let mut covered_facts = 0usize;
+    let mut expected_facts = 0usize;
+
+    for case in &corpus {
+        let result: CompressedMemory = compressor.compress(case.input);
+        total_ratio += result.ratio as f64;
+
+        for fact in case.required_facts {
+            expected_facts += 1;
+            if result.structured_content.contains(fact)
+                || result.key_facts.iter().any(|s| s.contains(fact))
+            {
+                covered_facts += 1;
+            }
+        }
+    }
+
+    let avg_ratio = if corpus.is_empty() {
+        0.0
+    } else {
+        total_ratio / corpus.len() as f64
+    };
+    let recall = if expected_facts == 0 {
+        1.0
+    } else {
+        covered_facts as f64 / expected_facts as f64
+    };
+
+    (avg_ratio, recall, covered_facts, expected_facts)
+}
+
+fn bench_semantic_compression_ratio(c: &mut Criterion) {
+    use engram::intelligence::compression_semantic::{CompressionConfig, SemanticCompressor};
+
+    let (baseline_ratio, baseline_recall, covered, expected) = semantic_ratio_and_recall_stats();
+    println!(
+        "token_reduction/semantic_compression/ratio_recall avg_ratio={baseline_ratio:.4} avg_recall={baseline_recall:.4} covered_facts={covered}/{expected}"
+    );
+    assert!(
+        baseline_recall >= FIXED_CORPUS_MIN_RECALL && covered >= FIXED_CORPUS_MIN_COVERED_FACTS,
+        "fixed corpus baseline recall too low: {covered}/{expected} ({baseline_recall:.4})"
+    );
+
+    let corpus = fixed_semantic_corpus();
+    let mut group = c.benchmark_group("token_reduction/semantic_compression");
+    group.sample_size(20);
+
+    let total_input_tokens: usize = corpus
+        .iter()
+        .map(|entry| entry.input.len().div_ceil(4))
+        .sum();
+    group.throughput(Throughput::Elements(total_input_tokens as u64));
+
+    group.bench_function("fixed_corpus_ratio_recall", |b| {
+        let compressor = SemanticCompressor::new(CompressionConfig::default());
+
+        b.iter(|| {
+            let mut total_ratio = 0.0f64;
+            let mut covered_facts = 0usize;
+            let mut expected_facts = 0usize;
+
+            for case in &corpus {
+                let result = compressor.compress(black_box(case.input));
+                total_ratio += result.ratio as f64;
+
+                for fact in case.required_facts {
+                    expected_facts += 1;
+                    if result.structured_content.contains(fact)
+                        || result.key_facts.iter().any(|s| s.contains(fact))
+                    {
+                        covered_facts += 1;
+                    }
+                }
+            }
+
+            let avg_ratio = if corpus.is_empty() {
+                0.0
+            } else {
+                total_ratio / corpus.len() as f64
+            };
+            let recall = if expected_facts == 0 {
+                1.0
+            } else {
+                covered_facts as f64 / expected_facts as f64
+            };
+
+            assert!(
+                recall >= FIXED_CORPUS_MIN_RECALL && covered_facts >= FIXED_CORPUS_MIN_COVERED_FACTS,
+                "recall baseline dropped: {covered_facts}/{expected_facts} (floor {FIXED_CORPUS_MIN_RECALL:.4})"
+            );
+            assert!(avg_ratio <= 1.0, "ratio should be <= 1.0");
+            black_box(avg_ratio);
+            black_box(recall);
+        });
+    });
+
+    group.finish();
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +515,7 @@ criterion_group!(
     bench_output_filter_git,
     bench_truncation_engine,
     bench_full_pipeline,
+    bench_semantic_compression_ratio,
     bench_consolidation_reduction,
 );
 criterion_main!(benches);
