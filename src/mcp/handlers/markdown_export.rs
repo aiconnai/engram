@@ -31,7 +31,11 @@ fn frontmatter_tags(fm: &HashMap<String, String>) -> Vec<String> {
 /// Build a deserializable frontmatter payload for `create_memory` /
 /// `update_memory`. `scope` is intentionally omitted (the bare `engram_scope`
 /// string cannot be losslessly mapped to `MemoryScope`); it defaults on import.
-fn import_payload(fm: &HashMap<String, String>, body: &str, include_workspace: bool) -> serde_json::Map<String, Value> {
+fn import_payload(
+    fm: &HashMap<String, String>,
+    body: &str,
+    include_workspace: bool,
+) -> serde_json::Map<String, Value> {
     let mut obj = serde_json::Map::new();
     obj.insert("content".into(), json!(body.trim()));
     if include_workspace {
@@ -46,7 +50,10 @@ fn import_payload(fm: &HashMap<String, String>, body: &str, include_workspace: b
             obj.insert("memory_type".into(), json!(mt));
         }
     }
-    if let Some(imp) = fm.get("engram_importance").and_then(|s| s.parse::<f64>().ok()) {
+    if let Some(imp) = fm
+        .get("engram_importance")
+        .and_then(|s| s.parse::<f64>().ok())
+    {
         obj.insert("importance".into(), json!(imp));
     }
     obj
@@ -219,18 +226,28 @@ fn compute_file_subdir(group: &str, mem: &Value) -> Option<String> {
             Some(created.chars().take(10).collect())
         }
         "workspace" => {
-            let ws = mem.get("workspace").and_then(|v| v.as_str()).unwrap_or("default");
+            let ws = mem
+                .get("workspace")
+                .and_then(|v| v.as_str())
+                .unwrap_or("default");
             Some(ws.to_string())
         }
         "type" => {
-            let t = mem.get("memory_type").and_then(|v| v.as_str()).unwrap_or("note");
+            let t = mem
+                .get("memory_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("note");
             Some(t.to_string())
         }
         "entity" => {
             let tags_str = mem.get("tags").and_then(|v| v.as_str()).unwrap_or("");
             let mut tags = parse_tags(tags_str);
             tags.sort(); // deterministic: first alphabetically
-            Some(tags.into_iter().next().unwrap_or_else(|| "untagged".to_string()))
+            Some(
+                tags.into_iter()
+                    .next()
+                    .unwrap_or_else(|| "untagged".to_string()),
+            )
         }
         _ => None,
     }
@@ -525,10 +542,13 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
                     let create_result = serde_json::from_value::<crate::types::CreateMemoryInput>(
                         Value::Object(obj),
                     )
-                    .map_err(|e| crate::error::EngramError::Internal(format!("bad import payload: {e}")))
+                    .map_err(|e| {
+                        crate::error::EngramError::Internal(format!("bad import payload: {e}"))
+                    })
                     .and_then(|input| {
-                        ctx.storage
-                            .with_transaction(|conn| crate::storage::queries::create_memory(conn, &input))
+                        ctx.storage.with_transaction(|conn| {
+                            crate::storage::queries::create_memory(conn, &input)
+                        })
                     });
 
                     match create_result {
@@ -583,7 +603,9 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
                     let update_result = serde_json::from_value::<crate::types::UpdateMemoryInput>(
                         Value::Object(obj),
                     )
-                    .map_err(|e| crate::error::EngramError::Internal(format!("bad import payload: {e}")))
+                    .map_err(|e| {
+                        crate::error::EngramError::Internal(format!("bad import payload: {e}"))
+                    })
                     .and_then(|input| {
                         ctx.storage.with_transaction(|conn| {
                             crate::storage::queries::update_memory(conn, engram_id, &input)
@@ -718,9 +740,7 @@ fn build_related_map(ctx: &HandlerContext, memory_ids: &[i64]) -> HashMap<i64, V
     }
 
     // Build a single IN-list query for all IDs at once.
-    let placeholders: Vec<String> = (1..=memory_ids.len())
-        .map(|i| format!("?{i}"))
-        .collect();
+    let placeholders: Vec<String> = (1..=memory_ids.len()).map(|i| format!("?{i}")).collect();
     let in_list = placeholders.join(", ");
     let sql = format!(
         "SELECT from_id, to_id, relation_type FROM cross_references
@@ -750,12 +770,13 @@ fn build_related_map(ctx: &HandlerContext, memory_ids: &[i64]) -> HashMap<i64, V
 
     match result {
         Ok(rows) => {
-            let id_set: std::collections::HashSet<i64> =
-                memory_ids.iter().copied().collect();
+            let id_set: std::collections::HashSet<i64> = memory_ids.iter().copied().collect();
             let mut map: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
             for (from_id, to_id, rel_type) in rows {
                 if id_set.contains(&from_id) {
-                    map.entry(from_id).or_default().push((to_id, rel_type.clone()));
+                    map.entry(from_id)
+                        .or_default()
+                        .push((to_id, rel_type.clone()));
                 }
                 if id_set.contains(&to_id) && to_id != from_id {
                     map.entry(to_id).or_default().push((from_id, rel_type));
@@ -1182,20 +1203,41 @@ mod tests {
 
         // All 12 engram_ keys must be present
         assert!(md.contains("engram_id: 42"), "missing engram_id");
-        assert!(md.contains("engram_workspace: default"), "missing engram_workspace");
+        assert!(
+            md.contains("engram_workspace: default"),
+            "missing engram_workspace"
+        );
         assert!(md.contains("engram_scope: user"), "missing engram_scope");
         assert!(md.contains("engram_type: note"), "missing engram_type");
-        assert!(md.contains("engram_created_at:"), "missing engram_created_at");
-        assert!(md.contains("engram_updated_at:"), "missing engram_updated_at");
-        assert!(md.contains("engram_content_hash: sha256:"), "missing engram_content_hash");
+        assert!(
+            md.contains("engram_created_at:"),
+            "missing engram_created_at"
+        );
+        assert!(
+            md.contains("engram_updated_at:"),
+            "missing engram_updated_at"
+        );
+        assert!(
+            md.contains("engram_content_hash: sha256:"),
+            "missing engram_content_hash"
+        );
         assert!(md.contains("engram_version: 3"), "missing engram_version");
-        assert!(md.contains("engram_importance: 0.8"), "missing engram_importance");
+        assert!(
+            md.contains("engram_importance: 0.8"),
+            "missing engram_importance"
+        );
         assert!(md.contains("engram_tier: permanent"), "missing engram_tier");
-        assert!(md.contains("engram_source_session: sess_abc"), "missing engram_source_session");
+        assert!(
+            md.contains("engram_source_session: sess_abc"),
+            "missing engram_source_session"
+        );
         // Tags must be YAML sequence format
         assert!(md.contains("engram_tags:"), "missing engram_tags key");
         assert!(md.contains("  - rust"), "missing tag sequence item rust");
-        assert!(md.contains("  - architecture"), "missing tag sequence item architecture");
+        assert!(
+            md.contains("  - architecture"),
+            "missing tag sequence item architecture"
+        );
         // Old-style keys must be absent
         assert!(!md.contains("\nid: "), "old id: key must be removed");
         assert!(!md.contains("\ntype: "), "old type: key must be removed");
@@ -1221,7 +1263,10 @@ mod tests {
         let id_to_filename = HashMap::new();
         let md = format_memory_markdown(&mem, false, &related_map, &id_to_filename);
 
-        assert!(!md.contains("engram_source_session"), "source_session must be absent when not in metadata");
+        assert!(
+            !md.contains("engram_source_session"),
+            "source_session must be absent when not in metadata"
+        );
         assert!(md.contains("engram_id: 10"), "engram_id must be present");
     }
 
@@ -1249,14 +1294,20 @@ mod tests {
         assert_eq!(fm.get("engram_id").map(|s| s.as_str()), Some("42"));
         assert_eq!(fm.get("engram_type").map(|s| s.as_str()), Some("note"));
         // Non-engram_ keys must be ignored
-        assert!(!fm.contains_key("aliases"), "non-engram_ keys must be ignored");
+        assert!(
+            !fm.contains_key("aliases"),
+            "non-engram_ keys must be ignored"
+        );
     }
 
     #[test]
     fn test_parse_frontmatter_tags_sequence() {
         let content = "---\nengram_tags:\n  - rust\n  - arch\n---\nBody";
         let fm = parse_frontmatter(content);
-        assert_eq!(fm.get("engram_tags_list").map(|s| s.as_str()), Some("rust,arch"));
+        assert_eq!(
+            fm.get("engram_tags_list").map(|s| s.as_str()),
+            Some("rust,arch")
+        );
     }
 
     #[test]
@@ -1271,12 +1322,7 @@ mod tests {
     #[test]
     fn test_classify_import_status_in_sync() {
         // same hash and same version → in_sync
-        let status = classify_import_status(
-            Some(("sha256:abc", 3)),
-            "sha256:abc",
-            3,
-            false,
-        );
+        let status = classify_import_status(Some(("sha256:abc", 3)), "sha256:abc", 3, false);
         assert_eq!(status, ImportStatus::InSync);
     }
 
@@ -1290,36 +1336,24 @@ mod tests {
     #[test]
     fn test_classify_import_status_pending_update() {
         // different hash, same version → pending_update
-        let status = classify_import_status(
-            Some(("sha256:old", 3)),
-            "sha256:new",
-            3,
-            false,
-        );
+        let status = classify_import_status(Some(("sha256:old", 3)), "sha256:new", 3, false);
         assert_eq!(status, ImportStatus::PendingUpdate);
     }
 
     #[test]
     fn test_classify_import_status_conflict_blocked() {
         // version mismatch, no force → conflict
-        let status = classify_import_status(
-            Some(("sha256:old", 5)),
-            "sha256:new",
-            3,
-            false,
+        let status = classify_import_status(Some(("sha256:old", 5)), "sha256:new", 3, false);
+        assert_eq!(
+            status,
+            ImportStatus::Conflict("DB version 5 > file version 3".to_string())
         );
-        assert_eq!(status, ImportStatus::Conflict("DB version 5 > file version 3".to_string()));
     }
 
     #[test]
     fn test_classify_import_status_force_version_applies() {
         // version mismatch + force → pending_update
-        let status = classify_import_status(
-            Some(("sha256:old", 5)),
-            "sha256:new",
-            3,
-            true,
-        );
+        let status = classify_import_status(Some(("sha256:old", 5)), "sha256:new", 3, true);
         assert_eq!(status, ImportStatus::PendingUpdate);
     }
 
@@ -1427,12 +1461,18 @@ mod tests {
                 meili_sync_interval: 300,
                 #[cfg(feature = "langfuse")]
                 langfuse_runtime: Arc::new(
-                    tokio::runtime::Builder::new_current_thread().build().unwrap(),
+                    tokio::runtime::Builder::new_current_thread()
+                        .build()
+                        .unwrap(),
                 ),
             }
         }
 
-        fn make_memory(c: &crate::mcp::handlers::HandlerContext, content: &str, tags: &[&str]) -> i64 {
+        fn make_memory(
+            c: &crate::mcp::handlers::HandlerContext,
+            content: &str,
+            tags: &[&str],
+        ) -> i64 {
             let input = CreateMemoryInput {
                 content: content.to_string(),
                 memory_type: MemoryType::Note,
@@ -1527,7 +1567,16 @@ mod tests {
             let c = ctx();
             let id = make_memory(&c, "hello world", &["alpha"]);
             let dir = tempfile::tempdir().unwrap();
-            write_md(dir.path(), "m.md", Some(id), 1, &["alpha"], 0.5, "hello world", &[]);
+            write_md(
+                dir.path(),
+                "m.md",
+                Some(id),
+                1,
+                &["alpha"],
+                0.5,
+                "hello world",
+                &[],
+            );
 
             let r = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
             assert_eq!(status_of(&r, id), Some("in_sync"), "result={}", r);
@@ -1540,13 +1589,27 @@ mod tests {
             let id = make_memory(&c, "original content", &["alpha"]);
             let dir = tempfile::tempdir().unwrap();
             // same version (1) as DB, changed body → pending_update
-            write_md(dir.path(), "m.md", Some(id), 1, &["alpha"], 0.5, "edited content", &[]);
+            write_md(
+                dir.path(),
+                "m.md",
+                Some(id),
+                1,
+                &["alpha"],
+                0.5,
+                "edited content",
+                &[],
+            );
 
             // review mode: staged, no write
-            let review = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
+            let review =
+                memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
             assert_eq!(status_of(&review, id), Some("pending_update"));
             assert_eq!(review["applied"].as_i64(), Some(0));
-            assert_eq!(db_row(&c, id).0, "original content", "review must not write");
+            assert_eq!(
+                db_row(&c, id).0,
+                "original content",
+                "review must not write"
+            );
 
             // confirm: applies
             let applied = memory_import_markdown(
@@ -1564,7 +1627,16 @@ mod tests {
             let c = ctx();
             let id = make_memory(&c, "base", &["old"]);
             let dir = tempfile::tempdir().unwrap();
-            write_md(dir.path(), "m.md", Some(id), 1, &["new1", "new2"], 0.9, "base edited", &[]);
+            write_md(
+                dir.path(),
+                "m.md",
+                Some(id),
+                1,
+                &["new1", "new2"],
+                0.9,
+                "base edited",
+                &[],
+            );
 
             let r = memory_import_markdown(
                 &c,
@@ -1572,9 +1644,17 @@ mod tests {
             );
             assert_eq!(r["applied"].as_i64(), Some(1));
             let tags = db_tags(&c, id);
-            assert_eq!(tags, vec!["new1".to_string(), "new2".to_string()], "tags resynced");
+            assert_eq!(
+                tags,
+                vec!["new1".to_string(), "new2".to_string()],
+                "tags resynced"
+            );
             let (_, _, importance) = db_row(&c, id);
-            assert!((importance - 0.9).abs() < 1e-6, "importance resynced: {}", importance);
+            assert!(
+                (importance - 0.9).abs() < 1e-6,
+                "importance resynced: {}",
+                importance
+            );
         }
 
         #[test]
@@ -1617,9 +1697,19 @@ mod tests {
             let c = ctx();
             let dir = tempfile::tempdir().unwrap();
             // engram_id not present in DB
-            write_md(dir.path(), "new.md", Some(999_999), 1, &["x"], 0.5, "brand new memory", &[]);
+            write_md(
+                dir.path(),
+                "new.md",
+                Some(999_999),
+                1,
+                &["x"],
+                0.5,
+                "brand new memory",
+                &[],
+            );
 
-            let review = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
+            let review =
+                memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
             assert_eq!(status_of(&review, 999_999), Some("new"));
             assert_eq!(review["applied"].as_i64(), Some(0));
 
@@ -1661,14 +1751,28 @@ mod tests {
             );
 
             let r = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
-            assert_eq!(status_of(&r, id), Some("in_sync"), "obsidian keys ignored; result={}", r);
+            assert_eq!(
+                status_of(&r, id),
+                Some("in_sync"),
+                "obsidian keys ignored; result={}",
+                r
+            );
         }
 
         #[test]
         fn test_import_skips_file_without_engram_id() {
             let c = ctx();
             let dir = tempfile::tempdir().unwrap();
-            write_md(dir.path(), "plain.md", None, 1, &[], 0.5, "just an obsidian note", &[]);
+            write_md(
+                dir.path(),
+                "plain.md",
+                None,
+                1,
+                &[],
+                0.5,
+                "just an obsidian note",
+                &[],
+            );
 
             let r = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
             let skipped = r["files"]
@@ -1676,7 +1780,11 @@ mod tests {
                 .unwrap()
                 .iter()
                 .any(|f| f["status"] == "skipped");
-            assert!(skipped, "file without engram_id must be skipped; result={}", r);
+            assert!(
+                skipped,
+                "file without engram_id must be skipped; result={}",
+                r
+            );
             assert_eq!(r["applied"].as_i64(), Some(0));
         }
     }

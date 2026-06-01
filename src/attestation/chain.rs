@@ -789,7 +789,11 @@ mod tests {
             ..Default::default()
         };
         let results = chain.list(&filter).unwrap();
-        assert_eq!(results.len(), 1, "percent should be literal, got {results:?}");
+        assert_eq!(
+            results.len(),
+            1,
+            "percent should be literal, got {results:?}"
+        );
         assert_eq!(results[0].document_name, "100% complete.txt");
     }
 
@@ -808,7 +812,10 @@ mod tests {
         let chain = test_chain();
         let bad_id = "agent\x00null";
         let err = chain.log_document(b"data", "doc.txt", Some(bad_id), &[], None);
-        assert!(err.is_err(), "agent_id with control chars should be rejected");
+        assert!(
+            err.is_err(),
+            "agent_id with control chars should be rejected"
+        );
     }
 
     #[test]
@@ -892,7 +899,10 @@ mod tests {
         let chain = test_chain();
         let at_limit = vec![0u8; 100 * 1024 * 1024];
         let result = chain.log_document(&at_limit, "limit.bin", None, &[], None);
-        assert!(result.is_ok(), "document at exactly 100 MB should be accepted");
+        assert!(
+            result.is_ok(),
+            "document at exactly 100 MB should be accepted"
+        );
     }
 
     // ── M2: memory_ids cap + negative rejection ──────────────────────────────
@@ -903,7 +913,10 @@ mod tests {
         let chain = test_chain();
         let ids: Vec<i64> = (0..10_001).collect();
         let err = chain.log_document(b"data", "doc.txt", None, &ids, None);
-        assert!(err.is_err(), "more than 10_000 memory_ids should be rejected");
+        assert!(
+            err.is_err(),
+            "more than 10_000 memory_ids should be rejected"
+        );
         let msg = err.unwrap_err().to_string();
         assert!(
             msg.contains("too many"),
@@ -917,7 +930,10 @@ mod tests {
         let chain = test_chain();
         let ids: Vec<i64> = (0..10_000).collect();
         let result = chain.log_document(b"data", "doc.txt", None, &ids, None);
-        assert!(result.is_ok(), "exactly 10_000 memory_ids should be accepted");
+        assert!(
+            result.is_ok(),
+            "exactly 10_000 memory_ids should be accepted"
+        );
     }
 
     #[test]
@@ -1000,10 +1016,7 @@ mod tests {
         let chain = test_chain();
         let long_name = "a".repeat(1_001);
         let err = chain.log_document(b"data", &long_name, None, &[], None);
-        assert!(
-            err.is_err(),
-            "document_name > 1000 chars must be rejected"
-        );
+        assert!(err.is_err(), "document_name > 1000 chars must be rejected");
         let msg = err.unwrap_err().to_string();
         assert!(
             msg.contains("too long") || msg.contains("1000"),
@@ -1039,10 +1052,7 @@ mod tests {
         // Corrupt the metadata column directly
         storage
             .with_transaction(|conn| {
-                conn.execute(
-                    "UPDATE attestation_log SET metadata = '{broken'",
-                    [],
-                )?;
+                conn.execute("UPDATE attestation_log SET metadata = '{broken'", [])?;
                 Ok(())
             })
             .unwrap();

@@ -296,10 +296,15 @@ mod tests {
     #[test]
     fn test_chunker_overlap() {
         let counter = TiktokenCounter::with_fallback("claude");
-        let full_ids = counter.encode("the quick brown fox jumps over the lazy dog and then runs away");
+        let full_ids =
+            counter.encode("the quick brown fox jumps over the lazy dog and then runs away");
         let chunk_size = 5;
         let overlap = 2;
-        let chunker = TokenChunker::new(TiktokenCounter::with_fallback("claude"), chunk_size, overlap);
+        let chunker = TokenChunker::new(
+            TiktokenCounter::with_fallback("claude"),
+            chunk_size,
+            overlap,
+        );
         let text = "the quick brown fox jumps over the lazy dog and then runs away";
         let chunks = chunker.chunk(text);
         if chunks.len() >= 2 {
@@ -309,7 +314,10 @@ mod tests {
             let c1_ids = TiktokenCounter::with_fallback("claude").encode(&chunks[1].text);
             let tail: Vec<_> = c0_ids.iter().rev().take(overlap).rev().collect();
             let head: Vec<_> = c1_ids.iter().take(overlap).collect();
-            assert_eq!(tail, head, "overlap tokens should match between consecutive chunks");
+            assert_eq!(
+                tail, head,
+                "overlap tokens should match between consecutive chunks"
+            );
         }
         let _ = full_ids; // suppress unused warning
     }

@@ -4363,7 +4363,9 @@ mod tests {
         let tools_src = include_str!("tools.rs");
 
         // Dispatch arm names: inside `pub fn dispatch`, up to the catch-all.
-        let d_start = mod_src.find("pub fn dispatch").expect("dispatch fn present");
+        let d_start = mod_src
+            .find("pub fn dispatch")
+            .expect("dispatch fn present");
         let d_end = mod_src[d_start..]
             .find("_ => json!({\"error\": format!(\"Unknown tool")
             .map(|i| d_start + i)
@@ -4403,8 +4405,16 @@ mod tests {
         const REGISTRY_ONLY_OK: &[&str] = &[];
 
         // Sanity: the parser actually found the tables.
-        assert!(dispatch.len() > 100, "parsed too few dispatch arms: {}", dispatch.len());
-        assert!(registry.len() > 100, "parsed too few registry defs: {}", registry.len());
+        assert!(
+            dispatch.len() > 100,
+            "parsed too few dispatch arms: {}",
+            dispatch.len()
+        );
+        assert!(
+            registry.len() > 100,
+            "parsed too few registry defs: {}",
+            registry.len()
+        );
 
         let d_only: Vec<&str> = dispatch
             .difference(&registry)
