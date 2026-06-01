@@ -4348,6 +4348,87 @@ mod tests {
         assert_eq!(essential + standard + advanced, TOOL_DEFINITIONS.len());
     }
 
+    /// Guard against the dispatch/registry drift bug class: every tool routed
+    /// in `handlers::dispatch` must have a `TOOL_DEFINITIONS` entry, and every
+    /// advertised tool must be routable. A new dispatch arm without a registry
+    /// entry (or vice-versa) fails CI here.
+    ///
+    /// Text-level + feature-independent: both sources are parsed as text, so
+    /// `#[cfg]`-gated arms and entries appear in both and cancel out.
+    #[test]
+    fn test_dispatch_registry_parity() {
+        use std::collections::BTreeSet;
+
+        let mod_src = include_str!("handlers/mod.rs");
+        let tools_src = include_str!("tools.rs");
+
+        // Dispatch arm names: inside `pub fn dispatch`, up to the catch-all.
+        let d_start = mod_src.find("pub fn dispatch").expect("dispatch fn present");
+        let d_end = mod_src[d_start..]
+            .find("_ => json!({\"error\": format!(\"Unknown tool")
+            .map(|i| d_start + i)
+            .expect("dispatch catch-all present");
+        let mut dispatch: BTreeSet<&str> = BTreeSet::new();
+        for line in mod_src[d_start..d_end].lines() {
+            let t = line.trim();
+            if t.starts_with('"') && t.contains("=>") {
+                if let Some(name) = t[1..].split('"').next() {
+                    dispatch.insert(name);
+                }
+            }
+        }
+
+        // Registry names: inside `const TOOL_DEFINITIONS`, up to its close.
+        let t_start = tools_src
+            .find("pub const TOOL_DEFINITIONS")
+            .expect("TOOL_DEFINITIONS present");
+        let t_end = tools_src[t_start..]
+            .find("\n];")
+            .map(|i| t_start + i)
+            .expect("TOOL_DEFINITIONS close present");
+        let mut registry: BTreeSet<&str> = BTreeSet::new();
+        for line in tools_src[t_start..t_end].lines() {
+            let t = line.trim();
+            if let Some(rest) = t.strip_prefix("name:") {
+                if let Some(inner) = rest.trim().strip_prefix('"') {
+                    if let Some(name) = inner.split('"').next() {
+                        registry.insert(name);
+                    }
+                }
+            }
+        }
+
+        // Legitimate asymmetries — keep empty; document any future addition.
+        const DISPATCH_ONLY_OK: &[&str] = &[];
+        const REGISTRY_ONLY_OK: &[&str] = &[];
+
+        // Sanity: the parser actually found the tables.
+        assert!(dispatch.len() > 100, "parsed too few dispatch arms: {}", dispatch.len());
+        assert!(registry.len() > 100, "parsed too few registry defs: {}", registry.len());
+
+        let d_only: Vec<&str> = dispatch
+            .difference(&registry)
+            .filter(|n| !DISPATCH_ONLY_OK.contains(n))
+            .copied()
+            .collect();
+        let r_only: Vec<&str> = registry
+            .difference(&dispatch)
+            .filter(|n| !REGISTRY_ONLY_OK.contains(n))
+            .copied()
+            .collect();
+
+        assert!(
+            d_only.is_empty(),
+            "Tools CALLABLE but NOT advertised — add a TOOL_DEFINITIONS entry: {:?}",
+            d_only
+        );
+        assert!(
+            r_only.is_empty(),
+            "Tools ADVERTISED but NOT callable — add a dispatch arm or remove from registry: {:?}",
+            r_only
+        );
+    }
+
     #[test]
     fn test_essential_tools_present() {
         let essential_names = [
