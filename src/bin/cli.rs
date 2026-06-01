@@ -743,7 +743,7 @@ fn main() -> Result<()> {
             }
             AttestAction::ChainVerify => {
                 let chain = AttestationChain::new(storage.clone());
-                match chain.verify_chain() {
+                match chain.verify_chain(None) {
                     Ok(status) => {
                         println!("{}", serde_json::to_string_pretty(&status)?);
                     }
