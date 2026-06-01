@@ -188,6 +188,29 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `./scripts/generate-mcp-reference.sh --check` — PASS.
 - O fechamento de #27 ainda depende de eliminar/normalizar quaisquer contagens ou listagens manuais remanescentes fora desse escopo.
 
+## Attestation CRITICAL security fixes — 2026-06-01
+
+- `src/attestation/chain.rs` agora lê o tip da cadeia e insere o novo registro
+  dentro do mesmo `with_transaction`, removendo a janela TOCTOU entre SELECT e
+  INSERT.
+- `verify_chain` passou a aceitar `Option<&[u8; 32]>` para verificar assinaturas
+  Ed25519; `None` preserva o comportamento legado, e `Some(key)` exige assinatura
+  válida em todos os registros verificados.
+- Testes adicionados cobrem append concorrente, assinatura válida, assinatura
+  adulterada e assinatura removida.
+- Verificações:
+  - `cargo test --features agent-portability test_verify_chain` — PASS.
+  - `cargo test --features agent-portability test_chain_stays_linear` — PASS.
+  - `cargo test --features agent-portability attestation` — PASS.
+  - `cargo test --features agent-portability scenario_5_chain_verify_valid` — PASS.
+  - `cargo test` — PASS.
+  - `cargo fmt --all -- --check` — BLOCKED por formatting drift existente
+    fora do diff (`compression_semantic.rs`, `token_counter.rs`, handlers MCP).
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+  - `cargo clippy --all-targets --all-features -- -D warnings` — BLOCKED por
+    warnings existentes fora do diff (`token_counter.rs`, `harness.rs`,
+    `markdown_export.rs`).
+
 ---
 
 **Nota**: Este arquivo é atualizado manualmente ao final de cada iteração significativa ou ao final de sessões. O log detalhado fica no arquivo apontado por `Active plan`.

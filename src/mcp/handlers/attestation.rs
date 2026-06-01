@@ -107,7 +107,7 @@ pub fn attestation_verify(ctx: &HandlerContext, params: Value) -> Value {
 pub fn attestation_chain_verify(ctx: &HandlerContext, _params: Value) -> Value {
     let chain = AttestationChain::new(ctx.storage.clone());
 
-    match chain.verify_chain() {
+    match chain.verify_chain(None) {
         Ok(status) => json!({
             "status": "ok",
             "chain_status": status,

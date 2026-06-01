@@ -338,7 +338,9 @@ da stack de compressão.
 
 ### Verificações
 
-- `cargo fmt --all -- --check` — PASS.
+- `cargo fmt --all -- --check` — BLOCKED por formatting drift existente fora
+  do diff (`src/intelligence/compression_semantic.rs`,
+  `src/intelligence/token_counter.rs`, handlers MCP).
 - `cargo test maintenance_status` — PASS.
 - `cargo test test_health_check_reports_` — PASS.
 - `bash docs/harness/bin/doctor.sh` — PASS.
@@ -445,3 +447,43 @@ shape mínimo para backends externos não retornarem uma lista vazia de
 - `cargo check --tests --features meilisearch` — PASS.
 - `cargo check --tests --features turso` — PASS.
 - `bash docs/harness/bin/doctor.sh` — PASS.
+
+## 2026-06-01 — Attestation CRITICAL security fixes
+
+### Contexto da sessão
+
+Aplicação do plano "Attestation CRITICAL Security Fixes" para fechar dois bugs
+em `src/attestation/chain.rs`: assinaturas Ed25519 eram geradas mas não
+verificadas, e append concorrente podia intercalar leitura do tip e insert.
+
+### Ações realizadas
+
+- `log_document` passou a executar a leitura do último `record_hash`, montagem do
+  novo registro, assinatura opcional e `INSERT` dentro de um único
+  `with_transaction`.
+- Removidos os helpers mortos `get_last_record` e `insert_record`.
+- `verify_chain` agora recebe `Option<&[u8; 32]>`:
+  - `None` mantém compatibilidade com os callers atuais.
+  - `Some(key)` verifica assinatura Ed25519 e marca a cadeia como `Broken` se a
+    assinatura estiver ausente ou inválida.
+- Callers existentes em CLI, MCP handler, testes unitários e snapshot foram
+  atualizados para `verify_chain(None)`.
+- Testes adicionados:
+  - `test_chain_stays_linear_under_concurrent_append`
+  - `test_verify_chain_rejects_tampered_signature`
+  - `test_verify_chain_rejects_stripped_signature_when_key_provided`
+  - `test_verify_chain_accepts_valid_signature`
+  - `test_verify_chain_skips_sig_check_when_no_key_provided`
+
+### Verificações
+
+- `cargo test --features agent-portability test_verify_chain` — PASS.
+- `cargo test --features agent-portability test_chain_stays_linear` — PASS.
+- `cargo test --features agent-portability attestation` — PASS.
+- `cargo test --features agent-portability scenario_5_chain_verify_valid` — PASS.
+- `cargo test` — PASS.
+- `cargo fmt --all -- --check` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `cargo clippy --all-targets --all-features -- -D warnings` — BLOCKED por
+  warnings existentes fora do diff (`src/intelligence/token_counter.rs`,
+  `src/mcp/handlers/harness.rs`, `src/mcp/handlers/markdown_export.rs`).

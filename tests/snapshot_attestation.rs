@@ -203,7 +203,7 @@ fn scenario_5_chain_verify_valid() {
     let chain = AttestationChain::new(storage);
 
     // Empty chain
-    let status = chain.verify_chain().expect("verify_chain");
+    let status = chain.verify_chain(None).expect("verify_chain");
     assert!(
         matches!(status, ChainStatus::Empty),
         "empty chain should be Empty, got {:?}",
@@ -221,7 +221,9 @@ fn scenario_5_chain_verify_valid() {
         .log_document(b"document three content", "doc3.txt", None, &[3], None)
         .expect("log doc3");
 
-    let status = chain.verify_chain().expect("verify_chain after 3 records");
+    let status = chain
+        .verify_chain(None)
+        .expect("verify_chain after 3 records");
     assert!(
         matches!(status, ChainStatus::Valid { record_count: 3 }),
         "chain should be Valid with 3 records, got {:?}",

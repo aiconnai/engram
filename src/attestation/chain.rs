@@ -52,40 +52,82 @@ impl AttestationChain {
         let document_hash = hash_bytes(content);
         let document_size = content.len();
         let ingested_at = Utc::now();
-
-        let previous_hash = match self.get_last_record()? {
-            Some(last) => last.record_hash,
-            None => GENESIS_HASH.to_string(),
-        };
-
         let memory_ids_vec: Vec<i64> = memory_ids.to_vec();
+        let agent_id_owned = agent_id.map(str::to_string);
+        let sign_key_owned = sign_key.copied();
 
-        // Build a partial record so we can compute the record_hash
-        let mut record = AttestationRecord {
-            id: None,
-            document_hash,
-            document_name: document_name.to_string(),
-            document_size,
-            ingested_at,
-            agent_id: agent_id.map(str::to_string),
-            memory_ids: memory_ids_vec,
-            previous_hash,
-            record_hash: String::new(), // filled in below
-            signature: None,
-            metadata: serde_json::Value::Object(serde_json::Map::new()),
-            created_at: None,
-        };
+        self.storage.with_transaction(|conn| {
+            let previous_hash: String = {
+                let mut stmt = conn
+                    .prepare("SELECT record_hash FROM attestation_log ORDER BY id DESC LIMIT 1")?;
+                let mut rows = stmt.query([])?;
+                match rows.next()? {
+                    Some(row) => row.get(0)?,
+                    None => GENESIS_HASH.to_string(),
+                }
+            };
 
-        record.record_hash = Self::compute_record_hash(&record);
+            let mut record = AttestationRecord {
+                id: None,
+                document_hash,
+                document_name: document_name.to_string(),
+                document_size,
+                ingested_at,
+                agent_id: agent_id_owned,
+                memory_ids: memory_ids_vec,
+                previous_hash,
+                record_hash: String::new(),
+                signature: None,
+                metadata: serde_json::Value::Object(serde_json::Map::new()),
+                created_at: None,
+            };
 
-        // Optional Ed25519 signature over the record_hash bytes
-        if let Some(key_bytes) = sign_key {
-            record.signature = Some(sign_record_hash(&record.record_hash, key_bytes)?);
-        }
+            record.record_hash = Self::compute_record_hash(&record);
 
-        // Persist
-        let record = self.insert_record(record)?;
-        Ok(record)
+            if let Some(key_bytes) = sign_key_owned.as_ref() {
+                record.signature = Some(sign_record_hash(&record.record_hash, key_bytes)?);
+            }
+
+            let memory_ids_json =
+                serde_json::to_string(&record.memory_ids).map_err(EngramError::Serialization)?;
+            let metadata_json =
+                serde_json::to_string(&record.metadata).map_err(EngramError::Serialization)?;
+
+            conn.execute(
+                "INSERT INTO attestation_log
+                    (document_hash, document_name, document_size, ingested_at,
+                     agent_id, memory_ids, previous_hash, record_hash, signature, metadata)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                rusqlite::params![
+                    record.document_hash,
+                    record.document_name,
+                    record.document_size as i64,
+                    record.ingested_at.to_rfc3339(),
+                    record.agent_id,
+                    memory_ids_json,
+                    record.previous_hash,
+                    record.record_hash,
+                    record.signature,
+                    metadata_json,
+                ],
+            )?;
+
+            let id = conn.last_insert_rowid();
+            let created_at_str: String = conn.query_row(
+                "SELECT created_at FROM attestation_log WHERE id = ?1",
+                rusqlite::params![id],
+                |row| row.get(0),
+            )?;
+            let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .ok();
+
+            Ok(AttestationRecord {
+                id: Some(id),
+                created_at,
+                ..record
+            })
+        })
     }
 
     /// Check whether a document (by content) has already been attested.
@@ -116,7 +158,9 @@ impl AttestationChain {
     /// Walks all records in insertion order and checks:
     /// - `previous_hash` of each record matches the `record_hash` of the preceding one
     /// - Each `record_hash` is correctly computed from the record's fields
-    pub fn verify_chain(&self) -> Result<ChainStatus> {
+    /// - If `verifying_key` is `Some`, every record must carry a valid Ed25519
+    ///   signature for its `record_hash`
+    pub fn verify_chain(&self, verifying_key: Option<&[u8; 32]>) -> Result<ChainStatus> {
         let records = self.storage.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, document_hash, document_name, document_size, ingested_at,
@@ -165,6 +209,32 @@ impl AttestationChain {
                     expected_hash: recomputed,
                     actual_hash: record.record_hash.clone(),
                 });
+            }
+
+            // 3. Verify Ed25519 signature when the caller provides a key.
+            if let Some(vk_bytes) = verifying_key {
+                let Some(sig_hex) = record.signature.as_deref() else {
+                    return Ok(ChainStatus::Broken {
+                        at_record_id: record.id.unwrap_or(-1),
+                        expected_hash: format!(
+                            "Ed25519 signature for record_hash {}",
+                            record.record_hash
+                        ),
+                        actual_hash: "missing signature".to_string(),
+                    });
+                };
+
+                let valid = verify_signature(&record.record_hash, sig_hex, vk_bytes)?;
+                if !valid {
+                    return Ok(ChainStatus::Broken {
+                        at_record_id: record.id.unwrap_or(-1),
+                        expected_hash: format!(
+                            "valid Ed25519 signature for record_hash {}",
+                            record.record_hash
+                        ),
+                        actual_hash: "invalid signature".to_string(),
+                    });
+                }
             }
 
             expected_previous = record.record_hash.clone();
@@ -239,70 +309,6 @@ impl AttestationChain {
 
     // ─── Private helpers ────────────────────────────────────────────────────
 
-    /// Retrieve the most recently inserted record
-    fn get_last_record(&self) -> Result<Option<AttestationRecord>> {
-        self.storage.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, document_hash, document_name, document_size, ingested_at,
-                        agent_id, memory_ids, previous_hash, record_hash, signature,
-                        metadata, created_at
-                 FROM attestation_log
-                 ORDER BY id DESC
-                 LIMIT 1",
-            )?;
-            let mut rows = stmt.query([])?;
-            match rows.next()? {
-                Some(row) => Ok(Some(row_to_record(row)?)),
-                None => Ok(None),
-            }
-        })
-    }
-
-    /// Insert a record into the database and return it with its assigned `id`
-    fn insert_record(&self, record: AttestationRecord) -> Result<AttestationRecord> {
-        let memory_ids_json =
-            serde_json::to_string(&record.memory_ids).map_err(EngramError::Serialization)?;
-        let metadata_json =
-            serde_json::to_string(&record.metadata).map_err(EngramError::Serialization)?;
-
-        self.storage.with_transaction(|conn| {
-            conn.execute(
-                "INSERT INTO attestation_log
-                    (document_hash, document_name, document_size, ingested_at,
-                     agent_id, memory_ids, previous_hash, record_hash, signature, metadata)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                rusqlite::params![
-                    record.document_hash,
-                    record.document_name,
-                    record.document_size as i64,
-                    record.ingested_at.to_rfc3339(),
-                    record.agent_id,
-                    memory_ids_json,
-                    record.previous_hash,
-                    record.record_hash,
-                    record.signature,
-                    metadata_json,
-                ],
-            )?;
-
-            let id = conn.last_insert_rowid();
-            let created_at_str: String = conn.query_row(
-                "SELECT created_at FROM attestation_log WHERE id = ?1",
-                rusqlite::params![id],
-                |row| row.get(0),
-            )?;
-            let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .ok();
-
-            Ok(AttestationRecord {
-                id: Some(id),
-                created_at,
-                ..record
-            })
-        })
-    }
-
     /// Compute the canonical `record_hash` for a record.
     ///
     /// Hash = SHA-256 of:
@@ -344,6 +350,32 @@ fn sign_record_hash(record_hash: &str, secret_key_bytes: &[u8; 32]) -> Result<St
     let signing_key = SigningKey::from_bytes(secret_key_bytes);
     let signature: Signature = signing_key.sign(record_hash.as_bytes());
     Ok(hex::encode(signature.to_bytes()))
+}
+
+/// Verify an Ed25519 signature stored as a hex string.
+///
+/// Returns `Ok(true)` if valid, `Ok(false)` if the signature is invalid, and
+/// `Err` if the key bytes or signature bytes are malformed.
+fn verify_signature(
+    record_hash: &str,
+    signature_hex: &str,
+    verifying_key_bytes: &[u8; 32],
+) -> Result<bool> {
+    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+
+    let key = VerifyingKey::from_bytes(verifying_key_bytes)
+        .map_err(|e| EngramError::InvalidInput(format!("invalid verifying key: {e}")))?;
+
+    let sig_bytes = hex::decode(signature_hex)
+        .map_err(|e| EngramError::InvalidInput(format!("invalid signature hex: {e}")))?;
+
+    let sig_array: [u8; 64] = sig_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| EngramError::InvalidInput("signature must be 64 bytes".to_string()))?;
+
+    let signature = Signature::from_bytes(&sig_array);
+    Ok(key.verify(record_hash.as_bytes(), &signature).is_ok())
 }
 
 /// Deserialise a database row into an `AttestationRecord`
@@ -445,7 +477,7 @@ mod tests {
         chain.log_document(b"a", "a.txt", None, &[], None).unwrap();
         chain.log_document(b"b", "b.txt", None, &[], None).unwrap();
 
-        match chain.verify_chain().unwrap() {
+        match chain.verify_chain(None).unwrap() {
             ChainStatus::Valid { record_count } => assert_eq!(record_count, 2),
             other => panic!("expected Valid, got {other:?}"),
         }
@@ -454,7 +486,133 @@ mod tests {
     #[test]
     fn test_verify_chain_empty() {
         let chain = test_chain();
-        assert!(matches!(chain.verify_chain().unwrap(), ChainStatus::Empty));
+        assert!(matches!(
+            chain.verify_chain(None).unwrap(),
+            ChainStatus::Empty
+        ));
+    }
+
+    #[test]
+    fn test_chain_stays_linear_under_concurrent_append() {
+        use std::sync::Arc;
+
+        let storage = crate::storage::Storage::open_in_memory().unwrap();
+        let chain = Arc::new(AttestationChain::new(storage));
+
+        let handles: Vec<_> = (0..4)
+            .map(|i| {
+                let c = Arc::clone(&chain);
+                std::thread::spawn(move || {
+                    c.log_document(
+                        format!("content-{i}").as_bytes(),
+                        &format!("doc-{i}.txt"),
+                        None,
+                        &[],
+                        None,
+                    )
+                    .unwrap()
+                })
+            })
+            .collect();
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        match chain.verify_chain(None).unwrap() {
+            ChainStatus::Valid { record_count } => assert_eq!(record_count, 4),
+            other => panic!("expected Valid, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_verify_chain_rejects_tampered_signature() {
+        use ed25519_dalek::{SigningKey, VerifyingKey};
+
+        let chain = test_chain();
+        let secret = [42u8; 32];
+        let verifying_key_bytes: [u8; 32] =
+            VerifyingKey::from(&SigningKey::from_bytes(&secret)).to_bytes();
+
+        chain
+            .log_document(b"data", "doc.txt", None, &[], Some(&secret))
+            .unwrap();
+
+        let zero_signature = "00".repeat(64);
+        chain
+            .storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "UPDATE attestation_log SET signature = ?1",
+                    rusqlite::params![zero_signature],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        match chain.verify_chain(Some(&verifying_key_bytes)).unwrap() {
+            ChainStatus::Broken { .. } => {}
+            other => panic!("expected Broken, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_verify_chain_rejects_stripped_signature_when_key_provided() {
+        use ed25519_dalek::{SigningKey, VerifyingKey};
+
+        let chain = test_chain();
+        let secret = [42u8; 32];
+        let verifying_key_bytes: [u8; 32] =
+            VerifyingKey::from(&SigningKey::from_bytes(&secret)).to_bytes();
+
+        chain
+            .log_document(b"data", "doc.txt", None, &[], Some(&secret))
+            .unwrap();
+
+        chain
+            .storage
+            .with_transaction(|conn| {
+                conn.execute("UPDATE attestation_log SET signature = NULL", [])?;
+                Ok(())
+            })
+            .unwrap();
+
+        match chain.verify_chain(Some(&verifying_key_bytes)).unwrap() {
+            ChainStatus::Broken { .. } => {}
+            other => panic!("expected Broken, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_verify_chain_accepts_valid_signature() {
+        use ed25519_dalek::{SigningKey, VerifyingKey};
+
+        let chain = test_chain();
+        let secret = [42u8; 32];
+        let verifying_key_bytes: [u8; 32] =
+            VerifyingKey::from(&SigningKey::from_bytes(&secret)).to_bytes();
+
+        chain
+            .log_document(b"data", "doc.txt", None, &[], Some(&secret))
+            .unwrap();
+
+        match chain.verify_chain(Some(&verifying_key_bytes)).unwrap() {
+            ChainStatus::Valid { record_count: 1 } => {}
+            other => panic!("expected Valid(1), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_verify_chain_skips_sig_check_when_no_key_provided() {
+        let chain = test_chain();
+        chain
+            .log_document(b"data", "doc.txt", None, &[], None)
+            .unwrap();
+
+        match chain.verify_chain(None).unwrap() {
+            ChainStatus::Valid { record_count: 1 } => {}
+            other => panic!("expected Valid(1), got {other:?}"),
+        }
     }
 
     #[test]
@@ -526,7 +684,7 @@ mod tests {
         }
 
         // Full chain verification
-        match chain.verify_chain().unwrap() {
+        match chain.verify_chain(None).unwrap() {
             ChainStatus::Valid { record_count } => assert_eq!(record_count, 5),
             other => panic!("expected Valid with 5 records, got {other:?}"),
         }
@@ -546,7 +704,7 @@ mod tests {
 
         // Chain is valid before tamper
         assert!(matches!(
-            chain.verify_chain().unwrap(),
+            chain.verify_chain(None).unwrap(),
             ChainStatus::Valid { .. }
         ));
 
@@ -563,7 +721,7 @@ mod tests {
             .expect("tamper record");
 
         // Chain should now be broken
-        match chain.verify_chain().unwrap() {
+        match chain.verify_chain(None).unwrap() {
             ChainStatus::Broken { at_record_id, .. } => {
                 // The breakage can be detected at r2 (hash mismatch) or at a subsequent record
                 assert!(at_record_id > 0);
