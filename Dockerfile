@@ -2,7 +2,10 @@
 # Build: docker build -t engram-server .
 # Run:   docker run -v engram-data:/data -p 8080:8080 engram-server
 
-FROM rust:latest AS builder
+# Pin builder to bookworm to match the runtime glibc (2.36).
+# rust:latest drifts to newer base images and can link GLIBC_2.39+
+# which crashes on debian:bookworm-slim at startup.
+FROM rust:1-bookworm AS builder
 
 WORKDIR /build
 COPY . .
