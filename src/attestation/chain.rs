@@ -13,7 +13,17 @@ use crate::storage::Storage;
 
 use super::types::{AttestationFilter, AttestationRecord, ChainStatus};
 
-/// Genesis sentinel — used as previous_hash for the very first record
+/// Genesis sentinel used as `previous_hash` for the first record.
+///
+/// This is a well-known constant, not a random or signed commitment. It means
+/// the chain has no cryptographic anchor to a trusted root: an adversary with
+/// direct DB access can insert a plausible first record with
+/// `previous_hash = "genesis"` and a valid `record_hash`, indistinguishable
+/// from a legitimate genesis record.
+///
+/// For stronger guarantees, replace this with a per-chain random nonce
+/// generated at chain creation time and stored out-of-band (e.g. in a
+/// separate `attestation_config` table).
 const GENESIS_HASH: &str = "genesis";
 
 /// Maximum allowed document size (100 MB). Documents larger than this would
@@ -55,6 +65,16 @@ impl AttestationChain {
         if document_name.trim().is_empty() {
             return Err(EngramError::InvalidInput(
                 "document_name must not be empty".to_string(),
+            ));
+        }
+        if document_name.len() > 1_000 {
+            return Err(EngramError::InvalidInput(
+                "document_name too long (max 1000 characters)".to_string(),
+            ));
+        }
+        if document_name.contains('\0') {
+            return Err(EngramError::InvalidInput(
+                "document_name must not contain null bytes".to_string(),
             ));
         }
 
@@ -487,7 +507,7 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> Result<AttestationRecord> {
         .map_err(|e| EngramError::Storage(format!("invalid memory_ids JSON: {e}")))?;
 
     let metadata: serde_json::Value = serde_json::from_str(&metadata_json)
-        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        .map_err(|e| EngramError::Storage(format!("invalid metadata JSON: {e}")))?;
 
     let created_at = created_at_str.and_then(|s| {
         chrono::DateTime::parse_from_rfc3339(&s)
@@ -769,7 +789,11 @@ mod tests {
             ..Default::default()
         };
         let results = chain.list(&filter).unwrap();
-        assert_eq!(results.len(), 1, "percent should be literal, got {results:?}");
+        assert_eq!(
+            results.len(),
+            1,
+            "percent should be literal, got {results:?}"
+        );
         assert_eq!(results[0].document_name, "100% complete.txt");
     }
 
@@ -788,7 +812,10 @@ mod tests {
         let chain = test_chain();
         let bad_id = "agent\x00null";
         let err = chain.log_document(b"data", "doc.txt", Some(bad_id), &[], None);
-        assert!(err.is_err(), "agent_id with control chars should be rejected");
+        assert!(
+            err.is_err(),
+            "agent_id with control chars should be rejected"
+        );
     }
 
     #[test]
@@ -872,7 +899,10 @@ mod tests {
         let chain = test_chain();
         let at_limit = vec![0u8; 100 * 1024 * 1024];
         let result = chain.log_document(&at_limit, "limit.bin", None, &[], None);
-        assert!(result.is_ok(), "document at exactly 100 MB should be accepted");
+        assert!(
+            result.is_ok(),
+            "document at exactly 100 MB should be accepted"
+        );
     }
 
     // ── M2: memory_ids cap + negative rejection ──────────────────────────────
@@ -883,7 +913,10 @@ mod tests {
         let chain = test_chain();
         let ids: Vec<i64> = (0..10_001).collect();
         let err = chain.log_document(b"data", "doc.txt", None, &ids, None);
-        assert!(err.is_err(), "more than 10_000 memory_ids should be rejected");
+        assert!(
+            err.is_err(),
+            "more than 10_000 memory_ids should be rejected"
+        );
         let msg = err.unwrap_err().to_string();
         assert!(
             msg.contains("too many"),
@@ -897,7 +930,10 @@ mod tests {
         let chain = test_chain();
         let ids: Vec<i64> = (0..10_000).collect();
         let result = chain.log_document(b"data", "doc.txt", None, &ids, None);
-        assert!(result.is_ok(), "exactly 10_000 memory_ids should be accepted");
+        assert!(
+            result.is_ok(),
+            "exactly 10_000 memory_ids should be accepted"
+        );
     }
 
     #[test]
@@ -955,6 +991,84 @@ mod tests {
     // test_verify_chain_empty, test_chain_tamper_detection, etc.) serve as the
     // regression harness for the streaming refactor. The behavior must be
     // identical after the refactor.
+
+    // ── L3: document_name validation — null bytes and length cap ────────────────
+
+    #[test]
+    fn test_document_name_null_byte_rejected() {
+        // L3: document_name containing null byte must be rejected
+        let chain = test_chain();
+        let err = chain.log_document(b"data", "doc\x00.txt", None, &[], None);
+        assert!(
+            err.is_err(),
+            "document_name with null byte must be rejected"
+        );
+        let msg = err.unwrap_err().to_string();
+        assert!(
+            msg.contains("null"),
+            "error should mention null bytes, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_document_name_too_long_rejected() {
+        // L3: document_name longer than 1000 chars must be rejected
+        let chain = test_chain();
+        let long_name = "a".repeat(1_001);
+        let err = chain.log_document(b"data", &long_name, None, &[], None);
+        assert!(err.is_err(), "document_name > 1000 chars must be rejected");
+        let msg = err.unwrap_err().to_string();
+        assert!(
+            msg.contains("too long") || msg.contains("1000"),
+            "error should mention length limit, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_document_name_exactly_1000_chars_accepted() {
+        // L3: exactly 1000 chars must be accepted
+        let chain = test_chain();
+        let name_1000 = "a".repeat(1_000);
+        let result = chain.log_document(b"data", &name_1000, None, &[], None);
+        assert!(
+            result.is_ok(),
+            "document_name of exactly 1000 chars should be accepted"
+        );
+    }
+
+    // ── L1: corrupt metadata JSON must not be silently swallowed ───────────────
+
+    #[test]
+    fn test_corrupt_metadata_json_returns_error() {
+        // L1: verify_chain (which calls row_to_record) must return Err when
+        // metadata_json stored in the DB is malformed, not silently substitute {}.
+        let storage = Storage::open_in_memory().unwrap();
+        let chain = AttestationChain::new(storage.clone());
+
+        chain
+            .log_document(b"data", "doc.txt", None, &[], None)
+            .unwrap();
+
+        // Corrupt the metadata column directly
+        storage
+            .with_transaction(|conn| {
+                conn.execute("UPDATE attestation_log SET metadata = '{broken'", [])?;
+                Ok(())
+            })
+            .unwrap();
+
+        // verify_chain must return Err, not Ok with broken ChainStatus
+        let result = chain.verify_chain(None);
+        assert!(
+            result.is_err(),
+            "corrupt metadata JSON must propagate an error, got: {result:?}"
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("invalid metadata JSON") || msg.contains("metadata"),
+            "error should mention metadata, got: {msg}"
+        );
+    }
 
     #[test]
     fn test_chain_tamper_detection() {

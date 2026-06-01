@@ -135,10 +135,7 @@ pub fn handle_harness_record(ctx: &HandlerContext, params: Value) -> Value {
     // ── Build metadata ───────────────────────────────────────────────────────
     let mut metadata: HashMap<String, Value> = HashMap::new();
     metadata.insert("harness_kind".to_string(), json!(kind));
-    metadata.insert(
-        "source_paths".to_string(),
-        json!(source_paths),
-    );
+    metadata.insert("source_paths".to_string(), json!(source_paths));
     metadata.insert("command".to_string(), json!(command));
     metadata.insert("issue_number".to_string(), json!(issue_number));
     metadata.insert("commit_sha".to_string(), json!(commit_sha));
@@ -240,7 +237,11 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
 
         match kind.as_str() {
             "decision" => {
-                let commit_sha = mem.metadata.get("commit_sha").cloned().unwrap_or(Value::Null);
+                let commit_sha = mem
+                    .metadata
+                    .get("commit_sha")
+                    .cloned()
+                    .unwrap_or(Value::Null);
                 decisions.push(json!({
                     "memory_id": mem.id,
                     "summary": summary,
@@ -256,28 +257,30 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
                     "created_at": created_at,
                 }));
             }
-            "verification_result" => {
-                if last_verification.is_none() {
-                    let command = mem.metadata.get("command").cloned().unwrap_or(Value::Null);
-                    last_verification = Some(json!({
-                        "memory_id": mem.id,
-                        "summary": summary,
-                        "created_at": created_at,
-                        "command": command,
-                    }));
-                }
+            "verification_result" if last_verification.is_none() => {
+                let command = mem.metadata.get("command").cloned().unwrap_or(Value::Null);
+                last_verification = Some(json!({
+                    "memory_id": mem.id,
+                    "summary": summary,
+                    "created_at": created_at,
+                    "command": command,
+                }));
             }
-            "handoff" => {
-                if last_handoff.is_none() {
-                    last_handoff = Some(json!({
-                        "memory_id": mem.id,
-                        "summary": summary,
-                        "created_at": created_at,
-                    }));
-                }
+            "verification_result" => {}
+            "handoff" if last_handoff.is_none() => {
+                last_handoff = Some(json!({
+                    "memory_id": mem.id,
+                    "summary": summary,
+                    "created_at": created_at,
+                }));
             }
+            "handoff" => {}
             "issue_update" => {
-                let issue_number = mem.metadata.get("issue_number").cloned().unwrap_or(Value::Null);
+                let issue_number = mem
+                    .metadata
+                    .get("issue_number")
+                    .cloned()
+                    .unwrap_or(Value::Null);
                 recent_issue_updates.push(json!({
                     "memory_id": mem.id,
                     "summary": summary,
@@ -293,13 +296,11 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
     let git_state = if include_git {
         let branch = run_command("git", &["branch", "--show-current"]);
         let dirty_raw = run_command("git", &["status", "--short"]);
-        let dirty_files: Option<Vec<String>> = dirty_raw.map(|s| {
-            s.lines().take(10).map(|l| l.to_string()).collect()
-        });
+        let dirty_files: Option<Vec<String>> =
+            dirty_raw.map(|s| s.lines().take(10).map(|l| l.to_string()).collect());
         let commits_raw = run_command("git", &["log", "--oneline", "-5"]);
-        let recent_commits: Option<Vec<String>> = commits_raw.map(|s| {
-            s.lines().map(|l| l.to_string()).collect()
-        });
+        let recent_commits: Option<Vec<String>> =
+            commits_raw.map(|s| s.lines().map(|l| l.to_string()).collect());
         Some(json!({
             "branch": branch,
             "dirty_files": dirty_files,
@@ -311,13 +312,19 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
 
     // ── suggested_next_action ─────────────────────────────────────────────────
     let suggested_next_action = if !blockers.is_empty() {
-        format!("Resolve {} known blocker(s) before proceeding.", blockers.len())
+        format!(
+            "Resolve {} known blocker(s) before proceeding.",
+            blockers.len()
+        )
     } else if let Some(ref h) = last_handoff {
         let s = h["summary"].as_str().unwrap_or("");
         let preview: String = s.chars().take(60).collect();
         format!("Continue from last handoff: {}.", preview)
     } else if !decisions.is_empty() {
-        format!("Review {} recent decision(s) and confirm alignment.", decisions.len())
+        format!(
+            "Review {} recent decision(s) and confirm alignment.",
+            decisions.len()
+        )
     } else {
         "No harness context found. Run harness_record to start tracking.".to_string()
     };
@@ -330,7 +337,11 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
         // current_objective: extracted from the most recent handoff's current_goal
         let current_objective = last_handoff
             .as_ref()
-            .and_then(|h| h["metadata"]["current_goal"].as_str().or_else(|| h["summary"].as_str()))
+            .and_then(|h| {
+                h["metadata"]["current_goal"]
+                    .as_str()
+                    .or_else(|| h["summary"].as_str())
+            })
             .map(|s| s.chars().take(200).collect::<String>());
 
         let candidate = json!({
@@ -372,7 +383,11 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
     // Fallback (should not normally be reached)
     let current_objective = last_handoff
         .as_ref()
-        .and_then(|h| h["metadata"]["current_goal"].as_str().or_else(|| h["summary"].as_str()))
+        .and_then(|h| {
+            h["metadata"]["current_goal"]
+                .as_str()
+                .or_else(|| h["summary"].as_str())
+        })
         .map(|s| s.chars().take(200).collect::<String>());
 
     json!({
@@ -419,7 +434,10 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
 
     // ── Validate next_steps ──────────────────────────────────────────────────
     let next_steps: Vec<String> = match params.get("next_steps").and_then(|v| v.as_array()) {
-        Some(arr) => arr.iter().filter_map(|v| v.as_str().map(String::from)).collect(),
+        Some(arr) => arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
         None => return json!({"error": "next_steps is required"}),
     };
     if next_steps.is_empty() {
@@ -430,37 +448,61 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
     let files_touched: Vec<String> = params
         .get("files_touched")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let decisions_made: Vec<String> = params
         .get("decisions_made")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let tests_run: Vec<String> = params
         .get("tests_run")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let tests_not_run: Vec<String> = params
         .get("tests_not_run")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let known_risks: Vec<String> = params
         .get("known_risks")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let blockers: Vec<String> = params
         .get("blockers")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let issue_numbers: Vec<i64> = params
@@ -472,7 +514,11 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
     let plan_doc_paths: Vec<String> = params
         .get("plan_doc_paths")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let verification_evidence = params
@@ -527,7 +573,10 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
         metadata.insert("blockers".to_string(), json!(blockers));
         metadata.insert("issue_numbers".to_string(), json!(issue_numbers));
         metadata.insert("plan_doc_paths".to_string(), json!(plan_doc_paths));
-        metadata.insert("verification_evidence".to_string(), json!(verification_evidence));
+        metadata.insert(
+            "verification_evidence".to_string(),
+            json!(verification_evidence),
+        );
 
         let input = crate::types::CreateMemoryInput {
             content,
@@ -692,7 +741,10 @@ pub fn handle_harness_verify(ctx: &HandlerContext, params: Value) -> Value {
     } else {
         "FAIL"
     };
-    let content = format!("{}\n\nResult: {}\n{}", command, result_label, output_summary);
+    let content = format!(
+        "{}\n\nResult: {}\n{}",
+        command, result_label, output_summary
+    );
 
     // ── Build tags ───────────────────────────────────────────────────────────
     let mut tags = vec!["harness".to_string(), "verification_result".to_string()];
@@ -918,7 +970,11 @@ mod tests {
                 "evidence_refs": ["https://github.com/org/repo/issues/42"],
             }),
         );
-        assert!(result.get("memory_id").is_some(), "expected memory_id, got: {}", result);
+        assert!(
+            result.get("memory_id").is_some(),
+            "expected memory_id, got: {}",
+            result
+        );
         // Memory was created — verify the memory_id is a number
         assert!(result["memory_id"].as_i64().is_some());
     }
@@ -957,24 +1013,45 @@ mod tests {
     fn test_harness_status_empty_workspace() {
         let ctx = test_ctx();
         let result = handle_harness_status(&ctx, json!({"workspace": "test_empty_ws"}));
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         assert_eq!(result["workspace"], "test_empty_ws");
         assert!(result["recent_decisions"].as_array().unwrap().is_empty());
         assert!(result["known_blockers"].as_array().unwrap().is_empty());
-        assert!(result["recent_issue_updates"].as_array().unwrap().is_empty());
+        assert!(result["recent_issue_updates"]
+            .as_array()
+            .unwrap()
+            .is_empty());
         assert!(result.get("token_estimate").is_some());
         let suggestion = result["suggested_next_action"].as_str().unwrap();
-        assert!(suggestion.contains("No harness context"), "got: {}", suggestion);
+        assert!(
+            suggestion.contains("No harness context"),
+            "got: {}",
+            suggestion
+        );
     }
 
     #[test]
     fn test_harness_status_with_decisions() {
         let ctx = test_ctx();
         let ws = "test_decisions_ws";
-        handle_harness_record(&ctx, json!({"kind": "decision", "summary": "Use SQLite", "workspace": ws}));
-        handle_harness_record(&ctx, json!({"kind": "decision", "summary": "Use Axum", "workspace": ws}));
+        handle_harness_record(
+            &ctx,
+            json!({"kind": "decision", "summary": "Use SQLite", "workspace": ws}),
+        );
+        handle_harness_record(
+            &ctx,
+            json!({"kind": "decision", "summary": "Use Axum", "workspace": ws}),
+        );
         let result = handle_harness_status(&ctx, json!({"workspace": ws}));
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         let decisions = result["recent_decisions"].as_array().unwrap();
         assert_eq!(decisions.len(), 2, "expected 2 decisions, got: {}", result);
         assert!(decisions[0].get("memory_id").is_some());
@@ -985,20 +1062,35 @@ mod tests {
     fn test_harness_status_with_blocker() {
         let ctx = test_ctx();
         let ws = "test_blocker_ws";
-        handle_harness_record(&ctx, json!({"kind": "risk", "summary": "DB migration may fail", "workspace": ws}));
+        handle_harness_record(
+            &ctx,
+            json!({"kind": "risk", "summary": "DB migration may fail", "workspace": ws}),
+        );
         let result = handle_harness_status(&ctx, json!({"workspace": ws}));
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         let blockers = result["known_blockers"].as_array().unwrap();
         assert_eq!(blockers.len(), 1);
         let suggestion = result["suggested_next_action"].as_str().unwrap();
-        assert!(suggestion.to_lowercase().contains("blocker"), "got: {}", suggestion);
+        assert!(
+            suggestion.to_lowercase().contains("blocker"),
+            "got: {}",
+            suggestion
+        );
     }
 
     #[test]
     fn test_harness_status_no_git() {
         let ctx = test_ctx();
         let result = handle_harness_status(&ctx, json!({"include_git": false}));
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         assert!(result["git_state"].is_null());
     }
 
@@ -1007,16 +1099,27 @@ mod tests {
         let ctx = test_ctx();
         let ws = "test_budget_ws";
         for i in 0..20 {
-            handle_harness_record(&ctx, json!({
-                "kind": "decision",
-                "summary": format!("Decision number {} with some content to pad size", i),
-                "workspace": ws,
-            }));
+            handle_harness_record(
+                &ctx,
+                json!({
+                    "kind": "decision",
+                    "summary": format!("Decision number {} with some content to pad size", i),
+                    "workspace": ws,
+                }),
+            );
         }
         let result = handle_harness_status(&ctx, json!({"workspace": ws, "token_budget": 200}));
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         let decisions = result["recent_decisions"].as_array().unwrap();
-        assert!(decisions.len() < 20, "expected truncation, got {} decisions", decisions.len());
+        assert!(
+            decisions.len() < 20,
+            "expected truncation, got {} decisions",
+            decisions.len()
+        );
     }
 
     // ── harness_handoff tests ────────────────────────────────────────────────
@@ -1035,8 +1138,16 @@ mod tests {
                 "verification_evidence": "873 tests passed",
             }),
         );
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
-        assert!(result["handoff_id"].as_i64().is_some(), "expected handoff_id, got: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
+        assert!(
+            result["handoff_id"].as_i64().is_some(),
+            "expected handoff_id, got: {}",
+            result
+        );
         assert_eq!(result["completion_claimed"], true);
         assert_eq!(result["persisted"], true);
         assert_eq!(result["current_goal"], "Implement search index v2");
@@ -1052,11 +1163,19 @@ mod tests {
                 "next_steps": ["Run cargo test"],
             }),
         );
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         assert_eq!(result["completion_claimed"], false);
         assert!(result["completion_warning"].as_str().is_some());
         let warning = result["completion_warning"].as_str().unwrap();
-        assert!(warning.contains("No verification evidence"), "got: {}", warning);
+        assert!(
+            warning.contains("No verification evidence"),
+            "got: {}",
+            warning
+        );
     }
 
     #[test]
@@ -1070,8 +1189,16 @@ mod tests {
                 "persist": false,
             }),
         );
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
-        assert!(result["handoff_id"].is_null(), "expected null handoff_id, got: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
+        assert!(
+            result["handoff_id"].is_null(),
+            "expected null handoff_id, got: {}",
+            result
+        );
         assert_eq!(result["persisted"], false);
     }
 
@@ -1084,7 +1211,11 @@ mod tests {
                 "next_steps": ["Do something"],
             }),
         );
-        assert!(result.get("error").is_some(), "expected error, got: {}", result);
+        assert!(
+            result.get("error").is_some(),
+            "expected error, got: {}",
+            result
+        );
     }
 
     #[test]
@@ -1097,7 +1228,11 @@ mod tests {
                 "next_steps": [],
             }),
         );
-        assert!(result.get("error").is_some(), "expected error, got: {}", result);
+        assert!(
+            result.get("error").is_some(),
+            "expected error, got: {}",
+            result
+        );
     }
 
     // ── harness_verify tests ────────────────────────────────────────────────
@@ -1113,8 +1248,16 @@ mod tests {
                 "output_summary": "873 tests passed, 0 failed",
             }),
         );
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
-        assert!(result["memory_id"].as_i64().is_some(), "expected memory_id, got: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
+        assert!(
+            result["memory_id"].as_i64().is_some(),
+            "expected memory_id, got: {}",
+            result
+        );
         assert_eq!(result["passed"], true);
         assert_eq!(result["skipped"], false);
         assert_eq!(result["command"], "cargo test --lib");
@@ -1134,7 +1277,11 @@ mod tests {
                 "output_summary": "2 tests failed",
             }),
         );
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         assert_eq!(result["passed"], false);
         let tags = result["tags"].as_array().unwrap();
         assert!(tags.iter().any(|t| t == "verification_failed"));
@@ -1152,7 +1299,11 @@ mod tests {
                 "skipped_reason": "benchmarks not run in CI environment",
             }),
         );
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         assert_eq!(result["skipped"], true);
         let tags = result["tags"].as_array().unwrap();
         assert!(tags.iter().any(|t| t == "verification_skipped"));
@@ -1171,7 +1322,11 @@ mod tests {
                 "output_summary": "all good",
             }),
         );
-        assert!(result.get("error").is_some(), "expected error, got: {}", result);
+        assert!(
+            result.get("error").is_some(),
+            "expected error, got: {}",
+            result
+        );
     }
 
     #[test]
@@ -1184,7 +1339,11 @@ mod tests {
                 "exit_code": 0,
             }),
         );
-        assert!(result.get("error").is_some(), "expected error, got: {}", result);
+        assert!(
+            result.get("error").is_some(),
+            "expected error, got: {}",
+            result
+        );
     }
 
     #[test]
@@ -1202,7 +1361,11 @@ mod tests {
                 "memory_ids": [100, 200],
             }),
         );
-        assert!(result.get("error").is_none(), "unexpected error: {}", result);
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
         assert_eq!(result["evidence_path"], "/tmp/test-output.log");
         assert_eq!(result["evidence_hash"], "abc123def456");
         assert!(result["memory_id"].as_i64().is_some());

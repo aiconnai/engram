@@ -817,6 +817,9 @@ mod tests {
 
         // Canonical must survive all modes — none of the compressors mutate the input.
         // Verify a known substring is still present after all three paths ran.
-        assert!(input.contains("Authentication is required"), "original input unchanged after compression");
+        assert!(
+            input.contains("Authentication is required"),
+            "original input unchanged after compression"
+        );
     }
 }

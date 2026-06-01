@@ -125,7 +125,9 @@ pub use context_quality::{
 };
 
 // Issue #30: Unified token counting and chunking
-pub use token_counter::{TextChunk, TiktokenCounter, TiktokenTokenCounter, TokenBudgetResult, TokenChunker};
+pub use token_counter::{
+    TextChunk, TiktokenCounter, TiktokenTokenCounter, TokenBudgetResult, TokenChunker,
+};
 
 // RML-1208: Semantic Structured Compression
 pub use compression_semantic::{CompressedMemory, CompressionConfig, SemanticCompressor};
