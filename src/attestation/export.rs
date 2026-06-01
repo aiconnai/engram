@@ -26,15 +26,15 @@ pub fn export_csv(records: &[AttestationRecord]) -> Result<String> {
         csv.push_str(&format!(
             "{},{},{},{},{},{},{},{},{},{}\n",
             r.id.map(|id| id.to_string()).unwrap_or_default(),
-            r.document_hash,
+            escape_csv(&r.document_hash),
             escape_csv(&r.document_name),
             r.document_size,
             r.ingested_at.to_rfc3339(),
-            r.agent_id.as_deref().unwrap_or(""),
+            escape_csv(r.agent_id.as_deref().unwrap_or("")),
             escape_csv(&memory_ids_str),
-            r.previous_hash,
-            r.record_hash,
-            r.signature.as_deref().unwrap_or(""),
+            escape_csv(&r.previous_hash),
+            escape_csv(&r.record_hash),
+            escape_csv(r.signature.as_deref().unwrap_or("")),
         ));
     }
 
@@ -49,9 +49,14 @@ pub fn export_merkle_proof(proof: &MerkleProof) -> Result<String> {
 /// Escape a string value for inclusion in a CSV field.
 ///
 /// Wraps the value in double-quotes and escapes interior double-quotes if the
-/// value contains commas, double-quotes, or newlines.
+/// value contains commas, double-quotes, newlines, or spreadsheet formula
+/// injection characters (`=`, `+`, `-`, `@`).
 fn escape_csv(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
+    let needs_quote = s.contains(',')
+        || s.contains('"')
+        || s.contains('\n')
+        || matches!(s.chars().next(), Some('=' | '+' | '-' | '@'));
+    if needs_quote {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_string()
@@ -142,5 +147,61 @@ mod tests {
     #[test]
     fn test_escape_csv_with_quote() {
         assert_eq!(escape_csv("say \"hi\""), "\"say \"\"hi\"\"\"");
+    }
+
+    #[test]
+    fn test_export_csv_agent_id_formula_escaped() {
+        // H5: agent_id starting with = must be escaped to prevent spreadsheet formula injection
+        let mut record = sample_record();
+        record.agent_id = Some("=HYPERLINK(\"http://evil.com\")".to_string());
+        let csv = export_csv(&[record]).unwrap();
+        let lines: Vec<&str> = csv.lines().collect();
+        // The agent_id column must NOT appear as a bare =HYPERLINK(...) — it must be quoted
+        assert!(
+            !lines[1].contains(",=HYPERLINK"),
+            "formula injection: agent_id starting with = must be escaped; got: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn test_export_csv_agent_id_plus_escaped() {
+        let mut record = sample_record();
+        record.agent_id = Some("+cmd|' /C calc'!A0".to_string());
+        let csv = export_csv(&[record]).unwrap();
+        let lines: Vec<&str> = csv.lines().collect();
+        assert!(
+            !lines[1].contains(",+cmd"),
+            "formula injection: agent_id starting with + must be escaped; got: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn test_export_csv_record_hash_formula_escaped() {
+        // H5: record_hash starting with = must also be escaped
+        let mut record = sample_record();
+        record.record_hash = "=malicious()".to_string();
+        let csv = export_csv(&[record]).unwrap();
+        let lines: Vec<&str> = csv.lines().collect();
+        assert!(
+            !lines[1].contains(",=malicious()"),
+            "record_hash formula injection must be escaped; got: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn test_export_csv_signature_formula_escaped() {
+        // H5: signature starting with - must be escaped
+        let mut record = sample_record();
+        record.signature = Some("-2+3+cmd|' /C calc'!A0".to_string());
+        let csv = export_csv(&[record]).unwrap();
+        let lines: Vec<&str> = csv.lines().collect();
+        assert!(
+            !lines[1].contains(",-2+3"),
+            "signature formula injection must be escaped; got: {}",
+            lines[1]
+        );
     }
 }

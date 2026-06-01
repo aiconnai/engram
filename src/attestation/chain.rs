@@ -6,6 +6,7 @@
 
 use chrono::Utc;
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 use crate::error::{EngramError, Result};
 use crate::storage::Storage;
@@ -47,6 +48,19 @@ impl AttestationChain {
             return Err(EngramError::InvalidInput(
                 "document_name must not be empty".to_string(),
             ));
+        }
+
+        if let Some(id) = agent_id {
+            if id.len() > 256 {
+                return Err(EngramError::InvalidInput(
+                    "agent_id must not exceed 256 characters".to_string(),
+                ));
+            }
+            if id.chars().any(|c| c.is_control()) {
+                return Err(EngramError::InvalidInput(
+                    "agent_id must not contain control characters".to_string(),
+                ));
+            }
         }
 
         let document_hash = hash_bytes(content);
@@ -192,8 +206,13 @@ impl AttestationChain {
         let mut expected_previous = GENESIS_HASH.to_string();
 
         for record in &records {
-            // 1. Check linkage
-            if record.previous_hash != expected_previous {
+            // 1. Check linkage (constant-time to prevent timing oracle)
+            let linkage_ok: bool = record
+                .previous_hash
+                .as_bytes()
+                .ct_eq(expected_previous.as_bytes())
+                .into();
+            if !linkage_ok {
                 return Ok(ChainStatus::Broken {
                     at_record_id: record.id.unwrap_or(-1),
                     expected_hash: expected_previous,
@@ -201,9 +220,13 @@ impl AttestationChain {
                 });
             }
 
-            // 2. Recompute record_hash and compare
+            // 2. Recompute record_hash and compare (constant-time)
             let recomputed = Self::compute_record_hash(record);
-            if recomputed != record.record_hash {
+            let hash_ok: bool = recomputed
+                .as_bytes()
+                .ct_eq(record.record_hash.as_bytes())
+                .into();
+            if !hash_ok {
                 return Ok(ChainStatus::Broken {
                     at_record_id: record.id.unwrap_or(-1),
                     expected_hash: recomputed,
@@ -262,8 +285,15 @@ impl AttestationChain {
                 param_values.push(Box::new(aid.clone()));
             }
             if let Some(ref name) = document_name {
-                conditions.push(format!("document_name LIKE ?{}", param_values.len() + 1));
-                param_values.push(Box::new(format!("%{}%", name)));
+                conditions.push(format!(
+                    "document_name LIKE ?{} ESCAPE '\\'",
+                    param_values.len() + 1
+                ));
+                let escaped = name
+                    .replace('\\', "\\\\")
+                    .replace('%', "\\%")
+                    .replace('_', "\\_");
+                param_values.push(Box::new(format!("%{}%", escaped)));
             }
 
             let where_clause = if conditions.is_empty() {
@@ -639,6 +669,79 @@ mod tests {
         let chain = test_chain();
         let err = chain.log_document(b"data", "", None, &[], None);
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_list_document_name_filter_no_wildcard_expansion() {
+        // H3: LIKE metacharacters in document_name must not expand
+        let chain = test_chain();
+        chain
+            .log_document(b"a", "report_final.txt", None, &[], None)
+            .unwrap();
+        chain
+            .log_document(b"b", "reportXfinal.txt", None, &[], None)
+            .unwrap();
+
+        // Searching for "report_final" should only match "report_final.txt",
+        // NOT "reportXfinal.txt" (SQLite `_` is a single-char wildcard if unescaped)
+        let filter = super::super::types::AttestationFilter {
+            document_name: Some("report_final".to_string()),
+            ..Default::default()
+        };
+        let results = chain.list(&filter).unwrap();
+        assert_eq!(
+            results.len(),
+            1,
+            "unescaped _ should not act as wildcard; got {results:?}"
+        );
+        assert_eq!(results[0].document_name, "report_final.txt");
+    }
+
+    #[test]
+    fn test_list_document_name_filter_percent_literal() {
+        // H3: literal % in document_name filter must be matched as literal
+        let chain = test_chain();
+        chain
+            .log_document(b"a", "100% complete.txt", None, &[], None)
+            .unwrap();
+        chain
+            .log_document(b"b", "other.txt", None, &[], None)
+            .unwrap();
+
+        let filter = super::super::types::AttestationFilter {
+            document_name: Some("100%".to_string()),
+            ..Default::default()
+        };
+        let results = chain.list(&filter).unwrap();
+        assert_eq!(results.len(), 1, "percent should be literal, got {results:?}");
+        assert_eq!(results[0].document_name, "100% complete.txt");
+    }
+
+    #[test]
+    fn test_agent_id_too_long_rejected() {
+        // H4: agent_id > 256 chars must be rejected
+        let chain = test_chain();
+        let long_id = "a".repeat(257);
+        let err = chain.log_document(b"data", "doc.txt", Some(&long_id), &[], None);
+        assert!(err.is_err(), "agent_id > 256 chars should be rejected");
+    }
+
+    #[test]
+    fn test_agent_id_control_char_rejected() {
+        // H4: agent_id with control characters must be rejected
+        let chain = test_chain();
+        let bad_id = "agent\x00null";
+        let err = chain.log_document(b"data", "doc.txt", Some(bad_id), &[], None);
+        assert!(err.is_err(), "agent_id with control chars should be rejected");
+    }
+
+    #[test]
+    fn test_agent_id_valid_256_chars_accepted() {
+        // H4: exactly 256 chars is valid
+        let chain = test_chain();
+        let id_256 = "a".repeat(256);
+        let result = chain.log_document(b"data", "doc.txt", Some(&id_256), &[], None);
+        assert!(result.is_ok(), "agent_id of 256 chars should be accepted");
     }
 
     #[test]
