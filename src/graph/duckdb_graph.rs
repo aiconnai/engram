@@ -81,16 +81,46 @@ pub struct TemporalGraph {
     sqlite_path: String,
 }
 
+/// Validate a SQLite path before interpolating it into a DuckDB ATTACH statement.
+///
+/// Rejects paths that contain:
+/// - Single quotes (SQL injection vector)
+/// - Null bytes (path truncation attacks)
+/// - `..` path components (directory traversal)
+fn validate_sqlite_path(path: &str) -> Result<()> {
+    if path.contains('\'') {
+        return Err(EngramError::InvalidInput(
+            "sqlite_path must not contain single quotes".to_string(),
+        ));
+    }
+    if path.contains('\0') {
+        return Err(EngramError::InvalidInput(
+            "sqlite_path must not contain null bytes".to_string(),
+        ));
+    }
+    for component in path.split(['/', '\\']) {
+        if component == ".." {
+            return Err(EngramError::InvalidInput(
+                "sqlite_path must not contain '..' path components".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl TemporalGraph {
     /// Open an in-memory DuckDB session attached to `sqlite_path`.
     ///
     /// Steps performed:
+    /// - Validate `sqlite_path` (no single quotes, no null bytes, no `..` components).
     /// - Install + load the bundled `sqlite` scanner extension.
     /// - Attach the SQLite database as the catalog `engram` (read-only).
     /// - Attempt to install + load `duckpgq`; failures are non-fatal.
     /// - If PGQ loaded, register a property graph over `graph_entities` /
     ///   `temporal_edges`.
     pub fn new(sqlite_path: &str) -> Result<Self> {
+        validate_sqlite_path(sqlite_path)?;
+
         let conn = DuckdbConnection::open_in_memory()?;
 
         // --- SQLite scanner extension -----------------------------------------
@@ -99,9 +129,12 @@ impl TemporalGraph {
         conn.execute_batch("INSTALL sqlite; LOAD sqlite;")?;
 
         // --- Attach the SQLite file read-only --------------------------------
+        // Defense-in-depth: escape single quotes even though validate_sqlite_path
+        // already rejects them.
+        let safe_path = sqlite_path.replace('\'', "''");
         conn.execute_batch(&format!(
             "ATTACH '{path}' AS engram (TYPE SQLITE, READ_ONLY);",
-            path = sqlite_path
+            path = safe_path
         ))?;
 
         // --- Optional: duckpgq extension -------------------------------------
@@ -179,10 +212,12 @@ impl TemporalGraph {
         // Detach the existing catalog.
         self.conn.execute_batch("DETACH engram;")?;
 
-        // Re-attach read-only.
+        // Re-attach read-only.  Path was validated in new(); escape as
+        // defense-in-depth.
+        let safe_path = self.sqlite_path.replace('\'', "''");
         self.conn.execute_batch(&format!(
             "ATTACH '{path}' AS engram (TYPE SQLITE, READ_ONLY);",
-            path = self.sqlite_path
+            path = safe_path
         ))?;
 
         debug!(
@@ -545,6 +580,33 @@ mod tests {
             ],
         )
         .expect("insert edge");
+    }
+
+    // -----------------------------------------------------------------------
+    // Security tests (H4)
+    // -----------------------------------------------------------------------
+
+    fn assert_invalid_input(result: Result<TemporalGraph>) {
+        match result {
+            Err(EngramError::InvalidInput(_)) => {}
+            Err(e) => panic!("expected InvalidInput, got: {}", e),
+            Ok(_) => panic!("expected error but got Ok"),
+        }
+    }
+
+    #[test]
+    fn test_new_rejects_path_with_single_quote() {
+        assert_invalid_input(TemporalGraph::new("/tmp/evil'path.sqlite"));
+    }
+
+    #[test]
+    fn test_new_rejects_path_with_null_byte() {
+        assert_invalid_input(TemporalGraph::new("/tmp/evil\0path.sqlite"));
+    }
+
+    #[test]
+    fn test_new_rejects_path_with_dotdot() {
+        assert_invalid_input(TemporalGraph::new("../../../etc/passwd"));
     }
 
     // -----------------------------------------------------------------------

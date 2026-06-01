@@ -120,71 +120,32 @@ impl TripletMatcher {
     ///
     /// `None` fields are wildcards — they match any value.
     /// Non-`None` fields are matched case-insensitively with SQL `LIKE`.
-    /// The `%` wildcard is automatically appended if the caller did not include it,
-    /// but exact matching is used unless the caller embeds `%` themselves.
+    ///
+    /// Uses a static SQL template with optional-filter semantics:
+    /// `(?N IS NULL OR lower(col) LIKE lower(?N))`.  This eliminates dynamic
+    /// SQL construction entirely and is safe against SQL injection by design.
     ///
     /// Results are ordered by `id ASC`.
     pub fn match_pattern(conn: &Connection, pattern: &TripletPattern) -> Result<Vec<Fact>> {
-        // Build WHERE clauses dynamically
-        let mut conditions: Vec<String> = Vec::new();
-        let mut bind_values: Vec<String> = Vec::new();
+        // Static template — no string building based on caller input.
+        // Each column is filtered only when its bound parameter is non-NULL.
+        const SQL: &str = "
+            SELECT id, subject, predicate, object, confidence, source_memory_id, created_at
+            FROM facts
+            WHERE (?1 IS NULL OR lower(subject)   LIKE lower(?1))
+              AND (?2 IS NULL OR lower(predicate)  LIKE lower(?2))
+              AND (?3 IS NULL OR lower(object)     LIKE lower(?3))
+            ORDER BY id ASC
+        ";
 
-        if let Some(ref s) = pattern.subject {
-            conditions.push(format!(
-                "lower(subject) LIKE lower(?{})",
-                conditions.len() + 1
-            ));
-            bind_values.push(s.clone());
-        }
-        if let Some(ref p) = pattern.predicate {
-            conditions.push(format!(
-                "lower(predicate) LIKE lower(?{})",
-                conditions.len() + 1
-            ));
-            bind_values.push(p.clone());
-        }
-        if let Some(ref o) = pattern.object {
-            conditions.push(format!(
-                "lower(object) LIKE lower(?{})",
-                conditions.len() + 1
-            ));
-            bind_values.push(o.clone());
-        }
+        let subject: Option<&str> = pattern.subject.as_deref();
+        let predicate: Option<&str> = pattern.predicate.as_deref();
+        let object: Option<&str> = pattern.object.as_deref();
 
-        let where_clause = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
-
-        let sql = format!(
-            "SELECT id, subject, predicate, object, confidence, source_memory_id, created_at
-             FROM facts
-             {where_clause}
-             ORDER BY id ASC"
-        );
-
-        let mut stmt = conn.prepare(&sql)?;
-
-        // rusqlite requires binding positional params; we map our vec to a slice of &dyn ToSql
-        let facts = match bind_values.len() {
-            0 => stmt
-                .query_map([], map_row)?
-                .collect::<std::result::Result<Vec<Fact>, _>>()?,
-            1 => stmt
-                .query_map(params![bind_values[0]], map_row)?
-                .collect::<std::result::Result<Vec<Fact>, _>>()?,
-            2 => stmt
-                .query_map(params![bind_values[0], bind_values[1]], map_row)?
-                .collect::<std::result::Result<Vec<Fact>, _>>()?,
-            3 => stmt
-                .query_map(
-                    params![bind_values[0], bind_values[1], bind_values[2]],
-                    map_row,
-                )?
-                .collect::<std::result::Result<Vec<Fact>, _>>()?,
-            _ => unreachable!("pattern has at most 3 fields"),
-        };
+        let mut stmt = conn.prepare(SQL)?;
+        let facts = stmt
+            .query_map(params![subject, predicate, object], map_row)?
+            .collect::<std::result::Result<Vec<Fact>, _>>()?;
 
         Ok(facts)
     }
@@ -488,6 +449,48 @@ mod tests {
         insert(conn, "Google", "located_in", "California", 0.95);
         insert(conn, "Carol", "lives_in", "London", 0.8);
         insert(conn, "Dave", "located_in", "Paris", 0.75);
+    }
+
+    // -------------------------------------------------------------------------
+    // match_pattern static-template tests (H5 — no dynamic SQL construction)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_match_all_filters() {
+        let conn = setup();
+        seed_graph(&conn);
+        // All three fields set: subject=Alice, predicate=works_at, object=Google
+        let pattern = TripletPattern::any()
+            .with_subject("Alice")
+            .with_predicate("works_at")
+            .with_object("Google");
+        let facts = TripletMatcher::match_pattern(&conn, &pattern).expect("match all filters");
+        assert_eq!(facts.len(), 1);
+        assert_eq!(facts[0].subject, "Alice");
+    }
+
+    #[test]
+    fn test_match_partial_filters_subject_object() {
+        let conn = setup();
+        seed_graph(&conn);
+        // subject + object only (predicate wildcard)
+        let pattern = TripletPattern::any()
+            .with_subject("Alice")
+            .with_object("Google");
+        let facts =
+            TripletMatcher::match_pattern(&conn, &pattern).expect("match partial filters");
+        assert_eq!(facts.len(), 1);
+        assert_eq!(facts[0].predicate, "works_at");
+    }
+
+    #[test]
+    fn test_match_no_filters_returns_all() {
+        let conn = setup();
+        seed_graph(&conn);
+        let pattern = TripletPattern::any();
+        let facts =
+            TripletMatcher::match_pattern(&conn, &pattern).expect("match no filters");
+        assert_eq!(facts.len(), 5, "all facts returned when no filters");
     }
 
     // -------------------------------------------------------------------------
