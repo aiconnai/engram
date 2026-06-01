@@ -55,6 +55,7 @@ fn escape_csv(s: &str) -> String {
     let needs_quote = s.contains(',')
         || s.contains('"')
         || s.contains('\n')
+        || s.contains('\r')
         || matches!(s.chars().next(), Some('=' | '+' | '-' | '@'));
     if needs_quote {
         format!("\"{}\"", s.replace('"', "\"\""))
@@ -188,6 +189,35 @@ mod tests {
             !lines[1].contains(",=malicious()"),
             "record_hash formula injection must be escaped; got: {}",
             lines[1]
+        );
+    }
+
+    // ── L2: carriage return must be detected as special and trigger quoting ─────
+
+    #[test]
+    fn test_escape_csv_with_carriage_return_is_quoted() {
+        // L2: a value containing \r must be wrapped in quotes so it cannot
+        // inject a spurious line break in Windows line-ending CSV parsers.
+        let result = escape_csv("line1\rline2");
+        assert!(
+            result.starts_with('"') && result.ends_with('"'),
+            "value with \\r must be quoted, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_export_csv_document_name_with_cr_is_safe() {
+        // L2: a document_name containing \r must not produce a naked line break
+        // in the CSV output (would corrupt multi-value parsers).
+        let mut record = sample_record();
+        record.document_name = "report\rinjected".to_string();
+        let csv = export_csv(&[record]).unwrap();
+        let lines: Vec<&str> = csv.lines().collect();
+        // The data must be fully quoted; the parser sees exactly 2 lines (header + data).
+        assert_eq!(
+            lines.len(),
+            2,
+            "\\r in document_name must not produce extra CSV rows; got lines: {lines:?}"
         );
     }
 
