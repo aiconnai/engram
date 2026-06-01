@@ -105,6 +105,14 @@ impl GeminiVisionProvider {
             client: reqwest::Client::new(),
         }
     }
+
+    /// Build the Gemini API request URL (without the API key — key goes in header).
+    pub(crate) fn build_request_url(&self) -> String {
+        format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+            self.model
+        )
+    }
 }
 
 #[async_trait]
@@ -114,10 +122,7 @@ impl VisionProvider for GeminiVisionProvider {
         input: VisionInput,
         opts: VisionOptions,
     ) -> Result<ImageDescription> {
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            self.model, self.api_key
-        );
+        let url = self.build_request_url();
 
         let image_b64 = base64::engine::general_purpose::STANDARD.encode(&input.image_bytes);
 
@@ -144,6 +149,7 @@ impl VisionProvider for GeminiVisionProvider {
             .client
             .post(&url)
             .header("Content-Type", "application/json")
+            .header("x-goog-api-key", &self.api_key)
             .json(&body)
             .send()
             .await
@@ -446,6 +452,21 @@ mod tests {
 
         assert_eq!(opts.effective_prompt(), "Extract all text from this image");
         assert_eq!(opts.effective_max_tokens(), 512);
+    }
+
+    #[test]
+    fn test_gemini_api_key_not_in_url() {
+        // H9: API key must travel in the x-goog-api-key header, never in the URL.
+        let provider = GeminiVisionProvider::new("super-secret-key".to_string());
+        let url = provider.build_request_url();
+        assert!(
+            !url.contains("super-secret-key"),
+            "API key must not appear in URL, found it in: {url}"
+        );
+        assert!(
+            !url.contains("key="),
+            "URL must not contain ?key= query parameter, got: {url}"
+        );
     }
 
     #[test]

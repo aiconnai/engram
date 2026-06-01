@@ -31,6 +31,66 @@ impl From<LangfuseError> for EngramError {
     }
 }
 
+/// Validate a Langfuse base URL to prevent SSRF attacks.
+///
+/// Rules:
+/// - Must use `https://` (unless `ENGRAM_ALLOW_HTTP_INTEGRATIONS=1` is set)
+/// - Must not target loopback addresses (`127.0.0.1`, `::1`, `localhost`)
+/// - Must not target link-local addresses (`169.254.x.x`)
+pub fn validate_base_url(url: &str) -> Result<()> {
+    let allow_http = std::env::var("ENGRAM_ALLOW_HTTP_INTEGRATIONS")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+
+    if !allow_http && !url.starts_with("https://") {
+        return Err(EngramError::InvalidInput(
+            "LANGFUSE_BASE_URL must use https:// scheme".to_string(),
+        ));
+    }
+
+    // Extract the host portion for IP/hostname checks.
+    // Strip scheme prefix (http:// or https://).
+    let after_scheme = url
+        .find("://")
+        .map(|i| &url[i + 3..])
+        .unwrap_or(url);
+
+    // Take only up to the first '/' or end of string (removes path).
+    let host_port = after_scheme
+        .split('/')
+        .next()
+        .unwrap_or(after_scheme);
+
+    // Strip port if present (handle [::1]:8080 too).
+    let host = if host_port.starts_with('[') {
+        // IPv6 bracketed: [::1] or [::1]:port
+        host_port
+            .trim_start_matches('[')
+            .split(']')
+            .next()
+            .unwrap_or(host_port)
+    } else {
+        // IPv4 or hostname: 127.0.0.1:8080 or localhost:3000
+        host_port.split(':').next().unwrap_or(host_port)
+    };
+
+    // Reject loopback.
+    if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+        return Err(EngramError::InvalidInput(format!(
+            "LANGFUSE_BASE_URL must not target loopback address: {host}"
+        )));
+    }
+
+    // Reject link-local (169.254.0.0/16).
+    if host.starts_with("169.254.") {
+        return Err(EngramError::InvalidInput(
+            "LANGFUSE_BASE_URL must not target link-local address (169.254.x.x)".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Langfuse configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LangfuseConfig {
@@ -40,12 +100,19 @@ pub struct LangfuseConfig {
 }
 
 impl LangfuseConfig {
-    /// Create config from environment variables
+    /// Create config from environment variables.
+    ///
+    /// Returns `None` if required keys are missing.
+    /// Panics if `LANGFUSE_BASE_URL` is set to an unsafe value (loopback, link-local, or non-https).
+    /// Use `ENGRAM_ALLOW_HTTP_INTEGRATIONS=1` to permit `http://` in development only.
     pub fn from_env() -> Option<Self> {
         let public_key = std::env::var("LANGFUSE_PUBLIC_KEY").ok()?;
         let secret_key = std::env::var("LANGFUSE_SECRET_KEY").ok()?;
         let base_url = std::env::var("LANGFUSE_BASE_URL")
             .unwrap_or_else(|_| "https://cloud.langfuse.com".to_string());
+
+        validate_base_url(&base_url)
+            .expect("LANGFUSE_BASE_URL failed security validation");
 
         Some(Self {
             public_key,
@@ -465,6 +532,57 @@ pub fn trace_to_memory_content(trace: &Trace, generations: &[TraceGeneration]) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── validate_base_url tests ───────────────────────────────────────────────
+
+    #[test]
+    fn test_validate_base_url_rejects_http() {
+        let result = validate_base_url("http://cloud.langfuse.com");
+        assert!(result.is_err(), "http:// must be rejected");
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("https"),
+            "error should mention https requirement, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_validate_base_url_rejects_link_local() {
+        let result = validate_base_url("https://169.254.169.254/latest/meta-data");
+        assert!(result.is_err(), "link-local address must be rejected");
+    }
+
+    #[test]
+    fn test_validate_base_url_rejects_loopback_localhost() {
+        let result = validate_base_url("https://localhost/api");
+        assert!(result.is_err(), "localhost must be rejected");
+    }
+
+    #[test]
+    fn test_validate_base_url_rejects_loopback_ipv4() {
+        let result = validate_base_url("https://127.0.0.1/api");
+        assert!(result.is_err(), "127.0.0.1 must be rejected");
+    }
+
+    #[test]
+    fn test_validate_base_url_rejects_loopback_ipv6() {
+        let result = validate_base_url("https://[::1]/api");
+        assert!(result.is_err(), "::1 must be rejected");
+    }
+
+    #[test]
+    fn test_validate_base_url_accepts_https_public() {
+        let result = validate_base_url("https://cloud.langfuse.com");
+        assert!(result.is_ok(), "public https URL must be accepted, got: {result:?}");
+    }
+
+    #[test]
+    fn test_validate_base_url_accepts_custom_https() {
+        let result = validate_base_url("https://api.langfuse.com");
+        assert!(result.is_ok(), "custom https URL must be accepted");
+    }
+
+    // ── existing tests ────────────────────────────────────────────────────────
 
     #[test]
     fn test_config_from_env() {
