@@ -40,6 +40,11 @@ impl CloudStorage {
 
         // Generate encryption key if needed
         let encryption_key = if encrypt {
+            tracing::warn!(
+                "CloudStorage: encryption is enabled but the key is ephemeral. \
+                 Data encrypted with this key will be permanently unrecoverable \
+                 after process restart. Use a persisted key for production workloads."
+            );
             Some(generate_encryption_key()?)
         } else {
             None
@@ -250,7 +255,12 @@ pub struct CloudMetadata {
     pub etag: Option<String>,
 }
 
-/// Generate a random 256-bit encryption key
+/// Generate a random 256-bit encryption key.
+///
+/// **WARNING — ephemeral key**: this key is generated in memory and is never
+/// persisted. Any data encrypted with it becomes permanently unrecoverable
+/// after the process restarts. Callers that require durable encryption must
+/// derive or load the key from a persistent secret store before construction.
 fn generate_encryption_key() -> Result<Vec<u8>> {
     use rand::RngCore;
     let mut key = vec![0u8; 32];

@@ -802,6 +802,14 @@ pub fn handle_harness_verify(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 /// Run a shell command and return trimmed stdout, or None on error.
+///
+/// # Safety
+///
+/// All arguments passed to this function **must be compile-time string literals**.
+/// Never pass user-supplied strings as `cmd` or `args` — doing so would be an
+/// OS command injection vulnerability. This function is intentionally private
+/// and restricted to internal harness introspection calls (e.g., reading git
+/// metadata) where both the command and arguments are hard-coded at call sites.
 fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
     std::process::Command::new(cmd)
         .args(args)

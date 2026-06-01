@@ -13,6 +13,32 @@ use super::builder::SnapshotEdge;
 use super::crypto::decrypt_aes256;
 use super::types::{LoadResult, LoadStrategy, SnapshotInfo, SnapshotManifest};
 
+/// Sanitize a zip entry name, rejecting path traversal and null bytes.
+///
+/// Returns `Ok(name)` for safe names, or an `Err` if the name contains
+/// `..` components or null bytes that could be used for directory traversal.
+pub(crate) fn sanitize_zip_entry(name: &str) -> Result<&str> {
+    if name.is_empty() {
+        return Err(EngramError::InvalidInput(
+            "zip entry name must not be empty".to_string(),
+        ));
+    }
+    if name.contains('\0') {
+        return Err(EngramError::InvalidInput(
+            "zip entry name must not contain null bytes".to_string(),
+        ));
+    }
+    for component in std::path::Path::new(name).components() {
+        if component == std::path::Component::ParentDir {
+            return Err(EngramError::InvalidInput(format!(
+                "zip entry name '{}' contains path traversal sequence '..'",
+                name
+            )));
+        }
+    }
+    Ok(name)
+}
+
 /// Loads .egm snapshot archives into storage
 pub struct SnapshotLoader;
 
@@ -211,6 +237,7 @@ impl SnapshotLoader {
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
 
     /// Read and parse the manifest from an open archive
     fn read_manifest(archive: &mut zip::ZipArchive<std::fs::File>) -> Result<SnapshotManifest> {
@@ -412,6 +439,48 @@ mod tests {
                 Ok(())
             })
             .expect("insert");
+    }
+
+    // ── M5: sanitize_zip_entry tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_sanitize_zip_entry_rejects_dotdot() {
+        assert!(
+            super::sanitize_zip_entry("../../../etc/passwd").is_err(),
+            "path traversal with .. must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_zip_entry_rejects_dotdot_middle() {
+        assert!(
+            super::sanitize_zip_entry("foo/../../../etc/passwd").is_err(),
+            "embedded .. must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_zip_entry_rejects_null_bytes() {
+        assert!(
+            super::sanitize_zip_entry("file\0name.json").is_err(),
+            "null bytes in zip entry name must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_zip_entry_accepts_valid_names() {
+        assert!(super::sanitize_zip_entry("memories.json").is_ok());
+        assert!(super::sanitize_zip_entry("manifest.json").is_ok());
+        assert!(super::sanitize_zip_entry("graph_edges.json").is_ok());
+        assert!(super::sanitize_zip_entry("payload.enc").is_ok());
+    }
+
+    #[test]
+    fn test_sanitize_zip_entry_rejects_empty() {
+        assert!(
+            super::sanitize_zip_entry("").is_err(),
+            "empty zip entry name must be rejected"
+        );
     }
 
     #[test]

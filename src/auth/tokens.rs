@@ -287,7 +287,13 @@ fn generate_api_key() -> String {
 }
 
 /// Generate a random 16-byte salt and return `(salt_hex, hash_hex)`.
-/// The hash is SHA-256(salt_bytes || key_bytes).
+///
+/// The salt is unique per call, so two invocations with the same key produce
+/// different hashes. This defends against rainbow-table attacks: an attacker
+/// who obtains the hash database cannot precompute a lookup table without
+/// knowing each row's individual salt.
+///
+/// The hash is computed as SHA-256(salt_bytes || key_bytes).
 fn hash_key(key: &str) -> (String, String) {
     let mut rng = rand::thread_rng();
     let salt_bytes: Vec<u8> = (0..16).map(|_| rng.gen()).collect();

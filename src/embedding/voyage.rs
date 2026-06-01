@@ -87,10 +87,13 @@ mod inner {
 
             if !response.status().is_success() {
                 let status = response.status();
-                let body = response.text().await.unwrap_or_default();
-                return Err(EngramError::Embedding(format!(
-                    "Voyage API error {status}: {body}"
-                )));
+                let err_msg = if status.is_client_error() {
+                    format!("Voyage API client error {status}")
+                } else {
+                    let body = response.text().await.unwrap_or_default();
+                    format!("Voyage API error {status}: {body}")
+                };
+                return Err(EngramError::Embedding(err_msg));
             }
 
             let data: serde_json::Value = response.json().await?;
@@ -142,10 +145,13 @@ mod inner {
 
             if !response.status().is_success() {
                 let status = response.status();
-                let body = response.text().await.unwrap_or_default();
-                return Err(EngramError::Embedding(format!(
-                    "Voyage API error {status}: {body}"
-                )));
+                let err_msg = if status.is_client_error() {
+                    format!("Voyage API client error {status}")
+                } else {
+                    let body = response.text().await.unwrap_or_default();
+                    format!("Voyage API error {status}: {body}")
+                };
+                return Err(EngramError::Embedding(err_msg));
             }
 
             let data: serde_json::Value = response.json().await?;

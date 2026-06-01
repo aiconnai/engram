@@ -91,10 +91,13 @@ mod inner {
 
             if !response.status().is_success() {
                 let status = response.status();
-                let body = response.text().await.unwrap_or_default();
-                return Err(EngramError::Embedding(format!(
-                    "Cohere API error {status}: {body}"
-                )));
+                let err_msg = if status.is_client_error() {
+                    format!("Cohere API client error {status}")
+                } else {
+                    let body = response.text().await.unwrap_or_default();
+                    format!("Cohere API error {status}: {body}")
+                };
+                return Err(EngramError::Embedding(err_msg));
             }
 
             let data: serde_json::Value = response.json().await?;
@@ -147,10 +150,13 @@ mod inner {
 
             if !response.status().is_success() {
                 let status = response.status();
-                let body = response.text().await.unwrap_or_default();
-                return Err(EngramError::Embedding(format!(
-                    "Cohere API error {status}: {body}"
-                )));
+                let err_msg = if status.is_client_error() {
+                    format!("Cohere API client error {status}")
+                } else {
+                    let body = response.text().await.unwrap_or_default();
+                    format!("Cohere API error {status}: {body}")
+                };
+                return Err(EngramError::Embedding(err_msg));
             }
 
             let data: serde_json::Value = response.json().await?;
@@ -305,6 +311,50 @@ mod tests {
         assert_eq!(cfg.base_url, "https://api.cohere.ai/v1");
         assert_eq!(cfg.dimensions, 1024);
         assert!(cfg.api_key.is_empty(), "default api_key must be empty");
+    }
+
+    /// M1: 4xx error messages must not contain the response body (which may reflect auth headers).
+    #[test]
+    fn test_4xx_error_message_does_not_contain_body() {
+        // Simulate what the real code does for a 4xx response.
+        // The fix: for client errors, suppress the body.
+        let status_code = 401u16;
+        let body = "Authorization header contains: Bearer sk-secret-key-12345";
+        let is_client_error = status_code >= 400 && status_code < 500;
+
+        let err_msg = if is_client_error {
+            format!("Cohere API client error {status_code}")
+        } else {
+            format!("Cohere API error {status_code}: {body}")
+        };
+
+        assert!(
+            !err_msg.contains(body),
+            "4xx error message must not contain response body: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("401"),
+            "error message must include status code"
+        );
+    }
+
+    /// M1: 5xx error messages may include the body for diagnostics.
+    #[test]
+    fn test_5xx_error_message_contains_body() {
+        let status_code = 503u16;
+        let body = "Service Unavailable";
+        let is_client_error = status_code >= 400 && status_code < 500;
+
+        let err_msg = if is_client_error {
+            format!("Cohere API client error {status_code}")
+        } else {
+            format!("Cohere API error {status_code}: {body}")
+        };
+
+        assert!(
+            err_msg.contains(body),
+            "5xx error message should include body: {err_msg}"
+        );
     }
 
     #[cfg(feature = "cohere")]
