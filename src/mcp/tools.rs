@@ -405,48 +405,6 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    ToolDef {
-        name: "memory_get_version",
-        description: "Get a specific version of a memory",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "id": {"type": "integer"},
-                "version": {"type": "integer"}
-            },
-            "required": ["id", "version"]
-        }"#,
-        annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Advanced,
-    },
-    ToolDef {
-        name: "memory_revert",
-        description: "Revert a memory to a previous version",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "id": {"type": "integer"},
-                "version": {"type": "integer"}
-            },
-            "required": ["id", "version"]
-        }"#,
-        annotations: ToolAnnotations::mutating(),
-        tier: ToolTier::Advanced,
-    },
-    // Embedding status
-    ToolDef {
-        name: "memory_embedding_status",
-        description: "Check embedding computation status",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "id": {"type": "integer"}
-            },
-            "required": ["id"]
-        }"#,
-        annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Advanced,
-    },
     // Memory TTL / Expiration (RML-930)
     ToolDef {
         name: "memory_set_expiration",
@@ -517,20 +475,6 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Essential,
     },
-    ToolDef {
-        name: "memory_aggregate",
-        description: "Aggregate memories by field",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "group_by": {"type": "string", "enum": ["type", "tags", "month"]},
-                "metrics": {"type": "array", "items": {"type": "string", "enum": ["count", "avg_importance"]}}
-            },
-            "required": ["group_by"]
-        }"#,
-        annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Advanced,
-    },
     // Graph
     ToolDef {
         name: "memory_export_graph",
@@ -546,34 +490,7 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
-    // Quality
-    ToolDef {
-        name: "memory_quality_report",
-        description: "Get quality report for memories",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "limit": {"type": "integer", "default": 20},
-                "min_quality": {"type": "number", "minimum": 0, "maximum": 1}
-            }
-        }"#,
-        annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Advanced,
-    },
     // Clustering and duplicates
-    ToolDef {
-        name: "memory_clusters",
-        description: "Find clusters of related memories",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "min_similarity": {"type": "number", "default": 0.7},
-                "min_cluster_size": {"type": "integer", "default": 2}
-            }
-        }"#,
-        annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Advanced,
-    },
     ToolDef {
         name: "memory_find_duplicates",
         description: "Find potential duplicate memories",
@@ -599,20 +516,6 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         }"#,
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
-    },
-    ToolDef {
-        name: "memory_merge",
-        description: "Merge duplicate memories",
-        schema: r#"{
-            "type": "object",
-            "properties": {
-                "ids": {"type": "array", "items": {"type": "integer"}, "minItems": 2},
-                "keep_id": {"type": "integer", "description": "ID to keep (others will be merged into it)"}
-            },
-            "required": ["ids"]
-        }"#,
-        annotations: ToolAnnotations::mutating(),
-        tier: ToolTier::Advanced,
     },
     // Project Context Discovery
     ToolDef {

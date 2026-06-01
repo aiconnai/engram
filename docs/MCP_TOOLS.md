@@ -4,7 +4,7 @@
 
 This reference is generated from `src/mcp/tools.rs`.
 
-Total tools: **199**
+Total tools: **192**
 
 ## Summary
 
@@ -26,22 +26,15 @@ Total tools: **199**
 | `memory_create_todo` | standard | mutating (no MCP hints) | `content` |
 | `memory_create_issue` | standard | mutating (no MCP hints) | `title` |
 | `memory_versions` | advanced | readOnlyHint | `id` |
-| `memory_get_version` | advanced | readOnlyHint | `id`, `version` |
-| `memory_revert` | advanced | mutating (no MCP hints) | `id`, `version` |
-| `memory_embedding_status` | advanced | readOnlyHint | `id` |
 | `memory_set_expiration` | standard | mutating (no MCP hints) | `id`, `ttl_seconds` |
 | `memory_cleanup_expired` | standard | destructiveHint | none |
 | `memory_sync_status` | advanced | readOnlyHint | none |
 | `memory_sync_media` | advanced | mutating (no MCP hints) | none |
 | `memory_search_by_image` | advanced | readOnlyHint | `image_path` |
 | `memory_stats` | essential | readOnlyHint | none |
-| `memory_aggregate` | advanced | readOnlyHint | `group_by` |
 | `memory_export_graph` | standard | readOnlyHint | none |
-| `memory_quality_report` | advanced | readOnlyHint | none |
-| `memory_clusters` | advanced | readOnlyHint | none |
 | `memory_find_duplicates` | standard | readOnlyHint | none |
 | `memory_find_semantic_duplicates` | standard | readOnlyHint | none |
-| `memory_merge` | advanced | mutating (no MCP hints) | `ids` |
 | `memory_scan_project` | advanced | mutating (no MCP hints) | none |
 | `memory_get_project_context` | advanced | readOnlyHint | none |
 | `memory_list_instruction_files` | advanced | readOnlyHint | none |
@@ -486,44 +479,6 @@ Get version history for a memory
 |-------|------|----------|---------|
 | `id` | `integer` | yes | No description. |
 
-### `memory_get_version`
-
-Get a specific version of a memory
-
-- Tier: `advanced`
-- Annotations: readOnlyHint
-- Required inputs: `id`, `version`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | No description. |
-| `version` | `integer` | yes | No description. |
-
-### `memory_revert`
-
-Revert a memory to a previous version
-
-- Tier: `advanced`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`, `version`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | No description. |
-| `version` | `integer` | yes | No description. |
-
-### `memory_embedding_status`
-
-Check embedding computation status
-
-- Tier: `advanced`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | No description. |
-
 ### `memory_set_expiration`
 
 Set or update the expiration time for a memory
@@ -601,19 +556,6 @@ Get storage statistics
 |-------|------|----------|---------|
 | _(none)_ |  | no | No input properties declared. |
 
-### `memory_aggregate`
-
-Aggregate memories by field
-
-- Tier: `advanced`
-- Annotations: readOnlyHint
-- Required inputs: `group_by`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `group_by` | `string` | yes | Allowed: `type`, `tags`, `month`. |
-| `metrics` | `array` | no | Items: `string`. |
-
 ### `memory_export_graph`
 
 Export knowledge graph visualization
@@ -627,32 +569,6 @@ Export knowledge graph visualization
 | `format` | `string` | no | Default: `html`. Allowed: `html`, `json`. |
 | `max_nodes` | `integer` | no | Default: `500`. |
 | `focus_id` | `integer` | no | Center graph on this memory |
-
-### `memory_quality_report`
-
-Get quality report for memories
-
-- Tier: `advanced`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `limit` | `integer` | no | Default: `20`. |
-| `min_quality` | `number` | no | Minimum: `0`. Maximum: `1`. |
-
-### `memory_clusters`
-
-Find clusters of related memories
-
-- Tier: `advanced`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `min_similarity` | `number` | no | Default: `0.7`. |
-| `min_cluster_size` | `integer` | no | Default: `2`. |
 
 ### `memory_find_duplicates`
 
@@ -679,19 +595,6 @@ Find semantically similar memories using embedding cosine similarity (LLM-powere
 | `threshold` | `number` | no | Cosine similarity threshold (0.92 = very similar) Default: `0.92`. |
 | `workspace` | `string` | no | Filter by workspace (optional) |
 | `limit` | `integer` | no | Maximum duplicate pairs to return Default: `50`. |
-
-### `memory_merge`
-
-Merge duplicate memories
-
-- Tier: `advanced`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `ids`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `ids` | `array` | yes | Items: `integer`. Min items: `2`. |
-| `keep_id` | `integer` | no | ID to keep (others will be merged into it) |
 
 ### `memory_scan_project`
 
