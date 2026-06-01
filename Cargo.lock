@@ -1999,6 +1999,7 @@ dependencies = [
  "sha2",
  "shellexpand",
  "sqlite-vec",
+ "subtle",
  "tempfile",
  "thiserror 1.0.69",
  "tiktoken-rs",
