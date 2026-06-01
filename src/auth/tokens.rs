@@ -68,7 +68,7 @@ impl<'a> ApiKeyManager<'a> {
     ) -> Result<(ApiKey, String)> {
         let id = Uuid::new_v4().to_string();
         let raw_key = generate_api_key();
-        let key_hash = hash_key(&raw_key);
+        let (key_salt, key_hash) = hash_key(&raw_key);
         let key_prefix = &raw_key[..12]; // Show first 12 chars for identification
 
         let expires_at = expires_in_days.map(|days| Utc::now() + chrono::Duration::days(days));
@@ -77,13 +77,14 @@ impl<'a> ApiKeyManager<'a> {
 
         self.conn.execute(
             r#"
-            INSERT INTO api_keys (id, user_id, key_hash, key_prefix, name, permissions, namespace, expires_at, is_active, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, datetime('now'))
+            INSERT INTO api_keys (id, user_id, key_hash, key_salt, key_prefix, name, permissions, namespace, expires_at, is_active, created_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, datetime('now'))
             "#,
             params![
                 id,
                 user_id.as_str(),
                 key_hash,
+                key_salt,
                 key_prefix,
                 name,
                 permissions_json,
@@ -110,23 +111,45 @@ impl<'a> ApiKeyManager<'a> {
 
     /// Validate an API key and return claims
     pub fn validate_key(&self, raw_key: &str) -> Result<Option<TokenClaims>> {
-        let key_hash = hash_key(raw_key);
+        // Use the key prefix to narrow the DB search, then verify the hash in-process.
+        if raw_key.len() < 12 {
+            return Ok(None);
+        }
+        let key_prefix = &raw_key[..12];
 
-        let result: Option<(String, String, String, Option<String>, Option<String>, bool)> = self
-            .conn
-            .query_row(
-                r#"
-                SELECT ak.id, ak.user_id, ak.permissions, ak.namespace, ak.expires_at, u.is_active as user_active
-                FROM api_keys ak
-                JOIN users u ON ak.user_id = u.id
-                WHERE ak.key_hash = ?1 AND ak.is_active = 1
-                "#,
-                params![key_hash],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
-            )
-            .optional()?;
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT ak.id, ak.user_id, ak.permissions, ak.namespace, ak.expires_at,
+                   u.is_active as user_active, ak.key_hash, ak.key_salt
+            FROM api_keys ak
+            JOIN users u ON ak.user_id = u.id
+            WHERE ak.key_prefix = ?1 AND ak.is_active = 1
+            "#,
+        )?;
 
-        if let Some((key_id, user_id, permissions_json, namespace, expires_at_str, user_active)) =
+        type Row = (String, String, String, Option<String>, Option<String>, bool, String, String);
+        let rows: Vec<Row> = stmt
+            .query_map(params![key_prefix], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let result = rows
+            .into_iter()
+            .find(|(_, _, _, _, _, _, stored_hash, salt)| {
+                hash_key_with_salt(raw_key, salt) == *stored_hash
+            });
+
+        if let Some((key_id, user_id, permissions_json, namespace, expires_at_str, user_active, _, _)) =
             result
         {
             if !user_active {
@@ -263,9 +286,21 @@ fn generate_api_key() -> String {
     format!("eng_{}", hex::encode(bytes))
 }
 
-/// Hash an API key for storage
-fn hash_key(key: &str) -> String {
+/// Generate a random 16-byte salt and return `(salt_hex, hash_hex)`.
+/// The hash is SHA-256(salt_bytes || key_bytes).
+fn hash_key(key: &str) -> (String, String) {
+    let mut rng = rand::thread_rng();
+    let salt_bytes: Vec<u8> = (0..16).map(|_| rng.gen()).collect();
+    let salt_hex = hex::encode(&salt_bytes);
+    let hash = hash_key_with_salt(key, &salt_hex);
+    (salt_hex, hash)
+}
+
+/// Recompute the hash for a key given an existing salt (hex-encoded).
+fn hash_key_with_salt(key: &str, salt_hex: &str) -> String {
+    let salt_bytes = hex::decode(salt_hex).unwrap_or_default();
     let mut hasher = Sha256::new();
+    hasher.update(&salt_bytes);
     hasher.update(key.as_bytes());
     hex::encode(hasher.finalize())
 }
@@ -398,5 +433,51 @@ mod tests {
 
         let keys = manager.list_keys(&user.id).unwrap();
         assert_eq!(keys.len(), 2);
+    }
+
+    #[test]
+    fn test_hash_key_includes_salt_and_is_unique() {
+        let (salt1, hash1) = hash_key("eng_samekey");
+        let (salt2, hash2) = hash_key("eng_samekey");
+        assert_ne!(salt1, salt2, "salts must be unique per call");
+        assert_ne!(hash1, hash2, "hashes must differ when salts differ");
+    }
+
+    #[test]
+    fn test_hash_key_verify_roundtrip() {
+        let raw = "eng_testkey123";
+        let (salt, hash) = hash_key(raw);
+        let recomputed = hash_key_with_salt(raw, &salt);
+        assert_eq!(hash, recomputed, "recompute with same salt must match");
+    }
+
+    #[test]
+    fn test_hash_key_wrong_key_differs() {
+        let (salt, hash) = hash_key("eng_rightkey");
+        let wrong = hash_key_with_salt("eng_wrongkey", &salt);
+        assert_ne!(hash, wrong, "different key with same salt must not match");
+    }
+
+    #[test]
+    fn test_create_api_key_stores_salt() {
+        let conn = setup_db();
+        let user = User::new("saltuser");
+        UserManager::new(&conn).create_user(&user, None).unwrap();
+
+        let manager = ApiKeyManager::new(&conn);
+        manager
+            .create_api_key(
+                &user.id,
+                "Salt Test",
+                PermissionSet::standard_user(),
+                None,
+                None,
+            )
+            .unwrap();
+
+        let salt: String = conn
+            .query_row("SELECT key_salt FROM api_keys LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert!(!salt.is_empty(), "key_salt must be stored");
     }
 }
