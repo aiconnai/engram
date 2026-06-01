@@ -4,7 +4,6 @@ use crate::error::{EngramError, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 /// User identifier
@@ -111,7 +110,7 @@ impl<'a> UserManager<'a> {
 
     /// Create a new user
     pub fn create_user(&self, user: &User, password: Option<&str>) -> Result<()> {
-        let password_hash = password.map(hash_password);
+        let password_hash = password.map(hash_password).transpose()?;
 
         self.conn.execute(
             r#"
@@ -205,7 +204,7 @@ impl<'a> UserManager<'a> {
             .optional()?;
 
         if let Some((id, Some(stored_hash))) = result {
-            if verify_password(password, &stored_hash) {
+            if verify_password(password, &stored_hash)? {
                 return self.get_user(&UserId::from_string(id));
             }
         }
@@ -277,16 +276,30 @@ impl<'a> UserManager<'a> {
     }
 }
 
-/// Hash a password using SHA-256 (in production, use bcrypt or argon2)
-fn hash_password(password: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(password.as_bytes());
-    hex::encode(hasher.finalize())
+/// Hash a password using Argon2id with a random salt
+fn hash_password(password: &str) -> Result<String> {
+    use argon2::{
+        password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
+        Argon2,
+    };
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|h| h.to_string())
+        .map_err(|e| EngramError::Auth(format!("password hashing failed: {e}")))
 }
 
-/// Verify a password against a hash
-fn verify_password(password: &str, hash: &str) -> bool {
-    hash_password(password) == hash
+/// Verify a password against an Argon2 PHC hash string
+fn verify_password(password: &str, hash: &str) -> Result<bool> {
+    use argon2::{
+        password_hash::{PasswordHash, PasswordVerifier},
+        Argon2,
+    };
+    let parsed = PasswordHash::new(hash)
+        .map_err(|e| EngramError::Auth(format!("invalid password hash: {e}")))?;
+    Ok(Argon2::default()
+        .verify_password(password.as_bytes(), &parsed)
+        .is_ok())
 }
 
 #[cfg(test)]
@@ -374,6 +387,25 @@ mod tests {
 
         let fetched = manager.get_user(&user.id).unwrap();
         assert!(fetched.is_none());
+    }
+
+    #[test]
+    fn test_argon2_hash_verify_correct_password() {
+        let hash = hash_password("hunter2").expect("hashing should succeed");
+        assert!(verify_password("hunter2", &hash).expect("verify should succeed"));
+    }
+
+    #[test]
+    fn test_argon2_verify_wrong_password_returns_false() {
+        let hash = hash_password("hunter2").expect("hashing should succeed");
+        assert!(!verify_password("wrong", &hash).expect("verify should succeed"));
+    }
+
+    #[test]
+    fn test_argon2_hashes_are_unique_per_call() {
+        let h1 = hash_password("samepassword").expect("hashing should succeed");
+        let h2 = hash_password("samepassword").expect("hashing should succeed");
+        assert_ne!(h1, h2, "different salts should produce different hashes");
     }
 
     #[test]
