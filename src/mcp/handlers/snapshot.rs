@@ -33,6 +33,50 @@ fn parse_hex_key(hex_str: &str) -> std::result::Result<[u8; 32], String> {
     Ok(key)
 }
 
+// ── Path validation ───────────────────────────────────────────────────────────
+
+/// Validate a snapshot path against traversal and boundary constraints.
+///
+/// For new files (output paths), the parent directory is canonicalized.
+/// For existing files (input paths), the path itself is canonicalized.
+/// If `ENGRAM_SNAPSHOTS_DIR` is set, the resolved path must be inside it.
+pub(crate) fn validate_snapshot_path(path: &str) -> Result<std::path::PathBuf, String> {
+    if path.is_empty() {
+        return Err("path must not be empty".to_string());
+    }
+    if path.contains('\0') {
+        return Err("path must not contain null bytes".to_string());
+    }
+
+    let p = std::path::Path::new(path);
+
+    // Canonicalize: use the path itself if it exists, otherwise the parent.
+    let canonical = if p.exists() {
+        std::fs::canonicalize(p).map_err(|e| format!("cannot resolve path: {}", e))?
+    } else {
+        let parent = p.parent().unwrap_or_else(|| std::path::Path::new("."));
+        let canon_parent = std::fs::canonicalize(parent)
+            .map_err(|e| format!("cannot resolve parent directory: {}", e))?;
+        canon_parent.join(p.file_name().ok_or("path has no file name")?)
+    };
+
+    // If ENGRAM_SNAPSHOTS_DIR is set, enforce boundary.
+    if let Ok(base_str) = std::env::var("ENGRAM_SNAPSHOTS_DIR") {
+        if !base_str.is_empty() {
+            let base = std::fs::canonicalize(&base_str)
+                .map_err(|e| format!("ENGRAM_SNAPSHOTS_DIR cannot be resolved: {}", e))?;
+            if !canonical.starts_with(&base) {
+                return Err(format!(
+                    "path '{}' is outside the allowed snapshots directory",
+                    path
+                ));
+            }
+        }
+    }
+
+    Ok(canonical)
+}
+
 // ── snapshot_create ───────────────────────────────────────────────────────────
 
 /// Create a .egm snapshot archive from the current storage.
@@ -45,6 +89,11 @@ pub fn snapshot_create(ctx: &HandlerContext, params: Value) -> Value {
     let output_path = match params.get("output_path").and_then(|v| v.as_str()) {
         Some(p) => p.to_string(),
         None => return json!({"error": "output_path is required"}),
+    };
+
+    let validated_output_path = match validate_snapshot_path(&output_path) {
+        Ok(p) => p,
+        Err(e) => return json!({"error": format!("Invalid output_path: {}", e)}),
     };
 
     // Build the snapshot builder with optional filters
@@ -86,7 +135,7 @@ pub fn snapshot_create(ctx: &HandlerContext, params: Value) -> Value {
         builder = builder.creator(creator);
     }
 
-    let path = Path::new(&output_path);
+    let path = validated_output_path.as_path();
 
     // Parse optional keys
     let encrypt_key_str = params.get("encrypt_key").and_then(|v| v.as_str());
@@ -142,6 +191,11 @@ pub fn snapshot_load(ctx: &HandlerContext, params: Value) -> Value {
         None => return json!({"error": "path is required"}),
     };
 
+    let validated_path = match validate_snapshot_path(&path_str) {
+        Ok(p) => p,
+        Err(e) => return json!({"error": format!("Invalid path: {}", e)}),
+    };
+
     let strategy_str = match params.get("strategy").and_then(|v| v.as_str()) {
         Some(s) => s.to_string(),
         None => return json!({"error": "strategy is required"}),
@@ -166,7 +220,7 @@ pub fn snapshot_load(ctx: &HandlerContext, params: Value) -> Value {
             None => None,
         };
 
-    let path = Path::new(&path_str);
+    let path = validated_path.as_path();
     let result = SnapshotLoader::load(
         &ctx.storage,
         path,
@@ -227,9 +281,12 @@ pub fn snapshot_inspect(_ctx: &HandlerContext, params: Value) -> Value {
         None => return json!({"error": "path is required"}),
     };
 
-    let path = Path::new(&path_str);
+    let validated_path = match validate_snapshot_path(&path_str) {
+        Ok(p) => p,
+        Err(e) => return json!({"error": format!("Invalid path: {}", e)}),
+    };
 
-    match SnapshotLoader::inspect(path) {
+    match SnapshotLoader::inspect(validated_path.as_path()) {
         Ok(info) => {
             let manifest = &info.manifest;
             json!({
@@ -255,5 +312,61 @@ pub fn snapshot_inspect(_ctx: &HandlerContext, params: Value) -> Value {
             })
         }
         Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_snapshot_path;
+
+    #[test]
+    fn test_validate_snapshot_path_rejects_traversal_with_base_dir() {
+        let tmp = std::env::temp_dir();
+        std::env::set_var("ENGRAM_SNAPSHOTS_DIR", tmp.to_str().unwrap());
+        let result = validate_snapshot_path("../../../etc/passwd");
+        std::env::remove_var("ENGRAM_SNAPSHOTS_DIR");
+        assert!(result.is_err(), "expected rejection for path traversal outside base dir");
+        let msg = result.unwrap_err();
+        assert!(msg.contains("outside"), "unexpected error message: {}", msg);
+    }
+
+    #[test]
+    fn test_validate_snapshot_path_rejects_empty() {
+        let result = validate_snapshot_path("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("empty"));
+    }
+
+    #[test]
+    fn test_validate_snapshot_path_rejects_null_bytes() {
+        let result = validate_snapshot_path("foo\0bar.egm");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("null"));
+    }
+
+    #[test]
+    fn test_validate_snapshot_path_accepts_valid_relative() {
+        std::env::remove_var("ENGRAM_SNAPSHOTS_DIR");
+        let result = validate_snapshot_path("my_snapshot.egm");
+        assert!(result.is_ok(), "expected ok, got {:?}", result);
+    }
+
+    #[test]
+    fn test_validate_snapshot_path_enforces_base_dir_absolute() {
+        let tmp = std::env::temp_dir();
+        std::env::set_var("ENGRAM_SNAPSHOTS_DIR", tmp.to_str().unwrap());
+        let result = validate_snapshot_path("/etc/passwd");
+        std::env::remove_var("ENGRAM_SNAPSHOTS_DIR");
+        assert!(result.is_err(), "expected rejection outside base dir");
+    }
+
+    #[test]
+    fn test_validate_snapshot_path_allows_within_base_dir() {
+        let tmp = std::env::temp_dir();
+        std::env::set_var("ENGRAM_SNAPSHOTS_DIR", tmp.to_str().unwrap());
+        let valid = tmp.join("test.egm").to_string_lossy().to_string();
+        let result = validate_snapshot_path(&valid);
+        std::env::remove_var("ENGRAM_SNAPSHOTS_DIR");
+        assert!(result.is_ok(), "expected ok for path within base dir, got {:?}", result);
     }
 }
