@@ -8,10 +8,49 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+use std::str::FromStr;
+
 use serde_json::{json, Value};
 
 use super::HandlerContext;
 use crate::storage::queries::compute_content_hash;
+
+/// Extract tags from parsed frontmatter (`engram_tags_list` is a comma-joined
+/// string produced by [`parse_frontmatter`]).
+fn frontmatter_tags(fm: &HashMap<String, String>) -> Vec<String> {
+    fm.get("engram_tags_list")
+        .map(|c| {
+            c.split(',')
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Build a deserializable frontmatter payload for `create_memory` /
+/// `update_memory`. `scope` is intentionally omitted (the bare `engram_scope`
+/// string cannot be losslessly mapped to `MemoryScope`); it defaults on import.
+fn import_payload(fm: &HashMap<String, String>, body: &str, include_workspace: bool) -> serde_json::Map<String, Value> {
+    let mut obj = serde_json::Map::new();
+    obj.insert("content".into(), json!(body.trim()));
+    if include_workspace {
+        let ws = fm
+            .get("engram_workspace")
+            .cloned()
+            .unwrap_or_else(|| "default".to_string());
+        obj.insert("workspace".into(), json!(ws));
+    }
+    if let Some(mt) = fm.get("engram_type") {
+        if crate::types::MemoryType::from_str(mt).is_ok() {
+            obj.insert("memory_type".into(), json!(mt));
+        }
+    }
+    if let Some(imp) = fm.get("engram_importance").and_then(|s| s.parse::<f64>().ok()) {
+        obj.insert("importance".into(), json!(imp));
+    }
+    obj
+}
 
 // ── Frontmatter parsing ───────────────────────────────────────────────────────
 
@@ -473,58 +512,27 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
             ImportStatus::New => {
                 count_new += 1;
                 if confirm {
-                    // Create the memory
-                    let workspace = workspace_override
-                        .clone()
-                        .or_else(|| fm.get("engram_workspace").cloned())
-                        .unwrap_or_else(|| "default".to_string());
-                    let mem_type = fm
-                        .get("engram_type")
-                        .cloned()
-                        .unwrap_or_else(|| "note".to_string());
-                    let scope = fm
-                        .get("engram_scope")
-                        .cloned()
-                        .unwrap_or_else(|| "user".to_string());
-                    let importance: f64 = fm
-                        .get("engram_importance")
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(0.5);
-                    let tags_csv = fm.get("engram_tags_list").cloned().unwrap_or_default();
-                    let hash = compute_content_hash(body.trim());
-
-                    let create_result: Result<(), _> = ctx.storage.with_connection(|conn| {
-                        conn.execute(
-                            "INSERT INTO memories (content, memory_type, workspace, scope, importance, content_hash, version, created_at, updated_at)
-                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, datetime('now'), datetime('now'))",
-                            rusqlite::params![body.trim(), mem_type, workspace, scope, importance, hash],
-                        )?;
-                        // Insert tags if any
-                        if !tags_csv.is_empty() {
-                            let memory_id = conn.last_insert_rowid();
-                            for tag_name in tags_csv.split(',') {
-                                let tag_name = tag_name.trim();
-                                if tag_name.is_empty() { continue; }
-                                conn.execute(
-                                    "INSERT OR IGNORE INTO tags (name) VALUES (?1)",
-                                    rusqlite::params![tag_name],
-                                )?;
-                                let tag_id: i64 = conn.query_row(
-                                    "SELECT id FROM tags WHERE name = ?1",
-                                    rusqlite::params![tag_name],
-                                    |r| r.get(0),
-                                )?;
-                                conn.execute(
-                                    "INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES (?1, ?2)",
-                                    rusqlite::params![memory_id, tag_id],
-                                )?;
-                            }
-                        }
-                        Ok(())
+                    // Build input via the query layer (single source of schema
+                    // truth: handles scope_type/scope_id, tier, tags, hash).
+                    let mut obj = import_payload(&fm, &body, true);
+                    if let Some(ws) = workspace_override.clone() {
+                        obj.insert("workspace".into(), json!(ws));
+                    }
+                    let tags = frontmatter_tags(&fm);
+                    if !tags.is_empty() {
+                        obj.insert("tags".into(), json!(tags));
+                    }
+                    let create_result = serde_json::from_value::<crate::types::CreateMemoryInput>(
+                        Value::Object(obj),
+                    )
+                    .map_err(|e| crate::error::EngramError::Internal(format!("bad import payload: {e}")))
+                    .and_then(|input| {
+                        ctx.storage
+                            .with_transaction(|conn| crate::storage::queries::create_memory(conn, &input))
                     });
 
                     match create_result {
-                        Ok(()) => {
+                        Ok(_) => {
                             applied += 1;
                             files_detail.push(json!({
                                 "file": filename,
@@ -553,35 +561,23 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
             ImportStatus::PendingUpdate => {
                 count_pending += 1;
                 if confirm {
-                    let hash = compute_content_hash(body.trim());
-                    let importance: f64 = fm.get("engram_importance").and_then(|s| s.parse().ok()).unwrap_or(0.5);
-                    let mem_type = fm.get("engram_type").cloned().unwrap_or_else(|| "note".to_string());
-                    let scope = fm.get("engram_scope").cloned().unwrap_or_else(|| "user".to_string());
-                    let workspace_val = workspace_override.clone()
-                        .or_else(|| fm.get("engram_workspace").cloned())
-                        .unwrap_or_else(|| "default".to_string());
-                    let tags_csv = fm.get("engram_tags_list").cloned().unwrap_or_default();
-                    let update_result: Result<(), _> = ctx.storage.with_connection(|conn| {
-                        conn.execute(
-                            "UPDATE memories SET content = ?1, updated_at = datetime('now'), version = version + 1, content_hash = ?2, importance = ?3, memory_type = ?4, scope = ?5, workspace = ?6 WHERE id = ?7",
-                            rusqlite::params![body.trim(), hash, importance, mem_type, scope, workspace_val, engram_id],
-                        )?;
-                        // Re-sync tags from frontmatter
-                        if !tags_csv.is_empty() {
-                            conn.execute("DELETE FROM memory_tags WHERE memory_id = ?1", rusqlite::params![engram_id])?;
-                            for tag_name in tags_csv.split(',') {
-                                let tag_name = tag_name.trim();
-                                if tag_name.is_empty() { continue; }
-                                conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?1)", rusqlite::params![tag_name])?;
-                                let tag_id: i64 = conn.query_row("SELECT id FROM tags WHERE name = ?1", rusqlite::params![tag_name], |r| r.get(0))?;
-                                conn.execute("INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES (?1, ?2)", rusqlite::params![engram_id, tag_id])?;
-                            }
-                        }
-                        Ok(())
+                    // Restore content, memory_type, importance, and tags from the
+                    // file via update_memory (recomputes content_hash, bumps version,
+                    // re-syncs tags). scope/workspace left to update_memory defaults.
+                    let mut obj = import_payload(&fm, &body, false);
+                    obj.insert("tags".into(), json!(frontmatter_tags(&fm)));
+                    let update_result = serde_json::from_value::<crate::types::UpdateMemoryInput>(
+                        Value::Object(obj),
+                    )
+                    .map_err(|e| crate::error::EngramError::Internal(format!("bad import payload: {e}")))
+                    .and_then(|input| {
+                        ctx.storage.with_transaction(|conn| {
+                            crate::storage::queries::update_memory(conn, engram_id, &input)
+                        })
                     });
 
                     match update_result {
-                        Ok(()) => {
+                        Ok(_) => {
                             applied += 1;
                             files_detail.push(json!({
                                 "file": filename,
@@ -1350,5 +1346,288 @@ mod tests {
         });
         let subdir = compute_file_subdir("entity", &mem);
         assert_eq!(subdir.as_deref(), Some("untagged"));
+    }
+
+    // ── Import round-trip integration (confirm:true write paths) ───────────
+    mod import_integration {
+        use super::super::memory_import_markdown;
+        use crate::storage::queries::create_memory;
+        use crate::storage::Storage;
+        use crate::types::{CreateMemoryInput, MemoryType};
+        use serde_json::json;
+        use std::fs;
+        use std::sync::Arc;
+
+        fn ctx() -> crate::mcp::handlers::HandlerContext {
+            crate::mcp::handlers::HandlerContext {
+                storage: Storage::open_in_memory().expect("in-memory storage"),
+                embedder: Arc::new(crate::embedding::TfIdfEmbedder::new(128)),
+                fuzzy_engine: Arc::new(parking_lot::Mutex::new(crate::search::FuzzyEngine::new())),
+                search_config: crate::search::SearchConfig::default(),
+                realtime: None,
+                embedding_cache: Arc::new(crate::embedding::EmbeddingCache::default()),
+                search_cache: Arc::new(crate::search::SearchResultCache::new(
+                    crate::search::AdaptiveCacheConfig::default(),
+                )),
+                #[cfg(feature = "meilisearch")]
+                meili: None,
+                #[cfg(feature = "meilisearch")]
+                meili_indexer: None,
+                #[cfg(feature = "meilisearch")]
+                meili_sync_interval: 300,
+                #[cfg(feature = "langfuse")]
+                langfuse_runtime: Arc::new(
+                    tokio::runtime::Builder::new_current_thread().build().unwrap(),
+                ),
+            }
+        }
+
+        fn make_memory(c: &crate::mcp::handlers::HandlerContext, content: &str, tags: &[&str]) -> i64 {
+            let input = CreateMemoryInput {
+                content: content.to_string(),
+                memory_type: MemoryType::Note,
+                tags: tags.iter().map(|t| t.to_string()).collect(),
+                importance: Some(0.5),
+                workspace: Some("default".to_string()),
+                ..Default::default()
+            };
+            c.storage
+                .with_transaction(|conn| create_memory(conn, &input))
+                .expect("create memory")
+                .id
+        }
+
+        /// Write a markdown file with engram_ frontmatter into `dir`.
+        #[allow(clippy::too_many_arguments)]
+        fn write_md(
+            dir: &std::path::Path,
+            fname: &str,
+            id: Option<i64>,
+            version: i64,
+            tags: &[&str],
+            importance: f64,
+            body: &str,
+            extra_keys: &[(&str, &str)],
+        ) {
+            let mut fm = String::from("---\n");
+            if let Some(id) = id {
+                fm.push_str(&format!("engram_id: {}\n", id));
+            }
+            fm.push_str("engram_workspace: default\n");
+            fm.push_str("engram_scope: user\n");
+            fm.push_str("engram_type: note\n");
+            fm.push_str(&format!("engram_version: {}\n", version));
+            fm.push_str(&format!("engram_importance: {}\n", importance));
+            for (k, v) in extra_keys {
+                fm.push_str(&format!("{}: {}\n", k, v));
+            }
+            if !tags.is_empty() {
+                fm.push_str("engram_tags:\n");
+                for t in tags {
+                    fm.push_str(&format!("  - {}\n", t));
+                }
+            }
+            fm.push_str("---\n");
+            fm.push_str(body);
+            fm.push('\n');
+            fs::write(dir.join(fname), fm).expect("write md");
+        }
+
+        fn db_row(c: &crate::mcp::handlers::HandlerContext, id: i64) -> (String, i64, f64) {
+            c.storage
+                .with_connection(|conn| {
+                    conn.query_row(
+                        "SELECT content, version, importance FROM memories WHERE id = ?1",
+                        rusqlite::params![id],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )
+                    .map_err(crate::error::EngramError::Database)
+                })
+                .expect("db row")
+        }
+
+        fn db_tags(c: &crate::mcp::handlers::HandlerContext, id: i64) -> Vec<String> {
+            c.storage
+                .with_connection(|conn| {
+                    let mut stmt = conn.prepare(
+                        "SELECT t.name FROM memory_tags mt JOIN tags t ON mt.tag_id = t.id \
+                         WHERE mt.memory_id = ?1 ORDER BY t.name",
+                    )?;
+                    let v = stmt
+                        .query_map(rusqlite::params![id], |r| r.get::<_, String>(0))?
+                        .filter_map(|r| r.ok())
+                        .collect();
+                    Ok(v)
+                })
+                .expect("db tags")
+        }
+
+        fn status_of<'a>(result: &'a serde_json::Value, id: i64) -> Option<&'a str> {
+            result["files"].as_array()?.iter().find_map(|f| {
+                if f["engram_id"].as_i64() == Some(id) {
+                    f["status"].as_str()
+                } else {
+                    None
+                }
+            })
+        }
+
+        #[test]
+        fn test_import_in_sync_when_body_matches() {
+            let c = ctx();
+            let id = make_memory(&c, "hello world", &["alpha"]);
+            let dir = tempfile::tempdir().unwrap();
+            write_md(dir.path(), "m.md", Some(id), 1, &["alpha"], 0.5, "hello world", &[]);
+
+            let r = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
+            assert_eq!(status_of(&r, id), Some("in_sync"), "result={}", r);
+            assert_eq!(r["applied"].as_i64(), Some(0));
+        }
+
+        #[test]
+        fn test_import_confirm_applies_update() {
+            let c = ctx();
+            let id = make_memory(&c, "original content", &["alpha"]);
+            let dir = tempfile::tempdir().unwrap();
+            // same version (1) as DB, changed body → pending_update
+            write_md(dir.path(), "m.md", Some(id), 1, &["alpha"], 0.5, "edited content", &[]);
+
+            // review mode: staged, no write
+            let review = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
+            assert_eq!(status_of(&review, id), Some("pending_update"));
+            assert_eq!(review["applied"].as_i64(), Some(0));
+            assert_eq!(db_row(&c, id).0, "original content", "review must not write");
+
+            // confirm: applies
+            let applied = memory_import_markdown(
+                &c,
+                json!({"input_dir": dir.path().to_str().unwrap(), "confirm": true}),
+            );
+            assert_eq!(applied["applied"].as_i64(), Some(1));
+            let (content, version, _) = db_row(&c, id);
+            assert_eq!(content, "edited content");
+            assert_eq!(version, 2, "version must increment");
+        }
+
+        #[test]
+        fn test_import_confirm_resyncs_tags_and_importance() {
+            let c = ctx();
+            let id = make_memory(&c, "base", &["old"]);
+            let dir = tempfile::tempdir().unwrap();
+            write_md(dir.path(), "m.md", Some(id), 1, &["new1", "new2"], 0.9, "base edited", &[]);
+
+            let r = memory_import_markdown(
+                &c,
+                json!({"input_dir": dir.path().to_str().unwrap(), "confirm": true}),
+            );
+            assert_eq!(r["applied"].as_i64(), Some(1));
+            let tags = db_tags(&c, id);
+            assert_eq!(tags, vec!["new1".to_string(), "new2".to_string()], "tags resynced");
+            let (_, _, importance) = db_row(&c, id);
+            assert!((importance - 0.9).abs() < 1e-6, "importance resynced: {}", importance);
+        }
+
+        #[test]
+        fn test_import_conflict_blocks_then_force_applies() {
+            let c = ctx();
+            let id = make_memory(&c, "c", &[]);
+            // bump DB version to 3 so the file (version 1) is stale
+            c.storage
+                .with_connection(|conn| {
+                    conn.execute(
+                        "UPDATE memories SET version = 3 WHERE id = ?1",
+                        rusqlite::params![id],
+                    )
+                    .map_err(crate::error::EngramError::Database)
+                })
+                .unwrap();
+            let dir = tempfile::tempdir().unwrap();
+            write_md(dir.path(), "m.md", Some(id), 1, &[], 0.5, "stale edit", &[]);
+
+            // no force → conflict, no write
+            let blocked = memory_import_markdown(
+                &c,
+                json!({"input_dir": dir.path().to_str().unwrap(), "confirm": true}),
+            );
+            assert_eq!(status_of(&blocked, id), Some("conflict"));
+            assert_eq!(blocked["applied"].as_i64(), Some(0));
+            assert_eq!(db_row(&c, id).0, "c", "conflict must not write");
+
+            // force → applies
+            let forced = memory_import_markdown(
+                &c,
+                json!({"input_dir": dir.path().to_str().unwrap(), "confirm": true, "force_version": true}),
+            );
+            assert_eq!(forced["applied"].as_i64(), Some(1));
+            assert_eq!(db_row(&c, id).0, "stale edit");
+        }
+
+        #[test]
+        fn test_import_new_inserts_memory() {
+            let c = ctx();
+            let dir = tempfile::tempdir().unwrap();
+            // engram_id not present in DB
+            write_md(dir.path(), "new.md", Some(999_999), 1, &["x"], 0.5, "brand new memory", &[]);
+
+            let review = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
+            assert_eq!(status_of(&review, 999_999), Some("new"));
+            assert_eq!(review["applied"].as_i64(), Some(0));
+
+            let applied = memory_import_markdown(
+                &c,
+                json!({"input_dir": dir.path().to_str().unwrap(), "confirm": true}),
+            );
+            assert_eq!(applied["applied"].as_i64(), Some(1));
+            // a memory with that content now exists (under a fresh autoincrement id)
+            let count: i64 = c
+                .storage
+                .with_connection(|conn| {
+                    conn.query_row(
+                        "SELECT COUNT(*) FROM memories WHERE content = ?1",
+                        rusqlite::params!["brand new memory"],
+                        |r| r.get(0),
+                    )
+                    .map_err(crate::error::EngramError::Database)
+                })
+                .unwrap();
+            assert_eq!(count, 1, "new memory inserted");
+        }
+
+        #[test]
+        fn test_import_ignores_obsidian_keys() {
+            let c = ctx();
+            let id = make_memory(&c, "hello world", &["alpha"]);
+            let dir = tempfile::tempdir().unwrap();
+            // extra non-engram_ frontmatter keys must be ignored, not error
+            write_md(
+                dir.path(),
+                "m.md",
+                Some(id),
+                1,
+                &["alpha"],
+                0.5,
+                "hello world",
+                &[("aliases", "[foo, bar]"), ("cssclasses", "note-card")],
+            );
+
+            let r = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
+            assert_eq!(status_of(&r, id), Some("in_sync"), "obsidian keys ignored; result={}", r);
+        }
+
+        #[test]
+        fn test_import_skips_file_without_engram_id() {
+            let c = ctx();
+            let dir = tempfile::tempdir().unwrap();
+            write_md(dir.path(), "plain.md", None, 1, &[], 0.5, "just an obsidian note", &[]);
+
+            let r = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
+            let skipped = r["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|f| f["status"] == "skipped");
+            assert!(skipped, "file without engram_id must be skipped; result={}", r);
+            assert_eq!(r["applied"].as_i64(), Some(0));
+        }
     }
 }
