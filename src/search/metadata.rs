@@ -44,6 +44,28 @@ pub struct QueryOperators {
     pub regex: Option<String>,
 }
 
+/// Validate that a metadata key contains only safe characters for JSON path embedding.
+///
+/// Prevents SQL injection via crafted JSON path strings. Allows alphanumeric, underscore,
+/// hyphen, and dot (for nested paths). Rejects quotes, parentheses, and other SQL metacharacters.
+fn validate_metadata_key(key: &str) -> Result<()> {
+    if key.is_empty() {
+        return Err(EngramError::InvalidInput(
+            "metadata key must not be empty".to_string(),
+        ));
+    }
+    let valid = key
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.');
+    if !valid {
+        return Err(EngramError::InvalidInput(format!(
+            "metadata key contains invalid characters: {}",
+            key
+        )));
+    }
+    Ok(())
+}
+
 /// Parse a metadata filter into SQL WHERE clauses
 pub fn parse_metadata_filter(
     filter: &serde_json::Map<String, Value>,
@@ -52,6 +74,8 @@ pub fn parse_metadata_filter(
     let mut params: Vec<Box<dyn rusqlite::ToSql + Send>> = Vec::new();
 
     for (key, value) in filter {
+        validate_metadata_key(key)?;
+
         let json_path = if key.contains('.') {
             // Nested path: metadata.config.timeout -> $.config.timeout
             format!("$.{}", key.replace("metadata.", ""))
@@ -341,5 +365,34 @@ mod tests {
             serde_json::from_value(json!({"config.timeout": 30})).unwrap();
         let (sql, _) = parse_metadata_filter(&filter).unwrap();
         assert!(sql.contains("$.config.timeout"));
+    }
+
+    #[test]
+    fn test_sql_injection_via_key_rejected() {
+        let filter: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"') OR '1'='1": "x"})).unwrap();
+        assert!(parse_metadata_filter(&filter).is_err());
+    }
+
+    #[test]
+    fn test_key_with_quotes_rejected() {
+        let filter: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"key'injected": "x"})).unwrap();
+        assert!(parse_metadata_filter(&filter).is_err());
+    }
+
+    #[test]
+    fn test_empty_key_rejected() {
+        let filter: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"": "x"})).unwrap();
+        assert!(parse_metadata_filter(&filter).is_err());
+    }
+
+    #[test]
+    fn test_valid_keys_accepted() {
+        let filter: serde_json::Map<String, Value> =
+            serde_json::from_value(json!({"valid_key": "x", "nested.path": "y", "kebab-key": "z"}))
+                .unwrap();
+        assert!(parse_metadata_filter(&filter).is_ok());
     }
 }
