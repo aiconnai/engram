@@ -101,8 +101,8 @@ fn parse_frontmatter(content: &str) -> HashMap<String, String> {
                 i += 1;
                 while i < fm_lines.len() {
                     let next = fm_lines[i];
-                    if next.starts_with("  - ") {
-                        tags.push(next[4..].trim().to_string());
+                    if let Some(item) = next.strip_prefix("  - ") {
+                        tags.push(item.trim().to_string());
                         i += 1;
                     } else {
                         break;
@@ -125,8 +125,8 @@ fn parse_frontmatter(content: &str) -> HashMap<String, String> {
                 i += 1;
                 while i < fm_lines.len() {
                     let next = fm_lines[i];
-                    if next.starts_with("  - ") {
-                        tags.push(next[4..].trim().to_string());
+                    if let Some(item) = next.strip_prefix("  - ") {
+                        tags.push(item.trim().to_string());
                         i += 1;
                     } else {
                         break;
@@ -194,9 +194,7 @@ fn classify_import_status(
             if current_hash == db_hash {
                 return ImportStatus::InSync;
             }
-            if db_version == file_version {
-                ImportStatus::PendingUpdate
-            } else if force_version {
+            if db_version == file_version || force_version {
                 ImportStatus::PendingUpdate
             } else if db_version > file_version {
                 // DB is ahead of the file — true conflict (file is stale)
@@ -1552,7 +1550,7 @@ mod tests {
                 .expect("db tags")
         }
 
-        fn status_of<'a>(result: &'a serde_json::Value, id: i64) -> Option<&'a str> {
+        fn status_of(result: &serde_json::Value, id: i64) -> Option<&str> {
             result["files"].as_array()?.iter().find_map(|f| {
                 if f["engram_id"].as_i64() == Some(id) {
                     f["status"].as_str()

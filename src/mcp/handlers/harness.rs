@@ -257,26 +257,24 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
                     "created_at": created_at,
                 }));
             }
-            "verification_result" => {
-                if last_verification.is_none() {
-                    let command = mem.metadata.get("command").cloned().unwrap_or(Value::Null);
-                    last_verification = Some(json!({
-                        "memory_id": mem.id,
-                        "summary": summary,
-                        "created_at": created_at,
-                        "command": command,
-                    }));
-                }
+            "verification_result" if last_verification.is_none() => {
+                let command = mem.metadata.get("command").cloned().unwrap_or(Value::Null);
+                last_verification = Some(json!({
+                    "memory_id": mem.id,
+                    "summary": summary,
+                    "created_at": created_at,
+                    "command": command,
+                }));
             }
-            "handoff" => {
-                if last_handoff.is_none() {
-                    last_handoff = Some(json!({
-                        "memory_id": mem.id,
-                        "summary": summary,
-                        "created_at": created_at,
-                    }));
-                }
+            "verification_result" => {}
+            "handoff" if last_handoff.is_none() => {
+                last_handoff = Some(json!({
+                    "memory_id": mem.id,
+                    "summary": summary,
+                    "created_at": created_at,
+                }));
             }
+            "handoff" => {}
             "issue_update" => {
                 let issue_number = mem
                     .metadata

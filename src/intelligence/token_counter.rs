@@ -41,7 +41,7 @@ impl TiktokenCounter {
     ///
     /// Returns `None` if the model is not recognised.
     pub fn for_model(model: &str) -> Option<Self> {
-        detect_encoding(model).map(|enc| Self::new(enc))
+        detect_encoding(model).map(Self::new)
     }
 
     /// Create a counter for a model name, falling back to `cl100k_base` if
