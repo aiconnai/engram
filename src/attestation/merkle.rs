@@ -6,6 +6,7 @@
 //! When the number of leaves is odd the last leaf is duplicated.
 
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 use super::types::{AttestationRecord, MerkleProof};
 
@@ -123,7 +124,7 @@ impl MerkleTree {
             };
         }
 
-        current == proof.root_hash
+        current.as_bytes().ct_eq(proof.root_hash.as_bytes()).into()
     }
 }
 
