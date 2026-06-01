@@ -150,11 +150,9 @@ fn extract_body(content: &str) -> &str {
         &content[body_start..]
     } else if let Some(rel) = content[pos..].find("\n---") {
         let after = pos + rel + 4;
-        if after >= content.len() {
-            ""
-        } else {
-            &content[after..]
-        }
+        // after == content.len() → closing marker is at EOF, no body
+        // after < content.len() → body follows immediately after "---"
+        &content[after.min(content.len())..]
     } else {
         content
     }
@@ -193,13 +191,15 @@ fn classify_import_status(
                 ImportStatus::PendingUpdate
             } else if force_version {
                 ImportStatus::PendingUpdate
+            } else if db_version > file_version {
+                // DB is ahead of the file — true conflict (file is stale)
+                ImportStatus::Conflict(format!(
+                    "DB version {} > file version {}",
+                    db_version, file_version
+                ))
             } else {
-                let reason = if db_version > file_version {
-                    format!("DB version {} > file version {}", db_version, file_version)
-                } else {
-                    format!("file version {} > DB version {}", file_version, db_version)
-                };
-                ImportStatus::Conflict(reason)
+                // file is ahead of DB — normal pending update
+                ImportStatus::PendingUpdate
             }
         }
     }
@@ -532,11 +532,12 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
                     });
 
                     match create_result {
-                        Ok(_) => {
+                        Ok(new_mem) => {
                             applied += 1;
+                            let inserted_id = new_mem.id;
                             files_detail.push(json!({
                                 "file": filename,
-                                "engram_id": engram_id,
+                                "engram_id": inserted_id,
                                 "status": "new",
                                 "applied": true
                             }));
@@ -565,7 +566,20 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
                     // file via update_memory (recomputes content_hash, bumps version,
                     // re-syncs tags). scope/workspace left to update_memory defaults.
                     let mut obj = import_payload(&fm, &body, false);
-                    obj.insert("tags".into(), json!(frontmatter_tags(&fm)));
+                    let tags = frontmatter_tags(&fm);
+                    if !tags.is_empty() {
+                        obj.insert("tags".into(), json!(tags));
+                    } else if fm.contains_key("engram_tags_list") {
+                        // Tag key present but empty — explicit wipe; warn before applying.
+                        eprintln!(
+                            "[markdown_export] import: wiping all tags for memory {} (engram_tags_list is empty in file {})",
+                            engram_id, filename
+                        );
+                        obj.insert("tags".into(), json!([]));
+                    }
+                    // If engram_tags_list is absent from frontmatter entirely, tags
+                    // field is omitted from the payload so update_memory leaves them
+                    // untouched (no-op).
                     let update_result = serde_json::from_value::<crate::types::UpdateMemoryInput>(
                         Value::Object(obj),
                     )
@@ -659,7 +673,7 @@ fn query_workspace_memories(
                      FROM memory_tags mt
                      JOIN tags t ON mt.tag_id = t.id
                      WHERE mt.memory_id = m.id) as tags,
-                    m.scope, m.version, m.metadata
+                    m.scope, m.version, m.metadata, m.content_hash
              FROM memories m
              WHERE m.workspace = ?1
                AND COALESCE(m.lifecycle_state, 'active') != 'archived'
@@ -684,7 +698,8 @@ fn query_workspace_memories(
                 "tags": row.get::<_, Option<String>>(8)?,
                 "scope": row.get::<_, Option<String>>(9)?,
                 "version": row.get::<_, Option<i64>>(10)?,
-                "metadata": metadata
+                "metadata": metadata,
+                "content_hash": row.get::<_, Option<String>>(12)?
             }))
         })?;
         let memories: Vec<Value> = rows.filter_map(|r| r.ok()).collect();
@@ -693,31 +708,66 @@ fn query_workspace_memories(
 }
 
 /// Build a map of memory_id -> [(related_id, relation_type)].
+///
+/// Issues a single batched query over all `memory_ids` instead of one per ID.
+/// DB errors are logged and result in an empty map rather than being silently
+/// discarded.
 fn build_related_map(ctx: &HandlerContext, memory_ids: &[i64]) -> HashMap<i64, Vec<(i64, String)>> {
-    let mut map: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
-
-    for &id in memory_ids {
-        if let Ok(related) = ctx.storage.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT to_id, relation_type FROM cross_references WHERE from_id = ?1
-                 UNION ALL
-                 SELECT from_id, relation_type FROM cross_references WHERE to_id = ?1",
-            )?;
-            let rows: Vec<(i64, String)> = stmt
-                .query_map(rusqlite::params![id], |row| {
-                    Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-                })?
-                .filter_map(|r| r.ok())
-                .collect();
-            Ok(rows)
-        }) {
-            if !related.is_empty() {
-                map.insert(id, related);
-            }
-        }
+    if memory_ids.is_empty() {
+        return HashMap::new();
     }
 
-    map
+    // Build a single IN-list query for all IDs at once.
+    let placeholders: Vec<String> = (1..=memory_ids.len())
+        .map(|i| format!("?{i}"))
+        .collect();
+    let in_list = placeholders.join(", ");
+    let sql = format!(
+        "SELECT from_id, to_id, relation_type FROM cross_references
+          WHERE from_id IN ({in_list}) OR to_id IN ({in_list})"
+    );
+
+    let result = ctx.storage.with_connection(|conn| {
+        let mut stmt = conn.prepare(&sql)?;
+        // Build params: each id appears twice (once for from_id IN, once for to_id IN).
+        let doubled: Vec<i64> = memory_ids
+            .iter()
+            .chain(memory_ids.iter())
+            .copied()
+            .collect();
+        let rows: Vec<(i64, i64, String)> = stmt
+            .query_map(rusqlite::params_from_iter(doubled.iter()), |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(crate::error::EngramError::Database)?;
+        Ok(rows)
+    });
+
+    match result {
+        Ok(rows) => {
+            let id_set: std::collections::HashSet<i64> =
+                memory_ids.iter().copied().collect();
+            let mut map: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
+            for (from_id, to_id, rel_type) in rows {
+                if id_set.contains(&from_id) {
+                    map.entry(from_id).or_default().push((to_id, rel_type.clone()));
+                }
+                if id_set.contains(&to_id) && to_id != from_id {
+                    map.entry(to_id).or_default().push((from_id, rel_type));
+                }
+            }
+            map
+        }
+        Err(e) => {
+            eprintln!("[markdown_export] build_related_map DB error: {e}");
+            HashMap::new()
+        }
+    }
 }
 
 /// Format a single memory as Markdown with YAML frontmatter.
