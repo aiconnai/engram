@@ -4,7 +4,7 @@
 
 This reference is generated from `src/mcp/tools.rs`.
 
-Total tools: **192**
+Total tools: **251**
 
 ## Summary
 
@@ -202,6 +202,65 @@ Total tools: **192**
 | `harness_handoff` | advanced | mutating (no MCP hints) | `current_goal`, `next_steps` |
 | `harness_verify` | advanced | mutating (no MCP hints) | `command`, `exit_code`, `output_summary` |
 | `memory_import_markdown` | advanced | mutating (no MCP hints) | `input_dir` |
+| `memory_agent_start` | standard | readOnlyHint | none |
+| `memory_agent_stop` | standard | readOnlyHint | none |
+| `memory_agent_status` | standard | readOnlyHint | none |
+| `memory_agent_metrics` | advanced | mutating (no MCP hints) | none |
+| `memory_auto_link` | advanced | mutating (no MCP hints) | none |
+| `memory_auto_link_stats` | standard | readOnlyHint | none |
+| `memory_block_create` | standard | mutating (no MCP hints) | `name` |
+| `memory_block_get` | standard | readOnlyHint | `name` |
+| `memory_block_edit` | standard | mutating (no MCP hints) | `content`, `name` |
+| `memory_block_list` | standard | readOnlyHint | none |
+| `memory_block_archive` | standard | mutating (no MCP hints) | `name` |
+| `memory_block_history` | standard | readOnlyHint | `name` |
+| `memory_cache_stats` | standard | readOnlyHint | none |
+| `memory_cache_clear` | advanced | mutating (no MCP hints) | none |
+| `memory_capture_screenshot` | advanced | readOnlyHint | none |
+| `memory_cluster` | advanced | readOnlyHint | none |
+| `memory_coactivation_report` | standard | readOnlyHint | none |
+| `memory_compress` | advanced | readOnlyHint | `id` |
+| `memory_compress_for_context` | standard | readOnlyHint | `ids` |
+| `memory_consolidate` | advanced | mutating (no MCP hints) | none |
+| `memory_decompress` | standard | readOnlyHint | `id` |
+| `memory_describe_image` | advanced | readOnlyHint | `image_path` |
+| `memory_detect_conflicts` | standard | mutating (no MCP hints) | none |
+| `memory_detect_updates` | standard | readOnlyHint | `content` |
+| `memory_embedding_migrate` | advanced | mutating (no MCP hints) | none |
+| `memory_embedding_providers` | standard | readOnlyHint | none |
+| `memory_explain_search` | standard | readOnlyHint | `results` |
+| `memory_extract_facts` | standard | mutating (no MCP hints) | `memory_id` |
+| `memory_fact_graph` | standard | readOnlyHint | `subject` |
+| `memory_feedback` | standard | mutating (no MCP hints) | `memory_id`, `query`, `signal` |
+| `memory_feedback_stats` | standard | readOnlyHint | none |
+| `memory_garden` | advanced | mutating (no MCP hints) | none |
+| `memory_garden_preview` | standard | readOnlyHint | none |
+| `memory_get_cluster` | standard | readOnlyHint | `memory_id` |
+| `memory_knowledge_stats` | standard | readOnlyHint | none |
+| `memory_list_auto_links` | standard | readOnlyHint | none |
+| `memory_list_clusters` | standard | readOnlyHint | none |
+| `memory_list_facts` | standard | readOnlyHint | none |
+| `memory_list_media` | standard | readOnlyHint | none |
+| `memory_process_video` | advanced | mutating (no MCP hints) | `video_path` |
+| `memory_query_triplets` | standard | readOnlyHint | none |
+| `memory_reflect` | standard | readOnlyHint | `ids` |
+| `memory_resolve_conflict` | standard | mutating (no MCP hints) | `conflict_id` |
+| `memory_sentiment_analyze` | standard | readOnlyHint | `id` |
+| `memory_sentiment_timeline` | standard | readOnlyHint | none |
+| `memory_suggest_acquisitions` | standard | readOnlyHint | none |
+| `memory_synthesis` | standard | readOnlyHint | `content_a`, `content_b` |
+| `memory_transcribe_audio` | advanced | readOnlyHint | `audio_path` |
+| `memory_utility_score` | standard | readOnlyHint | `id` |
+| `scope_get` | standard | readOnlyHint | `memory_id` |
+| `scope_list` | standard | readOnlyHint | none |
+| `scope_search` | standard | readOnlyHint | `query`, `scope_path` |
+| `scope_set` | standard | mutating (no MCP hints) | `memory_id`, `scope_path` |
+| `scope_tree` | standard | readOnlyHint | none |
+| `temporal_add_edge` | advanced | mutating (no MCP hints) | `from_id`, `relation`, `to_id`, `valid_from` |
+| `temporal_contradictions` | advanced | readOnlyHint | none |
+| `temporal_diff` | advanced | readOnlyHint | `t1`, `t2` |
+| `temporal_snapshot` | advanced | readOnlyHint | `timestamp` |
+| `temporal_timeline` | advanced | readOnlyHint | `from_id`, `to_id` |
 
 ## Tools
 
@@ -2926,3 +2985,765 @@ Import memories from Markdown files with engram_ frontmatter (RFC 0004). Review 
 | `workspace` | `string` | no | Override workspace (default: from each file's engram_workspace) |
 | `confirm` | `boolean` | no | Apply writes. When false (default), dry-run review only Default: `false`. |
 | `force_version` | `boolean` | no | Bypass version conflict checks Default: `false`. |
+
+### `memory_agent_start`
+
+Configure a tick-based memory agent for a workspace and return its initial configuration.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace the agent will operate on (default: "default") |
+| `interval_secs` | `integer` | no | Desired check interval in seconds (default: 300) |
+
+### `memory_agent_stop`
+
+Stop a tick-based memory agent (no-op for stateless agents; resets client-side tracking).
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace whose agent should be stopped (default: "default") |
+
+### `memory_agent_status`
+
+Return current status and memory statistics for a workspace agent.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to report status for (default: "default") |
+
+### `memory_agent_metrics`
+
+Run one full agent cycle (prune/merge/archive) and return the actions taken and aggregate metrics. Mutates the database.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to run the agent cycle on (default: "default") |
+| `max_actions` | `integer` | no | Maximum number of actions to take in this cycle (default: 10) |
+
+### `memory_auto_link`
+
+Run semantic and temporal auto-linker on a workspace, creating crossref edges in the database. Mutates the database.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to auto-link (default: all workspaces) |
+| `similarity_threshold` | `number` | no | Minimum cosine similarity to create a semantic link (default: 0.75) |
+| `time_window_minutes` | `integer` | no | Time window in minutes for temporal linking (default: 30) |
+
+### `memory_auto_link_stats`
+
+Return aggregate statistics about auto-generated semantic and temporal links.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_block_create`
+
+Create a named, token-bounded memory block (Letta/MemGPT-style self-editing context slot).
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Unique name for the memory block |
+| `content` | `string` | no | Initial content of the block (default: empty string) |
+| `max_tokens` | `integer` | no | Maximum token capacity for the block (default: 4096) |
+
+### `memory_block_get`
+
+Retrieve a memory block by name.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Name of the memory block to retrieve |
+
+### `memory_block_edit`
+
+Update the content of an existing memory block, incrementing its version and recording the reason.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `content`, `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Name of the memory block to edit |
+| `content` | `string` | yes | New content for the block |
+| `reason` | `string` | no | Human-readable reason for this edit (optional) |
+
+### `memory_block_list`
+
+List all memory blocks with their names, versions, and token usage.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_block_archive`
+
+Permanently delete a memory block and return its final content before deletion. Destructive and irreversible.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Name of the memory block to archive and delete |
+
+### `memory_block_history`
+
+Return the edit history for a named memory block.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Name of the memory block |
+| `limit` | `integer` | no | Maximum number of history entries to return (default: 20) |
+
+### `memory_cache_stats`
+
+Return hit/miss statistics and entry count for the in-memory semantic search cache.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_cache_clear`
+
+Evict all entries from the semantic search cache. Mutates in-memory cache state.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_capture_screenshot`
+
+Capture a screenshot of the full screen or a specific application window and save it to a local file.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `app_name` | `string` | no | Name of the application window to capture; omit to capture the full screen |
+
+### `memory_cluster`
+
+Run Louvain community detection on the memory graph and return detected clusters with modularity score.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `min_cluster_size` | `integer` | no | Minimum number of members for a cluster to be reported (default: 2). |
+| `resolution` | `number` | no | Louvain resolution parameter controlling cluster granularity (default: 1.0). |
+| `link_types` | `array` | no | Restrict clustering to these edge/link types. Omit to use all link types. Items: `string`. |
+
+### `memory_coactivation_report`
+
+Return coactivation graph statistics including edge count, average strength, and strongest co-occurring memory pairs.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_compress`
+
+Apply rule-based semantic compression to a single memory and return the structured result with key entities and facts.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | ID of the memory to compress. |
+| `target_ratio` | `number` | no | Target compression ratio as a fraction of original tokens (default: 0.1). |
+
+### `memory_compress_for_context`
+
+Pack a set of memories into a token budget for LLM context, returning compressed entries and diagnostics about skipped memories.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `ids`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `ids` | `array` | yes | Memory IDs to compress and pack (alias: memory_ids). Items: `integer`. |
+| `memory_ids` | `array` | no | Alias for ids. Items: `integer`. |
+| `token_budget` | `integer` | no | Maximum token budget for the packed context (default: 4096). |
+
+### `memory_consolidate`
+
+Run offline consolidation over a workspace, merging and archiving similar memories; use dry_run to preview without writing.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to consolidate (default: "default"). |
+| `strategy` | `string` | no | Grouping strategy: "content_overlap" (default), "tag_similarity", or "temporal_proximity". |
+| `dry_run` | `boolean` | no | If true, report what would be merged/archived without writing changes (default: false). |
+
+### `memory_decompress`
+
+Retrieve the original (uncompressed) content of a memory by ID.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | ID of the memory whose content to retrieve. |
+
+### `memory_describe_image`
+
+Describe the contents of an image file using the configured vision provider (requires VISION_PROVIDER env).
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `image_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `image_path` | `string` | yes | Absolute filesystem path to the image file (JPEG, PNG, WebP, etc.). |
+| `prompt` | `string` | no | Optional custom prompt to guide the image description. |
+
+### `memory_detect_conflicts`
+
+Detect contradictory or conflicting facts in the knowledge graph; optionally persist detected conflicts for later resolution.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `save` | `boolean` | no | If true, persist detected conflicts to the conflicts table for later resolution (default: false). |
+
+### `memory_detect_updates`
+
+Given new content, identify existing memories in a workspace that may be stale or in need of an update.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `content`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `content` | `string` | yes | New content to compare against stored memories. |
+| `workspace` | `string` | no | Workspace to search for update candidates (default: "default"). |
+
+### `memory_embedding_migrate`
+
+Re-embed all memories using the active embedding model; use dry_run to count affected memories without writing.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `dry_run` | `boolean` | no | If true, count memories to migrate without re-embedding them (default: false). |
+| `target_model` | `string` | no | Target embedding model name to record in embedding_model column. Defaults to the active embedder's model name. |
+
+### `memory_embedding_providers`
+
+List the active embedding provider including model name and vector dimensions.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_explain_search`
+
+Explain how each result in a scored search batch was ranked, breaking down bm25, vector, fuzzy, recency, importance, and optional rerank contributions.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `results`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `results` | `array` | yes | Array of scored search result objects to explain. Items: `object`. |
+| `reranking_active` | `boolean` | no | Whether cross-encoder reranking was active for this result set (default: false). |
+| `rrf_k` | `integer` | no | RRF k constant used during retrieval (default: 60). |
+
+### `memory_extract_facts`
+
+Extract subject-predicate-object facts from a memory's content using rule-based NLP and persist them to the facts table.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory from which to extract and store facts. |
+
+### `memory_fact_graph`
+
+Return all stored subject-predicate-object facts for a given subject entity.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `subject`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `subject` | `string` | yes | Entity name to look up in the facts table. |
+
+### `memory_feedback`
+
+Record relevance feedback for a search result and update the memory's utility score; schedules low-utility memories for consolidation.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_id`, `query`, `signal`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | The search query that produced the result. |
+| `memory_id` | `integer` | yes | ID of the memory being rated. |
+| `signal` | `string` | yes | Feedback signal: "useful" (alias "helpful"), "irrelevant" (alias "not_helpful"), "outdated", or "conflict". |
+| `rank_position` | `integer` | no | 0-based rank position of the result in the original result list (optional). |
+| `original_score` | `number` | no | The final_score from the original search result (optional). |
+| `workspace` | `string` | no | Workspace context for the feedback (default: "default"). |
+
+### `memory_feedback_stats`
+
+Return aggregated search-feedback statistics (thumbs-up/down counts, top-rated queries) for a workspace.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace name to filter stats; omit for all workspaces. |
+
+### `memory_garden`
+
+Run full autonomous garden maintenance on a workspace: prunes stale memories, merges duplicates, archives cold entries, and compresses verbose content.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to garden (default: "default"). |
+
+### `memory_garden_preview`
+
+Dry-run garden maintenance: reports what would be pruned, merged, archived, or compressed without making any changes.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to preview gardening for (default: "default"). |
+
+### `memory_get_cluster`
+
+Return the Louvain community cluster that contains a specific memory, including its cluster ID, size, and member IDs.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory whose cluster to look up. |
+
+### `memory_knowledge_stats`
+
+Return aggregate statistics over the knowledge-graph facts table: total facts, unique subjects/predicates/objects, and top entities.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_list_auto_links`
+
+List auto-generated graph links (semantic or temporal) between memories, optionally filtered by link type.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `link_type` | `string` | no | Filter by link type: "semantic" or "temporal". Omit for all types. |
+| `limit` | `integer` | no | Maximum number of links to return (default: 50). |
+
+### `memory_list_clusters`
+
+List all detected memory clusters from the persistent cluster table, optionally selecting the detection algorithm.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `algorithm` | `string` | no | Clustering algorithm to filter by (default: "louvain"). |
+
+### `memory_list_facts`
+
+List extracted subject-predicate-object facts, optionally scoped to a single source memory.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | no | Source memory ID to filter facts; omit to list facts from all memories. |
+| `limit` | `integer` | no | Maximum number of facts to return (default: 100). |
+
+### `memory_list_media`
+
+List media assets stored in the media_assets table, optionally filtered by type (image, audio, video).
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `media_type` | `string` | no | Filter by media type: "image", "audio", or "video". Omit for all types. |
+| `limit` | `integer` | no | Maximum number of assets to return (default: 50). |
+
+### `memory_process_video`
+
+Process a video file: extract metadata and keyframe descriptions via the configured vision provider, and create a memory record for the result.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `video_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `video_path` | `string` | yes | Absolute path to the video file to process. |
+
+### `memory_query_triplets`
+
+SPARQL-like pattern query over the knowledge-graph facts table: match any combination of subject, predicate, and object (all optional, acts as wildcard when omitted).
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `subject` | `string` | no | Subject entity to match (wildcard if omitted). |
+| `predicate` | `string` | no | Predicate/relation to match (wildcard if omitted). |
+| `object` | `string` | no | Object value to match (wildcard if omitted). |
+
+### `memory_reflect`
+
+Generate a reflective synthesis over a set of memories at a configurable analytical depth (surface, analytical, or meta).
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `ids`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `ids` | `array` | yes | Array of memory IDs to reflect on (required, must be non-empty). Items: `integer`. |
+| `depth` | `string` | no | Reflection depth: "surface" (default), "analytical", or "meta". |
+
+### `memory_resolve_conflict`
+
+Resolve a saved knowledge-graph conflict by ID using a chosen strategy, removing or retaining the conflicting edges accordingly.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `conflict_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `conflict_id` | `integer` | yes | ID of the conflict record to resolve (required). |
+| `strategy` | `string` | no | Resolution strategy: "keep_newer" (default), "keep_higher_confidence", "merge", or "manual". |
+
+### `memory_sentiment_analyze`
+
+Analyze the sentiment of a single memory's content, returning a score, label (positive/neutral/negative), confidence, and keyword signals.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | ID of the memory to analyze (required). |
+
+### `memory_sentiment_timeline`
+
+Compute a chronological sentiment timeline over memories in a workspace within an optional time range.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to scan (default: "default"). |
+| `from` | `string` | no | ISO-8601 start timestamp (default: epoch). |
+| `to` | `string` | no | ISO-8601 end timestamp (default: far future). |
+| `limit` | `integer` | no | Maximum number of timeline entries to return (default: 50). |
+
+### `memory_suggest_acquisitions`
+
+Analyse knowledge gaps in a workspace and suggest new memories to create.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to analyse (default: "default"). |
+| `limit` | `integer` | no | Maximum number of suggestions to return (default: 10). |
+
+### `memory_synthesis`
+
+Check semantic overlap between two content strings and produce a merged synthesis using the chosen strategy.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `content_a`, `content_b`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `content_a` | `string` | yes | First content string to synthesise. |
+| `content_b` | `string` | yes | Second content string to synthesise. |
+| `id_a` | `integer` | no | Optional memory ID associated with content_a (default: 0). |
+| `strategy` | `string` | no | Synthesis strategy: "merge" (default), "replace", or "append". Allowed: `merge`, `replace`, `append`. |
+
+### `memory_transcribe_audio`
+
+Transcribe an audio file to text using the configured audio transcription provider.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `audio_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `audio_path` | `string` | yes | Absolute or relative path to the audio file to transcribe. |
+
+### `memory_utility_score`
+
+Compute the Q-value utility score for a memory based on its retrieval feedback history.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to score. |
+
+### `scope_get`
+
+Return the current scope path and level for a given memory.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory whose scope to retrieve. |
+
+### `scope_list`
+
+List all distinct scope paths currently present in the database.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `scope_search`
+
+Search for memories whose content matches a query within a given scope, including ancestor scopes.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `query`, `scope_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | Substring to search for within scoped memories. |
+| `scope_path` | `string` | yes | Hierarchical scope path to search within (e.g. "global/org:acme/user:alice"). |
+
+### `scope_set`
+
+Assign or update the hierarchical scope of a memory.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_id`, `scope_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory to re-scope. |
+| `scope_path` | `string` | yes | Target scope path (e.g. "global/org:acme/user:alice"). |
+
+### `scope_tree`
+
+Return a hierarchical tree of all scopes in the database.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `temporal_add_edge`
+
+Add a bi-temporal validity edge between two memories in the knowledge graph.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `from_id`, `relation`, `to_id`, `valid_from`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `from_id` | `integer` | yes | Source memory ID. |
+| `to_id` | `integer` | yes | Target memory ID. |
+| `relation` | `string` | yes | Semantic label for the edge (e.g. "works_at"). |
+| `valid_from` | `string` | yes | RFC3339 timestamp marking the start of edge validity. |
+| `properties` | `object` | no | Arbitrary JSON metadata to attach to the edge. |
+| `confidence` | `number` | no | Edge confidence score between 0.0 and 1.0 (default: 1.0). |
+| `source` | `string` | no | Provenance string identifying where this edge originates. |
+| `scope_path` | `string` | no | Optional scope path to associate with this edge. |
+
+### `temporal_contradictions`
+
+Detect overlapping or contradictory edge pairs in the temporal knowledge graph.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `temporal_diff`
+
+Compute the set of added, removed, and changed edges between two RFC3339 timestamps in the temporal graph.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `t1`, `t2`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `t1` | `string` | yes | Earlier RFC3339 timestamp (snapshot baseline). |
+| `t2` | `string` | yes | Later RFC3339 timestamp (snapshot target). |
+| `scope_path` | `string` | no | Optional scope path to restrict the diff. |
+
+### `temporal_snapshot`
+
+Return all currently-valid temporal graph edges as of a given RFC3339 timestamp.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `timestamp`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `timestamp` | `string` | yes | RFC3339 point-in-time for the snapshot. |
+| `scope_path` | `string` | no | Optional scope path to restrict the snapshot. |
+
+### `temporal_timeline`
+
+Return the full edge history between two memory IDs, ordered chronologically.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `from_id`, `to_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `from_id` | `integer` | yes | Source memory ID. |
+| `to_id` | `integer` | yes | Target memory ID. |
+| `scope_path` | `string` | no | Optional scope path to restrict the timeline. |

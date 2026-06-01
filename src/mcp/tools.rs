@@ -3079,6 +3079,1083 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
+
+    // === Reconciliation: previously-unadvertised tools (dispatch/registry parity) ===
+    // -- reconciliation batch A --
+    ToolDef {
+        name: "memory_agent_start",
+        description: "Configure a tick-based memory agent for a workspace and return its initial configuration.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace the agent will operate on (default: \"default\")"},
+                "interval_secs": {"type": "integer", "description": "Desired check interval in seconds (default: 300)"}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_agent_stop",
+        description: "Stop a tick-based memory agent (no-op for stateless agents; resets client-side tracking).",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace whose agent should be stopped (default: \"default\")"}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_agent_status",
+        description: "Return current status and memory statistics for a workspace agent.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace to report status for (default: \"default\")"}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_agent_metrics",
+        description: "Run one full agent cycle (prune/merge/archive) and return the actions taken and aggregate metrics. Mutates the database.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace to run the agent cycle on (default: \"default\")"},
+                "max_actions": {"type": "integer", "description": "Maximum number of actions to take in this cycle (default: 10)"}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+    #[cfg(feature = "emergent-graph")]
+    ToolDef {
+        name: "memory_auto_link",
+        description: "Run semantic and temporal auto-linker on a workspace, creating crossref edges in the database. Mutates the database.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace to auto-link (default: all workspaces)"},
+                "similarity_threshold": {"type": "number", "description": "Minimum cosine similarity to create a semantic link (default: 0.75)"},
+                "time_window_minutes": {"type": "integer", "description": "Time window in minutes for temporal linking (default: 30)"}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+    #[cfg(feature = "emergent-graph")]
+    ToolDef {
+        name: "memory_auto_link_stats",
+        description: "Return aggregate statistics about auto-generated semantic and temporal links.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_block_create",
+        description: "Create a named, token-bounded memory block (Letta/MemGPT-style self-editing context slot).",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Unique name for the memory block"},
+                "content": {"type": "string", "description": "Initial content of the block (default: empty string)"},
+                "max_tokens": {"type": "integer", "description": "Maximum token capacity for the block (default: 4096)"}
+            },
+            "required": ["name"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_block_get",
+        description: "Retrieve a memory block by name.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the memory block to retrieve"}
+            },
+            "required": ["name"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_block_edit",
+        description: "Update the content of an existing memory block, incrementing its version and recording the reason.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the memory block to edit"},
+                "content": {"type": "string", "description": "New content for the block"},
+                "reason": {"type": "string", "description": "Human-readable reason for this edit (optional)"}
+            },
+            "required": ["name", "content"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_block_list",
+        description: "List all memory blocks with their names, versions, and token usage.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_block_archive",
+        description: "Permanently delete a memory block and return its final content before deletion. Destructive and irreversible.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the memory block to archive and delete"}
+            },
+            "required": ["name"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_block_history",
+        description: "Return the edit history for a named memory block.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the memory block"},
+                "limit": {"type": "integer", "description": "Maximum number of history entries to return (default: 20)"}
+            },
+            "required": ["name"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_cache_stats",
+        description: "Return hit/miss statistics and entry count for the in-memory semantic search cache.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_cache_clear",
+        description: "Evict all entries from the semantic search cache. Mutates in-memory cache state.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+    #[cfg(feature = "multimodal")]
+    ToolDef {
+        name: "memory_capture_screenshot",
+        description: "Capture a screenshot of the full screen or a specific application window and save it to a local file.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "app_name": {"type": "string", "description": "Name of the application window to capture; omit to capture the full screen"}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+    // -- reconciliation batch B --
+    ToolDef {
+        name: "memory_cluster",
+        description: "Run Louvain community detection on the memory graph and return detected clusters with modularity score.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "min_cluster_size": {
+                    "type": "integer",
+                    "description": "Minimum number of members for a cluster to be reported (default: 2)."
+                },
+                "resolution": {
+                    "type": "number",
+                    "description": "Louvain resolution parameter controlling cluster granularity (default: 1.0)."
+                },
+                "link_types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Restrict clustering to these edge/link types. Omit to use all link types."
+                }
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "memory_coactivation_report",
+        description: "Return coactivation graph statistics including edge count, average strength, and strongest co-occurring memory pairs.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_compress",
+        description: "Apply rule-based semantic compression to a single memory and return the structured result with key entities and facts.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "description": "ID of the memory to compress."
+                },
+                "target_ratio": {
+                    "type": "number",
+                    "description": "Target compression ratio as a fraction of original tokens (default: 0.1)."
+                }
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "memory_compress_for_context",
+        description: "Pack a set of memories into a token budget for LLM context, returning compressed entries and diagnostics about skipped memories.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Memory IDs to compress and pack (alias: memory_ids)."
+                },
+                "memory_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Alias for ids."
+                },
+                "token_budget": {
+                    "type": "integer",
+                    "description": "Maximum token budget for the packed context (default: 4096)."
+                }
+            },
+            "required": ["ids"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_consolidate",
+        description: "Run offline consolidation over a workspace, merging and archiving similar memories; use dry_run to preview without writing.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {
+                    "type": "string",
+                    "description": "Workspace to consolidate (default: \"default\")."
+                },
+                "strategy": {
+                    "type": "string",
+                    "description": "Grouping strategy: \"content_overlap\" (default), \"tag_similarity\", or \"temporal_proximity\"."
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "If true, report what would be merged/archived without writing changes (default: false)."
+                }
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "memory_decompress",
+        description: "Retrieve the original (uncompressed) content of a memory by ID.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "description": "ID of the memory whose content to retrieve."
+                }
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+#[cfg(feature = "multimodal")]
+    ToolDef {
+        name: "memory_describe_image",
+        description: "Describe the contents of an image file using the configured vision provider (requires VISION_PROVIDER env).",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "image_path": {
+                    "type": "string",
+                    "description": "Absolute filesystem path to the image file (JPEG, PNG, WebP, etc.)."
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Optional custom prompt to guide the image description."
+                }
+            },
+            "required": ["image_path"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "memory_detect_conflicts",
+        description: "Detect contradictory or conflicting facts in the knowledge graph; optionally persist detected conflicts for later resolution.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "save": {
+                    "type": "boolean",
+                    "description": "If true, persist detected conflicts to the conflicts table for later resolution (default: false)."
+                }
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_detect_updates",
+        description: "Given new content, identify existing memories in a workspace that may be stale or in need of an update.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "New content to compare against stored memories."
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Workspace to search for update candidates (default: \"default\")."
+                }
+            },
+            "required": ["content"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_embedding_migrate",
+        description: "Re-embed all memories using the active embedding model; use dry_run to count affected memories without writing.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "If true, count memories to migrate without re-embedding them (default: false)."
+                },
+                "target_model": {
+                    "type": "string",
+                    "description": "Target embedding model name to record in embedding_model column. Defaults to the active embedder's model name."
+                }
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "memory_embedding_providers",
+        description: "List the active embedding provider including model name and vector dimensions.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_explain_search",
+        description: "Explain how each result in a scored search batch was ranked, breaking down bm25, vector, fuzzy, recency, importance, and optional rerank contributions.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "description": "Array of scored search result objects to explain.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "memory_id":   {"type": "integer", "description": "ID of the memory."},
+                            "bm25":        {"type": "number",  "description": "BM25 full-text score."},
+                            "vector":      {"type": "number",  "description": "Cosine similarity / vector score."},
+                            "fuzzy":       {"type": "number",  "description": "Fuzzy string match score."},
+                            "recency":     {"type": "number",  "description": "Recency decay score."},
+                            "importance":  {"type": "number",  "description": "Stored importance weight."},
+                            "final_score": {"type": "number",  "description": "Final blended score used for ranking."},
+                            "rerank_score":{"type": "number",  "description": "Optional cross-encoder rerank score."}
+                        },
+                        "required": ["memory_id", "final_score"]
+                    }
+                },
+                "reranking_active": {
+                    "type": "boolean",
+                    "description": "Whether cross-encoder reranking was active for this result set (default: false)."
+                },
+                "rrf_k": {
+                    "type": "integer",
+                    "description": "RRF k constant used during retrieval (default: 60)."
+                }
+            },
+            "required": ["results"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_extract_facts",
+        description: "Extract subject-predicate-object facts from a memory's content using rule-based NLP and persist them to the facts table.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "memory_id": {
+                    "type": "integer",
+                    "description": "ID of the memory from which to extract and store facts."
+                }
+            },
+            "required": ["memory_id"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_fact_graph",
+        description: "Return all stored subject-predicate-object facts for a given subject entity.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "subject": {
+                    "type": "string",
+                    "description": "Entity name to look up in the facts table."
+                }
+            },
+            "required": ["subject"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_feedback",
+        description: "Record relevance feedback for a search result and update the memory's utility score; schedules low-utility memories for consolidation.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query that produced the result."
+                },
+                "memory_id": {
+                    "type": "integer",
+                    "description": "ID of the memory being rated."
+                },
+                "signal": {
+                    "type": "string",
+                    "description": "Feedback signal: \"useful\" (alias \"helpful\"), \"irrelevant\" (alias \"not_helpful\"), \"outdated\", or \"conflict\"."
+                },
+                "rank_position": {
+                    "type": "integer",
+                    "description": "0-based rank position of the result in the original result list (optional)."
+                },
+                "original_score": {
+                    "type": "number",
+                    "description": "The final_score from the original search result (optional)."
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Workspace context for the feedback (default: \"default\")."
+                }
+            },
+            "required": ["query", "memory_id", "signal"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    // -- reconciliation batch C --
+    ToolDef {
+        name: "memory_feedback_stats",
+        description: "Return aggregated search-feedback statistics (thumbs-up/down counts, top-rated queries) for a workspace.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace name to filter stats; omit for all workspaces."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 2. memory_garden
+    ToolDef {
+        name: "memory_garden",
+        description: "Run full autonomous garden maintenance on a workspace: prunes stale memories, merges duplicates, archives cold entries, and compresses verbose content.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace to garden (default: \"default\")."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+
+    // 3. memory_garden_preview
+    ToolDef {
+        name: "memory_garden_preview",
+        description: "Dry-run garden maintenance: reports what would be pruned, merged, archived, or compressed without making any changes.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace to preview gardening for (default: \"default\")."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 4. memory_get_cluster
+    #[cfg(feature = "emergent-graph")]
+    ToolDef {
+        name: "memory_get_cluster",
+        description: "Return the Louvain community cluster that contains a specific memory, including its cluster ID, size, and member IDs.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "integer", "description": "ID of the memory whose cluster to look up."}
+            },
+            "required": ["memory_id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 5. memory_knowledge_stats
+    ToolDef {
+        name: "memory_knowledge_stats",
+        description: "Return aggregate statistics over the knowledge-graph facts table: total facts, unique subjects/predicates/objects, and top entities.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 6. memory_list_auto_links
+    #[cfg(feature = "emergent-graph")]
+    ToolDef {
+        name: "memory_list_auto_links",
+        description: "List auto-generated graph links (semantic or temporal) between memories, optionally filtered by link type.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "link_type": {"type": "string", "description": "Filter by link type: \"semantic\" or \"temporal\". Omit for all types."},
+                "limit": {"type": "integer", "description": "Maximum number of links to return (default: 50)."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 7. memory_list_clusters
+    #[cfg(feature = "emergent-graph")]
+    ToolDef {
+        name: "memory_list_clusters",
+        description: "List all detected memory clusters from the persistent cluster table, optionally selecting the detection algorithm.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "algorithm": {"type": "string", "description": "Clustering algorithm to filter by (default: \"louvain\")."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 8. memory_list_facts
+    ToolDef {
+        name: "memory_list_facts",
+        description: "List extracted subject-predicate-object facts, optionally scoped to a single source memory.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "integer", "description": "Source memory ID to filter facts; omit to list facts from all memories."},
+                "limit": {"type": "integer", "description": "Maximum number of facts to return (default: 100)."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 9. memory_list_media
+    #[cfg(feature = "multimodal")]
+    ToolDef {
+        name: "memory_list_media",
+        description: "List media assets stored in the media_assets table, optionally filtered by type (image, audio, video).",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "media_type": {"type": "string", "description": "Filter by media type: \"image\", \"audio\", or \"video\". Omit for all types."},
+                "limit": {"type": "integer", "description": "Maximum number of assets to return (default: 50)."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 10. memory_process_video
+    #[cfg(feature = "multimodal")]
+    ToolDef {
+        name: "memory_process_video",
+        description: "Process a video file: extract metadata and keyframe descriptions via the configured vision provider, and create a memory record for the result.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "video_path": {"type": "string", "description": "Absolute path to the video file to process."}
+            },
+            "required": ["video_path"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+
+    // 11. memory_query_triplets
+    ToolDef {
+        name: "memory_query_triplets",
+        description: "SPARQL-like pattern query over the knowledge-graph facts table: match any combination of subject, predicate, and object (all optional, acts as wildcard when omitted).",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "subject": {"type": "string", "description": "Subject entity to match (wildcard if omitted)."},
+                "predicate": {"type": "string", "description": "Predicate/relation to match (wildcard if omitted)."},
+                "object": {"type": "string", "description": "Object value to match (wildcard if omitted)."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 12. memory_reflect
+    ToolDef {
+        name: "memory_reflect",
+        description: "Generate a reflective synthesis over a set of memories at a configurable analytical depth (surface, analytical, or meta).",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Array of memory IDs to reflect on (required, must be non-empty)."
+                },
+                "depth": {"type": "string", "description": "Reflection depth: \"surface\" (default), \"analytical\", or \"meta\"."}
+            },
+            "required": ["ids"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 13. memory_resolve_conflict
+    ToolDef {
+        name: "memory_resolve_conflict",
+        description: "Resolve a saved knowledge-graph conflict by ID using a chosen strategy, removing or retaining the conflicting edges accordingly.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "conflict_id": {"type": "integer", "description": "ID of the conflict record to resolve (required)."},
+                "strategy": {"type": "string", "description": "Resolution strategy: \"keep_newer\" (default), \"keep_higher_confidence\", \"merge\", or \"manual\"."}
+            },
+            "required": ["conflict_id"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+
+    // 14. memory_sentiment_analyze
+    ToolDef {
+        name: "memory_sentiment_analyze",
+        description: "Analyze the sentiment of a single memory's content, returning a score, label (positive/neutral/negative), confidence, and keyword signals.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "description": "ID of the memory to analyze (required)."}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // 15. memory_sentiment_timeline
+    ToolDef {
+        name: "memory_sentiment_timeline",
+        description: "Compute a chronological sentiment timeline over memories in a workspace within an optional time range.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "description": "Workspace to scan (default: \"default\")."},
+                "from": {"type": "string", "description": "ISO-8601 start timestamp (default: epoch)."},
+                "to": {"type": "string", "description": "ISO-8601 end timestamp (default: far future)."},
+                "limit": {"type": "integer", "description": "Maximum number of timeline entries to return (default: 50)."}
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    // -- reconciliation batch D --
+    ToolDef {
+        name: "memory_suggest_acquisitions",
+        description: "Analyse knowledge gaps in a workspace and suggest new memories to create.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {
+                    "type": "string",
+                    "description": "Workspace to analyse (default: \"default\")."
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of suggestions to return (default: 10)."
+                }
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // ── compression.rs ───────────────────────────────────────────────────────
+    ToolDef {
+        name: "memory_synthesis",
+        description: "Check semantic overlap between two content strings and produce a merged synthesis using the chosen strategy.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "content_a": {
+                    "type": "string",
+                    "description": "First content string to synthesise."
+                },
+                "content_b": {
+                    "type": "string",
+                    "description": "Second content string to synthesise."
+                },
+                "id_a": {
+                    "type": "integer",
+                    "description": "Optional memory ID associated with content_a (default: 0)."
+                },
+                "strategy": {
+                    "type": "string",
+                    "description": "Synthesis strategy: \"merge\" (default), \"replace\", or \"append\".",
+                    "enum": ["merge", "replace", "append"]
+                }
+            },
+            "required": ["content_a", "content_b"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // ── multimodal.rs ────────────────────────────────────────────────────────
+    #[cfg(feature = "multimodal")]
+    ToolDef {
+        name: "memory_transcribe_audio",
+        description: "Transcribe an audio file to text using the configured audio transcription provider.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "audio_path": {
+                    "type": "string",
+                    "description": "Absolute or relative path to the audio file to transcribe."
+                }
+            },
+            "required": ["audio_path"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+
+    // ── evolution.rs ─────────────────────────────────────────────────────────
+    ToolDef {
+        name: "memory_utility_score",
+        description: "Compute the Q-value utility score for a memory based on its retrieval feedback history.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "description": "Memory ID to score."
+                }
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // ── temporal.rs — scope handlers ─────────────────────────────────────────
+    ToolDef {
+        name: "scope_get",
+        description: "Return the current scope path and level for a given memory.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "memory_id": {
+                    "type": "integer",
+                    "description": "ID of the memory whose scope to retrieve."
+                }
+            },
+            "required": ["memory_id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "scope_list",
+        description: "List all distinct scope paths currently present in the database.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "scope_search",
+        description: "Search for memories whose content matches a query within a given scope, including ancestor scopes.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Substring to search for within scoped memories."
+                },
+                "scope_path": {
+                    "type": "string",
+                    "description": "Hierarchical scope path to search within (e.g. \"global/org:acme/user:alice\")."
+                }
+            },
+            "required": ["query", "scope_path"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "scope_set",
+        description: "Assign or update the hierarchical scope of a memory.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "memory_id": {
+                    "type": "integer",
+                    "description": "ID of the memory to re-scope."
+                },
+                "scope_path": {
+                    "type": "string",
+                    "description": "Target scope path (e.g. \"global/org:acme/user:alice\")."
+                }
+            },
+            "required": ["memory_id", "scope_path"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "scope_tree",
+        description: "Return a hierarchical tree of all scopes in the database.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    // ── temporal.rs — temporal graph handlers ────────────────────────────────
+    ToolDef {
+        name: "temporal_add_edge",
+        description: "Add a bi-temporal validity edge between two memories in the knowledge graph.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "from_id": {
+                    "type": "integer",
+                    "description": "Source memory ID."
+                },
+                "to_id": {
+                    "type": "integer",
+                    "description": "Target memory ID."
+                },
+                "relation": {
+                    "type": "string",
+                    "description": "Semantic label for the edge (e.g. \"works_at\")."
+                },
+                "valid_from": {
+                    "type": "string",
+                    "description": "RFC3339 timestamp marking the start of edge validity."
+                },
+                "properties": {
+                    "type": "object",
+                    "description": "Arbitrary JSON metadata to attach to the edge."
+                },
+                "confidence": {
+                    "type": "number",
+                    "description": "Edge confidence score between 0.0 and 1.0 (default: 1.0)."
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Provenance string identifying where this edge originates."
+                },
+                "scope_path": {
+                    "type": "string",
+                    "description": "Optional scope path to associate with this edge."
+                }
+            },
+            "required": ["from_id", "to_id", "relation", "valid_from"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "temporal_contradictions",
+        description: "Detect overlapping or contradictory edge pairs in the temporal knowledge graph.",
+        schema: r#"{
+            "type": "object",
+            "properties": {},
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "temporal_diff",
+        description: "Compute the set of added, removed, and changed edges between two RFC3339 timestamps in the temporal graph.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "t1": {
+                    "type": "string",
+                    "description": "Earlier RFC3339 timestamp (snapshot baseline)."
+                },
+                "t2": {
+                    "type": "string",
+                    "description": "Later RFC3339 timestamp (snapshot target)."
+                },
+                "scope_path": {
+                    "type": "string",
+                    "description": "Optional scope path to restrict the diff."
+                }
+            },
+            "required": ["t1", "t2"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "temporal_snapshot",
+        description: "Return all currently-valid temporal graph edges as of a given RFC3339 timestamp.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "timestamp": {
+                    "type": "string",
+                    "description": "RFC3339 point-in-time for the snapshot."
+                },
+                "scope_path": {
+                    "type": "string",
+                    "description": "Optional scope path to restrict the snapshot."
+                }
+            },
+            "required": ["timestamp"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+
+    ToolDef {
+        name: "temporal_timeline",
+        description: "Return the full edge history between two memory IDs, ordered chronologically.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "from_id": {
+                    "type": "integer",
+                    "description": "Source memory ID."
+                },
+                "to_id": {
+                    "type": "integer",
+                    "description": "Target memory ID."
+                },
+                "scope_path": {
+                    "type": "string",
+                    "description": "Optional scope path to restrict the timeline."
+                }
+            },
+            "required": ["from_id", "to_id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+
 ];
 
 /// Get all tool definitions as ToolDefinition structs.
@@ -3262,9 +4339,11 @@ mod tests {
             .iter()
             .filter(|t| t.tier == ToolTier::Advanced)
             .count();
+        // Ranges widened after the dispatch/registry reconciliation that
+        // advertised ~59 previously-hidden tools (registry grew to ~250).
         assert!((18..=25).contains(&essential), "essential: {}", essential);
-        assert!((40..=60).contains(&standard), "standard: {}", standard);
-        // Advanced count depends on feature flags (19 feature-gated tools are Advanced)
+        assert!((60..=130).contains(&standard), "standard: {}", standard);
+        // Advanced count depends on feature flags (feature-gated tools are Advanced)
         assert!(advanced >= 80, "advanced: {}", advanced);
         assert_eq!(essential + standard + advanced, TOOL_DEFINITIONS.len());
     }
