@@ -102,6 +102,7 @@ pub fn init_auth_tables(conn: &Connection) -> Result<()> {
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             key_hash TEXT UNIQUE NOT NULL,
+            key_salt TEXT NOT NULL DEFAULT '',
             key_prefix TEXT NOT NULL,
             name TEXT NOT NULL,
             permissions TEXT NOT NULL DEFAULT '[]',

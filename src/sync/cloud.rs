@@ -40,6 +40,11 @@ impl CloudStorage {
 
         // Generate encryption key if needed
         let encryption_key = if encrypt {
+            tracing::warn!(
+                "CloudStorage: encryption is enabled but the key is ephemeral. \
+                 Data encrypted with this key will be permanently unrecoverable \
+                 after process restart. Use a persisted key for production workloads."
+            );
             Some(generate_encryption_key()?)
         } else {
             None
@@ -250,7 +255,12 @@ pub struct CloudMetadata {
     pub etag: Option<String>,
 }
 
-/// Generate a random 256-bit encryption key
+/// Generate a random 256-bit encryption key.
+///
+/// **WARNING — ephemeral key**: this key is generated in memory and is never
+/// persisted. Any data encrypted with it becomes permanently unrecoverable
+/// after the process restarts. Callers that require durable encryption must
+/// derive or load the key from a persistent secret store before construction.
 fn generate_encryption_key() -> Result<Vec<u8>> {
     use rand::RngCore;
     let mut key = vec![0u8; 32];
@@ -258,33 +268,49 @@ fn generate_encryption_key() -> Result<Vec<u8>> {
     Ok(key)
 }
 
-/// Derive encryption key from passphrase
+/// Derive encryption key from passphrase using Argon2id.
+///
+/// `salt` must be at least 8 bytes (16 bytes recommended). The returned key
+/// is always 32 bytes.
 #[allow(dead_code)]
 pub fn derive_key_from_passphrase(passphrase: &str, salt: &[u8]) -> Result<Vec<u8>> {
-    use std::num::NonZeroU32;
-
-    // Simple PBKDF2-like derivation (in production, use proper PBKDF2 or Argon2)
-    let iterations = NonZeroU32::new(100_000).unwrap();
+    use argon2::{Algorithm, Argon2, Params, Version};
+    let params = Params::new(65536, 3, 1, Some(32))
+        .map_err(|e| EngramError::Sync(format!("argon2 params error: {e}")))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut key = vec![0u8; 32];
-
-    // Simplified key derivation (replace with ring::pbkdf2 in production)
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    use std::hash::{Hash, Hasher};
-    for _ in 0..iterations.get() {
-        passphrase.hash(&mut hasher);
-        salt.hash(&mut hasher);
-    }
-    let hash = hasher.finish();
-    key[..8].copy_from_slice(&hash.to_le_bytes());
-
-    // Fill rest of key with more hashing rounds
-    for i in 1..4 {
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        key[..i * 8].hash(&mut h);
-        passphrase.hash(&mut h);
-        let hash = h.finish();
-        key[i * 8..(i + 1) * 8].copy_from_slice(&hash.to_le_bytes());
-    }
-
+    argon2
+        .hash_password_into(passphrase.as_bytes(), salt, &mut key)
+        .map_err(|e| EngramError::Sync(format!("key derivation failed: {e}")))?;
     Ok(key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_derive_key_deterministic() {
+        let passphrase = "hunter2";
+        let salt = b"abcdefghijklmnop";
+        let key1 = derive_key_from_passphrase(passphrase, salt).unwrap();
+        let key2 = derive_key_from_passphrase(passphrase, salt).unwrap();
+        assert_eq!(key1, key2, "same passphrase+salt must yield same key");
+    }
+
+    #[test]
+    fn test_derive_key_different_salt() {
+        let passphrase = "hunter2";
+        let salt1 = b"abcdefghijklmnop";
+        let salt2 = b"pqrstuvwxyz12345";
+        let key1 = derive_key_from_passphrase(passphrase, salt1).unwrap();
+        let key2 = derive_key_from_passphrase(passphrase, salt2).unwrap();
+        assert_ne!(key1, key2, "different salts must yield different keys");
+    }
+
+    #[test]
+    fn test_derive_key_length() {
+        let key = derive_key_from_passphrase("secret", b"saltysalt12345678").unwrap();
+        assert_eq!(key.len(), 32, "key must be 32 bytes");
+    }
 }

@@ -6,8 +6,12 @@
 //! Also provides a `GET /v1/events` SSE endpoint for real-time event streaming.
 
 use std::convert::Infallible;
+use std::env;
 use std::sync::Arc;
 
+use subtle::ConstantTimeEq;
+
+use axum::http::HeaderValue;
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
@@ -294,10 +298,58 @@ fn check_bearer(headers: &HeaderMap, expected: &str) -> bool {
         .and_then(|v| v.to_str().ok())
         .map(|v| {
             v.strip_prefix("Bearer ")
-                .map(|token| token == expected)
+                .map(|token| bool::from(token.as_bytes().ct_eq(expected.as_bytes())))
                 .unwrap_or(false)
         })
         .unwrap_or(false)
+}
+
+// ---------------------------------------------------------------------------
+// CORS helpers
+// ---------------------------------------------------------------------------
+
+/// Return `true` if `origin` is permitted according to `ENGRAM_CORS_ORIGINS`.
+///
+/// - Unset → only `http://localhost` and `http://127.0.0.1` prefixes allowed.
+/// - `*`   → all origins allowed (opt-in).
+/// - Comma-separated list → exact match required.
+#[allow(dead_code)]
+pub(crate) fn cors_origin_allowed(origin: &str) -> bool {
+    match env::var("ENGRAM_CORS_ORIGINS") {
+        Err(_) => origin.starts_with("http://localhost") || origin.starts_with("http://127.0.0.1"),
+        Ok(val) if val.trim() == "*" => true,
+        Ok(val) => val.split(',').any(|s| s.trim() == origin),
+    }
+}
+
+/// Build a `CorsLayer` honouring `ENGRAM_CORS_ORIGINS`.
+fn build_cors_layer() -> CorsLayer {
+    match env::var("ENGRAM_CORS_ORIGINS") {
+        Ok(val) if val.trim() == "*" => CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any),
+        Ok(val) => {
+            let origins: Vec<HeaderValue> = val
+                .split(',')
+                .filter_map(|s| s.trim().parse::<HeaderValue>().ok())
+                .collect();
+            CorsLayer::new()
+                .allow_origin(origins)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        }
+        Err(_) => {
+            let origins: Vec<HeaderValue> = ["http://localhost", "http://127.0.0.1"]
+                .iter()
+                .filter_map(|s| s.parse::<HeaderValue>().ok())
+                .collect();
+            CorsLayer::new()
+                .allow_origin(origins)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -322,10 +374,7 @@ pub async fn serve_http(
         realtime,
     };
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors = build_cors_layer();
 
     let app = Router::new()
         .route("/mcp", post(handle_mcp))
@@ -652,5 +701,53 @@ mod tests {
     #[test]
     fn test_retry_constant_is_3000ms() {
         assert_eq!(SSE_RETRY_MS, 3000);
+    }
+
+    // ---- H2: constant-time token comparison --------------------------------
+
+    #[test]
+    fn test_check_bearer_constant_time_wrong_token_rejected() {
+        // Token differing only in the last byte must be rejected.
+        let secret = "abcdefghijklmnop";
+        let almost = "abcdefghijklmnox";
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", format!("Bearer {almost}").parse().unwrap());
+        assert!(!check_bearer(&headers, secret));
+    }
+
+    // ---- H3: configurable CORS ---------------------------------------------
+
+    #[test]
+    fn test_cors_origins_default_allows_localhost() {
+        std::env::remove_var("ENGRAM_CORS_ORIGINS");
+        assert!(cors_origin_allowed("http://localhost:3000"));
+    }
+
+    #[test]
+    fn test_cors_origins_default_rejects_external() {
+        std::env::remove_var("ENGRAM_CORS_ORIGINS");
+        assert!(!cors_origin_allowed("https://evil.example.com"));
+    }
+
+    /// Env-var-sensitive CORS tests are grouped in one test to avoid races
+    /// between parallel test threads mutating the same env var.
+    #[test]
+    fn test_cors_origins_env_var_cases() {
+        // Case 1: * allows any origin
+        std::env::set_var("ENGRAM_CORS_ORIGINS", "*");
+        assert!(cors_origin_allowed("https://anything.example.com"));
+
+        // Case 2: explicit list allows listed origin
+        std::env::set_var(
+            "ENGRAM_CORS_ORIGINS",
+            "https://app.example.com,https://other.example.com",
+        );
+        assert!(cors_origin_allowed("https://app.example.com"));
+
+        // Case 3: explicit list rejects unlisted origin
+        std::env::set_var("ENGRAM_CORS_ORIGINS", "https://app.example.com");
+        assert!(!cors_origin_allowed("https://other.example.com"));
+
+        std::env::remove_var("ENGRAM_CORS_ORIGINS");
     }
 }

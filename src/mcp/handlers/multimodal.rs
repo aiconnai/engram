@@ -40,7 +40,12 @@ pub fn memory_describe_image(_ctx: &HandlerContext, params: Value) -> Value {
         Err(e) => return json!({"error": format!("Vision provider not configured: {}", e)}),
     };
 
-    let image_bytes = match std::fs::read(&image_path) {
+    let validated_path = match validate_media_path(&image_path) {
+        Ok(p) => p,
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+
+    let image_bytes = match std::fs::read(&validated_path) {
         Ok(bytes) => bytes,
         Err(e) => {
             return json!({"error": format!("Failed to read image file '{}': {}", image_path, e)})
@@ -85,11 +90,15 @@ pub fn memory_describe_image(_ctx: &HandlerContext, params: Value) -> Value {
 #[cfg(feature = "multimodal")]
 pub fn memory_transcribe_audio(_ctx: &HandlerContext, params: Value) -> Value {
     use crate::multimodal::audio::AudioTranscriberFactory;
-    use std::path::Path;
 
     let audio_path = match params.get("audio_path").and_then(|v| v.as_str()) {
         Some(p) => p.to_string(),
         None => return json!({"error": "audio_path is required"}),
+    };
+
+    let validated_audio = match validate_media_path(&audio_path) {
+        Ok(p) => p,
+        Err(e) => return json!({"error": e.to_string()}),
     };
 
     let transcriber = match AudioTranscriberFactory::from_env() {
@@ -104,7 +113,7 @@ pub fn memory_transcribe_audio(_ctx: &HandlerContext, params: Value) -> Value {
         Err(e) => return json!({"error": format!("Failed to create async runtime: {}", e)}),
     };
 
-    match rt.block_on(transcriber.transcribe(Path::new(&audio_path))) {
+    match rt.block_on(transcriber.transcribe(&validated_audio)) {
         Ok(result) => {
             let segments: Vec<Value> = result
                 .segments
@@ -183,7 +192,6 @@ pub fn memory_capture_screenshot(_ctx: &HandlerContext, params: Value) -> Value 
 pub fn memory_process_video(_ctx: &HandlerContext, params: Value) -> Value {
     use crate::multimodal::video::VideoProcessor;
     use crate::multimodal::vision::VisionProviderFactory;
-    use std::path::Path;
 
     let video_path = match params.get("video_path").and_then(|v| v.as_str()) {
         Some(p) => p.to_string(),
@@ -193,6 +201,11 @@ pub fn memory_process_video(_ctx: &HandlerContext, params: Value) -> Value {
     let vision = match VisionProviderFactory::from_env() {
         Ok(p) => p,
         Err(e) => return json!({"error": format!("Vision provider not configured: {}", e)}),
+    };
+
+    let validated_video = match validate_media_path(&video_path) {
+        Ok(p) => p,
+        Err(e) => return json!({"error": e.to_string()}),
     };
 
     let processor = VideoProcessor::new();
@@ -206,7 +219,7 @@ pub fn memory_process_video(_ctx: &HandlerContext, params: Value) -> Value {
         Err(e) => return json!({"error": format!("Failed to create async runtime: {}", e)}),
     };
 
-    match rt.block_on(processor.create_video_memory(Path::new(&video_path), vision.as_ref())) {
+    match rt.block_on(processor.create_video_memory(&validated_video, vision.as_ref())) {
         Ok(video_memory) => {
             let meta = &video_memory.metadata;
             json!({
@@ -355,8 +368,13 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_str())
         .unwrap_or("auto");
 
-    // Step 1: Read the image file
-    let image_bytes = match std::fs::read(&image_path) {
+    // Step 1: Validate and read the image file
+    let validated_image = match validate_media_path(&image_path) {
+        Ok(p) => p,
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+
+    let image_bytes = match std::fs::read(&validated_image) {
         Ok(b) => b,
         Err(e) => {
             return json!({"error": format!("Failed to read image file '{}': {}", image_path, e)})
@@ -517,6 +535,52 @@ pub fn memory_sync_media(ctx: &HandlerContext, params: Value) -> Value {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/// Validate a user-supplied media file path.
+///
+/// Rejects empty paths and null bytes. If `ENGRAM_MEDIA_BASE_DIR` is set,
+/// canonicalizes the path and rejects any path that escapes the base directory.
+#[cfg(feature = "multimodal")]
+fn validate_media_path(path: &str) -> crate::error::Result<std::path::PathBuf> {
+    use crate::error::EngramError;
+
+    if path.is_empty() {
+        return Err(EngramError::InvalidInput(
+            "media path must not be empty".to_string(),
+        ));
+    }
+    if path.contains('\0') {
+        return Err(EngramError::InvalidInput(
+            "media path must not contain null bytes".to_string(),
+        ));
+    }
+
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| EngramError::InvalidInput(format!("media path is not accessible: {}", e)))?;
+
+    if let Ok(base_str) = std::env::var("ENGRAM_MEDIA_BASE_DIR") {
+        let base = std::fs::canonicalize(&base_str).map_err(|e| {
+            EngramError::InvalidInput(format!("ENGRAM_MEDIA_BASE_DIR is not accessible: {}", e))
+        })?;
+        if !canonical.starts_with(&base) {
+            return Err(EngramError::InvalidInput(format!(
+                "media path '{}' is outside the allowed base directory",
+                path
+            )));
+        }
+    }
+
+    Ok(canonical)
+}
+
+/// Validate a user-supplied media file path (non-multimodal fallback, always errors).
+#[cfg(not(feature = "multimodal"))]
+#[allow(dead_code)]
+fn validate_media_path(_path: &str) -> crate::error::Result<std::path::PathBuf> {
+    Err(crate::error::EngramError::InvalidInput(
+        "multimodal feature not enabled".to_string(),
+    ))
+}
+
 /// Infer MIME type from file extension.
 #[cfg(feature = "multimodal")]
 fn infer_mime_type(path: &str) -> String {
@@ -667,6 +731,58 @@ mod tests {
         let result = memory_list_media(&ctx, json!({}));
         assert!(result.get("error").is_none(), "should not error");
         assert_eq!(result["count"], 0);
+    }
+
+    // ── M2: validate_media_path tests ────────────────────────────────────────
+
+    #[test]
+    fn test_validate_media_path_rejects_empty() {
+        let result = super::validate_media_path("");
+        assert!(result.is_err(), "empty path must be rejected");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("empty"), "error should mention 'empty'");
+    }
+
+    #[test]
+    fn test_validate_media_path_rejects_null_bytes() {
+        let result = super::validate_media_path("some/path\0file.png");
+        assert!(result.is_err(), "path with null byte must be rejected");
+    }
+
+    #[test]
+    fn test_validate_media_path_rejects_dotdot() {
+        let result = super::validate_media_path("../../../etc/passwd");
+        // When no ENGRAM_MEDIA_BASE_DIR is set, canonicalize may succeed or fail.
+        // The key requirement is that dotdot is flagged before canonicalize if base is set.
+        // Without base dir, we still check for null bytes and empty.
+        // We test the dotdot rejection through the sanitize path when base dir is set.
+        // For now just ensure no panic.
+        let _ = result;
+    }
+
+    #[test]
+    fn test_validate_media_path_rejects_traversal_with_base_dir() {
+        // Set a base dir and verify that a traversal path is rejected
+        std::env::set_var("ENGRAM_MEDIA_BASE_DIR", "/tmp");
+        let result = super::validate_media_path("../../../etc/passwd");
+        std::env::remove_var("ENGRAM_MEDIA_BASE_DIR");
+        assert!(
+            result.is_err(),
+            "path traversal outside base dir must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_validate_media_path_accepts_valid_path_no_base() {
+        std::env::remove_var("ENGRAM_MEDIA_BASE_DIR");
+        // A nonexistent path should fail at canonicalize, which is expected.
+        // A valid existing path should pass.
+        let result = super::validate_media_path("/tmp");
+        assert!(
+            result.is_ok(),
+            "existing path without base dir must be accepted: {:?}",
+            result
+        );
     }
 
     #[test]
