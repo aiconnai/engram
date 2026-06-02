@@ -50,16 +50,10 @@ pub fn validate_base_url(url: &str) -> Result<()> {
 
     // Extract the host portion for IP/hostname checks.
     // Strip scheme prefix (http:// or https://).
-    let after_scheme = url
-        .find("://")
-        .map(|i| &url[i + 3..])
-        .unwrap_or(url);
+    let after_scheme = url.find("://").map(|i| &url[i + 3..]).unwrap_or(url);
 
     // Take only up to the first '/' or end of string (removes path).
-    let host_port = after_scheme
-        .split('/')
-        .next()
-        .unwrap_or(after_scheme);
+    let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
 
     // Strip port if present (handle [::1]:8080 too).
     let host = if host_port.starts_with('[') {
@@ -111,8 +105,7 @@ impl LangfuseConfig {
         let base_url = std::env::var("LANGFUSE_BASE_URL")
             .unwrap_or_else(|_| "https://cloud.langfuse.com".to_string());
 
-        validate_base_url(&base_url)
-            .expect("LANGFUSE_BASE_URL failed security validation");
+        validate_base_url(&base_url).expect("LANGFUSE_BASE_URL failed security validation");
 
         Some(Self {
             public_key,
@@ -573,7 +566,10 @@ mod tests {
     #[test]
     fn test_validate_base_url_accepts_https_public() {
         let result = validate_base_url("https://cloud.langfuse.com");
-        assert!(result.is_ok(), "public https URL must be accepted, got: {result:?}");
+        assert!(
+            result.is_ok(),
+            "public https URL must be accepted, got: {result:?}"
+        );
     }
 
     #[test]

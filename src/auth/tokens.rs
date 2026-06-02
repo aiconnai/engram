@@ -127,7 +127,16 @@ impl<'a> ApiKeyManager<'a> {
             "#,
         )?;
 
-        type Row = (String, String, String, Option<String>, Option<String>, bool, String, String);
+        type Row = (
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            bool,
+            String,
+            String,
+        );
         let rows: Vec<Row> = stmt
             .query_map(params![key_prefix], |row| {
                 Ok((
@@ -149,8 +158,16 @@ impl<'a> ApiKeyManager<'a> {
                 hash_key_with_salt(raw_key, salt) == *stored_hash
             });
 
-        if let Some((key_id, user_id, permissions_json, namespace, expires_at_str, user_active, _, _)) =
-            result
+        if let Some((
+            key_id,
+            user_id,
+            permissions_json,
+            namespace,
+            expires_at_str,
+            user_active,
+            _,
+            _,
+        )) = result
         {
             if !user_active {
                 return Ok(None);

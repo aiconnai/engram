@@ -1892,6 +1892,10 @@ mod tests {
         let valid = tmp.join("my-export").to_string_lossy().to_string();
         let result = validate_export_dir(&valid);
         std::env::remove_var("ENGRAM_EXPORT_BASE_DIR");
-        assert!(result.is_ok(), "expected ok within base dir, got {:?}", result);
+        assert!(
+            result.is_ok(),
+            "expected ok within base dir, got {:?}",
+            result
+        );
     }
 }

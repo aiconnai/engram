@@ -477,8 +477,7 @@ mod tests {
         let pattern = TripletPattern::any()
             .with_subject("Alice")
             .with_object("Google");
-        let facts =
-            TripletMatcher::match_pattern(&conn, &pattern).expect("match partial filters");
+        let facts = TripletMatcher::match_pattern(&conn, &pattern).expect("match partial filters");
         assert_eq!(facts.len(), 1);
         assert_eq!(facts[0].predicate, "works_at");
     }
@@ -488,8 +487,7 @@ mod tests {
         let conn = setup();
         seed_graph(&conn);
         let pattern = TripletPattern::any();
-        let facts =
-            TripletMatcher::match_pattern(&conn, &pattern).expect("match no filters");
+        let facts = TripletMatcher::match_pattern(&conn, &pattern).expect("match no filters");
         assert_eq!(facts.len(), 5, "all facts returned when no filters");
     }
 
