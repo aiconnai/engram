@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use subtle::ConstantTimeEq;
 
+use axum::http::HeaderValue;
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
@@ -26,7 +27,6 @@ use serde_json::json;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 use tower_http::cors::{Any, CorsLayer};
-use axum::http::HeaderValue;
 
 use super::protocol::{McpHandler, McpRequest, McpResponse};
 use crate::realtime::{EventType, RealtimeEvent, RealtimeManager};
@@ -313,11 +313,10 @@ fn check_bearer(headers: &HeaderMap, expected: &str) -> bool {
 /// - Unset → only `http://localhost` and `http://127.0.0.1` prefixes allowed.
 /// - `*`   → all origins allowed (opt-in).
 /// - Comma-separated list → exact match required.
+#[allow(dead_code)]
 pub(crate) fn cors_origin_allowed(origin: &str) -> bool {
     match env::var("ENGRAM_CORS_ORIGINS") {
-        Err(_) => {
-            origin.starts_with("http://localhost") || origin.starts_with("http://127.0.0.1")
-        }
+        Err(_) => origin.starts_with("http://localhost") || origin.starts_with("http://127.0.0.1"),
         Ok(val) if val.trim() == "*" => true,
         Ok(val) => val.split(',').any(|s| s.trim() == origin),
     }
@@ -712,10 +711,7 @@ mod tests {
         let secret = "abcdefghijklmnop";
         let almost = "abcdefghijklmnox";
         let mut headers = HeaderMap::new();
-        headers.insert(
-            "authorization",
-            format!("Bearer {almost}").parse().unwrap(),
-        );
+        headers.insert("authorization", format!("Bearer {almost}").parse().unwrap());
         assert!(!check_bearer(&headers, secret));
     }
 

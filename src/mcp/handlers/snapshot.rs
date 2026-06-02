@@ -50,11 +50,26 @@ pub(crate) fn validate_snapshot_path(path: &str) -> Result<std::path::PathBuf, S
 
     let p = std::path::Path::new(path);
 
+    // Reject paths with any `..` component before attempting to resolve them.
+    // This catches traversal attempts even when the intermediate directories don't exist.
+    for component in p.components() {
+        if component == std::path::Component::ParentDir {
+            return Err(format!(
+                "path '{}' is outside the allowed snapshots directory",
+                path
+            ));
+        }
+    }
+
     // Canonicalize: use the path itself if it exists, otherwise the parent.
     let canonical = if p.exists() {
         std::fs::canonicalize(p).map_err(|e| format!("cannot resolve path: {}", e))?
     } else {
-        let parent = p.parent().unwrap_or_else(|| std::path::Path::new("."));
+        // parent() on a bare filename (e.g. "foo.egm") returns Some("") — treat as ".".
+        let parent = p
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| std::path::Path::new("."));
         let canon_parent = std::fs::canonicalize(parent)
             .map_err(|e| format!("cannot resolve parent directory: {}", e))?;
         canon_parent.join(p.file_name().ok_or("path has no file name")?)
@@ -318,14 +333,22 @@ pub fn snapshot_inspect(_ctx: &HandlerContext, params: Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::validate_snapshot_path;
+    use std::sync::Mutex;
+
+    // Serialize env-var-mutating tests to avoid races between parallel test threads.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_validate_snapshot_path_rejects_traversal_with_base_dir() {
+        let _g = ENV_LOCK.lock().unwrap();
         let tmp = std::env::temp_dir();
         std::env::set_var("ENGRAM_SNAPSHOTS_DIR", tmp.to_str().unwrap());
         let result = validate_snapshot_path("../../../etc/passwd");
         std::env::remove_var("ENGRAM_SNAPSHOTS_DIR");
-        assert!(result.is_err(), "expected rejection for path traversal outside base dir");
+        assert!(
+            result.is_err(),
+            "expected rejection for path traversal outside base dir"
+        );
         let msg = result.unwrap_err();
         assert!(msg.contains("outside"), "unexpected error message: {}", msg);
     }
@@ -346,6 +369,7 @@ mod tests {
 
     #[test]
     fn test_validate_snapshot_path_accepts_valid_relative() {
+        let _g = ENV_LOCK.lock().unwrap();
         std::env::remove_var("ENGRAM_SNAPSHOTS_DIR");
         let result = validate_snapshot_path("my_snapshot.egm");
         assert!(result.is_ok(), "expected ok, got {:?}", result);
@@ -353,6 +377,7 @@ mod tests {
 
     #[test]
     fn test_validate_snapshot_path_enforces_base_dir_absolute() {
+        let _g = ENV_LOCK.lock().unwrap();
         let tmp = std::env::temp_dir();
         std::env::set_var("ENGRAM_SNAPSHOTS_DIR", tmp.to_str().unwrap());
         let result = validate_snapshot_path("/etc/passwd");
@@ -362,11 +387,16 @@ mod tests {
 
     #[test]
     fn test_validate_snapshot_path_allows_within_base_dir() {
+        let _g = ENV_LOCK.lock().unwrap();
         let tmp = std::env::temp_dir();
         std::env::set_var("ENGRAM_SNAPSHOTS_DIR", tmp.to_str().unwrap());
         let valid = tmp.join("test.egm").to_string_lossy().to_string();
         let result = validate_snapshot_path(&valid);
         std::env::remove_var("ENGRAM_SNAPSHOTS_DIR");
-        assert!(result.is_ok(), "expected ok for path within base dir, got {:?}", result);
+        assert!(
+            result.is_ok(),
+            "expected ok for path within base dir, got {:?}",
+            result
+        );
     }
 }
