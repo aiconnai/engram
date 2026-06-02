@@ -17,6 +17,7 @@ use super::types::{LoadResult, LoadStrategy, SnapshotInfo, SnapshotManifest};
 ///
 /// Returns `Ok(name)` for safe names, or an `Err` if the name contains
 /// `..` components or null bytes that could be used for directory traversal.
+#[allow(dead_code)]
 pub(crate) fn sanitize_zip_entry(name: &str) -> Result<&str> {
     if name.is_empty() {
         return Err(EngramError::InvalidInput(
@@ -237,7 +238,6 @@ impl SnapshotLoader {
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
-
 
     /// Read and parse the manifest from an open archive
     fn read_manifest(archive: &mut zip::ZipArchive<std::fs::File>) -> Result<SnapshotManifest> {

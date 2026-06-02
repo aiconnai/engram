@@ -320,7 +320,7 @@ mod tests {
         // The fix: for client errors, suppress the body.
         let status_code = 401u16;
         let body = "Authorization header contains: Bearer sk-secret-key-12345";
-        let is_client_error = status_code >= 400 && status_code < 500;
+        let is_client_error = (400..500).contains(&status_code);
 
         let err_msg = if is_client_error {
             format!("Cohere API client error {status_code}")
@@ -343,7 +343,7 @@ mod tests {
     fn test_5xx_error_message_contains_body() {
         let status_code = 503u16;
         let body = "Service Unavailable";
-        let is_client_error = status_code >= 400 && status_code < 500;
+        let is_client_error = (400..500).contains(&status_code);
 
         let err_msg = if is_client_error {
             format!("Cohere API client error {status_code}")

@@ -90,7 +90,6 @@ pub fn memory_describe_image(_ctx: &HandlerContext, params: Value) -> Value {
 #[cfg(feature = "multimodal")]
 pub fn memory_transcribe_audio(_ctx: &HandlerContext, params: Value) -> Value {
     use crate::multimodal::audio::AudioTranscriberFactory;
-    use std::path::Path;
 
     let audio_path = match params.get("audio_path").and_then(|v| v.as_str()) {
         Some(p) => p.to_string(),
@@ -193,7 +192,6 @@ pub fn memory_capture_screenshot(_ctx: &HandlerContext, params: Value) -> Value 
 pub fn memory_process_video(_ctx: &HandlerContext, params: Value) -> Value {
     use crate::multimodal::video::VideoProcessor;
     use crate::multimodal::vision::VisionProviderFactory;
-    use std::path::Path;
 
     let video_path = match params.get("video_path").and_then(|v| v.as_str()) {
         Some(p) => p.to_string(),
@@ -544,7 +542,6 @@ pub fn memory_sync_media(ctx: &HandlerContext, params: Value) -> Value {
 #[cfg(feature = "multimodal")]
 fn validate_media_path(path: &str) -> crate::error::Result<std::path::PathBuf> {
     use crate::error::EngramError;
-    use std::path::PathBuf;
 
     if path.is_empty() {
         return Err(EngramError::InvalidInput(
@@ -557,9 +554,8 @@ fn validate_media_path(path: &str) -> crate::error::Result<std::path::PathBuf> {
         ));
     }
 
-    let canonical = std::fs::canonicalize(path).map_err(|e| {
-        EngramError::InvalidInput(format!("media path is not accessible: {}", e))
-    })?;
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| EngramError::InvalidInput(format!("media path is not accessible: {}", e)))?;
 
     if let Ok(base_str) = std::env::var("ENGRAM_MEDIA_BASE_DIR") {
         let base = std::fs::canonicalize(&base_str).map_err(|e| {
@@ -770,7 +766,10 @@ mod tests {
         std::env::set_var("ENGRAM_MEDIA_BASE_DIR", "/tmp");
         let result = super::validate_media_path("../../../etc/passwd");
         std::env::remove_var("ENGRAM_MEDIA_BASE_DIR");
-        assert!(result.is_err(), "path traversal outside base dir must be rejected");
+        assert!(
+            result.is_err(),
+            "path traversal outside base dir must be rejected"
+        );
     }
 
     #[test]
@@ -779,7 +778,11 @@ mod tests {
         // A nonexistent path should fail at canonicalize, which is expected.
         // A valid existing path should pass.
         let result = super::validate_media_path("/tmp");
-        assert!(result.is_ok(), "existing path without base dir must be accepted: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "existing path without base dir must be accepted: {:?}",
+            result
+        );
     }
 
     #[test]
