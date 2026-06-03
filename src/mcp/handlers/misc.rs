@@ -10,6 +10,7 @@
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 
 // ── Tag Utilities ─────────────────────────────────────────────────────────────
 
@@ -346,6 +347,29 @@ pub fn memory_auto_tag(ctx: &HandlerContext, params: Value) -> Value {
         .with_transaction(|conn| update_memory(conn, id, &update_input))
     {
         Ok(updated_memory) => {
+            ctx.storage
+                .with_connection(|conn| {
+                    let op_id = uuid::Uuid::new_v4().to_string();
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &op_id,
+                            event_type:   "auto_tag",
+                            memory_id:    Some(id),
+                            version_id:   None,
+                            triggered_by: "memory_auto_tag",
+                            agent_id:     None,
+                            workspace:    None,
+                            params:       json!({"apply": true, "merge": merge}),
+                            outcome:      json!({"applied_tags": &suggested_tags}),
+                            status:       "completed",
+                            dry_run:      false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                })
+                .ok();
+
             json!({
                 "memory_id": id,
                 "suggestions": suggestions.suggestions,

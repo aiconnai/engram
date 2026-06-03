@@ -245,6 +245,24 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
                 return Ok(json!({"error": "Memory not found"}));
             }
 
+            let operation_id = uuid::Uuid::new_v4().to_string();
+            emit_best_effort(
+                conn,
+                &EnrichmentEvent {
+                    operation_id: &operation_id,
+                    event_type:   "lifecycle_transition",
+                    memory_id:    Some(id),
+                    version_id:   None,
+                    triggered_by: "memory_set_lifecycle",
+                    agent_id:     None,
+                    workspace:    None,
+                    params:       json!({"state": state}),
+                    outcome:      json!({"new_state": state}),
+                    status:       "completed",
+                    dry_run:      false,
+                },
+            );
+
             Ok(json!({"id": id, "lifecycle_state": state, "updated": true}))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
@@ -390,6 +408,27 @@ pub fn retention_policy_apply(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_transaction(|conn| {
             let affected = apply_retention_policies(conn)?;
+
+            if affected > 0 {
+                let operation_id = uuid::Uuid::new_v4().to_string();
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &operation_id,
+                        event_type:   "lifecycle_transition",
+                        memory_id:    None,
+                        version_id:   None,
+                        triggered_by: "retention_policy_apply",
+                        agent_id:     None,
+                        workspace:    None,
+                        params:       json!({}),
+                        outcome:      json!({"memories_affected": affected}),
+                        status:       "completed",
+                        dry_run:      false,
+                    },
+                );
+            }
+
             Ok(json!({"applied": true, "memories_affected": affected}))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))

@@ -9,6 +9,7 @@
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -77,12 +78,35 @@ pub fn memory_extract_facts(ctx: &HandlerContext, params: Value) -> Value {
                 }
             }
 
-            Ok(json!({
+            let facts_stored = stored.len();
+            let result = json!({
                 "memory_id": memory_id,
                 "facts_extracted": extracted.len(),
-                "facts_stored": stored.len(),
+                "facts_stored": facts_stored,
                 "facts": stored
-            }))
+            });
+
+            if facts_stored > 0 {
+                let op_id = uuid::Uuid::new_v4().to_string();
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &op_id,
+                        event_type:   "fact_ingest",
+                        memory_id:    Some(memory_id),
+                        version_id:   None,
+                        triggered_by: "memory_extract_facts",
+                        agent_id:     None,
+                        workspace:    None,
+                        params:       json!({}),
+                        outcome:      json!({"facts_stored": facts_stored}),
+                        status:       "completed",
+                        dry_run:      false,
+                    },
+                );
+            }
+
+            Ok(result)
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }

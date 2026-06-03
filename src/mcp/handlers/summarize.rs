@@ -279,6 +279,7 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
 
             let mut archived = 0;
             let mut errors: Vec<String> = Vec::new();
+            let operation_id = uuid::Uuid::new_v4().to_string();
 
             for memory in candidates {
                 let summary_text = if memory.content.len() > 200 {
@@ -314,7 +315,25 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
                             "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ? AND valid_to IS NULL",
                             params![memory.id],
                         ) {
-                            Ok(_) => archived += 1,
+                            Ok(_) => {
+                                archived += 1;
+                                emit_best_effort(
+                                    conn,
+                                    &EnrichmentEvent {
+                                        operation_id: &operation_id,
+                                        event_type:   "compression",
+                                        memory_id:    Some(memory.id),
+                                        version_id:   None,
+                                        triggered_by: "memory_archive_old",
+                                        agent_id:     None,
+                                        workspace:    Some(memory.workspace.as_str()),
+                                        params:       json!({}),
+                                        outcome:      json!({"new_state": "archived"}),
+                                        status:       "completed",
+                                        dry_run:      false,
+                                    },
+                                );
+                            }
                             Err(e) => errors.push(format!(
                                 "Memory {}: summary created but failed to mark archived: {}",
                                 memory.id, e
