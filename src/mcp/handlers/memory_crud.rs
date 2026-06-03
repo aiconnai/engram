@@ -1056,6 +1056,15 @@ pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
         .map(|f| f as f32)
         .or(Some(0.8));
 
+    let scope = match params
+        .get("scope")
+        .and_then(|v| v.as_str())
+        .unwrap_or("global")
+    {
+        "global" => MemoryScope::Global,
+        other => return json!({"error": format!("unsupported scope '{}'; use 'global'", other)}),
+    };
+
     let mut metadata: HashMap<String, Value> = HashMap::new();
     if let Some(ref src) = source {
         metadata.insert("source".to_string(), json!(src));
@@ -1071,7 +1080,7 @@ pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
         tags,
         metadata,
         importance,
-        scope: MemoryScope::Global,
+        scope,
         workspace,
         tier: MemoryTier::Permanent,
         defer_embedding: false,
@@ -1085,17 +1094,19 @@ pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
         media_url: None,
     };
 
-    let result = ctx.storage.with_transaction(|conn| {
-        let memory = create_memory(conn, &input)?;
-        let mut fuzzy = ctx.fuzzy_engine.lock();
-        fuzzy.add_to_vocabulary(&memory.content);
-        Ok(memory)
-    });
+    // Run the DB insert inside a transaction; fuzzy index update happens after commit.
+    let result = ctx
+        .storage
+        .with_transaction(|conn| create_memory(conn, &input));
 
     match result {
         Ok(memory) => {
             ctx.search_cache
                 .invalidate_for_workspace(ws_str.as_deref());
+            {
+                let mut fuzzy = ctx.fuzzy_engine.lock();
+                fuzzy.add_to_vocabulary(&memory.content);
+            }
             if let Some(ref manager) = ctx.realtime {
                 manager.broadcast(RealtimeEvent::memory_created(
                     memory.id,
@@ -1108,9 +1119,12 @@ pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
     }
 }
 
-/// Batch variant of `memory_ingest_fact` — inserts all facts in a single transaction.
+/// Batch variant of `memory_ingest_fact` — inserts all facts atomically in a single transaction.
+///
+/// If any item is invalid (missing `fact`) or any insert fails, the entire batch is rolled back.
 pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::storage::create_memory_batch;
+    use crate::storage::queries::create_memory;
+    use std::collections::HashSet;
     use std::collections::HashMap;
 
     let facts = match params.get("facts").and_then(|v| v.as_array()) {
@@ -1128,12 +1142,28 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or("default")
         .to_string();
 
-    let mut inputs = Vec::with_capacity(facts.len());
+    let default_scope = match params
+        .get("scope")
+        .and_then(|v| v.as_str())
+        .unwrap_or("global")
+    {
+        "global" => MemoryScope::Global,
+        other => {
+            return json!({"error": format!("unsupported scope '{}'; use 'global'", other)})
+        }
+    };
 
-    for item in &facts {
+    // Validate all items up-front before touching the DB.
+    let mut inputs: Vec<(CreateMemoryInput, String)> = Vec::with_capacity(facts.len());
+    for (idx, item) in facts.iter().enumerate() {
         let fact = match item.get("fact").and_then(|v| v.as_str()) {
             Some(f) => f.to_string(),
-            None => continue,
+            None => {
+                return json!({"error": format!(
+                    "item at index {} is missing required field 'fact'",
+                    idx
+                )})
+            }
         };
 
         let source = item
@@ -1144,12 +1174,11 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
             .get("session_id")
             .and_then(|v| v.as_str())
             .map(String::from);
-        let workspace = Some(
-            item.get("workspace")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&default_workspace)
-                .to_string(),
-        );
+        let workspace = item
+            .get("workspace")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&default_workspace)
+            .to_string();
         let tags: Vec<String> = item
             .get("tags")
             .and_then(|v| v.as_array())
@@ -1173,14 +1202,14 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
             metadata.insert("session_id".to_string(), json!(sid));
         }
 
-        inputs.push(CreateMemoryInput {
+        let input = CreateMemoryInput {
             content: fact,
             memory_type: MemoryType::Fact,
             tags,
             metadata,
             importance,
-            scope: MemoryScope::Global,
-            workspace,
+            scope: default_scope.clone(),
+            workspace: Some(workspace.clone()),
             tier: MemoryTier::Permanent,
             defer_embedding: false,
             ttl_seconds: None,
@@ -1191,28 +1220,38 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
             trigger_pattern: None,
             summary_of_id: None,
             media_url: None,
-        });
+        };
+        inputs.push((input, workspace));
     }
 
-    if inputs.is_empty() {
-        return json!({"error": "No valid fact items provided"});
-    }
-
-    let result = ctx
-        .storage
-        .with_transaction(|conn| create_memory_batch(conn, &inputs));
+    // All inputs are valid — run a single atomic transaction.
+    let result = ctx.storage.with_transaction(|conn| {
+        let mut created = Vec::with_capacity(inputs.len());
+        for (input, _ws) in &inputs {
+            let memory = create_memory(conn, input)?;
+            created.push(memory);
+        }
+        Ok(created)
+    });
 
     match result {
-        Ok(batch) => {
-            ctx.search_cache
-                .invalidate_for_workspace(Some(default_workspace.as_str()));
+        Ok(memories) => {
+            // Invalidate cache for every distinct workspace that was written.
+            let workspaces: HashSet<&str> = inputs
+                .iter()
+                .filter_map(|(_input, ws)| Some(ws.as_str()))
+                .collect();
+            for ws in &workspaces {
+                ctx.search_cache.invalidate_for_workspace(Some(ws));
+            }
+
             {
                 let mut fuzzy = ctx.fuzzy_engine.lock();
-                for memory in &batch.created {
+                for memory in &memories {
                     fuzzy.add_to_vocabulary(&memory.content);
                 }
             }
-            for memory in &batch.created {
+            for memory in &memories {
                 if let Some(ref manager) = ctx.realtime {
                     manager.broadcast(RealtimeEvent::memory_created(
                         memory.id,
@@ -1220,8 +1259,8 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
                     ));
                 }
             }
-            let ids: Vec<i64> = batch.created.iter().map(|m| m.id).collect();
-            json!({"count": batch.total_created, "ids": ids})
+            let ids: Vec<i64> = memories.iter().map(|m| m.id).collect();
+            json!({"count": memories.len(), "ids": ids})
         }
         Err(e) => json!({"error": e.to_string()}),
     }
@@ -1393,6 +1432,80 @@ mod ingest_fact_tests {
         let ctx = make_ctx();
         let result = memory_ingest_fact_batch(&ctx, serde_json::json!({"facts": []}));
         assert!(result.get("error").is_some(), "should error on empty batch");
+    }
+
+    #[test]
+    fn test_ingest_fact_batch_missing_fact_field_returns_error() {
+        let ctx = make_ctx();
+        // Item at index 1 is missing "fact" — must return an error, not silently skip.
+        let params = serde_json::json!({
+            "facts": [
+                {"fact": "Good fact"},
+                {"source": "orphan", "tags": ["no-fact"]}
+            ]
+        });
+        let result = memory_ingest_fact_batch(&ctx, params);
+        assert!(
+            result.get("error").is_some(),
+            "should return error when an item is missing 'fact'"
+        );
+        let err_msg = result["error"].as_str().unwrap();
+        assert!(
+            err_msg.contains("index 1"),
+            "error should mention the offending index; got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_ingest_fact_batch_atomicity_on_missing_fact() {
+        let ctx = make_ctx();
+        // Even though item 0 is valid, the batch must be rolled back if item 1 is invalid.
+        let params = serde_json::json!({
+            "facts": [
+                {"fact": "Valid fact"},
+                {}
+            ]
+        });
+        let result = memory_ingest_fact_batch(&ctx, params);
+        assert!(result.get("error").is_some(), "batch must fail");
+        // Nothing should have been persisted.
+        let list = memory_list(&ctx, serde_json::json!({}));
+        let empty = vec![];
+        let memories = list.as_array().unwrap_or(&empty);
+        assert_eq!(memories.len(), 0, "no memories should be persisted after rollback");
+    }
+
+    #[test]
+    fn test_ingest_fact_scope_default_global() {
+        let ctx = make_ctx();
+        let params = serde_json::json!({"fact": "Scoped fact"});
+        let result = memory_ingest_fact(&ctx, params);
+        assert!(result.get("id").is_some());
+        let id = result["id"].as_i64().unwrap();
+        let get_result = memory_get(&ctx, serde_json::json!({"id": id}));
+        assert_eq!(get_result["scope"], "global");
+    }
+
+    #[test]
+    fn test_ingest_fact_invalid_scope_returns_error() {
+        let ctx = make_ctx();
+        let params = serde_json::json!({"fact": "Fact", "scope": "invalid_scope"});
+        let result = memory_ingest_fact(&ctx, params);
+        assert!(result.get("error").is_some(), "unsupported scope must return error");
+    }
+
+    #[test]
+    fn test_ingest_fact_batch_scope_default_global() {
+        let ctx = make_ctx();
+        let params = serde_json::json!({
+            "facts": [{"fact": "Batch scoped fact"}]
+        });
+        let result = memory_ingest_fact_batch(&ctx, params);
+        assert_eq!(result["count"], 1);
+        let id = result["ids"][0].as_i64().unwrap();
+        let get_result = memory_get(&ctx, serde_json::json!({"id": id}));
+        assert_eq!(get_result["scope"], "global");
     }
 }
 

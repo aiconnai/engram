@@ -1166,7 +1166,8 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
                 "session_id": {"type": "string", "description": "Session ID stored in metadata.session_id"},
                 "workspace": {"type": "string", "description": "Workspace name (default: 'default')"},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags"},
-                "importance": {"type": "number", "minimum": 0, "maximum": 1, "description": "Importance score (default: 0.8)"}
+                "importance": {"type": "number", "minimum": 0, "maximum": 1, "description": "Importance score (default: 0.8)"},
+                "scope": {"type": "string", "description": "Memory scope (default: 'global')"}
             },
             "required": ["fact"]
         }"#,
@@ -1195,7 +1196,8 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
                     },
                     "description": "Array of fact objects to insert"
                 },
-                "workspace": {"type": "string", "description": "Default workspace applied to all facts (default: 'default')"}
+                "workspace": {"type": "string", "description": "Default workspace applied to all facts (default: 'default')"},
+                "scope": {"type": "string", "description": "Memory scope applied to all facts (default: 'global')"}
             },
             "required": ["facts"]
         }"#,
