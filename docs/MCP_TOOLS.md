@@ -421,6 +421,7 @@ Search memories using hybrid search (keyword + semantic). Automatically selects 
 | `rerank` | `boolean` | no | Apply reranking to improve result quality Default: `true`. |
 | `rerank_strategy` | `string` | no | Reranking strategy to use Default: `heuristic`. Allowed: `none`, `heuristic`, `multi_signal`. |
 | `filter` | `object` | no | Advanced filter with AND/OR logic. Supports workspace, tier, and metadata fields. Example: {"AND": [{"workspace": {"eq": "my-project"}}, {"importance": {"gte": 0.5}}]} |
+| `global` | `boolean` | no | Search across all workspaces (default: false). When true, ignores any workspace filter and returns results from all workspaces with a workspace field in each result. Default: `false`. |
 
 ### `memory_smart_retrieve`
 
@@ -2710,6 +2711,7 @@ Token-efficient search returning only id, title (first line, max 80 chars), crea
 | `query` | `string` | yes | Search query |
 | `limit` | `integer` | no | Max results (default: 10) |
 | `workspace` | `string` | no | Filter to workspace |
+| `global` | `boolean` | no | Search across all workspaces (default: false). When true, ignores any workspace filter and includes a workspace field in each result. Default: `false`. |
 
 ### `memory_expand`
 
