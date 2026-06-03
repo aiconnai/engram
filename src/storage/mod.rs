@@ -97,6 +97,7 @@ pub use meilisearch_indexer::MeilisearchIndexer;
 pub use queries::{
     acknowledge_share,
     boost_memory,
+    collect_supersedes_chain,
     cleanup_sync_data,
     clear_events,
     create_checkpoint,

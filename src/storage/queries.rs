@@ -2657,6 +2657,58 @@ pub fn create_memory_batch(
     })
 }
 
+/// Collect all memory IDs in a "supersedes" chain starting from `root_id`.
+///
+/// Returns `root_id` plus all ancestors (memories that `root_id` supersedes,
+/// recursively), following `crossrefs` rows where `edge_type = 'supersedes'`
+/// and `from_id = current`.  Capped at 100 hops to prevent infinite loops.
+pub fn collect_supersedes_chain(conn: &Connection, root_id: i64) -> Result<Vec<i64>> {
+    let mut chain = vec![root_id];
+    let mut current_ids = vec![root_id];
+
+    for _ in 0..100usize {
+        if current_ids.is_empty() {
+            break;
+        }
+
+        // Build placeholder list for the IN clause using positional params
+        let placeholders: String = current_ids
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let sql = format!(
+            "SELECT to_id FROM crossrefs \
+             WHERE edge_type = 'supersedes' \
+               AND valid_to IS NULL \
+               AND from_id IN ({placeholders})",
+            placeholders = placeholders
+        );
+
+        let mut stmt = conn.prepare(&sql)?;
+        let params_refs: Vec<&dyn rusqlite::ToSql> = current_ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::ToSql)
+            .collect();
+
+        let next_ids: Vec<i64> = stmt
+            .query_map(params_refs.as_slice(), |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .filter(|id| !chain.contains(id)) // guard against cycles
+            .collect();
+
+        if next_ids.is_empty() {
+            break;
+        }
+
+        chain.extend_from_slice(&next_ids);
+        current_ids = next_ids;
+    }
+
+    Ok(chain)
+}
+
 /// Delete multiple memories in a single transaction
 pub fn delete_memory_batch(conn: &Connection, ids: &[i64]) -> Result<BatchDeleteResult> {
     let mut deleted = Vec::new();
@@ -6049,6 +6101,137 @@ mod tests {
                 )?;
                 assert_eq!(results.len(), 2); // A and C
 
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    fn make_memory(conn: &Connection) -> i64 {
+        create_memory(
+            conn,
+            &CreateMemoryInput {
+                content: "test memory".to_string(),
+                memory_type: MemoryType::Note,
+                tags: vec![],
+                metadata: HashMap::new(),
+                importance: None,
+                scope: Default::default(),
+                workspace: None,
+                tier: Default::default(),
+                defer_embedding: true,
+                ttl_seconds: None,
+                dedup_mode: Default::default(),
+                dedup_threshold: None,
+                event_time: None,
+                event_duration_seconds: None,
+                trigger_pattern: None,
+                summary_of_id: None,
+                media_url: None,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn link_supersedes(conn: &Connection, from_id: i64, to_id: i64) {
+        conn.execute(
+            "INSERT INTO crossrefs (from_id, to_id, edge_type, score, strength, source, created_at, valid_from) \
+             VALUES (?1, ?2, 'supersedes', 1.0, 1.0, 'test', datetime('now'), datetime('now'))",
+            params![from_id, to_id],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_collect_supersedes_chain_three_nodes() {
+        // C supersedes B supersedes A
+        // collect_supersedes_chain(C) should return [C, B, A]
+        let storage = Storage::open_in_memory().unwrap();
+        storage
+            .with_connection(|conn| {
+                let id_a = make_memory(conn);
+                let id_b = make_memory(conn);
+                let id_c = make_memory(conn);
+                link_supersedes(conn, id_b, id_a); // B supersedes A
+                link_supersedes(conn, id_c, id_b); // C supersedes B
+
+                let chain = collect_supersedes_chain(conn, id_c).unwrap();
+                assert!(chain.contains(&id_c), "chain must include root");
+                assert!(chain.contains(&id_b), "chain must include B");
+                assert!(chain.contains(&id_a), "chain must include A");
+                assert_eq!(chain.len(), 3);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_collect_supersedes_chain_no_ancestors() {
+        let storage = Storage::open_in_memory().unwrap();
+        storage
+            .with_connection(|conn| {
+                let id_a = make_memory(conn);
+                let chain = collect_supersedes_chain(conn, id_a).unwrap();
+                assert_eq!(chain, vec![id_a]);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_delete_memory_cascade_chain_true() {
+        // C supersedes B supersedes A; deleting C with cascade_chain=true removes all three
+        let storage = Storage::open_in_memory().unwrap();
+        storage
+            .with_connection(|conn| {
+                let id_a = make_memory(conn);
+                let id_b = make_memory(conn);
+                let id_c = make_memory(conn);
+                link_supersedes(conn, id_b, id_a);
+                link_supersedes(conn, id_c, id_b);
+
+                let chain = collect_supersedes_chain(conn, id_c).unwrap();
+                for &id in &chain {
+                    delete_memory(conn, id).unwrap();
+                }
+
+                // All three should be soft-deleted (valid_to is set)
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM memories WHERE id IN (?1, ?2, ?3) AND valid_to IS NULL",
+                        params![id_a, id_b, id_c],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                assert_eq!(count, 0, "all three memories should be deleted");
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_delete_memory_cascade_chain_false_leaves_ancestors() {
+        // C supersedes B supersedes A; deleting C without cascade leaves B and A intact
+        let storage = Storage::open_in_memory().unwrap();
+        storage
+            .with_connection(|conn| {
+                let id_a = make_memory(conn);
+                let id_b = make_memory(conn);
+                let id_c = make_memory(conn);
+                link_supersedes(conn, id_b, id_a);
+                link_supersedes(conn, id_c, id_b);
+
+                delete_memory(conn, id_c).unwrap();
+
+                // B and A should still be alive
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM memories WHERE id IN (?1, ?2) AND valid_to IS NULL",
+                        params![id_a, id_b],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                assert_eq!(count, 2, "ancestors must survive when cascade_chain=false");
                 Ok(())
             })
             .unwrap();
