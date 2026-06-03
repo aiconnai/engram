@@ -41,13 +41,19 @@ pub fn memory_enrichment_timeline(ctx: &HandlerContext, params: Value) -> Value 
             // Build a parameterised query to avoid string injection.
             // rusqlite does not support dynamic IN-clauses, so we build the
             // WHERE clause manually and bind all values positionally.
-            let mut conditions: Vec<String> = vec!["e.memory_id = ?1".to_string()];
-            let mut bind_idx: usize = 2;
+            // pos starts at 1 for the mandatory memory_id condition; each
+            // optional filter advances it so the limit placeholder is always
+            // correct regardless of which filters are active.
+            let mut pos: usize = 1;
+            let mut conditions: Vec<String> = {
+                let c = format!("e.memory_id = ?{pos}");
+                pos += 1;
+                vec![c]
+            };
 
-            if let Some(ref et) = event_type {
-                conditions.push(format!("e.event_type = ?{bind_idx}"));
-                bind_idx += 1;
-                let _ = et; // used below via bind_values
+            if event_type.is_some() {
+                conditions.push(format!("e.event_type = ?{pos}"));
+                pos += 1;
             }
             if !include_dry_runs {
                 conditions.push("e.dry_run = 0".to_string());
@@ -55,7 +61,7 @@ pub fn memory_enrichment_timeline(ctx: &HandlerContext, params: Value) -> Value 
             // NOTE: include_snapshots=false suppresses version_snapshot data in
             // the row output, but does NOT filter rows by event_type.
 
-            let _ = bind_idx; // silence warning
+            let limit_pos = pos;
             let where_clause = conditions.join(" AND ");
             let sql = format!(
                 "SELECT e.id, e.operation_id, e.event_type, e.memory_id, e.version_id,
@@ -66,8 +72,7 @@ pub fn memory_enrichment_timeline(ctx: &HandlerContext, params: Value) -> Value 
                  LEFT JOIN memory_versions mv ON mv.id = e.version_id
                  WHERE {where_clause}
                  ORDER BY e.created_at DESC
-                 LIMIT ?{next}",
-                next = if event_type.is_some() { 3 } else { 2 }
+                 LIMIT ?{limit_pos}"
             );
 
             let mut stmt = conn.prepare(&sql)?;
@@ -147,6 +152,18 @@ pub fn memory_enrichment_audit(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_u64())
         .unwrap_or(50)
         .min(200) as i64;
+
+    // Validate RFC3339 timestamps
+    if let Some(ref s) = since {
+        if chrono::DateTime::parse_from_rfc3339(s).is_err() {
+            return json!({"error": format!("'since' must be a valid RFC3339 timestamp, got: {s}")});
+        }
+    }
+    if let Some(ref u) = until {
+        if chrono::DateTime::parse_from_rfc3339(u).is_err() {
+            return json!({"error": format!("'until' must be a valid RFC3339 timestamp, got: {u}")});
+        }
+    }
 
     // Validate status enum
     if let Some(ref s) = status {
