@@ -44,6 +44,7 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         include_archived: options.include_archived,
         include_transcripts: options.include_transcripts,
         tags: options.tags.clone(),
+        global,
     };
 
     let skip_cache = params
@@ -53,6 +54,20 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
 
     if !skip_cache && !rerank_enabled {
         if let Some(cached_results) = ctx.search_cache.get(query, embedding_ref, &cache_filters) {
+            if global {
+                let results_with_ws: Vec<Value> = cached_results
+                    .iter()
+                    .map(|r| {
+                        json!({
+                            "memory": r.memory,
+                            "score": r.score,
+                            "match_info": r.match_info,
+                            "workspace": r.memory.workspace
+                        })
+                    })
+                    .collect();
+                return json!({"results": results_with_ws, "cached": true});
+            }
             return json!({"results": cached_results, "cached": true});
         }
     }

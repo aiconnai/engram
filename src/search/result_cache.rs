@@ -23,6 +23,9 @@ pub struct CacheFilterParams {
     pub include_archived: bool,
     pub include_transcripts: bool,
     pub tags: Option<Vec<String>>,
+    /// When true, this is a global (cross-workspace) search. Distinguishes
+    /// from a workspace-unfiltered non-global search in the cache key.
+    pub global: bool,
 }
 
 /// A cached search result entry
