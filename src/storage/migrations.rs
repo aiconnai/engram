@@ -182,7 +182,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         migrate_v39(conn)?;
     }
 
-    if current_version < SCHEMA_VERSION {
+    if current_version < 40 {
         migrate_v40(conn)?;
     }
 
@@ -1959,7 +1959,7 @@ fn migrate_v40(conn: &Connection) -> Result<()> {
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             operation_id TEXT NOT NULL,
             event_type   TEXT NOT NULL,
-            memory_id    INTEGER,
+            memory_id    INTEGER,          -- no FK: preserved for audit even after hard delete
             version_id   INTEGER REFERENCES memory_versions(id) ON DELETE SET NULL,
             triggered_by TEXT NOT NULL,
             agent_id     TEXT,
@@ -2014,7 +2014,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fresh_db_reaches_v19() {
+    fn test_fresh_db_reaches_current_version() {
         let conn = in_memory_conn();
         let version: i32 = conn
             .query_row(
