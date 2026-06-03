@@ -39,7 +39,7 @@ The enrichment pipeline (lifecycle transitions, consolidation, compression, evol
 ```sql
 CREATE TABLE IF NOT EXISTS enrichment_events (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    operation_id TEXT,
+    operation_id TEXT NOT NULL,    -- UUID; always set, even for single-memory operations
     event_type   TEXT NOT NULL,
     memory_id    INTEGER,          -- no FK; preserved even after memory hard-delete
     version_id   INTEGER REFERENCES memory_versions(id) ON DELETE SET NULL,
@@ -60,8 +60,9 @@ CREATE INDEX idx_enrichment_by_memory
 CREATE INDEX idx_enrichment_by_type
     ON enrichment_events(event_type, created_at DESC);
 CREATE INDEX idx_enrichment_by_operation
-    ON enrichment_events(operation_id)
-    WHERE operation_id IS NOT NULL;
+    ON enrichment_events(operation_id);
+CREATE INDEX idx_enrichment_by_triggered_by
+    ON enrichment_events(triggered_by, created_at DESC);
 CREATE INDEX idx_enrichment_by_workspace
     ON enrichment_events(workspace, created_at DESC);
 CREATE INDEX idx_enrichment_by_time
@@ -79,7 +80,7 @@ CREATE INDEX idx_enrichment_by_status
 **Key design decisions:**
 
 - `memory_id` has no FK — ID is preserved for audit even after hard delete.
-- `operation_id` is set on every event (not just batch) to simplify tracing. Single-operation events generate their own UUID.
+- `operation_id` is `NOT NULL` — set on every event. Single-operation events generate their own UUID via `Uuid::new_v4().to_string()`. `emit` rejects empty strings.
 - `event_type` has no CHECK constraint — new types should not require a migration.
 - `created_at` is filled by the application (`Utc::now().to_rfc3339()`), not `CURRENT_TIMESTAMP`, to match the repo's RFC3339 UTC invariant.
 - `workspace` is denormalized for the same reason as `memory_id`: preserve context after delete.
@@ -111,7 +112,9 @@ pub fn emit(conn: &Connection, event: &EnrichmentEvent<'_>) -> Result<i64>
 pub fn emit_best_effort(conn: &Connection, event: &EnrichmentEvent<'_>) -> Option<i64>
 
 /// Return the id of the latest memory_versions row for a given memory.
-/// Called after a mutating operation to fill version_id before emitting.
+/// Only call this when the operation is known to create a memory_versions row
+/// (e.g. update_memory). Most lifecycle/garden handlers mutate via direct SQL
+/// and do NOT create versions — for those, set version_id = None.
 pub fn latest_version_id(conn: &Connection, memory_id: i64) -> Result<Option<i64>>
 ```
 
@@ -123,9 +126,9 @@ pub fn latest_version_id(conn: &Connection, memory_id: i64) -> Result<Option<i64
 
 | Path | Where to emit | Transaction |
 |---|---|---|
-| Operation succeeds | Inside `with_transaction`, before `Ok(...)` | Atomic with operation |
+| Operation succeeds | Inside `with_transaction`, before `Ok(...)` | Atomic with operation. **Note:** `lifecycle_run`, `memory_garden`, and `memory_summarize` currently use `with_connection` — converting these to `with_transaction` is a prerequisite for atomicity on their success paths. |
 | Operation fails | In the `Err(e)` arm, **outside** the failed transaction | Separate transaction |
-| `dry_run = true` | Only if caller passes `record_dry_run_events: true` | Separate (no memory mutation) |
+| `dry_run = true` | Only if caller passes `record_dry_run_events: true` in tool params | Separate (no memory mutation). Handlers that set `record_dry_run_events` must document it in their tool schema. `memory_garden_preview` must not write audit rows by default — doing so would invalidate its `read_only` MCP annotation. |
 
 ### Handler list
 
@@ -135,7 +138,7 @@ pub fn latest_version_id(conn: &Connection, memory_id: i64) -> Result<Option<i64
 | `lifecycle::memory_set_lifecycle` | `lifecycle_transition` | Single-memory manual transition |
 | `lifecycle::retention_policy_apply` | `lifecycle_transition` | When policy executes archival |
 | `auto_consolidate::memory_consolidate_batch` | `consolidation` | Batch; `operation_id` groups all rows |
-| `auto_consolidate::memory_consolidate` | `consolidation` | Excludes pure dry-run |
+| `compression::memory_consolidate` | `consolidation` | Lives in `compression.rs:131`, not `auto_consolidate`. Excludes pure dry-run. |
 | `summarize::memory_summarize` | `consolidation` | When producing summary from multiple sources |
 | `summarize::memory_archive_old` | `compression` | When archiving with summary |
 | `misc::memory_auto_tag` | `auto_tag` | Only when `apply = true` |
@@ -256,6 +259,6 @@ Every PR implementing this feature must touch:
 - [ ] `src/mcp/handlers/enrichment_audit.rs` (new handler file)
 - [ ] `src/mcp/handlers/mod.rs` (wire 2 new tools)
 - [ ] `src/mcp/tools.rs` (register 2 new tools)
-- [ ] 11 emitting handlers (Seção 2 list)
-- [ ] `docs/MCP_TOOLS.md` via `./scripts/generate_mcp_reference.py`
+- [ ] 11 emitting handlers (handler list above), including converting `lifecycle_run`, `memory_garden`, `memory_summarize` from `with_connection` to `with_transaction`
+- [ ] `docs/MCP_TOOLS.md` via `./scripts/generate-mcp-reference.sh` (canonical harness wrapper)
 - [ ] Unit + integration + protocol tests
