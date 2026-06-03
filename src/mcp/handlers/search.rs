@@ -73,7 +73,7 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                     ..Default::default()
                 };
                 let reranker = Reranker::with_config(config);
-                let reranked = reranker.rerank(results, query, None);
+                let reranked = reranker.rerank(results, query, Some(conn));
 
                 if options.explain {
                     Ok(json!({
