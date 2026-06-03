@@ -19,6 +19,7 @@
 
 pub mod agent_registry;
 mod audit;
+pub mod enrichment_events;
 pub mod auto_linker;
 pub mod backend;
 #[cfg(feature = "emergent-graph")]
