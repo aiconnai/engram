@@ -199,31 +199,44 @@ pub fn memory_garden(ctx: &HandlerContext, params: Value) -> Value {
         ..GardenConfig::default()
     };
 
-    ctx.storage
-        .with_transaction(|conn| {
-            let gardener = MemoryGardener::new(config);
-            let report = gardener.garden(conn, workspace)?;
+    let garden_result = ctx.storage.with_transaction(|conn| {
+        let gardener = MemoryGardener::new(config);
+        let report = gardener.garden(conn, workspace)?;
+        Ok(report)
+    });
+
+    match garden_result {
+        Ok(report) => {
+            // Emit SUCCESS event in a separate connection, outside the now-committed transaction.
             let operation_id = uuid::Uuid::new_v4().to_string();
-            emit_best_effort(conn, &EnrichmentEvent {
-                operation_id: &operation_id,
-                event_type:   "garden",
-                memory_id:    None,
-                version_id:   None,
-                triggered_by: "memory_garden",
-                agent_id:     None,
-                workspace:    Some(workspace),
-                params:       serde_json::json!({"dry_run": false}),
-                outcome:      serde_json::json!({
-                    "memories_pruned": report.memories_pruned,
-                    "memories_merged": report.memories_merged,
-                    "memories_archived": report.memories_archived,
-                    "memories_compressed": report.memories_compressed,
-                    "tokens_freed": report.tokens_freed,
-                }),
-                status:       "completed",
-                dry_run:      false,
-            });
-            Ok(json!({
+            ctx.storage
+                .with_connection(|conn| {
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &operation_id,
+                            event_type: "garden",
+                            memory_id: None,
+                            version_id: None,
+                            triggered_by: "memory_garden",
+                            agent_id: None,
+                            workspace: Some(workspace),
+                            params: serde_json::json!({"dry_run": false}),
+                            outcome: serde_json::json!({
+                                "memories_pruned": report.memories_pruned,
+                                "memories_merged": report.memories_merged,
+                                "memories_archived": report.memories_archived,
+                                "memories_compressed": report.memories_compressed,
+                                "tokens_freed": report.tokens_freed,
+                            }),
+                            status: "completed",
+                            dry_run: false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                })
+                .ok();
+            json!({
                 "workspace": workspace,
                 "dry_run": false,
                 "memories_pruned": report.memories_pruned,
@@ -232,9 +245,36 @@ pub fn memory_garden(ctx: &HandlerContext, params: Value) -> Value {
                 "memories_compressed": report.memories_compressed,
                 "tokens_freed": report.tokens_freed,
                 "actions": report.actions,
-            }))
-        })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+            })
+        }
+        Err(e) => {
+            // Emit FAILURE event in a separate connection (transaction already rolled back).
+            let op_id = uuid::Uuid::new_v4().to_string();
+            let err_str = e.to_string();
+            ctx.storage
+                .with_connection(|conn| {
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &op_id,
+                            event_type: "garden",
+                            memory_id: None,
+                            version_id: None,
+                            triggered_by: "memory_garden",
+                            agent_id: None,
+                            workspace: Some(workspace),
+                            params: serde_json::json!({"dry_run": false}),
+                            outcome: serde_json::json!({"error": &err_str}),
+                            status: "failed",
+                            dry_run: false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                })
+                .ok();
+            json!({"error": err_str})
+        }
+    }
 }
 
 // ── memory_garden_preview ─────────────────────────────────────────────────────

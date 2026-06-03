@@ -3,8 +3,8 @@
 use rusqlite::params;
 use serde_json::{json, Value};
 
-use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use super::HandlerContext;
+use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 
 pub fn lifecycle_status(ctx: &HandlerContext, params: Value) -> Value {
     let workspace = params.get("workspace").and_then(|v| v.as_str());
@@ -196,15 +196,15 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
                     conn,
                     &EnrichmentEvent {
                         operation_id: &operation_id,
-                        event_type:   "lifecycle_transition",
-                        memory_id:    Some(*mem_id),
-                        version_id:   None,
+                        event_type: "lifecycle_transition",
+                        memory_id: Some(*mem_id),
+                        version_id: None,
                         triggered_by: "lifecycle_run",
-                        agent_id:     None,
+                        agent_id: None,
                         workspace,
-                        params:       json!({"dry_run": dry_run}),
-                        outcome:      json!({"new_state": new_state}),
-                        status:       "completed",
+                        params: json!({"dry_run": dry_run}),
+                        outcome: json!({"new_state": new_state}),
+                        status: "completed",
                         dry_run,
                     },
                 );
@@ -250,16 +250,16 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
                 conn,
                 &EnrichmentEvent {
                     operation_id: &operation_id,
-                    event_type:   "lifecycle_transition",
-                    memory_id:    Some(id),
-                    version_id:   None,
+                    event_type: "lifecycle_transition",
+                    memory_id: Some(id),
+                    version_id: None,
                     triggered_by: "memory_set_lifecycle",
-                    agent_id:     None,
-                    workspace:    None,
-                    params:       json!({"state": state}),
-                    outcome:      json!({"new_state": state}),
-                    status:       "completed",
-                    dry_run:      false,
+                    agent_id: None,
+                    workspace: None,
+                    params: json!({"state": state}),
+                    outcome: json!({"new_state": state}),
+                    status: "completed",
+                    dry_run: false,
                 },
             );
 
@@ -405,33 +405,41 @@ pub fn retention_policy_apply(ctx: &HandlerContext, params: Value) -> Value {
             .unwrap_or_else(|e| json!({"error": e.to_string()}));
     }
 
-    ctx.storage
-        .with_transaction(|conn| {
-            let affected = apply_retention_policies(conn)?;
+    let tx_result = ctx
+        .storage
+        .with_transaction(|conn| apply_retention_policies(conn));
 
+    match tx_result {
+        Ok(affected) => {
+            // Emit SUCCESS event in a separate connection, outside the now-committed transaction.
             if affected > 0 {
                 let operation_id = uuid::Uuid::new_v4().to_string();
-                emit_best_effort(
-                    conn,
-                    &EnrichmentEvent {
-                        operation_id: &operation_id,
-                        event_type:   "lifecycle_transition",
-                        memory_id:    None,
-                        version_id:   None,
-                        triggered_by: "retention_policy_apply",
-                        agent_id:     None,
-                        workspace:    None,
-                        params:       json!({}),
-                        outcome:      json!({"memories_affected": affected}),
-                        status:       "completed",
-                        dry_run:      false,
-                    },
-                );
+                ctx.storage
+                    .with_connection(|conn| {
+                        emit_best_effort(
+                            conn,
+                            &EnrichmentEvent {
+                                operation_id: &operation_id,
+                                event_type: "lifecycle_transition",
+                                memory_id: None,
+                                version_id: None,
+                                triggered_by: "retention_policy_apply",
+                                agent_id: None,
+                                workspace: None,
+                                params: json!({}),
+                                outcome: json!({"memories_affected": affected}),
+                                status: "completed",
+                                dry_run: false,
+                            },
+                        );
+                        Ok::<_, crate::error::EngramError>(())
+                    })
+                    .ok();
             }
-
-            Ok(json!({"applied": true, "memories_affected": affected}))
-        })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+            json!({"applied": true, "memories_affected": affected})
+        }
+        Err(e) => json!({"error": e.to_string()}),
+    }
 }
 
 #[cfg(test)]
@@ -463,9 +471,7 @@ mod lifecycle_tests {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new().expect("langfuse runtime"),
-            ),
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         }
     }
 

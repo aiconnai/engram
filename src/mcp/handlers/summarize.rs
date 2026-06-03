@@ -31,89 +31,103 @@ pub fn memory_summarize(ctx: &HandlerContext, params: Value) -> Value {
         .get("tags")
         .and_then(|v| serde_json::from_value(v.clone()).ok());
 
-    ctx.storage
-        .with_transaction(|conn| {
-            let mut contents: Vec<String> = Vec::with_capacity(memory_ids.len());
-            let mut first_memory_workspace: Option<String> = None;
+    let tx_result = ctx.storage.with_transaction(|conn| {
+        let mut contents: Vec<String> = Vec::with_capacity(memory_ids.len());
+        let mut first_memory_workspace: Option<String> = None;
 
-            for id in &memory_ids {
-                match get_memory(conn, *id) {
-                    Ok(mem) => {
-                        contents.push(mem.content);
-                        if first_memory_workspace.is_none() {
-                            first_memory_workspace = Some(mem.workspace);
-                        }
+        for id in &memory_ids {
+            match get_memory(conn, *id) {
+                Ok(mem) => {
+                    contents.push(mem.content);
+                    if first_memory_workspace.is_none() {
+                        first_memory_workspace = Some(mem.workspace);
                     }
-                    Err(e) => {
-                        return Err(crate::error::EngramError::Internal(format!(
-                            "Memory {} not found: {}",
-                            id, e
-                        )));
-                    }
+                }
+                Err(e) => {
+                    return Err(crate::error::EngramError::Internal(format!(
+                        "Memory {} not found: {}",
+                        id, e
+                    )));
                 }
             }
+        }
 
-            let summary_text = if let Some(s) = provided_summary {
-                s.to_string()
+        let summary_text = if let Some(s) = provided_summary {
+            s.to_string()
+        } else {
+            let combined = contents.join("\n\n---\n\n");
+            if combined.len() <= max_length {
+                combined
             } else {
-                let combined = contents.join("\n\n---\n\n");
-                if combined.len() <= max_length {
-                    combined
-                } else {
-                    let head_len = (max_length as f64 * 0.6) as usize;
-                    let tail_len = (max_length as f64 * 0.3) as usize;
-                    let head: String = combined.chars().take(head_len).collect();
-                    let tail: String = combined
-                        .chars()
-                        .rev()
-                        .take(tail_len)
-                        .collect::<String>()
-                        .chars()
-                        .rev()
-                        .collect();
-                    let truncated = combined.len() - head_len - tail_len;
-                    format!("{}...[{} chars truncated]...{}", head, truncated, tail)
-                }
-            };
+                let head_len = (max_length as f64 * 0.6) as usize;
+                let tail_len = (max_length as f64 * 0.3) as usize;
+                let head: String = combined.chars().take(head_len).collect();
+                let tail: String = combined
+                    .chars()
+                    .rev()
+                    .take(tail_len)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect();
+                let truncated = combined.len() - head_len - tail_len;
+                format!("{}...[{} chars truncated]...{}", head, truncated, tail)
+            }
+        };
 
-            let input = CreateMemoryInput {
-                content: summary_text,
-                memory_type: MemoryType::Summary,
-                importance: Some(0.6),
-                tags: tags.unwrap_or_default(),
-                workspace: workspace.map(|s| s.to_string()).or(first_memory_workspace),
-                tier: MemoryTier::Permanent,
-                summary_of_id: Some(memory_ids[0]),
-                ..Default::default()
-            };
+        let input = CreateMemoryInput {
+            content: summary_text,
+            memory_type: MemoryType::Summary,
+            importance: Some(0.6),
+            tags: tags.unwrap_or_default(),
+            workspace: workspace.map(|s| s.to_string()).or(first_memory_workspace),
+            tier: MemoryTier::Permanent,
+            summary_of_id: Some(memory_ids[0]),
+            ..Default::default()
+        };
 
-            let memory = create_memory(conn, &input)?;
+        let memory = create_memory(conn, &input)?;
 
+        // Return data needed for the post-commit emit.
+        Ok((memory.id, memory.workspace, memory.content.len()))
+    });
+
+    match tx_result {
+        Ok((summary_id, summary_workspace, summary_len)) => {
+            // Emit SUCCESS event in a separate connection, outside the now-committed transaction.
             let operation_id = uuid::Uuid::new_v4().to_string();
-            let vid = latest_version_id(conn, memory.id).unwrap_or(None);
-            emit_best_effort(conn, &EnrichmentEvent {
-                operation_id: &operation_id,
-                event_type:   "consolidation",
-                memory_id:    Some(memory.id),
-                version_id:   vid,
-                triggered_by: "memory_summarize",
-                agent_id:     None,
-                workspace:    Some(memory.workspace.as_str()),
-                params:       serde_json::json!({"source_count": memory_ids.len()}),
-                outcome:      serde_json::json!({"summary_id": memory.id}),
-                status:       "completed",
-                dry_run:      false,
-            });
-
-            Ok(json!({
-                "id": memory.id,
+            ctx.storage
+                .with_connection(|conn| {
+                    let vid = latest_version_id(conn, summary_id).unwrap_or(None);
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &operation_id,
+                            event_type: "consolidation",
+                            memory_id: Some(summary_id),
+                            version_id: vid,
+                            triggered_by: "memory_summarize",
+                            agent_id: None,
+                            workspace: Some(summary_workspace.as_str()),
+                            params: serde_json::json!({"source_count": memory_ids.len()}),
+                            outcome: serde_json::json!({"summary_id": summary_id}),
+                            status: "completed",
+                            dry_run: false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                })
+                .ok();
+            json!({
+                "id": summary_id,
                 "memory_type": "summary",
                 "summarized_count": memory_ids.len(),
                 "original_ids": memory_ids,
-                "summary_length": memory.content.len()
-            }))
-        })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+                "summary_length": summary_len
+            })
+        }
+        Err(e) => json!({"error": e.to_string()}),
+    }
 }
 
 pub fn memory_get_full(ctx: &HandlerContext, params: Value) -> Value {
@@ -382,9 +396,7 @@ mod summarize_tests {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new().expect("langfuse runtime"),
-            ),
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         }
     }
 
@@ -429,7 +441,10 @@ mod summarize_tests {
             "memory_summarize returned error: {:?}",
             result
         );
-        assert!(result["id"].as_i64().is_some(), "expected summary memory id");
+        assert!(
+            result["id"].as_i64().is_some(),
+            "expected summary memory id"
+        );
 
         // Verify an enrichment_events row was written
         let count: i64 = ctx
