@@ -372,6 +372,7 @@ Delete a memory (soft delete)
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `id` | `integer` | yes | Memory ID |
+| `cascade_chain` | `boolean` | no | When true, also delete all memories in the supersedes chain (ancestors this memory replaced). Default: `false`. |
 
 ### `memory_list`
 
@@ -1214,6 +1215,7 @@ Delete multiple memories in a single operation.
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `ids` | `array` | yes | Array of memory IDs to delete Items: `integer`. |
+| `cascade_chain` | `boolean` | no | When true, also delete all memories in the supersedes chain (ancestors this memory replaced). Default: `false`. |
 
 ### `memory_tags`
 
