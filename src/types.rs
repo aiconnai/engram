@@ -251,6 +251,8 @@ pub enum MemoryType {
     Audio,
     /// Video memory with optional media_url pointing to the asset
     Video,
+    /// Lightweight append-only fact for high-frequency session/watcher ingest
+    Fact,
 }
 
 /// Memory tier for tiered storage (permanent vs ephemeral)
@@ -321,6 +323,7 @@ impl MemoryType {
             MemoryType::Image => "image",
             MemoryType::Audio => "audio",
             MemoryType::Video => "video",
+            MemoryType::Fact => "fact",
         }
     }
 
@@ -360,6 +363,7 @@ impl std::str::FromStr for MemoryType {
             "image" => Ok(MemoryType::Image),
             "audio" => Ok(MemoryType::Audio),
             "video" => Ok(MemoryType::Video),
+            "fact" => Ok(MemoryType::Fact),
             _ => Err(format!("Unknown memory type: {}", s)),
         }
     }
@@ -1026,6 +1030,13 @@ pub struct SearchOptions {
     /// are returned. For example, `"global/org:acme"` will match memories at
     /// `"global/org:acme"`, `"global/org:acme/user:alice"`, etc.
     pub scope_path: Option<String>,
+    /// Search across all workspaces (default: false).
+    ///
+    /// When `true`, ignores any `workspace` or `workspaces` filter and returns
+    /// results from all workspaces. Each result will include a `workspace` field
+    /// in the MCP handler response.
+    #[serde(default)]
+    pub global: bool,
 }
 
 /// Sync status information

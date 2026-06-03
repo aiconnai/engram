@@ -123,6 +123,8 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_create_section" => memory_crud::memory_create_section(ctx, params),
         "memory_create_todo" => memory_crud::create_todo(ctx, params),
         "memory_create_issue" => memory_crud::create_issue(ctx, params),
+        "memory_ingest_fact" => memory_crud::memory_ingest_fact(ctx, params),
+        "memory_ingest_fact_batch" => memory_crud::memory_ingest_fact_batch(ctx, params),
 
         // ── Search ───────────────────────────────────────────────────────────
         "memory_search" => search::memory_search(ctx, params),

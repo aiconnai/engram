@@ -4,7 +4,7 @@
 
 This reference is generated from `src/mcp/tools.rs`.
 
-Total tools: **254**
+Total tools: **256**
 
 ## Summary
 
@@ -77,6 +77,8 @@ Total tools: **254**
 | `memory_content_stats` | advanced | readOnlyHint | `id` |
 | `memory_create_batch` | standard | mutating (no MCP hints) | `memories` |
 | `memory_delete_batch` | standard | destructiveHint | `ids` |
+| `memory_ingest_fact` | standard | mutating (no MCP hints) | `fact` |
+| `memory_ingest_fact_batch` | standard | mutating (no MCP hints) | `facts` |
 | `memory_tags` | standard | readOnlyHint | none |
 | `memory_tag_hierarchy` | advanced | readOnlyHint | none |
 | `memory_validate_tags` | advanced | readOnlyHint | none |
@@ -375,6 +377,7 @@ Delete a memory (soft delete)
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `id` | `integer` | yes | Memory ID |
+| `cascade_chain` | `boolean` | no | When true, also delete all memories in the supersedes chain (ancestors this memory replaced). Default: `false`. |
 
 ### `memory_list`
 
@@ -424,6 +427,7 @@ Search memories using hybrid search (keyword + semantic). Automatically selects 
 | `rerank` | `boolean` | no | Apply reranking to improve result quality Default: `true`. |
 | `rerank_strategy` | `string` | no | Reranking strategy to use Default: `heuristic`. Allowed: `none`, `heuristic`, `multi_signal`. |
 | `filter` | `object` | no | Advanced filter with AND/OR logic. Supports workspace, tier, and metadata fields. Example: {"AND": [{"workspace": {"eq": "my-project"}}, {"importance": {"gte": 0.5}}]} |
+| `global` | `boolean` | no | Search across all workspaces (default: false). When true, ignores any workspace filter and returns results from all workspaces with a workspace field in each result. Default: `false`. |
 
 ### `memory_smart_retrieve`
 
@@ -1236,6 +1240,39 @@ Delete multiple memories in a single operation.
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `ids` | `array` | yes | Array of memory IDs to delete Items: `integer`. |
+| `cascade_chain` | `boolean` | no | When true, also delete all memories in the supersedes chain (ancestors this memory replaced). Default: `false`. |
+
+### `memory_ingest_fact`
+
+Append-only fact ingest for high-frequency sources (sessions, file watchers). Always inserts a new memory with memory_type='fact'. No dedup or upsert.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `fact`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `fact` | `string` | yes | The fact text to store |
+| `source` | `string` | no | Origin identifier, e.g. 'session:abc' or 'watcher:/path/to/file' |
+| `session_id` | `string` | no | Session ID stored in metadata.session_id |
+| `workspace` | `string` | no | Workspace name (default: 'default') |
+| `tags` | `array` | no | Optional tags Items: `string`. |
+| `importance` | `number` | no | Importance score (default: 0.8) Minimum: `0`. Maximum: `1`. |
+| `scope` | `string` | no | Memory scope (default: 'global') |
+
+### `memory_ingest_fact_batch`
+
+Batch append-only fact ingest. Inserts all facts in a single transaction. Returns count and ids.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `facts`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `facts` | `array` | yes | Array of fact objects to insert Items: `object`. |
+| `workspace` | `string` | no | Default workspace applied to all facts (default: 'default') |
+| `scope` | `string` | no | Memory scope applied to all facts (default: 'global') |
 
 ### `memory_tags`
 
@@ -2732,6 +2769,7 @@ Token-efficient search returning only id, title (first line, max 80 chars), crea
 | `query` | `string` | yes | Search query |
 | `limit` | `integer` | no | Max results (default: 10) |
 | `workspace` | `string` | no | Filter to workspace |
+| `global` | `boolean` | no | Search across all workspaces (default: false). When true, ignores any workspace filter and includes a workspace field in each result. Default: `false`. |
 
 ### `memory_expand`
 

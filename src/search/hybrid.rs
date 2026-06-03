@@ -76,6 +76,18 @@ fn keyword_only_search(
     options: &SearchOptions,
     config: &SearchConfig,
 ) -> Result<Vec<SearchResult>> {
+    // When global=true, skip all workspace filters to search across all workspaces.
+    let workspace_filter = if options.global {
+        None
+    } else {
+        options.workspace.as_deref()
+    };
+    let workspaces_filter: Option<&[String]> = if options.global {
+        None
+    } else {
+        options.workspaces.as_deref()
+    };
+
     let bm25_results = bm25_search_complete_with_scope_path(
         conn,
         query,
@@ -85,8 +97,8 @@ fn keyword_only_search(
         options.filter.as_ref(),
         options.include_transcripts,
         options.include_archived,
-        options.workspace.as_deref(),
-        options.workspaces.as_deref(),
+        workspace_filter,
+        workspaces_filter,
         options.tier.as_ref(),
         options.scope_path.as_deref(),
     )?;
@@ -207,8 +219,11 @@ fn semantic_only_search(
         }
     }
 
-    // Add workspace filter (single or multiple)
-    if let Some(ref workspace) = options.workspace {
+    // Add workspace filter (single or multiple).
+    // When `global` is true, skip all workspace filters to search across all workspaces.
+    if options.global {
+        // No workspace filter applied — results span all workspaces.
+    } else if let Some(ref workspace) = options.workspace {
         sql.push_str(" AND m.workspace = ?");
         params.push(Box::new(workspace.clone()));
     } else if let Some(ref workspaces) = options.workspaces {
@@ -294,6 +309,18 @@ fn rrf_hybrid_search(
     options: &SearchOptions,
     config: &SearchConfig,
 ) -> Result<Vec<SearchResult>> {
+    // When global=true, skip all workspace filters to search across all workspaces.
+    let workspace_filter = if options.global {
+        None
+    } else {
+        options.workspace.as_deref()
+    };
+    let workspaces_filter: Option<&[String]> = if options.global {
+        None
+    } else {
+        options.workspaces.as_deref()
+    };
+
     // Get keyword results (with all filters applied)
     let keyword_results = bm25_search_complete_with_scope_path(
         conn,
@@ -304,8 +331,8 @@ fn rrf_hybrid_search(
         options.filter.as_ref(),
         options.include_transcripts,
         options.include_archived,
-        options.workspace.as_deref(),
-        options.workspaces.as_deref(),
+        workspace_filter,
+        workspaces_filter,
         options.tier.as_ref(),
         options.scope_path.as_deref(),
     )?;
@@ -322,6 +349,7 @@ fn rrf_hybrid_search(
         workspaces: options.workspaces.clone(),
         tier: options.tier,
         scope_path: options.scope_path.clone(),
+        global: options.global,
         ..Default::default()
     };
     // Create a config without project boost for sub-search (we'll apply boost to final RRF)

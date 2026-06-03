@@ -207,7 +207,12 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         schema: r#"{
             "type": "object",
             "properties": {
-                "id": {"type": "integer", "description": "Memory ID"}
+                "id": {"type": "integer", "description": "Memory ID"},
+                "cascade_chain": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, also delete all memories in the supersedes chain (ancestors this memory replaced)."
+                }
             },
             "required": ["id"]
         }"#,
@@ -267,7 +272,8 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
                 "filter": {
                     "type": "object",
                     "description": "Advanced filter with AND/OR logic. Supports workspace, tier, and metadata fields. Example: {\"AND\": [{\"workspace\": {\"eq\": \"my-project\"}}, {\"importance\": {\"gte\": 0.5}}]}"
-                }
+                },
+                "global": {"type": "boolean", "default": false, "description": "Search across all workspaces (default: false). When true, ignores any workspace filter and returns results from all workspaces with a workspace field in each result."}
             },
             "required": ["query"]
         }"#,
@@ -1171,11 +1177,66 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
                     "type": "array",
                     "items": {"type": "integer"},
                     "description": "Array of memory IDs to delete"
+                },
+                "cascade_chain": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, also delete all memories in the supersedes chain (ancestors this memory replaced)."
                 }
             },
             "required": ["ids"]
         }"#,
         annotations: ToolAnnotations::destructive(),
+        tier: ToolTier::Standard,
+    },
+    // Fact Ingest (append-only, high-frequency)
+    ToolDef {
+        name: "memory_ingest_fact",
+        description: "Append-only fact ingest for high-frequency sources (sessions, file watchers). Always inserts a new memory with memory_type='fact'. No dedup or upsert.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "fact": {"type": "string", "description": "The fact text to store"},
+                "source": {"type": "string", "description": "Origin identifier, e.g. 'session:abc' or 'watcher:/path/to/file'"},
+                "session_id": {"type": "string", "description": "Session ID stored in metadata.session_id"},
+                "workspace": {"type": "string", "description": "Workspace name (default: 'default')"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags"},
+                "importance": {"type": "number", "minimum": 0, "maximum": 1, "description": "Importance score (default: 0.8)"},
+                "scope": {"type": "string", "description": "Memory scope (default: 'global')"}
+            },
+            "required": ["fact"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_ingest_fact_batch",
+        description: "Batch append-only fact ingest. Inserts all facts in a single transaction. Returns count and ids.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "facts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "fact": {"type": "string", "description": "The fact text"},
+                            "source": {"type": "string"},
+                            "session_id": {"type": "string"},
+                            "workspace": {"type": "string", "description": "Overrides top-level workspace for this item"},
+                            "tags": {"type": "array", "items": {"type": "string"}},
+                            "importance": {"type": "number", "minimum": 0, "maximum": 1}
+                        },
+                        "required": ["fact"]
+                    },
+                    "description": "Array of fact objects to insert"
+                },
+                "workspace": {"type": "string", "description": "Default workspace applied to all facts (default: 'default')"},
+                "scope": {"type": "string", "description": "Memory scope applied to all facts (default: 'global')"}
+            },
+            "required": ["facts"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Standard,
     },
     // Tag Utilities
@@ -2802,7 +2863,8 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
             "properties": {
                 "query": {"type": "string", "description": "Search query"},
                 "limit": {"type": "integer", "description": "Max results (default: 10)"},
-                "workspace": {"type": "string", "description": "Filter to workspace"}
+                "workspace": {"type": "string", "description": "Filter to workspace"},
+                "global": {"type": "boolean", "default": false, "description": "Search across all workspaces (default: false). When true, ignores any workspace filter and includes a workspace field in each result."}
             },
             "required": ["query"]
         }"#,
