@@ -167,3 +167,4 @@ vendor/
 benchmark_*.txt
 .claude/worktrees/
 .orchestrator/
+.worktrees/
