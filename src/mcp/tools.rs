@@ -4279,7 +4279,7 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
             "required": []
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Standard,
+        tier: ToolTier::Advanced,
     },
 
 ];

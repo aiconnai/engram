@@ -41,31 +41,31 @@ pub fn memory_enrichment_timeline(ctx: &HandlerContext, params: Value) -> Value 
             // Build a parameterised query to avoid string injection.
             // rusqlite does not support dynamic IN-clauses, so we build the
             // WHERE clause manually and bind all values positionally.
-            let mut conditions: Vec<String> = vec!["memory_id = ?1".to_string()];
+            let mut conditions: Vec<String> = vec!["e.memory_id = ?1".to_string()];
             let mut bind_idx: usize = 2;
 
             if let Some(ref et) = event_type {
-                conditions.push(format!("event_type = ?{bind_idx}"));
+                conditions.push(format!("e.event_type = ?{bind_idx}"));
                 bind_idx += 1;
                 let _ = et; // used below via bind_values
             }
             if !include_dry_runs {
-                conditions.push("dry_run = 0".to_string());
+                conditions.push("e.dry_run = 0".to_string());
             }
-            if !include_snapshots {
-                // "snapshot" is a common event_type for snapshot operations
-                conditions.push("event_type != 'snapshot'".to_string());
-            }
+            // NOTE: include_snapshots=false suppresses version_snapshot data in
+            // the row output, but does NOT filter rows by event_type.
 
             let _ = bind_idx; // silence warning
             let where_clause = conditions.join(" AND ");
             let sql = format!(
-                "SELECT id, operation_id, event_type, memory_id, version_id,
-                        triggered_by, agent_id, workspace, params, outcome,
-                        status, dry_run, created_at
-                 FROM enrichment_events
+                "SELECT e.id, e.operation_id, e.event_type, e.memory_id, e.version_id,
+                        e.triggered_by, e.agent_id, e.workspace, e.params, e.outcome,
+                        e.status, e.dry_run, e.created_at,
+                        mv.content, mv.version
+                 FROM enrichment_events e
+                 LEFT JOIN memory_versions mv ON mv.id = e.version_id
                  WHERE {where_clause}
-                 ORDER BY created_at DESC
+                 ORDER BY e.created_at DESC
                  LIMIT ?{next}",
                 next = if event_type.is_some() { 3 } else { 2 }
             );
@@ -75,12 +75,14 @@ pub fn memory_enrichment_timeline(ctx: &HandlerContext, params: Value) -> Value 
             let rows: Vec<Value> = if let Some(ref et) = event_type {
                 stmt.query_map(
                     params![memory_id, et.as_str(), limit],
-                    row_to_json,
+                    |row| row_to_json_with_snapshot(row, include_snapshots),
                 )?
                 .collect::<rusqlite::Result<Vec<_>>>()?
             } else {
-                stmt.query_map(params![memory_id, limit], row_to_json)?
-                    .collect::<rusqlite::Result<Vec<_>>>()?
+                stmt.query_map(params![memory_id, limit], |row| {
+                    row_to_json_with_snapshot(row, include_snapshots)
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?
             };
 
             Ok(json!({
@@ -226,16 +228,37 @@ pub fn memory_enrichment_audit(ctx: &HandlerContext, params: Value) -> Value {
                 .query_map(refs.as_slice(), row_to_json)?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
 
+            let count = rows.len();
+
+            // Build filters_applied map from all active filters.
+            let mut applied = serde_json::Map::new();
+            if let Some(ref v) = event_type     { applied.insert("event_type".into(),    json!(v)); }
+            if let Some(ref v) = triggered_by   { applied.insert("triggered_by".into(),  json!(v)); }
+            if let Some(ref v) = agent_id       { applied.insert("agent_id".into(),      json!(v)); }
+            if let Some(ref v) = status         { applied.insert("status".into(),        json!(v)); }
+            if let Some(ref v) = workspace      { applied.insert("workspace".into(),     json!(v)); }
+            if let Some(ref v) = operation_id   { applied.insert("operation_id".into(),  json!(v)); }
+            if let Some(v)     = memory_id      { applied.insert("memory_id".into(),     json!(v)); }
+            if let Some(v)     = version_id     { applied.insert("version_id".into(),    json!(v)); }
+            if let Some(v)     = dry_run        { applied.insert("dry_run".into(),       json!(v)); }
+            if let Some(ref v) = since          { applied.insert("since".into(),         json!(v)); }
+            if let Some(ref v) = until          { applied.insert("until".into(),         json!(v)); }
+            applied.insert("limit".into(), json!(limit));
+            applied.insert("order".into(), json!(order));
+
             Ok(json!({
-                "count": rows.len(),
                 "events": rows,
+                "count": count,
+                "filters_applied": applied,
             }))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
-// ── shared row mapper ─────────────────────────────────────────────────────────
+// ── shared row mappers ────────────────────────────────────────────────────────
 
+/// Row mapper for queries that SELECT 13 base columns from enrichment_events
+/// (no JOIN). Used by `memory_enrichment_audit`.
 fn row_to_json(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let params_str: String = row.get(8)?;
     let outcome_str: String = row.get(9)?;
@@ -256,6 +279,49 @@ fn row_to_json(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "status":       row.get::<_, String>(10)?,
         "dry_run":      dry_run_int != 0,
         "created_at":   row.get::<_, String>(12)?,
+    }))
+}
+
+/// Row mapper for queries that SELECT 13 base columns + mv.content (13) +
+/// mv.version (14) via LEFT JOIN memory_versions.  Used by
+/// `memory_enrichment_timeline`.
+fn row_to_json_with_snapshot(
+    row: &rusqlite::Row<'_>,
+    include_snapshots: bool,
+) -> rusqlite::Result<Value> {
+    let params_str: String = row.get(8)?;
+    let outcome_str: String = row.get(9)?;
+    let params_val: Value = serde_json::from_str(&params_str).unwrap_or(Value::Null);
+    let outcome_val: Value = serde_json::from_str(&outcome_str).unwrap_or(Value::Null);
+    let dry_run_int: i32 = row.get(11)?;
+
+    let version_id: Option<i64> = row.get(4)?;
+    let content: Option<String> = row.get(13)?;
+    let version_num: Option<i64> = row.get(14)?;
+
+    let version_snapshot = match (version_id, content, version_num) {
+        (Some(_), Some(c), Some(v)) if include_snapshots => json!({
+            "content_preview": c.chars().take(200).collect::<String>(),
+            "version": v,
+        }),
+        _ => Value::Null,
+    };
+
+    Ok(json!({
+        "id":               row.get::<_, i64>(0)?,
+        "operation_id":     row.get::<_, String>(1)?,
+        "event_type":       row.get::<_, String>(2)?,
+        "memory_id":        row.get::<_, Option<i64>>(3)?,
+        "version_id":       version_id,
+        "triggered_by":     row.get::<_, String>(5)?,
+        "agent_id":         row.get::<_, Option<String>>(6)?,
+        "workspace":        row.get::<_, Option<String>>(7)?,
+        "params":           params_val,
+        "outcome":          outcome_val,
+        "status":           row.get::<_, String>(10)?,
+        "dry_run":          dry_run_int != 0,
+        "created_at":       row.get::<_, String>(12)?,
+        "version_snapshot": version_snapshot,
     }))
 }
 
@@ -412,5 +478,59 @@ mod tests {
         let result = memory_enrichment_audit(&ctx, serde_json::json!({"limit": 1}));
         let count = result["count"].as_u64().expect("count");
         assert!(count <= 1);
+    }
+
+    #[test]
+    fn test_memory_enrichment_audit_filters_applied_present() {
+        let (ctx, _) = ctx_with_event();
+        let result = memory_enrichment_audit(
+            &ctx,
+            serde_json::json!({"status": "completed", "limit": 10, "order": "asc"}),
+        );
+        let fa = result.get("filters_applied").expect("filters_applied key");
+        assert_eq!(fa["status"], "completed");
+        assert_eq!(fa["limit"], 10);
+        assert_eq!(fa["order"], "asc");
+    }
+
+    #[test]
+    fn test_memory_enrichment_audit_filters_applied_no_filters() {
+        let (ctx, _) = ctx_with_event();
+        let result = memory_enrichment_audit(&ctx, serde_json::json!({}));
+        let fa = result.get("filters_applied").expect("filters_applied key");
+        // limit and order are always present
+        assert!(fa.get("limit").is_some());
+        assert!(fa.get("order").is_some());
+        // no optional filters set
+        assert!(fa.get("status").is_none());
+        assert!(fa.get("event_type").is_none());
+    }
+
+    #[test]
+    fn test_memory_enrichment_timeline_version_snapshot_null_when_no_version() {
+        let (ctx, memory_id) = ctx_with_event();
+        // The test event has version_id = None, so version_snapshot must be null
+        // regardless of include_snapshots value.
+        let result = memory_enrichment_timeline(
+            &ctx,
+            serde_json::json!({"memory_id": memory_id, "include_snapshots": true}),
+        );
+        let events = result["events"].as_array().expect("events array");
+        assert!(!events.is_empty());
+        assert!(events[0]["version_snapshot"].is_null());
+    }
+
+    #[test]
+    fn test_memory_enrichment_timeline_include_snapshots_false_forces_null() {
+        let (ctx, memory_id) = ctx_with_event();
+        // include_snapshots=false must produce null version_snapshot (no WHERE filter).
+        let result = memory_enrichment_timeline(
+            &ctx,
+            serde_json::json!({"memory_id": memory_id, "include_snapshots": false}),
+        );
+        let events = result["events"].as_array().expect("events array");
+        // row should still be returned (include_snapshots does not filter rows)
+        assert_eq!(result["count"], 1);
+        assert!(events[0]["version_snapshot"].is_null());
     }
 }
