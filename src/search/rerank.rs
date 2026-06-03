@@ -32,8 +32,8 @@ pub struct RerankConfig {
     pub recency_half_life_days: f32,
     /// Boost per importance point
     pub importance_boost: f32,
-    /// Boost for memories with matching entities
-    pub entity_match_boost: f32,
+    /// Score value returned when a memory has at least one structural entity link
+    pub entity_linked_score: f32,
     /// Boost for exact phrase matches
     pub exact_match_boost: f32,
     /// Minimum number of results to consider for reranking
@@ -52,7 +52,7 @@ impl Default for RerankConfig {
             recency_boost: 0.05,
             recency_half_life_days: 30.0,
             importance_boost: 0.1,
-            entity_match_boost: 0.15,
+            entity_linked_score: 1.0,
             exact_match_boost: 0.2,
             min_results: 3,
             max_rerank_candidates: 100,
@@ -110,8 +110,8 @@ pub struct RerankComponents {
     pub recency: f32,
     /// Score from memory importance
     pub importance: f32,
-    /// Score from entity matches
-    pub entity_match: f32,
+    /// Score from entity links (structural DB-level links)
+    pub entity_linked: f32,
     /// Score from exact phrase match
     pub exact_match: f32,
     /// Score from memory type relevance
@@ -138,12 +138,16 @@ impl Reranker {
         Self { config }
     }
 
-    /// Rerank search results
+    /// Rerank search results.
+    ///
+    /// `conn` is optional; when provided, the reranker queries `memory_entities`
+    /// to apply an additional boost to memories that are structurally linked to
+    /// entities in the database.
     pub fn rerank(
         &self,
         results: Vec<SearchResult>,
         query: &str,
-        query_entities: Option<&[String]>,
+        conn: Option<&rusqlite::Connection>,
     ) -> Vec<RerankResult> {
         if !self.config.enabled || results.len() < self.config.min_results {
             // Return results unchanged but with rerank info
@@ -166,12 +170,12 @@ impl Reranker {
 
         match self.config.strategy {
             RerankStrategy::None => self.no_rerank(results),
-            RerankStrategy::Heuristic => self.heuristic_rerank(results, query, query_entities),
+            RerankStrategy::Heuristic => self.heuristic_rerank(results, query, conn),
             RerankStrategy::CrossEncoder => {
                 // Cross-encoder requires external model, fallback to heuristic
-                self.heuristic_rerank(results, query, query_entities)
+                self.heuristic_rerank(results, query, conn)
             }
-            RerankStrategy::MultiSignal => self.multi_signal_rerank(results, query, query_entities),
+            RerankStrategy::MultiSignal => self.multi_signal_rerank(results, query, conn),
         }
     }
 
@@ -199,7 +203,7 @@ impl Reranker {
         &self,
         results: Vec<SearchResult>,
         query: &str,
-        query_entities: Option<&[String]>,
+        conn: Option<&rusqlite::Connection>,
     ) -> Vec<RerankResult> {
         let query_terms = extract_terms(query);
         let query_lower = query.to_lowercase();
@@ -209,12 +213,8 @@ impl Reranker {
             .enumerate()
             .take(self.config.max_rerank_candidates)
             .map(|(i, r)| {
-                let components = self.compute_rerank_components(
-                    &r.memory,
-                    &query_terms,
-                    &query_lower,
-                    query_entities,
-                );
+                let components =
+                    self.compute_rerank_components(&r.memory, &query_terms, &query_lower, conn);
 
                 let rerank_score = self.combine_components(&components);
                 let final_score = self.config.original_score_weight * r.score
@@ -255,7 +255,7 @@ impl Reranker {
         &self,
         results: Vec<SearchResult>,
         query: &str,
-        query_entities: Option<&[String]>,
+        conn: Option<&rusqlite::Connection>,
     ) -> Vec<RerankResult> {
         let query_terms = extract_terms(query);
         let query_lower = query.to_lowercase();
@@ -309,12 +309,8 @@ impl Reranker {
             .into_iter()
             .enumerate()
             .map(|(i, r)| {
-                let components = self.compute_rerank_components(
-                    &r.memory,
-                    &query_terms,
-                    &query_lower,
-                    query_entities,
-                );
+                let components =
+                    self.compute_rerank_components(&r.memory, &query_terms, &query_lower, conn);
                 let rrf_score = rrf_scores
                     .iter()
                     .find(|(idx, _)| *idx == i)
@@ -350,7 +346,7 @@ impl Reranker {
         memory: &Memory,
         query_terms: &HashSet<String>,
         query_lower: &str,
-        query_entities: Option<&[String]>,
+        conn: Option<&rusqlite::Connection>,
     ) -> RerankComponents {
         let content_lower = memory.content.to_lowercase();
 
@@ -358,7 +354,7 @@ impl Reranker {
             term_overlap: compute_term_overlap(&memory.content, query_terms),
             recency: self.compute_recency_score(memory),
             importance: memory.importance * self.config.importance_boost,
-            entity_match: self.compute_entity_match_score(memory, query_entities),
+            entity_linked: self.compute_entity_linked_score(memory.id, conn),
             exact_match: if content_lower.contains(query_lower) {
                 self.config.exact_match_boost
             } else {
@@ -371,14 +367,14 @@ impl Reranker {
 
     /// Combine component scores into a single rerank score
     fn combine_components(&self, components: &RerankComponents) -> f32 {
-        // Weighted combination of components
+        // Weighted combination of components (weights sum to 1.0)
         components.term_overlap * 0.25
             + components.recency * 0.15
             + components.importance * 0.15
-            + components.entity_match * 0.15
+            + components.entity_linked * 0.20
             + components.exact_match * 0.15
             + components.type_relevance * 0.05
-            + components.tag_match * 0.10
+            + components.tag_match * 0.05
     }
 
     /// Compute recency score with exponential decay
@@ -391,28 +387,29 @@ impl Reranker {
         self.config.recency_boost * decay
     }
 
-    /// Compute entity match score
-    fn compute_entity_match_score(
+    /// Compute entity-linked score by querying the `memory_entities` join table.
+    ///
+    /// Returns `entity_linked_boost` if the memory has at least one entity link
+    /// in the database, otherwise 0.0.
+    fn compute_entity_linked_score(
         &self,
-        memory: &Memory,
-        query_entities: Option<&[String]>,
+        memory_id: i64,
+        conn: Option<&rusqlite::Connection>,
     ) -> f32 {
-        let Some(entities) = query_entities else {
+        let Some(conn) = conn else {
             return 0.0;
         };
 
-        if entities.is_empty() {
-            return 0.0;
-        }
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM memory_entities WHERE memory_id = ?1 LIMIT 1",
+                rusqlite::params![memory_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
-        let content_lower = memory.content.to_lowercase();
-        let matches = entities
-            .iter()
-            .filter(|e| content_lower.contains(&e.to_lowercase()))
-            .count();
-
-        if matches > 0 {
-            self.config.entity_match_boost * (matches as f32 / entities.len() as f32)
+        if count > 0 {
+            self.config.entity_linked_score
         } else {
             0.0
         }
@@ -613,33 +610,58 @@ mod tests {
     }
 
     #[test]
-    fn test_entity_match_boost() {
+    fn test_entity_linked_boost() {
+        use rusqlite::Connection;
+
+        // Set up in-memory SQLite with memory_entities table
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE memory_entities (
+                memory_id INTEGER NOT NULL,
+                entity_id INTEGER NOT NULL,
+                PRIMARY KEY (memory_id, entity_id)
+            );
+            INSERT INTO memory_entities (memory_id, entity_id) VALUES (1, 1);",
+        )
+        .unwrap();
+
         let config = RerankConfig {
-            min_results: 2, // Allow testing with 2 results
+            min_results: 2,
             ..Default::default()
         };
         let reranker = Reranker::with_config(config);
 
+        let mut linked_memory = create_test_memory("Memory linked to an entity", 0.5);
+        linked_memory.id = 1; // has a row in memory_entities
+
+        let mut unlinked_memory = create_test_memory("Memory with no entity link", 0.5);
+        unlinked_memory.id = 2; // no row in memory_entities
+
         let results = vec![
-            create_test_result(
-                create_test_memory("Content about Python programming", 0.5),
-                0.8,
-            ),
-            create_test_result(
-                create_test_memory("Content about Rust and systems", 0.5),
-                0.75,
-            ),
+            create_test_result(linked_memory, 0.8),
+            create_test_result(unlinked_memory, 0.8), // same base score
         ];
 
-        let entities = vec!["Rust".to_string(), "systems".to_string()];
-        let reranked = reranker.rerank(results, "programming language", Some(&entities));
+        let reranked = reranker.rerank(results, "entity", Some(&conn));
 
-        // Result mentioning entities should have entity_match boost
-        let rust_result = reranked
-            .iter()
-            .find(|r| r.result.memory.content.contains("Rust"))
-            .unwrap();
-        assert!(rust_result.rerank_info.components.entity_match > 0.0);
+        let linked_result = reranked.iter().find(|r| r.result.memory.id == 1).unwrap();
+        let unlinked_result = reranked.iter().find(|r| r.result.memory.id == 2).unwrap();
+
+        // Linked memory should have entity_linked component > 0
+        assert!(
+            linked_result.rerank_info.components.entity_linked > 0.0,
+            "entity_linked should be non-zero for the linked memory"
+        );
+        // Unlinked memory should have entity_linked == 0
+        assert_eq!(
+            unlinked_result.rerank_info.components.entity_linked, 0.0,
+            "entity_linked should be 0.0 for unlinked memory"
+        );
+        // Linked memory should rank first (higher final score)
+        assert!(
+            linked_result.rerank_info.final_score > unlinked_result.rerank_info.final_score,
+            "entity-linked memory should score higher"
+        );
     }
 
     #[test]
