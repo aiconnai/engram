@@ -1026,6 +1026,13 @@ pub struct SearchOptions {
     /// are returned. For example, `"global/org:acme"` will match memories at
     /// `"global/org:acme"`, `"global/org:acme/user:alice"`, etc.
     pub scope_path: Option<String>,
+    /// Search across all workspaces (default: false).
+    ///
+    /// When `true`, ignores any `workspace` or `workspaces` filter and returns
+    /// results from all workspaces. Each result will include a `workspace` field
+    /// in the MCP handler response.
+    #[serde(default)]
+    pub global: bool,
 }
 
 /// Sync status information

@@ -11,7 +11,18 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
     use crate::search::result_cache::CacheFilterParams;
 
     let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
-    let options: SearchOptions = serde_json::from_value(params.clone()).unwrap_or_default();
+    let mut options: SearchOptions = serde_json::from_value(params.clone()).unwrap_or_default();
+
+    // Global search opt-in: when `global` is true, ignore workspace filters.
+    let global = params
+        .get("global")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if global {
+        options.global = true;
+        options.workspace = None;
+        options.workspaces = None;
+    }
 
     let rerank_enabled = params
         .get("rerank")
@@ -78,12 +89,16 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                 if options.explain {
                     Ok(json!({
                         "results": reranked.iter().map(|r| {
-                            json!({
+                            let mut obj = json!({
                                 "memory": r.result.memory,
                                 "score": r.rerank_info.final_score,
                                 "match_info": r.result.match_info,
                                 "rerank_info": r.rerank_info
-                            })
+                            });
+                            if global {
+                                obj["workspace"] = json!(r.result.memory.workspace);
+                            }
+                            obj
                         }).collect::<Vec<_>>(),
                         "reranked": true,
                         "strategy": format!("{:?}", rerank_strategy)
@@ -92,14 +107,31 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                     Ok(json!(reranked
                         .iter()
                         .map(|r| {
-                            json!({
+                            let mut obj = json!({
                                 "memory": r.result.memory,
                                 "score": r.rerank_info.final_score,
                                 "match_info": r.result.match_info
-                            })
+                            });
+                            if global {
+                                obj["workspace"] = json!(r.result.memory.workspace);
+                            }
+                            obj
                         })
                         .collect::<Vec<_>>()))
                 }
+            } else if global {
+                // For global search without reranking, add top-level workspace field
+                Ok(json!(results
+                    .iter()
+                    .map(|r| {
+                        json!({
+                            "memory": r.memory,
+                            "score": r.score,
+                            "match_info": r.match_info,
+                            "workspace": r.memory.workspace
+                        })
+                    })
+                    .collect::<Vec<_>>()))
             } else {
                 Ok(json!(results))
             }
@@ -433,6 +465,17 @@ pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
 
     let mut options: SearchOptions = serde_json::from_value(params.clone()).unwrap_or_default();
 
+    // Global search opt-in: when `global` is true, ignore workspace filters.
+    let global = params
+        .get("global")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if global {
+        options.global = true;
+        options.workspace = None;
+        options.workspaces = None;
+    }
+
     // Apply default limit of 10 when not supplied
     if options.limit.is_none() {
         let limit_from_param = params.get("limit").and_then(|v| v.as_i64());
@@ -468,12 +511,16 @@ pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
                     } else {
                         first_line.to_string()
                     };
-                    json!({
+                    let mut obj = json!({
                         "id": memory.id,
                         "title": title_str,
                         "created_at": memory.created_at,
                         "tags": memory.tags
-                    })
+                    });
+                    if global {
+                        obj["workspace"] = json!(memory.workspace);
+                    }
+                    obj
                 })
                 .collect();
 
