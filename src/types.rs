@@ -251,6 +251,8 @@ pub enum MemoryType {
     Audio,
     /// Video memory with optional media_url pointing to the asset
     Video,
+    /// Lightweight append-only fact for high-frequency session/watcher ingest
+    Fact,
 }
 
 /// Memory tier for tiered storage (permanent vs ephemeral)
@@ -321,6 +323,7 @@ impl MemoryType {
             MemoryType::Image => "image",
             MemoryType::Audio => "audio",
             MemoryType::Video => "video",
+            MemoryType::Fact => "fact",
         }
     }
 
@@ -360,6 +363,7 @@ impl std::str::FromStr for MemoryType {
             "image" => Ok(MemoryType::Image),
             "audio" => Ok(MemoryType::Audio),
             "video" => Ok(MemoryType::Video),
+            "fact" => Ok(MemoryType::Fact),
             _ => Err(format!("Unknown memory type: {}", s)),
         }
     }

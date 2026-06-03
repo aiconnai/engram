@@ -1154,6 +1154,54 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::destructive(),
         tier: ToolTier::Standard,
     },
+    // Fact Ingest (append-only, high-frequency)
+    ToolDef {
+        name: "memory_ingest_fact",
+        description: "Append-only fact ingest for high-frequency sources (sessions, file watchers). Always inserts a new memory with memory_type='fact'. No dedup or upsert.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "fact": {"type": "string", "description": "The fact text to store"},
+                "source": {"type": "string", "description": "Origin identifier, e.g. 'session:abc' or 'watcher:/path/to/file'"},
+                "session_id": {"type": "string", "description": "Session ID stored in metadata.session_id"},
+                "workspace": {"type": "string", "description": "Workspace name (default: 'default')"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags"},
+                "importance": {"type": "number", "minimum": 0, "maximum": 1, "description": "Importance score (default: 0.8)"}
+            },
+            "required": ["fact"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_ingest_fact_batch",
+        description: "Batch append-only fact ingest. Inserts all facts in a single transaction. Returns count and ids.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "facts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "fact": {"type": "string", "description": "The fact text"},
+                            "source": {"type": "string"},
+                            "session_id": {"type": "string"},
+                            "workspace": {"type": "string", "description": "Overrides top-level workspace for this item"},
+                            "tags": {"type": "array", "items": {"type": "string"}},
+                            "importance": {"type": "number", "minimum": 0, "maximum": 1}
+                        },
+                        "required": ["fact"]
+                    },
+                    "description": "Array of fact objects to insert"
+                },
+                "workspace": {"type": "string", "description": "Default workspace applied to all facts (default: 'default')"}
+            },
+            "required": ["facts"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
     // Tag Utilities
     ToolDef {
         name: "memory_tags",

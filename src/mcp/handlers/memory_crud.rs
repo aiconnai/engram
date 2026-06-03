@@ -1013,6 +1013,220 @@ pub fn create_issue(ctx: &HandlerContext, params: Value) -> Value {
     memory_create(ctx, serde_json::to_value(input).unwrap_or_default())
 }
 
+
+/// Append-only fact ingest — always inserts a NEW memory with `memory_type = "fact"`.
+///
+/// Lighter than `memory_create`: no dedup, no upsert, minimal overhead.
+pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::storage::create_memory;
+    use std::collections::HashMap;
+
+    let fact = match params.get("fact").and_then(|v| v.as_str()) {
+        Some(f) => f.to_string(),
+        None => return json!({"error": "fact is required"}),
+    };
+
+    let source = params
+        .get("source")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let session_id = params
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let workspace = Some(
+        params
+            .get("workspace")
+            .and_then(|v| v.as_str())
+            .unwrap_or("default")
+            .to_string(),
+    );
+    let tags: Vec<String> = params
+        .get("tags")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    let importance = params
+        .get("importance")
+        .and_then(|v| v.as_f64())
+        .map(|f| f as f32)
+        .or(Some(0.8));
+
+    let mut metadata: HashMap<String, Value> = HashMap::new();
+    if let Some(ref src) = source {
+        metadata.insert("source".to_string(), json!(src));
+    }
+    if let Some(ref sid) = session_id {
+        metadata.insert("session_id".to_string(), json!(sid));
+    }
+
+    let ws_str = workspace.clone();
+    let input = CreateMemoryInput {
+        content: fact,
+        memory_type: MemoryType::Fact,
+        tags,
+        metadata,
+        importance,
+        scope: MemoryScope::Global,
+        workspace,
+        tier: MemoryTier::Permanent,
+        defer_embedding: false,
+        ttl_seconds: None,
+        dedup_mode: DedupMode::Allow,
+        dedup_threshold: None,
+        event_time: None,
+        event_duration_seconds: None,
+        trigger_pattern: None,
+        summary_of_id: None,
+        media_url: None,
+    };
+
+    let result = ctx.storage.with_transaction(|conn| {
+        let memory = create_memory(conn, &input)?;
+        let mut fuzzy = ctx.fuzzy_engine.lock();
+        fuzzy.add_to_vocabulary(&memory.content);
+        Ok(memory)
+    });
+
+    match result {
+        Ok(memory) => {
+            ctx.search_cache
+                .invalidate_for_workspace(ws_str.as_deref());
+            if let Some(ref manager) = ctx.realtime {
+                manager.broadcast(RealtimeEvent::memory_created(
+                    memory.id,
+                    memory.content.clone(),
+                ));
+            }
+            json!({"id": memory.id, "created": true})
+        }
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
+/// Batch variant of `memory_ingest_fact` — inserts all facts in a single transaction.
+pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::storage::create_memory_batch;
+    use std::collections::HashMap;
+
+    let facts = match params.get("facts").and_then(|v| v.as_array()) {
+        Some(arr) => arr.clone(),
+        None => return json!({"error": "facts array is required"}),
+    };
+
+    if facts.is_empty() {
+        return json!({"error": "facts must have at least 1 item"});
+    }
+
+    let default_workspace = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default")
+        .to_string();
+
+    let mut inputs = Vec::with_capacity(facts.len());
+
+    for item in &facts {
+        let fact = match item.get("fact").and_then(|v| v.as_str()) {
+            Some(f) => f.to_string(),
+            None => continue,
+        };
+
+        let source = item
+            .get("source")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let session_id = item
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let workspace = Some(
+            item.get("workspace")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&default_workspace)
+                .to_string(),
+        );
+        let tags: Vec<String> = item
+            .get("tags")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let importance = item
+            .get("importance")
+            .and_then(|v| v.as_f64())
+            .map(|f| f as f32)
+            .or(Some(0.8));
+
+        let mut metadata: HashMap<String, Value> = HashMap::new();
+        if let Some(ref src) = source {
+            metadata.insert("source".to_string(), json!(src));
+        }
+        if let Some(ref sid) = session_id {
+            metadata.insert("session_id".to_string(), json!(sid));
+        }
+
+        inputs.push(CreateMemoryInput {
+            content: fact,
+            memory_type: MemoryType::Fact,
+            tags,
+            metadata,
+            importance,
+            scope: MemoryScope::Global,
+            workspace,
+            tier: MemoryTier::Permanent,
+            defer_embedding: false,
+            ttl_seconds: None,
+            dedup_mode: DedupMode::Allow,
+            dedup_threshold: None,
+            event_time: None,
+            event_duration_seconds: None,
+            trigger_pattern: None,
+            summary_of_id: None,
+            media_url: None,
+        });
+    }
+
+    if inputs.is_empty() {
+        return json!({"error": "No valid fact items provided"});
+    }
+
+    let result = ctx
+        .storage
+        .with_transaction(|conn| create_memory_batch(conn, &inputs));
+
+    match result {
+        Ok(batch) => {
+            ctx.search_cache
+                .invalidate_for_workspace(Some(default_workspace.as_str()));
+            {
+                let mut fuzzy = ctx.fuzzy_engine.lock();
+                for memory in &batch.created {
+                    fuzzy.add_to_vocabulary(&memory.content);
+                }
+            }
+            for memory in &batch.created {
+                if let Some(ref manager) = ctx.realtime {
+                    manager.broadcast(RealtimeEvent::memory_created(
+                        memory.id,
+                        memory.content.clone(),
+                    ));
+                }
+            }
+            let ids: Vec<i64> = batch.created.iter().map(|m| m.id).collect();
+            json!({"count": batch.total_created, "ids": ids})
+        }
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
 #[cfg(test)]
 mod privacy_tests {
     use super::strip_private_content;
@@ -1067,3 +1281,118 @@ mod privacy_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod ingest_fact_tests {
+    use super::*;
+    use crate::{
+        embedding::{create_embedder, EmbeddingCache},
+        types::EmbeddingConfig,
+        search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache},
+    };
+    use parking_lot::Mutex;
+    use std::sync::Arc;
+
+    fn make_ctx() -> HandlerContext {
+        use crate::storage::Storage;
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
+        HandlerContext {
+            storage,
+            embedder,
+            fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
+            search_config: SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(EmbeddingCache::default()),
+            search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 60,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(
+                tokio::runtime::Runtime::new().expect("langfuse runtime"),
+            ),
+        }
+    }
+
+    #[test]
+    fn test_ingest_fact_single() {
+        let ctx = make_ctx();
+        let params = serde_json::json!({
+            "fact": "The sky is blue",
+            "source": "session:test-123",
+            "session_id": "test-123",
+            "tags": ["color", "sky"],
+            "importance": 0.9
+        });
+        let result = memory_ingest_fact(&ctx, params);
+        assert!(result.get("id").is_some(), "should return id");
+        assert_eq!(result["created"], true, "should return created=true");
+
+        let id = result["id"].as_i64().unwrap();
+        let get_result = memory_get(&ctx, serde_json::json!({"id": id}));
+        assert_eq!(get_result["type"], "fact");
+        assert!(
+            (get_result["importance"].as_f64().unwrap() - 0.9).abs() < 0.01,
+            "importance should be ~0.9"
+        );
+        let metadata = &get_result["metadata"];
+        assert_eq!(metadata["source"], "session:test-123");
+        assert_eq!(metadata["session_id"], "test-123");
+    }
+
+    #[test]
+    fn test_ingest_fact_default_importance() {
+        let ctx = make_ctx();
+        let params = serde_json::json!({"fact": "Default importance fact"});
+        let result = memory_ingest_fact(&ctx, params);
+        assert!(result.get("id").is_some());
+        let id = result["id"].as_i64().unwrap();
+        let get_result = memory_get(&ctx, serde_json::json!({"id": id}));
+        assert!(
+            (get_result["importance"].as_f64().unwrap() - 0.8).abs() < 0.01,
+            "default importance should be 0.8"
+        );
+        assert_eq!(get_result["type"], "fact");
+    }
+
+    #[test]
+    fn test_ingest_fact_batch() {
+        let ctx = make_ctx();
+        let params = serde_json::json!({
+            "facts": [
+                {"fact": "Fact one", "source": "watcher:/some/file"},
+                {"fact": "Fact two", "tags": ["batch"]},
+                {"fact": "Fact three", "importance": 0.5}
+            ],
+            "workspace": "test-ws"
+        });
+        let result = memory_ingest_fact_batch(&ctx, params);
+        assert_eq!(result["count"], 3, "should insert all 3 facts");
+        let ids = result["ids"].as_array().unwrap();
+        assert_eq!(ids.len(), 3, "should return 3 ids");
+
+        let id = ids[0].as_i64().unwrap();
+        let get_result = memory_get(&ctx, serde_json::json!({"id": id}));
+        assert_eq!(get_result["type"], "fact");
+        assert_eq!(get_result["metadata"]["source"], "watcher:/some/file");
+    }
+
+    #[test]
+    fn test_ingest_fact_missing_field() {
+        let ctx = make_ctx();
+        let result = memory_ingest_fact(&ctx, serde_json::json!({}));
+        assert!(result.get("error").is_some(), "should error when fact missing");
+    }
+
+    #[test]
+    fn test_ingest_fact_batch_empty() {
+        let ctx = make_ctx();
+        let result = memory_ingest_fact_batch(&ctx, serde_json::json!({"facts": []}));
+        assert!(result.get("error").is_some(), "should error on empty batch");
+    }
+}
+
