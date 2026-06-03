@@ -1013,7 +1013,6 @@ pub fn create_issue(ctx: &HandlerContext, params: Value) -> Value {
     memory_create(ctx, serde_json::to_value(input).unwrap_or_default())
 }
 
-
 /// Append-only fact ingest — always inserts a NEW memory with `memory_type = "fact"`.
 ///
 /// Lighter than `memory_create`: no dedup, no upsert, minimal overhead.
@@ -1101,8 +1100,7 @@ pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
 
     match result {
         Ok(memory) => {
-            ctx.search_cache
-                .invalidate_for_workspace(ws_str.as_deref());
+            ctx.search_cache.invalidate_for_workspace(ws_str.as_deref());
             {
                 let mut fuzzy = ctx.fuzzy_engine.lock();
                 fuzzy.add_to_vocabulary(&memory.content);
@@ -1124,8 +1122,8 @@ pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
 /// If any item is invalid (missing `fact`) or any insert fails, the entire batch is rolled back.
 pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::create_memory;
-    use std::collections::HashSet;
     use std::collections::HashMap;
+    use std::collections::HashSet;
 
     let facts = match params.get("facts").and_then(|v| v.as_array()) {
         Some(arr) => arr.clone(),
@@ -1148,9 +1146,7 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or("global")
     {
         "global" => MemoryScope::Global,
-        other => {
-            return json!({"error": format!("unsupported scope '{}'; use 'global'", other)})
-        }
+        other => return json!({"error": format!("unsupported scope '{}'; use 'global'", other)}),
     };
 
     // Validate all items up-front before touching the DB.
@@ -1326,8 +1322,8 @@ mod ingest_fact_tests {
     use super::*;
     use crate::{
         embedding::{create_embedder, EmbeddingCache},
-        types::EmbeddingConfig,
         search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache},
+        types::EmbeddingConfig,
     };
     use parking_lot::Mutex;
     use std::sync::Arc;
@@ -1351,9 +1347,7 @@ mod ingest_fact_tests {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new().expect("langfuse runtime"),
-            ),
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         }
     }
 
@@ -1424,7 +1418,10 @@ mod ingest_fact_tests {
     fn test_ingest_fact_missing_field() {
         let ctx = make_ctx();
         let result = memory_ingest_fact(&ctx, serde_json::json!({}));
-        assert!(result.get("error").is_some(), "should error when fact missing");
+        assert!(
+            result.get("error").is_some(),
+            "should error when fact missing"
+        );
     }
 
     #[test]
@@ -1473,7 +1470,11 @@ mod ingest_fact_tests {
         let list = memory_list(&ctx, serde_json::json!({}));
         let empty = vec![];
         let memories = list.as_array().unwrap_or(&empty);
-        assert_eq!(memories.len(), 0, "no memories should be persisted after rollback");
+        assert_eq!(
+            memories.len(),
+            0,
+            "no memories should be persisted after rollback"
+        );
     }
 
     #[test]
@@ -1492,7 +1493,10 @@ mod ingest_fact_tests {
         let ctx = make_ctx();
         let params = serde_json::json!({"fact": "Fact", "scope": "invalid_scope"});
         let result = memory_ingest_fact(&ctx, params);
-        assert!(result.get("error").is_some(), "unsupported scope must return error");
+        assert!(
+            result.get("error").is_some(),
+            "unsupported scope must return error"
+        );
     }
 
     #[test]
@@ -1508,4 +1512,3 @@ mod ingest_fact_tests {
         assert_eq!(get_result["scope"], "global");
     }
 }
-
