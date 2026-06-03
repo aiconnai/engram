@@ -213,12 +213,8 @@ impl Reranker {
             .enumerate()
             .take(self.config.max_rerank_candidates)
             .map(|(i, r)| {
-                let components = self.compute_rerank_components(
-                    &r.memory,
-                    &query_terms,
-                    &query_lower,
-                    conn,
-                );
+                let components =
+                    self.compute_rerank_components(&r.memory, &query_terms, &query_lower, conn);
 
                 let rerank_score = self.combine_components(&components);
                 let final_score = self.config.original_score_weight * r.score
@@ -313,12 +309,8 @@ impl Reranker {
             .into_iter()
             .enumerate()
             .map(|(i, r)| {
-                let components = self.compute_rerank_components(
-                    &r.memory,
-                    &query_terms,
-                    &query_lower,
-                    conn,
-                );
+                let components =
+                    self.compute_rerank_components(&r.memory, &query_terms, &query_lower, conn);
                 let rrf_score = rrf_scores
                     .iter()
                     .find(|(idx, _)| *idx == i)
@@ -661,8 +653,7 @@ mod tests {
         );
         // Unlinked memory should have entity_linked == 0
         assert_eq!(
-            unlinked_result.rerank_info.components.entity_linked,
-            0.0,
+            unlinked_result.rerank_info.components.entity_linked, 0.0,
             "entity_linked should be 0.0 for unlinked memory"
         );
         // Linked memory should rank first (higher final score)
