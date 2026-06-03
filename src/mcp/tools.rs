@@ -295,6 +295,30 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         tier: ToolTier::Essential,
     },
     ToolDef {
+        name: "memory_council",
+        description: "Run a question through an llm-council instance (Karpathy council orchestration) and return consolidated stage outputs and final answer. Optionally persist a checkpoint memory.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Prompt to send to the council"},
+                "conversation_id": {"type": "string", "description": "Optional existing conversation ID to continue"},
+                "council_url": {"type": "string", "default": "http://127.0.0.1:8001", "description": "Council HTTP base URL"},
+                "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300, "default": 90, "description": "Request timeout in seconds (1-300)"},
+                "include_raw_stages": {"type": "boolean", "default": true, "description": "Whether to include raw stage payloads"},
+                "persist": {"type": "boolean", "default": false, "description": "Persist final answer as checkpoint memory"},
+                "workspace": {"type": "string", "default": "default", "description": "Target workspace when persist=true"},
+                "memory_tags": {
+                    "type": "array",
+                    "description": "Extra tags to include when persist=true (default tags: llm-council, consensus)",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["prompt"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
         name: "memory_search_suggest",
         description: "Get search suggestions and typo corrections",
         schema: r#"{
@@ -4154,6 +4178,108 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         }"#,
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
+    },
+
+    // ── enrichment_audit.rs (ENG-1240) ───────────────────────────────────────
+
+    ToolDef {
+        name: "memory_enrichment_timeline",
+        description: "List all enrichment events for a specific memory (lifecycle transitions, consolidation, compression, etc.). Shows what automated operations affected this memory and why.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "memory_id": {
+                    "type": "integer",
+                    "description": "ID of the memory whose enrichment history to retrieve."
+                },
+                "event_type": {
+                    "type": "string",
+                    "description": "Filter to a specific event type (e.g. \"consolidation\", \"lifecycle_transition\")."
+                },
+                "include_dry_runs": {
+                    "type": "boolean",
+                    "description": "Include events that were executed in dry-run mode (default: true)."
+                },
+                "include_snapshots": {
+                    "type": "boolean",
+                    "description": "Include snapshot events (default: true)."
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of events to return (default: 20, max: 100)."
+                }
+            },
+            "required": ["memory_id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+
+    ToolDef {
+        name: "memory_enrichment_audit",
+        description: "Query enrichment events globally with filters (status, event_type, agent_id, operation_id, workspace, time range). Use for compliance audit and batch tracing.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string",
+                    "description": "Filter by event type (e.g. \"consolidation\", \"lifecycle_transition\", \"compression\")."
+                },
+                "triggered_by": {
+                    "type": "string",
+                    "description": "Filter by the tool name that triggered the event."
+                },
+                "agent_id": {
+                    "type": "string",
+                    "description": "Filter by the agent ID that triggered the event."
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Filter by event outcome status.",
+                    "enum": ["completed", "failed", "skipped"]
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Filter to a specific workspace."
+                },
+                "operation_id": {
+                    "type": "string",
+                    "description": "Filter by a specific operation ID (exact match)."
+                },
+                "memory_id": {
+                    "type": "integer",
+                    "description": "Filter to events that reference a specific memory."
+                },
+                "version_id": {
+                    "type": "integer",
+                    "description": "Filter to events that reference a specific memory version."
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Filter by dry-run flag (true = only dry-run events, false = only real events)."
+                },
+                "since": {
+                    "type": "string",
+                    "description": "ISO-8601 timestamp: return events created at or after this time."
+                },
+                "until": {
+                    "type": "string",
+                    "description": "ISO-8601 timestamp: return events created at or before this time."
+                },
+                "order": {
+                    "type": "string",
+                    "description": "Sort order by creation time: \"desc\" (newest first, default) or \"asc\".",
+                    "enum": ["desc", "asc"]
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of events to return (default: 50, max: 200)."
+                }
+            },
+            "required": []
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
     },
 
 ];
