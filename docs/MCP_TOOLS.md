@@ -4,7 +4,7 @@
 
 This reference is generated from `src/mcp/tools.rs`.
 
-Total tools: **251**
+Total tools: **253**
 
 ## Summary
 
@@ -76,6 +76,8 @@ Total tools: **251**
 | `memory_content_stats` | advanced | readOnlyHint | `id` |
 | `memory_create_batch` | standard | mutating (no MCP hints) | `memories` |
 | `memory_delete_batch` | standard | destructiveHint | `ids` |
+| `memory_ingest_fact` | standard | mutating (no MCP hints) | `fact` |
+| `memory_ingest_fact_batch` | standard | mutating (no MCP hints) | `facts` |
 | `memory_tags` | standard | readOnlyHint | none |
 | `memory_tag_hierarchy` | advanced | readOnlyHint | none |
 | `memory_validate_tags` | advanced | readOnlyHint | none |
@@ -1214,6 +1216,38 @@ Delete multiple memories in a single operation.
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `ids` | `array` | yes | Array of memory IDs to delete Items: `integer`. |
+
+### `memory_ingest_fact`
+
+Append-only fact ingest for high-frequency sources (sessions, file watchers). Always inserts a new memory with memory_type='fact'. No dedup or upsert.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `fact`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `fact` | `string` | yes | The fact text to store |
+| `source` | `string` | no | Origin identifier, e.g. 'session:abc' or 'watcher:/path/to/file' |
+| `session_id` | `string` | no | Session ID stored in metadata.session_id |
+| `workspace` | `string` | no | Workspace name (default: 'default') |
+| `tags` | `array` | no | Optional tags Items: `string`. |
+| `importance` | `number` | no | Importance score (default: 0.8) Minimum: `0`. Maximum: `1`. |
+| `scope` | `string` | no | Memory scope (default: 'global') |
+
+### `memory_ingest_fact_batch`
+
+Batch append-only fact ingest. Inserts all facts in a single transaction. Returns count and ids.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `facts`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `facts` | `array` | yes | Array of fact objects to insert Items: `object`. |
+| `workspace` | `string` | no | Default workspace applied to all facts (default: 'default') |
+| `scope` | `string` | no | Memory scope applied to all facts (default: 'global') |
 
 ### `memory_tags`
 

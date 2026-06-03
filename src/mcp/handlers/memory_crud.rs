@@ -1235,7 +1235,7 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
             // Invalidate cache for every distinct workspace that was written.
             let workspaces: HashSet<&str> = inputs
                 .iter()
-                .filter_map(|(_input, ws)| Some(ws.as_str()))
+                .map(|(_input, ws)| ws.as_str())
                 .collect();
             for ws in &workspaces {
                 ctx.search_cache.invalidate_for_workspace(Some(ws));
