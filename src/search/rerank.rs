@@ -32,10 +32,8 @@ pub struct RerankConfig {
     pub recency_half_life_days: f32,
     /// Boost per importance point
     pub importance_boost: f32,
-    /// Boost for memories with matching entities
-    pub entity_match_boost: f32,
-    /// Boost for memories structurally linked to entities in the DB
-    pub entity_linked_boost: f32,
+    /// Score value returned when a memory has at least one structural entity link
+    pub entity_linked_score: f32,
     /// Boost for exact phrase matches
     pub exact_match_boost: f32,
     /// Minimum number of results to consider for reranking
@@ -54,8 +52,7 @@ impl Default for RerankConfig {
             recency_boost: 0.05,
             recency_half_life_days: 30.0,
             importance_boost: 0.1,
-            entity_match_boost: 0.15,
-            entity_linked_boost: 0.20,
+            entity_linked_score: 1.0,
             exact_match_boost: 0.2,
             min_results: 3,
             max_rerank_candidates: 100,
@@ -113,8 +110,6 @@ pub struct RerankComponents {
     pub recency: f32,
     /// Score from memory importance
     pub importance: f32,
-    /// Score from entity matches (text mentions)
-    pub entity_match: f32,
     /// Score from entity links (structural DB-level links)
     pub entity_linked: f32,
     /// Score from exact phrase match
@@ -367,7 +362,6 @@ impl Reranker {
             term_overlap: compute_term_overlap(&memory.content, query_terms),
             recency: self.compute_recency_score(memory),
             importance: memory.importance * self.config.importance_boost,
-            entity_match: self.compute_entity_match_score(memory),
             entity_linked: self.compute_entity_linked_score(memory.id, conn),
             exact_match: if content_lower.contains(query_lower) {
                 self.config.exact_match_boost
@@ -381,15 +375,14 @@ impl Reranker {
 
     /// Combine component scores into a single rerank score
     fn combine_components(&self, components: &RerankComponents) -> f32 {
-        // Weighted combination of components
+        // Weighted combination of components (weights sum to 1.0)
         components.term_overlap * 0.25
             + components.recency * 0.15
             + components.importance * 0.15
-            + components.entity_match * 0.10
-            + components.entity_linked * 0.10
+            + components.entity_linked * 0.20
             + components.exact_match * 0.15
             + components.type_relevance * 0.05
-            + components.tag_match * 0.10
+            + components.tag_match * 0.05
     }
 
     /// Compute recency score with exponential decay
@@ -400,15 +393,6 @@ impl Reranker {
         // Exponential decay: score = boost * 0.5^(age/half_life)
         let decay = 0.5_f32.powf(age_days / self.config.recency_half_life_days);
         self.config.recency_boost * decay
-    }
-
-    /// Compute entity match score (text-mention based).
-    ///
-    /// Returns 0.0 since query entities are no longer passed through the
-    /// reranker public API. Structural entity links are handled by
-    /// `compute_entity_linked_score` instead.
-    fn compute_entity_match_score(&self, _memory: &Memory) -> f32 {
-        0.0
     }
 
     /// Compute entity-linked score by querying the `memory_entities` join table.
@@ -433,7 +417,7 @@ impl Reranker {
             .unwrap_or(0);
 
         if count > 0 {
-            self.config.entity_linked_boost
+            self.config.entity_linked_score
         } else {
             0.0
         }
@@ -630,38 +614,6 @@ mod tests {
             high_result.rerank_info.components.importance
                 > low_result.rerank_info.components.importance
         );
-    }
-
-    #[test]
-    fn test_entity_match_boost() {
-        // entity_match is now always 0.0 since query_entities are no longer
-        // passed through the reranker. This test confirms the field exists and
-        // is zero.
-        let config = RerankConfig {
-            min_results: 2,
-            ..Default::default()
-        };
-        let reranker = Reranker::with_config(config);
-
-        let results = vec![
-            create_test_result(
-                create_test_memory("Content about Python programming", 0.5),
-                0.8,
-            ),
-            create_test_result(
-                create_test_memory("Content about Rust and systems", 0.5),
-                0.75,
-            ),
-        ];
-
-        let reranked = reranker.rerank(results, "programming language", None);
-
-        // entity_match is 0.0 — entity_linked is the structural signal
-        let rust_result = reranked
-            .iter()
-            .find(|r| r.result.memory.content.contains("Rust"))
-            .unwrap();
-        assert_eq!(rust_result.rerank_info.components.entity_match, 0.0);
     }
 
     #[test]
