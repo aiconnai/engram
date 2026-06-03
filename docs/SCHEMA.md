@@ -1215,6 +1215,26 @@ CREATE INDEX idx_audit_user ON audit_log(user_id);
 CREATE INDEX idx_embedding_queue_status ON embedding_queue(status);
 ```
 
+### `enrichment_events`
+
+Append-only audit trail for automated enrichment operations (lifecycle transitions, consolidation, compression, gardening, etc.).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `operation_id` | TEXT NOT NULL | UUID grouping single or batch operations |
+| `event_type` | TEXT NOT NULL | `lifecycle_transition`, `consolidation`, `compression`, `garden`, `auto_tag`, `fact_ingest`, `evolution` |
+| `memory_id` | INTEGER | No FK — preserved after hard delete |
+| `version_id` | INTEGER | FK → `memory_versions(id)` ON DELETE SET NULL |
+| `triggered_by` | TEXT NOT NULL | Handler name that triggered the event |
+| `agent_id` | TEXT | Agent that triggered, when applicable |
+| `workspace` | TEXT | Denormalized — preserved after memory delete |
+| `params` | TEXT | JSON operation parameters (no sensitive data) |
+| `outcome` | TEXT | JSON result (tokens_saved, ratio, etc.) |
+| `status` | TEXT | `completed` \| `failed` \| `skipped` |
+| `dry_run` | INTEGER | 0 or 1 |
+| `created_at` | TEXT | RFC3339 UTC, filled by application |
+
 ---
 
 ## Migration Strategy

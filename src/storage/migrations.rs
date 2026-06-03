@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 39;
+pub const SCHEMA_VERSION: i32 = 40;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -178,8 +178,12 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         migrate_v38(conn)?;
     }
 
-    if current_version < SCHEMA_VERSION {
+    if current_version < 39 {
         migrate_v39(conn)?;
+    }
+
+    if current_version < SCHEMA_VERSION {
+        migrate_v40(conn)?;
     }
 
     Ok(())
@@ -1946,6 +1950,58 @@ fn migrate_v39(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_v40(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v40: Creating enrichment_events table...");
+
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS enrichment_events (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            operation_id TEXT NOT NULL,
+            event_type   TEXT NOT NULL,
+            memory_id    INTEGER,
+            version_id   INTEGER REFERENCES memory_versions(id) ON DELETE SET NULL,
+            triggered_by TEXT NOT NULL,
+            agent_id     TEXT,
+            workspace    TEXT,
+            params       TEXT NOT NULL DEFAULT '{}',
+            outcome      TEXT NOT NULL DEFAULT '{}',
+            status       TEXT NOT NULL DEFAULT 'completed'
+                             CHECK (status IN ('completed', 'failed', 'skipped')),
+            dry_run      INTEGER NOT NULL DEFAULT 0
+                             CHECK (dry_run IN (0, 1)),
+            created_at   TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_memory
+            ON enrichment_events(memory_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_type
+            ON enrichment_events(event_type, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_operation
+            ON enrichment_events(operation_id);
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_triggered_by
+            ON enrichment_events(triggered_by, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_workspace
+            ON enrichment_events(workspace, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_time
+            ON enrichment_events(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_version
+            ON enrichment_events(version_id)
+            WHERE version_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_agent
+            ON enrichment_events(agent_id, created_at DESC)
+            WHERE agent_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_enrichment_by_status
+            ON enrichment_events(status, created_at DESC);
+
+        INSERT INTO schema_version (version) VALUES (40);
+        "#,
+    )?;
+
+    tracing::info!("Migration v40 complete: enrichment_events table created");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1967,12 +2023,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 39);
+        assert_eq!(version, 40);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 39);
+        assert_eq!(SCHEMA_VERSION, 40);
     }
 
     #[test]
@@ -2127,7 +2183,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 39, "should reach v39 after full migration");
+        assert_eq!(version, 40, "should reach v40 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
@@ -2147,5 +2203,29 @@ mod tests {
             )
             .expect("check memory_clusters");
         assert_eq!(clusters_exists, 1, "memory_clusters table should exist");
+    }
+
+    #[test]
+    fn test_enrichment_events_table_exists() {
+        let conn = in_memory_conn();
+        let exists: i32 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='enrichment_events'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query sqlite_master");
+        assert_eq!(exists, 1, "enrichment_events table should exist after migration");
+    }
+
+    #[test]
+    fn test_enrichment_events_operation_id_not_null() {
+        let conn = in_memory_conn();
+        let result = conn.execute(
+            "INSERT INTO enrichment_events (operation_id, event_type, triggered_by, created_at)
+             VALUES (NULL, 'test', 'test', '2026-01-01T00:00:00Z')",
+            [],
+        );
+        assert!(result.is_err(), "NULL operation_id should be rejected");
     }
 }
