@@ -267,7 +267,8 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
                 "filter": {
                     "type": "object",
                     "description": "Advanced filter with AND/OR logic. Supports workspace, tier, and metadata fields. Example: {\"AND\": [{\"workspace\": {\"eq\": \"my-project\"}}, {\"importance\": {\"gte\": 0.5}}]}"
-                }
+                },
+                "global": {"type": "boolean", "default": false, "description": "Search across all workspaces (default: false). When true, ignores any workspace filter and returns results from all workspaces with a workspace field in each result."}
             },
             "required": ["query"]
         }"#,
@@ -2778,7 +2779,8 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
             "properties": {
                 "query": {"type": "string", "description": "Search query"},
                 "limit": {"type": "integer", "description": "Max results (default: 10)"},
-                "workspace": {"type": "string", "description": "Filter to workspace"}
+                "workspace": {"type": "string", "description": "Filter to workspace"},
+                "global": {"type": "boolean", "default": false, "description": "Search across all workspaces (default: false). When true, ignores any workspace filter and includes a workspace field in each result."}
             },
             "required": ["query"]
         }"#,
