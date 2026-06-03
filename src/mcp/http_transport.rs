@@ -56,7 +56,10 @@ async fn handle_mcp(
             let err = McpResponse::error(request.id, -32000, "Unauthorized".to_string());
             return (
                 StatusCode::UNAUTHORIZED,
-                Json(serde_json::to_value(err).unwrap_or_default()),
+                Json(serde_json::to_value(err).unwrap_or_else(|e| {
+                    tracing::error!("failed to serialize error response: {e}");
+                    serde_json::Value::Null
+                })),
             );
         }
     }
@@ -69,7 +72,10 @@ async fn handle_mcp(
     }
     (
         StatusCode::OK,
-        Json(serde_json::to_value(response).unwrap_or_default()),
+        Json(serde_json::to_value(response).unwrap_or_else(|e| {
+            tracing::error!("failed to serialize MCP response: {e}");
+            serde_json::Value::Null
+        })),
     )
 }
 
@@ -352,6 +358,33 @@ fn build_cors_layer() -> CorsLayer {
     }
 }
 
+/// Build the Axum router for the MCP HTTP transport.
+///
+/// Module-private by design: callers must go through [`serve_http`] or the
+/// test helper `test_app`. Direct router composition from outside the module
+/// is not a supported use-case; if it becomes necessary, promote this to `pub`.
+fn build_router(
+    handler: Arc<dyn McpHandler>,
+    api_key: Option<String>,
+    realtime: Option<RealtimeManager>,
+) -> Router {
+    let state = AppState {
+        handler,
+        api_key,
+        realtime,
+    };
+
+    let cors = build_cors_layer();
+
+    Router::new()
+        .route("/mcp", post(handle_mcp))
+        .route("/v1/mcp", post(handle_mcp))
+        .route("/health", get(handle_health))
+        .route("/v1/events", get(handle_events))
+        .layer(cors)
+        .with_state(state)
+}
+
 // ---------------------------------------------------------------------------
 // Public entry-point
 // ---------------------------------------------------------------------------
@@ -368,20 +401,7 @@ pub async fn serve_http(
     api_key: Option<String>,
     realtime: Option<RealtimeManager>,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let state = AppState {
-        handler,
-        api_key,
-        realtime,
-    };
-
-    let cors = build_cors_layer();
-
-    let app = Router::new()
-        .route("/mcp", post(handle_mcp))
-        .route("/health", get(handle_health))
-        .route("/v1/events", get(handle_events))
-        .layer(cors)
-        .with_state(state);
+    let app = build_router(handler, api_key, realtime);
 
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -398,6 +418,46 @@ pub async fn serve_http(
 mod tests {
     use super::*;
     use crate::realtime::RealtimeEvent;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use std::sync::Mutex as StdMutex;
+    use tower::ServiceExt;
+
+    static ENV_LOCK: StdMutex<()> = StdMutex::new(());
+
+    struct TestMcpHandler;
+
+    impl McpHandler for TestMcpHandler {
+        fn handle_request(&self, request: McpRequest) -> McpResponse {
+            McpResponse::success(request.id, json!({"ok": true}))
+        }
+    }
+
+    fn json_rpc_request(path: &str, bearer: Option<&str>) -> Request<Body> {
+        let body = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {}
+        })
+        .to_string();
+
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri(path)
+            .header("content-type", "application/json");
+
+        if let Some(token) = bearer {
+            builder = builder.header("authorization", format!("Bearer {token}"));
+        }
+
+        builder.body(Body::from(body)).unwrap()
+    }
+
+    fn test_app(api_key: Option<&str>) -> Router {
+        let _guard = ENV_LOCK.lock().unwrap();
+        build_router(Arc::new(TestMcpHandler), api_key.map(str::to_string), None)
+    }
 
     // ---- check_bearer tests ------------------------------------------------
 
@@ -586,6 +646,50 @@ mod tests {
         assert!(has_key.is_none());
     }
 
+    #[tokio::test]
+    async fn test_post_mcp_requires_bearer_when_api_key_configured() {
+        let app = test_app(Some("secret-key"));
+        let response = app
+            .oneshot(json_rpc_request("/mcp", None))
+            .await
+            .expect("request should be handled");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_post_mcp_accepts_matching_bearer_token() {
+        let app = test_app(Some("secret-key"));
+        let response = app
+            .oneshot(json_rpc_request("/mcp", Some("secret-key")))
+            .await
+            .expect("request should be handled");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_post_v1_mcp_alias_uses_same_auth_contract() {
+        let app = test_app(Some("secret-key"));
+        let response = app
+            .oneshot(json_rpc_request("/v1/mcp", Some("secret-key")))
+            .await
+            .expect("request should be handled");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_post_v1_mcp_alias_rejects_missing_bearer() {
+        let app = test_app(Some("secret-key"));
+        let response = app
+            .oneshot(json_rpc_request("/v1/mcp", None))
+            .await
+            .expect("request should be handled");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
     // ---- Keep-alive configuration test ------------------------------------
 
     #[test]
@@ -719,12 +823,14 @@ mod tests {
 
     #[test]
     fn test_cors_origins_default_allows_localhost() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::remove_var("ENGRAM_CORS_ORIGINS");
         assert!(cors_origin_allowed("http://localhost:3000"));
     }
 
     #[test]
     fn test_cors_origins_default_rejects_external() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::remove_var("ENGRAM_CORS_ORIGINS");
         assert!(!cors_origin_allowed("https://evil.example.com"));
     }
@@ -733,6 +839,7 @@ mod tests {
     /// between parallel test threads mutating the same env var.
     #[test]
     fn test_cors_origins_env_var_cases() {
+        let _guard = ENV_LOCK.lock().unwrap();
         // Case 1: * allows any origin
         std::env::set_var("ENGRAM_CORS_ORIGINS", "*");
         assert!(cors_origin_allowed("https://anything.example.com"));
