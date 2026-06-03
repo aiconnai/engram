@@ -150,7 +150,7 @@ pub fn latest_version_id(conn: &Connection, memory_id: i64) -> Result<Option<i64
 
 - `compression::memory_compress` — currently read-only (returns computed compression, does not persist).
 - `evolution::memory_reflect` with `persist = false` — no state change, no event.
-- `memory_garden_preview` — dry-run by semantics; no event unless `record_dry_run_events: true`.
+- `memory_garden_preview` — `read_only` annotation in `tools.rs`; never emits enrichment events. Dry-run event logging is only available on mutating/destructive tools.
 
 ---
 
@@ -261,4 +261,6 @@ Every PR implementing this feature must touch:
 - [ ] `src/mcp/tools.rs` (register 2 new tools)
 - [ ] 11 emitting handlers (handler list above), including converting `lifecycle_run`, `memory_garden`, `memory_summarize` from `with_connection` to `with_transaction`
 - [ ] `docs/MCP_TOOLS.md` via `./scripts/generate-mcp-reference.sh` (canonical harness wrapper)
+- [ ] `docs/SCHEMA.md` — add `enrichment_events` table description
+- [ ] `src/storage/migrations.rs` — update hardcoded `SCHEMA_VERSION` test to v40
 - [ ] Unit + integration + protocol tests
