@@ -298,31 +298,48 @@ mod tests {
 
     #[test]
     fn test_memory_consolidate_emits_failed_event_on_error() {
-        // We can't easily make the consolidator fail via params alone because
-        // all workspace strings are valid. Instead we verify the failure-path
-        // code compiles and runs correctly by checking the "completed" path
-        // on a fresh DB (zero memories → zero groups → no error, no panic).
+        // Force a real DB error by dropping the `memories` table before calling
+        // the handler. `fetch_candidates` inside the consolidator queries that
+        // table, so the `with_connection` closure will return an error, which
+        // causes the handler to enter the failure path and emit a
+        // `status="failed"` enrichment event.
         let ctx = make_ctx();
+
+        // Drop the memories table so the consolidator hits a real SQL error.
+        ctx.storage
+            .with_connection(|conn| {
+                conn.execute_batch("DROP TABLE IF EXISTS memories;")?;
+                Ok(())
+            })
+            .expect("drop memories table");
+
         let result = memory_consolidate(
             &ctx,
-            json!({"workspace": "nonexistent_ws", "dry_run": false}),
+            json!({"workspace": "default", "strategy": "content_overlap", "dry_run": false}),
         );
-        // With no memories in the workspace this must succeed (0 groups found).
-        assert!(result.get("error").is_none(), "unexpected error: {result}");
 
-        // Check the enrichment_events table is accessible (schema is correct).
+        // The handler must surface an error in the JSON response.
+        assert!(
+            result.get("error").is_some(),
+            "expected an error response after dropping memories table, got: {result}"
+        );
+
+        // The failure path must have emitted a status=failed enrichment event.
         let count: i32 = ctx
             .storage
             .with_connection(|conn| {
                 Ok(conn.query_row(
-                    "SELECT COUNT(*) FROM enrichment_events WHERE triggered_by='memory_consolidate'",
+                    "SELECT COUNT(*) FROM enrichment_events
+                     WHERE triggered_by='memory_consolidate' AND status='failed'",
                     [],
                     |r| r.get(0),
                 )?)
             })
             .unwrap();
-        // Zero merges means no event emitted — that is correct behaviour.
-        assert_eq!(count, 0, "no event expected when nothing was consolidated");
+        assert!(
+            count > 0,
+            "memory_consolidate error must emit status=failed enrichment event"
+        );
     }
 }
 
