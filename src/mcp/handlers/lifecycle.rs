@@ -3,6 +3,7 @@
 use rusqlite::params;
 use serde_json::{json, Value};
 
+use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use super::HandlerContext;
 
 pub fn lifecycle_status(ctx: &HandlerContext, params: Value) -> Value {
@@ -92,7 +93,7 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
     let archive_cutoff = (Utc::now() - Duration::days(archive_days)).to_rfc3339();
 
     ctx.storage
-        .with_connection(|conn| {
+        .with_transaction(|conn| {
             let stale_query = if workspace.is_some() {
                 "SELECT id, content FROM memories
                  WHERE workspace = ?
@@ -169,6 +170,7 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
 
             let mut stale_count = 0;
             let mut archive_count = 0;
+            let mut transitioned_ids: Vec<(i64, &str)> = Vec::new();
 
             for (id, _) in &stale_candidates {
                 conn.execute(
@@ -176,6 +178,7 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
                     params![id],
                 )?;
                 stale_count += 1;
+                transitioned_ids.push((*id, "stale"));
             }
 
             for (id, _) in &archive_candidates {
@@ -184,6 +187,27 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
                     params![id],
                 )?;
                 archive_count += 1;
+                transitioned_ids.push((*id, "archived"));
+            }
+
+            let operation_id = uuid::Uuid::new_v4().to_string();
+            for (mem_id, new_state) in &transitioned_ids {
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &operation_id,
+                        event_type:   "lifecycle_transition",
+                        memory_id:    Some(*mem_id),
+                        version_id:   None,
+                        triggered_by: "lifecycle_run",
+                        agent_id:     None,
+                        workspace,
+                        params:       json!({"dry_run": dry_run}),
+                        outcome:      json!({"new_state": new_state}),
+                        status:       "completed",
+                        dry_run,
+                    },
+                );
             }
 
             Ok(json!({
@@ -369,4 +393,100 @@ pub fn retention_policy_apply(ctx: &HandlerContext, params: Value) -> Value {
             Ok(json!({"applied": true, "memories_affected": affected}))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+
+    fn test_ctx() -> super::super::HandlerContext {
+        use crate::embedding::{create_embedder, EmbeddingCache};
+        use crate::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
+        use crate::storage::Storage;
+        use crate::types::EmbeddingConfig;
+        use parking_lot::Mutex;
+        use std::sync::Arc;
+
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
+        super::super::HandlerContext {
+            storage,
+            embedder,
+            fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
+            search_config: SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(EmbeddingCache::default()),
+            search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 60,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(
+                tokio::runtime::Runtime::new().expect("langfuse runtime"),
+            ),
+        }
+    }
+
+    #[test]
+    fn test_lifecycle_run_emits_enrichment_event() {
+        use chrono::{Duration, Utc};
+
+        let ctx = test_ctx();
+
+        // Seed a memory old enough to trigger stale transition:
+        // created_at far in the past, low importance, low access_count.
+        let old_ts = (Utc::now() - Duration::days(60)).to_rfc3339();
+        ctx.storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "INSERT INTO memories (content, memory_type, workspace, importance,
+                             access_count, lifecycle_state, created_at)
+                     VALUES ('old memory content', 'general', 'default', 0.1, 0, 'active', ?1)",
+                    rusqlite::params![old_ts],
+                )?;
+                Ok(())
+            })
+            .expect("seed old memory");
+
+        // Run lifecycle_run with dry_run: false
+        let result = lifecycle_run(
+            &ctx,
+            json!({
+                "dry_run": false,
+                "stale_days": 30,
+                "workspace": "default"
+            }),
+        );
+        assert!(
+            result.get("error").is_none(),
+            "lifecycle_run returned error: {result}"
+        );
+        assert!(
+            result["marked_stale"].as_i64().unwrap_or(0) > 0,
+            "expected at least one memory marked stale"
+        );
+
+        // Assert enrichment event was emitted
+        let event_count: i64 = ctx
+            .storage
+            .with_connection(|conn| {
+                let n: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM enrichment_events
+                     WHERE event_type = 'lifecycle_transition'
+                       AND triggered_by = 'lifecycle_run'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                Ok(n)
+            })
+            .expect("query enrichment_events");
+
+        assert!(
+            event_count > 0,
+            "expected enrichment_events rows for lifecycle_transition, got 0"
+        );
+    }
 }

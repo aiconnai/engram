@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::storage::enrichment_events::{emit_best_effort, latest_version_id, EnrichmentEvent};
 
 pub fn memory_summarize(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::{create_memory, get_memory};
@@ -31,7 +32,7 @@ pub fn memory_summarize(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| serde_json::from_value(v.clone()).ok());
 
     ctx.storage
-        .with_connection(|conn| {
+        .with_transaction(|conn| {
             let mut contents: Vec<String> = Vec::with_capacity(memory_ids.len());
             let mut first_memory_workspace: Option<String> = None;
 
@@ -87,6 +88,22 @@ pub fn memory_summarize(ctx: &HandlerContext, params: Value) -> Value {
             };
 
             let memory = create_memory(conn, &input)?;
+
+            let operation_id = uuid::Uuid::new_v4().to_string();
+            let vid = latest_version_id(conn, memory.id).unwrap_or(None);
+            emit_best_effort(conn, &EnrichmentEvent {
+                operation_id: &operation_id,
+                event_type:   "consolidation",
+                memory_id:    Some(memory.id),
+                version_id:   vid,
+                triggered_by: "memory_summarize",
+                agent_id:     None,
+                workspace:    Some(memory.workspace.as_str()),
+                params:       serde_json::json!({"source_count": memory_ids.len()}),
+                outcome:      serde_json::json!({"summary_id": memory.id}),
+                status:       "completed",
+                dry_run:      false,
+            });
 
             Ok(json!({
                 "id": memory.id,
@@ -315,4 +332,100 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
             }))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+#[cfg(test)]
+mod summarize_tests {
+    use super::*;
+
+    fn test_ctx() -> super::super::HandlerContext {
+        use crate::embedding::{create_embedder, EmbeddingCache};
+        use crate::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
+        use crate::storage::Storage;
+        use crate::types::EmbeddingConfig;
+        use parking_lot::Mutex;
+        use std::sync::Arc;
+
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
+        super::super::HandlerContext {
+            storage,
+            embedder,
+            fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
+            search_config: SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(EmbeddingCache::default()),
+            search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 60,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(
+                tokio::runtime::Runtime::new().expect("langfuse runtime"),
+            ),
+        }
+    }
+
+    fn seed_memory(ctx: &super::super::HandlerContext, content: &str) -> i64 {
+        use crate::storage::queries::create_memory;
+        use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
+        ctx.storage
+            .with_transaction(|conn| {
+                create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: content.to_string(),
+                        memory_type: MemoryType::Note,
+                        workspace: Some("default".to_string()),
+                        tier: MemoryTier::Permanent,
+                        ..Default::default()
+                    },
+                )
+            })
+            .expect("seed failed")
+            .id
+    }
+
+    #[test]
+    fn test_memory_summarize_emits_enrichment_event() {
+        let ctx = test_ctx();
+
+        let id1 = seed_memory(&ctx, "Memory alpha about Rust ownership");
+        let id2 = seed_memory(&ctx, "Memory beta about Rust lifetimes");
+
+        let result = memory_summarize(
+            &ctx,
+            serde_json::json!({
+                "memory_ids": [id1, id2],
+                "summary": "Rust ownership and lifetimes overview",
+                "workspace": "default"
+            }),
+        );
+
+        assert!(
+            result.get("error").is_none(),
+            "memory_summarize returned error: {:?}",
+            result
+        );
+        assert!(result["id"].as_i64().is_some(), "expected summary memory id");
+
+        // Verify an enrichment_events row was written
+        let count: i64 = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM enrichment_events \
+                     WHERE event_type = 'consolidation' \
+                       AND triggered_by = 'memory_summarize'",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("query failed");
+
+        assert_eq!(count, 1, "expected exactly 1 enrichment_events row");
+    }
 }
