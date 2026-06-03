@@ -99,6 +99,7 @@ pub use queries::{
     boost_memory,
     cleanup_sync_data,
     clear_events,
+    collect_supersedes_chain,
     create_checkpoint,
     create_memory,
     // Batch operations

@@ -207,7 +207,12 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         schema: r#"{
             "type": "object",
             "properties": {
-                "id": {"type": "integer", "description": "Memory ID"}
+                "id": {"type": "integer", "description": "Memory ID"},
+                "cascade_chain": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, also delete all memories in the supersedes chain (ancestors this memory replaced)."
+                }
             },
             "required": ["id"]
         }"#,
@@ -1148,6 +1153,11 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
                     "type": "array",
                     "items": {"type": "integer"},
                     "description": "Array of memory IDs to delete"
+                },
+                "cascade_chain": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, also delete all memories in the supersedes chain (ancestors this memory replaced)."
                 }
             },
             "required": ["ids"]
