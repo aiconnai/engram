@@ -6,6 +6,12 @@
 //! Run with: cargo test --test mcp_protocol_tests
 
 use std::sync::Arc;
+use std::{
+    io::{Read, Write},
+    net::TcpListener,
+    thread,
+    time::Duration,
+};
 
 use parking_lot::Mutex;
 use serde_json::{json, Value};
@@ -211,6 +217,93 @@ fn make_request(id: i64, method: &str, params: Value) -> McpRequest {
     }
 }
 
+fn start_council_stub_server(
+    expected_path: &'static str,
+    expected_body_fragment: &'static str,
+    response_body: Value,
+) -> (String, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock council port");
+    let addr = listener.local_addr().expect("local address");
+    let response_body = response_body.to_string();
+
+    let handle = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept mock council request");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("set read timeout");
+
+        let mut request_bytes = Vec::new();
+        let header_end = loop {
+            let mut chunk = [0_u8; 1024];
+            let n = stream.read(&mut chunk).expect("read request bytes");
+            if n == 0 {
+                break None;
+            }
+            request_bytes.extend_from_slice(&chunk[..n]);
+            if let Some(pos) = request_bytes
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+            {
+                break Some(pos);
+            }
+        }
+        .expect("request headers must be present");
+
+        let header_text = String::from_utf8(request_bytes[..header_end].to_vec())
+            .expect("request headers must be UTF-8");
+        let mut lines = header_text.lines();
+        let request_line = lines.next().expect("request line");
+        assert!(
+            request_line.starts_with("POST "),
+            "expected POST request, got: {}",
+            request_line
+        );
+        assert!(
+            request_line.contains(expected_path),
+            "expected request path to contain {}, got: {}",
+            expected_path,
+            request_line
+        );
+
+        let mut content_length = 0usize;
+        for line in lines {
+            if let Some(value) = line.strip_prefix("Content-Length:") {
+                content_length = value.trim().parse().expect("valid Content-Length");
+            }
+        }
+
+        let mut body_bytes = request_bytes[(header_end + 4)..].to_vec();
+        while body_bytes.len() < content_length {
+            let mut chunk = [0_u8; 1024];
+            let n = stream.read(&mut chunk).expect("read request body");
+            if n == 0 {
+                break;
+            }
+            body_bytes.extend_from_slice(&chunk[..n]);
+        }
+
+        let body_text = String::from_utf8(body_bytes).expect("request body must be UTF-8");
+        assert!(
+            body_text.contains(expected_body_fragment),
+            "expected request body to contain {}, got: {}",
+            expected_body_fragment,
+            body_text
+        );
+
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            response_body.len(),
+            response_body
+        );
+        stream
+            .write_all(response.as_bytes())
+            .expect("write mock council response");
+        stream.flush().expect("flush mock council response");
+    });
+
+    (format!("http://{}", addr), handle)
+}
+
 // ---------------------------------------------------------------------------
 // Protocol negotiation tests
 // ---------------------------------------------------------------------------
@@ -359,6 +452,75 @@ fn test_tools_list_includes_annotations() {
             }
         }
     }
+}
+
+#[test]
+fn test_memory_council_round_trips_through_tools_call() {
+    let handler = TestHandler::new();
+    let (council_url, server_handle) = start_council_stub_server(
+        "/api/conversations/conv-42/message",
+        "Should we use Postgres?",
+        json!({
+            "stage1": [{"model": "critic-1", "response": "Prefer the safer route"}],
+            "stage2": [{"model": "critic-2", "response": "Prefer the safer route"}],
+            "stage3": {"model": "arbiter", "response": "Prefer the safer route"},
+            "metadata": {"rounds": 3}
+        }),
+    );
+
+    let req = make_request(
+        3,
+        "tools/call",
+        json!({
+            "name": "memory_council",
+            "arguments": {
+                "prompt": "Should we use Postgres?",
+                "conversation_id": "conv-42",
+                "council_url": council_url,
+                "persist": true,
+                "workspace": "architecture",
+                "memory_tags": ["architecture", "consensus"],
+                "include_raw_stages": true
+            }
+        }),
+    );
+
+    let resp = handler.handle_request(req);
+    server_handle
+        .join()
+        .expect("mock council server should exit cleanly");
+
+    assert!(resp.error.is_none(), "Expected no error: {:?}", resp.error);
+
+    let result = resp.result.expect("Expected result");
+    let content = result["content"]
+        .as_array()
+        .expect("Expected content array");
+    let text = content[0]["text"].as_str().expect("Expected text content");
+    let inner: Value = serde_json::from_str(text).expect("Tool result should contain JSON");
+
+    assert_eq!(
+        inner["conversation_id"].as_str(),
+        Some("conv-42"),
+        "Council response should preserve the conversation id"
+    );
+    assert_eq!(
+        inner["final_answer"].as_str(),
+        Some("Prefer the safer route"),
+        "Council response should surface the final answer"
+    );
+    assert_eq!(
+        inner["final_model"].as_str(),
+        Some("arbiter"),
+        "Council response should surface the final model"
+    );
+    assert!(inner["stage1"].is_array(), "Expected raw stage1 payload");
+    assert!(inner["stage2"].is_array(), "Expected raw stage2 payload");
+    assert!(inner["stage3"].is_object(), "Expected raw stage3 payload");
+    assert!(
+        inner["memory_id"].is_number(),
+        "Persisted council result should return a memory id"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -897,6 +1059,114 @@ fn test_recent_activity_limit_enforced() {
         activities.len() <= 2,
         "Should return at most 2 activities, got {}",
         activities.len()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Enrichment audit tool tests (ENG-1240)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_enrichment_tools_appear_in_tools_list() {
+    let handler = TestHandler::new();
+    let req = make_request(110, "tools/list", json!({}));
+
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none(), "Expected no error: {:?}", resp.error);
+
+    let result = resp.result.expect("Expected result");
+    let tools = result["tools"].as_array().expect("Expected tools array");
+    let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
+
+    assert!(
+        tool_names.contains(&"memory_enrichment_timeline"),
+        "tools/list must include memory_enrichment_timeline, got: {:?}",
+        tool_names
+    );
+    assert!(
+        tool_names.contains(&"memory_enrichment_audit"),
+        "tools/list must include memory_enrichment_audit, got: {:?}",
+        tool_names
+    );
+}
+
+#[test]
+fn test_memory_enrichment_timeline_returns_empty_for_unknown_memory() {
+    let handler = TestHandler::new();
+    let req = make_request(
+        111,
+        "tools/call",
+        json!({
+            "name": "memory_enrichment_timeline",
+            "arguments": {"memory_id": 999_999}
+        }),
+    );
+
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none(), "Expected no error: {:?}", resp.error);
+
+    let result = resp.result.expect("Expected result");
+    let content = result["content"]
+        .as_array()
+        .expect("Expected content array");
+    let text = content[0]["text"].as_str().expect("Expected text content");
+    let data: Value =
+        serde_json::from_str(text).expect("memory_enrichment_timeline should return valid JSON");
+
+    assert!(
+        data["events"].is_array(),
+        "Result must have 'events' array, got: {}",
+        data
+    );
+    assert_eq!(
+        data["events"].as_array().unwrap().len(),
+        0,
+        "events should be empty for unknown memory id"
+    );
+    assert_eq!(
+        data["memory_id"].as_i64(),
+        Some(999_999),
+        "Result should echo back the requested memory_id"
+    );
+}
+
+#[test]
+fn test_memory_enrichment_audit_returns_events_array_with_filters() {
+    let handler = TestHandler::new();
+    let req = make_request(
+        112,
+        "tools/call",
+        json!({
+            "name": "memory_enrichment_audit",
+            "arguments": {"status": "failed", "limit": 5}
+        }),
+    );
+
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none(), "Expected no error: {:?}", resp.error);
+
+    let result = resp.result.expect("Expected result");
+    let content = result["content"]
+        .as_array()
+        .expect("Expected content array");
+    let text = content[0]["text"].as_str().expect("Expected text content");
+    let data: Value =
+        serde_json::from_str(text).expect("memory_enrichment_audit should return valid JSON");
+
+    assert!(
+        data["events"].is_array(),
+        "Result must have 'events' array, got: {}",
+        data
+    );
+    assert!(
+        data["filters_applied"].is_object(),
+        "Result must have 'filters_applied' object, got: {}",
+        data
+    );
+    assert!(
+        data["filters_applied"]["status"].as_str() == Some("failed"),
+        "filters_applied must echo back the 'status' filter, got: {}",
+        data["filters_applied"]
     );
 }
 

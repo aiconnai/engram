@@ -164,20 +164,20 @@ pub fn memory_consolidate(ctx: &HandlerContext, params: Value) -> Value {
                 conn,
                 &EnrichmentEvent {
                     operation_id: &operation_id,
-                    event_type:   "consolidation",
-                    memory_id:    None,
-                    version_id:   None,
+                    event_type: "consolidation",
+                    memory_id: None,
+                    version_id: None,
                     triggered_by: "memory_consolidate",
-                    agent_id:     None,
-                    workspace:    Some(workspace),
-                    params:       json!({"strategy": strategy_str}),
-                    outcome:      json!({
+                    agent_id: None,
+                    workspace: Some(workspace),
+                    params: json!({"strategy": strategy_str}),
+                    outcome: json!({
                         "groups_found":       report.groups_found,
                         "memories_merged":    report.memories_merged,
                         "memories_archived":  report.memories_archived,
                         "tokens_saved":       report.tokens_saved,
                     }),
-                    status:       "completed",
+                    status: "completed",
                     dry_run,
                 },
             );
@@ -205,15 +205,15 @@ pub fn memory_consolidate(ctx: &HandlerContext, params: Value) -> Value {
                 conn,
                 &EnrichmentEvent {
                     operation_id: &op_id,
-                    event_type:   "consolidation",
-                    memory_id:    None,
-                    version_id:   None,
+                    event_type: "consolidation",
+                    memory_id: None,
+                    version_id: None,
                     triggered_by: "memory_consolidate",
-                    agent_id:     None,
-                    workspace:    Some(workspace),
-                    params:       json!({"strategy": strategy_str}),
-                    outcome:      json!({"error": &err_str}),
-                    status:       "failed",
+                    agent_id: None,
+                    workspace: Some(workspace),
+                    params: json!({"strategy": strategy_str}),
+                    outcome: json!({"error": &err_str}),
+                    status: "failed",
                     dry_run,
                 },
             );
@@ -221,6 +221,51 @@ pub fn memory_consolidate(ctx: &HandlerContext, params: Value) -> Value {
         });
         json!({"error": err_str})
     })
+}
+
+// ── memory_synthesis ──────────────────────────────────────────────────────────
+
+/// Check whether two pieces of content overlap semantically (Jaccard-based).
+pub fn memory_synthesis(_ctx: &HandlerContext, params: Value) -> Value {
+    use crate::intelligence::synthesis::{SynthesisConfig, SynthesisEngine, SynthesisStrategy};
+
+    let content_a = match params.get("content_a").and_then(|v| v.as_str()) {
+        Some(c) => c.to_string(),
+        None => return json!({"error": "content_a is required"}),
+    };
+    let content_b = match params.get("content_b").and_then(|v| v.as_str()) {
+        Some(c) => c.to_string(),
+        None => return json!({"error": "content_b is required"}),
+    };
+    let id_a: i64 = params.get("id_a").and_then(|v| v.as_i64()).unwrap_or(0);
+    let strategy_str = params
+        .get("strategy")
+        .and_then(|v| v.as_str())
+        .unwrap_or("merge");
+
+    let strategy = match strategy_str {
+        "replace" => SynthesisStrategy::Replace,
+        "append" => SynthesisStrategy::Append,
+        _ => SynthesisStrategy::Merge,
+    };
+
+    let mut engine = SynthesisEngine::new(SynthesisConfig::default());
+    engine.add_to_buffer(id_a, &content_a);
+
+    match engine.check_and_synthesize(&content_b, strategy) {
+        Some(synth) => json!({
+            "overlap_detected": true,
+            "overlap_score": synth.overlap_score,
+            "strategy_used": format!("{:?}", synth.strategy_used),
+            "synthesized_content": synth.content,
+            "source_ids": synth.sources,
+            "tokens_saved": synth.tokens_saved,
+        }),
+        None => json!({
+            "overlap_detected": false,
+            "message": "No significant overlap detected between the two contents",
+        }),
+    }
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -253,9 +298,7 @@ mod tests {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new().expect("langfuse runtime"),
-            ),
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         }
     }
 
@@ -340,50 +383,5 @@ mod tests {
             count > 0,
             "memory_consolidate error must emit status=failed enrichment event"
         );
-    }
-}
-
-// ── memory_synthesis ──────────────────────────────────────────────────────────
-
-/// Check whether two pieces of content overlap semantically (Jaccard-based).
-pub fn memory_synthesis(_ctx: &HandlerContext, params: Value) -> Value {
-    use crate::intelligence::synthesis::{SynthesisConfig, SynthesisEngine, SynthesisStrategy};
-
-    let content_a = match params.get("content_a").and_then(|v| v.as_str()) {
-        Some(c) => c.to_string(),
-        None => return json!({"error": "content_a is required"}),
-    };
-    let content_b = match params.get("content_b").and_then(|v| v.as_str()) {
-        Some(c) => c.to_string(),
-        None => return json!({"error": "content_b is required"}),
-    };
-    let id_a: i64 = params.get("id_a").and_then(|v| v.as_i64()).unwrap_or(0);
-    let strategy_str = params
-        .get("strategy")
-        .and_then(|v| v.as_str())
-        .unwrap_or("merge");
-
-    let strategy = match strategy_str {
-        "replace" => SynthesisStrategy::Replace,
-        "append" => SynthesisStrategy::Append,
-        _ => SynthesisStrategy::Merge,
-    };
-
-    let mut engine = SynthesisEngine::new(SynthesisConfig::default());
-    engine.add_to_buffer(id_a, &content_a);
-
-    match engine.check_and_synthesize(&content_b, strategy) {
-        Some(synth) => json!({
-            "overlap_detected": true,
-            "overlap_score": synth.overlap_score,
-            "strategy_used": format!("{:?}", synth.strategy_used),
-            "synthesized_content": synth.content,
-            "source_ids": synth.sources,
-            "tokens_saved": synth.tokens_saved,
-        }),
-        None => json!({
-            "overlap_detected": false,
-            "message": "No significant overlap detected between the two contents",
-        }),
     }
 }
