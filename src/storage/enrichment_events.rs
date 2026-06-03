@@ -171,4 +171,27 @@ mod tests {
         let result = latest_version_id(&conn, 99999).unwrap();
         assert!(result.is_none());
     }
+
+    #[test]
+    fn test_latest_version_id_returns_id_for_existing_version() {
+        let conn = test_conn();
+        // Insert a memory first (required for FK in memory_versions)
+        conn.execute(
+            "INSERT INTO memories (content, memory_type, importance, visibility, metadata, valid_from)
+             VALUES ('test', 'note', 0.5, 'private', '{}', CURRENT_TIMESTAMP)",
+            [],
+        ).unwrap();
+        let memory_id = conn.last_insert_rowid();
+
+        // Insert a memory_versions row
+        conn.execute(
+            "INSERT INTO memory_versions (memory_id, version, content, tags, created_at)
+             VALUES (?1, 1, 'v1 content', '[]', '2026-01-01T00:00:00Z')",
+            rusqlite::params![memory_id],
+        ).unwrap();
+        let version_row_id = conn.last_insert_rowid();
+
+        let result = latest_version_id(&conn, memory_id).unwrap();
+        assert_eq!(result, Some(version_row_id), "should return the PK of the latest memory_versions row");
+    }
 }
