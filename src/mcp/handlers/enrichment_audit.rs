@@ -78,10 +78,9 @@ pub fn memory_enrichment_timeline(ctx: &HandlerContext, params: Value) -> Value 
             let mut stmt = conn.prepare(&sql)?;
 
             let rows: Vec<Value> = if let Some(ref et) = event_type {
-                stmt.query_map(
-                    params![memory_id, et.as_str(), limit],
-                    |row| row_to_json_with_snapshot(row, include_snapshots),
-                )?
+                stmt.query_map(params![memory_id, et.as_str(), limit], |row| {
+                    row_to_json_with_snapshot(row, include_snapshots)
+                })?
                 .collect::<rusqlite::Result<Vec<_>>>()?
             } else {
                 stmt.query_map(params![memory_id, limit], |row| {
@@ -192,17 +191,39 @@ pub fn memory_enrichment_audit(ctx: &HandlerContext, params: Value) -> Value {
                 }};
             }
 
-            if event_type.is_some()   { cond!("event_type"); }
-            if triggered_by.is_some() { cond!("triggered_by"); }
-            if agent_id.is_some()     { cond!("agent_id"); }
-            if status.is_some()       { cond!("status"); }
-            if workspace.is_some()    { cond!("workspace"); }
-            if operation_id.is_some() { cond!("operation_id"); }
-            if memory_id.is_some()    { cond!("memory_id"); }
-            if version_id.is_some()   { cond!("version_id"); }
-            if dry_run.is_some()      { cond!("dry_run"); }
-            if since.is_some()        { cond!("created_at", ">="); }
-            if until.is_some()        { cond!("created_at", "<="); }
+            if event_type.is_some() {
+                cond!("event_type");
+            }
+            if triggered_by.is_some() {
+                cond!("triggered_by");
+            }
+            if agent_id.is_some() {
+                cond!("agent_id");
+            }
+            if status.is_some() {
+                cond!("status");
+            }
+            if workspace.is_some() {
+                cond!("workspace");
+            }
+            if operation_id.is_some() {
+                cond!("operation_id");
+            }
+            if memory_id.is_some() {
+                cond!("memory_id");
+            }
+            if version_id.is_some() {
+                cond!("version_id");
+            }
+            if dry_run.is_some() {
+                cond!("dry_run");
+            }
+            if since.is_some() {
+                cond!("created_at", ">=");
+            }
+            if until.is_some() {
+                cond!("created_at", "<=");
+            }
 
             let limit_pos = pos;
             let where_clause = if conditions.is_empty() {
@@ -226,17 +247,39 @@ pub fn memory_enrichment_audit(ctx: &HandlerContext, params: Value) -> Value {
             // Bind values in the same order as conditions.
             use rusqlite::types::ToSql;
             let mut bind_vals: Vec<Box<dyn ToSql>> = Vec::new();
-            if let Some(ref v) = event_type   { bind_vals.push(Box::new(v.clone())); }
-            if let Some(ref v) = triggered_by { bind_vals.push(Box::new(v.clone())); }
-            if let Some(ref v) = agent_id     { bind_vals.push(Box::new(v.clone())); }
-            if let Some(ref v) = status       { bind_vals.push(Box::new(v.clone())); }
-            if let Some(ref v) = workspace    { bind_vals.push(Box::new(v.clone())); }
-            if let Some(ref v) = operation_id { bind_vals.push(Box::new(v.clone())); }
-            if let Some(v)     = memory_id    { bind_vals.push(Box::new(v)); }
-            if let Some(v)     = version_id   { bind_vals.push(Box::new(v)); }
-            if let Some(v)     = dry_run      { bind_vals.push(Box::new(v as i32)); }
-            if let Some(ref v) = since        { bind_vals.push(Box::new(v.clone())); }
-            if let Some(ref v) = until        { bind_vals.push(Box::new(v.clone())); }
+            if let Some(ref v) = event_type {
+                bind_vals.push(Box::new(v.clone()));
+            }
+            if let Some(ref v) = triggered_by {
+                bind_vals.push(Box::new(v.clone()));
+            }
+            if let Some(ref v) = agent_id {
+                bind_vals.push(Box::new(v.clone()));
+            }
+            if let Some(ref v) = status {
+                bind_vals.push(Box::new(v.clone()));
+            }
+            if let Some(ref v) = workspace {
+                bind_vals.push(Box::new(v.clone()));
+            }
+            if let Some(ref v) = operation_id {
+                bind_vals.push(Box::new(v.clone()));
+            }
+            if let Some(v) = memory_id {
+                bind_vals.push(Box::new(v));
+            }
+            if let Some(v) = version_id {
+                bind_vals.push(Box::new(v));
+            }
+            if let Some(v) = dry_run {
+                bind_vals.push(Box::new(v as i32));
+            }
+            if let Some(ref v) = since {
+                bind_vals.push(Box::new(v.clone()));
+            }
+            if let Some(ref v) = until {
+                bind_vals.push(Box::new(v.clone()));
+            }
             bind_vals.push(Box::new(limit));
 
             let refs: Vec<&dyn ToSql> = bind_vals.iter().map(|b| b.as_ref()).collect();
@@ -249,17 +292,39 @@ pub fn memory_enrichment_audit(ctx: &HandlerContext, params: Value) -> Value {
 
             // Build filters_applied map from all active filters.
             let mut applied = serde_json::Map::new();
-            if let Some(ref v) = event_type     { applied.insert("event_type".into(),    json!(v)); }
-            if let Some(ref v) = triggered_by   { applied.insert("triggered_by".into(),  json!(v)); }
-            if let Some(ref v) = agent_id       { applied.insert("agent_id".into(),      json!(v)); }
-            if let Some(ref v) = status         { applied.insert("status".into(),        json!(v)); }
-            if let Some(ref v) = workspace      { applied.insert("workspace".into(),     json!(v)); }
-            if let Some(ref v) = operation_id   { applied.insert("operation_id".into(),  json!(v)); }
-            if let Some(v)     = memory_id      { applied.insert("memory_id".into(),     json!(v)); }
-            if let Some(v)     = version_id     { applied.insert("version_id".into(),    json!(v)); }
-            if let Some(v)     = dry_run        { applied.insert("dry_run".into(),       json!(v)); }
-            if let Some(ref v) = since          { applied.insert("since".into(),         json!(v)); }
-            if let Some(ref v) = until          { applied.insert("until".into(),         json!(v)); }
+            if let Some(ref v) = event_type {
+                applied.insert("event_type".into(), json!(v));
+            }
+            if let Some(ref v) = triggered_by {
+                applied.insert("triggered_by".into(), json!(v));
+            }
+            if let Some(ref v) = agent_id {
+                applied.insert("agent_id".into(), json!(v));
+            }
+            if let Some(ref v) = status {
+                applied.insert("status".into(), json!(v));
+            }
+            if let Some(ref v) = workspace {
+                applied.insert("workspace".into(), json!(v));
+            }
+            if let Some(ref v) = operation_id {
+                applied.insert("operation_id".into(), json!(v));
+            }
+            if let Some(v) = memory_id {
+                applied.insert("memory_id".into(), json!(v));
+            }
+            if let Some(v) = version_id {
+                applied.insert("version_id".into(), json!(v));
+            }
+            if let Some(v) = dry_run {
+                applied.insert("dry_run".into(), json!(v));
+            }
+            if let Some(ref v) = since {
+                applied.insert("since".into(), json!(v));
+            }
+            if let Some(ref v) = until {
+                applied.insert("until".into(), json!(v));
+            }
             applied.insert("limit".into(), json!(limit));
             applied.insert("order".into(), json!(order));
 
@@ -409,9 +474,7 @@ mod tests {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new().expect("langfuse runtime"),
-            ),
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         };
         (ctx, memory_id)
     }
@@ -419,10 +482,7 @@ mod tests {
     #[test]
     fn test_memory_enrichment_timeline_returns_events() {
         let (ctx, memory_id) = ctx_with_event();
-        let result = memory_enrichment_timeline(
-            &ctx,
-            serde_json::json!({"memory_id": memory_id}),
-        );
+        let result = memory_enrichment_timeline(&ctx, serde_json::json!({"memory_id": memory_id}));
         assert_eq!(result["memory_id"], memory_id);
         assert_eq!(result["count"], 1);
         let events = result["events"].as_array().expect("events array");
@@ -459,8 +519,7 @@ mod tests {
     #[test]
     fn test_memory_enrichment_audit_status_filter() {
         let (ctx, _) = ctx_with_event();
-        let result =
-            memory_enrichment_audit(&ctx, serde_json::json!({"status": "completed"}));
+        let result = memory_enrichment_audit(&ctx, serde_json::json!({"status": "completed"}));
         let count = result["count"].as_u64().expect("count");
         assert!(count >= 1);
         let events = result["events"].as_array().expect("events");
@@ -472,8 +531,7 @@ mod tests {
     #[test]
     fn test_memory_enrichment_audit_invalid_status() {
         let (ctx, _) = ctx_with_event();
-        let result =
-            memory_enrichment_audit(&ctx, serde_json::json!({"status": "invalid"}));
+        let result = memory_enrichment_audit(&ctx, serde_json::json!({"status": "invalid"}));
         assert!(result.get("error").is_some());
     }
 

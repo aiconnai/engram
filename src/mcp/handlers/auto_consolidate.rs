@@ -95,7 +95,10 @@ pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
                         ConsolidationAction::DuplicateMerged { kept, merged, .. } => {
                             Some((*kept, *merged))
                         }
-                        ConsolidationAction::Summarized { memory_ids, summary_id } => {
+                        ConsolidationAction::Summarized {
+                            memory_ids,
+                            summary_id,
+                        } => {
                             // Emit for the first source id, carrying summary_id in outcome.
                             memory_ids.first().map(|&id| (id, summary_id.unwrap_or(id)))
                         }
@@ -110,16 +113,16 @@ pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
                                 conn,
                                 &EnrichmentEvent {
                                     operation_id: &operation_id,
-                                    event_type:   "consolidation",
-                                    memory_id:    Some(*mem_id),
-                                    version_id:   None,
+                                    event_type: "consolidation",
+                                    memory_id: Some(*mem_id),
+                                    version_id: None,
                                     triggered_by: "memory_consolidate_batch",
-                                    agent_id:     None,
-                                    workspace:    Some(ws_str.as_str()),
-                                    params:       json!({}),
-                                    outcome:      json!({}),
-                                    status:       "completed",
-                                    dry_run:      dry_run_flag,
+                                    agent_id: None,
+                                    workspace: Some(ws_str.as_str()),
+                                    params: json!({}),
+                                    outcome: json!({}),
+                                    status: "completed",
+                                    dry_run: dry_run_flag,
                                 },
                             );
                         }
