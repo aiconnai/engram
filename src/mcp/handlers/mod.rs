@@ -16,13 +16,13 @@ use crate::storage::Storage;
 pub mod agent;
 pub mod auto_consolidate;
 pub mod autonomous;
-pub mod enrichment_audit;
 pub mod compression;
 pub mod context;
 pub mod council;
 pub mod document_ingest;
 #[cfg(feature = "dream-phase")]
 pub mod dream;
+pub mod enrichment_audit;
 pub mod evolution;
 pub mod graph;
 pub mod handoff;
@@ -431,7 +431,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
 
         // ── Enrichment audit (ENG-1240) ───────────────────────────────────────
         "memory_enrichment_timeline" => enrichment_audit::memory_enrichment_timeline(ctx, params),
-        "memory_enrichment_audit"    => enrichment_audit::memory_enrichment_audit(ctx, params),
+        "memory_enrichment_audit" => enrichment_audit::memory_enrichment_audit(ctx, params),
 
         // ── Attestation (agent-portability) ──────────────────────────────────
         #[cfg(feature = "agent-portability")]

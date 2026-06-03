@@ -19,13 +19,13 @@
 
 pub mod agent_registry;
 mod audit;
-pub mod enrichment_events;
 pub mod auto_linker;
 pub mod backend;
 #[cfg(feature = "emergent-graph")]
 pub mod clustering;
 mod confidence;
 mod connection;
+pub mod enrichment_events;
 pub mod entity_queries;
 pub mod feedback;
 pub mod filter;
