@@ -906,27 +906,19 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or(false);
 
     if cascade_chain {
-        let expanded_result = ctx.storage.with_connection(|conn| {
-            let mut expanded: Vec<i64> = Vec::new();
-            for &id in &ids {
-                let chain = collect_supersedes_chain(conn, id)?;
-                for chain_id in chain {
-                    if !expanded.contains(&chain_id) {
-                        expanded.push(chain_id);
+        ctx.storage
+            .with_transaction(|conn| {
+                let mut expanded: Vec<i64> = Vec::new();
+                let mut seen = std::collections::HashSet::new();
+                for &id in &ids {
+                    let chain = collect_supersedes_chain(conn, id)?;
+                    for chain_id in chain {
+                        if seen.insert(chain_id) {
+                            expanded.push(chain_id);
+                        }
                     }
                 }
-            }
-            Ok(expanded)
-        });
-
-        let expanded_ids = match expanded_result {
-            Ok(ids) => ids,
-            Err(e) => return json!({"error": e.to_string()}),
-        };
-
-        ctx.storage
-            .with_connection(|conn| {
-                let result = delete_memory_batch(conn, &expanded_ids)?;
+                let result = delete_memory_batch(conn, &expanded)?;
                 Ok(json!(result))
             })
             .unwrap_or_else(|e| json!({"error": e.to_string()}))

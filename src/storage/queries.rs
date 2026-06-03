@@ -2663,7 +2663,9 @@ pub fn create_memory_batch(
 /// recursively), following `crossrefs` rows where `edge_type = 'supersedes'`
 /// and `from_id = current`.  Capped at 100 hops to prevent infinite loops.
 pub fn collect_supersedes_chain(conn: &Connection, root_id: i64) -> Result<Vec<i64>> {
-    let mut chain = vec![root_id];
+    let mut visited: std::collections::HashSet<i64> = std::collections::HashSet::new();
+    visited.insert(root_id);
+    let mut chain: Vec<i64> = vec![root_id];
     let mut current_ids = vec![root_id];
 
     for _ in 0..100usize {
@@ -2692,10 +2694,12 @@ pub fn collect_supersedes_chain(conn: &Connection, root_id: i64) -> Result<Vec<i
             .map(|id| id as &dyn rusqlite::ToSql)
             .collect();
 
+        // Use HashSet for O(1) dedup — guards against both cycles and
+        // diamond topologies where multiple parents share the same ancestor.
         let next_ids: Vec<i64> = stmt
             .query_map(params_refs.as_slice(), |row| row.get(0))?
             .filter_map(|r| r.ok())
-            .filter(|id| !chain.contains(id)) // guard against cycles
+            .filter(|id| visited.insert(*id)) // insert returns false if already present
             .collect();
 
         if next_ids.is_empty() {
