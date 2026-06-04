@@ -3,7 +3,7 @@ use super::backend::{
     StorageBackend,
 };
 use crate::error::EngramError;
-use crate::storage::queries::compute_content_hash;
+use crate::storage::queries::compute_dedup_hash;
 use crate::types::{
     normalize_workspace, CreateMemoryInput, CrossReference, EdgeType, LifecycleState, ListOptions,
     MatchInfo, Memory, MemoryId, MemoryScope, MemoryTier, SearchOptions, SearchResult,
@@ -339,7 +339,7 @@ fn build_memory_from_input(
         }
     };
 
-    let content_hash = Some(compute_content_hash(&input.content));
+    let content_hash = Some(compute_dedup_hash(&input.content));
 
     Ok(Memory {
         id,
@@ -579,7 +579,7 @@ impl StorageBackend for MeilisearchBackend {
 
         if let Some(content) = input.content {
             memory.content = content;
-            memory.content_hash = Some(compute_content_hash(&memory.content));
+            memory.content_hash = Some(compute_dedup_hash(&memory.content));
             changed = true;
         }
         if let Some(memory_type) = input.memory_type {

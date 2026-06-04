@@ -101,16 +101,35 @@ pub fn attestation_verify(ctx: &HandlerContext, params: Value) -> Value {
 
 // ── attestation_chain_verify ──────────────────────────────────────────────────
 
-/// Verify the integrity of the full attestation chain.
+/// Verify the integrity of the full attestation chain, optionally checking
+/// Ed25519 signatures on every record.
 ///
-/// No parameters required.
-pub fn attestation_chain_verify(ctx: &HandlerContext, _params: Value) -> Value {
+/// Params:
+/// - `verifying_key` (string, optional) — hex-encoded 32-byte Ed25519
+///   verifying key. When provided, every record must carry a valid signature
+///   for its `record_hash`; records with missing or invalid signatures cause
+///   the chain to be reported as broken. When omitted, signatures are
+///   skipped (hash-chain integrity is still verified).
+pub fn attestation_chain_verify(ctx: &HandlerContext, params: Value) -> Value {
     let chain = AttestationChain::new(ctx.storage.clone());
 
-    match chain.verify_chain(None) {
+    let verifying_key: Option<[u8; 32]> = match params
+        .get("verifying_key")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        Some(hex) => match parse_hex_key(hex) {
+            Ok(k) => Some(k),
+            Err(e) => return json!({"error": e}),
+        },
+        None => None,
+    };
+
+    match chain.verify_chain(verifying_key.as_ref()) {
         Ok(status) => json!({
             "status": "ok",
             "chain_status": status,
+            "signature_check": verifying_key.is_some(),
         }),
         Err(e) => json!({"error": e.to_string()}),
     }

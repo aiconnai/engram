@@ -36,7 +36,7 @@ use tokio::sync::RwLock;
 
 use crate::error::{EngramError, Result};
 use crate::storage::migrations::SCHEMA_VERSION;
-use crate::storage::queries::compute_content_hash;
+use crate::storage::queries::compute_dedup_hash;
 use crate::types::{
     normalize_workspace, CreateMemoryInput, CrossReference, EdgeType, LifecycleState, ListOptions,
     MatchInfo, Memory, MemoryId, MemoryScope, MemoryTier, MemoryType, RelationSource,
@@ -645,7 +645,7 @@ impl StorageBackend for TursoBackend {
                 }
             };
 
-            let content_hash = compute_content_hash(&input.content);
+            let content_hash = compute_dedup_hash(&input.content);
             let event_time = input.event_time.map(|dt| dt.to_rfc3339());
 
             conn.execute(
@@ -786,7 +786,7 @@ impl StorageBackend for TursoBackend {
             if let Some(ref content) = input.content {
                 updates.push("content = ?".to_string());
                 params.push(libsql::Value::Text(content.clone()));
-                let new_hash = compute_content_hash(content);
+                let new_hash = compute_dedup_hash(content);
                 updates.push("content_hash = ?".to_string());
                 params.push(libsql::Value::Text(new_hash));
             }

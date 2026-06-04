@@ -22,11 +22,14 @@ A persistent memory layer designed for real deployments: fast, stable, and easy 
 
 ```bash
 # Store a memory
-curl -X POST localhost:8080/v1/memories \
-  -d '{"content": "User prefers dark mode"}'
+curl -X POST localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"memory_create","arguments":{"content":"User prefers dark mode"}}}'
 
 # Hybrid search
-curl localhost:8080/v1/search?q=user+preferences
+curl -X POST localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory_search","arguments":{"query":"user preferences"}}}'
 ```
 
 **What you get:**
@@ -76,9 +79,82 @@ cd engram && cargo install --path .
 # Run as MCP server (Claude Code, Cursor, VS Code MCP clients, etc.)
 engram-server --mcp
 
-# Or run as HTTP API
-engram-server --http --port 8080
+# Or run as HTTP MCP transport
+engram-server --transport http --http-port 8080
 ```
+
+## SDK Integration Pattern: Council Skill
+
+Engram exposes the MCP tool `memory_council` and both SDKs now include a reusable helper wrapper.
+
+- Python SDK: `engram_client.integrations.CouncilSkill`
+- TypeScript SDK: `CouncilSkill` from `engram-client`
+- `memory_council` MCP tool: direct fallback via HTTP/MCP
+
+Python:
+
+```python
+from engram_client import EngramClient
+from engram_client.integrations import CouncilSkill
+
+async def run_review() -> None:
+    async with EngramClient(
+        base_url="https://your-engram-api.fly.dev",
+        api_key="ek_...",
+        tenant="my-tenant",
+    ) as client:
+        council = CouncilSkill(
+            client,
+            default_workspace="architecture",
+            default_timeout_seconds=120,
+            default_include_raw_stages=False,
+        )
+        result = await council.ask("Should we switch from Redis to Postgres?")
+        print(result)
+```
+
+TypeScript:
+
+```typescript
+import { CouncilSkill, EngramClient } from "engram-client";
+
+const client = new EngramClient({
+  baseUrl: "https://your-engram-api.fly.dev",
+  apiKey: "ek_...",
+  tenant: "my-tenant",
+});
+
+const council = new CouncilSkill(client, {
+  defaultWorkspace: "architecture",
+  defaultTimeoutSeconds: 120,
+});
+
+const result = await council.askWithPersistence(
+  "Should we switch from Redis to Postgres?"
+);
+```
+
+Use this when multiple agents need the same structured consensus process.
+
+## Reusable Agent Skill Pack
+
+Engram includes a ready-to-use Claude skill for this workflow in:
+
+- `skills/engram-council/SKILL.md`
+
+Install the skill folder in your Claude or agent skills environment and enable
+it when you want consistent, low-overhead consensus prompts:
+
+1. Open your agent's skills settings
+2. Add the folder `skills/engram-council/`
+3. Enable `engram-council`
+4. Keep your Engram MCP server configured as usual
+
+The skill follows this flow:
+
+- Prefer SDK `CouncilSkill` wrappers
+- Fallback to direct `memory_council` MCP call when needed
+- Optionally persist decision checkpoints to project memory
 
 ## Why Engram
 
@@ -251,16 +327,17 @@ Run Engram as HTTP server with JSON-RPC 2.0 support:
 
 ```bash
 # HTTP-only server (port 8080)
-engram-server --transport http --port 8080
+engram-server --transport http --http-port 8080
 
 # Both HTTP and stdio (default)
-engram-server --transport both --port 8080
+engram-server --transport both --http-port 8080
 
 # Bearer token authentication
-ENGRAM_BEARER_TOKEN=secret-token-here engram-server --transport http
+ENGRAM_HTTP_API_KEY=secret-token-here engram-server --transport http
 ```
 
-Clients connect via HTTP with JSON-RPC 2.0 at `/v1/mcp` endpoint.
+Clients connect via HTTP with JSON-RPC 2.0 at `POST /mcp`; `POST /v1/mcp` is
+also accepted as a compatibility alias. See [MCP HTTP Authentication](docs/MCP_AUTH.md).
 
 ### Project Context Discovery
 

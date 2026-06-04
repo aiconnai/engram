@@ -7,6 +7,8 @@ alias c := ci
 ci:
     @./scripts/ci.sh
 
+pre-commit: fmt clippy
+
 fmt:
     cargo fmt --all -- --check
 

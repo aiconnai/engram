@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engram_client.client import EngramClient, EngramError
+from engram_client.integrations.council import CouncilSkill
 
 
 @pytest.fixture
@@ -225,6 +226,112 @@ class TestSearch:
 
         args = mock_client._client.post.call_args.kwargs["json"]["params"]["arguments"]
         assert args["filter"] == filter_dict
+
+
+class TestMemoryCouncil:
+    """Test council orchestration helper."""
+
+    @pytest.mark.asyncio
+    async def test_memory_council_basic(self, mock_client, mock_response):
+        mock_client._client.post.return_value = mock_response
+
+        await mock_client.memory_council("What is the plan?")
+
+        args = mock_client._client.post.call_args.kwargs["json"]["params"]["arguments"]
+        assert args["prompt"] == "What is the plan?"
+        assert args["include_raw_stages"] is True
+        assert args["persist"] is False
+
+    @pytest.mark.asyncio
+    async def test_memory_council_with_options(self, mock_client, mock_response):
+        mock_client._client.post.return_value = mock_response
+
+        await mock_client.memory_council(
+            "What should we do?",
+            conversation_id="conv-1",
+            council_url="http://127.0.0.1:8001",
+            timeout_seconds=120,
+            include_raw_stages=False,
+            persist=True,
+            workspace="project-a",
+            memory_tags=["llm", "consensus"],
+        )
+
+        args = mock_client._client.post.call_args.kwargs["json"]["params"]["arguments"]
+        assert args["conversation_id"] == "conv-1"
+        assert args["council_url"] == "http://127.0.0.1:8001"
+        assert args["timeout_seconds"] == 120
+        assert args["include_raw_stages"] is False
+        assert args["persist"] is True
+        assert args["workspace"] == "project-a"
+        assert args["memory_tags"] == ["llm", "consensus"]
+
+
+class TestCouncilSkill:
+    """Test council skill helper wrapper."""
+
+    @pytest.mark.asyncio
+    async def test_council_skill_ask_uses_defaults(self, mock_client):
+        mock_client.memory_council = AsyncMock(return_value={"result": "ok"})
+
+        skill = CouncilSkill(
+            mock_client,
+            default_workspace="project-a",
+            default_timeout_seconds=120,
+            default_include_raw_stages=True,
+        )
+
+        await skill.ask("How should we proceed?")
+
+        mock_client.memory_council.assert_awaited_once_with(
+            "How should we proceed?",
+            conversation_id=None,
+            council_url=None,
+            timeout_seconds=120,
+            include_raw_stages=True,
+            persist=False,
+            workspace="project-a",
+            memory_tags=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_council_skill_ask_with_override_and_persistence(
+        self,
+        mock_client,
+    ):
+        mock_client.memory_council = AsyncMock(return_value={"result": "ok"})
+
+        skill = CouncilSkill(mock_client)
+        await skill.ask_with_persistence(
+            "  summarize last meeting  ",
+            workspace="planning",
+            timeout_seconds=45,
+            include_raw_stages=False,
+            conversation_id="conv-42",
+            council_url="http://127.0.0.1:8001",
+            tags=("decisions", "architecture"),
+        )
+
+        mock_client.memory_council.assert_awaited_once_with(
+            "  summarize last meeting  ",
+            conversation_id="conv-42",
+            council_url="http://127.0.0.1:8001",
+            timeout_seconds=45,
+            include_raw_stages=False,
+            persist=True,
+            workspace="planning",
+            memory_tags=["decisions", "architecture"],
+        )
+
+    @pytest.mark.asyncio
+    async def test_council_skill_rejects_empty_prompt(self, mock_client):
+        mock_client.memory_council = AsyncMock(return_value={"result": "ok"})
+
+        skill = CouncilSkill(mock_client)
+        result = await skill.ask("  ")
+
+        assert result == {"error": "prompt must be a non-empty string"}
+        mock_client.memory_council.assert_not_awaited()
 
 
 class TestGetUpdateDelete:

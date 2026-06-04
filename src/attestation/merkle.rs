@@ -104,6 +104,7 @@ impl MerkleTree {
             proof_hashes,
             root_hash,
             total_leaves,
+            scheme_version: 2,
         })
     }
 
@@ -111,16 +112,25 @@ impl MerkleTree {
     ///
     /// Recomputes the root from the leaf hash and the proof hashes, then
     /// compares against `proof.root_hash`.
+    ///
+    /// Dispatches on `proof.scheme_version`:
+    /// - `1` — uses the original naive `left || right` concatenation
+    /// - `2` — uses length-domain-separated `len(left) || left || len(right) || right`
     pub fn verify_proof(proof: &MerkleProof) -> bool {
+        let pair_fn = match proof.scheme_version {
+            1 => hash_pair_v1,
+            _ => hash_pair_v2,
+        };
+
         let mut current = proof.leaf_hash.clone();
 
         for (sibling_hash, is_right_sibling) in &proof.proof_hashes {
             current = if *is_right_sibling {
                 // sibling is to the right → we are the left child
-                hash_pair(&current, sibling_hash)
+                pair_fn(&current, sibling_hash)
             } else {
                 // sibling is to the left → we are the right child
-                hash_pair(sibling_hash, &current)
+                pair_fn(sibling_hash, &current)
             };
         }
 
@@ -128,10 +138,32 @@ impl MerkleTree {
     }
 }
 
-/// Compute SHA-256 of the concatenated raw bytes of two hash strings.
+/// Current hash pair scheme (scheme v2).
+/// Uses length-domain-separation: `len(left) || left || len(right) || right`
+/// to prevent second-preimage collisions.
 fn hash_pair(left: &str, right: &str) -> String {
+    hash_pair_v2(left, right)
+}
+
+/// Original hash pair scheme (scheme v1).
+/// Naive `left || right` concatenation. Retained for backwards-compatible
+/// verification of Merkle proofs generated before June 2026.
+fn hash_pair_v1(left: &str, right: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(left.as_bytes());
+    hasher.update(right.as_bytes());
+    format!("sha256:{}", hex::encode(hasher.finalize()))
+}
+
+/// Hash pair scheme v2.
+/// Length-domain-separated: `len(left) || left || len(right) || right`
+/// (lengths as 8-byte big-endian). Prevents the second-preimage collision
+/// where hash_pair("ab", "cd") == hash_pair("a", "bcd").
+fn hash_pair_v2(left: &str, right: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update((left.len() as u64).to_be_bytes());
+    hasher.update(left.as_bytes());
+    hasher.update((right.len() as u64).to_be_bytes());
     hasher.update(right.as_bytes());
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
@@ -189,9 +221,11 @@ mod tests {
         assert_eq!(tree.root(), Some(expected_root.as_str()));
 
         let proof0 = tree.generate_proof(0).unwrap();
+        assert_eq!(proof0.scheme_version, 2);
         assert!(MerkleTree::verify_proof(&proof0));
 
         let proof1 = tree.generate_proof(1).unwrap();
+        assert_eq!(proof1.scheme_version, 2);
         assert!(MerkleTree::verify_proof(&proof1));
     }
 
@@ -248,5 +282,34 @@ mod tests {
         proof.root_hash =
             "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_string();
         assert!(!MerkleTree::verify_proof(&proof));
+    }
+
+    #[test]
+    fn test_v1_proof_backwards_compat() {
+        // Old-format proof (scheme_version=1, naive concatenation)
+        // must still verify correctly.
+        let r1 = make_record("aa", "a.txt");
+        let r2 = make_record("bb", "b.txt");
+
+        let v1_root = hash_pair_v1(&r1.record_hash, &r2.record_hash);
+
+        let v1_proof = MerkleProof {
+            leaf_hash: r1.record_hash.clone(),
+            leaf_index: 0,
+            proof_hashes: vec![(r2.record_hash.clone(), true)],
+            root_hash: v1_root,
+            total_leaves: 2,
+            scheme_version: 1,
+        };
+        assert!(MerkleTree::verify_proof(&v1_proof), "v1 proof must verify");
+
+        // Tampered v1 proof must still fail
+        let mut bad_v1 = MerkleProof {
+            scheme_version: 1,
+            ..v1_proof
+        };
+        bad_v1.root_hash =
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        assert!(!MerkleTree::verify_proof(&bad_v1), "tampered v1 must fail");
     }
 }

@@ -15,7 +15,7 @@ npm install engram-client
 ## Quick Start
 
 ```typescript
-import { EngramClient } from "engram-client";
+import { CouncilSkill, EngramClient } from "engram-client";
 
 const client = new EngramClient({
   baseUrl: "https://your-engram-api.fly.dev",
@@ -31,6 +31,26 @@ const memory = await client.create("User prefers dark mode", {
 
 // Search (hybrid: BM25 + vector + fuzzy)
 const results = await client.search("user preferences");
+
+// Run a council consensus session
+const council = await client.memoryCouncil(
+  "Should we use Redis or Postgres for caching?",
+  {
+    timeoutSeconds: 120,
+    persist: true,
+    workspace: "architecture",
+  }
+);
+
+const councilSkill = new CouncilSkill(client, {
+  defaultWorkspace: "architecture",
+  defaultTimeoutSeconds: 120,
+  defaultIncludeRawStages: true,
+});
+
+const councilWithSkill = await councilSkill.askWithPersistence(
+  "Should we use Redis or Postgres for caching?"
+);
 
 // List with filters
 const memories = await client.list({ limit: 20, workspace: "my-project" });
@@ -73,7 +93,17 @@ interface EngramConfig {
 | `delete(id)` | `Promise<void>` | Delete a memory |
 | `list(options?)` | `Promise<Memory[]>` | List memories with filters |
 | `search(query, options?)` | `Promise<SearchResult[]>` | Hybrid search |
+| `memoryCouncil(prompt, options?)` | `Promise<unknown>` | Run a prompt through llm-council |
+| `memoryReplayAtTime(memoryId, timestamp, options?)` | `Promise<unknown>` | Replay a memory state at a point in time |
+| `new CouncilSkill(client, options?)` | `CouncilSkill` | Reusable wrapper for repeated council sessions |
 | `stats()` | `Promise<Stats>` | Storage statistics |
+
+### `CouncilSkill` methods
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `ask(prompt, options?)` | `Promise<unknown>` | Run a council session with skill defaults |
+| `askWithPersistence(prompt, options?)` | `Promise<unknown>` | Force `persist: true` with defaults |
 
 ### Options
 
@@ -81,7 +111,11 @@ interface EngramConfig {
 
 **ListOptions:** `limit`, `offset`, `workspace`, `memoryType`, `tags`, `sortBy`, `sortOrder`
 
-**SearchOptions:** `limit`, `workspace`, `tags`, `memoryType`, `includeArchived`
+- **SearchOptions:** `limit`, `workspace`, `tags`, `memoryType`, `includeArchived`
+- **MemoryCouncilOptions:** `conversationId`, `councilUrl`, `timeoutSeconds`, `includeRawStages`, `persist`, `workspace`, `memoryTags`
+- **MemoryReplayAtTimeOptions:** `eventType`, `includeEvents`, `includeFailed`, `includeDryRuns`, `eventLimit`
+- **CouncilSkillOptions:** `defaultWorkspace`, `defaultTimeoutSeconds`, `defaultIncludeRawStages`
+- **CouncilSkillAskOptions:** `persist`, `workspace`, `timeoutSeconds`, `includeRawStages`, `conversationId`, `councilUrl`, `memoryTags`
 
 ## Error Handling
 

@@ -129,6 +129,7 @@ mod tests {
             proof_hashes: vec![("sha256:bbb".to_string(), true)],
             root_hash: "sha256:ccc".to_string(),
             total_leaves: 2,
+            scheme_version: 2,
         };
         let json = export_merkle_proof(&proof).unwrap();
         assert!(json.contains("leaf_hash"));
