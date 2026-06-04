@@ -9,6 +9,7 @@ pub mod http_transport;
 pub mod prompts;
 pub mod protocol;
 pub mod resources;
+#[path = "tools/mod.rs"]
 pub mod tools;
 
 pub use prompts::{get_prompt, list_prompts};

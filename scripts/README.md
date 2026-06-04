@@ -15,7 +15,7 @@ This ensures you catch performance issues early and have a clear record of when 
 
 ### `generate-mcp-reference.sh`
 
-Generates the MCP tool reference from `src/mcp/tools.rs`.
+Generates the MCP tool reference from `src/mcp/tools/registry.rs`.
 
 ```bash
 # Update docs/MCP_TOOLS.md

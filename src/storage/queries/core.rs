@@ -232,11 +232,11 @@ pub fn compute_content_hash(content: &str) -> String {
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 
-/// Compute the raw SHA-256 hash of content bytes.
+/// Compute the raw SHA-256 hash of content bytes without any normalization.
 ///
-/// Internal helper for byte-exact integrity checks.
-#[cfg(test)]
-pub(crate) fn compute_content_hash_raw(content: &str) -> String {
+/// Used for sync detection where case and whitespace differences must be preserved
+/// (e.g. detecting case-only edits in markdown import/export).
+pub fn compute_content_hash_raw(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     format!("sha256:{}", hex::encode(hasher.finalize()))
