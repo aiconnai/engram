@@ -27,22 +27,70 @@ pub struct ToolDef {
 /// All tool definitions for Engram
 pub const TOOL_DEFINITIONS: &[ToolDef] = include!("registry.rs");
 
+/// Returns `false` for tool names whose feature flag is not compiled in.
+///
+/// Called by both `get_tool_definitions` and `get_tool_definitions_tiered` so
+/// that `tools/list` never advertises a tool that `tools/call` would reject with
+/// "Unknown tool".
+fn tool_feature_available(name: &str) -> bool {
+    match name {
+        // langfuse feature
+        "langfuse_connect"
+        | "langfuse_sync"
+        | "langfuse_sync_status"
+        | "langfuse_extract_patterns"
+        | "memory_from_trace" => cfg!(feature = "langfuse"),
+
+        // meilisearch feature
+        "meilisearch_search"
+        | "meilisearch_reindex"
+        | "meilisearch_status"
+        | "meilisearch_config" => cfg!(feature = "meilisearch"),
+
+        // emergent-graph feature
+        "memory_auto_link"
+        | "memory_list_auto_links"
+        | "memory_auto_link_stats"
+        | "memory_cluster"
+        | "memory_get_cluster"
+        | "memory_list_clusters" => cfg!(feature = "emergent-graph"),
+
+        // multimodal feature (memory_sync_media also needs cloud)
+        "memory_sync_media" => cfg!(all(feature = "multimodal", feature = "cloud")),
+        "memory_describe_image"
+        | "memory_transcribe_audio"
+        | "memory_capture_screenshot"
+        | "memory_process_video"
+        | "memory_list_media"
+        | "memory_search_by_image" => cfg!(feature = "multimodal"),
+
+        // duckdb-graph feature
+        "memory_graph_path" | "memory_temporal_snapshot" | "memory_scope_snapshot" => {
+            cfg!(feature = "duckdb-graph")
+        }
+
+        // dream-phase feature
+        "dream_run_now" => cfg!(feature = "dream-phase"),
+
+        // agent-portability feature
+        "attestation_log"
+        | "attestation_verify"
+        | "attestation_chain_verify"
+        | "attestation_list"
+        | "snapshot_create"
+        | "snapshot_load"
+        | "snapshot_inspect" => cfg!(feature = "agent-portability"),
+
+        _ => true,
+    }
+}
+
 /// Get all tool definitions as ToolDefinition structs.
 ///
+/// Only returns tools whose feature flag is compiled in so that `tools/list`
+/// never advertises a tool that `tools/call` would reject.
 pub fn get_tool_definitions() -> Vec<ToolDefinition> {
-    TOOL_DEFINITIONS
-        .iter()
-        .filter(|def| {
-            // memory_sync_media requires both multimodal and cloud features
-            if def.name == "memory_sync_media" {
-                return cfg!(all(feature = "multimodal", feature = "cloud"));
-            }
-            // memory_search_by_image requires multimodal feature
-            if def.name == "memory_search_by_image" {
-                return cfg!(feature = "multimodal");
-            }
-            true
-        })
+    iter_tool_definitions()
         .map(|def| ToolDefinition {
             name: def.name.to_string(),
             description: def.description.to_string(),
@@ -64,19 +112,11 @@ pub fn get_tool_definitions_tiered(max_tier: Option<&str>) -> Vec<ToolDefinition
         _ => ToolTier::Advanced, // "all" or None = everything
     };
 
-    TOOL_DEFINITIONS
-        .iter()
+    iter_tool_definitions()
         .filter(|def| {
             // discover_tools is always included regardless of tier
             if def.name == "discover_tools" {
                 return true;
-            }
-            // Feature-gate filtering (existing logic)
-            if def.name == "memory_sync_media" {
-                return cfg!(all(feature = "multimodal", feature = "cloud"));
-            }
-            if def.name == "memory_search_by_image" {
-                return cfg!(feature = "multimodal");
             }
             // Tier filtering
             matches!(
@@ -93,6 +133,12 @@ pub fn get_tool_definitions_tiered(max_tier: Option<&str>) -> Vec<ToolDefinition
             annotations: Some(def.annotations.clone()),
         })
         .collect()
+}
+
+pub(crate) fn iter_tool_definitions() -> impl Iterator<Item = &'static ToolDef> {
+    TOOL_DEFINITIONS
+        .iter()
+        .filter(|def| tool_feature_available(def.name))
 }
 
 #[cfg(test)]

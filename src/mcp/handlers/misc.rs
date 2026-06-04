@@ -919,14 +919,13 @@ pub fn meilisearch_config(ctx: &HandlerContext, _params: Value) -> Value {
 
 /// List available tools by tier, category, or search query.
 pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
-    use crate::mcp::tools::{ToolTier, TOOL_DEFINITIONS};
+    use crate::mcp::tools::{iter_tool_definitions, ToolTier};
 
     let tier_filter = params.get("tier").and_then(|v| v.as_str());
     let category = params.get("category").and_then(|v| v.as_str());
     let search = params.get("search").and_then(|v| v.as_str());
 
-    let tools: Vec<Value> = TOOL_DEFINITIONS
-        .iter()
+    let tools: Vec<Value> = iter_tool_definitions()
         .filter(|def| {
             if let Some(t) = tier_filter {
                 match t {
@@ -974,16 +973,13 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
         })
         .collect();
 
-    let essential_count = TOOL_DEFINITIONS
-        .iter()
+    let essential_count = iter_tool_definitions()
         .filter(|d| d.tier == ToolTier::Essential)
         .count();
-    let standard_count = TOOL_DEFINITIONS
-        .iter()
+    let standard_count = iter_tool_definitions()
         .filter(|d| d.tier == ToolTier::Standard)
         .count();
-    let advanced_count = TOOL_DEFINITIONS
-        .iter()
+    let advanced_count = iter_tool_definitions()
         .filter(|d| d.tier == ToolTier::Advanced)
         .count();
     let count = tools.len();
@@ -991,7 +987,7 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
     json!({
         "tools": tools,
         "count": count,
-        "total_available": TOOL_DEFINITIONS.len(),
+        "total_available": iter_tool_definitions().count(),
         "tier_summary": {
             "essential": essential_count,
             "standard": standard_count,

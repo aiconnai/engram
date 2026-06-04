@@ -377,7 +377,7 @@ If you built from source instead of installing via Homebrew, use the full path t
 
 ### Available MCP Tools
 
-The MCP tool reference is generated from source of truth (`src/mcp/tools.rs`) and tracked in `docs/MCP_TOOLS.md`.
+The MCP tool reference is generated from source of truth (`src/mcp/tools/registry.rs`) and tracked in `docs/MCP_TOOLS.md`.
 
 - Full reference: [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md)
 - Generated count and schema are in that reference (single source of truth).

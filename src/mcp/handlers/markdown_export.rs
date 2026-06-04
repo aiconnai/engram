@@ -13,7 +13,7 @@ use std::str::FromStr;
 use serde_json::{json, Value};
 
 use super::HandlerContext;
-use crate::storage::queries::compute_content_hash;
+use crate::storage::queries::{compute_content_hash, compute_content_hash_raw};
 
 /// Extract tags from parsed frontmatter (`engram_tags_list` is a comma-joined
 /// string produced by [`parse_frontmatter`]).
@@ -185,19 +185,34 @@ pub enum ImportStatus {
 fn classify_import_status(
     db_state: Option<(&str, i64)>,
     current_hash: &str,
+    // Baseline hash to compare for InSync: frontmatter hash (raw, case-sensitive) when
+    // available, otherwise the normalized DB content_hash for backward compat.
+    sync_baseline: &str,
     file_version: i64,
     force_version: bool,
 ) -> ImportStatus {
     match db_state {
         None => ImportStatus::New,
-        Some((db_hash, db_version)) => {
-            if current_hash == db_hash {
+        Some((_, db_version)) => {
+            if current_hash == sync_baseline {
+                // File content hasn't changed since export. But if the DB was updated
+                // afterwards (db_version > file_version), the file is stale.
+                // force_version lets callers override stale-file conflicts the same way
+                // it overrides hash-mismatch conflicts.
+                if db_version > file_version && !force_version {
+                    return ImportStatus::Conflict(format!(
+                        "DB version {} > file version {} (file unchanged, DB updated after export)",
+                        db_version, file_version
+                    ));
+                }
+                // force_version=true with stale file falls through to InSync — the
+                // caller explicitly asked to not treat version skew as a blocker.
                 return ImportStatus::InSync;
             }
             if db_version == file_version || force_version {
                 ImportStatus::PendingUpdate
             } else if db_version > file_version {
-                // DB is ahead of the file — true conflict (file is stale)
+                // DB is ahead of the file — true conflict (both sides changed)
                 ImportStatus::Conflict(format!(
                     "DB version {} > file version {}",
                     db_version, file_version
@@ -531,8 +546,6 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
             .and_then(|s| s.parse().ok())
             .unwrap_or(1);
 
-        let current_hash = compute_content_hash(body.trim());
-
         // Look up in DB
         let db_state_result: Result<Option<(String, i64)>, crate::error::EngramError> =
             ctx.storage.with_connection(|conn| {
@@ -561,9 +574,27 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
             }
         };
 
+        // When the file has an engram_content_hash frontmatter field (written by
+        // memory_export_markdown since this fix), use case-sensitive (raw) hashes so
+        // case-only edits are detected as PendingUpdate.
+        // For files exported before this fix (no frontmatter hash), fall back to
+        // normalized hash comparison against the DB hash for backward compat.
+        let (current_hash, sync_baseline) = match fm.get("engram_content_hash") {
+            Some(fm_hash) => (compute_content_hash_raw(body.trim()), fm_hash.clone()),
+            None => {
+                let norm = compute_content_hash(body.trim());
+                let db_hash = db_state
+                    .as_ref()
+                    .map(|(h, _)| h.clone())
+                    .unwrap_or_default();
+                (norm, db_hash)
+            }
+        };
+
         let status = classify_import_status(
             db_state.as_ref().map(|(h, v)| (h.as_str(), *v)),
             &current_hash,
+            &sync_baseline,
             file_version,
             force_version,
         );
@@ -876,7 +907,9 @@ fn format_memory_markdown(
         .and_then(|m| m.get("source_session"))
         .and_then(|v| v.as_str());
 
-    let hash = compute_content_hash(content.trim());
+    // Raw (case-sensitive) hash written to frontmatter so the import sync check
+    // can detect case-only edits as PendingUpdate rather than InSync.
+    let hash = compute_content_hash_raw(content.trim());
 
     let mut md = String::new();
 
@@ -1373,28 +1406,72 @@ mod tests {
     #[test]
     fn test_classify_import_status_in_sync() {
         // same hash and same version → in_sync
-        let status = classify_import_status(Some(("sha256:abc", 3)), "sha256:abc", 3, false);
+        let status = classify_import_status(
+            Some(("sha256:abc", 3)),
+            "sha256:abc",
+            "sha256:abc",
+            3,
+            false,
+        );
+        assert_eq!(status, ImportStatus::InSync);
+    }
+
+    #[test]
+    fn test_classify_import_status_db_updated_after_export() {
+        // File unchanged since export (hash matches baseline) but DB version is newer →
+        // Conflict so the caller knows the file is stale.
+        let status = classify_import_status(
+            Some(("sha256:abc", 5)),
+            "sha256:abc",
+            "sha256:abc",
+            3,
+            false,
+        );
+        assert!(
+            matches!(status, ImportStatus::Conflict(_)),
+            "expected Conflict, got {:?}",
+            status
+        );
+    }
+
+    #[test]
+    fn test_classify_import_status_force_overrides_stale_db() {
+        // force_version=true: stale-file conflict becomes InSync (caller opted in).
+        let status =
+            classify_import_status(Some(("sha256:abc", 5)), "sha256:abc", "sha256:abc", 3, true);
         assert_eq!(status, ImportStatus::InSync);
     }
 
     #[test]
     fn test_classify_import_status_new() {
         // ID not in DB → new
-        let status = classify_import_status(None, "sha256:abc", 1, false);
+        let status = classify_import_status(None, "sha256:abc", "sha256:abc", 1, false);
         assert_eq!(status, ImportStatus::New);
     }
 
     #[test]
     fn test_classify_import_status_pending_update() {
         // different hash, same version → pending_update
-        let status = classify_import_status(Some(("sha256:old", 3)), "sha256:new", 3, false);
+        let status = classify_import_status(
+            Some(("sha256:old", 3)),
+            "sha256:new",
+            "sha256:old",
+            3,
+            false,
+        );
         assert_eq!(status, ImportStatus::PendingUpdate);
     }
 
     #[test]
     fn test_classify_import_status_conflict_blocked() {
         // version mismatch, no force → conflict
-        let status = classify_import_status(Some(("sha256:old", 5)), "sha256:new", 3, false);
+        let status = classify_import_status(
+            Some(("sha256:old", 5)),
+            "sha256:new",
+            "sha256:old",
+            3,
+            false,
+        );
         assert_eq!(
             status,
             ImportStatus::Conflict("DB version 5 > file version 3".to_string())
@@ -1404,7 +1481,29 @@ mod tests {
     #[test]
     fn test_classify_import_status_force_version_applies() {
         // version mismatch + force → pending_update
-        let status = classify_import_status(Some(("sha256:old", 5)), "sha256:new", 3, true);
+        let status =
+            classify_import_status(Some(("sha256:old", 5)), "sha256:new", "sha256:old", 3, true);
+        assert_eq!(status, ImportStatus::PendingUpdate);
+    }
+
+    #[test]
+    fn test_classify_import_status_case_only_edit_detected() {
+        // Frontmatter hash = raw hash of "Hello World" (uppercase H)
+        // File body was changed to "hello world" (lowercase) → different raw hashes → PendingUpdate
+        use crate::storage::queries::compute_content_hash_raw;
+        let original_hash = compute_content_hash_raw("Hello World");
+        let edited_hash = compute_content_hash_raw("hello world");
+        // They must differ (this is the whole point of the fix)
+        assert_ne!(original_hash, edited_hash);
+        // The DB has the normalized hash (simulates old behavior), frontmatter has raw hash
+        let db_normalized = crate::storage::queries::compute_content_hash("Hello World");
+        let status = classify_import_status(
+            Some((db_normalized.as_str(), 1)),
+            &edited_hash,
+            &original_hash, // frontmatter hash (what was exported)
+            1,
+            false,
+        );
         assert_eq!(status, ImportStatus::PendingUpdate);
     }
 

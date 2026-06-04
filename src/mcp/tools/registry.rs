@@ -982,7 +982,6 @@
         annotations: ToolAnnotations::destructive(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "langfuse")]
     ToolDef {
         name: "memory_from_trace",
         description: "Create a memory from a specific Langfuse trace ID.",
@@ -1894,7 +1893,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
-    #[cfg(feature = "langfuse")]
     // Phase 3: Langfuse Integration (ENG-35) - feature-gated
     ToolDef {
         name: "langfuse_connect",
@@ -1910,7 +1908,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "langfuse")]
     ToolDef {
         name: "langfuse_sync",
         description: "Start background sync from Langfuse traces to memories. Returns task_id for status checking.",
@@ -1926,7 +1923,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "langfuse")]
     ToolDef {
         name: "langfuse_sync_status",
         description: "Check the status of a Langfuse sync task.",
@@ -1940,7 +1936,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "langfuse")]
     ToolDef {
         name: "langfuse_extract_patterns",
         description: "Extract patterns from Langfuse traces without saving. Preview mode for pattern discovery.",
@@ -2025,7 +2020,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Standard,
     },
-    #[cfg(feature = "meilisearch")]
     // Phase 7: Meilisearch Integration (ENG-58) - feature-gated
     ToolDef {
         name: "meilisearch_search",
@@ -2045,7 +2039,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "meilisearch")]
     ToolDef {
         name: "meilisearch_reindex",
         description: "Trigger a full re-sync from SQLite to Meilisearch. Use after bulk imports or if the index is out of sync.",
@@ -2056,7 +2049,6 @@
         annotations: ToolAnnotations::idempotent(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "meilisearch")]
     ToolDef {
         name: "meilisearch_status",
         description: "Get Meilisearch index status including document count, indexing state, and health.",
@@ -2067,7 +2059,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "meilisearch")]
     ToolDef {
         name: "meilisearch_config",
         description: "Show current Meilisearch configuration (URL, sync interval, enabled status).",
@@ -2327,7 +2318,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
-    #[cfg(feature = "duckdb-graph")]
     // ── DuckDB Graph Tools (duckdb-graph) ──────────────────────────────────────
     ToolDef {
         name: "memory_graph_path",
@@ -2350,7 +2340,6 @@
         },
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "duckdb-graph")]
     ToolDef {
         name: "memory_temporal_snapshot",
         description: "Retrieves the exact facts and relationships that were true at a specific historical point in time. Uses DuckDB OLAP engine for fast columnar scans over temporal edges.",
@@ -2370,7 +2359,6 @@
         },
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "duckdb-graph")]
     ToolDef {
         name: "memory_scope_snapshot",
         description: "Compares the knowledge graph between two timestamps, showing what relationships were added, removed, or changed. Uses DuckDB OLAP engine for efficient temporal diff.",
@@ -2391,7 +2379,6 @@
         },
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "emergent-graph")]
     ToolDef {
         name: "memory_auto_link",
         description: "Run semantic and temporal auto-linker on a workspace, creating crossref edges in the database. Mutates the database.",
@@ -2407,7 +2394,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "emergent-graph")]
     ToolDef {
         name: "memory_auto_link_stats",
         description: "Return aggregate statistics about auto-generated semantic and temporal links.",
@@ -2500,7 +2486,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
-    #[cfg(feature = "emergent-graph")]
     // 4. memory_get_cluster
     ToolDef {
         name: "memory_get_cluster",
@@ -2527,7 +2512,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
-    #[cfg(feature = "emergent-graph")]
     // 6. memory_list_auto_links
     ToolDef {
         name: "memory_list_auto_links",
@@ -2543,7 +2527,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
-    #[cfg(feature = "emergent-graph")]
     // 7. memory_list_clusters
     ToolDef {
         name: "memory_list_clusters",
@@ -2908,7 +2891,6 @@
         annotations: ToolAnnotations::idempotent(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "multimodal")]
     ToolDef {
         name: "memory_capture_screenshot",
         description: "Capture a screenshot of the full screen or a specific application window and save it to a local file.",
@@ -2922,7 +2904,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-#[cfg(feature = "multimodal")]
     ToolDef {
         name: "memory_describe_image",
         description: "Describe the contents of an image file using the configured vision provider (requires VISION_PROVIDER env).",
@@ -2943,7 +2924,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "multimodal")]
     // 9. memory_list_media
     ToolDef {
         name: "memory_list_media",
@@ -2959,7 +2939,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
-    #[cfg(feature = "multimodal")]
     // 10. memory_process_video
     ToolDef {
         name: "memory_process_video",
@@ -2974,7 +2953,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "multimodal")]
     // ── multimodal.rs ────────────────────────────────────────────────────────
     ToolDef {
         name: "memory_transcribe_audio",
@@ -3078,7 +3056,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "agent-portability")]
     // ── Snapshot Tools (agent-portability) ────────────────────────────────────
     ToolDef {
         name: "snapshot_create",
@@ -3101,7 +3078,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "agent-portability")]
     ToolDef {
         name: "snapshot_load",
         description: "Load a .egm snapshot into the memory store. Strategies: merge (skip duplicates), replace (clear workspace first), isolate (new workspace), dry_run (preview only).",
@@ -3118,7 +3094,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "agent-portability")]
     ToolDef {
         name: "snapshot_inspect",
         description: "Inspect a .egm snapshot without loading it. Returns manifest, file list, and size.",
@@ -3132,7 +3107,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "agent-portability")]
     // ── Attestation Tools (agent-portability) ──────────────────────────────────
     ToolDef {
         name: "attestation_log",
@@ -3151,7 +3125,6 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "agent-portability")]
     ToolDef {
         name: "attestation_verify",
         description: "Verify whether a document has been attested (ingested and recorded).",
@@ -3165,7 +3138,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "agent-portability")]
     ToolDef {
         name: "attestation_chain_verify",
         description: "Verify the integrity of the entire attestation chain. Returns valid, broken (with location), or empty.",
@@ -3181,7 +3153,6 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    #[cfg(feature = "agent-portability")]
     ToolDef {
         name: "attestation_list",
         description: "List attestation records with optional filters. Supports JSON, CSV, and Merkle proof export formats.",

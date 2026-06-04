@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the MCP tools reference from src/mcp/tools.rs."""
+"""Generate the MCP tools reference from src/mcp/tools/registry.rs."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = ROOT / "src/mcp/tools.rs"
+DEFAULT_SOURCE = ROOT / "src/mcp/tools/registry.rs"
 DEFAULT_OUTPUT = ROOT / "docs/MCP_TOOLS.md"
 
 
@@ -32,6 +32,7 @@ SCHEMA_RE = re.compile(
     re.DOTALL,
 )
 TIER_RE = re.compile(r"tier:\s*ToolTier::(?P<value>Essential|Standard|Advanced)")
+INCLUDE_RE = re.compile(r"=\s*include!\(\s*\"(?P<path>[^\"]+)\"\s*\)")
 
 
 def main() -> int:
@@ -78,7 +79,7 @@ def main() -> int:
 
 
 def parse_tools(source: Path) -> list[Tool]:
-    text = source.read_text()
+    text = extract_tool_definition_source(source)
     tools: list[Tool] = []
     for block in tool_blocks(text):
         name = decode_rust_string(required_match(NAME_RE, block, "name"))
@@ -111,11 +112,33 @@ def required_match(pattern: re.Pattern[str], text: str, label: str) -> str:
     return match.group("value")
 
 
+def extract_tool_definition_source(source: Path) -> str:
+    text = source.read_text()
+    definitions = text.find("pub const TOOL_DEFINITIONS")
+    if definitions != -1:
+        text = text[definitions:]
+        include = INCLUDE_RE.search(text)
+        if include:
+            include_path = (source.parent / include.group("path")).resolve()
+            return extract_tool_definition_source(include_path)
+        return text
+
+    text = text.lstrip()
+    if text.startswith("&["):
+        return text
+
+    raise ValueError("missing TOOL_DEFINITIONS")
+
+
 def tool_blocks(text: str) -> list[str]:
     definitions = text.find("pub const TOOL_DEFINITIONS")
     if definitions == -1:
-        raise ValueError("missing TOOL_DEFINITIONS")
-    text = text[definitions:]
+        # For sources that are included directly as a slice literal (`&[ ... ]`).
+        if not text.startswith("&["):
+            raise ValueError("missing TOOL_DEFINITIONS")
+        # Keep whole text.
+    else:
+        text = text[definitions:]
     blocks: list[str] = []
     cursor = 0
     while True:
