@@ -1,29 +1,4 @@
-use serde_json::json;
-
-use crate::mcp::protocol::{ToolAnnotations, ToolDefinition};
-
-/// Tool exposure tier for progressive discovery.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolTier {
-    /// ~20 core tools every agent needs. Always exposed.
-    Essential,
-    /// ~50 common tools for standard workflows.
-    Standard,
-    /// ~110 advanced/specialized tools.
-    Advanced,
-}
-
-/// Structured tool definition with MCP 2025-11-25 annotations.
-pub struct ToolDef {
-    pub name: &'static str,
-    pub description: &'static str,
-    pub schema: &'static str,
-    pub annotations: ToolAnnotations,
-    pub tier: ToolTier,
-}
-
-/// All tool definitions for Engram
-pub const TOOL_DEFINITIONS: &[ToolDef] = &[
+&[
 // MCP tool definitions by domain.
 
     // Memory CRUD
@@ -4360,4 +4335,4 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-];
+]
