@@ -405,9 +405,7 @@ pub fn retention_policy_apply(ctx: &HandlerContext, params: Value) -> Value {
             .unwrap_or_else(|e| json!({"error": e.to_string()}));
     }
 
-    let tx_result = ctx
-        .storage
-        .with_transaction(|conn| apply_retention_policies(conn));
+    let tx_result = ctx.storage.with_transaction(apply_retention_policies);
 
     match tx_result {
         Ok(affected) => {

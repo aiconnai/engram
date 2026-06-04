@@ -2215,7 +2215,10 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query sqlite_master");
-        assert_eq!(exists, 1, "enrichment_events table should exist after migration");
+        assert_eq!(
+            exists, 1,
+            "enrichment_events table should exist after migration"
+        );
     }
 
     #[test]
