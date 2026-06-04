@@ -440,17 +440,15 @@ pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
                         response.insert("state".into(), Value::Null);
                     }
                 }
-
             }
 
             let mut event_rows = Vec::new();
             if include_events {
                 let mut conditions: Vec<String> = vec!["e.memory_id = ?1".to_string()];
-                let mut bind_vals: Vec<rusqlite::types::Value> =
-                    vec![
-                        rusqlite::types::Value::Integer(memory_id),
-                        rusqlite::types::Value::Text(as_of.to_rfc3339().into()),
-                    ];
+                let mut bind_vals: Vec<rusqlite::types::Value> = vec![
+                    rusqlite::types::Value::Integer(memory_id),
+                    rusqlite::types::Value::Text(as_of.to_rfc3339()),
+                ];
 
                 // Include successful events by default; optional failure events can be requested.
                 if !include_failed {
