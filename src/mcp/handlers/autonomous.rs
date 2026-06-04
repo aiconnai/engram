@@ -187,6 +187,7 @@ pub fn memory_suggest_acquisitions(ctx: &HandlerContext, params: Value) -> Value
 /// Run full garden maintenance on a workspace.
 pub fn memory_garden(ctx: &HandlerContext, params: Value) -> Value {
     use crate::intelligence::gardening::{GardenConfig, MemoryGardener};
+    use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 
     let workspace = params
         .get("workspace")
@@ -198,11 +199,44 @@ pub fn memory_garden(ctx: &HandlerContext, params: Value) -> Value {
         ..GardenConfig::default()
     };
 
-    ctx.storage
-        .with_connection(|conn| {
-            let gardener = MemoryGardener::new(config);
-            let report = gardener.garden(conn, workspace)?;
-            Ok(json!({
+    let garden_result = ctx.storage.with_transaction(|conn| {
+        let gardener = MemoryGardener::new(config);
+        let report = gardener.garden(conn, workspace)?;
+        Ok(report)
+    });
+
+    match garden_result {
+        Ok(report) => {
+            // Emit SUCCESS event in a separate connection, outside the now-committed transaction.
+            let operation_id = uuid::Uuid::new_v4().to_string();
+            ctx.storage
+                .with_connection(|conn| {
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &operation_id,
+                            event_type: "garden",
+                            memory_id: None,
+                            version_id: None,
+                            triggered_by: "memory_garden",
+                            agent_id: None,
+                            workspace: Some(workspace),
+                            params: serde_json::json!({"dry_run": false}),
+                            outcome: serde_json::json!({
+                                "memories_pruned": report.memories_pruned,
+                                "memories_merged": report.memories_merged,
+                                "memories_archived": report.memories_archived,
+                                "memories_compressed": report.memories_compressed,
+                                "tokens_freed": report.tokens_freed,
+                            }),
+                            status: "completed",
+                            dry_run: false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                })
+                .ok();
+            json!({
                 "workspace": workspace,
                 "dry_run": false,
                 "memories_pruned": report.memories_pruned,
@@ -211,9 +245,36 @@ pub fn memory_garden(ctx: &HandlerContext, params: Value) -> Value {
                 "memories_compressed": report.memories_compressed,
                 "tokens_freed": report.tokens_freed,
                 "actions": report.actions,
-            }))
-        })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+            })
+        }
+        Err(e) => {
+            // Emit FAILURE event in a separate connection (transaction already rolled back).
+            let op_id = uuid::Uuid::new_v4().to_string();
+            let err_str = e.to_string();
+            ctx.storage
+                .with_connection(|conn| {
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &op_id,
+                            event_type: "garden",
+                            memory_id: None,
+                            version_id: None,
+                            triggered_by: "memory_garden",
+                            agent_id: None,
+                            workspace: Some(workspace),
+                            params: serde_json::json!({"dry_run": false}),
+                            outcome: serde_json::json!({"error": &err_str}),
+                            status: "failed",
+                            dry_run: false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                })
+                .ok();
+            json!({"error": err_str})
+        }
+    }
 }
 
 // ── memory_garden_preview ─────────────────────────────────────────────────────
@@ -367,4 +428,63 @@ pub fn memory_agent_metrics(ctx: &HandlerContext, params: Value) -> Value {
             }))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mcp::handlers::HandlerContext;
+    use crate::storage::Storage;
+    use std::sync::Arc;
+
+    fn test_ctx() -> HandlerContext {
+        let storage = Storage::open_in_memory().expect("open in-memory storage");
+        HandlerContext {
+            storage,
+            embedder: Arc::new(crate::embedding::TfIdfEmbedder::new(128)),
+            fuzzy_engine: Arc::new(parking_lot::Mutex::new(crate::search::FuzzyEngine::new())),
+            search_config: crate::search::SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(crate::embedding::EmbeddingCache::default()),
+            search_cache: Arc::new(crate::search::SearchResultCache::new(
+                crate::search::AdaptiveCacheConfig::default(),
+            )),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 300,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(
+                tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap(),
+            ),
+        }
+    }
+
+    #[test]
+    fn test_memory_garden_emits_enrichment_event() {
+        let ctx = test_ctx();
+        let result = memory_garden(&ctx, json!({"workspace": "default"}));
+        // The call should succeed (no error key)
+        assert!(
+            result.get("error").is_none(),
+            "memory_garden returned error: {result}"
+        );
+        // Verify one enrichment_events row was written
+        let count: i64 = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM enrichment_events \
+                     WHERE event_type='garden' AND triggered_by='memory_garden'",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("query enrichment_events");
+        assert_eq!(count, 1, "expected 1 garden event, got {count}");
+    }
 }

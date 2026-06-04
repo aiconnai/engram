@@ -18,9 +18,11 @@ pub mod auto_consolidate;
 pub mod autonomous;
 pub mod compression;
 pub mod context;
+pub mod council;
 pub mod document_ingest;
 #[cfg(feature = "dream-phase")]
 pub mod dream;
+pub mod enrichment_audit;
 pub mod evolution;
 pub mod graph;
 pub mod handoff;
@@ -126,6 +128,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
 
         // ── Search ───────────────────────────────────────────────────────────
         "memory_search" => search::memory_search(ctx, params),
+        "memory_council" => council::memory_council(ctx, params),
         "memory_smart_retrieve" => smart_retrieve::memory_smart_retrieve(ctx, params),
         "memory_search_suggest" => search::search_suggest(ctx, params),
         "memory_search_by_identity" => search::memory_search_by_identity(ctx, params),
@@ -427,6 +430,10 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_agent_stop" => autonomous::memory_agent_stop(ctx, params),
         "memory_agent_status" => autonomous::memory_agent_status(ctx, params),
         "memory_agent_metrics" => autonomous::memory_agent_metrics(ctx, params),
+
+        // ── Enrichment audit (ENG-1240) ───────────────────────────────────────
+        "memory_enrichment_timeline" => enrichment_audit::memory_enrichment_timeline(ctx, params),
+        "memory_enrichment_audit" => enrichment_audit::memory_enrichment_audit(ctx, params),
 
         // ── Attestation (agent-portability) ──────────────────────────────────
         #[cfg(feature = "agent-portability")]

@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::storage::enrichment_events::{emit_best_effort, latest_version_id, EnrichmentEvent};
 
 pub fn memory_summarize(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::{create_memory, get_memory};
@@ -30,73 +31,103 @@ pub fn memory_summarize(ctx: &HandlerContext, params: Value) -> Value {
         .get("tags")
         .and_then(|v| serde_json::from_value(v.clone()).ok());
 
-    ctx.storage
-        .with_connection(|conn| {
-            let mut contents: Vec<String> = Vec::with_capacity(memory_ids.len());
-            let mut first_memory_workspace: Option<String> = None;
+    let tx_result = ctx.storage.with_transaction(|conn| {
+        let mut contents: Vec<String> = Vec::with_capacity(memory_ids.len());
+        let mut first_memory_workspace: Option<String> = None;
 
-            for id in &memory_ids {
-                match get_memory(conn, *id) {
-                    Ok(mem) => {
-                        contents.push(mem.content);
-                        if first_memory_workspace.is_none() {
-                            first_memory_workspace = Some(mem.workspace);
-                        }
+        for id in &memory_ids {
+            match get_memory(conn, *id) {
+                Ok(mem) => {
+                    contents.push(mem.content);
+                    if first_memory_workspace.is_none() {
+                        first_memory_workspace = Some(mem.workspace);
                     }
-                    Err(e) => {
-                        return Err(crate::error::EngramError::Internal(format!(
-                            "Memory {} not found: {}",
-                            id, e
-                        )));
-                    }
+                }
+                Err(e) => {
+                    return Err(crate::error::EngramError::Internal(format!(
+                        "Memory {} not found: {}",
+                        id, e
+                    )));
                 }
             }
+        }
 
-            let summary_text = if let Some(s) = provided_summary {
-                s.to_string()
+        let summary_text = if let Some(s) = provided_summary {
+            s.to_string()
+        } else {
+            let combined = contents.join("\n\n---\n\n");
+            if combined.len() <= max_length {
+                combined
             } else {
-                let combined = contents.join("\n\n---\n\n");
-                if combined.len() <= max_length {
-                    combined
-                } else {
-                    let head_len = (max_length as f64 * 0.6) as usize;
-                    let tail_len = (max_length as f64 * 0.3) as usize;
-                    let head: String = combined.chars().take(head_len).collect();
-                    let tail: String = combined
-                        .chars()
-                        .rev()
-                        .take(tail_len)
-                        .collect::<String>()
-                        .chars()
-                        .rev()
-                        .collect();
-                    let truncated = combined.len() - head_len - tail_len;
-                    format!("{}...[{} chars truncated]...{}", head, truncated, tail)
-                }
-            };
+                let head_len = (max_length as f64 * 0.6) as usize;
+                let tail_len = (max_length as f64 * 0.3) as usize;
+                let head: String = combined.chars().take(head_len).collect();
+                let tail: String = combined
+                    .chars()
+                    .rev()
+                    .take(tail_len)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect();
+                let truncated = combined.len() - head_len - tail_len;
+                format!("{}...[{} chars truncated]...{}", head, truncated, tail)
+            }
+        };
 
-            let input = CreateMemoryInput {
-                content: summary_text,
-                memory_type: MemoryType::Summary,
-                importance: Some(0.6),
-                tags: tags.unwrap_or_default(),
-                workspace: workspace.map(|s| s.to_string()).or(first_memory_workspace),
-                tier: MemoryTier::Permanent,
-                summary_of_id: Some(memory_ids[0]),
-                ..Default::default()
-            };
+        let input = CreateMemoryInput {
+            content: summary_text,
+            memory_type: MemoryType::Summary,
+            importance: Some(0.6),
+            tags: tags.unwrap_or_default(),
+            workspace: workspace.map(|s| s.to_string()).or(first_memory_workspace),
+            tier: MemoryTier::Permanent,
+            summary_of_id: Some(memory_ids[0]),
+            ..Default::default()
+        };
 
-            let memory = create_memory(conn, &input)?;
+        let memory = create_memory(conn, &input)?;
 
-            Ok(json!({
-                "id": memory.id,
+        // Return data needed for the post-commit emit.
+        Ok((memory.id, memory.workspace, memory.content.len()))
+    });
+
+    match tx_result {
+        Ok((summary_id, summary_workspace, summary_len)) => {
+            // Emit SUCCESS event in a separate connection, outside the now-committed transaction.
+            let operation_id = uuid::Uuid::new_v4().to_string();
+            ctx.storage
+                .with_connection(|conn| {
+                    let vid = latest_version_id(conn, summary_id).unwrap_or(None);
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &operation_id,
+                            event_type: "consolidation",
+                            memory_id: Some(summary_id),
+                            version_id: vid,
+                            triggered_by: "memory_summarize",
+                            agent_id: None,
+                            workspace: Some(summary_workspace.as_str()),
+                            params: serde_json::json!({"source_count": memory_ids.len()}),
+                            outcome: serde_json::json!({"summary_id": summary_id}),
+                            status: "completed",
+                            dry_run: false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                })
+                .ok();
+            json!({
+                "id": summary_id,
                 "memory_type": "summary",
                 "summarized_count": memory_ids.len(),
                 "original_ids": memory_ids,
-                "summary_length": memory.content.len()
-            }))
-        })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+                "summary_length": summary_len
+            })
+        }
+        Err(e) => json!({"error": e.to_string()}),
+    }
 }
 
 pub fn memory_get_full(ctx: &HandlerContext, params: Value) -> Value {
@@ -262,6 +293,7 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
 
             let mut archived = 0;
             let mut errors: Vec<String> = Vec::new();
+            let operation_id = uuid::Uuid::new_v4().to_string();
 
             for memory in candidates {
                 let summary_text = if memory.content.len() > 200 {
@@ -297,7 +329,25 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
                             "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ? AND valid_to IS NULL",
                             params![memory.id],
                         ) {
-                            Ok(_) => archived += 1,
+                            Ok(_) => {
+                                archived += 1;
+                                emit_best_effort(
+                                    conn,
+                                    &EnrichmentEvent {
+                                        operation_id: &operation_id,
+                                        event_type:   "compression",
+                                        memory_id:    Some(memory.id),
+                                        version_id:   None,
+                                        triggered_by: "memory_archive_old",
+                                        agent_id:     None,
+                                        workspace:    Some(memory.workspace.as_str()),
+                                        params:       json!({}),
+                                        outcome:      json!({"new_state": "archived"}),
+                                        status:       "completed",
+                                        dry_run:      false,
+                                    },
+                                );
+                            }
                             Err(e) => errors.push(format!(
                                 "Memory {}: summary created but failed to mark archived: {}",
                                 memory.id, e
@@ -315,4 +365,101 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
             }))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+#[cfg(test)]
+mod summarize_tests {
+    use super::*;
+
+    fn test_ctx() -> super::super::HandlerContext {
+        use crate::embedding::{create_embedder, EmbeddingCache};
+        use crate::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
+        use crate::storage::Storage;
+        use crate::types::EmbeddingConfig;
+        use parking_lot::Mutex;
+        use std::sync::Arc;
+
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
+        super::super::HandlerContext {
+            storage,
+            embedder,
+            fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
+            search_config: SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(EmbeddingCache::default()),
+            search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 60,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+        }
+    }
+
+    fn seed_memory(ctx: &super::super::HandlerContext, content: &str) -> i64 {
+        use crate::storage::queries::create_memory;
+        use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
+        ctx.storage
+            .with_transaction(|conn| {
+                create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: content.to_string(),
+                        memory_type: MemoryType::Note,
+                        workspace: Some("default".to_string()),
+                        tier: MemoryTier::Permanent,
+                        ..Default::default()
+                    },
+                )
+            })
+            .expect("seed failed")
+            .id
+    }
+
+    #[test]
+    fn test_memory_summarize_emits_enrichment_event() {
+        let ctx = test_ctx();
+
+        let id1 = seed_memory(&ctx, "Memory alpha about Rust ownership");
+        let id2 = seed_memory(&ctx, "Memory beta about Rust lifetimes");
+
+        let result = memory_summarize(
+            &ctx,
+            serde_json::json!({
+                "memory_ids": [id1, id2],
+                "summary": "Rust ownership and lifetimes overview",
+                "workspace": "default"
+            }),
+        );
+
+        assert!(
+            result.get("error").is_none(),
+            "memory_summarize returned error: {:?}",
+            result
+        );
+        assert!(
+            result["id"].as_i64().is_some(),
+            "expected summary memory id"
+        );
+
+        // Verify an enrichment_events row was written
+        let count: i64 = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM enrichment_events \
+                     WHERE event_type = 'consolidation' \
+                       AND triggered_by = 'memory_summarize'",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("query failed");
+
+        assert_eq!(count, 1, "expected exactly 1 enrichment_events row");
+    }
 }

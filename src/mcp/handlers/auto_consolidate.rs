@@ -8,7 +8,10 @@ use serde_json::{json, Value};
 
 use super::HandlerContext;
 use crate::error::EngramError;
-use crate::intelligence::auto_consolidate::{list_history, run_consolidation, ConsolidationPolicy};
+use crate::intelligence::auto_consolidate::{
+    list_history, run_consolidation, ConsolidationAction, ConsolidationPolicy,
+};
+use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::Storage;
 
 pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
@@ -80,6 +83,54 @@ pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
 
     match run_consolidation(&ctx.storage, &workspace, &policy) {
         Ok(report) => {
+            // Emit enrichment events for non-dry-run consolidation actions.
+            if !report.dry_run {
+                let operation_id = uuid::Uuid::new_v4().to_string();
+                let dry_run_flag = report.dry_run;
+                let ws_str = report.workspace.clone();
+                let actions_snapshot: Vec<_> = report
+                    .actions
+                    .iter()
+                    .filter_map(|a| match a {
+                        ConsolidationAction::DuplicateMerged { kept, merged, .. } => {
+                            Some((*kept, *merged))
+                        }
+                        ConsolidationAction::Summarized {
+                            memory_ids,
+                            summary_id,
+                        } => {
+                            // Emit for the first source id, carrying summary_id in outcome.
+                            memory_ids.first().map(|&id| (id, summary_id.unwrap_or(id)))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+
+                if !actions_snapshot.is_empty() {
+                    let _ = ctx.storage.with_connection(|conn| {
+                        for (mem_id, _) in &actions_snapshot {
+                            emit_best_effort(
+                                conn,
+                                &EnrichmentEvent {
+                                    operation_id: &operation_id,
+                                    event_type: "consolidation",
+                                    memory_id: Some(*mem_id),
+                                    version_id: None,
+                                    triggered_by: "memory_consolidate_batch",
+                                    agent_id: None,
+                                    workspace: Some(ws_str.as_str()),
+                                    params: json!({}),
+                                    outcome: json!({}),
+                                    status: "completed",
+                                    dry_run: dry_run_flag,
+                                },
+                            );
+                        }
+                        Ok::<_, crate::error::EngramError>(())
+                    });
+                }
+            }
+
             let counts = report.counts();
             json!({
                 "workspace": report.workspace,

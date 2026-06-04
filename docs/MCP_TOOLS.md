@@ -4,7 +4,7 @@
 
 This reference is generated from `src/mcp/tools.rs`.
 
-Total tools: **253**
+Total tools: **256**
 
 ## Summary
 
@@ -19,6 +19,7 @@ Total tools: **253**
 | `memory_list` | essential | readOnlyHint | none |
 | `memory_search` | essential | readOnlyHint | `query` |
 | `memory_smart_retrieve` | essential | readOnlyHint | `query` |
+| `memory_council` | standard | mutating (no MCP hints) | `prompt` |
 | `memory_search_suggest` | standard | readOnlyHint | `query` |
 | `memory_link` | essential | mutating (no MCP hints) | `from_id`, `to_id` |
 | `memory_unlink` | standard | mutating (no MCP hints) | `from_id`, `to_id` |
@@ -263,6 +264,8 @@ Total tools: **253**
 | `temporal_diff` | advanced | readOnlyHint | `t1`, `t2` |
 | `temporal_snapshot` | advanced | readOnlyHint | `timestamp` |
 | `temporal_timeline` | advanced | readOnlyHint | `from_id`, `to_id` |
+| `memory_enrichment_timeline` | standard | readOnlyHint | `memory_id` |
+| `memory_enrichment_audit` | advanced | readOnlyHint | none |
 
 ## Tools
 
@@ -440,6 +443,25 @@ Intent-aware unified retrieval. Classifies the query (lookup, exploration, conte
 | `limit` | `integer` | no | Default: `10`. Minimum: `1`. Maximum: `100`. |
 | `workspace` | `string` | no | Optional workspace filter |
 | `force_intents` | `array` | no | Override the classifier (for testing/debugging) Items: `string`. |
+
+### `memory_council`
+
+Run a question through an llm-council instance (Karpathy council orchestration) and return consolidated stage outputs and final answer. Optionally persist a checkpoint memory.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `prompt`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `prompt` | `string` | yes | Prompt to send to the council |
+| `conversation_id` | `string` | no | Optional existing conversation ID to continue |
+| `council_url` | `string` | no | Council HTTP base URL Default: `http://127.0.0.1:8001`. |
+| `timeout_seconds` | `integer` | no | Request timeout in seconds (1-300) Default: `90`. Minimum: `1`. Maximum: `300`. |
+| `include_raw_stages` | `boolean` | no | Whether to include raw stage payloads Default: `true`. |
+| `persist` | `boolean` | no | Persist final answer as checkpoint memory Default: `false`. |
+| `workspace` | `string` | no | Target workspace when persist=true Default: `default`. |
+| `memory_tags` | `array` | no | Extra tags to include when persist=true (default tags: llm-council, consensus) Items: `string`. |
 
 ### `memory_search_suggest`
 
@@ -3785,3 +3807,43 @@ Return the full edge history between two memory IDs, ordered chronologically.
 | `from_id` | `integer` | yes | Source memory ID. |
 | `to_id` | `integer` | yes | Target memory ID. |
 | `scope_path` | `string` | no | Optional scope path to restrict the timeline. |
+
+### `memory_enrichment_timeline`
+
+List all enrichment events for a specific memory (lifecycle transitions, consolidation, compression, etc.). Shows what automated operations affected this memory and why.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory whose enrichment history to retrieve. |
+| `event_type` | `string` | no | Filter to a specific event type (e.g. "consolidation", "lifecycle_transition"). |
+| `include_dry_runs` | `boolean` | no | Include events that were executed in dry-run mode (default: true). |
+| `include_snapshots` | `boolean` | no | Include snapshot events (default: true). |
+| `limit` | `integer` | no | Maximum number of events to return (default: 20, max: 100). |
+
+### `memory_enrichment_audit`
+
+Query enrichment events globally with filters (status, event_type, agent_id, operation_id, workspace, time range). Use for compliance audit and batch tracing.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `event_type` | `string` | no | Filter by event type (e.g. "consolidation", "lifecycle_transition", "compression"). |
+| `triggered_by` | `string` | no | Filter by the tool name that triggered the event. |
+| `agent_id` | `string` | no | Filter by the agent ID that triggered the event. |
+| `status` | `string` | no | Filter by event outcome status. Allowed: `completed`, `failed`, `skipped`. |
+| `workspace` | `string` | no | Filter to a specific workspace. |
+| `operation_id` | `string` | no | Filter by a specific operation ID (exact match). |
+| `memory_id` | `integer` | no | Filter to events that reference a specific memory. |
+| `version_id` | `integer` | no | Filter to events that reference a specific memory version. |
+| `dry_run` | `boolean` | no | Filter by dry-run flag (true = only dry-run events, false = only real events). |
+| `since` | `string` | no | ISO-8601 timestamp: return events created at or after this time. |
+| `until` | `string` | no | ISO-8601 timestamp: return events created at or before this time. |
+| `order` | `string` | no | Sort order by creation time: "desc" (newest first, default) or "asc". Allowed: `desc`, `asc`. |
+| `limit` | `integer` | no | Maximum number of events to return (default: 50, max: 200). |

@@ -25,6 +25,7 @@ pub mod backend;
 pub mod clustering;
 mod confidence;
 mod connection;
+pub mod enrichment_events;
 pub mod entity_queries;
 pub mod feedback;
 pub mod filter;

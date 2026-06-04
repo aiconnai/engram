@@ -6,6 +6,7 @@
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 
 // ── memory_detect_updates ─────────────────────────────────────────────────────
 
@@ -182,6 +183,11 @@ pub fn memory_reflect(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_str())
         .unwrap_or("surface");
 
+    let persist = params
+        .get("persist")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let depth = match depth_str {
         "analytical" => ReflectionDepth::Analytical,
         "meta" => ReflectionDepth::Meta,
@@ -203,12 +209,33 @@ pub fn memory_reflect(ctx: &HandlerContext, params: Value) -> Value {
             let engine = ReflectionEngine::new();
             let reflection = engine.create_reflection(conn, &memory_refs, depth)?;
 
+            if persist {
+                let op_id = uuid::Uuid::new_v4().to_string();
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &op_id,
+                        event_type: "evolution",
+                        memory_id: ids.first().copied(),
+                        version_id: None,
+                        triggered_by: "memory_reflect",
+                        agent_id: None,
+                        workspace: None,
+                        params: json!({"depth": depth_str, "source_ids": &ids}),
+                        outcome: json!({"insights": reflection.insights.len()}),
+                        status: "completed",
+                        dry_run: false,
+                    },
+                );
+            }
+
             Ok(json!({
                 "reflection": reflection.content,
                 "source_ids": reflection.source_ids,
                 "depth": reflection.depth.as_str(),
                 "insights": reflection.insights,
                 "created_at": reflection.created_at,
+                "persisted": persist,
             }))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
