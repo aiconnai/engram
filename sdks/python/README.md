@@ -33,6 +33,58 @@ memory = client.create(
 # Search (hybrid: BM25 + vector + fuzzy)
 results = client.search("user preferences")
 
+# Run a council consensus session
+import asyncio
+
+
+async def example() -> None:
+    async with EngramClient(base_url="https://your-engram-api.fly.dev", api_key="ek_...", tenant="my-tenant") as client:
+        await client.create("User prefers dark mode")
+
+        council = await client.memory_council(
+            "Should we use Redis or Postgres for caching?",
+            timeout_seconds=120,
+            persist=True,
+            workspace="architecture",
+        )
+        print(council)
+
+
+asyncio.run(example())
+```
+
+### Council Skill (reusable in projects)
+
+```python
+import asyncio
+from engram_client import EngramClient
+from engram_client.integrations import CouncilSkill
+
+
+async def example() -> None:
+    async with EngramClient(
+        base_url="https://your-engram-api.fly.dev",
+        api_key="ek_...",
+        tenant="my-tenant",
+    ) as client:
+        skill = CouncilSkill(
+            client,
+            default_workspace="my-project",
+            default_timeout_seconds=120,
+            default_include_raw_stages=True,
+        )
+
+        result = await skill.ask(
+            "What is the best migration strategy?",
+            persist=True,
+        )
+        print(result)
+
+
+asyncio.run(example())
+```
+
+```python
 # List with filters
 memories = client.list(limit=20, workspace="my-project")
 
@@ -68,6 +120,8 @@ with EngramClient(base_url="...", api_key="...", tenant="...") as client:
 | `delete(id)` | Delete a memory |
 | `list(**kwargs)` | List memories with filters |
 | `search(query, **kwargs)` | Hybrid search |
+| `memory_council(prompt, **kwargs)` | Run a prompt through llm-council |
+| `memory_replay_at_time(memory_id, timestamp, **kwargs)` | Replay memory state at a timestamp |
 | `stats()` | Storage statistics |
 
 ### Parameters
@@ -77,6 +131,7 @@ with EngramClient(base_url="...", api_key="...", tenant="...") as client:
 **list kwargs:** `limit`, `offset`, `workspace`, `memory_type`, `tags`, `sort_by`, `sort_order`
 
 **search kwargs:** `limit`, `workspace`, `tags`, `memory_type`, `include_archived`
+**memory_council kwargs:** `conversation_id`, `council_url`, `timeout_seconds`, `include_raw_stages`, `persist`, `workspace`, `memory_tags`
 
 ## Requirements
 

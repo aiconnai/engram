@@ -42,6 +42,40 @@ export interface SearchOptions {
   workspace?: string;
 }
 
+export interface MemoryCouncilOptions {
+  conversationId?: string;
+  councilUrl?: string;
+  timeoutSeconds?: number;
+  includeRawStages?: boolean;
+  persist?: boolean;
+  workspace?: string;
+  memoryTags?: string[];
+}
+
+export interface MemoryReplayAtTimeOptions {
+  eventType?: string;
+  includeEvents?: boolean;
+  includeFailed?: boolean;
+  includeDryRuns?: boolean;
+  eventLimit?: number;
+}
+
+export interface CouncilSkillOptions {
+  defaultWorkspace?: string;
+  defaultTimeoutSeconds?: number;
+  defaultIncludeRawStages?: boolean;
+}
+
+export interface CouncilSkillAskOptions {
+  persist?: boolean;
+  workspace?: string;
+  timeoutSeconds?: number;
+  includeRawStages?: boolean;
+  conversationId?: string;
+  councilUrl?: string;
+  memoryTags?: string[];
+}
+
 export interface UpdateOptions {
   content?: string;
   tags?: string[];
@@ -328,6 +362,48 @@ export class EngramClient {
     };
     if (options?.workspace) params.workspace = options.workspace;
     return this.mcpCall("memory_search", params);
+  }
+
+  async memoryCouncil(
+    prompt: string,
+    options?: MemoryCouncilOptions
+  ): Promise<unknown> {
+    const params: Record<string, unknown> = {
+      prompt,
+      include_raw_stages: options?.includeRawStages ?? true,
+      persist: options?.persist ?? false,
+    };
+
+    if (options?.conversationId !== undefined)
+      params.conversation_id = options.conversationId;
+    if (options?.councilUrl !== undefined) params.council_url = options.councilUrl;
+    if (options?.timeoutSeconds !== undefined)
+      params.timeout_seconds = options.timeoutSeconds;
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    if (options?.memoryTags !== undefined) params.memory_tags = options.memoryTags;
+
+    return this.mcpCall("memory_council", params);
+  }
+
+  // -- Enrichment Audit --
+
+  async memoryReplayAtTime(
+    memoryId: number,
+    timestamp: string,
+    options?: MemoryReplayAtTimeOptions
+  ): Promise<unknown> {
+    const params: Record<string, unknown> = {
+      memory_id: memoryId,
+      timestamp,
+      include_events: options?.includeEvents ?? true,
+      include_failed: options?.includeFailed ?? false,
+      include_dry_runs: options?.includeDryRuns ?? false,
+    };
+
+    if (options?.eventType !== undefined) params.event_type = options.eventType;
+    if (options?.eventLimit !== undefined) params.event_limit = options.eventLimit;
+
+    return this.mcpCall("memory_replay_at_time", params);
   }
 
   // -- Graph --
@@ -879,5 +955,41 @@ export class EngramClient {
 
   async federationSyncStatus(): Promise<unknown> {
     return this.mcpCall("memory_federation_sync_status", {});
+  }
+}
+
+export class CouncilSkill {
+  private readonly defaultWorkspace: string;
+  private readonly defaultTimeoutSeconds: number;
+  private readonly defaultIncludeRawStages: boolean;
+
+  constructor(private readonly client: EngramClient, options: CouncilSkillOptions = {}) {
+    this.defaultWorkspace = options.defaultWorkspace ?? "default";
+    this.defaultTimeoutSeconds = options.defaultTimeoutSeconds ?? 90;
+    this.defaultIncludeRawStages = options.defaultIncludeRawStages ?? false;
+  }
+
+  async ask(prompt: string, options: CouncilSkillAskOptions = {}): Promise<unknown> {
+    if (!prompt || !prompt.trim()) {
+      return { error: "prompt must be a non-empty string" };
+    }
+
+    return this.client.memoryCouncil(prompt, {
+      conversationId: options.conversationId,
+      councilUrl: options.councilUrl,
+      timeoutSeconds: options.timeoutSeconds ?? this.defaultTimeoutSeconds,
+      includeRawStages:
+        options.includeRawStages ?? this.defaultIncludeRawStages,
+      persist: options.persist ?? false,
+      workspace: options.workspace ?? this.defaultWorkspace,
+      memoryTags: options.memoryTags,
+    });
+  }
+
+  async askWithPersistence(
+    prompt: string,
+    options: Omit<CouncilSkillAskOptions, "persist"> = {}
+  ): Promise<unknown> {
+    return this.ask(prompt, { ...options, persist: true });
   }
 }

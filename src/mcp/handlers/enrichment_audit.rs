@@ -4,7 +4,7 @@
 //! - `memory_enrichment_timeline` – per-memory enrichment history
 //! - `memory_enrichment_audit`    – global enrichment event query with filters
 
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use serde_json::{json, Value};
 
 use super::HandlerContext;
@@ -71,7 +71,7 @@ pub fn memory_enrichment_timeline(ctx: &HandlerContext, params: Value) -> Value 
                  FROM enrichment_events e
                  LEFT JOIN memory_versions mv ON mv.id = e.version_id
                  WHERE {where_clause}
-                 ORDER BY e.created_at DESC
+                 ORDER BY e.created_at DESC, e.id DESC
                  LIMIT ?{limit_pos}"
             );
 
@@ -238,7 +238,7 @@ pub fn memory_enrichment_audit(ctx: &HandlerContext, params: Value) -> Value {
                         status, dry_run, created_at
                  FROM enrichment_events
                  {where_clause}
-                 ORDER BY created_at {order_dir}
+                 ORDER BY created_at {order_dir}, id {order_dir}
                  LIMIT ?{limit_pos}"
             );
 
@@ -337,9 +337,179 @@ pub fn memory_enrichment_audit(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+/// Replay a memory's content as it existed at `timestamp` with optional event trail.
+///
+/// - `memory_id` (required): memory identifier
+/// - `timestamp` (required): RFC3339 point-in-time
+/// - `event_limit` (optional): max number of enrichment events to include (default 50, max 200)
+/// - `include_failed` (optional): include failed events (default false)
+/// - `event_type` (optional): restrict replay log to a specific event type
+/// - `include_dry_runs` (optional): include dry-run events (default false)
+/// - `include_events` (optional): include replay event list (default true)
+pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
+    let memory_id = match params.get("memory_id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return json!({"error": "memory_id is required"}),
+    };
+
+    let timestamp = match params.get("timestamp").and_then(|v| v.as_str()) {
+        Some(t) => t.to_string(),
+        None => return json!({"error": "timestamp is required"}),
+    };
+
+    let as_of = match chrono::DateTime::parse_from_rfc3339(&timestamp) {
+        Ok(ts) => ts.with_timezone(&chrono::Utc),
+        Err(_) => {
+            return json!({"error": format!("timestamp must be RFC3339, got: {timestamp}")});
+        }
+    };
+
+    let event_type = params
+        .get("event_type")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let include_dry_runs = params
+        .get("include_dry_runs")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let include_events = params
+        .get("include_events")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let include_failed = params
+        .get("include_failed")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let event_limit = params
+        .get("event_limit")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(50)
+        .min(200) as i64;
+
+    ctx.storage
+        .with_connection(|conn| {
+            let mut response = serde_json::Map::new();
+
+            response.insert("memory_id".into(), json!(memory_id));
+            response.insert("timestamp".into(), json!(timestamp));
+
+            // Pick the latest memory version valid at the requested point in time.
+            {
+                let mut stmt = conn.prepare_cached(
+                    r#"
+                    SELECT version, content, tags, metadata, created_at, created_by, change_summary
+                    FROM memory_versions
+                    WHERE memory_id = ?1 AND datetime(created_at) <= datetime(?2)
+                    ORDER BY version DESC
+                    LIMIT 1
+                    "#,
+                )?;
+
+                let state: Option<Value> = stmt
+                    .query_row(params![memory_id, as_of.to_rfc3339()], |row| {
+                        let version: i64 = row.get(0)?;
+                        let content: String = row.get(1)?;
+                        let tags_str: String = row.get(2)?;
+                        let metadata_str: String = row.get(3)?;
+                        let created_at: String = row.get(4)?;
+                        let created_by: Option<String> = row.get(5)?;
+                        let change_summary: Option<String> = row.get(6)?;
+
+                        let tags = serde_json::from_str(&tags_str).unwrap_or(json!([]));
+                        let metadata = serde_json::from_str(&metadata_str).unwrap_or(json!({}));
+
+                        Ok(json!({
+                            "version": version,
+                            "content": content,
+                            "tags": tags,
+                            "metadata": metadata,
+                            "created_at": created_at,
+                            "created_by": created_by,
+                            "change_summary": change_summary,
+                        }))
+                    })
+                    .optional()?;
+
+                match state {
+                    Some(state) => {
+                        response.insert("found".into(), json!(true));
+                        response.insert("state".into(), state);
+                    }
+                    None => {
+                        response.insert("found".into(), json!(false));
+                        response.insert("state".into(), Value::Null);
+                    }
+                }
+
+            }
+
+            let mut event_rows = Vec::new();
+            if include_events {
+                let mut conditions: Vec<String> = vec!["e.memory_id = ?1".to_string()];
+                let mut bind_vals: Vec<rusqlite::types::Value> =
+                    vec![
+                        rusqlite::types::Value::Integer(memory_id),
+                        rusqlite::types::Value::Text(as_of.to_rfc3339().into()),
+                    ];
+
+                // Include successful events by default; optional failure events can be requested.
+                if !include_failed {
+                    conditions.push("e.status IN (?3, ?4)".to_string());
+                    bind_vals.push(rusqlite::types::Value::Text("completed".to_string()));
+                    bind_vals.push(rusqlite::types::Value::Text("skipped".to_string()));
+                }
+                if !include_dry_runs {
+                    let p = bind_vals.len() + 1;
+                    conditions.push(format!("e.dry_run = ?{p}"));
+                    bind_vals.push(rusqlite::types::Value::Integer(0));
+                }
+                if let Some(ref et) = event_type {
+                    let p = bind_vals.len() + 1;
+                    conditions.push(format!("e.event_type = ?{p}"));
+                    bind_vals.push(rusqlite::types::Value::Text(et.clone()));
+                }
+
+                let limit_pos = bind_vals.len() + 1;
+                let where_clause = format!("WHERE {}", conditions.join(" AND "));
+                let sql = format!(
+                    "SELECT id, operation_id, event_type, memory_id, version_id, \
+                        triggered_by, agent_id, workspace, params, outcome, \
+                        status, dry_run, created_at \
+                     FROM enrichment_events e \
+                     {where_clause} \
+                     AND datetime(e.created_at) <= datetime(?2) \
+                     ORDER BY e.created_at DESC, e.id DESC \
+                     LIMIT ?{limit_pos}"
+                );
+
+                bind_vals.push(rusqlite::types::Value::Integer(event_limit));
+
+                let mut bound_params: Vec<&dyn rusqlite::types::ToSql> =
+                    Vec::with_capacity(bind_vals.len());
+                for v in &bind_vals {
+                    bound_params.push(v);
+                }
+
+                let mut stmt = conn.prepare_cached(&sql)?;
+                let rows = stmt
+                    .query_map(bound_params.as_slice(), row_to_json)?
+                    .collect::<rusqlite::Result<Vec<_>>>()?;
+
+                event_rows = rows;
+            }
+
+            response.insert("events".into(), json!(event_rows));
+            response.insert("events_count".into(), json!(event_rows.len()));
+            response.insert("requested_timestamp".into(), json!(as_of.to_rfc3339()));
+
+            Ok(json!(response))
+        })
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
 // ── shared row mappers ────────────────────────────────────────────────────────
 
-/// Row mapper for queries that SELECT 13 base columns from enrichment_events
+/// Row mapper for queries that SELECT 13 base columns from `enrichment_events`.
 /// (no JOIN). Used by `memory_enrichment_audit`.
 fn row_to_json(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let params_str: String = row.get(8)?;
@@ -607,5 +777,49 @@ mod tests {
         // row should still be returned (include_snapshots does not filter rows)
         assert_eq!(result["count"], 1);
         assert!(events[0]["version_snapshot"].is_null());
+    }
+
+    #[test]
+    fn test_memory_replay_at_time_returns_latest_state_before_timestamp() {
+        let (ctx, memory_id) = ctx_with_event();
+
+        ctx.storage
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO memory_versions (memory_id, version, content, tags, metadata, created_at)
+                     VALUES (?1, 1, 'v1', '[]', '{}', '2026-01-01T00:00:00Z')",
+                    params![memory_id],
+                )?;
+                conn.execute(
+                    "INSERT INTO memory_versions (memory_id, version, content, tags, metadata, created_at)
+                     VALUES (?1, 2, 'v2', '[\"a\"]', '{\"k\":1}', '2026-01-02T00:00:00Z')",
+                    params![memory_id],
+                )?;
+                conn.execute(
+                    "INSERT INTO enrichment_events
+                         (operation_id, event_type, memory_id, triggered_by, params, outcome, status, dry_run, created_at)
+                     VALUES ('op-1', 'consolidation', ?1, 'memory_consolidate', '{}', '{\"ok\":true}', 'completed', 0, '2026-01-02T00:00:00Z')",
+                    params![memory_id],
+                )?;
+                Ok(())
+            })
+            .expect("seed replay test data");
+
+        let result = memory_replay_at_time(
+            &ctx,
+            serde_json::json!({
+                "memory_id": memory_id,
+                "timestamp": "2026-01-02T00:00:00Z",
+                "include_events": true,
+            }),
+        );
+        assert_eq!(result["memory_id"], memory_id);
+        assert_eq!(result["found"], true);
+        assert_eq!(result["state"]["version"], 2);
+        assert_eq!(result["state"]["content"], "v2");
+        let events = result["events"].as_array().expect("events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["event_type"], "consolidation");
+        assert_eq!(result["events_count"], 1);
     }
 }

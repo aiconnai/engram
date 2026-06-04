@@ -259,10 +259,11 @@ curl -X POST https://your-engram-mcp.fly.dev/mcp \
 Start Engram as an HTTP service:
 
 ```bash
-engram-server --http --port 8080 --http-api-key "$ENGRAM_HTTP_API_KEY"
+engram-server --transport http --http-port 8080 --http-api-key "$ENGRAM_HTTP_API_KEY"
 ```
 
-Engram's core HTTP transport exposes MCP over HTTP at `/mcp`. Create a memory:
+Engram's core HTTP transport exposes MCP over HTTP at `/mcp` (`/v1/mcp` is a
+compatibility alias). Create a memory:
 
 ```bash
 curl -X POST http://localhost:8080/mcp \
@@ -381,6 +382,96 @@ ENGRAM_WORKSPACE=my-org/my-repo
 # Set locally, never commit:
 # ENGRAM_HTTP_API_KEY=...
 ```
+
+## 10. Reusable Council Workflow (`engram-council` Skill)
+
+For architecture decisions or design discussions, use the MCP `memory_council` tool or the new reusable SDK wrappers:
+
+- Python: `CouncilSkill` in `engram_client.integrations`
+- TypeScript: `CouncilSkill` in `engram-client`
+
+Python:
+
+```python
+from engram_client import EngramClient
+from engram_client.integrations import CouncilSkill
+
+
+async def run_consensus() -> None:
+    async with EngramClient(
+        base_url="https://your-engram-api.fly.dev",
+        api_key="ek_...",
+        tenant="my-tenant",
+    ) as client:
+        skill = CouncilSkill(
+            client,
+            default_workspace="architecture",
+            default_timeout_seconds=120,
+        )
+        result = await skill.ask_with_persistence(
+            "Evaluate tradeoffs: Postgres HA vs MySQL Galera"
+        )
+        print(result)
+```
+
+TypeScript:
+
+```typescript
+import { CouncilSkill, EngramClient } from "engram-client";
+
+const client = new EngramClient({
+  baseUrl: "https://your-engram-api.fly.dev",
+  apiKey: "ek_...",
+  tenant: "my-tenant",
+});
+
+const skill = new CouncilSkill(client, {
+  defaultWorkspace: "architecture",
+  defaultTimeoutSeconds: 120,
+});
+
+const result = await skill.askWithPersistence(
+  "Evaluate tradeoffs: Postgres HA vs MySQL Galera"
+);
+```
+
+Direct MCP fallback:
+
+```bash
+curl -X POST https://your-engram-mcp.fly.dev/mcp \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_council",
+      "arguments": {
+        "prompt": "Should we switch primary DB from SQLite to Postgres?",
+        "workspace": "my-org/my-repo",
+        "persist": true
+      }
+    }
+  }'
+```
+
+### Repo Skill: `engram-council`
+
+If this repository is also used with Claude agents, install the reusable skill at
+`skills/engram-council/SKILL.md` so future prompts reuse a consistent consensus
+workflow.
+
+Recommended when:
+
+- you want the same architecture-review flow across projects
+- you want decision checkpoints persisted as memories
+- you want the same structure for tradeoff prompts every time
+
+The skill uses the same underlying tools shown above:
+
+- Python/TypeScript `CouncilSkill`
+- MCP `memory_council` tool as fallback
 
 ## Safety Rules
 

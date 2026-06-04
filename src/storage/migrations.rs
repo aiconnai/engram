@@ -2,7 +2,7 @@
 
 use rusqlite::Connection;
 
-use crate::error::Result;
+use crate::error::{EngramError, Result};
 
 /// Current schema version
 pub const SCHEMA_VERSION: i32 = 40;
@@ -25,6 +25,13 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             |row| row.get(0),
         )
         .unwrap_or(0);
+
+    if current_version > SCHEMA_VERSION {
+        return Err(EngramError::Storage(format!(
+            "Database schema version {} is newer than supported version {}",
+            current_version, SCHEMA_VERSION
+        )));
+    }
 
     if current_version < 1 {
         migrate_v1(conn)?;

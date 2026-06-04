@@ -4,7 +4,7 @@
 
 This reference is generated from `src/mcp/tools.rs`.
 
-Total tools: **256**
+Total tools: **257**
 
 ## Summary
 
@@ -266,6 +266,7 @@ Total tools: **256**
 | `temporal_timeline` | advanced | readOnlyHint | `from_id`, `to_id` |
 | `memory_enrichment_timeline` | standard | readOnlyHint | `memory_id` |
 | `memory_enrichment_audit` | advanced | readOnlyHint | none |
+| `memory_replay_at_time` | advanced | readOnlyHint | `memory_id`, `timestamp` |
 
 ## Tools
 
@@ -2684,7 +2685,7 @@ Verify the integrity of the entire attestation chain. Returns valid, broken (wit
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
+| `verifying_key` | `string` | no | Hex-encoded 32-byte Ed25519 verifying key. When provided, every record must carry a valid signature; missing or invalid signatures cause the chain to report as Broken. When omitted, only hash-chain integrity is verified. |
 
 ### `attestation_list`
 
@@ -3847,3 +3848,21 @@ Query enrichment events globally with filters (status, event_type, agent_id, ope
 | `until` | `string` | no | ISO-8601 timestamp: return events created at or before this time. |
 | `order` | `string` | no | Sort order by creation time: "desc" (newest first, default) or "asc". Allowed: `desc`, `asc`. |
 | `limit` | `integer` | no | Maximum number of events to return (default: 50, max: 200). |
+
+### `memory_replay_at_time`
+
+Replay one memory as it existed at a given RFC3339 timestamp and optionally return enrichment events affecting it up to that time.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `memory_id`, `timestamp`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory to replay. |
+| `timestamp` | `string` | yes | RFC3339 timestamp to replay state at. |
+| `event_type` | `string` | no | Optional event type filter for replayed event list (e.g. "consolidation"). |
+| `include_events` | `boolean` | no | Whether to include enrichment events in the response. Default: `true`. |
+| `include_failed` | `boolean` | no | Whether to include failed enrichment events. Default: `false`. |
+| `include_dry_runs` | `boolean` | no | Whether to include dry-run events. Default: `false`. |
+| `event_limit` | `integer` | no | Max number of events to include in replay trail (default 50, max 200). |

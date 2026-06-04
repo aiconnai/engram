@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if command -v just >/dev/null 2>&1; then
+  echo "Running required pre-commit checks via just (pre-commit)."
+  just pre-commit
+  exit 0
+fi
+
 echo "Running required pre-commit checks (fmt + clippy)."
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings

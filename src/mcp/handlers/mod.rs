@@ -434,6 +434,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         // ── Enrichment audit (ENG-1240) ───────────────────────────────────────
         "memory_enrichment_timeline" => enrichment_audit::memory_enrichment_timeline(ctx, params),
         "memory_enrichment_audit" => enrichment_audit::memory_enrichment_audit(ctx, params),
+        "memory_replay_at_time" => enrichment_audit::memory_replay_at_time(ctx, params),
 
         // ── Attestation (agent-portability) ──────────────────────────────────
         #[cfg(feature = "agent-portability")]

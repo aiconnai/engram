@@ -13,6 +13,11 @@ use engram::snapshot::{LoadStrategy, SnapshotBuilder, SnapshotLoader};
 use engram::storage::queries::create_memory;
 use engram::storage::Storage;
 use engram::types::CreateMemoryInput;
+use std::io::ErrorKind;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+static EGM_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -34,7 +39,32 @@ fn add_memory(storage: &Storage, content: &str, workspace: &str) -> i64 {
 }
 
 fn tmp_egm(suffix: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(format!("engram_test_{}.egm", suffix))
+    let seq = EGM_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let now_ns = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let pid = std::process::id();
+    std::env::temp_dir().join(format!(
+        "engram_test_{}_{}_{}_{}.egm",
+        pid,
+        suffix,
+        now_ns,
+        seq
+    ))
+}
+
+fn cleanup_snapshot(path: &std::path::Path) {
+    // Ensure test artifacts do not accumulate across runs.
+    if let Err(err) = std::fs::remove_file(path) {
+        if !matches!(err.kind(), ErrorKind::NotFound) {
+            panic!(
+                "Failed to clean up temp snapshot file {}: {}",
+                path.display(),
+                err
+            );
+        }
+    }
 }
 
 // ── Scenario 1: Build and inspect a snapshot ─────────────────────────────────
@@ -62,7 +92,7 @@ fn scenario_1_build_and_inspect() {
     assert!(info.file_size_bytes > 0);
     assert!(info.files.iter().any(|f| f.contains("manifest")));
 
-    let _ = std::fs::remove_file(&path);
+    cleanup_snapshot(&path);
 }
 
 // ── Scenario 2: Load with Isolate strategy ───────────────────────────────────
@@ -91,7 +121,7 @@ fn scenario_2_load_isolate_strategy() {
     // The target workspace should be different from the original
     assert_ne!(result.target_workspace, "src_ws");
 
-    let _ = std::fs::remove_file(&path);
+    cleanup_snapshot(&path);
 }
 
 // ── Scenario 3: Verify snapshot_origin and snapshot_loaded_at are set ────────
@@ -145,7 +175,7 @@ fn scenario_3_provenance_columns_set() {
     })
     .expect("provenance check");
 
-    let _ = std::fs::remove_file(&path);
+    cleanup_snapshot(&path);
 }
 
 // ── Scenario 4: Verify attestation exists for a loaded snapshot ───────────────
@@ -192,7 +222,7 @@ fn scenario_4_attestation_after_load() {
     let found_record = found.unwrap();
     assert_eq!(found_record.document_name, "test_snapshot.egm");
 
-    let _ = std::fs::remove_file(&path);
+    cleanup_snapshot(&path);
 }
 
 // ── Scenario 5: verify_chain returns Valid ────────────────────────────────────
@@ -254,7 +284,7 @@ fn scenario_6_encrypted_wrong_key_fails() {
         "loading with wrong key should return an error"
     );
 
-    let _ = std::fs::remove_file(&path);
+    cleanup_snapshot(&path);
 }
 
 // ── Scenario 7: Signed snapshot — verify the signed flag and build_signed API ─
@@ -289,7 +319,7 @@ fn scenario_7_signed_snapshot_flag() {
         info.files
     );
 
-    let _ = std::fs::remove_file(&path);
+    cleanup_snapshot(&path);
 }
 
 // ── Scenario 8: List attestation records with filter ─────────────────────────
@@ -360,7 +390,7 @@ fn scenario_9_dry_run_no_insert() {
         .expect("count query");
     assert_eq!(count, 0, "DryRun must leave destination empty");
 
-    let _ = std::fs::remove_file(&path);
+    cleanup_snapshot(&path);
 }
 
 // ── Scenario 10: Merge strategy skips duplicates ─────────────────────────────
@@ -389,5 +419,5 @@ fn scenario_10_merge_skips_duplicates() {
     assert_eq!(second.memories_loaded, 0);
     assert_eq!(second.memories_skipped, 1);
 
-    let _ = std::fs::remove_file(&path);
+    cleanup_snapshot(&path);
 }

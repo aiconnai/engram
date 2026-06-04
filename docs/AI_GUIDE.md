@@ -61,7 +61,9 @@ Add to your MCP client configuration:
 engram-server --transport http --http-port 3000 --http-api-key sk_my_secret
 ```
 
-Call tools via JSON-RPC 2.0 at `POST /v1/mcp`:
+Call tools via JSON-RPC 2.0 at `POST /mcp` (`POST /v1/mcp` is also accepted as
+a compatibility alias). Include `Authorization: Bearer sk_my_secret` when
+`--http-api-key` or `ENGRAM_HTTP_API_KEY` is configured:
 
 ```json
 {
@@ -96,7 +98,7 @@ X-Tenant: your-tenant-slug
 Content-Type: application/json
 ```
 
-Batch endpoint: `POST /v1/mcp/batch` (up to 100 requests per call).
+Local HTTP MCP authentication is documented in [`docs/MCP_AUTH.md`](MCP_AUTH.md).
 
 ---
 
@@ -1309,7 +1311,7 @@ Used by Claude Desktop, Cursor, and other MCP clients.
 engram-server --transport http --http-port 3000 --http-api-key sk_my_secret
 ```
 
-- Endpoint: `POST /v1/mcp`
+- Endpoint: `POST /mcp` (`POST /v1/mcp` compatibility alias)
 - Auth: `Authorization: Bearer sk_my_secret`
 - Protocol: JSON-RPC 2.0
 
@@ -1476,7 +1478,59 @@ Higher confidence → longer TTL. Confidence 1.0 creates permanent memories.
    snapshot_load(path: "broker-kit.egm", strategy: "merge", passphrase: "secret", target_workspace: "my-knowledge")
 ```
 
-### Pattern 7: Graceful Degradation
+### Pattern 7: Council Skill for Multi-Model Consensus
+
+Use `memory_council` when you need a structured consensus step with optional checkpoint persistence:
+
+Python (SDK helper):
+
+```python
+from engram_client import EngramClient
+from engram_client.integrations import CouncilSkill
+
+async def run_arch_review() -> None:
+    async with EngramClient(
+        base_url="https://your-engram-api.fly.dev",
+        api_key="ek_...",
+        tenant="my-tenant",
+    ) as client:
+        council = CouncilSkill(
+            client,
+            default_workspace="architecture",
+            default_timeout_seconds=120,
+            default_include_raw_stages=False,
+        )
+        decision = await council.ask_with_persistence(
+            "Should we use UUIDv7 or ULID?"
+        )
+        print(decision)
+```
+
+TypeScript (SDK helper):
+
+```typescript
+import { CouncilSkill, EngramClient } from "engram-client";
+
+const client = new EngramClient({
+  baseUrl: "https://your-engram-api.fly.dev",
+  apiKey: "ek_...",
+  tenant: "my-tenant",
+});
+
+const council = new CouncilSkill(client, {
+  defaultWorkspace: "architecture",
+  defaultTimeoutSeconds: 120,
+  defaultIncludeRawStages: false,
+});
+
+const decision = await council.askWithPersistence("Should we use UUIDv7 or ULID?");
+```
+
+If this repository is used in Claude/agent workflows, also use the reusable skill
+at `skills/engram-council/SKILL.md` to standardize the same consensus routine
+across projects.
+
+### Pattern 8: Graceful Degradation
 
 Always handle Engram being unavailable:
 
@@ -1517,7 +1571,7 @@ else:
 | **Attestation** | `attestation_log`, `attestation_verify`, `attestation_chain_verify`, `attestation_list` |
 | **Cloud** | `memory_sync_status`, `memory_sync_media` |
 | **Admin** | `memory_stats` |
-| **Multi-Agent** | `session_list_by_agent`, `session_search_global`, `agent_set_context`, `agent_get_context` |
+| **Multi-Agent** | `memory_council`, `session_list_by_agent`, `session_search_global`, `agent_set_context`, `agent_get_context` |
 
 ### Tool Annotations
 

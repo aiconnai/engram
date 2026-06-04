@@ -160,7 +160,7 @@ serde_json = "1.0"
 
 # HTTP/WebSocket server
 axum = { version = "0.7", features = ["ws"] }
-tower = "0.4"
+tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 # MCP Protocol (JSON-RPC over stdio)

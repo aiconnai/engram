@@ -66,6 +66,25 @@ O review-gate é prompted explicitamente para caçar estes (sensores verdes mas 
 
 O prompt do review-gate inclui esta lista + instrução para buscar evidência concreta no diff.
 
+### Security Reference Harness Gate
+
+Adaptações baseadas no `anthropics/defending-code-reference-harness` seguem
+`docs/harness/security/anthropic-reference-harness.md`.
+
+Hard rules:
+
+- O modo default é static/read-only: threat model, scan, triage e patch
+  candidates sem execução de código alvo por agentes.
+- A pipeline autônoma da referência não é aceita como drop-in para Engram,
+  porque o target padrão é C/C++ com ASAN.
+- Qualquer execução autônoma contra Engram exige ADR prévio, sandbox forte
+  (gVisor ou equivalente), egress restrito, nenhum mount de credenciais, e
+  target contract Rust com build, proof, reproduce, regress e re-attack.
+- `--dangerously-no-sandbox` é bloqueado para runs em código Engram ou máquinas
+  de desenvolvimento com credenciais.
+- Patches gerados por agente são drafts. Eles precisam de revisão independente,
+  evidência de regressão apropriada e `review-gate.sh post` antes de upstream.
+
 ## Camada 2 — Review Gate
 
 Ver `review-gate.sh` e `CODE_REVIEW_POLICY.md` para detalhes de execução e prompt.

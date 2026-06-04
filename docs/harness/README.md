@@ -64,6 +64,7 @@ bash docs/harness/bin/doctor.sh
 | `INVARIANTS.md`                | Regras de processo invioláveis (canônico sobre docs divergentes) |
 | `GATES.md`                     | Sensores, thresholds, retry policy, exclusões documentadas, fake-success patterns |
 | `CODE_REVIEW_POLICY.md`        | Política local consumida pelo review-gate (cross-model / cross-CLI) |
+| `security/`                    | Playbooks de segurança e adaptação do defending-code reference harness |
 | `progress.md`                  | Estado vivo curto: sprint, task, último review, último sensor, commit |
 | `progress/*.md`                | Logs permanentes por sprint/tarefa (detalhados) |
 | `known-issues/*.md`            | Incidentes externos que justificam exclusão auditável de sensor |
@@ -179,6 +180,22 @@ O script:
 - Tem modo self-test.
 
 Política de retry: 2 FAILs consecutivos no mesmo task → escalar para humano. Não tentar 3ª iteração.
+
+## Security Reference Harness
+
+O fluxo de segurança inspirado no `anthropics/defending-code-reference-harness`
+vive em `docs/harness/security/anthropic-reference-harness.md`.
+
+Contrato local:
+
+- Static/read-only first: threat model, scan, triage e patch candidates antes de
+  qualquer execução autônoma.
+- Tuning versionado para Claude Code/reference harness em
+  `.claude/scan-extras.txt` e `.claude/fp-rules.txt`.
+- Pipeline autônoma bloqueada por default para Engram; qualquer porta Rust exige
+  ADR, sandbox forte, target contract e review-gate.
+- Findings importados viram artefatos auditáveis e só avançam com evidência,
+  supressão explícita, ou patch revisado.
 
 ## Critério de Done
 

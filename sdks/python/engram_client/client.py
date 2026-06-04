@@ -218,6 +218,66 @@ class EngramClient:
             params["filter"] = filter
         return await self._mcp_call("memory_search", params)
 
+    async def memory_council(
+        self,
+        prompt: str,
+        *,
+        conversation_id: str | None = None,
+        council_url: str | None = None,
+        timeout_seconds: int | None = None,
+        include_raw_stages: bool = True,
+        persist: bool = False,
+        workspace: str | None = None,
+        memory_tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run a prompt through llm-council and return the consolidated response.
+
+        Useful when you want multi-agent consensus while keeping the result in Engram
+        via ``persist=True``.
+        """
+        params: dict[str, Any] = {
+            "prompt": prompt,
+            "include_raw_stages": include_raw_stages,
+            "persist": persist,
+        }
+        if conversation_id is not None:
+            params["conversation_id"] = conversation_id
+        if council_url is not None:
+            params["council_url"] = council_url
+        if timeout_seconds is not None:
+            params["timeout_seconds"] = timeout_seconds
+        if workspace is not None:
+            params["workspace"] = workspace
+        if memory_tags is not None:
+            params["memory_tags"] = memory_tags
+        return await self._mcp_call("memory_council", params)
+
+
+    async def memory_replay_at_time(
+        self,
+        memory_id: int,
+        timestamp: str,
+        *,
+        event_type: str | None = None,
+        include_events: bool = True,
+        include_failed: bool = False,
+        include_dry_runs: bool = False,
+        event_limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Replay memory state at a given RFC3339 timestamp and optional event trail."""
+        params: dict[str, Any] = {
+            "memory_id": memory_id,
+            "timestamp": timestamp,
+            "include_events": include_events,
+            "include_failed": include_failed,
+            "include_dry_runs": include_dry_runs,
+        }
+        if event_type is not None:
+            params["event_type"] = event_type
+        if event_limit is not None:
+            params["event_limit"] = event_limit
+        return await self._mcp_call("memory_replay_at_time", params)
+
     # -- Graph --
 
     async def related(self, memory_id: int) -> dict[str, Any]:

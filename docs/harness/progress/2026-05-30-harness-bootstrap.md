@@ -487,3 +487,148 @@ verificadas, e append concorrente podia intercalar leitura do tip e insert.
 - `cargo clippy --all-targets --all-features -- -D warnings` — BLOCKED por
   warnings existentes fora do diff (`src/intelligence/token_counter.rs`,
   `src/mcp/handlers/harness.rs`, `src/mcp/handlers/markdown_export.rs`).
+
+## 2026-06-02 — Council workflow skill / `memory_council`
+
+### Contexto da sessão
+
+Registro canonico do fluxo reutilizavel de consensus/council, cobrindo a nova
+ferramenta MCP `memory_council`, wrappers SDK e skill instalavel para agentes.
+
+### Ações realizadas
+
+- Adicionada ferramenta MCP `memory_council` e dispatch em handlers/tools.
+- Adicionado handler `src/mcp/handlers/council.rs` para chamar backend
+  `llm-council`, retornar resposta consolidada e persistir checkpoint memory
+  quando `persist=true`.
+- Adicionados wrappers:
+  - Python: `engram_client.integrations.CouncilSkill`.
+  - TypeScript: `CouncilSkill`.
+- Criada skill reutilizavel `skills/engram-council/SKILL.md`.
+- Atualizados README, `docs/AI_GUIDE.md`,
+  `docs/USING_ENGRAM_IN_A_REPO.md`, SDK READMEs, changelog e
+  `docs/MCP_TOOLS.md`.
+- Revisao local aplicou:
+  - reestruturacao de `skills/engram-council/SKILL.md` como playbook
+    operacional para agentes, com regras de uso, checklist, template de prompt,
+    argumentos MCP, interpretacao de resultado e handling de falhas;
+  - truncamento de erro seguro para UTF-8 em `truncate_for_error`;
+  - nomenclatura consistente entre `engram-council` (skill) e
+    `llm-council` (backend);
+  - limpeza de trailing whitespace no README TypeScript.
+
+- Integração leve dos gates locais concluída nesta sessão:
+  - `.githooks/pre-commit` agora prefere `just pre-commit` quando o comando
+    existe, com fallback direto para `cargo fmt` + `cargo clippy`.
+  - `justfile` ganhou a receita `pre-commit` para centralizar as checagens do
+    hook.
+  - `tests/mcp_protocol_tests.rs` passou a cobrir `memory_council` via
+    `tools/call` usando backend HTTP local de teste.
+
+### Verificações
+
+- `bash docs/harness/bin/bootstrap.sh` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `cargo fmt --all -- --check` — PASS.
+- `cargo test council -- --nocapture` — PASS.
+- `git diff --check` — PASS.
+- `rg -n '[[:blank:]]+$' skills/engram-council/SKILL.md` — PASS sem
+  trailing whitespace.
+- `LC_ALL=C rg -n "[^ -~]" skills/engram-council/SKILL.md` — PASS sem
+  caracteres nao ASCII.
+
+### Limitações
+
+- `python3 .../skill-creator/scripts/quick_validate.py skills/engram-council`
+  ficou bloqueado porque `PyYAML` nao esta instalado no Python global.
+- `pytest sdks/python/tests/test_client.py -k council` ficou bloqueado porque
+  o ambiente global nao tem `pytest-asyncio` ativo.
+- `npm run type-check` ficou bloqueado porque `tsc` nao esta instalado no SDK
+  TypeScript local.
+
+## 2026-06-03 — ENG-1241 MCP HTTP auth contract and client docs
+
+### Contexto da sessão
+
+O diagnostico inicial indicava possivel ausencia de auth no HTTP transport.
+Leitura do codigo mostrou que `src/mcp/http_transport.rs` ja validava Bearer em
+`POST /mcp` e `GET /v1/events` quando `api_key` era configurada. O gap efetivo
+era de contrato publico: docs misturavam endpoints locais MCP (`/mcp`), endpoint
+versionado (`/v1/mcp`) e REST local antigo (`/v1/memories`, `/v1/search`).
+
+### Ações realizadas
+
+- Extraido helper interno `build_router(...)` em `src/mcp/http_transport.rs`
+  para permitir teste do router Axum sem bind de socket.
+- Adicionado alias `POST /v1/mcp` para `POST /mcp`, mantendo compatibilidade
+  com docs/clientes que ja apontavam para o path versionado.
+- Mantido o mesmo contrato de auth em ambos os paths: sem API key configurada,
+  acesso aberto; com API key configurada, header `Authorization: Bearer <token>`
+  obrigatorio.
+- Testes adicionados para rejeicao sem Bearer, aceite com Bearer correto e alias
+  `/v1/mcp` com mesmo contrato.
+- CORS tests serializados com lock de env var para evitar race com testes que
+  constroem router e leem `ENGRAM_CORS_ORIGINS`.
+- Criado `docs/MCP_AUTH.md` com contrato de auth HTTP/gRPC, endpoints, status de
+  unauthorized e CORS.
+- Atualizados README, `docs/AI_GUIDE.md`, `docs/GETTING_STARTED.md` e
+  `docs/USING_ENGRAM_IN_A_REPO.md` para flags reais e MCP JSON-RPC local.
+
+### Verificações
+
+- `cargo test http_transport --lib` — PASS.
+- `cargo fmt --all -- --check` — PASS.
+- `cargo clippy --lib -- -D warnings` — PASS.
+- `cargo clippy --lib --tests -- -D warnings` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `git diff --check` — PASS.
+- `bash docs/harness/bin/review-gate.sh post eng-1241-mcp-http-auth-docs` —
+  prompt de post-review gerado em
+  `docs/harness/reviews/2026-06-03-eng-1241-mcp-http-auth-docs-v2-post.md.raw`;
+  sem verdict porque falta reviewer externo no fluxo dual-CLI.
+
+### Limitações
+
+- `bash docs/harness/bin/sensors.sh` completo nao foi executado nesta iteracao
+  por causa de worktree amplo ja dirty com mudancas nao relacionadas
+  (`memory_council`, SDKs, hooks, docs geradas).
+- Post-gate hard ainda precisa de resposta de reviewer externo salva em
+  `docs/harness/reviews/2026-06-03-eng-1241-mcp-http-auth-docs-v2-post.md`.
+- ENG-1241 ainda pode ter extensoes separadas para rate-limit MCP,
+  observabilidade especifica de transport e verificacao real de deploy Fly.io.
+
+## 2026-06-04 — Security reference harness adaptation
+
+### Contexto da sessão
+
+Pedido: implementar localmente o uso seletivo do
+`anthropics/defending-code-reference-harness` para hardening de segurança do
+Engram.
+
+### Ações realizadas
+
+- Criado `docs/harness/security/anthropic-reference-harness.md` com o contrato
+  local:
+  - Mode 1: static interactive review;
+  - Mode 2: Codex Security scan;
+  - Mode 3: autonomous pipeline bloqueada por default.
+- Criados arquivos versionados para orientar `/vuln-scan` e `/triage`:
+  - `.claude/scan-extras.txt`;
+  - `.claude/fp-rules.txt`.
+- Atualizados `docs/harness/README.md` e `docs/harness/GATES.md` para tornar a
+  adaptação descobrível e gateada.
+- Atualizado `docs/harness/progress.md` como memória canônica curta.
+
+### Decisão de segurança
+
+- A pipeline da referência não será tratada como drop-in para Engram.
+- Qualquer porta Rust futura exige ADR, sandbox forte, egress restrito, nenhum
+  mount de credenciais, target contract Rust e review independente.
+- Patches gerados por agentes continuam sendo drafts até passarem por evidência
+  executável/estática e review-gate.
+
+### Verificações
+
+- Não executadas nesta iteração por solicitação implícita de implementação
+  documental e worktree amplo já dirty. Próximo passo natural: `bash
+  docs/harness/bin/doctor.sh`.

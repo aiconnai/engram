@@ -131,19 +131,27 @@ In Claude Code, Cursor, VS Code MCP clients, or any MCP-enabled assistant, you c
 
 The AI will call `memory_create` automatically.
 
-### Using the HTTP API
+### Using the HTTP MCP Transport
 
 ```bash
 # Start the HTTP server
-engram-server --http --port 8080
+engram-server --transport http --http-port 8080
 
 # Create a memory
-curl -X POST http://localhost:8080/v1/memories \
+curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "The API uses JWT tokens for authentication",
-    "memory_type": "note",
-    "tags": ["auth", "api"]
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_create",
+      "arguments": {
+        "content": "The API uses JWT tokens for authentication",
+        "type": "note",
+        "tags": ["auth", "api"]
+      }
+    }
   }'
 ```
 
@@ -175,7 +183,20 @@ Ask your AI assistant:
 ### HTTP Search
 
 ```bash
-curl "http://localhost:8080/v1/search?q=authentication&limit=10"
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_search",
+      "arguments": {
+        "query": "authentication",
+        "limit": 10
+      }
+    }
+  }'
 ```
 
 ---

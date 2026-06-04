@@ -45,7 +45,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - [x] `docs/harness/known-issues/2026-05-31-grpc-transport-port-bind.md` — limitação formal para sensor `grpc-transport`
 - [x] Atualização de `AGENTS.md` + `Claude.md` para exigir bootstrap
 - [x] Execução do loop completo nesta sprint + evidência de PASS
-- [ ] Integração leve com pre-commit / justfile (sem ruptura)
+- [x] Integração leve com pre-commit / justfile (sem ruptura)
 
 ## Trilha de exclusão ativa
 
@@ -66,6 +66,17 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 2. Concluir Fase 1: manter mini-artifacts dos blocos 1.1–1.3 e audit report em `docs/harness/plans/`.
 3. Entrar em Fase 2 (decisões/P1/P0): 28, 29, 26, 31, 32.
 4. Preparar Fase 4 com base no contrato de `harness_record` + `harness_status`.
+
+## Security reference harness adaptation — 2026-06-04
+
+- Adicionada adaptação local do
+  `anthropics/defending-code-reference-harness` em
+  `docs/harness/security/anthropic-reference-harness.md`.
+- Adicionados tuning files para scan/triage em `.claude/scan-extras.txt` e
+  `.claude/fp-rules.txt`.
+- Contrato adotado: static/read-only first; pipeline autônoma bloqueada por
+  default até existir ADR, sandbox forte e target contract Rust.
+- README e GATES do harness agora referenciam o fluxo de segurança.
 
 ## Nota da sessão — 2026-05-31
 
@@ -211,6 +222,108 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
     warnings existentes fora do diff (`token_counter.rs`, `harness.rs`,
     `markdown_export.rs`).
 
+## Council workflow skill / `memory_council` — 2026-06-02
+
+- Fluxo reutilizavel de consensus/council adicionado:
+  - ferramenta MCP `memory_council`;
+  - handler `src/mcp/handlers/council.rs`;
+  - wrappers Python/TypeScript `CouncilSkill`;
+  - skill instalavel `skills/engram-council/SKILL.md`;
+
+- Integração de fluxo leve com gates locais concluída:
+  - `.githooks/pre-commit` agora usa `just pre-commit` quando disponível e cai
+    para os comandos diretos quando `just` não estiver instalado.
+  - `justfile` ganhou a receita `pre-commit` como fonte única para o hook.
+  - `tests/mcp_protocol_tests.rs` recebeu cobertura de round-trip do tool
+    `memory_council` via `tools/call`.
+  - documentacao em README, AI guide, guia de uso em repos, SDK READMEs,
+    changelog e referencia MCP gerada.
+- Ajustes de revisao aplicados:
+  - `skills/engram-council/SKILL.md` reestruturada como playbook operacional
+    para agentes, com regras de uso, checklist, template de prompt, argumentos
+    MCP, interpretacao de resultado e handling de falhas;
+  - truncamento de erro no handler agora e seguro para UTF-8;
+  - textos publicos distinguem `engram-council` (skill instalavel) de
+    `llm-council` (backend de orquestracao);
+  - README TypeScript nao depende mais de trailing whitespace para quebra de
+    linha.
+- Verificacoes:
+  - `bash docs/harness/bin/bootstrap.sh` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+  - `cargo fmt --all -- --check` — PASS.
+  - `cargo test council -- --nocapture` — PASS.
+  - `git diff --check` — PASS.
+- Validacao de skill:
+  - `python3 .../skill-creator/scripts/quick_validate.py skills/engram-council`
+    bloqueado porque `PyYAML` nao esta instalado no Python global.
+  - `rg -n '[[:blank:]]+$' skills/engram-council/SKILL.md` — PASS sem
+    trailing whitespace.
+  - `LC_ALL=C rg -n "[^ -~]" skills/engram-council/SKILL.md` — PASS sem
+    caracteres nao ASCII.
+- Limitacoes locais:
+  - `pytest sdks/python/tests/test_client.py -k council` bloqueado porque o
+    ambiente global nao tem `pytest-asyncio` ativo.
+  - `npm run type-check` bloqueado porque `tsc` nao esta instalado no SDK
+    TypeScript local.
+
+## ENG-1241 — MCP HTTP auth contract and client docs
+
+- Diagnostico atualizado: o HTTP transport ja aplicava Bearer auth em
+  `POST /mcp` e `GET /v1/events` quando `ENGRAM_HTTP_API_KEY`/`--http-api-key`
+  estava configurado; o gap real era contrato publico inconsistente.
+- `src/mcp/http_transport.rs` agora constroi o router em helper testavel e
+  aceita `POST /v1/mcp` como alias compativel de `POST /mcp`, com o mesmo
+  contrato de auth.
+- Cobertura adicionada para:
+  - `POST /mcp` rejeitar request sem Bearer quando API key configurada;
+  - `POST /mcp` aceitar Bearer correto;
+  - `POST /v1/mcp` usar o mesmo contrato de auth.
+- Docs alinhadas:
+  - novo `docs/MCP_AUTH.md` para clientes externos;
+  - README, AI guide, getting started e guia de uso em repos atualizados para
+    flags reais (`--transport http --http-port`, `ENGRAM_HTTP_API_KEY`) e MCP
+    JSON-RPC em vez de REST local antigo.
+- Validacoes:
+  - `cargo test http_transport --lib` — PASS.
+  - `cargo fmt --all -- --check` — PASS.
+  - `cargo clippy --lib -- -D warnings` — PASS.
+  - `cargo clippy --lib --tests -- -D warnings` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+  - `git diff --check` — PASS.
+  - `bash docs/harness/bin/review-gate.sh post eng-1241-mcp-http-auth-docs`
+    gerou prompt de post-review em
+    `docs/harness/reviews/2026-06-03-eng-1241-mcp-http-auth-docs-v2-post.md.raw`;
+    sem verdict porque falta reviewer externo.
+  - Escopo deliberadamente fora desta iteracao: rate-limit MCP, metricas/tracing
+    especificas de transport, e execucao/verificacao de deploy Fly.io.
+
+## Security fixes — 2026-06-04
+
+- **Merkle `hash_pair` length-separation** (OBS. 9133):
+  `hash_pair` alterado de `left || right` para
+  `len(left) || left || len(right) || right` para eliminar colisao de
+  segunda pre-imagem. Backwards compat mantida via `scheme_version: u8`
+  no `MerkleProof` (v1 = concat. naive; v2 = length-sep).
+  Novas provas usam v2; provas v1 pre-existentes continuam verificaveis.
+
+- **Attestation signature verification** (OBS. 9132):
+  MCP handler `attestation_chain_verify` agora aceita `verifying_key`
+  opcional (hex Ed25519). Quando fornecido, valida assinatura de todo
+  registro. Schema MCP atualizado em `tools.rs` para expor o parametro.
+
+- **Dedup normalization regression** (ACHADO AUDITORIA):
+  `create_memory` e `update_memory` agora usam `compute_dedup_hash`
+  (normalizado) na coluna `content_hash`. Backends alternativos
+  (`turso_backend`, `meilisearch_backend`) sincronizados.
+  `compute_content_hash_raw(cfg(test))` existe para byte-exact checks.
+  Markdown import detecta edits case-only como `PendingUpdate` (teste
+  `test_import_in_sync_when_body_normalized_matches`).
+
+  Verificacoes:
+  - `cargo test --lib` — 988 PASS.
+  - `cargo test --features agent-portability --lib` — 1,063 PASS.
+  - `cargo clippy --all-targets --all-features` — clean.
+
 ---
 
-**Nota**: Este arquivo é atualizado manualmente ao final de cada iteração significativa ou ao final de sessões. O log detalhado fica no arquivo apontado por `Active plan`.
+**Nota**: Este arquivo e atualizado manualmente ao final de cada iteracao significativa ou ao final de sessoes. O log detalhado fica no arquivo apontado por `Active plan`.

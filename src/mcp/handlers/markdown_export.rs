@@ -179,7 +179,7 @@ pub enum ImportStatus {
 /// Classify the import status of a file given DB state and file metadata.
 ///
 /// - `db_state`: `Some((db_hash, db_version))` if ID exists in DB, `None` if not found.
-/// - `current_hash`: SHA-256 of the file body.
+/// - `current_hash`: dedupe-normalized SHA-256 of the file body.
 /// - `file_version`: `engram_version` from frontmatter.
 /// - `force_version`: if true, version conflicts are treated as `PendingUpdate`.
 fn classify_import_status(
@@ -1626,6 +1626,27 @@ mod tests {
                 &["alpha"],
                 0.5,
                 "hello world",
+                &[],
+            );
+
+            let r = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
+            assert_eq!(status_of(&r, id), Some("in_sync"), "result={}", r);
+            assert_eq!(r["applied"].as_i64(), Some(0));
+        }
+
+        #[test]
+        fn test_import_in_sync_when_body_normalized_matches() {
+            let c = ctx();
+            let id = make_memory(&c, "hello world", &["alpha"]);
+            let dir = tempfile::tempdir().unwrap();
+            write_md(
+                dir.path(),
+                "m.md",
+                Some(id),
+                1,
+                &["alpha"],
+                0.5,
+                "  HELLO   world  ",
                 &[],
             );
 

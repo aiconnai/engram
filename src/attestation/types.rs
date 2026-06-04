@@ -45,6 +45,20 @@ pub struct MerkleProof {
     pub proof_hashes: Vec<(String, bool)>,
     pub root_hash: String,
     pub total_leaves: usize,
+    /// Hash pair scheme version used to build this proof.
+    ///
+    /// - `1`: naive `left || right` concatenation (original, pre-June 2026)
+    /// - `2`: length-domain-separated `len(left) || left || len(right) || right`
+    ///
+    /// Omitted during deserialization of old proofs (defaults to 1 for
+    /// backwards-compatible verification). New proofs always use 2.
+    #[serde(default = "default_scheme_version")]
+    pub scheme_version: u8,
+}
+
+/// Default scheme version for deserialization of old proofs.
+fn default_scheme_version() -> u8 {
+    1
 }
 
 /// Filter options for listing attestation records

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Consensus workflow skill (`memory_council`)** — Added MCP tool wiring and dispatch for
+  `memory_council` plus SDK-level reusable wrappers in Python and TypeScript.
+  - New MCP handler in `src/mcp/handlers/council.rs` for running prompts through
+    llm-council and optional persistence as checkpoint memory.
+  - New `CouncilSkill` helper in `sdks/python/engram_client/integrations/council.py`
+    and `sdks/typescript/src/index.ts`, with `ask()` / `ask_with_persistence()`
+    (`askWithPersistence()` in TS) APIs.
+  - Documentation updates across root README, SDK READMEs, AI guide, and repo
+    integration guide.
+
 ---
 
 ## [0.21.0] - 2026-05-10
