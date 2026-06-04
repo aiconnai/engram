@@ -7,16 +7,16 @@ use crate::error::Result;
 
 pub struct EnrichmentEvent<'a> {
     pub operation_id: &'a str,
-    pub event_type:   &'a str,
-    pub memory_id:    Option<i64>,
-    pub version_id:   Option<i64>,
+    pub event_type: &'a str,
+    pub memory_id: Option<i64>,
+    pub version_id: Option<i64>,
     pub triggered_by: &'a str,
-    pub agent_id:     Option<&'a str>,
-    pub workspace:    Option<&'a str>,
-    pub params:       serde_json::Value,
-    pub outcome:      serde_json::Value,
-    pub status:       &'a str,
-    pub dry_run:      bool,
+    pub agent_id: Option<&'a str>,
+    pub workspace: Option<&'a str>,
+    pub params: serde_json::Value,
+    pub outcome: serde_json::Value,
+    pub status: &'a str,
+    pub dry_run: bool,
 }
 
 pub fn emit(conn: &Connection, event: &EnrichmentEvent<'_>) -> Result<i64> {
@@ -25,10 +25,8 @@ pub fn emit(conn: &Connection, event: &EnrichmentEvent<'_>) -> Result<i64> {
             "enrichment_events: operation_id must not be empty".into(),
         ));
     }
-    let params_str = serde_json::to_string(&event.params)
-        .unwrap_or_else(|_| "{}".to_string());
-    let outcome_str = serde_json::to_string(&event.outcome)
-        .unwrap_or_else(|_| "{}".to_string());
+    let params_str = serde_json::to_string(&event.params).unwrap_or_else(|_| "{}".to_string());
+    let outcome_str = serde_json::to_string(&event.outcome).unwrap_or_else(|_| "{}".to_string());
     let created_at = Utc::now().to_rfc3339();
 
     conn.execute(
@@ -89,29 +87,47 @@ mod tests {
         let conn = test_conn();
         let event = EnrichmentEvent {
             operation_id: "op-abc-123",
-            event_type:   "consolidation",
-            memory_id:    Some(42),
-            version_id:   None,
+            event_type: "consolidation",
+            memory_id: Some(42),
+            version_id: None,
             triggered_by: "memory_consolidate_batch",
-            agent_id:     Some("agent-x"),
-            workspace:    Some("default"),
-            params:       serde_json::json!({"threshold": 0.8}),
-            outcome:      serde_json::json!({"merged": 3}),
-            status:       "completed",
-            dry_run:      false,
+            agent_id: Some("agent-x"),
+            workspace: Some("default"),
+            params: serde_json::json!({"threshold": 0.8}),
+            outcome: serde_json::json!({"merged": 3}),
+            status: "completed",
+            dry_run: false,
         };
         let id = emit(&conn, &event).expect("emit should succeed");
         assert!(id > 0);
 
-        let (op_id, ev_type, mem_id, trig_by, ag_id, ws, status_val, dry_val):
-            (String, String, Option<i64>, String, Option<String>, Option<String>, String, i32) = conn
+        let (op_id, ev_type, mem_id, trig_by, ag_id, ws, status_val, dry_val): (
+            String,
+            String,
+            Option<i64>,
+            String,
+            Option<String>,
+            Option<String>,
+            String,
+            i32,
+        ) = conn
             .query_row(
                 "SELECT operation_id, event_type, memory_id, triggered_by, agent_id,
                          workspace, status, dry_run
                  FROM enrichment_events WHERE id = ?1",
                 params![id],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?,
-                         r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?)),
+                |r| {
+                    Ok((
+                        r.get(0)?,
+                        r.get(1)?,
+                        r.get(2)?,
+                        r.get(3)?,
+                        r.get(4)?,
+                        r.get(5)?,
+                        r.get(6)?,
+                        r.get(7)?,
+                    ))
+                },
             )
             .unwrap();
 
@@ -130,18 +146,21 @@ mod tests {
         let conn = test_conn();
         let event = EnrichmentEvent {
             operation_id: "",
-            event_type:   "test",
-            memory_id:    None,
-            version_id:   None,
+            event_type: "test",
+            memory_id: None,
+            version_id: None,
             triggered_by: "test",
-            agent_id:     None,
-            workspace:    None,
-            params:       serde_json::json!({}),
-            outcome:      serde_json::json!({}),
-            status:       "completed",
-            dry_run:      false,
+            agent_id: None,
+            workspace: None,
+            params: serde_json::json!({}),
+            outcome: serde_json::json!({}),
+            status: "completed",
+            dry_run: false,
         };
-        assert!(emit(&conn, &event).is_err(), "empty operation_id must be rejected");
+        assert!(
+            emit(&conn, &event).is_err(),
+            "empty operation_id must be rejected"
+        );
     }
 
     #[test]
@@ -150,16 +169,16 @@ mod tests {
         // No migrations — table doesn't exist
         let event = EnrichmentEvent {
             operation_id: "op-1",
-            event_type:   "test",
-            memory_id:    None,
-            version_id:   None,
+            event_type: "test",
+            memory_id: None,
+            version_id: None,
             triggered_by: "test",
-            agent_id:     None,
-            workspace:    None,
-            params:       serde_json::json!({}),
-            outcome:      serde_json::json!({}),
-            status:       "completed",
-            dry_run:      false,
+            agent_id: None,
+            workspace: None,
+            params: serde_json::json!({}),
+            outcome: serde_json::json!({}),
+            status: "completed",
+            dry_run: false,
         };
         let result = emit_best_effort(&conn, &event);
         assert!(result.is_none(), "should return None on DB error");
@@ -188,10 +207,15 @@ mod tests {
             "INSERT INTO memory_versions (memory_id, version, content, tags, created_at)
              VALUES (?1, 1, 'v1 content', '[]', '2026-01-01T00:00:00Z')",
             rusqlite::params![memory_id],
-        ).unwrap();
+        )
+        .unwrap();
         let version_row_id = conn.last_insert_rowid();
 
         let result = latest_version_id(&conn, memory_id).unwrap();
-        assert_eq!(result, Some(version_row_id), "should return the PK of the latest memory_versions row");
+        assert_eq!(
+            result,
+            Some(version_row_id),
+            "should return the PK of the latest memory_versions row"
+        );
     }
 }
