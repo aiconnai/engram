@@ -47,10 +47,7 @@ fn tmp_egm(suffix: &str) -> std::path::PathBuf {
     let pid = std::process::id();
     std::env::temp_dir().join(format!(
         "engram_test_{}_{}_{}_{}.egm",
-        pid,
-        suffix,
-        now_ns,
-        seq
+        pid, suffix, now_ns, seq
     ))
 }
 
