@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780664604322,
+  "lastUpdate": 1780675404960,
   "repoUrl": "https://github.com/aiconnai/engram",
   "entries": {
     "Engram Performance": [
@@ -329,6 +329,336 @@ window.BENCHMARK_DATA = {
             "name": "traversal/bfs_depth_3",
             "value": 1244162,
             "range": "± 25974",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ron@ldinho.com.br",
+            "name": "Ronaldo Martins",
+            "username": "limaronaldo"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f8668eb9776cf206b509a5349e4cabb6f001bc74",
+          "message": "feat(audit): emit CRUD audit events and add temporal replay edges (ENGRA-62/61/63) (#55)\n\n* chore(ci): update checkout action for node 24\n\n* feat(audit): emit CRUD audit events and add temporal replay edges (ENGRA-62/61/63)\n\n- memory_create/update/delete now call emit_best_effort for audit trail coverage\n- memory_replay_at_time response includes temporal_edges active at requested timestamp\n- Protocol tests: assert memory_replay_at_time in tools/list, add 4 integration tests\n  covering replay structure, error validation, and CRUD audit emit end-to-end\n\n* fix(audit): address 5 code-review findings in CRUD audit and temporal replay\n\n- cascade delete: emit one event per deleted member (not just root) so\n  memory_enrichment_timeline returns results for every id in the chain\n- emit inside with_transaction for atomicity: audit event and data write\n  now commit or roll back together in memory_create/update/delete\n- workspace captured inside transaction for memory_update/delete (was None)\n- snapshot_at full-scan replaced by edges_for_memory_at: SQL-filtered query\n  O(K) instead of O(N_total_edges) for memory_replay_at_time\n- snapshot_at error now logs a tracing::warn instead of silently returning []\n\n* style(audit): apply rustfmt to mcp_protocol_tests",
+          "timestamp": "2026-06-05T12:48:55-03:00",
+          "tree_id": "3af3409f011ee64beed5d17611725f104f5176f7",
+          "url": "https://github.com/aiconnai/engram/commit/f8668eb9776cf206b509a5349e4cabb6f001bc74"
+        },
+        "date": 1780675404483,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "community_detection/detect_communities_500_nodes",
+            "value": 5925794,
+            "range": "± 4605",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extractor_new/default",
+            "value": 3575,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extraction/extract_mixed",
+            "value": 10027,
+            "range": "± 88",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_create/memory_create",
+            "value": 233088,
+            "range": "± 7382",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search/memory_search",
+            "value": 510439,
+            "range": "± 2673",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_list/memory_list",
+            "value": 279025,
+            "range": "± 6642",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_stats/memory_stats",
+            "value": 102611,
+            "range": "± 5538",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_error_path/unknown_tool",
+            "value": 160,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_create/no_embedding",
+            "value": 191502,
+            "range": "± 10706",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_get/by_id",
+            "value": 39362,
+            "range": "± 1222",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/10",
+            "value": 112794,
+            "range": "± 437",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/10",
+            "value": 269851,
+            "range": "± 4430",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/50",
+            "value": 444988,
+            "range": "± 2761",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/50",
+            "value": 674103,
+            "range": "± 7219",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/100",
+            "value": 858542,
+            "range": "± 6242",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/100",
+            "value": 1074008,
+            "range": "± 17037",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/create",
+            "value": 32710,
+            "range": "± 126",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/get_related",
+            "value": 21839,
+            "range": "± 208",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "get_stats",
+            "value": 310143,
+            "range": "± 4713",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/authentication",
+            "value": 231561,
+            "range": "± 2017",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/database migration",
+            "value": 268753,
+            "range": "± 1397",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/React hooks optimization",
+            "value": 304944,
+            "range": "± 1856",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/API rate limiting Redis",
+            "value": 346459,
+            "range": "± 1724",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/short",
+            "value": 42726,
+            "range": "± 283",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/medium",
+            "value": 496846,
+            "range": "± 2109",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/long",
+            "value": 69291,
+            "range": "± 162",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/short",
+            "value": 920,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/medium",
+            "value": 2486,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/long",
+            "value": 5624,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/batch_100",
+            "value": 205971,
+            "range": "± 344",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/1_char_typo",
+            "value": 19326,
+            "range": "± 57",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/2_char_typo",
+            "value": 18628,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/transposition",
+            "value": 19623,
+            "range": "± 82",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/memories/100",
+            "value": 202742,
+            "range": "± 1388",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/memories/1000",
+            "value": 496769,
+            "range": "± 1675",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/memories/10000",
+            "value": 2138683,
+            "range": "± 7016",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/100",
+            "value": 6654,
+            "range": "± 117",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/500",
+            "value": 35333,
+            "range": "± 647",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/2000",
+            "value": 141462,
+            "range": "± 273",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/20",
+            "value": 556,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/100",
+            "value": 551,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/500",
+            "value": 555,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/tight_500/500",
+            "value": 2590,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/medium_2k/2000",
+            "value": 10174,
+            "range": "± 567",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/loose_8k/8000",
+            "value": 36823,
+            "range": "± 78",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/200",
+            "value": 13596,
+            "range": "± 32",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/1000",
+            "value": 70413,
+            "range": "± 251",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/semantic_compression/fixed_corpus_ratio_recall",
+            "value": 84509132,
+            "range": "± 492157",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/50",
+            "value": 4655495,
+            "range": "± 94493",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/200",
+            "value": 16780497,
+            "range": "± 82660",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "traversal/bfs_depth_3",
+            "value": 1190312,
+            "range": "± 12297",
             "unit": "ns/iter"
           }
         ]
