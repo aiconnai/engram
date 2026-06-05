@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 
 use crate::realtime::RealtimeEvent;
+use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
 use crate::types::*;
 
@@ -118,6 +119,23 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
         let memory = create_memory(conn, &input)?;
         let mut fuzzy = ctx.fuzzy_engine.lock();
         fuzzy.add_to_vocabulary(&memory.content);
+        let op_id = uuid::Uuid::new_v4().to_string();
+        emit_best_effort(
+            conn,
+            &EnrichmentEvent {
+                operation_id: &op_id,
+                event_type: "memory_created",
+                memory_id: Some(memory.id),
+                version_id: None,
+                triggered_by: "memory_create",
+                agent_id: None,
+                workspace: Some(memory.workspace.as_str()),
+                params: json!({}),
+                outcome: json!({"id": memory.id}),
+                status: "completed",
+                dry_run: false,
+            },
+        );
         Ok(memory)
     });
 
@@ -387,6 +405,23 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
 
     let result = ctx.storage.with_transaction(|conn| {
         let memory = update_memory(conn, id, &input)?;
+        let op_id = uuid::Uuid::new_v4().to_string();
+        emit_best_effort(
+            conn,
+            &EnrichmentEvent {
+                operation_id: &op_id,
+                event_type: "memory_updated",
+                memory_id: Some(memory.id),
+                version_id: None,
+                triggered_by: "memory_update",
+                agent_id: None,
+                workspace: Some(memory.workspace.as_str()),
+                params: json!({"fields_changed": changes}),
+                outcome: json!({"id": memory.id}),
+                status: "completed",
+                dry_run: false,
+            },
+        );
         Ok(memory)
     });
 
@@ -414,8 +449,29 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
     if cascade_chain {
         let result = ctx.storage.with_transaction(|conn| {
             let chain = collect_supersedes_chain(conn, id)?;
+            // Capture workspace from the root before any deletion.
+            let workspace = get_memory(conn, id).ok().map(|m| m.workspace);
+            let op_id = uuid::Uuid::new_v4().to_string();
             for &mem_id in &chain {
                 delete_memory(conn, mem_id)?;
+                // One audit event per deleted member so memory_enrichment_timeline
+                // returns results for every memory_id in the chain, not just the root.
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &op_id,
+                        event_type: "memory_deleted",
+                        memory_id: Some(mem_id),
+                        version_id: None,
+                        triggered_by: "memory_delete",
+                        agent_id: None,
+                        workspace: workspace.as_deref(),
+                        params: json!({"cascade_chain": true, "root_id": id}),
+                        outcome: json!({"id": mem_id}),
+                        status: "completed",
+                        dry_run: false,
+                    },
+                );
             }
             Ok(chain)
         });
@@ -435,7 +491,26 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
         }
     } else {
         let result = ctx.storage.with_transaction(|conn| {
+            // Capture workspace before deletion while the row still exists.
+            let workspace = get_memory(conn, id).ok().map(|m| m.workspace);
             delete_memory(conn, id)?;
+            let op_id = uuid::Uuid::new_v4().to_string();
+            emit_best_effort(
+                conn,
+                &EnrichmentEvent {
+                    operation_id: &op_id,
+                    event_type: "memory_deleted",
+                    memory_id: Some(id),
+                    version_id: None,
+                    triggered_by: "memory_delete",
+                    agent_id: None,
+                    workspace: workspace.as_deref(),
+                    params: json!({"cascade_chain": false}),
+                    outcome: json!({"id": id}),
+                    status: "completed",
+                    dry_run: false,
+                },
+            );
             Ok(id)
         });
 

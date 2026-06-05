@@ -1088,6 +1088,11 @@ fn test_enrichment_tools_appear_in_tools_list() {
         "tools/list must include memory_enrichment_audit, got: {:?}",
         tool_names
     );
+    assert!(
+        tool_names.contains(&"memory_replay_at_time"),
+        "tools/list must include memory_replay_at_time, got: {:?}",
+        tool_names
+    );
 }
 
 #[test]
@@ -1167,6 +1172,155 @@ fn test_memory_enrichment_audit_returns_events_array_with_filters() {
         data["filters_applied"]["status"].as_str() == Some("failed"),
         "filters_applied must echo back the 'status' filter, got: {}",
         data["filters_applied"]
+    );
+}
+
+#[test]
+fn test_memory_replay_at_time_requires_memory_id() {
+    let handler = TestHandler::new();
+    let req = make_request(
+        120,
+        "tools/call",
+        json!({
+            "name": "memory_replay_at_time",
+            "arguments": {"timestamp": "2026-01-01T00:00:00Z"}
+        }),
+    );
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none());
+    let result = resp.result.expect("Expected result");
+    let text = result["content"][0]["text"].as_str().unwrap();
+    let data: Value = serde_json::from_str(text).unwrap();
+    assert!(
+        data["error"].is_string(),
+        "Missing memory_id should return error, got: {}",
+        data
+    );
+}
+
+#[test]
+fn test_memory_replay_at_time_requires_timestamp() {
+    let handler = TestHandler::new();
+    let req = make_request(
+        121,
+        "tools/call",
+        json!({
+            "name": "memory_replay_at_time",
+            "arguments": {"memory_id": 1}
+        }),
+    );
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none());
+    let result = resp.result.expect("Expected result");
+    let text = result["content"][0]["text"].as_str().unwrap();
+    let data: Value = serde_json::from_str(text).unwrap();
+    assert!(
+        data["error"].is_string(),
+        "Missing timestamp should return error, got: {}",
+        data
+    );
+}
+
+#[test]
+fn test_memory_replay_at_time_returns_structured_response() {
+    let handler = TestHandler::new();
+
+    // Create a memory to replay
+    let create_req = make_request(
+        122,
+        "tools/call",
+        json!({
+            "name": "memory_create",
+            "arguments": {"content": "replay test memory", "memory_type": "note"}
+        }),
+    );
+    let create_resp = handler.handle_request(create_req);
+    let create_text = create_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let created: Value = serde_json::from_str(&create_text).unwrap();
+    let memory_id = created["id"].as_i64().unwrap();
+
+    let req = make_request(
+        123,
+        "tools/call",
+        json!({
+            "name": "memory_replay_at_time",
+            "arguments": {
+                "memory_id": memory_id,
+                "timestamp": "2099-01-01T00:00:00Z"
+            }
+        }),
+    );
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none());
+    let result = resp.result.expect("Expected result");
+    let text = result["content"][0]["text"].as_str().unwrap();
+    let data: Value = serde_json::from_str(text).expect("replay must return valid JSON");
+
+    assert_eq!(
+        data["memory_id"], memory_id,
+        "memory_id must be echoed back"
+    );
+    assert!(data["events"].is_array(), "events must be an array");
+    assert!(
+        data["temporal_edges"].is_array(),
+        "temporal_edges must be present, got: {}",
+        data
+    );
+    assert!(
+        data["temporal_edges_count"].is_number(),
+        "temporal_edges_count must be present"
+    );
+}
+
+#[test]
+fn test_memory_create_emits_audit_event() {
+    let handler = TestHandler::new();
+
+    // Create a memory
+    let create_req = make_request(
+        130,
+        "tools/call",
+        json!({
+            "name": "memory_create",
+            "arguments": {"content": "audit emit test", "memory_type": "note"}
+        }),
+    );
+    let create_resp = handler.handle_request(create_req);
+    let text = create_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let created: Value = serde_json::from_str(&text).unwrap();
+    let memory_id = created["id"].as_i64().unwrap();
+
+    // Check audit trail captures the creation event
+    let audit_req = make_request(
+        131,
+        "tools/call",
+        json!({
+            "name": "memory_enrichment_timeline",
+            "arguments": {"memory_id": memory_id}
+        }),
+    );
+    let audit_resp = handler.handle_request(audit_req);
+    let audit_text = audit_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let audit_data: Value = serde_json::from_str(&audit_text).unwrap();
+
+    let events = audit_data["events"]
+        .as_array()
+        .expect("events must be array");
+    assert!(
+        events
+            .iter()
+            .any(|e| e["event_type"].as_str() == Some("memory_created")),
+        "audit trail must contain a memory_created event, got: {:?}",
+        events
     );
 }
 

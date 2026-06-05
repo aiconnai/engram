@@ -1,11 +1,14 @@
 //! Enrichment audit tool handlers (ENG-1240).
 //!
-//! Provides two MCP tools:
+//! Provides MCP tools:
 //! - `memory_enrichment_timeline` – per-memory enrichment history
 //! - `memory_enrichment_audit`    – global enrichment event query with filters
+//! - `memory_replay_at_time`      – point-in-time memory state + temporal graph edges
 
 use rusqlite::{params, OptionalExtension};
 use serde_json::{json, Value};
+
+use crate::graph::temporal::edges_for_memory_at;
 
 use super::HandlerContext;
 
@@ -499,6 +502,21 @@ pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
             response.insert("events".into(), json!(event_rows));
             response.insert("events_count".into(), json!(event_rows.len()));
             response.insert("requested_timestamp".into(), json!(as_of.to_rfc3339()));
+
+            // Temporal graph edges where this memory is an endpoint, active at timestamp.
+            // Uses edges_for_memory_at (SQL-filtered) instead of snapshot_at to avoid
+            // loading the entire temporal graph when only one memory's edges are needed.
+            let temporal_edges = edges_for_memory_at(conn, memory_id, &as_of.to_rfc3339())
+                .inspect_err(|e| {
+                    tracing::warn!(
+                        memory_id,
+                        error = %e,
+                        "temporal_edges query failed in memory_replay_at_time"
+                    );
+                })
+                .unwrap_or_default();
+            response.insert("temporal_edges".into(), json!(temporal_edges));
+            response.insert("temporal_edges_count".into(), json!(temporal_edges.len()));
 
             Ok(json!(response))
         })
