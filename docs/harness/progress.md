@@ -301,7 +301,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 
 - **ENGRA-58 (implementado):** Rate limit para MCP HTTP (`/mcp` e `/v1/mcp`) via token-bucket, com chaves por IP/header, teto de buckets e stale cleanup.
 - **ENGRA-59 (implementado):** observabilidade do transporte (métricas, tracing e `GET /health` com estado de proteção).
-- **ENGRA-60 (pendente):** rollout/documentação de validação de deploy (Fly.io) para auth + rate limit.
+- **ENGRA-60 (implementado):** rollout/documentação de validação de deploy (Fly.io) para auth + rate limit.
 
 ## Security fixes — 2026-06-04
 

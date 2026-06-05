@@ -1267,13 +1267,21 @@ mod tests {
         let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, None);
         let first = app
             .clone()
-            .oneshot(json_rpc_request_with_headers("/mcp", Some("secret-key"), &[]))
+            .oneshot(json_rpc_request_with_headers(
+                "/mcp",
+                Some("secret-key"),
+                &[],
+            ))
             .await
             .expect("request should be handled");
         assert_eq!(first.status(), StatusCode::OK);
 
         let second = app
-            .oneshot(json_rpc_notification_request_with_headers("/mcp", Some("secret-key"), &[]))
+            .oneshot(json_rpc_notification_request_with_headers(
+                "/mcp",
+                Some("secret-key"),
+                &[],
+            ))
             .await
             .expect("request should be handled");
 

@@ -99,6 +99,8 @@ O canvas deve conter abordagens consideradas, hot-path complexity, ao menos dois
 
 `bash docs/harness/bin/sensors.sh` sem argumentos continua sendo o full canonical gate.
 
+These optional lanes do not replace the full gate; gates preserve full sensor gate.
+
 Modos opcionais:
 
 - `full` — gate completo canônico.
