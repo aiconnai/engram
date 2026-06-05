@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780687004489,
+  "lastUpdate": 1780691795294,
   "repoUrl": "https://github.com/aiconnai/engram",
   "entries": {
     "Engram Performance": [
@@ -989,6 +989,336 @@ window.BENCHMARK_DATA = {
             "name": "traversal/bfs_depth_3",
             "value": 1182699,
             "range": "± 21657",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ron@ldinho.com.br",
+            "name": "Ronaldo Martins",
+            "username": "limaronaldo"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6f1af3faa4032eacea47d5c44d00bc48eaff3c4e",
+          "message": "feat(context): add operational context memory (#57)\n\n* chore(ci): update checkout action for node 24\n\n* feat(audit): emit CRUD audit events and add temporal replay edges (ENGRA-62/61/63)\n\n- memory_create/update/delete now call emit_best_effort for audit trail coverage\n- memory_replay_at_time response includes temporal_edges active at requested timestamp\n- Protocol tests: assert memory_replay_at_time in tools/list, add 4 integration tests\n  covering replay structure, error validation, and CRUD audit emit end-to-end\n\n* fix(audit): address 5 code-review findings in CRUD audit and temporal replay\n\n- cascade delete: emit one event per deleted member (not just root) so\n  memory_enrichment_timeline returns results for every id in the chain\n- emit inside with_transaction for atomicity: audit event and data write\n  now commit or roll back together in memory_create/update/delete\n- workspace captured inside transaction for memory_update/delete (was None)\n- snapshot_at full-scan replaced by edges_for_memory_at: SQL-filtered query\n  O(K) instead of O(N_total_edges) for memory_replay_at_time\n- snapshot_at error now logs a tracing::warn instead of silently returning []\n\n* style(audit): apply rustfmt to mcp_protocol_tests\n\n* feat(context): add operational context memory",
+          "timestamp": "2026-06-05T17:21:50-03:00",
+          "tree_id": "aa8090f34edf96ae3ee0509e776e244fd17fe681",
+          "url": "https://github.com/aiconnai/engram/commit/6f1af3faa4032eacea47d5c44d00bc48eaff3c4e"
+        },
+        "date": 1780691794433,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "community_detection/detect_communities_500_nodes",
+            "value": 5389168,
+            "range": "± 29189",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extractor_new/default",
+            "value": 3538,
+            "range": "± 24",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extraction/extract_mixed",
+            "value": 8119,
+            "range": "± 32",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_create/memory_create",
+            "value": 269245,
+            "range": "± 6133",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search/memory_search",
+            "value": 525889,
+            "range": "± 3665",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_list/memory_list",
+            "value": 289330,
+            "range": "± 7507",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_stats/memory_stats",
+            "value": 118269,
+            "range": "± 1464",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_error_path/unknown_tool",
+            "value": 162,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_create/no_embedding",
+            "value": 209604,
+            "range": "± 8307",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_get/by_id",
+            "value": 46709,
+            "range": "± 1426",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/10",
+            "value": 114192,
+            "range": "± 656",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/10",
+            "value": 287292,
+            "range": "± 2331",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/50",
+            "value": 441603,
+            "range": "± 3138",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/50",
+            "value": 676097,
+            "range": "± 3829",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/100",
+            "value": 847225,
+            "range": "± 3017",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/100",
+            "value": 1058431,
+            "range": "± 26528",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/create",
+            "value": 34791,
+            "range": "± 522",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/get_related",
+            "value": 21303,
+            "range": "± 340",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "get_stats",
+            "value": 321456,
+            "range": "± 1613",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/authentication",
+            "value": 251371,
+            "range": "± 2223",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/database migration",
+            "value": 290294,
+            "range": "± 1857",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/React hooks optimization",
+            "value": 325562,
+            "range": "± 1988",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/API rate limiting Redis",
+            "value": 366229,
+            "range": "± 2557",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/short",
+            "value": 52063,
+            "range": "± 298",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/medium",
+            "value": 521411,
+            "range": "± 6772",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/long",
+            "value": 74422,
+            "range": "± 824",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/short",
+            "value": 908,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/medium",
+            "value": 2325,
+            "range": "± 52",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/long",
+            "value": 5260,
+            "range": "± 20",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/batch_100",
+            "value": 193382,
+            "range": "± 587",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/1_char_typo",
+            "value": 18240,
+            "range": "± 49",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/2_char_typo",
+            "value": 17181,
+            "range": "± 334",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/transposition",
+            "value": 18090,
+            "range": "± 71",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/memories/100",
+            "value": 228251,
+            "range": "± 2888",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/memories/1000",
+            "value": 520526,
+            "range": "± 3975",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/memories/10000",
+            "value": 2068522,
+            "range": "± 14123",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/100",
+            "value": 6746,
+            "range": "± 45",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/500",
+            "value": 34173,
+            "range": "± 168",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/2000",
+            "value": 139138,
+            "range": "± 764",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/20",
+            "value": 578,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/100",
+            "value": 550,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/500",
+            "value": 552,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/tight_500/500",
+            "value": 3042,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/medium_2k/2000",
+            "value": 11332,
+            "range": "± 92",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/loose_8k/8000",
+            "value": 44567,
+            "range": "± 274",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/200",
+            "value": 13290,
+            "range": "± 38",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/1000",
+            "value": 67872,
+            "range": "± 143",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/semantic_compression/fixed_corpus_ratio_recall",
+            "value": 80300890,
+            "range": "± 241575",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/50",
+            "value": 5252459,
+            "range": "± 30772",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/200",
+            "value": 19131727,
+            "range": "± 118725",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "traversal/bfs_depth_3",
+            "value": 1227695,
+            "range": "± 22914",
             "unit": "ns/iter"
           }
         ]
