@@ -152,6 +152,18 @@ struct Args {
     #[arg(long, env = "ENGRAM_HTTP_API_KEY")]
     http_api_key: Option<String>,
 
+    /// HTTP requests per second for MCP HTTP rate limiting
+    #[arg(long, env = "ENGRAM_HTTP_RATE_LIMIT_RPS", default_value = "120")]
+    http_rate_limit_rps: u64,
+
+    /// HTTP burst size for MCP HTTP rate limiting
+    #[arg(long, env = "ENGRAM_HTTP_RATE_LIMIT_BURST", default_value = "240")]
+    http_rate_limit_burst: u64,
+
+    /// HTTP rate-limit key source header (e.g., x-api-key, x-tenant-id). Empty disables header keying.
+    #[arg(long, env = "ENGRAM_HTTP_RATE_LIMIT_KEY")]
+    http_rate_limit_key: Option<String>,
+
     /// gRPC transport port (used when --transport is grpc)
     #[cfg(feature = "grpc")]
     #[arg(long, env = "ENGRAM_GRPC_PORT", default_value = "50051")]
@@ -808,6 +820,9 @@ fn main() -> Result<()> {
                     args.http_port,
                     args.http_api_key,
                     realtime_manager,
+                    args.http_rate_limit_rps,
+                    args.http_rate_limit_burst,
+                    args.http_rate_limit_key,
                 )
                 .await
                 .map_err(|e| engram::error::EngramError::Internal(e.to_string()))
@@ -828,6 +843,9 @@ fn main() -> Result<()> {
                         http_port,
                         http_api_key,
                         http_realtime,
+                        args.http_rate_limit_rps,
+                        args.http_rate_limit_burst,
+                        args.http_rate_limit_key,
                     )
                     .await
                     {

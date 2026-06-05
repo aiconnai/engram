@@ -1,12 +1,12 @@
 # Engram Cloud Architecture
 
 **Date:** 2026-05-27 *(updated to reflect v32–v39 migration phases)*  
-**Goal:** Hosted SaaS that monetizes convenience (multi-tenant + ops) while keeping Engram core open source.
+**Goal:** Provide a managed source of truth for team memory without forcing every project to build its own ingestion, indexing, and retrieval stack.
 
 ## Product Line
 
-- **Engram OSS (MIT):** single-tenant, BYO storage, self-hosted.
-- **Engram Cloud (SaaS):** multi-tenant, managed hosting, team workspaces, quotas, metering, dashboard.
+- **Engram OSS (MIT):** single-tenant, BYO storage, self-hosted memory for teams and agents.
+- **Engram Cloud (SaaS):** multi-tenant, managed hosting, shared workspaces, quotas, metering, and a dashboard.
 - **Engram Enterprise:** Cloud + SSO/SCIM, audit, governance, SLA.
 
 ## High-level System

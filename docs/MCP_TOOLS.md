@@ -2,7 +2,9 @@
 
 <!-- GENERATED: do not edit manually. Run `./scripts/generate-mcp-reference.sh`. -->
 
-This reference is generated from `src/mcp/tools/registry.rs`.
+This reference documents the MCP surface that turns Engram into a shared source of truth for team memory.
+
+It is generated from `src/mcp/tools/registry.rs`.
 
 Total tools: **261**
 

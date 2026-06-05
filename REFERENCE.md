@@ -1,5 +1,7 @@
 # Engram Cloud API Reference
 
+This reference documents the cloud surface for Engram's memory layer: how agents and applications authenticate, resolve a tenant, and query the same organized context through MCP or REST.
+
 **Base URLs**
 - Tenant: `https://{tenant-slug}.engram.cloud`
 - Global: `https://api.engram.cloud` (requires `X-Engram-Tenant`)

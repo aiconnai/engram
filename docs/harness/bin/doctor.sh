@@ -57,19 +57,28 @@ require_grep() {
 # Core required structure
 require_file docs/harness/SPEC.md
 require_file docs/harness/INVARIANTS.md
+require_file docs/harness/WHAT_WE_DONT_DO.md
 require_file docs/harness/GATES.md
 require_file docs/harness/CODE_REVIEW_POLICY.md
 require_file docs/harness/README.md
 require_file docs/harness/progress.md
 require_file docs/harness/bin/bootstrap.sh
 require_file docs/harness/bin/doctor.sh
+require_file docs/harness/bin/baseline.sh
+require_file docs/harness/bin/quarterly-audit.sh
 require_dir docs/harness/progress
 require_dir docs/harness/reviews
 require_dir docs/harness/known-issues
+require_dir docs/harness/canvas
+require_dir docs/harness/audits
+require_file docs/harness/canvas/README.md
+require_file docs/harness/canvas/TEMPLATE.md
 
 # Scripts that must be executable (review-gate and check-commit-msg are optional in early v0 but preferred)
 require_exec docs/harness/bin/bootstrap.sh
 require_exec docs/harness/bin/doctor.sh
+require_exec docs/harness/bin/baseline.sh
+require_exec docs/harness/bin/quarterly-audit.sh
 
 # If the advanced scripts exist, they should be executable
 [ -f docs/harness/bin/sensors.sh ] && require_exec docs/harness/bin/sensors.sh || true
@@ -78,13 +87,35 @@ require_exec docs/harness/bin/doctor.sh
 
 # Cross-references (bootstrap + README point at the policy and doctor)
 require_grep docs/harness/bin/bootstrap.sh 'CODE_REVIEW_POLICY\.md' 'read-next includes the local review policy'
+require_grep docs/harness/bin/bootstrap.sh 'WHAT_WE_DONT_DO\.md' 'read-next includes negative-scope policy'
+require_grep docs/harness/README.md 'WHAT_WE_DONT_DO\.md' 'workflow mentions the negative-scope policy'
 require_grep docs/harness/README.md 'CODE_REVIEW_POLICY\.md' 'structure table or workflow mentions the policy file'
 require_grep docs/harness/README.md 'doctor\.sh' 'workflow mentions the doctor check'
 require_grep docs/harness/README.md 'known-issues/' 'structure table or workflow mentions known issues'
+require_grep docs/harness/README.md 'baseline\.sh' 'workflow mentions baseline snapshots'
+require_grep docs/harness/README.md 'quarterly-audit\.sh' 'workflow mentions evidence-only audits'
+require_grep docs/harness/README.md 'Sensor modes' 'workflow lists optional sensor modes'
+require_grep docs/harness/GATES.md 'WHAT_WE_DONT_DO\.md' 'gates reference negative-scope policy'
+require_grep docs/harness/GATES.md 'Review Canvas' 'gates define review canvas requirement'
+require_grep docs/harness/GATES.md 'baseline\.sh' 'gates document baseline snapshots'
+require_grep docs/harness/GATES.md 'quarterly-audit\.sh' 'gates document evidence-only audit'
+require_grep docs/harness/GATES.md 'optional lanes do not replace the full gate' 'gates preserve full sensor gate'
+require_grep docs/harness/GATES.md 'docs/harness/bin' 'gates protect harness script changes'
 require_grep docs/harness/GATES.md 'Exclus' 'documented exclusion policy exists'
 require_grep docs/harness/GATES.md 'known-issue' 'exclusion policy points at known-issue docs'
+require_grep docs/harness/CODE_REVIEW_POLICY.md 'WHAT_WE_DONT_DO\.md' 'review policy enforces negative-scope policy'
+require_grep docs/harness/CODE_REVIEW_POLICY.md 'Review Canvas' 'review policy checks complex-change canvas evidence'
+require_grep docs/harness/CODE_REVIEW_POLICY.md 'Harness script changes' 'review policy checks harness scripts directly'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'Finding Format|Finding format|severidade' 'review policy defines finding format'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'PASS <resumo|Harness Output Contract' 'review policy defines output contract'
+require_grep docs/harness/bin/review-gate.sh 'WHAT_WE_DONT_DO\.md' 'review-gate prompt includes negative-scope policy'
+require_grep docs/harness/bin/review-gate.sh 'Review Canvas' 'review-gate prompt includes review canvas checks'
+require_grep docs/harness/bin/review-gate.sh 'docs/harness/bin' 'review-gate protects harness script changes'
+require_grep docs/harness/bin/sensors.sh 'quick' 'sensors supports quick mode'
+require_grep docs/harness/bin/sensors.sh 'full' 'sensors supports full mode'
+require_grep docs/harness/bin/sensors.sh 'docs' 'sensors supports docs mode'
+require_grep docs/harness/bin/sensors.sh 'mcp' 'sensors supports mcp mode'
+require_grep docs/harness/bin/sensors.sh 'baseline' 'sensors supports baseline mode'
 
 field_value() {
   local file="$1"
@@ -260,4 +291,4 @@ if [ "${#WARNINGS[@]}" -gt 0 ]; then
   done
 fi
 
-echo "Checked: required docs + executables, cross-references to policy/doctor, SPEC<->progress drift, active plan existence, review verdict presence, .sensors-last format, bootstrap contract, and exclusion records."
+echo "Checked: required docs + executables, negative-scope/canvas/baseline/audit wiring, cross-references to policy/doctor, SPEC<->progress drift, active plan existence, review verdict presence, .sensors-last format, bootstrap contract, and exclusion records."

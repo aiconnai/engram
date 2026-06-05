@@ -1,7 +1,7 @@
 # Engram - AI Agent Context
 
 ## Visão Geral
-Engram é um sistema de memória persistente para agentes de IA, construído em Rust. Ele fornece armazenamento, busca híbrida (BM25 + vetores + fuzzy) e grafos de conhecimento através de uma API REST, WebSocket e protocolo MCP (Model Context Protocol).
+Engram é um sistema de memória persistente para agentes de IA e times que trabalham sobre contexto proprietário, construído em Rust. Ele organiza entrevistas, reuniões, documentos, transcrições e decisões, e expõe isso por busca híbrida (BM25 + vetores + fuzzy), grafos de conhecimento e protocolo MCP (Model Context Protocol) para consulta direta na fonte.
 
 **Repositório**: https://github.com/aiconnai/engram  
 **Linguagem Principal**: Rust (com SDKs em Python e TypeScript para integração)  
@@ -69,7 +69,7 @@ cargo build --release
 3. **TypeScript Syntax**: Verifique cuidadosamente o fechamento de tipos em métodos que retornam objetos complexos (ex: `Promise<{...}>`).
 
 ## Ferramentas MCP Disponíveis
-O Engram expõe as ferramentas MCP documentadas em [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Principais:
+O Engram expõe as ferramentas MCP documentadas em [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Elas existem para transformar contexto disperso em memória acionável, com leitura e escrita pela mesma superfície. Principais:
 - `memory_create`, `memory_search`, `memory_list`
 - `memory_create_daily` (memórias efêmeras)
 - `identity_create`, `identity_resolve`
@@ -82,6 +82,7 @@ O Engram expõe as ferramentas MCP documentadas em [`docs/MCP_TOOLS.md`](docs/MC
 - **Cliente TypeScript**: `sdks/typescript/src/index.ts`
 - **Testes de integração**: `tests/*.rs`
 - **Documentação da API**: `REFERENCE.md` (Engram Cloud), `INVARIANTS.md` (regras do projeto)
+- **Tese do produto**: `README.md`, `docs/README.md`, `docs/AI_GUIDE.md`, `docs/USING_ENGRAM_IN_A_REPO.md`
 
 ## Harness de Desenvolvimento (Obrigatório no Início de Toda Sessão)
 
