@@ -119,6 +119,23 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
         let memory = create_memory(conn, &input)?;
         let mut fuzzy = ctx.fuzzy_engine.lock();
         fuzzy.add_to_vocabulary(&memory.content);
+        let op_id = uuid::Uuid::new_v4().to_string();
+        emit_best_effort(
+            conn,
+            &EnrichmentEvent {
+                operation_id: &op_id,
+                event_type: "memory_created",
+                memory_id: Some(memory.id),
+                version_id: None,
+                triggered_by: "memory_create",
+                agent_id: None,
+                workspace: Some(memory.workspace.as_str()),
+                params: json!({}),
+                outcome: json!({"id": memory.id}),
+                status: "completed",
+                dry_run: false,
+            },
+        );
         Ok(memory)
     });
 
@@ -132,28 +149,6 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
                     memory.content.clone(),
                 ));
             }
-            let op_id = uuid::Uuid::new_v4().to_string();
-            let mem_id = memory.id;
-            let ws = memory.workspace.clone();
-            let _ = ctx.storage.with_connection(|conn| {
-                emit_best_effort(
-                    conn,
-                    &EnrichmentEvent {
-                        operation_id: &op_id,
-                        event_type: "memory_created",
-                        memory_id: Some(mem_id),
-                        version_id: None,
-                        triggered_by: "memory_create",
-                        agent_id: None,
-                        workspace: Some(ws.as_str()),
-                        params: json!({}),
-                        outcome: json!({"id": mem_id}),
-                        status: "completed",
-                        dry_run: false,
-                    },
-                );
-                Ok::<_, crate::error::EngramError>(())
-            });
             json!(memory)
         }
         Err(e) => json!({"error": e.to_string()}),
@@ -410,6 +405,23 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
 
     let result = ctx.storage.with_transaction(|conn| {
         let memory = update_memory(conn, id, &input)?;
+        let op_id = uuid::Uuid::new_v4().to_string();
+        emit_best_effort(
+            conn,
+            &EnrichmentEvent {
+                operation_id: &op_id,
+                event_type: "memory_updated",
+                memory_id: Some(memory.id),
+                version_id: None,
+                triggered_by: "memory_update",
+                agent_id: None,
+                workspace: Some(memory.workspace.as_str()),
+                params: json!({"fields_changed": changes}),
+                outcome: json!({"id": memory.id}),
+                status: "completed",
+                dry_run: false,
+            },
+        );
         Ok(memory)
     });
 
@@ -417,29 +429,8 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
         Ok(memory) => {
             ctx.search_cache.invalidate_for_memory(memory.id);
             if let Some(ref manager) = ctx.realtime {
-                manager.broadcast(RealtimeEvent::memory_updated(memory.id, changes.clone()));
+                manager.broadcast(RealtimeEvent::memory_updated(memory.id, changes));
             }
-            let op_id = uuid::Uuid::new_v4().to_string();
-            let mem_id = memory.id;
-            let _ = ctx.storage.with_connection(|conn| {
-                emit_best_effort(
-                    conn,
-                    &EnrichmentEvent {
-                        operation_id: &op_id,
-                        event_type: "memory_updated",
-                        memory_id: Some(mem_id),
-                        version_id: None,
-                        triggered_by: "memory_update",
-                        agent_id: None,
-                        workspace: None,
-                        params: json!({"fields_changed": changes}),
-                        outcome: json!({"id": mem_id}),
-                        status: "completed",
-                        dry_run: false,
-                    },
-                );
-                Ok::<_, crate::error::EngramError>(())
-            });
             json!(memory)
         }
         Err(e) => json!({"error": e.to_string()}),
@@ -458,8 +449,29 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
     if cascade_chain {
         let result = ctx.storage.with_transaction(|conn| {
             let chain = collect_supersedes_chain(conn, id)?;
+            // Capture workspace from the root before any deletion.
+            let workspace = get_memory(conn, id).ok().map(|m| m.workspace);
+            let op_id = uuid::Uuid::new_v4().to_string();
             for &mem_id in &chain {
                 delete_memory(conn, mem_id)?;
+                // One audit event per deleted member so memory_enrichment_timeline
+                // returns results for every memory_id in the chain, not just the root.
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &op_id,
+                        event_type: "memory_deleted",
+                        memory_id: Some(mem_id),
+                        version_id: None,
+                        triggered_by: "memory_delete",
+                        agent_id: None,
+                        workspace: workspace.as_deref(),
+                        params: json!({"cascade_chain": true, "root_id": id}),
+                        outcome: json!({"id": mem_id}),
+                        status: "completed",
+                        dry_run: false,
+                    },
+                );
             }
             Ok(chain)
         });
@@ -473,33 +485,32 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                     }
                 }
                 let count = deleted_ids.len();
-                let op_id = uuid::Uuid::new_v4().to_string();
-                let _ = ctx.storage.with_connection(|conn| {
-                    emit_best_effort(
-                        conn,
-                        &EnrichmentEvent {
-                            operation_id: &op_id,
-                            event_type: "memory_deleted",
-                            memory_id: Some(id),
-                            version_id: None,
-                            triggered_by: "memory_delete",
-                            agent_id: None,
-                            workspace: None,
-                            params: json!({"cascade_chain": true}),
-                            outcome: json!({"deleted_ids": deleted_ids, "count": count}),
-                            status: "completed",
-                            dry_run: false,
-                        },
-                    );
-                    Ok::<_, crate::error::EngramError>(())
-                });
                 json!({"deleted_ids": deleted_ids, "count": count})
             }
             Err(e) => json!({"error": e.to_string()}),
         }
     } else {
         let result = ctx.storage.with_transaction(|conn| {
+            // Capture workspace before deletion while the row still exists.
+            let workspace = get_memory(conn, id).ok().map(|m| m.workspace);
             delete_memory(conn, id)?;
+            let op_id = uuid::Uuid::new_v4().to_string();
+            emit_best_effort(
+                conn,
+                &EnrichmentEvent {
+                    operation_id: &op_id,
+                    event_type: "memory_deleted",
+                    memory_id: Some(id),
+                    version_id: None,
+                    triggered_by: "memory_delete",
+                    agent_id: None,
+                    workspace: workspace.as_deref(),
+                    params: json!({"cascade_chain": false}),
+                    outcome: json!({"id": id}),
+                    status: "completed",
+                    dry_run: false,
+                },
+            );
             Ok(id)
         });
 
@@ -509,26 +520,6 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                 if let Some(ref manager) = ctx.realtime {
                     manager.broadcast(RealtimeEvent::memory_deleted(deleted_id));
                 }
-                let op_id = uuid::Uuid::new_v4().to_string();
-                let _ = ctx.storage.with_connection(|conn| {
-                    emit_best_effort(
-                        conn,
-                        &EnrichmentEvent {
-                            operation_id: &op_id,
-                            event_type: "memory_deleted",
-                            memory_id: Some(deleted_id),
-                            version_id: None,
-                            triggered_by: "memory_delete",
-                            agent_id: None,
-                            workspace: None,
-                            params: json!({"cascade_chain": false}),
-                            outcome: json!({"id": deleted_id}),
-                            status: "completed",
-                            dry_run: false,
-                        },
-                    );
-                    Ok::<_, crate::error::EngramError>(())
-                });
                 json!({"deleted": deleted_id})
             }
             Err(e) => json!({"error": e.to_string()}),
