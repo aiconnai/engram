@@ -1259,7 +1259,10 @@ fn test_memory_replay_at_time_returns_structured_response() {
     let text = result["content"][0]["text"].as_str().unwrap();
     let data: Value = serde_json::from_str(text).expect("replay must return valid JSON");
 
-    assert_eq!(data["memory_id"], memory_id, "memory_id must be echoed back");
+    assert_eq!(
+        data["memory_id"], memory_id,
+        "memory_id must be echoed back"
+    );
     assert!(data["events"].is_array(), "events must be an array");
     assert!(
         data["temporal_edges"].is_array(),
@@ -1309,7 +1312,9 @@ fn test_memory_create_emits_audit_event() {
         .to_string();
     let audit_data: Value = serde_json::from_str(&audit_text).unwrap();
 
-    let events = audit_data["events"].as_array().expect("events must be array");
+    let events = audit_data["events"]
+        .as_array()
+        .expect("events must be array");
     assert!(
         events
             .iter()
