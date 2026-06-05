@@ -1,11 +1,14 @@
 //! Enrichment audit tool handlers (ENG-1240).
 //!
-//! Provides two MCP tools:
+//! Provides MCP tools:
 //! - `memory_enrichment_timeline` – per-memory enrichment history
 //! - `memory_enrichment_audit`    – global enrichment event query with filters
+//! - `memory_replay_at_time`      – point-in-time memory state + temporal graph edges
 
 use rusqlite::{params, OptionalExtension};
 use serde_json::{json, Value};
+
+use crate::graph::temporal::snapshot_at;
 
 use super::HandlerContext;
 
@@ -499,6 +502,16 @@ pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
             response.insert("events".into(), json!(event_rows));
             response.insert("events_count".into(), json!(event_rows.len()));
             response.insert("requested_timestamp".into(), json!(as_of.to_rfc3339()));
+
+            // Temporal graph edges active at the requested timestamp for this memory.
+            let ts_str = as_of.to_rfc3339();
+            let edges = snapshot_at(conn, &ts_str, None).unwrap_or_default();
+            let memory_edges: Vec<&_> = edges
+                .iter()
+                .filter(|e| e.from_id == memory_id || e.to_id == memory_id)
+                .collect();
+            response.insert("temporal_edges".into(), json!(memory_edges));
+            response.insert("temporal_edges_count".into(), json!(memory_edges.len()));
 
             Ok(json!(response))
         })

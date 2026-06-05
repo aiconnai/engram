@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 
 use crate::realtime::RealtimeEvent;
+use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
 use crate::types::*;
 
@@ -131,6 +132,28 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
                     memory.content.clone(),
                 ));
             }
+            let op_id = uuid::Uuid::new_v4().to_string();
+            let mem_id = memory.id;
+            let ws = memory.workspace.clone();
+            let _ = ctx.storage.with_connection(|conn| {
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &op_id,
+                        event_type: "memory_created",
+                        memory_id: Some(mem_id),
+                        version_id: None,
+                        triggered_by: "memory_create",
+                        agent_id: None,
+                        workspace: Some(ws.as_str()),
+                        params: json!({}),
+                        outcome: json!({"id": mem_id}),
+                        status: "completed",
+                        dry_run: false,
+                    },
+                );
+                Ok::<_, crate::error::EngramError>(())
+            });
             json!(memory)
         }
         Err(e) => json!({"error": e.to_string()}),
@@ -394,8 +417,29 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
         Ok(memory) => {
             ctx.search_cache.invalidate_for_memory(memory.id);
             if let Some(ref manager) = ctx.realtime {
-                manager.broadcast(RealtimeEvent::memory_updated(memory.id, changes));
+                manager.broadcast(RealtimeEvent::memory_updated(memory.id, changes.clone()));
             }
+            let op_id = uuid::Uuid::new_v4().to_string();
+            let mem_id = memory.id;
+            let _ = ctx.storage.with_connection(|conn| {
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &op_id,
+                        event_type: "memory_updated",
+                        memory_id: Some(mem_id),
+                        version_id: None,
+                        triggered_by: "memory_update",
+                        agent_id: None,
+                        workspace: None,
+                        params: json!({"fields_changed": changes}),
+                        outcome: json!({"id": mem_id}),
+                        status: "completed",
+                        dry_run: false,
+                    },
+                );
+                Ok::<_, crate::error::EngramError>(())
+            });
             json!(memory)
         }
         Err(e) => json!({"error": e.to_string()}),
@@ -429,6 +473,26 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                     }
                 }
                 let count = deleted_ids.len();
+                let op_id = uuid::Uuid::new_v4().to_string();
+                let _ = ctx.storage.with_connection(|conn| {
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &op_id,
+                            event_type: "memory_deleted",
+                            memory_id: Some(id),
+                            version_id: None,
+                            triggered_by: "memory_delete",
+                            agent_id: None,
+                            workspace: None,
+                            params: json!({"cascade_chain": true}),
+                            outcome: json!({"deleted_ids": deleted_ids, "count": count}),
+                            status: "completed",
+                            dry_run: false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                });
                 json!({"deleted_ids": deleted_ids, "count": count})
             }
             Err(e) => json!({"error": e.to_string()}),
@@ -445,6 +509,26 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                 if let Some(ref manager) = ctx.realtime {
                     manager.broadcast(RealtimeEvent::memory_deleted(deleted_id));
                 }
+                let op_id = uuid::Uuid::new_v4().to_string();
+                let _ = ctx.storage.with_connection(|conn| {
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &op_id,
+                            event_type: "memory_deleted",
+                            memory_id: Some(deleted_id),
+                            version_id: None,
+                            triggered_by: "memory_delete",
+                            agent_id: None,
+                            workspace: None,
+                            params: json!({"cascade_chain": false}),
+                            outcome: json!({"id": deleted_id}),
+                            status: "completed",
+                            dry_run: false,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                });
                 json!({"deleted": deleted_id})
             }
             Err(e) => json!({"error": e.to_string()}),
