@@ -4,7 +4,7 @@
 
 This reference is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **257**
+Total tools: **261**
 
 ## Summary
 
@@ -230,6 +230,10 @@ Total tools: **257**
 | `memory_get_working_memory` | standard | readOnlyHint | `session_id` |
 | `session_land` | essential | mutating (no MCP hints) | `session_id` |
 | `memory_build_context` | standard | readOnlyHint | `query` |
+| `context_record` | standard | mutating (no MCP hints) | `event_type`, `session_id`, `source` |
+| `context_record_artifact` | standard | mutating (no MCP hints) | `kind` |
+| `context_search` | standard | readOnlyHint | `query` |
+| `context_build_bundle` | standard | readOnlyHint | none |
 | `recent_activity` | essential | readOnlyHint | none |
 | `discover_tools` | essential | readOnlyHint | none |
 | `memory_prepare_context` | advanced | readOnlyHint | `query` |
@@ -3344,6 +3348,132 @@ Build a structured prompt context from relevant memories using hybrid search, wi
 | `timeframe` | `string` | no | Time window for memory filtering Default: `all`. Allowed: `1h`, `24h`, `7d`, `30d`, `all`. |
 | `include_types` | `array` | no | Only include these memory types (e.g., ['note', 'decision']) Items: `string`. |
 | `include_graph` | `boolean` | no | Include entity relationship graph in response Default: `false`. |
+
+### `context_record`
+
+Record a scoped Operational Context event and optional derived summary. Redacts text before storage, requires provenance scope, keeps raw payload storage off, and supports RTK-compatible external summary metadata without dereferencing external pointers.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `event_type`, `session_id`, `source`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `source` | `string` | yes | Source system or adapter, for example codex, harness, rtk, github_actions |
+| `source_version` | `string` | no | Optional source or adapter version |
+| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope |
+| `workspace` | `string` | no | Alias for workspace_path_hash |
+| `git_branch` | `string` | no | Branch observed when the event occurred |
+| `worktree_name` | `string` | no | Worktree name observed when the event occurred |
+| `commit_hash` | `string` | no | Commit observed when the event occurred |
+| `session_id` | `string` | yes | Agent or user session scope |
+| `task_id` | `string` | no | Task, issue, or ticket scope |
+| `agent_id` | `string` | no | Agent identity |
+| `event_type` | `string` | yes | Event family such as command, tool, decision_made, verification_run, verification_skipped, blocker_found, review_result, handoff_created |
+| `command` | `string` | no | Command line or command name for command events |
+| `command_name` | `string` | no | Alias/preferred command field |
+| `tool` | `string` | no | Tool name for tool events |
+| `tool_name` | `string` | no | Alias/preferred tool field |
+| `cwd` | `string` | no | Working directory context |
+| `exit_code` | `integer` | no | Command exit code; required for event_type=command |
+| `summary` | `string` | no | Optional derived/lossy summary to store with provenance |
+| `key_errors` | `array` | no | Important errors to index after redaction Items: `string`. |
+| `touched_files` | `array` | no | Files inspected or changed by the event Items: `string`. |
+| `reducer` | `object` | no | Optional reducer metadata: name, version, lossy, confidence, structured_facts, warnings, labels, tokens_raw_est, tokens_compact_est |
+| `external_reducer` | `string` | no | External reducer name for RTK-compatible summaries |
+| `raw_pointer` | `string` | no | External raw pointer recorded as metadata only; Engram does not dereference it |
+| `external_unverified` | `boolean` | no | Mark external summary as unverified |
+| `labels` | `array` | no | Additional labels; external records add derived/lossy/external_unverified conservatively Items: `string`. |
+| `retention_policy` | `string` | no | Retention label; sensitive commands may be forced to ephemeral_sensitive by policy |
+| `raw_artifact_id` | `string` | no | Optional existing artifact id pointer; raw payload content is not accepted by this tool |
+| `metadata` | `object` | no | Additional metadata redacted recursively before storage |
+| `started_at` | `string` | no | RFC3339 event start time; defaults to now |
+| `finished_at` | `string` | no | RFC3339 event finish time |
+
+### `context_record_artifact`
+
+Record an Operational Context artifact pointer or explicitly retained redacted raw artifact. Pointer-only is the default; raw_content requires retain_raw=true and policy approval.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `kind`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | no | Optional artifact id; generated when omitted |
+| `source_event_id` | `integer` | no | Related context event id |
+| `source` | `string` | no | Source system or adapter |
+| `source_version` | `string` | no | Optional source or adapter version |
+| `repo_id` | `string` | no | Repository scope identifier |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope |
+| `workspace` | `string` | no | Alias for workspace_path_hash |
+| `session_id` | `string` | no | Session scope for access policy |
+| `task_id` | `string` | no | Task scope for access policy |
+| `agent_id` | `string` | no | Agent scope for access policy |
+| `kind` | `string` | yes | Artifact type, for example command_output_summary, raw_command_output, review_artifact, diff_reference, test_report, external_url |
+| `label` | `string` | no | Human label |
+| `uri` | `string` | no | External/source-of-truth pointer |
+| `raw_pointer` | `string` | no | Alias pointer stored as uri/metadata only; not dereferenced |
+| `media_type` | `string` | no | Media type for pointer or raw content |
+| `raw_content` | `string` | no | Raw content to retain only when retain_raw=true and policy allows it |
+| `content_sha256` | `string` | no | Optional digest for pointer-only artifacts; raw digests are recomputed after redaction |
+| `byte_len` | `integer` | no | Optional source byte length for pointer-only artifacts |
+| `retention_policy` | `string` | no | Retention label, default pointer_only or raw_retained |
+| `access_policy` | `string` | no | Default: `same_session`. Allowed: `same_session`, `same_task`, `same_agent`, `repo`, `public`. |
+| `retain_raw` | `boolean` | no | Must be true to persist raw_content Default: `false`. |
+| `ttl_seconds` | `integer` | no | Optional raw retention TTL from now |
+| `stale_after_seconds` | `integer` | no | Optional stale threshold from now |
+| `metadata` | `object` | no | Additional metadata redacted recursively before storage |
+
+### `context_search`
+
+Search scoped Operational Context events and derived summaries. Searches event metadata, command/tool names, summaries, structured facts, failure signals, decisions, inspected/touched file metadata, and artifact pointers without returning raw artifact content.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `query`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | Search query for operational events, summaries, decisions, failures, files, or artifact metadata |
+| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope |
+| `workspace` | `string` | no | Alias for workspace_path_hash when clients only have a workspace scope value |
+| `session_id` | `string` | no | Session scope filter |
+| `task_id` | `string` | no | Task scope filter |
+| `event_type` | `string` | no | Restrict results to one event type |
+| `event_types` | `array` | no | Restrict results to these event types Items: `string`. |
+| `event_type_filters` | `array` | no | Alias for event_types Items: `string`. |
+| `failure_only` | `boolean` | no | Only include failures/errors inferred from exit_code or event_type Default: `false`. |
+| `max_results` | `integer` | no | Maximum results to return Default: `25`. Minimum: `1`. Maximum: `200`. |
+| `include_artifact_pointers` | `boolean` | no | Include artifact IDs/pointers only; raw artifact content is never returned Default: `false`. |
+| `current_git_branch` | `string` | no | Current branch used to mark branch mismatch staleness |
+| `current_commit_hash` | `string` | no | Current commit used to mark commit mismatch staleness |
+| `stale_after_days` | `integer` | no | Age threshold for stale warnings Default: `7`. |
+
+### `context_build_bundle`
+
+Build a compact agent-ready Operational Context bundle for resuming work. Includes relevant failures, inferred unresolved blockers, recent decisions, commands already run, inspected/touched files, staleness warnings, and optional artifact pointers with provenance for every item. Does not include raw artifact content.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | no | Optional query describing the work to resume |
+| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope |
+| `workspace` | `string` | no | Alias for workspace_path_hash when clients only have a workspace scope value |
+| `session_id` | `string` | no | Session scope filter |
+| `task_id` | `string` | no | Task scope filter |
+| `max_results` | `integer` | no | Maximum operational context rows to inspect Default: `80`. Minimum: `1`. Maximum: `200`. |
+| `section_limit` | `integer` | no | Maximum entries per bundle section Default: `12`. Minimum: `1`. Maximum: `50`. |
+| `include_artifact_pointers` | `boolean` | no | Include artifact IDs/pointers only; raw artifact content is never returned Default: `false`. |
+| `current_git_branch` | `string` | no | Current branch used to mark branch mismatch staleness |
+| `current_commit_hash` | `string` | no | Current commit used to mark commit mismatch staleness |
+| `stale_after_days` | `integer` | no | Age threshold for stale warnings Default: `7`. |
 
 ### `recent_activity`
 
