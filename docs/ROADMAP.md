@@ -1,5 +1,7 @@
 # Engram Roadmap
 
+Roadmap de evolução do Engram como memória persistente para agentes e times que precisam organizar contexto proprietário, reduzir assimetria de informação e consultar a mesma base factual via MCP, CLI e APIs.
+
 ## Phase Overview
 
 | Phase | Name | Status | Version | Description |
@@ -101,7 +103,7 @@ Offload search to Meilisearch for larger deployments.
 - Full `StorageBackend` implementation (1,285 lines, 33 tests)
 - `MeilisearchIndexer`: background sync from SQLite (full + incremental)
 - 4 MCP tools: `meilisearch_search`, `meilisearch_reindex`, `meilisearch_status`, `meilisearch_config`
-- SQLite remains source of truth; Meilisearch is a read-optimized mirror
+- SQLite remains the operational source of truth; Meilisearch is a read-optimized mirror for search scale-out
 - Feature-gated behind `--features meilisearch`
 
 ### Phase 8: Salience Scoring (v0.4.0)

@@ -119,6 +119,7 @@ echo
 echo "--- Read next (in order) ---"
 echo "  docs/harness/SPEC.md                 (active sprint scope)"
 echo "  docs/harness/INVARIANTS.md           (hard process rules; canonical)"
+echo "  docs/harness/WHAT_WE_DONT_DO.md      (negative scope; no hidden expansion)"
 echo "  docs/harness/GATES.md                (sensors + review criteria + fake-success)"
 echo "  docs/harness/CODE_REVIEW_POLICY.md   (local policy for external reviewer)"
 echo "  docs/harness/README.md               (workflow + harness loop)"

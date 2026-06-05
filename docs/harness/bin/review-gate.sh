@@ -15,7 +15,7 @@
 #   REVIEWER_CLI=claude|grok|codex|ollama|manual   (affects prompt tone; default "manual")
 #   REVIEWER_TIMEOUT_SECS=...                        (future non-interactive exec)
 #
-# The script builds a rich prompt including SPEC, INVARIANTS, GATES, CODE_REVIEW_POLICY,
+# The script builds a rich prompt including SPEC, INVARIANTS, WHAT_WE_DONT_DO, GATES, CODE_REVIEW_POLICY,
 # fake-success patterns, and the relevant diff (with harness artifacts excluded).
 # It writes artifacts to docs/harness/reviews/ with iteration versioning.
 # Verdict is parsed from an explicit marker line:
@@ -60,6 +60,21 @@ if [ "$MODE" != "pre" ] && [ "$MODE" != "post" ]; then
 fi
 
 mkdir -p docs/harness/reviews
+
+detect_harness_script_changes() {
+  if [ -n "$RANGE" ]; then
+    git diff --name-only "$RANGE" -- docs/harness/bin 2>/dev/null || true
+  elif git diff --quiet --exit-code; then
+    git show --name-only --format='' HEAD -- docs/harness/bin 2>/dev/null || true
+  else
+    {
+      git diff --name-only -- docs/harness/bin 2>/dev/null || true
+      git diff --cached --name-only -- docs/harness/bin 2>/dev/null || true
+    } | sort -u
+  fi
+}
+
+HARNESS_SCRIPT_CHANGES="$(detect_harness_script_changes)"
 
 # Timestamp + iteration handling for artifact naming
 DATE="$(date -u +%Y-%m-%d)"
@@ -109,12 +124,23 @@ PROMPT_FILE="/tmp/engram-review-${TASK_ID}-$$.md"
   echo
   echo "- docs/harness/SPEC.md"
   echo "- docs/harness/INVARIANTS.md (process invariants — canonical)"
+  echo "- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)"
   echo "- docs/harness/GATES.md (especially the fake-success patterns section)"
   echo "- docs/harness/CODE_REVIEW_POLICY.md (this policy)"
   echo "- docs/harness/README.md (workflow)"
   echo "- Root INVARIANTS.md (data layer invariants for the memory system)"
   echo
   echo "Then review the diff below."
+  echo
+  echo "Additional harness-specific requirements:"
+  echo "- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work."
+  echo "- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table."
+  echo "- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate."
+  if [ -n "$HARNESS_SCRIPT_CHANGES" ]; then
+    echo
+    echo "Harness script changes detected:"
+    printf '%s\n' "$HARNESS_SCRIPT_CHANGES" | sed 's/^/- /'
+  fi
   echo
   echo "## Key Fake-Success Patterns (hunt these actively)"
   echo
@@ -230,6 +256,15 @@ if [ -n "$REVIEW_FILE" ] && [ -f "$REVIEW_FILE" ]; then
 fi
 
 if [ ! -f "$ARTIFACT_PATH" ]; then
+  if [ -n "$HARNESS_SCRIPT_CHANGES" ]; then
+    echo "Harness script changes were detected under docs/harness/bin/*:"
+    printf '%s\n' "$HARNESS_SCRIPT_CHANGES" | sed 's/^/- /'
+    echo
+    echo "These changes require independent post-review evidence."
+    echo "Generated prompt: $RAW_PATH"
+    echo "Save the external/human reviewer response with REVIEW_VERDICT: PASS|FAIL and re-run with --review-file."
+    exit 1
+  fi
   echo "No review file present at $ARTIFACT_PATH (or --review-file)."
   echo "This is expected on first post-gate run in the dual-CLI flow."
   echo "After you obtain the review from the other CLI, re-invoke with --review-file pointing at it."

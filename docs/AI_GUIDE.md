@@ -2,7 +2,11 @@
 
 > **Version:** 0.20.0 | **Protocol:** MCP 2025-11-25 | **Tools:** [generated reference](docs/MCP_TOOLS.md) | **Schema:** v34
 
-This guide teaches AI agents how to use every Engram capability — from basic CRUD to cloud sync, multimodal memory, knowledge packaging, and multi-agent coordination.
+This guide shows agents how to turn scattered meetings, docs, transcripts, and project decisions into a shared source of truth that can be queried through MCP.
+
+Use Engram when the problem is not model access, but organizing proprietary context so every agent can reach the same facts without reconstructing the same mental model.
+
+The emphasis here is operational: ingest the material, structure it, search it, and expose it back to agents in a way that stays actionable.
 
 ---
 
@@ -39,6 +43,15 @@ This guide teaches AI agents how to use every Engram capability — from basic C
 ---
 
 ## 1. Connecting to Engram
+
+### What this guide is for
+
+Engram is a memory layer for teams that need to reduce information asymmetry. It is useful when:
+
+- interviews, meetings, and docs accumulate faster than humans can index them manually
+- not everyone on the team attends every conversation or research session
+- decisions need to move quickly, but the relevant context is buried across many artifacts
+- agents should be able to query the source of truth directly instead of relying on recollection
 
 ### Via MCP (stdio — default)
 

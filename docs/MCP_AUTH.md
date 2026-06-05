@@ -47,8 +47,25 @@ curl -X POST http://localhost:3000/mcp \
 ```
 
 If a configured token is missing or wrong, `POST /mcp` and `POST /v1/mcp`
-return `401 Unauthorized` with a JSON-RPC error response. `GET /v1/events`
-returns `401 Unauthorized`.
+return `401 Unauthorized` with a JSON-RPC error response (`code=-32001`) and
+message `Unauthorized`. `GET /v1/events` returns `401 Unauthorized`.
+
+## Rate limiting (HTTP MCP)
+
+Engram can enforce a token-bucket rate limit for MCP HTTP requests:
+
+- `--http-rate-limit-rps` / `ENGRAM_HTTP_RATE_LIMIT_RPS` (default: `120`)
+- `--http-rate-limit-burst` / `ENGRAM_HTTP_RATE_LIMIT_BURST` (default: `240`)
+- `--http-rate-limit-key` / `ENGRAM_HTTP_RATE_LIMIT_KEY` (optional identity header)
+
+When the key is unset, bucket keys are derived from `x-forwarded-for`,
+then `x-real-ip`, then `ip:unknown`.
+
+When a key header is set, its value is used as the bucket identity key.
+
+If the limit is exceeded, the server returns `429 Too Many Requests` with
+`Retry-After: 1` and a JSON-RPC error response (`code=-32005`) and message
+`Too Many Requests`.
 
 ## Browser Clients
 
@@ -60,3 +77,80 @@ ENGRAM_CORS_ORIGINS="https://app.example.com,https://admin.example.com"
 ```
 
 Use `ENGRAM_CORS_ORIGINS="*"` only for explicitly open deployments.
+
+## Fly.io deployment validation (auth + rate limit)
+
+For each new Fly.io deployment of `engram-server` with HTTP transport enabled,
+run this validation sequence before routing production traffic:
+
+1. **Health and protection state**
+
+```bash
+curl -sS https://your-engram-api.fly.dev/health | jq '.protection, .transport.http.mcp_requests_total'
+```
+
+2. **Unauthorized access must fail**
+
+```bash
+curl -sS -o /tmp/mcp-no-auth.json -w "%{http_code}\n" \
+  https://your-engram-api.fly.dev/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+Expect:
+
+- HTTP `401`
+- `error.code` is `-32001`
+
+3. **Authorized request succeeds**
+
+```bash
+curl -sS -o /tmp/mcp-with-auth.json -w "%{http_code}\n" \
+  https://your-engram-api.fly.dev/mcp \
+  -H "Authorization: Bearer $ENGRAM_HTTP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+Expect HTTP `200`.
+
+4. **Rate limit is enforced**
+
+Set `ENGRAM_HTTP_RATE_LIMIT_RPS=1` and `ENGRAM_HTTP_RATE_LIMIT_BURST=1` in the
+deployment for this check. Then run three quick requests with the same bearer:
+
+```bash
+for i in 1 2 3; do
+  curl -sS -o /tmp/mcp-rl-$i.json -w "%{http_code} %{time_total}\\n" \
+    -H "Authorization: Bearer $ENGRAM_HTTP_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+    https://your-engram-api.fly.dev/mcp
+done
+```
+
+Expect the third request to return:
+
+- HTTP `429`
+- `error.code` is `-32005`
+- `Retry-After: 1`
+
+5. **SSE guardrail still protected**
+
+```bash
+curl -sS -o /tmp/events-unauth.json -w "%{http_code}\n" \
+  "https://your-engram-api.fly.dev/v1/events?workspace=default" \
+  -H "Accept: text/event-stream"
+```
+
+Expect HTTP `401`.
+
+6. **Confirm metrics are exposed**
+
+```bash
+curl -sS https://your-engram-api.fly.dev/health | jq '.transport.http'
+```
+
+Check that `mcp_requests_total`, `mcp_rate_limited_total`, and
+`events_requests_total` advance during the validation run.

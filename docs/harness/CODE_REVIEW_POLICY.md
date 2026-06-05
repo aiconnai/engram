@@ -8,6 +8,8 @@
 
 O review gate existe para capturar **fake successes** e contract drift que sensores locais determinísticos não detectam de forma confiável (especialmente em cenários de dual-CLI onde o implementador e o reviewer são diferentes personas/modelos).
 
+No Engram, isso protege a qualidade da memória operacional e da superfície MCP que o time usa como fonte de verdade compartilhada.
+
 O reviewer deve julgar o diff **como um engenheiro sênior externo**, não como o implementador re-reasoning sobre seu próprio trabalho.
 
 Priorize: corretude, regressões, segurança, perda de dados, builds quebrados, quebras de compatibilidade (especialmente MCP protocol e SDK contracts), coverage de comportamentos alterados pelo diff, e violação de invariants.
@@ -29,7 +31,7 @@ Antes de julgar, leia (o prompt do review-gate injeta ou referencia):
 
 ## Workflow de Review
 
-1. Entenda a intenção do autor a partir do task-id, sprint docs, commit message, PR description, issue, ou docs ao redor.
+1. Entenda a intenção do autor a partir do task-id, sprint docs, commit message, PR description, issue, ou docs ao redor. Em Engram, a intenção normalmente envolve preservar ou melhorar a confiabilidade do contexto proprietário que agentes e humanos consultam.
 2. Extraia requisitos concretos de tickets, specs, plans ou acceptance criteria.
 3. Identifique arquivos alterados e quaisquer project instructions com escopo relevante (AGENTS.md, Claude.md, docs/ por área).
 4. Mapeie linhas alteradas para a menor unidade significativa: função, módulo MCP handler, migration, tool definition, hook, embedding provider, test, doc de contrato.
@@ -133,3 +135,22 @@ Ver `GATES.md` para a lista completa. O reviewer deve ativamente procurar por:
 ---
 
 **Lembrete**: O objetivo não é perfeição. É **evidência suficiente** para que um agente futuro (ou o outro CLI) possa retomar o trabalho com confiança de que o que foi entregue é sólido dentro do escopo declarado.
+## Additional Harness Policy Checks
+
+Reviewers must apply these checks in addition to the normal finding format and output contract.
+
+### Negative Scope
+
+Read `docs/harness/WHAT_WE_DONT_DO.md`.
+
+Flag hidden scope creep as `[HIGH]` or `[BLOCKER]` when a harness task changes product behavior, weakens gates, removes live code based only on static evidence, or uses sensor exclusions to make production code look green.
+
+### Review Canvas
+
+For complex diffs, verify that a matching Review Canvas exists under `docs/harness/canvas/YYYY-MM-DD-<task-id>.md`.
+
+The canvas should include approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table. Missing canvas evidence is `[HIGH]` by default and `[BLOCKER]` when the change touches storage, MCP surface, harness gates, or process-critical scripts.
+
+### Harness script changes
+
+Harness script changes are process-critical. Reviewers must inspect `docs/harness/bin/*` changes directly for shell safety, path handling, parseability, read-only guarantees, and gate weakening.

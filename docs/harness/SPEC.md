@@ -35,6 +35,9 @@
 - Implementar `check-commit-msg.sh` — validador de Conventional Commits com scopes engram/harness.
 - Criar `CODE_REVIEW_POLICY.md` adaptada para Rust, engram (MCP tools, hooks, embeddings, storage invariants, cross-SDK), e o cenário dual-CLI atual.
 - Criar `GATES.md` com thresholds, fake-success patterns específicos (ex.: tests passando só com features locais mas falhando em CI Linux, schema version drift, MCP protocol breakage, embedding cache bounds violados, etc.).
+- Criar `WHAT_WE_DONT_DO.md` como política explícita de escopo negativo para evitar expansão silenciosa de mudanças de harness.
+- Criar `docs/harness/canvas/` com template de Review Canvas para mudanças complexas.
+- Adicionar `baseline.sh`, `quarterly-audit.sh`, lanes opcionais em `sensors.sh` e guard de review para `docs/harness/bin/*`.
 - Atualizar `AGENTS.md` e `Claude.md` para exigir `bootstrap.sh` no início de toda sessão.
 - Atualizar pre-commit hook e/ou justfile para reforçar (sem quebrar fluxo atual).
 - Seed de progresso para esta sprint + registro de decisões.
@@ -66,6 +69,17 @@
 - Agentes especializados em harness (planner, verifier, context-engine) como MCP tools ou personas em `docs/harness/agents/`.
 - Integração mais profunda com Grok Build TUI (se expuser APIs/exec modes).
 - Suporte a Linear/GitHub sync de tasks no harness (se aplicável ao fluxo de engram).
+
+## Emenda 2026-06-05 — cross-harness improvements
+
+O plano `docs/harness/plans/2026-06-05-engram-harness-improvement-execution-plan.md` adiciona melhorias inspiradas no harness mbras sem importar comportamento de domínio externo:
+
+- Escopo negativo explícito em `WHAT_WE_DONT_DO.md`.
+- Review Canvas para evidência em mudanças complexas.
+- Guard para mudanças em `docs/harness/bin/*`.
+- Baseline snapshot barato.
+- Lanes opcionais em `sensors.sh` que não substituem o gate completo.
+- Auditoria periódica evidence-only.
 
 ## Critérios de Saída da Sprint v0
 

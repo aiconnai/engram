@@ -1,0 +1,11 @@
+timestamp=2026-06-05T15:59:26Z
+branch=main
+commit=ce658775306d340903e5df61b736fa9923005fa8
+dirty=yes
+cargo=cargo 1.96.0 (30a34c682 2026-05-25)
+rustc=rustc 1.96.0 (ac68faa20 2026-05-25)
+ci_runner=make
+schema_version=src/storage/migrations.rs:8:pub const SCHEMA_VERSION: i32 = 40;
+mcp_reference_sections=257
+harness_scripts=8
+review_artifacts=12

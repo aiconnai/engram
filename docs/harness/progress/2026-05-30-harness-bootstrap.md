@@ -632,3 +632,41 @@ Engram.
 - Não executadas nesta iteração por solicitação implícita de implementação
   documental e worktree amplo já dirty. Próximo passo natural: `bash
   docs/harness/bin/doctor.sh`.
+
+## 2026-06-05 — Cross-harness improvement execution
+
+### Contexto
+
+Comparação com o harness mbras identificou melhorias úteis para Engram sem importar lógica de domínio externa. A execução seguiu o plano `docs/harness/plans/2026-06-05-engram-harness-improvement-execution-plan.md`.
+
+### Ações realizadas
+
+- Adicionado `docs/harness/WHAT_WE_DONT_DO.md` como escopo negativo explícito.
+- Adicionado `docs/harness/canvas/README.md` e `docs/harness/canvas/TEMPLATE.md` para Review Canvas de mudanças complexas.
+- Adicionado `docs/harness/bin/baseline.sh` para snapshot estático barato em `.baseline-last`.
+- Adicionado `docs/harness/bin/quarterly-audit.sh` e `docs/harness/audits/.gitkeep` para auditoria evidence-only.
+- Atualizado `bootstrap.sh` para incluir `WHAT_WE_DONT_DO.md` na ordem obrigatória de leitura.
+- Atualizado `doctor.sh` para validar nova política, canvas, baseline, audit, sensor lanes e referências cruzadas.
+- Atualizado `sensors.sh` com modos opcionais `full`, `quick`, `docs`, `mcp` e `baseline`, preservando o gate completo sem argumentos.
+- Atualizado `review-gate.sh` com instruções de escopo negativo, Review Canvas e guard para mudanças em `docs/harness/bin/*`.
+- Atualizados README, SPEC, INVARIANTS, GATES e CODE_REVIEW_POLICY para refletir o novo fluxo.
+
+### Rastreamento externo
+
+- Huly issues criados: ENGRA-78, ENGRA-79, ENGRA-80, ENGRA-81, ENGRA-82 e ENGRA-83.
+
+### Verificações planejadas nesta execução
+
+- `bash docs/harness/bin/doctor.sh`.
+- `bash docs/harness/bin/sensors.sh baseline`.
+- `bash -n docs/harness/bin/bootstrap.sh docs/harness/bin/doctor.sh docs/harness/bin/sensors.sh docs/harness/bin/review-gate.sh docs/harness/bin/baseline.sh docs/harness/bin/quarterly-audit.sh`.
+
+### Verificações executadas — 2026-06-05
+
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh baseline` — PASS; gravou `docs/harness/.baseline-last`.
+- `bash -n docs/harness/bin/bootstrap.sh docs/harness/bin/doctor.sh docs/harness/bin/sensors.sh docs/harness/bin/review-gate.sh docs/harness/bin/baseline.sh docs/harness/bin/quarterly-audit.sh` — PASS.
+- `bash docs/harness/bin/quarterly-audit.sh` — PASS; gravou `docs/harness/audits/2026-06-05T155933Z-quarterly-audit.md` e `docs/harness/.quarterly-audit-last`.
+- `bash docs/harness/bin/doctor.sh` final — PASS.
+
+Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado nesta iteracao; a validacao executada foi a lane `baseline` especifica do plano de melhoria do harness.
