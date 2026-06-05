@@ -47,8 +47,25 @@ curl -X POST http://localhost:3000/mcp \
 ```
 
 If a configured token is missing or wrong, `POST /mcp` and `POST /v1/mcp`
-return `401 Unauthorized` with a JSON-RPC error response. `GET /v1/events`
-returns `401 Unauthorized`.
+return `401 Unauthorized` with a JSON-RPC error response (`code=-32001`) and
+message `Unauthorized`. `GET /v1/events` returns `401 Unauthorized`.
+
+## Rate limiting (HTTP MCP)
+
+Engram can enforce a token-bucket rate limit for MCP HTTP requests:
+
+- `--http-rate-limit-rps` / `ENGRAM_HTTP_RATE_LIMIT_RPS` (default: `120`)
+- `--http-rate-limit-burst` / `ENGRAM_HTTP_RATE_LIMIT_BURST` (default: `240`)
+- `--http-rate-limit-key` / `ENGRAM_HTTP_RATE_LIMIT_KEY` (optional identity header)
+
+When the key is unset, bucket keys are derived from `x-forwarded-for`,
+then `x-real-ip`, then `ip:unknown`.
+
+When a key header is set, its value is used as the bucket identity key.
+
+If the limit is exceeded, the server returns `429 Too Many Requests` with
+`Retry-After: 1` and a JSON-RPC error response (`code=-32005`) and message
+`Too Many Requests`.
 
 ## Browser Clients
 

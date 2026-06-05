@@ -37,18 +37,54 @@ trap on_exit EXIT
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: docs/harness/bin/sensors.sh [--exclude-sensor <name> --known-issue docs/harness/known-issues/YYYY-MM-DD-slug.md --reason "short reason"]
+Usage:
+  docs/harness/bin/sensors.sh [full]
+  docs/harness/bin/sensors.sh quick
+  docs/harness/bin/sensors.sh docs
+  docs/harness/bin/sensors.sh mcp
+  docs/harness/bin/sensors.sh baseline
+  docs/harness/bin/sensors.sh [--exclude-sensor <name> --known-issue docs/harness/known-issues/YYYY-MM-DD-slug.md --reason "short reason"]
 
-Default: clean run of `just ci` (or `make ci` fallback) + harness doctor.
+Default/full: clean run of `just ci` (or `make ci` fallback) + harness doctor.
+Optional lanes are developer aids and do not replace the full gate.
 Exclusion mode is reserved for documented external-dependency outages (ex.: API embedding, watcher GUI, socket/grpc transport)
 and must be pre-registered in progress.md + known-issue file.
 USAGE
 }
 
+MODE="full"
 EXCLUDE_SENSOR=""
 KNOWN_ISSUE=""
 EXCLUSION_REASON=""
 CI_OUTPUT=""
+
+write_sensors_last() {
+  local status="$1"
+  local ci_status="$2"
+  local doctor_status="$3"
+  local mode="$4"
+  local ci_label="$5"
+
+  {
+    echo "status=$status"
+    echo "ci_status=$ci_status"
+    echo "doctor_status=$doctor_status"
+    echo "mode=$mode"
+    echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    [ -n "${EXCLUSION_NOTE:-}" ] && echo "$EXCLUSION_NOTE"
+    [ -n "$EXCLUDE_SENSOR" ] && echo "excluded_sensor=$EXCLUDE_SENSOR"
+    [ -n "$KNOWN_ISSUE" ] && echo "excluded_known_issue=$KNOWN_ISSUE"
+    [ -n "$EXCLUSION_REASON" ] && echo "excluded_reason=$EXCLUSION_REASON"
+    echo "ci=$ci_label + harness doctor"
+  } > docs/harness/.sensors-last
+}
+
+run_step() {
+  local label="$1"
+  shift
+  echo "==> [harness] $label"
+  "$@"
+}
 
 normalize_plan_path() {
   local path="$1"
@@ -140,6 +176,10 @@ while [ "$#" -gt 0 ]; do
       EXCLUSION_REASON="${2:-}"
       shift 2
       ;;
+    full|quick|docs|mcp|baseline)
+      MODE="$1"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -151,6 +191,11 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+if [ "$MODE" != "full" ] && { [ -n "$EXCLUDE_SENSOR" ] || [ -n "$KNOWN_ISSUE" ] || [ -n "$EXCLUSION_REASON" ]; }; then
+  echo "ERROR: documented exclusions are supported only by the full canonical gate" >&2
+  exit 2
+fi
 
 # Validate exclusion contract (very restrictive for v0)
 if [ -n "$EXCLUDE_SENSOR" ] || [ -n "$KNOWN_ISSUE" ] || [ -n "$EXCLUSION_REASON" ]; then
@@ -203,7 +248,7 @@ if [ -n "$EXCLUDE_SENSOR" ] || [ -n "$KNOWN_ISSUE" ] || [ -n "$EXCLUSION_REASON"
   fi
 fi
 
-echo "==> [harness] sensors.sh starting at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "==> [harness] sensors.sh starting at $(date -u +%Y-%m-%dT%H:%M:%SZ) (mode=$MODE)"
 
 CI_STATUS="pass"
 DOCTOR_STATUS="pass"
@@ -213,6 +258,56 @@ if [ -n "$EXCLUDE_SENSOR" ]; then
   echo "==> [harness] running with exclusion: $EXCLUDE_SENSOR (reason: $EXCLUSION_REASON)"
   EXCLUSION_NOTE="excluded=$EXCLUDE_SENSOR known_issue=$KNOWN_ISSUE reason=\"$EXCLUSION_REASON\""
 fi
+
+case "$MODE" in
+  baseline)
+    if run_step "baseline snapshot" bash docs/harness/bin/baseline.sh && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+      write_sensors_last "pass" "pass" "pass" "$MODE" "baseline"
+      echo "PASS (baseline lane green)"
+      exit 0
+    fi
+    write_sensors_last "fail" "fail" "fail" "$MODE" "baseline"
+    echo "FAIL"
+    exit 1
+    ;;
+  quick)
+    if run_step "fmt" cargo fmt --all -- --check && run_step "cargo check" cargo check && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+      write_sensors_last "pass" "pass" "pass" "$MODE" "cargo fmt + cargo check"
+      echo "PASS (quick lane green)"
+      exit 0
+    fi
+    write_sensors_last "fail" "fail" "fail" "$MODE" "cargo fmt + cargo check"
+    echo "FAIL"
+    exit 1
+    ;;
+  docs)
+    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "rustdoc" env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + rustdoc"
+      echo "PASS (docs lane green)"
+      exit 0
+    fi
+    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + rustdoc"
+    echo "FAIL"
+    exit 1
+    ;;
+  mcp)
+    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "MCP protocol tests" cargo test --test mcp_protocol_tests && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + protocol tests"
+      echo "PASS (mcp lane green)"
+      exit 0
+    fi
+    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + protocol tests"
+    echo "FAIL"
+    exit 1
+    ;;
+  full)
+    ;;
+  *)
+    echo "ERROR: unknown sensor mode '$MODE'" >&2
+    usage
+    exit 2
+    ;;
+esac
 
 # Core delegation: the existing just ci contract (fmt + clippy -D + test parity + docs + MCP ref)
 CI_COMMAND=()
@@ -263,17 +358,7 @@ elif [ "$CI_STATUS" != "pass" ] || [ "$DOCTOR_STATUS" != "pass" ]; then
 fi
 
 # Record result (machine parseable for bootstrap / doctor)
-{
-  echo "status=$STATUS"
-  echo "ci_status=$CI_STATUS"
-  echo "doctor_status=$DOCTOR_STATUS"
-  echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  [ -n "$EXCLUSION_NOTE" ] && echo "$EXCLUSION_NOTE"
-  [ -n "$EXCLUDE_SENSOR" ] && echo "excluded_sensor=$EXCLUDE_SENSOR"
-  [ -n "$KNOWN_ISSUE" ] && echo "excluded_known_issue=$KNOWN_ISSUE"
-  [ -n "$EXCLUSION_REASON" ] && echo "excluded_reason=$EXCLUSION_REASON"
-  echo "ci=${CI_COMMAND[*]-missing} + harness doctor"
-} > docs/harness/.sensors-last
+write_sensors_last "$STATUS" "$CI_STATUS" "$DOCTOR_STATUS" "$MODE" "${CI_COMMAND[*]-missing}"
 
 echo
 if [ "$STATUS" = "pass" ]; then

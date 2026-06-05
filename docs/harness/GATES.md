@@ -1,5 +1,7 @@
 # Gates — Sensores, Thresholds e Critérios (Engram)
 
+Estes gates existem para manter a memória operacional do Engram confiável: o time precisa confiar que sensores, review e artefatos refletem o estado real da base de conhecimento e da superfície MCP.
+
 Três camadas de verificação:
 
 1. **Sensores determinísticos** (`sensors.sh`) — locais, rápidos, reproduzíveis.
@@ -65,6 +67,65 @@ O review-gate é prompted explicitamente para caçar estes (sensores verdes mas 
 10. **Identity alias normalization ou scope grants mudam sem atualização de testes de propriedade** — property tests ou `tests/` não cobrem o novo comportamento.
 
 O prompt do review-gate inclui esta lista + instrução para buscar evidência concreta no diff.
+
+### Negative Scope Gate
+
+`docs/harness/WHAT_WE_DONT_DO.md` define escopo negativo para mudanças de harness.
+
+O review-gate deve marcar como `[HIGH]` ou `[BLOCKER]` qualquer mudança que:
+
+- Faça product work dentro de uma task de harness.
+- Enfraqueça o gate completo sem registrar decisão explícita.
+- Remova código, dependências, docs ou scripts baseado só em evidência estática.
+- Use exclusões de sensor para mascarar falha de produção.
+
+### Review Canvas Requirement
+
+Mudanças complexas exigem Review Canvas em `docs/harness/canvas/YYYY-MM-DD-<task-id>.md` antes de post-review.
+
+Triggers:
+
+- Mais de 200 linhas não geradas.
+- Storage schema, migrations ou invariants de dados.
+- Mudança na superfície MCP.
+- Hooks, intelligence, consolidation, embeddings, sync ou attestation.
+- Contratos públicos dos SDKs.
+- Nova dependência externa, backend, transport, cache, fila ou serviço de rede.
+- Mudança em harness gates, invariants, bootstrap, sensores ou policy.
+
+O canvas deve conter abordagens consideradas, hot-path complexity, ao menos dois edge cases e tabela de breakage risk. Canvas é evidência, não aprovação.
+
+### Sensor Modes
+
+`bash docs/harness/bin/sensors.sh` sem argumentos continua sendo o full canonical gate.
+
+Modos opcionais:
+
+- `full` — gate completo canônico.
+- `quick` — fmt, check e doctor.
+- `docs` — referência MCP e rustdoc.
+- `mcp` — referência MCP e testes de protocolo MCP.
+- `baseline` — `baseline.sh` e doctor.
+
+Essas lanes opcionais não substituem o gate completo para merge, handoff ou completion claims.
+
+### Baseline Snapshot
+
+`baseline.sh` grava fatos estáticos baratos em `docs/harness/.baseline-last`.
+
+Ele é evidência para drift review, não substitui `sensors.sh`, `make ci`, `just ci` ou review independente.
+
+### Evidence-Only Audit
+
+`quarterly-audit.sh` grava relatórios em `docs/harness/audits/` e atualiza `docs/harness/.quarterly-audit-last`.
+
+Ele é evidence-only: não é pass/fail gate e não pode deletar, arquivar ou reescrever arquivos.
+
+### Harness Script Guard
+
+Mudanças em `docs/harness/bin/*` são process-critical.
+
+O post-gate deve exigir evidência independente explícita para alterações nesses scripts. Prompt gerado, review advisory ou artefato sem `REVIEW_VERDICT` não é suficiente.
 
 ### Security Reference Harness Gate
 

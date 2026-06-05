@@ -1,5 +1,7 @@
 # Engram Database Schema
 
+This schema backs the persistent memory layer that stores team context, retrieval indexes, provenance, and coordination data for agents and humans working against the same source of truth.
+
 **Date:** March 9, 2026
 **Current Version:** v31
 **Engine:** SQLite with WAL mode

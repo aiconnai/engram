@@ -22,11 +22,11 @@
 
 O usuário está usando Claude Code CLI e Grok Build TUI side-by-side para comparar workflows agentic em terminal. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI.
 
-Engram é posicionado de forma única porque ele *é* o Memory Manager para agentes. O harness de desenvolvimento do próprio engram pode dogfood o produto (futuro).
+Engram é posicionado de forma única porque ele *é* o Memory Manager para agentes e para times que acumulam contexto proprietário mais rápido do que conseguem organizá-lo manualmente. O harness de desenvolvimento do próprio engram pode dogfood o produto (futuro).
 
 RFC 0001 (`docs/rfcs/0001-harness-memory-product-boundary.md`) já define o product boundary para Harness Memory.
 
-Esta sprint implementa a **camada operacional** (o "harness engineering" process) que permite que agentes (e humanos) trabalhem de forma resumível, auditável e confiável.
+Esta sprint implementa a **camada operacional** (o "harness engineering" process) que permite que agentes (e humanos) trabalhem de forma resumível, auditável e confiável sobre a mesma memória canônica.
 
 ## Trabalho em andamento (v0)
 
@@ -297,6 +297,12 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - Escopo deliberadamente fora desta iteracao: rate-limit MCP, metricas/tracing
     especificas de transport, e execucao/verificacao de deploy Fly.io.
 
+## ENG-1241 follow-ups — MCP HTTP follow-through
+
+- **ENGRA-58 (implementado):** Rate limit para MCP HTTP (`/mcp` e `/v1/mcp`) via token-bucket, com chaves por IP/header, teto de buckets e stale cleanup.
+- **ENGRA-59 (implementado):** observabilidade do transporte (métricas, tracing e `GET /health` com estado de proteção).
+- **ENGRA-60 (pendente):** rollout/documentação de validação de deploy (Fly.io) para auth + rate limit.
+
 ## Security fixes — 2026-06-04
 
 - **Merkle `hash_pair` length-separation** (OBS. 9133):
@@ -327,3 +333,39 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 ---
 
 **Nota**: Este arquivo e atualizado manualmente ao final de cada iteracao significativa ou ao final de sessoes. O log detalhado fica no arquivo apontado por `Active plan`.
+
+## Harness cross-improvements — 2026-06-05
+
+- Plano Engram-only executado a partir de `docs/harness/plans/2026-06-05-engram-harness-improvement-execution-plan.md`.
+- Criado `docs/harness/WHAT_WE_DONT_DO.md` para escopo negativo do harness.
+- Criado `docs/harness/canvas/` com README e template de Review Canvas para mudanças complexas.
+- Criados `docs/harness/bin/baseline.sh` e `docs/harness/bin/quarterly-audit.sh` como evidência de drift/auditoria, sem substituir sensores ou CI.
+- `sensors.sh` ganhou modos opcionais `full`, `quick`, `docs`, `mcp` e `baseline`; o modo sem argumentos permanece o gate completo canônico.
+- `review-gate.sh` passou a incluir `WHAT_WE_DONT_DO.md`, Review Canvas e guard para mudanças em `docs/harness/bin/*`.
+- `doctor.sh` agora valida a nova política, canvas, baseline, audit, sensor lanes e referências cruzadas.
+
+### Verificações planejadas nesta execução
+
+- `bash docs/harness/bin/doctor.sh`.
+- `bash docs/harness/bin/sensors.sh baseline`.
+- `bash -n docs/harness/bin/bootstrap.sh docs/harness/bin/doctor.sh docs/harness/bin/sensors.sh docs/harness/bin/review-gate.sh docs/harness/bin/baseline.sh docs/harness/bin/quarterly-audit.sh`.
+
+## Huly tracking — 2026-06-05
+
+- Issues criados no Huly para execução do plano:
+  - ENGRA-78 — negative-scope policy.
+  - ENGRA-79 — Review Canvas.
+  - ENGRA-80 — harness script review guard.
+  - ENGRA-81 — baseline snapshot.
+  - ENGRA-82 — optional sensor lanes.
+  - ENGRA-83 — evidence-only quarterly audit.
+
+### Verificações executadas — 2026-06-05 harness cross-improvements
+
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh baseline` — PASS; gravou `docs/harness/.baseline-last`.
+- `bash -n docs/harness/bin/bootstrap.sh docs/harness/bin/doctor.sh docs/harness/bin/sensors.sh docs/harness/bin/review-gate.sh docs/harness/bin/baseline.sh docs/harness/bin/quarterly-audit.sh` — PASS.
+- `bash docs/harness/bin/quarterly-audit.sh` — PASS; gravou `docs/harness/audits/2026-06-05T155933Z-quarterly-audit.md` e `docs/harness/.quarterly-audit-last`.
+- `bash docs/harness/bin/doctor.sh` final — PASS.
+
+Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado nesta iteracao; a validacao executada foi a lane `baseline` especifica do plano de melhoria do harness.

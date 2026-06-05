@@ -30,7 +30,7 @@ If the task is inside a subdirectory that has its own CLAUDE.md:
 
 ## Repository Overview
 
-Hybrid search, knowledge graphs, and optional cloud sync — shipped as a single Rust binary.
+Persistent memory for AI agents and teams working on proprietary context. Engram ingests interviews, meetings, docs, transcripts, and decisions, then exposes them through hybrid search, knowledge graphs, and MCP so agents can query the source of truth directly.
 
 **Tech stack:** python, node, rust
 **Frameworks:** axum
@@ -77,7 +77,7 @@ Then read in order: `docs/harness/SPEC.md`, `docs/harness/INVARIANTS.md`,
 `docs/harness/GATES.md`, `docs/harness/CODE_REVIEW_POLICY.md`,
 `docs/harness/progress.md`.
 
-This operational harness (inspired by proven backend patterns) ensures resumable, auditable, high-signal work across Claude Code CLI and Grok Build TUI.
+This operational harness (inspired by proven backend patterns) ensures resumable, auditable, high-signal work across Claude Code CLI and Grok Build TUI while keeping the same operational truth available to the team and its agents.
 
 ## Common Commands
 

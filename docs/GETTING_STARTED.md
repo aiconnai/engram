@@ -1,6 +1,8 @@
 # Getting Started with Engram
 
-A quick guide to installing Engram, connecting it to your AI tools, and storing your first memories.
+A quick guide to installing Engram, connecting it to your AI tools, and turning scattered project context into a shared source of truth.
+
+Use Engram when you need one place for meetings, decisions, transcripts, and recurring project knowledge so agents can query the same context instead of reconstructing it from chat history.
 
 ---
 
@@ -56,7 +58,7 @@ docker run -v engram-data:/data ghcr.io/aiconnai/engram-server:latest
 
 ## Configure MCP for AI Tools
 
-Engram speaks the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), so it integrates with Claude Code, Cursor, VS Code MCP clients (like Cline/Roo Code), and other MCP-compatible tools.
+Engram speaks the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), so it integrates with Claude Code, Cursor, VS Code MCP clients (like Cline/Roo Code), and other MCP-compatible tools. That matters because MCP gives agents direct access to the organized source of truth instead of forcing them to infer it from old conversations.
 
 ### Claude Code (Example)
 
@@ -100,7 +102,7 @@ Use the same `mcpServers.engram` JSON block in your client's MCP config location
 
 ### Verify Connection
 
-Once configured, your AI tool will have access to the MCP tools listed in [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Ask it to run `memory_stats` to verify the connection is working.
+Once configured, your AI tool will have access to the MCP tools listed in [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Ask it to run `memory_stats` to verify the connection is working and to confirm it can read the shared memory layer.
 
 ---
 

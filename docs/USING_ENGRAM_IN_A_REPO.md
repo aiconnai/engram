@@ -1,6 +1,6 @@
 # Using Engram From Another Repository
 
-This guide shows how to connect any project repository to Engram so coding agents and application code can store and retrieve persistent project memory.
+This guide shows how to connect any project repository to Engram so coding agents and application code can store and retrieve persistent project memory. Use it when you want one shared source of truth for decisions, conventions, and recurring project context instead of leaving that knowledge scattered across chats and meeting notes.
 
 ## Deployment Modes
 
@@ -9,7 +9,7 @@ Use one of these modes:
 - **Local mode**: each machine runs `engram-server` and stores memory in a local SQLite database.
 - **Cloud mode**: repositories and agents connect to a shared private Engram server over HTTPS.
 
-For personal or internal project memory, cloud mode is usually simpler: one persistent memory service, separated by workspaces, without running a multi-tenant SaaS gateway.
+For personal or internal project memory, cloud mode is usually simpler: one persistent memory service, separated by workspaces, without running a multi-tenant SaaS gateway. Local mode is better when the repository should own its own context store and keep the data beside the codebase.
 
 ## 1. Install Engram
 
@@ -59,7 +59,7 @@ If you use a repo-local database, add it to `.gitignore`:
 
 ## 3. Connect Coding Agents With MCP
 
-Engram works best with coding agents through MCP. Add an MCP config to the repository or to the agent's global config.
+Engram works best with coding agents through MCP because it gives the agent direct access to the source of truth instead of forcing it to reconstruct context from chat history.
 
 ### Option A: Local MCP Server
 
@@ -381,6 +381,10 @@ ENGRAM_MCP_URL=https://your-engram-mcp.fly.dev/mcp
 ENGRAM_WORKSPACE=my-org/my-repo
 # Set locally, never commit:
 # ENGRAM_HTTP_API_KEY=...
+# Optional MCP HTTP rate limiting:
+# ENGRAM_HTTP_RATE_LIMIT_RPS=120
+# ENGRAM_HTTP_RATE_LIMIT_BURST=240
+# ENGRAM_HTTP_RATE_LIMIT_KEY=x-tenant-id
 ```
 
 ## 10. Reusable Council Workflow (`engram-council` Skill)

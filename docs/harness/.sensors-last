@@ -1,5 +1,6 @@
 status=pass
 ci_status=pass
 doctor_status=pass
-timestamp=2026-06-04T04:53:42Z
+mode=full
+timestamp=2026-06-05T16:19:38Z
 ci=make ci + harness doctor

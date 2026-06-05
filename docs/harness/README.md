@@ -21,7 +21,7 @@ Este harness foi desenhado para agentes que *vivem* no terminal (Grok Build TUI,
 
 O harness não é "outra interface de chat". É o conjunto de camadas (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) que vive *dentro* do repo, onde o trabalho real acontece.
 
-Engram é especialmente adequado para isso porque ele *é* um Memory Manager para agentes. O harness de engram pode (e deve) eventualmente dogfood o próprio engram para armazenar sessões, decisões, reviews e eventos de verificação.
+Engram é especialmente adequado para isso porque ele *é* um Memory Manager para agentes e para times que acumulam contexto proprietário rápido demais para depender de memória humana ou de chat logs soltos. O harness de engram pode (e deve) eventualmente dogfood o próprio engram para armazenar sessões, decisões, reviews e eventos de verificação.
 
 ## Contrato de Bootstrap (Obrigatório)
 
@@ -62,9 +62,12 @@ bash docs/harness/bin/doctor.sh
 | `README.md`                    | Guia operacional e fluxo de trabalho |
 | `SPEC.md`                      | Escopo curto da sprint/tarefa ativa (mutável por tarefa) |
 | `INVARIANTS.md`                | Regras de processo invioláveis (canônico sobre docs divergentes) |
+| `WHAT_WE_DONT_DO.md`           | Escopo negativo e anti-patterns para evitar expansão silenciosa |
 | `GATES.md`                     | Sensores, thresholds, retry policy, exclusões documentadas, fake-success patterns |
 | `CODE_REVIEW_POLICY.md`        | Política local consumida pelo review-gate (cross-model / cross-CLI) |
 | `security/`                    | Playbooks de segurança e adaptação do defending-code reference harness |
+| `canvas/`                      | Evidência estruturada para mudanças complexas |
+| `audits/`                      | Relatórios evidence-only de auditoria periódica |
 | `progress.md`                  | Estado vivo curto: sprint, task, último review, último sensor, commit |
 | `progress/*.md`                | Logs permanentes por sprint/tarefa (detalhados) |
 | `known-issues/*.md`            | Incidentes externos que justificam exclusão auditável de sensor |
@@ -73,6 +76,8 @@ bash docs/harness/bin/doctor.sh
 | `bin/doctor.sh`                | Consistência read-only do harness |
 | `bin/sensors.sh`               | Gate determinístico principal (wrapping `just ci` ou `make ci` + harness checks) |
 | `bin/review-gate.sh`           | Gate de review cross-CLI / cross-model (generalizado) |
+| `bin/baseline.sh`              | Snapshot estático barato em `.baseline-last` para drift review |
+| `bin/quarterly-audit.sh`       | Auditoria evidence-only; nunca apaga, arquiva ou reescreve |
 | `bin/check-commit-msg.sh`      | Validador de Conventional Commit com scope |
 
 ## Leitura Obrigatória (em ordem)
@@ -81,13 +86,14 @@ Antes de editar código, docs de processo, ou planejar qualquer mudança signifi
 
 1. `docs/harness/SPEC.md` — escopo da sprint/tarefa ativa
 2. `docs/harness/INVARIANTS.md` — regras duras de processo (vence conflitos)
-3. `docs/harness/GATES.md` — critérios de sensores e review
-4. `docs/harness/CODE_REVIEW_POLICY.md` — política de julgamento para o reviewer externo
-5. `docs/harness/progress.md` — estado vivo
-6. O active plan apontado em `Active plan`
-7. `AGENTS.md` (raiz) e `Claude.md` / docs de onboarding relevantes
-8. `INVARIANTS.md` (raiz) — data invariants do sistema de memória
-9. `STANDARDS.md` + `ERRORS_AND_LESSONS.md`
+3. `docs/harness/WHAT_WE_DONT_DO.md` — escopo negativo e anti-patterns
+4. `docs/harness/GATES.md` — critérios de sensores e review
+5. `docs/harness/CODE_REVIEW_POLICY.md` — política de julgamento para o reviewer externo
+6. `docs/harness/progress.md` — estado vivo
+7. O active plan apontado em `Active plan`
+8. `AGENTS.md` (raiz) e `Claude.md` / docs de onboarding relevantes
+9. `INVARIANTS.md` (raiz) — data invariants do sistema de memória
+10. `STANDARDS.md` + `ERRORS_AND_LESSONS.md`
 
 `INVARIANTS.md` (harness) vence qualquer conflito com AGENTS.md, Claude.md, specs antigas ou memória de sessão. Mudanças reais em invariants exigem ADR em `docs/decisions/` + PR revisado sob os gates anteriores.
 
@@ -158,6 +164,24 @@ Resultado mais recente fica em `docs/harness/.sensors-last`.
 
 Exclusões documentadas (apenas para dependências externas temporárias, ex.: APIs de embedding pagos indisponíveis) seguem contrato rigoroso via `--exclude-sensor`, `--known-issue` e `--reason`, com registro prévio em progress e known-issues/.
 
+### Sensor modes
+
+`bash docs/harness/bin/sensors.sh` sem argumentos continua sendo o gate completo canônico.
+
+Modos opcionais existem apenas como atalhos de desenvolvimento:
+
+- `full` — equivalente ao default: CI local completo + `doctor.sh`.
+- `quick` — `cargo fmt --all -- --check`, `cargo check` e `doctor.sh`.
+- `docs` — referência MCP gerada, rustdoc com warnings como erro e `doctor.sh`.
+- `mcp` — referência MCP gerada, testes de protocolo MCP e `doctor.sh`.
+- `baseline` — `baseline.sh` + `doctor.sh`.
+
+Essas lanes opcionais não substituem o gate completo para merge, handoff ou claim de conclusão.
+
+`baseline.sh` grava fatos estáticos baratos em `docs/harness/.baseline-last`. Ele ajuda revisão de drift, mas não prova correção.
+
+`quarterly-audit.sh` grava relatórios evidence-only em `docs/harness/audits/` e atualiza `docs/harness/.quarterly-audit-last`. Ele nunca é um gate pass/fail e não deve apagar, arquivar ou reescrever arquivos.
+
 ## Review Gate (Camada Cross-Model / Cross-CLI)
 
 `review-gate.sh` implementa o princípio de **Single-Process Judgment**:
@@ -173,11 +197,21 @@ Modos:
 
 O script:
 
-- Monta prompt rico com: SPEC, INVARIANTS, GATES, CODE_REVIEW_POLICY, fake-success patterns específicos de Rust/engram/MCP, diff (excluindo artefatos do próprio harness para evitar loops).
+- Monta prompt rico com: SPEC, INVARIANTS, WHAT_WE_DONT_DO, GATES, CODE_REVIEW_POLICY, fake-success patterns específicos de Rust/engram/MCP, diff (excluindo artefatos do próprio harness para evitar loops).
 - Suporta múltiplos backends de reviewer via env `REVIEWER_CLI` ou flags.
 - Escreve artefatos versionados (v1-post.md, v2-post.md...) em `reviews/`.
 - Suporta continuity: em reruns de post após FAIL, injeta achados anteriores relevantes.
 - Tem modo self-test.
+
+Mudanças em `docs/harness/bin/*` são process-critical. O post-gate exige evidência independente explícita antes de aceitar alterações nesses scripts.
+
+## Review Canvas
+
+Mudanças complexas devem criar um canvas em `docs/harness/canvas/YYYY-MM-DD-<task-id>.md` antes do post-review.
+
+Use `docs/harness/canvas/TEMPLATE.md` quando a mudança envolver diffs grandes, storage/migrations, superfície MCP, hooks/intelligence/embeddings/sync/attestation, contratos SDK, dependências externas ou qualquer alteração em gates/scripts/policies do harness.
+
+O canvas é evidência de raciocínio, não aprovação. O post-review ainda pode falhar depois de um canvas completo.
 
 Política de retry: 2 FAILs consecutivos no mesmo task → escalar para humano. Não tentar 3ª iteração.
 

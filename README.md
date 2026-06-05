@@ -1,7 +1,7 @@
 # Engram
 
-**Memory for production AI agents — built for predictable latency.**  
-Hybrid search, knowledge graphs, and optional cloud sync — shipped as a single Rust binary.
+**Persistent memory for AI agents and teams working on proprietary context.**  
+Engram ingests meetings, docs, transcripts, and project decisions, structures them, indexes them with hybrid search, and exposes them through MCP so agents can query the source of truth directly.
 
 [![Crates.io](https://img.shields.io/crates/v/engram-core)](https://crates.io/crates/engram-core)
 [![docs.rs](https://img.shields.io/docsrs/engram-core)](https://docs.rs/engram-core)
@@ -16,9 +16,9 @@ Hybrid search, knowledge graphs, and optional cloud sync — shipped as a single
 <tr>
 <td width="50%" valign="top">
 
-### Production LLM Apps (Primary)
+### Internal Knowledge Server (Primary)
 
-A persistent memory layer designed for real deployments: fast, stable, and easy to ship.
+Use Engram when the hard part is not model access. The hard part is organizing your own context so the team can move fast without rebuilding the same mental model in every conversation.
 
 ```bash
 # Store a memory
@@ -33,16 +33,17 @@ curl -X POST localhost:8080/mcp \
 ```
 
 **What you get:**
+- Automatic ingestion of notes, meetings, transcripts, and project artifacts
 - Hybrid search (BM25 + vectors + fuzzy) in one call
-- MCP / REST / WebSocket / CLI
-- Predictable p95 latency (no runtime, no reindex loops)
+- MCP / REST / WebSocket / CLI access to the same organized memory
+- Predictable p95 latency with a single Rust binary and local-first storage
 
 </td>
 <td width="50%" valign="top">
 
-### Dev Workflow (Bonus)
+### Agent Workflow Support
 
-Capture project context and decision trails so your coding agents stop repeating the same questions.
+Capture project context and decision trails so coding agents stop repeating the same questions and stop drifting from prior decisions.
 
 ```bash
 # Search decisions
@@ -50,9 +51,9 @@ engram-cli search "why did we choose postgres"
 ```
 
 **What you get:**
-- Project Context Discovery (CLAUDE.md, .cursorrules, etc.) via MCP tools
-- Decision trails with tags + metadata
-- Local-first by default, sync optional
+- Project Context Discovery (CLAUDE.md, AGENTS.md, .cursorrules, etc.) via MCP tools
+- Decision trails with provenance, tags, and metadata
+- Local-first by default, with optional sync for shared or hosted deployments
 
 </td>
 </tr>
@@ -63,6 +64,22 @@ engram-cli search "why did we choose postgres"
 ## Use Engram In Your Repository
 
 See [Using Engram From Another Repository](docs/USING_ENGRAM_IN_A_REPO.md) for a practical setup guide covering MCP config, repo-local databases, agent instructions, CLI usage, HTTP access, and local embeddings.
+
+## What Engram Solves
+
+Engram is built for teams that accumulate more context than a single person can keep in their head.
+
+- Interviews, meetings, docs, and transcripts become hard to search manually at scale.
+- Not everyone attends every conversation, so information becomes unevenly distributed across the team.
+- That asymmetry slows down decisions that need speed and conviction.
+- Engram turns scattered artifacts into a structured memory layer that agents can query directly from the source.
+
+## How It Works
+
+1. Ingest the material: meetings, docs, transcripts, and notes.
+2. Organize the data: normalize, tag, and store it with durable provenance.
+3. Index it: combine exact, fuzzy, and semantic retrieval.
+4. Expose it via MCP: let Claude Code and other agents ask questions against the same knowledge base.
 
 ---
 
@@ -158,16 +175,17 @@ The skill follows this flow:
 
 ## Why Engram
 
-Agents forget between sessions. Context windows overflow. Important knowledge gets buried in chat logs.
+Agents forget between sessions. Context windows overflow. Important knowledge gets buried in chat logs and meeting notes.
 
-Engram turns that into a fast, queryable memory system with stable latency and zero runtime dependencies.
+Engram turns that into a fast, queryable memory system that keeps the team aligned on the same facts.
 
 | Problem | Engram Solution |
 |---------|-----------------|
-| Vector search misses exact keywords | **Hybrid search**: BM25 + vectors + fuzzy, fused + ranked |
+| Knowledge is spread across meetings, docs, and chats | **Automatic ingestion** into one memory layer |
+| Search misses exact terms or related concepts | **Hybrid search**: BM25 + vectors + fuzzy, fused and ranked |
 | Context disappears between sessions | **Persistent memory** on SQLite + WAL |
-| Cloud-only products | **Local-first**, optional S3/R2 sync |
-| Python/Docker required | **Single Rust binary** (no runtime stack) |
+| Teams need a private source of truth | **Local-first** with optional sync and shared workspaces |
+| Agents need direct access to the same facts | **MCP-native** tools for read/write/search workflows |
 | No project awareness | **Project Context Discovery** (CLAUDE.md, AGENTS.md, .cursorrules, etc.) |
 
 ---
