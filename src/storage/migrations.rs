@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::{EngramError, Result};
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 40;
+pub const SCHEMA_VERSION: i32 = 42;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -191,6 +191,14 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 40 {
         migrate_v40(conn)?;
+    }
+
+    if current_version < 41 {
+        migrate_v41(conn)?;
+    }
+
+    if current_version < 42 {
+        migrate_v42(conn)?;
     }
 
     Ok(())
@@ -2009,6 +2017,230 @@ fn migrate_v40(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_v41(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v41: Creating operational context tables...");
+
+    conn.execute_batch(
+        r#"
+        -- Observed operational facts from agents, commands, and tools.
+        -- Raw artifact fields are optional references/payloads; this schema
+        -- does not imply raw artifact retention.
+        CREATE TABLE IF NOT EXISTS context_events (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            repo_id             TEXT,
+            workspace_path_hash TEXT,
+            git_branch          TEXT,
+            worktree_name       TEXT,
+            commit_hash         TEXT,
+            session_id          TEXT NOT NULL CHECK (length(session_id) > 0),
+            task_id             TEXT,
+            agent_id            TEXT,
+            source              TEXT NOT NULL CHECK (length(source) > 0),
+            event_type          TEXT NOT NULL CHECK (length(event_type) > 0),
+            command_name        TEXT,
+            tool_name           TEXT,
+            cwd                 TEXT,
+            exit_code           INTEGER,
+            started_at          TEXT NOT NULL,
+            finished_at         TEXT,
+            redaction_status    TEXT NOT NULL DEFAULT 'unknown'
+                                      CHECK (length(redaction_status) > 0),
+            retention_policy    TEXT NOT NULL DEFAULT 'default'
+                                      CHECK (length(retention_policy) > 0),
+            raw_artifact_id     TEXT,
+            raw_payload         TEXT,
+            metadata            TEXT NOT NULL DEFAULT '{}',
+            created_at          TEXT NOT NULL,
+            CHECK (
+                (repo_id IS NOT NULL AND length(repo_id) > 0)
+                OR (workspace_path_hash IS NOT NULL AND length(workspace_path_hash) > 0)
+            ),
+            CHECK (
+                lower(event_type) <> 'command'
+                OR (command_name IS NOT NULL AND length(command_name) > 0 AND exit_code IS NOT NULL)
+            ),
+            CHECK (
+                lower(event_type) <> 'tool'
+                OR (tool_name IS NOT NULL AND length(tool_name) > 0)
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_context_events_scope_time
+            ON context_events(repo_id, workspace_path_hash, started_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_events_session
+            ON context_events(session_id, started_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_events_task
+            ON context_events(task_id, started_at DESC)
+            WHERE task_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_events_agent
+            ON context_events(agent_id, started_at DESC)
+            WHERE agent_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_events_source
+            ON context_events(source, started_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_events_type
+            ON context_events(event_type, started_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_events_command
+            ON context_events(command_name, started_at DESC)
+            WHERE command_name IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_events_tool
+            ON context_events(tool_name, started_at DESC)
+            WHERE tool_name IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_events_commit
+            ON context_events(commit_hash)
+            WHERE commit_hash IS NOT NULL;
+
+        -- Derived operational summaries. Every row points back to a source
+        -- event; optional source_artifact_id is a provenance pointer, not a
+        -- raw retention guarantee.
+        CREATE TABLE IF NOT EXISTS context_summaries (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_event_id    INTEGER NOT NULL
+                                   REFERENCES context_events(id) ON DELETE CASCADE,
+            source_artifact_id TEXT,
+            reducer_name       TEXT NOT NULL CHECK (length(reducer_name) > 0),
+            reducer_version    TEXT NOT NULL CHECK (length(reducer_version) > 0),
+            lossy              INTEGER NOT NULL DEFAULT 1 CHECK (lossy IN (0, 1)),
+            confidence         REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+            summary            TEXT NOT NULL CHECK (length(summary) > 0),
+            structured_facts   TEXT NOT NULL DEFAULT '{}',
+            warnings           TEXT NOT NULL DEFAULT '[]',
+            tokens_raw_est     INTEGER CHECK (tokens_raw_est IS NULL OR tokens_raw_est >= 0),
+            tokens_compact_est INTEGER CHECK (tokens_compact_est IS NULL OR tokens_compact_est >= 0),
+            created_at         TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_context_summaries_source_event
+            ON context_summaries(source_event_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_summaries_artifact
+            ON context_summaries(source_artifact_id)
+            WHERE source_artifact_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_summaries_reducer
+            ON context_summaries(reducer_name, reducer_version, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_summaries_created_at
+            ON context_summaries(created_at DESC);
+
+        INSERT INTO schema_version (version) VALUES (41);
+        "#,
+    )?;
+
+    tracing::info!("Migration v41 complete: operational context tables created");
+    Ok(())
+}
+
+fn migrate_v42(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v42: Creating operational context artifact tables...");
+
+    conn.execute_batch(
+        r#"
+        -- Policy-controlled raw artifacts for operational context.
+        -- Metadata is queryable, but raw_content is retrieved only through an
+        -- explicit artifact-id path that enforces retention, TTL, staleness,
+        -- access policy, and audit logging.
+        CREATE TABLE IF NOT EXISTS context_artifacts (
+            id                  TEXT PRIMARY KEY CHECK (length(id) > 0),
+            source_event_id     INTEGER
+                                    REFERENCES context_events(id) ON DELETE SET NULL,
+            repo_id             TEXT,
+            workspace_path_hash TEXT,
+            session_id          TEXT,
+            task_id             TEXT,
+            agent_id            TEXT,
+            kind                TEXT NOT NULL CHECK (length(kind) > 0),
+            label               TEXT,
+            uri                 TEXT,
+            media_type          TEXT,
+            content_sha256      TEXT,
+            byte_len            INTEGER CHECK (byte_len IS NULL OR byte_len >= 0),
+            redaction_status    TEXT NOT NULL DEFAULT 'not_required'
+                                    CHECK (
+                                        redaction_status IN (
+                                            'passed',
+                                            'redacted',
+                                            'not_required'
+                                        )
+                                    ),
+            retention_policy    TEXT NOT NULL DEFAULT 'pointer_only'
+                                    CHECK (length(retention_policy) > 0),
+            access_policy       TEXT NOT NULL DEFAULT 'same_session'
+                                    CHECK (
+                                        access_policy IN (
+                                            'same_session',
+                                            'same_task',
+                                            'same_agent',
+                                            'repo',
+                                            'public'
+                                        )
+                                    ),
+            retain_raw          INTEGER NOT NULL DEFAULT 0 CHECK (retain_raw IN (0, 1)),
+            raw_content         BLOB,
+            stale_at            TEXT,
+            expires_at          TEXT,
+            metadata            TEXT NOT NULL DEFAULT '{}',
+            created_at          TEXT NOT NULL,
+            CHECK (retain_raw = 1 OR raw_content IS NULL),
+            CHECK (raw_content IS NULL OR content_sha256 IS NOT NULL),
+            CHECK (
+                source_event_id IS NOT NULL
+                OR (repo_id IS NOT NULL AND length(repo_id) > 0)
+                OR (
+                    workspace_path_hash IS NOT NULL
+                    AND length(workspace_path_hash) > 0
+                )
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_context_artifacts_event
+            ON context_artifacts(source_event_id, created_at DESC)
+            WHERE source_event_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_artifacts_scope_time
+            ON context_artifacts(repo_id, workspace_path_hash, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_artifacts_session
+            ON context_artifacts(session_id, created_at DESC)
+            WHERE session_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_artifacts_task
+            ON context_artifacts(task_id, created_at DESC)
+            WHERE task_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_artifacts_hash
+            ON context_artifacts(content_sha256)
+            WHERE content_sha256 IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_artifacts_expiry
+            ON context_artifacts(expires_at)
+            WHERE expires_at IS NOT NULL;
+
+        -- Durable access attempts for explicit raw retrieval. No FK is used so
+        -- denied/not-found/deleted-artifact attempts remain auditable.
+        CREATE TABLE IF NOT EXISTS context_artifact_access_log (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            artifact_id         TEXT NOT NULL CHECK (length(artifact_id) > 0),
+            requester_agent_id  TEXT,
+            session_id          TEXT,
+            task_id             TEXT,
+            repo_id             TEXT,
+            workspace_path_hash TEXT,
+            access_result       TEXT NOT NULL CHECK (length(access_result) > 0),
+            reason              TEXT NOT NULL CHECK (length(reason) > 0),
+            max_bytes           INTEGER CHECK (max_bytes IS NULL OR max_bytes >= 0),
+            returned_bytes      INTEGER CHECK (returned_bytes IS NULL OR returned_bytes >= 0),
+            truncated           INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0, 1)),
+            created_at          TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_context_artifact_access_artifact
+            ON context_artifact_access_log(artifact_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_artifact_access_agent
+            ON context_artifact_access_log(requester_agent_id, created_at DESC)
+            WHERE requester_agent_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_context_artifact_access_result
+            ON context_artifact_access_log(access_result, created_at DESC);
+
+        INSERT INTO schema_version (version) VALUES (42);
+        "#,
+    )?;
+
+    tracing::info!("Migration v42 complete: operational context artifact tables created");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2030,12 +2262,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 40);
+        assert_eq!(version, 42);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 40);
+        assert_eq!(SCHEMA_VERSION, 42);
     }
 
     #[test]
@@ -2190,7 +2422,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 40, "should reach v40 after full migration");
+        assert_eq!(version, 42, "should reach v42 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
@@ -2237,5 +2469,114 @@ mod tests {
             [],
         );
         assert!(result.is_err(), "NULL operation_id should be rejected");
+    }
+
+    #[test]
+    fn test_context_events_and_summaries_tables_exist() {
+        let conn = in_memory_conn();
+        for table in [
+            "context_events",
+            "context_summaries",
+            "context_artifacts",
+            "context_artifact_access_log",
+        ] {
+            let exists: i32 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                    rusqlite::params![table],
+                    |row| row.get(0),
+                )
+                .expect("query sqlite_master");
+            assert_eq!(exists, 1, "{table} table should exist after migration");
+        }
+    }
+
+    #[test]
+    fn test_context_artifacts_default_to_pointer_only() {
+        let conn = in_memory_conn();
+        conn.execute(
+            "INSERT INTO context_artifacts
+                (id, repo_id, kind, redaction_status, retention_policy,
+                 access_policy, retain_raw, raw_content, metadata, created_at)
+             VALUES
+                ('artifact-1', 'github:aiconnai/engram', 'command_output',
+                 'redacted', 'pointer_only', 'same_session', 0, X'616263',
+                 '{}', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect_err("raw_content is rejected unless retain_raw is true");
+
+        conn.execute(
+            "INSERT INTO context_artifacts
+                (id, repo_id, kind, redaction_status, retention_policy,
+                 access_policy, retain_raw, raw_content, metadata, created_at)
+             VALUES
+                ('artifact-2', 'github:aiconnai/engram', 'command_output',
+                 'redacted', 'pointer_only', 'same_session', 0, NULL,
+                 '{}', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("pointer-only artifact should be accepted");
+    }
+
+    #[test]
+    fn test_command_context_events_require_exit_code() {
+        let conn = in_memory_conn();
+        let result = conn.execute(
+            "INSERT INTO context_events
+                (repo_id, session_id, source, event_type, command_name,
+                 started_at, redaction_status, retention_policy, metadata, created_at)
+             VALUES
+                ('github:aiconnai/engram', 'sess-1', 'codex', 'command', 'cargo',
+                 '2026-01-01T00:00:00Z', 'redacted', 'default', '{}',
+                 '2026-01-01T00:00:00Z')",
+            [],
+        );
+        assert!(
+            result.is_err(),
+            "command context events should require exit_code"
+        );
+    }
+
+    #[test]
+    fn test_context_summaries_require_source_event_and_reducer_version() {
+        let conn = in_memory_conn();
+        conn.execute(
+            "INSERT INTO context_events
+                (repo_id, session_id, source, event_type, command_name, exit_code,
+                 started_at, redaction_status, retention_policy, metadata, created_at)
+             VALUES
+                ('github:aiconnai/engram', 'sess-1', 'codex', 'command', 'cargo', 0,
+                 '2026-01-01T00:00:00Z', 'redacted', 'default', '{}',
+                 '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("insert context event");
+        let event_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO context_summaries
+                (source_event_id, reducer_name, reducer_version, lossy,
+                 confidence, summary, structured_facts, warnings, created_at)
+             VALUES
+                (?1, 'command_savings', '1.0.0', 1, 0.9, 'summary', '{}', '[]',
+                 '2026-01-01T00:00:00Z')",
+            rusqlite::params![event_id],
+        )
+        .expect("insert context summary");
+
+        let missing_reducer_version = conn.execute(
+            "INSERT INTO context_summaries
+                (source_event_id, reducer_name, reducer_version, lossy,
+                 confidence, summary, structured_facts, warnings, created_at)
+             VALUES
+                (?1, 'command_savings', '', 1, 0.9, 'summary', '{}', '[]',
+                 '2026-01-01T00:00:00Z')",
+            rusqlite::params![event_id],
+        );
+        assert!(
+            missing_reducer_version.is_err(),
+            "reducer-generated summaries should require reducer_version"
+        );
     }
 }

@@ -35,6 +35,7 @@ pub mod image_storage;
 mod lock;
 pub mod memory_blocks;
 mod migrations;
+pub mod operational_context;
 pub mod pending_injections;
 pub mod queries;
 pub mod scope_grants;
@@ -50,6 +51,10 @@ pub mod meilisearch_indexer;
 #[cfg(feature = "turso")]
 pub mod turso_backend;
 
+pub use crate::context::{
+    ArtifactAccessPolicy, ArtifactRedactionStatus, ArtifactRetentionPolicy,
+    ArtifactRetrievalRequest, ContextArtifact, NewContextArtifact, RetrievedContextArtifact,
+};
 pub use agent_registry::{
     deregister_agent, get_agent, get_agents_in_namespace, heartbeat_agent, list_agents,
     register_agent, update_agent_capabilities, Agent, RegisterAgentInput,
@@ -95,6 +100,13 @@ pub use lock::{LockInfo, StorageLock};
 pub use meilisearch_backend::MeilisearchBackend;
 #[cfg(feature = "meilisearch")]
 pub use meilisearch_indexer::MeilisearchIndexer;
+pub use operational_context::{
+    create_context_artifact, create_context_event, create_context_summary, get_context_artifact,
+    get_context_event, get_context_summary, list_context_artifacts_for_event,
+    list_context_events_for_session, list_context_summaries_for_event,
+    retrieve_context_artifact_raw, ContextEvent, ContextSummary, NewContextEvent,
+    NewContextSummary,
+};
 pub use queries::{
     acknowledge_share,
     boost_memory,
