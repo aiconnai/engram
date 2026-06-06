@@ -2245,7 +2245,6 @@ fn migrate_v42(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-
 fn migrate_v43(conn: &Connection) -> Result<()> {
     tracing::info!("Migration v43: Creating memory_policy table...");
 
@@ -2633,5 +2632,4 @@ mod tests {
             "memory_policy table should exist after migration"
         );
     }
-
 }
