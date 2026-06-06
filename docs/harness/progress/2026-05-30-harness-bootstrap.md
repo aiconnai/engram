@@ -741,3 +741,15 @@ Post-review de `memory-policy-layer` apontou falso sucesso em `docs/harness/bin/
 - `bash docs/harness/bin/doctor.sh` — PASS.
 - `make ci` — PASS.
 - `bash docs/harness/bin/review-gate.sh post memory-policy-layer --review-file docs/harness/reviews/2026-06-06-memory-policy-layer-v2-post.md` — POST-GATE PASS.
+
+## Root folder organization — 2026-06-06
+
+- Moved cloud/API reference docs from the repository root into `docs/`:
+  `ARCHITECTURE.md`, `OPERATIONS.md`, `QUICKSTART.md`, `REFERENCE.md`, and
+  `CONTROL_PLANE_SCHEMA.sql`.
+- Kept root reserved for repository identity, build/config entrypoints,
+  GitHub-visible policy files, and agent context files consumed by tooling.
+- Updated known links in `AGENTS.md`, `CLAUDE.md`, `docs/QUICKSTART.md`, and
+  `docs/README.md`.
+- No `src/`, runtime schema, MCP surface, hooks, SDK, or harness gate behavior
+  changes are included in this branch.

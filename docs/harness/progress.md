@@ -398,3 +398,15 @@ Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado n
 - Preserved SQLite/FTS/vector/graph/provenance as canonical state; no automatic synthesized memory writes were added.
 - Validation passed: focused checks, `make ci`, `doctor.sh`, and post-review gate.
 - Post-review artifact: `docs/harness/reviews/2026-06-06-memory-policy-layer-v2-post.md` with `REVIEW_VERDICT: PASS`.
+
+## Root folder organization — 2026-06-06
+
+- Moved cloud/API reference docs from the repository root into `docs/`:
+  `ARCHITECTURE.md`, `OPERATIONS.md`, `QUICKSTART.md`, `REFERENCE.md`, and
+  `CONTROL_PLANE_SCHEMA.sql`.
+- Kept root reserved for repository identity, build/config entrypoints,
+  GitHub-visible policy files, and agent context files consumed by tooling.
+- Updated known links in `AGENTS.md`, `CLAUDE.md`, `docs/QUICKSTART.md`, and
+  `docs/README.md`.
+- No `src/`, runtime schema, MCP surface, hooks, SDK, or harness gate behavior
+  changes are included in this branch.
