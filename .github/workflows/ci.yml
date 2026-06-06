@@ -425,7 +425,7 @@ jobs:
           benchmark-data-dir-path: dev/bench
 
       - name: Upload raw Criterion reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: benchmark-results
@@ -490,7 +490,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: engram-${{ matrix.target }}
           path: |
