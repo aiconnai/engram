@@ -4,6 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CI_ALLOW_OPTIONAL_TEST_FAILURES="${CI_ALLOW_OPTIONAL_TEST_FAILURES:-0}"
+CI_RUN_BACKEND_SMOKE="${CI_RUN_BACKEND_SMOKE:-0}"
+CI_RUN_FULL_FEATURES="${CI_RUN_FULL_FEATURES:-0}"
 
 run_optional() {
   if [[ "${CI_ALLOW_OPTIONAL_TEST_FAILURES}" == "1" ]]; then
@@ -13,40 +15,43 @@ run_optional() {
   fi
 }
 
-# Use shared CI feature list unless caller explicitly provides one.
-if [[ -z "${CI_FEATURES:-}" ]]; then
-  source "$SCRIPT_DIR/ci-features.env"
+# Use the required PR feature list unless caller explicitly provides one.
+if [[ -z "${CI_REQUIRED_FEATURES:-}" ]]; then
+  source "$SCRIPT_DIR/ci-required-features.env"
 fi
 
-: "${CI_FEATURES:?CI_FEATURES must be set or defined in $SCRIPT_DIR/ci-features.env}"
+: "${CI_REQUIRED_FEATURES:?CI_REQUIRED_FEATURES must be set or defined in $SCRIPT_DIR/ci-required-features.env}"
 
 echo "==> [1/4] Format"
 cargo fmt --all -- --check
 
-echo "==> [2/4] Clippy (all features)"
-cargo clippy --all-targets --all-features -- -D warnings
+echo "==> [2/4] Clippy (required PR features)"
+cargo clippy --all-targets --no-default-features --features "$CI_REQUIRED_FEATURES" -- -D warnings
 
 echo "==> [3/4] Core tests (lib + integration, matching required GitHub CI job)"
 # Mirrors the required "Test (ubuntu-latest)" job as closely as practical for local work.
 export CARGO_BUILD_JOBS=1
-cargo test --features "$CI_FEATURES" --lib -- --test-threads=1
+cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests -- --test-threads=1
 
-for test_file in tests/*.rs; do
-  test_name="$(basename "$test_file" .rs)"
-  cargo test --features "$CI_FEATURES" --test "$test_name" -- --test-threads=1
-done
+if [[ "$CI_RUN_FULL_FEATURES" == "1" ]]; then
+  echo "==> Optional full feature checks"
+  run_optional cargo clippy --all-targets --all-features -- -D warnings
+  run_optional cargo test --profile ci --all-features --lib --tests -- --test-threads=1
+fi
 
-# Specific backend smoke tests (best-effort locally)
-run_optional cargo test --features local-embeddings --lib embedding::onnx
-run_optional cargo test --features neural-rerank --lib search::neural_rerank
+if [[ "$CI_RUN_BACKEND_SMOKE" == "1" ]]; then
+  echo "==> Optional backend smoke tests"
+  run_optional cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
+  run_optional cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
+fi
 
 # Binary unit tests (required in the GitHub job)
-run_optional cargo test --bin engram-server
-run_optional cargo test --features watcher --bin engram-watcher
+cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-server
+cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-watcher
 
 echo "==> [4/4] Documentation + generated MCP reference"
 ./scripts/generate-mcp-reference.sh --check
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
+RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features "$CI_REQUIRED_FEATURES" --no-deps --document-private-items
 
 echo
 
@@ -58,4 +63,16 @@ if [[ "$CI_ALLOW_OPTIONAL_TEST_FAILURES" == "1" ]]; then
   echo
   echo "ℹ Optional test failures were allowed during this run."
   echo "  To enforce strict behavior (required for PR parity), unset CI_ALLOW_OPTIONAL_TEST_FAILURES."
+fi
+
+if [[ "$CI_RUN_FULL_FEATURES" != "1" ]]; then
+  echo
+  echo "Optional full feature checks were skipped."
+  echo "Run with CI_RUN_FULL_FEATURES=1 ./scripts/ci.sh to include them."
+fi
+
+if [[ "$CI_RUN_BACKEND_SMOKE" != "1" ]]; then
+  echo
+  echo "Optional backend smoke tests were skipped."
+  echo "Run with CI_RUN_BACKEND_SMOKE=1 ./scripts/ci.sh to include them."
 fi

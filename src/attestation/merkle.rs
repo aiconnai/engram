@@ -12,7 +12,7 @@ use super::types::{AttestationRecord, MerkleProof};
 
 /// Binary Merkle tree built from attestation record hashes
 pub struct MerkleTree {
-    /// Level 0 = raw leaves (record_hash values), last level = [root]
+    /// Level 0 = raw leaves (record_hash values), last level = root
     levels: Vec<Vec<String>>,
 }
 

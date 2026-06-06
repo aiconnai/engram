@@ -313,3 +313,12 @@ strip = true
 [profile.bench]
 lto = true
 codegen-units = 1
+
+[profile.ci]
+inherits = "dev"
+debug = 0
+incremental = false
+
+[profile.ci.build-override]
+debug = 0
+incremental = false

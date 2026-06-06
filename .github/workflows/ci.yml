@@ -21,7 +21,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
   RUST_BACKTRACE: 1
+  RUSTUP_MAX_RETRIES: 10
 
 # Least-privilege default for GITHUB_TOKEN. Jobs that need more opt in with
 # their own job-level `permissions:` block below.
@@ -40,9 +43,9 @@ permissions:
 # These four jobs protect main. Contributors should run `make ci` or `just ci`
 # locally before pushing.
 #
-# Everything else (macOS, property-tests, golden-tests, coverage, benchmarks,
-# cargo-deny, security-audit) is "extended". It runs on schedule and on
-# manual dispatch. It does NOT block PRs by default.
+# Everything else (macOS, full-feature checks, property-tests, golden-tests,
+# coverage, benchmarks, cargo-deny, security-audit) is "extended". It runs on
+# schedule and on manual dispatch. It does NOT block PRs by default.
 #
 # This keeps GitHub Actions as an enforceable gate without incurring high
 # per-PR costs (especially macOS minutes and long-running jobs).
@@ -78,12 +81,17 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+        with:
+          shared-key: required-linux
+      - run: |
+          source scripts/ci-required-features.env
+          cargo clippy --all-targets --no-default-features --features "$CI_REQUIRED_FEATURES" -- -D warnings
 
   # Required on every PR (Ubuntu only — fast, cheap, deterministic)
   test:
     name: Test (ubuntu-latest)
     runs-on: ubuntu-latest
+    needs: [fmt, clippy]
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -94,36 +102,26 @@ jobs:
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
           docker system prune -af || true
+      - name: Install mold linker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mold
+          echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
         with:
-          cache-targets: false
+          shared-key: required-linux
       - name: Test library and integration tests
         run: |
-          source scripts/ci-features.env
+          source scripts/ci-required-features.env
           export CARGO_BUILD_JOBS=1
 
-          cargo test --features "$CI_FEATURES" --lib -- --test-threads=1
-
-          for test_file in tests/*.rs; do
-            test_name="$(basename "$test_file" .rs)"
-            cargo test --features "$CI_FEATURES" --test "$test_name" -- --test-threads=1
-          done
-
-      - name: Test local embedding backend
-        run: |
-          source scripts/ci-features.env
-          cargo test --features local-embeddings --lib embedding::onnx
-
-      - name: Test neural rerank backend
-        run: |
-          source scripts/ci-features.env
-          cargo test --features neural-rerank --lib search::neural_rerank
+          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests -- --test-threads=1
 
       - name: Test binary unit tests
         run: |
-          source scripts/ci-features.env
-          cargo test --bin engram-server
-          cargo test --features watcher --bin engram-watcher
+          source scripts/ci-required-features.env
+          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-server
+          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-watcher
 
   # Extended / expensive macOS testing. Only runs on schedule + manual trigger.
   # Not required for PR merge (avoids high macOS minute costs).
@@ -171,6 +169,77 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --test golden_tests
+
+  full-feature-clippy:
+    name: Full Feature Clippy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free Linux runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          docker system prune -af || true
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: extended-linux
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  full-feature-tests:
+    name: Full Feature Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free Linux runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          docker system prune -af || true
+      - name: Install mold linker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mold
+          echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: extended-linux
+      - run: |
+          export CARGO_BUILD_JOBS=1
+          cargo test --profile ci --all-features --lib --tests -- --test-threads=1
+
+  backend-smoke:
+    name: Backend Smoke Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Free Linux runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          docker system prune -af || true
+      - name: Install mold linker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mold
+          echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: extended-linux
+      - name: Test local embedding backend
+        run: cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
+      - name: Test neural rerank backend
+        run: cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
 
   # =============================================================================
   # Security & Supply Chain
@@ -235,11 +304,7 @@ jobs:
           cargo llvm-cov clean --workspace
 
           cargo llvm-cov --features "$CI_FEATURES" --no-report --lib
-
-          for test_file in tests/*.rs; do
-            test_name="$(basename "$test_file" .rs)"
-            cargo llvm-cov --features "$CI_FEATURES" --no-report --test "$test_name"
-          done
+          cargo llvm-cov --features "$CI_FEATURES" --no-report --tests
 
           cargo llvm-cov report --lcov --output-path lcov.info
 
@@ -328,9 +393,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: required-linux
       - run: ./scripts/generate-mcp-reference.sh --check
-      - run: cargo doc --no-deps --document-private-items
+      - run: |
+          source scripts/ci-required-features.env
+          cargo doc --no-default-features --features "$CI_REQUIRED_FEATURES" --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: -D warnings
 

@@ -12,6 +12,9 @@
 ifeq ($(strip $(CI_FEATURES)),)
 CI_FEATURES := $(strip $(shell sed -n 's/^CI_FEATURES=//p' scripts/ci-features.env))
 endif
+ifeq ($(strip $(CI_REQUIRED_FEATURES)),)
+CI_REQUIRED_FEATURES := $(strip $(shell sed -n 's/^CI_REQUIRED_FEATURES=//p' scripts/ci-required-features.env))
+endif
 
 .PHONY: ci
 ci:
@@ -23,21 +26,25 @@ fmt:
 
 .PHONY: clippy
 clippy:
-	cargo clippy --all-targets --all-features -- -D warnings
+	cargo clippy --all-targets --no-default-features --features $(CI_REQUIRED_FEATURES) -- -D warnings
 
 .PHONY: test
 test:
-	CARGO_BUILD_JOBS=1 cargo test --features $(CI_FEATURES) --lib -- --test-threads=1
-	@for test_file in tests/*.rs; do \
-		test_name="$$(basename "$$test_file" .rs)" ; \
-		CARGO_BUILD_JOBS=1 cargo test --features $(CI_FEATURES) --test "$$test_name" -- --test-threads=1; \
-	done
-	CARGO_BUILD_JOBS=1 cargo test --features local-embeddings --lib embedding::onnx
-	CARGO_BUILD_JOBS=1 cargo test --features neural-rerank --lib search::neural_rerank
-	CARGO_BUILD_JOBS=1 cargo test --bin engram-server
-	CARGO_BUILD_JOBS=1 cargo test --features watcher --bin engram-watcher
+	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --lib --tests -- --test-threads=1
+	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-server
+	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-watcher
+
+.PHONY: full-feature-check
+full-feature-check:
+	cargo clippy --all-targets --all-features -- -D warnings
+	CARGO_BUILD_JOBS=1 cargo test --profile ci --all-features --lib --tests -- --test-threads=1
+
+.PHONY: backend-smoke
+backend-smoke:
+	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
+	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
 
 .PHONY: docs
 docs:
 	./scripts/generate-mcp-reference.sh --check
-	RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
+	RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features $(CI_REQUIRED_FEATURES) --no-deps --document-private-items

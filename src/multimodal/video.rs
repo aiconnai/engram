@@ -73,7 +73,7 @@ pub struct VideoMemory {
 
 /// Processes video files to create rich memory records.
 ///
-/// All system-command invocations are centralised in [`run_command`] so that
+/// All system-command invocations are centralised in `run_command` so that
 /// tests can verify the expected command-line arguments without actually
 /// executing them.
 pub struct VideoProcessor {
