@@ -95,9 +95,16 @@ bash docs/harness/bin/bootstrap.sh
 Em seguida leia (em ordem):
 - `docs/harness/SPEC.md`
 - `docs/harness/INVARIANTS.md`
+- `docs/harness/WHAT_WE_DONT_DO.md`
 - `docs/harness/GATES.md`
 - `docs/harness/CODE_REVIEW_POLICY.md`
+- `docs/harness/security/anthropic-reference-harness.md`
+- `docs/harness/README.md`
 - `docs/harness/progress.md`
+- active plan apontado em `docs/harness/progress.md`
+- `AGENTS.md` e `CLAUDE.md`
+- `INVARIANTS.md` (raiz)
+- `STANDARDS.md` e `ERRORS_AND_LESSONS.md`
 
 O harness garante que o trabalho seja retomável entre agentes (Claude Code CLI, Grok Build TUI, etc.) e entre sessões. Ele implementa as camadas de Context Engine, Planner, Memory Manager e Verifier diretamente no repositório.
 

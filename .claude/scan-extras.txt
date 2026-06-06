@@ -1,0 +1,30 @@
+# Engram security scan extras v1
+#
+# Purpose:
+# - Augment the core harness policy docs with Engram-specific scan focus.
+# - Keep scan tuning versioned and reviewed like code.
+# - Do not replace docs/harness security policy, invariants, gates, or review rules.
+#
+# Usage:
+# - Treat each active line as additional reviewer/scanner guidance.
+# - Keep entries narrow, auditable, and tied to Engram risk areas.
+# - Prefer adding specific prompts over broad categories.
+
+[scope]
+mode = augment_only
+owner = aiconnai/engram
+review = required
+
+[focus]
+- Check MCP handlers for unsafe tool exposure, confused-deputy behavior, and missing authorization boundaries.
+- Check storage and migration code for schema drift, unsafe SQL construction, and WAL/local-first data integrity risks.
+- Check search, embedding, and ranking paths for prompt-injection persistence, trust-boundary confusion, and leakage through retrieved context.
+- Check sync/import/export paths for credential handling, path traversal, untrusted archive/input parsing, and unintended data egress.
+- Check hooks and lifecycle automation for accidental autonomous execution, command injection, and unsafe environment inheritance.
+- Check SDKs for insecure defaults, token/header leakage, ambiguous timeout behavior, and inconsistent API parameter translation.
+
+[prompts]
+- Does this change expand execution capability beyond static/read-only harness work?
+- Does this change read, write, sync, or expose proprietary memory outside the expected scope?
+- Does this change introduce a new trust boundary that needs an ADR or explicit security note update?
+- Does this change rely on undocumented false-positive suppression instead of a narrow rule in .claude/fp-rules.txt?

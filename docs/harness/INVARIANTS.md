@@ -60,6 +60,26 @@ Cada invariant tem um **gate** indicando como é enforçado.
 16. **Policy local de review é referenciada consistentemente.** bootstrap.sh, review-gate.sh, GATES.md, README.md e CODE_REVIEW_POLICY.md devem apontar uns para os outros de forma que doctor.sh valide.
     _Gate: `doctor.sh` greps por referências._
 
+## Security Boundary & Anthropic Reference Harness
+
+21. **Static/read-only first é o default para trabalho de harness.** Threat modeling, scan, triage e patch candidates começam como leitura/escrita de artefatos; execução autônoma de Engram nunca é implícita por docs, prompts ou tuning files.
+    _Gate: `doctor.sh` valida `docs/harness/security/anthropic-reference-harness.md`; review-gate injeta checagem de scope creep._
+
+22. **Execução autônoma contra Engram exige ADR e sandbox explícitos.** Qualquer pipeline futura que compile, rode, ataque ou mutacione Engram automaticamente exige ADR em `docs/decisions/`, sandbox forte, restrição de egress, ausência de mounts com credenciais e target contract explícito.
+    _Gate: review-gate + checklist humano; `doctor.sh` valida o contrato canônico._
+
+23. **O Anthropic reference harness é fonte de padrões, não pipeline drop-in.** Não importar a trilha C/C++/ASAN/Docker/gVisor como default do Engram; transferir somente boundaries, prompt shape, triage discipline, sandbox posture e false-positive tuning.
+    _Gate: review-gate flaggea imports indevidos como scope creep._
+
+24. **Docs e scripts do harness referenciam a security note de forma consistente.** `README.md`, `GATES.md`, `CODE_REVIEW_POLICY.md`, `bootstrap.sh`, `doctor.sh`, `sensors.sh` e `review-gate.sh` devem apontar para `docs/harness/security/anthropic-reference-harness.md`.
+    _Gate: `doctor.sh` hard fail._
+
+25. **Tuning org-specific vive fora do core policy text.** Categorias extras de scan ficam em `.claude/scan-extras.txt`; regras de falso positivo ficam em `.claude/fp-rules.txt`. Esses arquivos sao versionados e revisados como codigo, mas nao substituem INVARIANTS/GATES/POLICY.
+    _Gate: `doctor.sh` hard fail + review-gate._
+
+26. **Sem fallback silencioso para postura de seguranca mais fraca.** Se a security note, anchors do contrato, ou tuning files obrigatorios estiverem ausentes ou divergentes, scripts devem falhar fechado ou reportar explicitamente a inconsistencia.
+    _Gate: `doctor.sh` hard fail; review-gate para mudancas em `docs/harness/bin/*`._
+
 ## Rust & Engram Específicos
 
 17. **Paridade CI local é sagrada.** `just ci` (ou `make ci`) deve reproduzir o que o GitHub Actions exige (fmt, clippy -D warnings, testes com CI_FEATURES, docs + MCP reference). Não "funciona na minha máquina" com features locais apenas.

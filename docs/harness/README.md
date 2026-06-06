@@ -65,7 +65,9 @@ bash docs/harness/bin/doctor.sh
 | `WHAT_WE_DONT_DO.md`           | Escopo negativo e anti-patterns para evitar expansão silenciosa |
 | `GATES.md`                     | Sensores, thresholds, retry policy, exclusões documentadas, fake-success patterns |
 | `CODE_REVIEW_POLICY.md`        | Política local consumida pelo review-gate (cross-model / cross-CLI) |
-| `security/`                    | Playbooks de segurança e adaptação do defending-code reference harness |
+| `security/`                    | Contrato de segurança do harness, incluindo a adaptação Anthropic |
+| `.claude/scan-extras.txt`      | Tuning versionado para categorias extras de scan/triage |
+| `.claude/fp-rules.txt`         | Tuning versionado para exclusões conservadoras de falso positivo |
 | `canvas/`                      | Evidência estruturada para mudanças complexas |
 | `audits/`                      | Relatórios evidence-only de auditoria periódica |
 | `progress.md`                  | Estado vivo curto: sprint, task, último review, último sensor, commit |
@@ -90,11 +92,12 @@ Antes de editar código, docs de processo, ou planejar qualquer mudança signifi
 3. `docs/harness/WHAT_WE_DONT_DO.md` — escopo negativo e anti-patterns
 4. `docs/harness/GATES.md` — critérios de sensores e review
 5. `docs/harness/CODE_REVIEW_POLICY.md` — política de julgamento para o reviewer externo
-6. `docs/harness/progress.md` — estado vivo
-7. O active plan apontado em `Active plan`
-8. `AGENTS.md` (raiz) e `Claude.md` / docs de onboarding relevantes
-9. `INVARIANTS.md` (raiz) — data invariants do sistema de memória
-10. `STANDARDS.md` + `ERRORS_AND_LESSONS.md`
+6. `docs/harness/security/anthropic-reference-harness.md` — boundary static/read-only vs execucao autonoma
+7. `docs/harness/progress.md` — estado vivo
+8. O active plan apontado em `Active plan`
+9. `AGENTS.md` (raiz) e `Claude.md` / docs de onboarding relevantes
+10. `INVARIANTS.md` (raiz) — data invariants do sistema de memória
+11. `STANDARDS.md` + `ERRORS_AND_LESSONS.md`
 
 `INVARIANTS.md` (harness) vence qualquer conflito com AGENTS.md, Claude.md, specs antigas ou memória de sessão. Mudanças reais em invariants exigem ADR em `docs/decisions/` + PR revisado sob os gates anteriores.
 
@@ -257,7 +260,9 @@ Política de retry: 2 FAILs consecutivos no mesmo task → escalar para humano. 
 ## Security Reference Harness
 
 O fluxo de segurança inspirado no `anthropics/defending-code-reference-harness`
-vive em `docs/harness/security/anthropic-reference-harness.md`.
+vive em `docs/harness/security/anthropic-reference-harness.md`. Esse arquivo
+e a fonte canonica local para o contrato `ENGRAM-HARNESS-SECURITY-CONTRACT-v1`;
+`doctor.sh` falha se ele ou os arquivos de tuning versionado estiverem ausentes.
 
 Contrato local:
 
@@ -269,6 +274,9 @@ Contrato local:
   ADR, sandbox forte, target contract e review-gate.
 - Findings importados viram artefatos auditáveis e só avançam com evidência,
   supressão explícita, ou patch revisado.
+- Nenhum script do harness pode silently fall back para postura mais fraca quando
+  esse contrato ou os arquivos `.claude/scan-extras.txt` e
+  `.claude/fp-rules.txt` estiverem ausentes.
 
 ## Critério de Done
 

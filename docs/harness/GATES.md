@@ -92,6 +92,7 @@ O review-gate é prompted explicitamente para caçar estes (sensores verdes mas 
 8. **Review gate roda contra diff que exclui harness artifacts, mas o prompt injetado está incompleto** — self-referential ou prompt drift.
 9. **Rustdoc warnings tratados como allow em CI local mas -D warnings no gate** — flags diferentes produzem falso verde.
 10. **Identity alias normalization ou scope grants mudam sem atualização de testes de propriedade** — property tests ou `tests/` não cobrem o novo comportamento.
+11. **Security boundary drift** — docs ou scripts passam a sugerir execução autônoma, sandbox implícito, mounts de credenciais, ou import da pipeline C/C++/ASAN sem ADR e target contract.
 
 O prompt do review-gate inclui esta lista + instrução para buscar evidência concreta no diff.
 
@@ -163,8 +164,14 @@ Adaptações baseadas no `anthropics/defending-code-reference-harness` seguem
 
 Hard rules:
 
+- `doctor.sh` valida o anchor `ENGRAM-HARNESS-SECURITY-CONTRACT-v1` e os campos
+  `DEFAULT_MODE=static_read_only`, `AUTONOMOUS_EXECUTION_REQUIRES_ADR=true`,
+  `NO_CREDENTIAL_MOUNTS=true` e
+  `TUNING_FILES=.claude/scan-extras.txt,.claude/fp-rules.txt`.
 - O modo default é static/read-only: threat model, scan, triage e patch
   candidates sem execução de código alvo por agentes.
+- `.claude/scan-extras.txt` e `.claude/fp-rules.txt` sao obrigatorios quando
+  referenciados e vivem fora do texto central de INVARIANTS/GATES/POLICY.
 - A pipeline autônoma da referência não é aceita como drop-in para Engram,
   porque o target padrão é C/C++ com ASAN.
 - Qualquer execução autônoma contra Engram exige ADR prévio, sandbox forte

@@ -741,3 +741,21 @@ Post-review de `memory-policy-layer` apontou falso sucesso em `docs/harness/bin/
 - `bash docs/harness/bin/doctor.sh` — PASS.
 - `make ci` — PASS.
 - `bash docs/harness/bin/review-gate.sh post memory-policy-layer --review-file docs/harness/reviews/2026-06-06-memory-policy-layer-v2-post.md` — POST-GATE PASS.
+
+## Security reference harness enforcement — 2026-06-06
+
+- Added `docs/harness/security/anthropic-reference-harness.md` as the canonical
+  local contract for `ENGRAM-HARNESS-SECURITY-CONTRACT-v1`.
+- Added versioned tuning files `.claude/scan-extras.txt` and
+  `.claude/fp-rules.txt`; they augment scan/triage behavior and do not replace
+  core invariants, gates, or review policy.
+- Updated `doctor.sh` to fail closed when the security note, contract anchors,
+  tuning files, or required cross-references are missing.
+- Updated `bootstrap.sh`, `sensors.sh`, and `review-gate.sh` to surface the
+  security boundary without adding autonomous execution to the default harness
+  flow.
+- Updated harness docs and onboarding docs so reviewers flag autonomous Engram
+  execution, sandbox drift, credential mounts, egress expansion, and C/C++/ASAN
+  pipeline import unless an ADR and explicit target contract exist.
+- No autonomous execution pipeline, target runner, credential mount, or `src/`
+  change is included in this branch.

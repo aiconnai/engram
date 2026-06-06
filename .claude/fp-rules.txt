@@ -1,0 +1,37 @@
+# Engram false-positive rules v1
+#
+# Purpose:
+# - Capture org-specific triage exclusions for recurring security scan noise.
+# - Keep suppressions versioned and reviewed like code.
+# - Preserve conservative defaults: no blanket suppressions and no silent weakening.
+#
+# Usage:
+# - Add only narrow, explainable exclusions with a stable reason.
+# - Prefer path + pattern + condition over broad path-only suppressions.
+# - Remove stale rules when code or scanner behavior changes.
+
+[defaults]
+blanket_suppressions = forbidden
+new_rules_require_review = true
+prefer_fix_over_suppression = true
+expire_or_revisit_rules = true
+
+[allowed_rule_shape]
+# rule_id = "short-stable-name"
+# scanner = "scanner-or-review-source"
+# path = "narrow/file/or/glob"
+# pattern = "specific finding pattern"
+# condition = "why this exact case is not exploitable"
+# reason = "brief justification"
+# revisit = "YYYY-MM-DD or release milestone"
+
+[active_rules]
+# No active false-positive exclusions.
+# Add rules here only after confirming the finding is not actionable and the
+# exclusion is narrower than the affected vulnerability class.
+
+[forbidden]
+- Do not suppress entire vulnerability classes.
+- Do not suppress all findings under src/, sdks/, docs/harness/, or .claude/.
+- Do not suppress findings involving credentials, command execution, network egress, or authorization without explicit security review.
+- Do not use this file to bypass required ADRs, sandboxing, or harness safety gates.
