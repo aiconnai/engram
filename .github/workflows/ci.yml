@@ -77,9 +77,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif command -v brew >/dev/null 2>&1; then
+            brew install protobuf
+          else
+            echo "No supported package manager found for protoc" >&2
+            exit 1
+          fi
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: required-linux
@@ -95,9 +103,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif command -v brew >/dev/null 2>&1; then
+            brew install protobuf
+          else
+            echo "No supported package manager found for protoc" >&2
+            exit 1
+          fi
       - name: Free Linux runner disk space
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
@@ -132,9 +148,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif command -v brew >/dev/null 2>&1; then
+            brew install protobuf
+          else
+            echo "No supported package manager found for protoc" >&2
+            exit 1
+          fi
       - uses: Swatinem/rust-cache@v2
       - name: macOS smoke test
         run: |
@@ -179,9 +203,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif command -v brew >/dev/null 2>&1; then
+            brew install protobuf
+          else
+            echo "No supported package manager found for protoc" >&2
+            exit 1
+          fi
       - name: Free Linux runner disk space
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
@@ -198,9 +230,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif command -v brew >/dev/null 2>&1; then
+            brew install protobuf
+          else
+            echo "No supported package manager found for protoc" >&2
+            exit 1
+          fi
       - name: Free Linux runner disk space
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
@@ -282,9 +322,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif command -v brew >/dev/null 2>&1; then
+            brew install protobuf
+          else
+            echo "No supported package manager found for protoc" >&2
+            exit 1
+          fi
       - name: Free Linux runner disk space
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
@@ -393,9 +441,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif command -v brew >/dev/null 2>&1; then
+            brew install protobuf
+          else
+            echo "No supported package manager found for protoc" >&2
+            exit 1
+          fi
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: required-linux
