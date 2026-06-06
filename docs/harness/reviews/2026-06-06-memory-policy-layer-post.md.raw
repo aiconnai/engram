@@ -1,0 +1,1980 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: memory-policy-layer
+**Mode**: post
+**Date (UTC)**: 2026-06-06
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+
+## Diff Under Review
+
+```diff
+diff --git a/README.md b/README.md
+index 719250b..8221692 100644
+--- a/README.md
++++ b/README.md
+@@ -37,0 +38 @@ curl -X POST localhost:8080/mcp \
++- Memory policy layer: deterministic scoring for salience, retention, retrieval priority, reinforcement, decay, and conflict demotion over explicit memories.
+diff --git a/docs/AI_GUIDE.md b/docs/AI_GUIDE.md
+index 10b0966..8c776a0 100644
+--- a/docs/AI_GUIDE.md
++++ b/docs/AI_GUIDE.md
+@@ -163,0 +164,4 @@ Local HTTP MCP authentication is documented in [`docs/MCP_AUTH.md`](MCP_AUTH.md)
++### Memory Policy Boundary
++
++Engram's memory policy layer ranks and manages explicit memories; it does not store canonical truth in model weights or hidden session state. SQLite rows, FTS, embeddings, graph edges, and provenance/audit records remain the inspectable source of truth.
++
+@@ -367 +371 @@ Increases importance score. Capped at 1.0.
+-Engram combines **4 search signals** automatically:
++Engram combines **3 base retrieval signals**:
+@@ -372,2 +376,2 @@ Engram combines **4 search signals** automatically:
+-4. **Reciprocal Rank Fusion (RRF)** — merges all signals
+-5. **Multi-signal reranking** — recency, importance, quality
++
++Reciprocal Rank Fusion (RRF) merges those retrieval signals. The default heuristic reranker is controlled by the `rerank` parameter. Policy-based retrieval priority is separate and opt-in via `policy_rerank`.
+diff --git a/docs/MCP_TOOLS.md b/docs/MCP_TOOLS.md
+index 7aa448f..171e1fa 100644
+--- a/docs/MCP_TOOLS.md
++++ b/docs/MCP_TOOLS.md
+@@ -9 +9 @@ It is generated from `src/mcp/tools/registry.rs`.
+-Total tools: **257**
++Total tools: **262**
+@@ -38,0 +39,5 @@ Total tools: **257**
++| `memory_score` | standard | mutating (no MCP hints) | `id` |
++| `memory_promote` | standard | mutating (no MCP hints) | `id` |
++| `memory_decay` | standard | mutating (no MCP hints) | none |
++| `memory_explain` | standard | readOnlyHint | `id` |
++| `memory_reconcile_conflict` | standard | mutating (no MCP hints) | `id`, `reason` |
+@@ -277 +282 @@ Total tools: **257**
+-Store a new memory. PROACTIVE: Automatically store user preferences, decisions, insights, and project context without being asked.
++Store an explicit durable memory with inspectable provenance. Use for stable preferences, decisions, insights, and project context when the fact is intentional and worth preserving.
+@@ -638,0 +644,64 @@ Create a daily (ephemeral) memory that auto-expires after the specified TTL. Use
++### `memory_score`
++
++Compute deterministic memory policy scores for a memory. When persist=true, upserts the memory_policy row and emits a best-effort policy audit event.
++
++- Tier: `standard`
++- Annotations: mutating (no MCP hints)
++- Required inputs: `id`
++
++| Input | Type | Required | Summary |
++|-------|------|----------|---------|
++| `id` | `integer` | yes | Memory ID to score |
++| `persist` | `boolean` | no | Persist the computed policy score to memory_policy Default: `false`. |
++
++### `memory_promote`
++
++Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.
++
++- Tier: `standard`
++- Annotations: mutating (no MCP hints)
++- Required inputs: `id`
++
++| Input | Type | Required | Summary |
++|-------|------|----------|---------|
++| `id` | `integer` | yes | Memory ID to promote or reinforce |
++| `canonical_tier` | `boolean` | no | When true, also call promote_to_permanent for canonical tier promotion Default: `false`. |
++
++### `memory_decay`
++
++Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.
++
++- Tier: `standard`
++- Annotations: mutating (no MCP hints)
++- Required inputs: none
++
++| Input | Type | Required | Summary |
++|-------|------|----------|---------|
++| `workspace` | `string` | no | Workspace to decay Default: `default`. |
++| `dry_run` | `boolean` | no | When true, compute candidate changes without mutation Default: `true`. |
++
++### `memory_explain`
++
++Explain a memory's current policy score with feature components, reason text, and policy audit count.
++
++- Tier: `standard`
++- Annotations: readOnlyHint
++- Required inputs: `id`
++
++| Input | Type | Required | Summary |
++|-------|------|----------|---------|
++| `id` | `integer` | yes | Memory ID to explain |
++
++### `memory_reconcile_conflict`
++
++Record a conflict reconciliation signal for a memory policy without deleting or mutating memory content.
++
++- Tier: `standard`
++- Annotations: mutating (no MCP hints)
++- Required inputs: `id`, `reason`
++
++| Input | Type | Required | Summary |
++|-------|------|----------|---------|
++| `id` | `integer` | yes | Memory ID with the conflict signal |
++| `reason` | `string` | yes | Audit reason for the conflict reconciliation |
++
+@@ -1742,0 +1812,2 @@ Search memories using hybrid search (keyword + semantic). Automatically selects
++| `policy_rerank` | `boolean` | no | Apply memory policy retrieval_priority as an opt-in rerank layer after hybrid search. Default: `false`. |
++| `policy_explain` | `boolean` | no | Include policy score and reason for each reranked result when policy_rerank is true. Default: `false`. |
+diff --git a/docs/USING_ENGRAM_IN_A_REPO.md b/docs/USING_ENGRAM_IN_A_REPO.md
+index 1d9669f..7b273e3 100644
+--- a/docs/USING_ENGRAM_IN_A_REPO.md
++++ b/docs/USING_ENGRAM_IN_A_REPO.md
+@@ -169,0 +170,4 @@ Suggested MCP tools:
++- `memory_score` before promoting uncertain context
++- `memory_explain` before trusting a surprising result
++- `memory_reconcile_conflict` when a newer correction contradicts older memory
++- `memory_promote_to_permanent` only when you intend to change canonical retention tier
+diff --git a/docs/harness/GATES.md b/docs/harness/GATES.md
+index 276439a..ba0f2eb 100644
+--- a/docs/harness/GATES.md
++++ b/docs/harness/GATES.md
+@@ -27,0 +28,27 @@ O script `sensors.sh` grava o resultado parseável em `docs/harness/.sensors-las
++### Version-Control Gate
++
++Wrapper: `bash docs/harness/bin/vc-gate.sh`
++
++Este gate e opcional durante desenvolvimento normal, mas recomendado em
++fronteiras de issue e obrigatorio antes de releases manuais.
++
++Modos:
++
++- `status [ISSUE]` — mostra branch, `HEAD`, dirty/untracked count e estado `jj`
++  quando disponivel.
++- `start ISSUE` — bloqueia iniciar uma nova issue com worktree sujo, a menos
++  que `--allow-dirty-current-issue` torne a atribuicao explicita.
++- `done ISSUE` — exige worktree limpo e evidencia recente de commit Git ou
++  descricao `jj` mencionando a issue.
++- `release VERSION` — exige worktree limpo, versao do `Cargo.toml` alinhada e
++  tag `vVERSION` apontando para `HEAD`; use `--allow-untagged` apenas para
++  checagens pre-tag antes do dry-run.
++
++Contrato:
++
++- `jj` e permitido como camada local para evoluir, splitar e descrever trabalho
++  de issue.
++- Git continua canonico para commits de release, tags e `cargo publish`.
++- O gate nao cria commits, nao roda `jj new`, nao move tags e nao publica crate.
++- Falhas de `vc-gate.sh release` bloqueiam qualquer tentativa de publish.
++
+diff --git a/docs/harness/INVARIANTS.md b/docs/harness/INVARIANTS.md
+index decebf3..a0f6cb1 100644
+--- a/docs/harness/INVARIANTS.md
++++ b/docs/harness/INVARIANTS.md
+@@ -31,0 +32,3 @@ Cada invariant tem um **gate** indicando como é enforçado.
++8. **Issue boundaries exigem version control explícito.** Antes de iniciar uma nova issue, o worktree deve estar limpo ou a sujeira deve estar explicitamente atribuída à issue atual. Antes de marcar issue como done, deve existir commit Git explícito ou change `jj` descrito com o ID da issue. `jj` pode ser usado para evolução local; Git continua canônico para release, tags e `cargo publish`.
++   _Gate: `vc-gate.sh start|done|release` + revisão manual._
++
+@@ -34 +37 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-8. **Single-Process Judgment.** O agente/CLI que implementou a mudança **não** é o juiz final da mesma. Review cross-CLI (ou cross-model) é exigido para tarefas não-triviais.
++9. **Single-Process Judgment.** O agente/CLI que implementou a mudança **não** é o juiz final da mesma. Review cross-CLI (ou cross-model) é exigido para tarefas não-triviais.
+@@ -37 +40 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-9. **2 FAILs consecutivos no mesmo task → escalar humano.** Não iterar infinitamente no review-gate post.
++10. **2 FAILs consecutivos no mesmo task → escalar humano.** Não iterar infinitamente no review-gate post.
+@@ -40 +43 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-10. **Artefatos de review são imutáveis e versionados.** Nunca sobrescrever `reviews/*-post.md`. Usar sufixos `-v2`, `-v3` etc. para reruns no mesmo dia/UTC.
++11. **Artefatos de review são imutáveis e versionados.** Nunca sobrescrever `reviews/*-post.md`. Usar sufixos `-v2`, `-v3` etc. para reruns no mesmo dia/UTC.
+@@ -43 +46 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-11. **Exclusões de sensor só com known-issue + razão + registro prévio.** Somente para dependências externas temporárias. Nunca para "fazer o sensor passar" em código de produção sem ADR.
++12. **Exclusões de sensor só com known-issue + razão + registro prévio.** Somente para dependências externas temporárias. Nunca para "fazer o sensor passar" em código de produção sem ADR.
+@@ -46 +49 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-12. **`review-gate.sh post` só aceita parsing por marcador explícito.** A decisão hard do post-gate exige `REVIEW_VERDICT: PASS|FAIL ...` no artefato do reviewer; `PASS/FAIL` textual sem este marcador é inválido para automação.
++13. **`review-gate.sh post` só aceita parsing por marcador explícito.** A decisão hard do post-gate exige `REVIEW_VERDICT: PASS|FAIL ...` no artefato do reviewer; `PASS/FAIL` textual sem este marcador é inválido para automação.
+@@ -51 +54 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-13. **Doctor.sh é a fonte de verdade para integridade do harness.** Mudanças em scripts, docs de harness, ou wiring (ex.: referências à CODE_REVIEW_POLICY.md) só são válidas se `doctor.sh` passa limpo antes e depois.
++14. **Doctor.sh é a fonte de verdade para integridade do harness.** Mudanças em scripts, docs de harness, ou wiring (ex.: referências à CODE_REVIEW_POLICY.md) só são válidas se `doctor.sh` passa limpo antes e depois.
+@@ -54 +57 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-14. **Bootstrap é read-only, rápido e estável.** Output limitado a ~50 linhas, <500ms, sem side effects. Mudanças que violam isso quebram o contrato de onboarding de agentes.
++15. **Bootstrap é read-only, rápido e estável.** Output limitado a ~50 linhas, <500ms, sem side effects. Mudanças que violam isso quebram o contrato de onboarding de agentes.
+@@ -57 +60 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-15. **Policy local de review é referenciada consistentemente.** bootstrap.sh, review-gate.sh, GATES.md, README.md e CODE_REVIEW_POLICY.md devem apontar uns para os outros de forma que doctor.sh valide.
++16. **Policy local de review é referenciada consistentemente.** bootstrap.sh, review-gate.sh, GATES.md, README.md e CODE_REVIEW_POLICY.md devem apontar uns para os outros de forma que doctor.sh valide.
+@@ -62 +65 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-16. **Paridade CI local é sagrada.** `just ci` (ou `make ci`) deve reproduzir o que o GitHub Actions exige (fmt, clippy -D warnings, testes com CI_FEATURES, docs + MCP reference). Não "funciona na minha máquina" com features locais apenas.
++17. **Paridade CI local é sagrada.** `just ci` (ou `make ci`) deve reproduzir o que o GitHub Actions exige (fmt, clippy -D warnings, testes com CI_FEATURES, docs + MCP reference). Não "funciona na minha máquina" com features locais apenas.
+@@ -65 +68 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-17. **Schema version + testes de migração.** Alterar `storage/migrations.rs` exige atualizar `SCHEMA_VERSION` **e** todos os testes que têm versão hardcoded. Nunca silenciar mismatches.
++18. **Schema version + testes de migração.** Alterar `storage/migrations.rs` exige atualizar `SCHEMA_VERSION` **e** todos os testes que têm versão hardcoded. Nunca silenciar mismatches.
+@@ -68 +71 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-18. **MCP surface changes são breaking por default.** Adicionar/remover/renomear tools expostas exige atualização de `scripts/generate-mcp-reference.sh`, docs/MCP_TOOLS.md, testes de protocolo, e SDKs (quando breaking). Coordenação visível.
++19. **MCP surface changes são breaking por default.** Adicionar/remover/renomear tools expostas exige atualização de `scripts/generate-mcp-reference.sh`, docs/MCP_TOOLS.md, testes de protocolo, e SDKs (quando breaking). Coordenação visível.
+@@ -71 +74 @@ Cada invariant tem um **gate** indicando como é enforçado.
+-19. **Sem unwrap em paths quentes.** Todos os paths de produção (MCP handlers, storage, hooks, intelligence) usam `?` + contexto de erro. `unwrap()` / `expect()` só em testes ou inicialização com panic intencional documentado.
++20. **Sem unwrap em paths quentes.** Todos os paths de produção (MCP handlers, storage, hooks, intelligence) usam `?` + contexto de erro. `unwrap()` / `expect()` só em testes ou inicialização com panic intencional documentado.
+diff --git a/docs/harness/README.md b/docs/harness/README.md
+index 4bf148a..0a62851 100644
+--- a/docs/harness/README.md
++++ b/docs/harness/README.md
+@@ -80,0 +81 @@ bash docs/harness/bin/doctor.sh
++| `bin/vc-gate.sh`               | Gate opcional de version control para issue boundaries, `jj` local e releases Git/Cargo |
+@@ -109 +110,4 @@ bash docs/harness/bin/review-gate.sh pre <task-id>
+-# 3. Implementar a menor mudança correta
++# 3. Gate de version control no inicio da issue (recomendado)
++bash docs/harness/bin/vc-gate.sh start <task-id>
++
++# 4. Implementar a menor mudança correta
+@@ -113 +117 @@ bash docs/harness/bin/review-gate.sh pre <task-id>
+-# 4. Rodar sensores determinísticos (hard gate)
++# 5. Rodar sensores determinísticos (hard gate)
+@@ -116 +120 @@ bash docs/harness/bin/sensors.sh
+-# 5. Review pós-mudança (hard gate — PASS exigido)
++# 6. Review pós-mudança (hard gate — PASS exigido)
+@@ -119 +123 @@ bash docs/harness/bin/review-gate.sh post <task-id>
+-# 6. Atualizar memória canônica (obrigatório)
++# 7. Atualizar memória canônica (obrigatório)
+@@ -123 +127 @@ $EDITOR docs/harness/progress/<active-plan-filename>.md
+-# 7. Validar mensagem de commit
++# 8. Validar mensagem de commit
+@@ -126 +130 @@ bash docs/harness/bin/check-commit-msg.sh --message "<type>(<scope>): <descripti
+-# 8. Commitar arquivos específicos (nunca "git add .")
++# 9. Commitar arquivos específicos (nunca "git add .")
+@@ -128,0 +133,3 @@ git commit -m "<type>(<scope>): <description>"
++
++# 10. Gate de version control no fechamento da issue (recomendado)
++bash docs/harness/bin/vc-gate.sh done <task-id>
+@@ -154,0 +162,32 @@ Sem `Co-Authored-By` ou trailers de atribuição de IA.
++## Version Control Gate e jj
++
++`vc-gate.sh` existe para impedir que trabalho de varias issues acumule em um
++worktree sujo sem fronteira clara. Ele complementa Git; nao substitui GitHub,
++tags de release ou `cargo publish`.
++
++Uso recomendado:
++
++```bash
++# Antes de iniciar uma issue
++bash docs/harness/bin/vc-gate.sh start ENGRA-84
++
++# Durante trabalho local com jj, se adotado pelo time
++jj new -m "feat(storage): ENGRA-84 memory policy layer"
++jj split
++jj describe -m "feat(storage): ENGRA-84 add memory policy layer"
++
++# Antes de marcar done
++bash docs/harness/bin/vc-gate.sh done ENGRA-84
++
++# Antes de release/publish
++bash docs/harness/bin/vc-gate.sh release 0.21.1
++```
++
++Regras:
++
++- `jj` pode ser usado para evoluir, splitar e descrever work-in-progress local.
++- Git continua canônico para release commits, tags e crates.io.
++- O gate nao cria commits, nao roda `jj new`, nao move tags e nao publica.
++- Dirty worktree em `start`, `done` ou `release` precisa ser resolvido ou
++  explicitamente atribuido com uma flag de allow.
++
+@@ -245,0 +285 @@ Uma tarefa só está pronta quando:
++- [ ] `vc-gate.sh done <task-id>` passou ou skip foi registrado
+diff --git a/docs/harness/plans/2026-06-05-cross-harness-improvement-plan.md b/docs/harness/plans/2026-06-05-cross-harness-improvement-plan.md
+index bd5c58e..ab3d1b4 100644
+--- a/docs/harness/plans/2026-06-05-cross-harness-improvement-plan.md
++++ b/docs/harness/plans/2026-06-05-cross-harness-improvement-plan.md
+@@ -0,0 +1 @@
++
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index a24aa81..aab7e12 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -371,0 +372,11 @@ Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado n
++
++## Version-control gate / jj adoption — 2026-06-05
++
++- Adicionado `docs/harness/bin/vc-gate.sh` como gate opcional de fronteira de issue e gate recomendado antes de release.
++- Contrato adotado:
++  - `jj` pode ser usado como camada local para evoluir, splitar e descrever work-in-progress;
++  - Git continua canônico para release commits, tags e `cargo publish`;
++  - o gate nao cria commits, nao roda `jj new`, nao move tags e nao publica.
++- Modos documentados: `status`, `start ISSUE`, `done ISSUE`, `release VERSION`.
++- Criado Review Canvas em `docs/harness/canvas/2026-06-05-jj-version-control-gate.md` porque a mudanca toca scripts/policy do harness.
++- Validação nao executada nesta iteração por instrução operacional atual de nao rodar verificações sem pedido explícito.
+diff --git a/src/bin/server.rs b/src/bin/server.rs
+index fc5bfae..2fb5611 100644
+--- a/src/bin/server.rs
++++ b/src/bin/server.rs
+@@ -278 +278,3 @@ impl EngramHandler {
+-        use engram::hooks::{HookManager, HookResult, LifecycleHook};
++        use engram::hooks::{
++            HookManager, HookResult, LifecycleHook, PostToolUseHandler, SessionEndHandler,
++        };
+@@ -280,0 +283 @@ impl EngramHandler {
++        let storage = self.storage.clone();
+@@ -292,7 +295,3 @@ impl EngramHandler {
+-        hm.register(LifecycleHook::PostToolUse, |_hook, ctx| {
+-            tracing::debug!(
+-                target = "engram::hooks",
+-                tool = ?ctx.metadata.get("tool_name"),
+-                "PostToolUse"
+-            );
+-            Ok(HookResult::Continue)
++        let post_tool_use_handler = PostToolUseHandler::new(storage.clone());
++        hm.register(LifecycleHook::PostToolUse, move |hook, ctx| {
++            post_tool_use_handler.handle(hook, ctx)
+@@ -302,7 +301,3 @@ impl EngramHandler {
+-        hm.register(LifecycleHook::SessionEnd, |_hook, ctx| {
+-            tracing::info!(
+-                target = "engram::hooks",
+-                session_id = ?ctx.session_id,
+-                "SessionEnd"
+-            );
+-            Ok(HookResult::Continue)
++        let session_end_handler = SessionEndHandler::policy_summary_only(storage);
++        hm.register(LifecycleHook::SessionEnd, move |hook, ctx| {
++            session_end_handler.handle(hook, ctx)
+diff --git a/src/hooks/post_tool_use.rs b/src/hooks/post_tool_use.rs
+index 76d27e1..c9bc060 100644
+--- a/src/hooks/post_tool_use.rs
++++ b/src/hooks/post_tool_use.rs
+@@ -4,0 +5 @@ use super::{HookContext, HookResult};
++use crate::storage::{queries::record_reinforcement, Storage};
+@@ -5,0 +7,4 @@ use crate::Result;
++use serde_json::Value;
++use std::collections::{BTreeSet, HashMap};
++
++const POST_TOOL_REINFORCEMENT_BOOST: f32 = 0.05;
+@@ -11,0 +17,2 @@ pub struct PostToolUseHandler {
++    /// Optional storage handle for best-effort policy reinforcement.
++    pub storage: Option<Storage>,
+@@ -16 +23,4 @@ impl Default for PostToolUseHandler {
+-        Self { auto_memory: true }
++        Self {
++            auto_memory: true,
++            storage: None,
++        }
+@@ -20,0 +31,7 @@ impl PostToolUseHandler {
++    pub fn new(storage: Storage) -> Self {
++        Self {
++            auto_memory: true,
++            storage: Some(storage),
++        }
++    }
++
+@@ -26,0 +44,2 @@ impl PostToolUseHandler {
++        self.reinforce_policy_from_metadata(context);
++
+@@ -42,0 +62,49 @@ impl PostToolUseHandler {
++
++    fn reinforce_policy_from_metadata(&self, context: &HookContext) {
++        let Some(storage) = self.storage.as_ref() else {
++            return;
++        };
++        let Some(tool_name) = context.metadata.get("tool_name").and_then(Value::as_str) else {
++            return;
++        };
++
++        if !is_policy_reinforcement_tool(tool_name) || metadata_indicates_failure(&context.metadata)
++        {
++            return;
++        }
++
++        let memory_ids = collect_memory_ids_from_metadata(&context.metadata);
++        if memory_ids.is_empty() {
++            return;
++        }
++
++        let triggered_by = format!("post_tool_use:{}", tool_name);
++        let result = storage.with_connection(|conn| {
++            for memory_id in &memory_ids {
++                if let Err(e) = record_reinforcement(
++                    conn,
++                    *memory_id,
++                    POST_TOOL_REINFORCEMENT_BOOST,
++                    &triggered_by,
++                ) {
++                    tracing::warn!(
++                        target = "engram::hooks::post_tool_use",
++                        memory_id = *memory_id,
++                        tool_name,
++                        error = %e,
++                        "failed to record post-tool-use policy reinforcement; continuing"
++                    );
++                }
++            }
++            Ok(())
++        });
++
++        if let Err(e) = result {
++            tracing::warn!(
++                target = "engram::hooks::post_tool_use",
++                tool_name,
++                error = %e,
++                "failed to access storage for post-tool-use policy reinforcement; continuing"
++            );
++        }
++    }
+@@ -52,0 +121,165 @@ pub fn create_handler(
++pub fn create_handler_with_storage(
++    storage: Storage,
++) -> impl Fn(super::LifecycleHook, &HookContext) -> Result<HookResult> + Send + Sync {
++    move |hook, context| {
++        let handler = PostToolUseHandler::new(storage.clone());
++        handler.handle(hook, context)
++    }
++}
++
++fn is_policy_reinforcement_tool(tool_name: &str) -> bool {
++    matches!(tool_name, "memory_search" | "memory_get" | "memory_expand")
++        || tool_name.starts_with("memory_policy")
++        || tool_name.starts_with("retention_policy")
++        || tool_name.contains("_policy_")
++}
++
++fn metadata_indicates_failure(metadata: &HashMap<String, Value>) -> bool {
++    if metadata
++        .get("success")
++        .or_else(|| metadata.get("ok"))
++        .and_then(Value::as_bool)
++        == Some(false)
++    {
++        return true;
++    }
++
++    for key in ["error", "tool_error"] {
++        if metadata.get(key).is_some_and(|value| !value.is_null()) {
++            return true;
++        }
++    }
++
++    if metadata.get("status").is_some_and(is_error_status) {
++        return true;
++    }
++
++    if let Some(output) = metadata.get("tool_output").and_then(Value::as_object) {
++        if output.get("isError").and_then(Value::as_bool) == Some(true) {
++            return true;
++        }
++        if output.get("error").is_some_and(|value| !value.is_null()) {
++            return true;
++        }
++        if output.get("status").is_some_and(is_error_status) {
++            return true;
++        }
++    }
++
++    false
++}
++
++fn is_error_status(value: &Value) -> bool {
++    value
++        .as_str()
++        .map(|status| {
++            matches!(
++                status.to_ascii_lowercase().as_str(),
++                "error" | "failed" | "failure"
++            )
++        })
++        .unwrap_or(false)
++}
++
++fn collect_memory_ids_from_metadata(metadata: &HashMap<String, Value>) -> Vec<i64> {
++    let mut ids = BTreeSet::new();
++    for key in [
++        "memory_id",
++        "memory_ids",
++        "returned_memory_id",
++        "returned_memory_ids",
++        "returned_memories",
++        "result_memory_id",
++        "result_memory_ids",
++    ] {
++        if let Some(value) = metadata.get(key) {
++            collect_memory_ids_from_value(value, &mut ids);
++        }
++    }
++    if let Some(value) = metadata.get("tool_output") {
++        collect_memory_ids_from_tool_output(value, &mut ids);
++    }
++    ids.into_iter().collect()
++}
++
++fn collect_memory_ids_from_value(value: &Value, ids: &mut BTreeSet<i64>) {
++    match value {
++        Value::Number(number) => {
++            if let Some(id) = number.as_i64().filter(|id| *id > 0) {
++                ids.insert(id);
++            }
++        }
++        Value::String(raw) => {
++            if let Ok(id) = raw.parse::<i64>() {
++                if id > 0 {
++                    ids.insert(id);
++                }
++            }
++        }
++        Value::Array(values) => {
++            for value in values {
++                collect_memory_ids_from_value(value, ids);
++            }
++        }
++        Value::Object(object) => {
++            for key in ["id", "memory_id"] {
++                if let Some(value) = object.get(key) {
++                    collect_memory_ids_from_value(value, ids);
++                }
++            }
++        }
++        Value::Bool(_) | Value::Null => {}
++    }
++}
++
++fn collect_memory_ids_from_tool_output(value: &Value, ids: &mut BTreeSet<i64>) {
++    let Value::Object(object) = value else {
++        return;
++    };
++
++    for key in [
++        "memory_id",
++        "memory_ids",
++        "returned_memory_id",
++        "returned_memory_ids",
++        "result_memory_id",
++        "result_memory_ids",
++    ] {
++        if let Some(value) = object.get(key) {
++            collect_memory_ids_from_value(value, ids);
++        }
++    }
++
++    for key in ["memory", "result"] {
++        if let Some(Value::Object(item)) = object.get(key) {
++            collect_memory_id_from_result_object(item, ids);
++        }
++    }
++
++    for key in ["memories", "results", "items"] {
++        if let Some(Value::Array(values)) = object.get(key) {
++            for value in values {
++                if let Value::Object(item) = value {
++                    collect_memory_id_from_result_object(item, ids);
++                }
++            }
++        }
++    }
++}
++
++fn collect_memory_id_from_result_object(
++    object: &serde_json::Map<String, Value>,
++    ids: &mut BTreeSet<i64>,
++) {
++    if object.contains_key("content")
++        || object.contains_key("memory_type")
++        || object.contains_key("score")
++    {
++        for key in ["memory_id", "id"] {
++            if let Some(value) = object.get(key) {
++                collect_memory_ids_from_value(value, ids);
++            }
++        }
++    }
++}
++
+@@ -55,0 +289,2 @@ mod tests {
++    use crate::storage::queries::{create_memory, get_policy_record};
++    use crate::types::{CreateMemoryInput, MemoryType};
+@@ -57 +292,22 @@ mod tests {
+-    use std::collections::HashMap;
++
++    fn test_memory_input(content: &str) -> CreateMemoryInput {
++        CreateMemoryInput {
++            content: content.to_string(),
++            memory_type: MemoryType::Note,
++            tags: vec![],
++            metadata: HashMap::new(),
++            importance: None,
++            scope: Default::default(),
++            workspace: None,
++            tier: Default::default(),
++            defer_embedding: true,
++            ttl_seconds: None,
++            dedup_mode: Default::default(),
++            dedup_threshold: None,
++            event_time: None,
++            event_duration_seconds: None,
++            trigger_pattern: None,
++            summary_of_id: None,
++            media_url: None,
++        }
++    }
+@@ -77,0 +334,129 @@ mod tests {
++
++    #[test]
++    fn post_tool_use_memory_id_metadata_reinforces_policy() {
++        let storage = Storage::open_in_memory().unwrap();
++        let memory = storage
++            .with_connection(|conn| create_memory(conn, &test_memory_input("post tool policy")))
++            .unwrap();
++        let handler = PostToolUseHandler::new(storage.clone());
++        let mut context = HookContext {
++            session_id: Some("test-session".to_string()),
++            workspace: Some("default".to_string()),
++            timestamp: chrono::Utc::now().to_rfc3339(),
++            metadata: HashMap::new(),
++        };
++        context
++            .metadata
++            .insert("tool_name".to_string(), json!("memory_search"));
++        context.metadata.insert("success".to_string(), json!(true));
++        context
++            .metadata
++            .insert("returned_memory_ids".to_string(), json!([memory.id]));
++
++        let result = handler.handle(crate::hooks::LifecycleHook::PostToolUse, &context);
++        assert!(matches!(result, Ok(HookResult::Continue)));
++
++        let policy = storage
++            .with_connection(|conn| get_policy_record(conn, memory.id))
++            .unwrap()
++            .expect("policy record");
++        assert_eq!(policy.reinforcement_count, 1);
++    }
++
++    #[test]
++    fn post_tool_use_tool_output_result_reinforces_policy() {
++        let storage = Storage::open_in_memory().unwrap();
++        let memory = storage
++            .with_connection(|conn| create_memory(conn, &test_memory_input("tool output policy")))
++            .unwrap();
++        let handler = PostToolUseHandler::new(storage.clone());
++        let mut context = HookContext {
++            session_id: Some("test-session".to_string()),
++            workspace: Some("default".to_string()),
++            timestamp: chrono::Utc::now().to_rfc3339(),
++            metadata: HashMap::new(),
++        };
++        context
++            .metadata
++            .insert("tool_name".to_string(), json!("memory_search"));
++        context.metadata.insert(
++            "tool_output".to_string(),
++            json!({
++                "results": [
++                    {
++                        "id": memory.id,
++                        "content": "tool output policy",
++                        "score": 0.91
++                    }
++                ]
++            }),
++        );
++
++        let result = handler.handle(crate::hooks::LifecycleHook::PostToolUse, &context);
++        assert!(matches!(result, Ok(HookResult::Continue)));
++
++        let policy = storage
++            .with_connection(|conn| get_policy_record(conn, memory.id))
++            .unwrap()
++            .expect("policy record");
++        assert_eq!(policy.reinforcement_count, 1);
++    }
++
++    #[test]
++    fn post_tool_use_tool_output_ignores_unrelated_numeric_ids() {
++        let storage = Storage::open_in_memory().unwrap();
++        let memory = storage
++            .with_connection(|conn| create_memory(conn, &test_memory_input("unrelated id policy")))
++            .unwrap();
++        let handler = PostToolUseHandler::new(storage.clone());
++        let mut context = HookContext {
++            session_id: Some("test-session".to_string()),
++            workspace: Some("default".to_string()),
++            timestamp: chrono::Utc::now().to_rfc3339(),
++            metadata: HashMap::new(),
++        };
++        context
++            .metadata
++            .insert("tool_name".to_string(), json!("memory_search"));
++        context.metadata.insert(
++            "tool_output".to_string(),
++            json!({
++                "request_id": memory.id,
++                "result": {
++                    "id": memory.id,
++                    "status": "ok"
++                }
++            }),
++        );
++
++        let result = handler.handle(crate::hooks::LifecycleHook::PostToolUse, &context);
++        assert!(matches!(result, Ok(HookResult::Continue)));
++
++        let policy = storage
++            .with_connection(|conn| get_policy_record(conn, memory.id))
++            .unwrap()
++            .expect("policy record");
++        assert_eq!(policy.reinforcement_count, 0);
++    }
++
++    #[test]
++    fn malformed_post_tool_use_metadata_continues_without_abort() {
++        let storage = Storage::open_in_memory().unwrap();
++        let handler = PostToolUseHandler::new(storage);
++        let mut context = HookContext {
++            session_id: Some("test-session".to_string()),
++            workspace: Some("default".to_string()),
++            timestamp: chrono::Utc::now().to_rfc3339(),
++            metadata: HashMap::new(),
++        };
++        context
++            .metadata
++            .insert("tool_name".to_string(), json!("memory_get"));
++        context.metadata.insert(
++            "returned_memory_ids".to_string(),
++            json!({"bad": ["not-an-id"]}),
++        );
++
++        let result = handler.handle(crate::hooks::LifecycleHook::PostToolUse, &context);
++        assert!(matches!(result, Ok(HookResult::Continue)));
++    }
+diff --git a/src/hooks/session_end.rs b/src/hooks/session_end.rs
+index 4f81102..06cc12c 100644
+--- a/src/hooks/session_end.rs
++++ b/src/hooks/session_end.rs
+@@ -18 +18,4 @@ use super::{HookContext, HookResult, LifecycleHook};
+-use crate::storage::{pending_injections, Storage};
++use crate::storage::{
++    enrichment_events::{self, EnrichmentEvent},
++    pending_injections, Storage,
++};
+@@ -43,0 +47,2 @@ pub struct SessionEndHandler {
++    /// Emit policy audit summary without enqueueing a next-session payload.
++    pub policy_summary_only: bool,
+@@ -51,0 +57 @@ impl Default for SessionEndHandler {
++            policy_summary_only: false,
+@@ -61,0 +68,10 @@ impl SessionEndHandler {
++            policy_summary_only: false,
++        }
++    }
++
++    pub fn policy_summary_only(storage: Storage) -> Self {
++        Self {
++            generate_summary: false,
++            storage: Some(storage),
++            auto_inject_next_session: false,
++            policy_summary_only: true,
+@@ -73,4 +88,0 @@ impl SessionEndHandler {
+-        if !self.auto_inject_next_session {
+-            return Ok(HookResult::Continue);
+-        }
+-
+@@ -91,0 +104,9 @@ impl SessionEndHandler {
++        if self.policy_summary_only {
++            emit_session_end_policy_summary(storage, workspace, context, false);
++            return Ok(HookResult::Continue);
++        }
++
++        if !self.auto_inject_next_session {
++            return Ok(HookResult::Continue);
++        }
++
+@@ -124,12 +145,20 @@ impl SessionEndHandler {
+-        match result {
+-            Ok(id) => tracing::debug!(
+-                target = "engram::hooks::session_end",
+-                queue_id = id,
+-                "enqueued session-end payload"
+-            ),
+-            Err(e) => tracing::warn!(
+-                target = "engram::hooks::session_end",
+-                error = %e,
+-                "failed to enqueue session-end payload; continuing"
+-            ),
+-        }
++        let queued = match result {
++            Ok(id) => {
++                tracing::debug!(
++                    target = "engram::hooks::session_end",
++                    queue_id = id,
++                    "enqueued session-end payload"
++                );
++                true
++            }
++            Err(e) => {
++                tracing::warn!(
++                    target = "engram::hooks::session_end",
++                    error = %e,
++                    "failed to enqueue session-end payload; continuing"
++                );
++                false
++            }
++        };
++
++        emit_session_end_policy_summary(storage, workspace, context, queued);
+@@ -140,0 +170,42 @@ impl SessionEndHandler {
++fn emit_session_end_policy_summary(
++    storage: &Storage,
++    workspace: &str,
++    context: &HookContext,
++    queued_next_session_payload: bool,
++) {
++    let result = storage.with_connection(|conn| {
++        let now = chrono::Utc::now();
++        let operation_id = format!("memory-policy-session-end-{}", now.timestamp_micros());
++        let event = EnrichmentEvent {
++            operation_id: &operation_id,
++            event_type: "memory_policy_session_end",
++            memory_id: None,
++            version_id: None,
++            triggered_by: "session_end",
++            agent_id: None,
++            workspace: Some(workspace),
++            params: json!({
++                "source_session_id": context.session_id,
++                "ended_at": context.timestamp,
++                "has_notes": context.metadata.contains_key("notes")
++            }),
++            outcome: json!({
++                "queued_next_session_payload": queued_next_session_payload,
++                "hidden_facts_written": false
++            }),
++            status: "completed",
++            dry_run: false,
++        };
++        enrichment_events::emit_best_effort(conn, &event);
++        Ok(())
++    });
++
++    if let Err(e) = result {
++        tracing::warn!(
++            target = "engram::hooks::session_end",
++            error = %e,
++            "failed to emit session-end policy summary; continuing"
++        );
++    }
++}
++
+@@ -230,0 +302 @@ mod tests {
++            policy_summary_only: false,
+@@ -263,0 +336,33 @@ mod tests {
++
++    #[test]
++    fn handler_with_storage_emits_policy_summary_without_hidden_notes() {
++        let storage = Storage::open_in_memory().unwrap();
++        let handler = SessionEndHandler::new(storage.clone());
++        let mut c = ctx("s1", "ws");
++        c.metadata.insert(
++            "notes".to_string(),
++            serde_json::json!("do not persist this as policy"),
++        );
++
++        handler
++            .handle(LifecycleHook::SessionEnd, &c)
++            .expect("handle");
++
++        let (count, outcome): (i64, String) = storage
++            .with_connection(|conn| {
++                let row = conn.query_row(
++                    "SELECT COUNT(*), COALESCE(MAX(outcome), '{}')
++                     FROM enrichment_events
++                     WHERE event_type = 'memory_policy_session_end'
++                       AND memory_id IS NULL
++                       AND workspace = 'ws'",
++                    [],
++                    |row| Ok((row.get(0)?, row.get(1)?)),
++                )?;
++                Ok(row)
++            })
++            .unwrap();
++        assert_eq!(count, 1);
++        assert!(!outcome.contains("do not persist this as policy"));
++        assert!(outcome.contains("hidden_facts_written"));
++    }
+diff --git a/src/intelligence/mod.rs b/src/intelligence/mod.rs
+index 53c5e96..a6f1a48 100644
+--- a/src/intelligence/mod.rs
++++ b/src/intelligence/mod.rs
+@@ -39,0 +40 @@ pub mod gardening;
++pub mod memory_policy;
+@@ -141,0 +143,6 @@ pub use memory_update::{
++pub use memory_policy::{
++    blend_retrieval_priority, explain_policy_score, extract_features, score_policy, PolicyEvent,
++    PolicyEventKind, PolicyExplanation, PolicyFeatureInput, PolicyFeatures, PolicyScore,
++    POLICY_VERSION,
++};
++
+diff --git a/src/mcp/handlers/mod.rs b/src/mcp/handlers/mod.rs
+index 566e3b7..3592e1d 100644
+--- a/src/mcp/handlers/mod.rs
++++ b/src/mcp/handlers/mod.rs
+@@ -33,0 +34 @@ pub mod memory_crud;
++pub mod memory_policy;
+@@ -127,0 +129,5 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
++        "memory_score" => memory_policy::memory_score(ctx, params),
++        "memory_promote" => memory_policy::memory_promote(ctx, params),
++        "memory_decay" => memory_policy::memory_decay(ctx, params),
++        "memory_explain" => memory_policy::memory_explain(ctx, params),
++        "memory_reconcile_conflict" => memory_policy::memory_reconcile_conflict(ctx, params),
+diff --git a/src/mcp/handlers/search.rs b/src/mcp/handlers/search.rs
+index 2fa1bea..dc67e15 100644
+--- a/src/mcp/handlers/search.rs
++++ b/src/mcp/handlers/search.rs
+@@ -2,0 +3,2 @@
++use std::collections::HashMap;
++
+@@ -4,0 +7,3 @@ use serde_json::{json, Value};
++use crate::intelligence::memory_policy::{
++    blend_retrieval_priority, extract_features, score_policy, PolicyFeatureInput,
++};
+@@ -5,0 +11 @@ use crate::search::{hybrid_search, RerankConfig, RerankStrategy, Reranker};
++use crate::storage::queries::get_policy_record;
+@@ -9,0 +16,21 @@ use super::HandlerContext;
++#[derive(Clone)]
++struct PolicyRerankInfo {
++    score: f32,
++    blended_score: f32,
++    reason: String,
++    version: String,
++    source: &'static str,
++}
++
++impl PolicyRerankInfo {
++    fn to_json(&self) -> Value {
++        json!({
++            "score": self.score,
++            "blended_score": self.blended_score,
++            "reason": self.reason,
++            "version": self.version,
++            "source": self.source
++        })
++    }
++}
++
+@@ -14,0 +42,8 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
++    let policy_rerank = params
++        .get("policy_rerank")
++        .and_then(|v| v.as_bool())
++        .unwrap_or(false);
++    let policy_explain = params
++        .get("policy_explain")
++        .and_then(|v| v.as_bool())
++        .unwrap_or(false);
+@@ -55 +90 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
+-    if !skip_cache && !rerank_enabled {
++    if !skip_cache && !rerank_enabled && !policy_rerank {
+@@ -84 +119 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
+-            let results = hybrid_search(conn, query, embedding_ref, &options, &search_config)?;
++            let mut results = hybrid_search(conn, query, embedding_ref, &options, &search_config)?;
+@@ -86 +121 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
+-            if !rerank_enabled && !skip_cache {
++            if !rerank_enabled && !skip_cache && !policy_rerank {
+@@ -94,0 +130,49 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
++            let mut policy_info_by_memory_id = HashMap::new();
++            if policy_rerank {
++                for result in &mut results {
++                    let hybrid_score = result.score;
++                    let stored_policy = get_policy_record(conn, result.memory.id)?;
++                    let (policy_score, source) = if let Some(policy) = stored_policy.as_ref() {
++                        (
++                            crate::intelligence::memory_policy::PolicyScore {
++                                salience_score: policy.salience_score,
++                                retention_score: policy.retention_score,
++                                retrieval_priority: policy.retrieval_priority,
++                                policy_version: policy.policy_version.clone(),
++                                policy_reason: policy.policy_reason.clone(),
++                            },
++                            "stored",
++                        )
++                    } else {
++                        let features = extract_features(PolicyFeatureInput {
++                            memory: &result.memory,
++                            existing_policy: None,
++                            event: None,
++                            hybrid_search_score: Some(hybrid_score),
++                            session_relevance: None,
++                        });
++                        (score_policy(&features), "heuristic-v1")
++                    };
++                    let blended_score =
++                        blend_retrieval_priority(hybrid_score, policy_score.retrieval_priority);
++
++                    result.score = blended_score;
++                    policy_info_by_memory_id.insert(
++                        result.memory.id,
++                        PolicyRerankInfo {
++                            score: policy_score.retrieval_priority,
++                            blended_score,
++                            reason: policy_score.policy_reason,
++                            version: policy_score.policy_version,
++                            source,
++                        },
++                    );
++                }
++
++                results.sort_by(|a, b| {
++                    b.score
++                        .partial_cmp(&a.score)
++                        .unwrap_or(std::cmp::Ordering::Equal)
++                });
++            }
++
+@@ -115,0 +200,5 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
++                            if policy_rerank && policy_explain {
++                                if let Some(policy) = policy_info_by_memory_id.get(&r.result.memory.id) {
++                                    obj["policy"] = policy.to_json();
++                                }
++                            }
+@@ -132,0 +222,5 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
++                            if policy_rerank && policy_explain {
++                                if let Some(policy) = policy_info_by_memory_id.get(&r.result.memory.id) {
++                                    obj["policy"] = policy.to_json();
++                                }
++                            }
+@@ -142 +236 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
+-                        json!({
++                        let mut obj = json!({
+@@ -147 +241,7 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
+-                        })
++                        });
++                        if policy_rerank && policy_explain {
++                            if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
++                                obj["policy"] = policy.to_json();
++                            }
++                        }
++                        obj
+@@ -151 +251,16 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
+-                Ok(json!(results))
++                Ok(json!(results
++                    .iter()
++                    .map(|r| {
++                        let mut obj = json!({
++                            "memory": r.memory,
++                            "score": r.score,
++                            "match_info": r.match_info
++                        });
++                        if policy_rerank && policy_explain {
++                            if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
++                                obj["policy"] = policy.to_json();
++                            }
++                        }
++                        obj
++                    })
++                    .collect::<Vec<_>>()))
+diff --git a/src/mcp/tools/memory.rs b/src/mcp/tools/memory.rs
+index 1ee846e..5228049 100644
+--- a/src/mcp/tools/memory.rs
++++ b/src/mcp/tools/memory.rs
+@@ -6 +6 @@
+-        description: "Store a new memory. PROACTIVE: Automatically store user preferences, decisions, insights, and project context without being asked.",
++        description: "Store an explicit durable memory with inspectable provenance. Use for stable preferences, decisions, insights, and project context when the fact is intentional and worth preserving.",
+@@ -463,0 +464,68 @@
++    ToolDef {
++        name: "memory_score",
++        description: "Compute deterministic memory policy scores for a memory. When persist=true, upserts the memory_policy row and emits a best-effort policy audit event.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "id": {"type": "integer", "description": "Memory ID to score"},
++                "persist": {"type": "boolean", "default": false, "description": "Persist the computed policy score to memory_policy"}
++            },
++            "required": ["id"]
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Standard,
++    },
++    ToolDef {
++        name: "memory_promote",
++        description: "Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "id": {"type": "integer", "description": "Memory ID to promote or reinforce"},
++                "canonical_tier": {"type": "boolean", "default": false, "description": "When true, also call promote_to_permanent for canonical tier promotion"}
++            },
++            "required": ["id"]
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Standard,
++    },
++    ToolDef {
++        name: "memory_decay",
++        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "workspace": {"type": "string", "default": "default", "description": "Workspace to decay"},
++                "dry_run": {"type": "boolean", "default": true, "description": "When true, compute candidate changes without mutation"}
++            }
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Standard,
++    },
++    ToolDef {
++        name: "memory_explain",
++        description: "Explain a memory's current policy score with feature components, reason text, and policy audit count.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "id": {"type": "integer", "description": "Memory ID to explain"}
++            },
++            "required": ["id"]
++        }"#,
++        annotations: ToolAnnotations::read_only(),
++        tier: ToolTier::Standard,
++    },
++    ToolDef {
++        name: "memory_reconcile_conflict",
++        description: "Record a conflict reconciliation signal for a memory policy without deleting or mutating memory content.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "id": {"type": "integer", "description": "Memory ID with the conflict signal"},
++                "reason": {"type": "string", "description": "Audit reason for the conflict reconciliation"}
++            },
++            "required": ["id", "reason"]
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Standard,
++    },
+diff --git a/src/mcp/tools/registry.rs b/src/mcp/tools/registry.rs
+index 82d0f0e..02a22f2 100644
+--- a/src/mcp/tools/registry.rs
++++ b/src/mcp/tools/registry.rs
+@@ -7 +7 @@
+-        description: "Store a new memory. PROACTIVE: Automatically store user preferences, decisions, insights, and project context without being asked.",
++        description: "Store an explicit durable memory with inspectable provenance. Use for stable preferences, decisions, insights, and project context when the fact is intentional and worth preserving.",
+@@ -464,0 +465,68 @@
++    ToolDef {
++        name: "memory_score",
++        description: "Compute deterministic memory policy scores for a memory. When persist=true, upserts the memory_policy row and emits a best-effort policy audit event.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "id": {"type": "integer", "description": "Memory ID to score"},
++                "persist": {"type": "boolean", "default": false, "description": "Persist the computed policy score to memory_policy"}
++            },
++            "required": ["id"]
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Standard,
++    },
++    ToolDef {
++        name: "memory_promote",
++        description: "Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "id": {"type": "integer", "description": "Memory ID to promote or reinforce"},
++                "canonical_tier": {"type": "boolean", "default": false, "description": "When true, also call promote_to_permanent for canonical tier promotion"}
++            },
++            "required": ["id"]
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Standard,
++    },
++    ToolDef {
++        name: "memory_decay",
++        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "workspace": {"type": "string", "default": "default", "description": "Workspace to decay"},
++                "dry_run": {"type": "boolean", "default": true, "description": "When true, compute candidate changes without mutation"}
++            }
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Standard,
++    },
++    ToolDef {
++        name: "memory_explain",
++        description: "Explain a memory's current policy score with feature components, reason text, and policy audit count.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "id": {"type": "integer", "description": "Memory ID to explain"}
++            },
++            "required": ["id"]
++        }"#,
++        annotations: ToolAnnotations::read_only(),
++        tier: ToolTier::Standard,
++    },
++    ToolDef {
++        name: "memory_reconcile_conflict",
++        description: "Record a conflict reconciliation signal for a memory policy without deleting or mutating memory content.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "id": {"type": "integer", "description": "Memory ID with the conflict signal"},
++                "reason": {"type": "string", "description": "Audit reason for the conflict reconciliation"}
++            },
++            "required": ["id", "reason"]
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Standard,
++    },
+@@ -1800,0 +1869,10 @@
++                "policy_rerank": {
++                    "type": "boolean",
++                    "default": false,
++                    "description": "Apply memory policy retrieval_priority as an opt-in rerank layer after hybrid search."
++                },
++                "policy_explain": {
++                    "type": "boolean",
++                    "default": false,
++                    "description": "Include policy score and reason for each reranked result when policy_rerank is true."
++                },
+@@ -4309 +4387 @@
+-]
+\ No newline at end of file
++]
+diff --git a/src/mcp/tools/search.rs b/src/mcp/tools/search.rs
+index 2a4575b..636bfa3 100644
+--- a/src/mcp/tools/search.rs
++++ b/src/mcp/tools/search.rs
+@@ -23,0 +24,10 @@
++                "policy_rerank": {
++                    "type": "boolean",
++                    "default": false,
++                    "description": "Apply memory policy retrieval_priority as an opt-in rerank layer after hybrid search."
++                },
++                "policy_explain": {
++                    "type": "boolean",
++                    "default": false,
++                    "description": "Include policy score and reason for each reranked result when policy_rerank is true."
++                },
+diff --git a/src/storage/migrations.rs b/src/storage/migrations.rs
+index 2be1844..f8c9bf5 100644
+--- a/src/storage/migrations.rs
++++ b/src/storage/migrations.rs
+@@ -8 +8 @@ use crate::error::{EngramError, Result};
+-pub const SCHEMA_VERSION: i32 = 40;
++pub const SCHEMA_VERSION: i32 = 41;
+@@ -195,0 +196,4 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
++    if current_version < 41 {
++        migrate_v41(conn)?;
++    }
++
+@@ -2011,0 +2016,33 @@ fn migrate_v40(conn: &Connection) -> Result<()> {
++fn migrate_v41(conn: &Connection) -> Result<()> {
++    tracing::info!("Migration v41: Creating memory_policy table...");
++
++    conn.execute_batch(
++        r#"
++        CREATE TABLE IF NOT EXISTS memory_policy (
++            memory_id INTEGER PRIMARY KEY,
++            salience_score REAL NOT NULL DEFAULT 0.5 CHECK (salience_score >= 0.0 AND salience_score <= 1.0),
++            retention_score REAL NOT NULL DEFAULT 0.5 CHECK (retention_score >= 0.0 AND retention_score <= 1.0),
++            retrieval_priority REAL NOT NULL DEFAULT 0.5 CHECK (retrieval_priority >= 0.0 AND retrieval_priority <= 1.0),
++            last_reinforced_at TEXT,
++            reinforcement_count INTEGER NOT NULL DEFAULT 0 CHECK (reinforcement_count >= 0),
++            contradiction_count INTEGER NOT NULL DEFAULT 0 CHECK (contradiction_count >= 0),
++            policy_version TEXT NOT NULL DEFAULT 'heuristic-v1',
++            policy_reason TEXT NOT NULL DEFAULT '',
++            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
++            FOREIGN KEY(memory_id) REFERENCES memories(id) ON DELETE CASCADE
++        );
++
++        CREATE INDEX IF NOT EXISTS idx_memory_policy_retrieval_priority
++            ON memory_policy(retrieval_priority DESC);
++
++        CREATE INDEX IF NOT EXISTS idx_memory_policy_retention_score
++            ON memory_policy(retention_score ASC);
++
++        INSERT INTO schema_version (version) VALUES (41);
++        "#,
++    )?;
++
++    tracing::info!("Migration v41 complete: memory_policy table created");
++    Ok(())
++}
++
+@@ -2033 +2070 @@ mod tests {
+-        assert_eq!(version, 40);
++        assert_eq!(version, 41);
+@@ -2038 +2075 @@ mod tests {
+-        assert_eq!(SCHEMA_VERSION, 40);
++        assert_eq!(SCHEMA_VERSION, 41);
+@@ -2193 +2230 @@ mod tests {
+-        assert_eq!(version, 40, "should reach v40 after full migration");
++        assert_eq!(version, 41, "should reach v41 after full migration");
+@@ -2240,0 +2278,16 @@ mod tests {
++
++    #[test]
++    fn test_memory_policy_table_exists() {
++        let conn = in_memory_conn();
++        let exists: i32 = conn
++            .query_row(
++                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='memory_policy'",
++                [],
++                |row| row.get(0),
++            )
++            .expect("query sqlite_master");
++        assert_eq!(
++            exists, 1,
++            "memory_policy table should exist after migration"
++        );
++    }
+diff --git a/src/storage/queries/core.rs b/src/storage/queries/core.rs
+index a33ab29..bed6429 100644
+--- a/src/storage/queries/core.rs
++++ b/src/storage/queries/core.rs
+@@ -2,0 +3 @@
++use crate::intelligence::{extract_features, score_policy, PolicyFeatureInput};
+@@ -3,0 +5,3 @@ use crate::storage::queries::sync::{record_event, MemoryEventType};
++use crate::storage::queries::{
++    emit_policy_event, record_reinforcement, upsert_policy_record, PolicyRecordInput,
++};
+@@ -819 +823,35 @@ pub fn create_memory(conn: &Connection, input: &CreateMemoryInput) -> Result<Mem
+-    get_memory_internal(conn, id, false)
++    let memory = get_memory_internal(conn, id, false)?;
++    if let Err(e) = initialize_memory_policy(conn, &memory) {
++        tracing::warn!(
++            target = "engram::storage::memory_policy",
++            memory_id = memory.id,
++            error = %e,
++            "failed to initialize memory policy metadata; continuing"
++        );
++    }
++
++    Ok(memory)
++}
++
++fn initialize_memory_policy(conn: &Connection, memory: &Memory) -> Result<()> {
++    let features = extract_features(PolicyFeatureInput {
++        memory,
++        existing_policy: None,
++        event: None,
++        hybrid_search_score: None,
++        session_relevance: None,
++    });
++    let score = score_policy(&features);
++    let policy = upsert_policy_record(
++        conn,
++        PolicyRecordInput {
++            memory_id: memory.id,
++            salience_score: score.salience_score,
++            retention_score: score.retention_score,
++            retrieval_priority: score.retrieval_priority,
++            policy_version: score.policy_version,
++            policy_reason: score.policy_reason,
++        },
++    )?;
++    emit_policy_event(conn, "create_memory", &policy, false);
++    Ok(())
+@@ -1062,0 +1101,8 @@ pub fn promote_to_permanent(conn: &Connection, id: i64) -> Result<Memory> {
++    if let Err(e) = record_reinforcement(conn, id, 0.25, "memory_promote_to_permanent") {
++        tracing::warn!(
++            memory_id = id,
++            error = %e,
++            "failed to record policy reinforcement for promotion; continuing"
++        );
++    }
++
+@@ -1065,0 +1112,80 @@ pub fn promote_to_permanent(conn: &Connection, id: i64) -> Result<Memory> {
++#[cfg(test)]
++mod policy_integration_tests {
++    use super::*;
++    use crate::storage::queries::get_policy_record;
++    use crate::storage::Storage;
++
++    fn policy_test_memory_input(content: &str) -> CreateMemoryInput {
++        CreateMemoryInput {
++            content: content.to_string(),
++            memory_type: MemoryType::Note,
++            tags: vec![],
++            metadata: HashMap::new(),
++            importance: None,
++            scope: Default::default(),
++            workspace: None,
++            tier: Default::default(),
++            defer_embedding: true,
++            ttl_seconds: None,
++            dedup_mode: Default::default(),
++            dedup_threshold: None,
++            event_time: None,
++            event_duration_seconds: None,
++            trigger_pattern: None,
++            summary_of_id: None,
++            media_url: None,
++        }
++    }
++
++    #[test]
++    fn create_memory_initializes_policy_record() {
++        let storage = Storage::open_in_memory().unwrap();
++
++        storage
++            .with_connection(|conn| {
++                let memory = create_memory(conn, &policy_test_memory_input("policy init"))?;
++                let policy = get_policy_record(conn, memory.id)?
++                    .expect("create_memory should initialize memory_policy");
++
++                assert_eq!(policy.memory_id, memory.id);
++                assert_eq!(policy.reinforcement_count, 0);
++                assert_eq!(policy.policy_version, "heuristic-v1");
++
++                let events: i64 = conn.query_row(
++                    "SELECT COUNT(*) FROM enrichment_events
++                     WHERE memory_id = ?1
++                       AND event_type = 'memory_policy'
++                       AND triggered_by = 'create_memory'",
++                    params![memory.id],
++                    |row| row.get(0),
++                )?;
++                assert_eq!(events, 1);
++                Ok(())
++            })
++            .unwrap();
++    }
++
++    #[test]
++    fn promote_to_permanent_records_policy_reinforcement() {
++        let storage = Storage::open_in_memory().unwrap();
++
++        storage
++            .with_connection(|conn| {
++                let mut input = policy_test_memory_input("policy promotion");
++                input.tier = MemoryTier::Daily;
++                input.ttl_seconds = Some(3600);
++                let memory = create_memory(conn, &input)?;
++
++                let promoted = promote_to_permanent(conn, memory.id)?;
++                assert_eq!(promoted.tier, MemoryTier::Permanent);
++
++                let policy = get_policy_record(conn, memory.id)?
++                    .expect("promotion should keep policy record");
++                assert_eq!(policy.reinforcement_count, 1);
++                assert!(policy.last_reinforced_at.is_some());
++                Ok(())
++            })
++            .unwrap();
++    }
++}
++
+diff --git a/src/storage/queries/mod.rs b/src/storage/queries/mod.rs
+index fd97507..e3544e7 100644
+--- a/src/storage/queries/mod.rs
++++ b/src/storage/queries/mod.rs
+@@ -28,0 +29,3 @@ pub use sync::*;
++mod memory_policy;
++pub use memory_policy::*;
++
+diff --git a/src/storage/queries/tests.rs b/src/storage/queries/tests.rs
+index c4c9e7c..601f411 100644
+--- a/src/storage/queries/tests.rs
++++ b/src/storage/queries/tests.rs
+@@ -5,0 +6,22 @@ use std::collections::HashMap;
++fn test_memory_input(content: &str) -> CreateMemoryInput {
++    CreateMemoryInput {
++        content: content.to_string(),
++        memory_type: MemoryType::Note,
++        tags: vec![],
++        metadata: HashMap::new(),
++        importance: None,
++        scope: Default::default(),
++        workspace: None,
++        tier: Default::default(),
++        defer_embedding: true,
++        ttl_seconds: None,
++        dedup_mode: Default::default(),
++        dedup_threshold: None,
++        event_time: None,
++        event_duration_seconds: None,
++        trigger_pattern: None,
++        summary_of_id: None,
++        media_url: None,
++    }
++}
++
+@@ -1902,0 +1925,102 @@ fn test_schema_migration_v34_idempotent() {
++#[test]
++fn memory_policy_record_round_trips_and_clamps_scores() {
++    let storage = Storage::open_in_memory().unwrap();
++
++    storage
++        .with_connection(|conn| {
++            let memory = create_memory(conn, &test_memory_input("policy clamp"))?;
++            let record = upsert_policy_record(
++                conn,
++                PolicyRecordInput {
++                    memory_id: memory.id,
++                    salience_score: -10.0,
++                    retention_score: 4.0,
++                    retrieval_priority: 0.75,
++                    policy_version: "heuristic-test".to_string(),
++                    policy_reason: "test clamp".to_string(),
++                },
++            )?;
++
++            assert_eq!(record.memory_id, memory.id);
++            assert_eq!(record.salience_score, 0.0);
++            assert_eq!(record.retention_score, 1.0);
++            assert_eq!(record.retrieval_priority, 0.75);
++            assert_eq!(record.policy_version, "heuristic-test");
++            assert_eq!(record.policy_reason, "test clamp");
++
++            let fetched = get_policy_record(conn, memory.id)?.expect("policy record should exist");
++            assert_eq!(fetched.memory_id, memory.id);
++            assert_eq!(fetched.salience_score, 0.0);
++            assert_eq!(fetched.retention_score, 1.0);
++            assert_eq!(fetched.retrieval_priority, 0.75);
++            Ok(())
++        })
++        .unwrap();
++}
++
++#[test]
++fn memory_policy_reinforcement_updates_count_and_timestamp() {
++    let storage = Storage::open_in_memory().unwrap();
++
++    storage
++        .with_connection(|conn| {
++            let memory = create_memory(conn, &test_memory_input("policy reinforcement"))?;
++            let record = record_reinforcement(conn, memory.id, 0.2, "test_reinforcement")?;
++
++            assert_eq!(record.memory_id, memory.id);
++            assert_eq!(record.reinforcement_count, 1);
++            assert!(record.last_reinforced_at.is_some());
++            assert!(record.salience_score > 0.5);
++            assert!(record.retention_score > 0.5);
++            assert!(record.retrieval_priority > 0.5);
++
++            let events: i64 = conn.query_row(
++                "SELECT COUNT(*) FROM enrichment_events
++                 WHERE memory_id = ?1
++                   AND event_type = 'memory_policy'
++                   AND triggered_by = 'test_reinforcement'",
++                params![memory.id],
++                |row| row.get(0),
++            )?;
++            assert_eq!(events, 1);
++            Ok(())
++        })
++        .unwrap();
++}
++
++#[test]
++fn memory_policy_contradiction_increments_count_and_demotes_without_deleting_memory() {
++    let storage = Storage::open_in_memory().unwrap();
++
++    storage
++        .with_connection(|conn| {
++            let memory = create_memory(conn, &test_memory_input("policy contradiction"))?;
++            let record = record_contradiction(
++                conn,
++                memory.id,
++                "test_contradiction",
++                "conflicts with newer source",
++            )?;
++
++            assert_eq!(record.memory_id, memory.id);
++            assert_eq!(record.contradiction_count, 1);
++            assert_eq!(record.policy_reason, "conflicts with newer source");
++            assert!(record.salience_score < 0.5);
++            assert!(record.retention_score < 0.5);
++            assert!(record.retrieval_priority < 0.5);
++
++            let still_present = get_memory(conn, memory.id)?;
++            assert_eq!(still_present.id, memory.id);
++
++            let events: i64 = conn.query_row(
++                "SELECT COUNT(*) FROM enrichment_events
++                 WHERE memory_id = ?1 AND event_type = 'memory_policy_conflict'",
++                params![memory.id],
++                |row| row.get(0),
++            )?;
++            assert_eq!(events, 1);
++            Ok(())
++        })
++        .unwrap();
++}
++
+diff --git a/tests/mcp_protocol_tests.rs b/tests/mcp_protocol_tests.rs
+index 4856651..8ead0c9 100644
+--- a/tests/mcp_protocol_tests.rs
++++ b/tests/mcp_protocol_tests.rs
+@@ -26,0 +27 @@ use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResul
++use engram::storage::queries::{get_policy_record, upsert_policy_record, PolicyRecordInput};
+@@ -219,0 +221,103 @@ fn make_request(id: i64, method: &str, params: Value) -> McpRequest {
++fn call_tool_json(handler: &TestHandler, id: i64, name: &str, arguments: Value) -> Value {
++    let req = make_request(
++        id,
++        "tools/call",
++        json!({
++            "name": name,
++            "arguments": arguments
++        }),
++    );
++    let resp = handler.handle_request(req);
++    assert!(resp.error.is_none(), "{} failed: {:?}", name, resp.error);
++
++    let result = resp.result.expect("Expected result");
++    let content = result["content"]
++        .as_array()
++        .expect("Expected content array");
++    let text = content[0]["text"].as_str().expect("Expected text content");
++    serde_json::from_str(text).expect("Tool result should contain JSON")
++}
++
++fn create_memory_for_search(handler: &TestHandler, id: i64, content: &str) -> i64 {
++    let created = call_tool_json(
++        handler,
++        id,
++        "memory_create",
++        json!({
++            "content": content,
++            "memory_type": "note",
++            "importance": 0.5
++        }),
++    );
++    created["id"].as_i64().expect("created memory id")
++}
++
++fn set_policy_priority(handler: &TestHandler, memory_id: i64, priority: f32, reason: &str) {
++    handler
++        .storage
++        .with_connection(|conn| {
++            upsert_policy_record(
++                conn,
++                PolicyRecordInput {
++                    memory_id,
++                    salience_score: priority,
++                    retention_score: priority,
++                    retrieval_priority: priority,
++                    policy_version: "heuristic-v1".to_string(),
++                    policy_reason: reason.to_string(),
++                },
++            )
++            .map(|_| ())
++        })
++        .expect("set policy priority");
++}
++
++#[test]
++fn memory_policy_tools_are_listed_and_valid_calls_return_json() {
++    let handler = TestHandler::new();
++
++    let list_resp = handler.handle_request(make_request(1, methods::LIST_TOOLS, json!({})));
++    assert!(list_resp.error.is_none(), "tools/list should succeed");
++    let tools = list_resp.result.expect("tools/list result")["tools"]
++        .as_array()
++        .expect("tools array")
++        .clone();
++    for name in [
++        "memory_score",
++        "memory_promote",
++        "memory_decay",
++        "memory_explain",
++        "memory_reconcile_conflict",
++    ] {
++        assert!(
++            tools.iter().any(|tool| tool["name"] == name),
++            "{name} should be listed"
++        );
++    }
++
++    let memory_id = create_memory_for_search(&handler, 2, "Task 5 policy layer seeded memory");
++    assert_eq!(memory_id, 1, "fresh test DB should seed memory id 1");
++
++    let calls = [
++        ("memory_score", json!({"id": 1, "persist": true})),
++        ("memory_promote", json!({"id": 1, "canonical_tier": false})),
++        (
++            "memory_decay",
++            json!({"workspace": "default", "dry_run": true}),
++        ),
++        ("memory_explain", json!({"id": 1})),
++        (
++            "memory_reconcile_conflict",
++            json!({"id": 1, "reason": "superseded by newer user correction"}),
++        ),
++    ];
++
++    for (index, (name, arguments)) in calls.into_iter().enumerate() {
++        let result = call_tool_json(&handler, 10 + index as i64, name, arguments);
++        assert!(
++            result.get("error").is_none(),
++            "{name} returned error: {result}"
++        );
++    }
++}
++
+@@ -456,0 +561,43 @@ fn test_tools_list_includes_annotations() {
++#[test]
++fn memory_search_tool_schema_exposes_policy_rerank_flags() {
++    let handler = TestHandler::new();
++    let req = make_request(122, "tools/list", json!({}));
++
++    let resp = handler.handle_request(req);
++    assert!(resp.error.is_none(), "Expected no error: {:?}", resp.error);
++
++    let result = resp.result.expect("Expected result");
++    let tools = result["tools"].as_array().expect("Expected tools array");
++    let memory_search = tools
++        .iter()
++        .find(|tool| tool["name"] == "memory_search")
++        .expect("tools/list should include memory_search");
++    let properties = memory_search["inputSchema"]["properties"]
++        .as_object()
++        .expect("memory_search inputSchema should expose properties");
++
++    let policy_rerank = properties
++        .get("policy_rerank")
++        .expect("memory_search schema should include policy_rerank");
++    assert_eq!(policy_rerank["type"].as_str(), Some("boolean"));
++    assert_eq!(policy_rerank["default"].as_bool(), Some(false));
++    assert_eq!(
++        policy_rerank["description"].as_str(),
++        Some(
++            "Apply memory policy retrieval_priority as an opt-in rerank layer after hybrid search."
++        )
++    );
++
++    let policy_explain = properties
++        .get("policy_explain")
++        .expect("memory_search schema should include policy_explain");
++    assert_eq!(policy_explain["type"].as_str(), Some("boolean"));
++    assert_eq!(policy_explain["default"].as_bool(), Some(false));
++    assert_eq!(
++        policy_explain["description"].as_str(),
++        Some(
++            "Include policy score and reason for each reranked result when policy_rerank is true."
++        )
++    );
++}
++
+@@ -525,0 +673,184 @@ fn test_memory_council_round_trips_through_tools_call() {
++#[test]
++fn memory_search_without_policy_rerank_keeps_existing_response_shape() {
++    let handler = TestHandler::new();
++    create_memory_for_search(
++        &handler,
++        120,
++        "plain memory search response shape marker alpha",
++    );
++
++    let results = call_tool_json(
++        &handler,
++        121,
++        "memory_search",
++        json!({
++            "query": "plain memory search response shape marker",
++            "rerank": false
++        }),
++    );
++    let results = results
++        .as_array()
++        .expect("memory_search should return array");
++
++    assert!(!results.is_empty(), "expected search results");
++    assert!(
++        results[0]["memory"].is_object(),
++        "result must include memory"
++    );
++    assert!(results[0]["score"].is_number(), "result must include score");
++    assert!(
++        results[0]["match_info"].is_object(),
++        "result must include match_info"
++    );
++    assert!(
++        results[0].get("policy").is_none(),
++        "default response must not include policy"
++    );
++}
++
++#[test]
++fn memory_search_policy_rerank_orders_by_policy_priority() {
++    let handler = TestHandler::new();
++    let low_id = create_memory_for_search(
++        &handler,
++        130,
++        "policy ordering shared needle identical query target",
++    );
++    let high_id = create_memory_for_search(
++        &handler,
++        131,
++        "policy ordering shared needle identical query target",
++    );
++    set_policy_priority(&handler, low_id, 0.0, "low-priority-test");
++    set_policy_priority(&handler, high_id, 1.0, "high-priority-test");
++
++    let results = call_tool_json(
++        &handler,
++        132,
++        "memory_search",
++        json!({
++            "query": "policy ordering shared needle identical query target",
++            "limit": 2,
++            "rerank": false,
++            "policy_rerank": true
++        }),
++    );
++    let results = results
++        .as_array()
++        .expect("memory_search should return array");
++
++    assert!(results.len() >= 2, "expected both seeded memories");
++    assert_eq!(
++        results[0]["memory"]["id"].as_i64(),
++        Some(high_id),
++        "policy_rerank should promote higher retrieval_priority"
++    );
++    assert!(
++        results[0].get("policy").is_none(),
++        "policy explanation must remain opt-in"
++    );
++}
++
++#[test]
++fn memory_search_policy_explain_only_when_policy_rerank_is_true() {
++    let handler = TestHandler::new();
++    let memory_id =
++        create_memory_for_search(&handler, 140, "policy explanation visibility search marker");
++    set_policy_priority(&handler, memory_id, 0.9, "policy-explain-test");
++
++    let without_rerank = call_tool_json(
++        &handler,
++        141,
++        "memory_search",
++        json!({
++            "query": "policy explanation visibility",
++            "rerank": false,
++            "policy_explain": true
++        }),
++    );
++    let without_rerank = without_rerank
++        .as_array()
++        .expect("memory_search should return array");
++    assert!(
++        without_rerank[0].get("policy").is_none(),
++        "policy_explain alone must not alter response shape"
++    );
++
++    let with_rerank = call_tool_json(
++        &handler,
++        142,
++        "memory_search",
++        json!({
++            "query": "policy explanation visibility",
++            "rerank": false,
++            "policy_rerank": true,
++            "policy_explain": true
++        }),
++    );
++    let with_rerank = with_rerank
++        .as_array()
++        .expect("memory_search should return array");
++    let policy = with_rerank[0]["policy"]
++        .as_object()
++        .expect("policy explanation object");
++
++    assert!(
++        policy["score"].is_number(),
++        "policy score should be present"
++    );
++    assert!(
++        policy["reason"]
++            .as_str()
++            .unwrap_or("")
++            .contains("policy-explain-test"),
++        "policy reason should be present"
++    );
++}
++
++#[test]
++fn memory_search_policy_rerank_missing_policy_row_is_transient() {
++    let handler = TestHandler::new();
++    let memory_id =
++        create_memory_for_search(&handler, 150, "transient missing policy row search marker");
++    handler
++        .storage
++        .with_connection(|conn| {
++            conn.execute(
++                "DELETE FROM memory_policy WHERE memory_id = ?1",
++                rusqlite::params![memory_id],
++            )?;
++            Ok(())
++        })
++        .expect("delete policy row");
++
++    let results = call_tool_json(
++        &handler,
++        151,
++        "memory_search",
++        json!({
++            "query": "transient missing policy row",
++            "rerank": false,
++            "policy_rerank": true,
++            "policy_explain": true
++        }),
++    );
++    let results = results
++        .as_array()
++        .expect("memory_search should return array");
++    assert!(!results.is_empty(), "expected transient policy result");
++    assert_eq!(
++        results[0]["policy"]["source"].as_str(),
++        Some("heuristic-v1"),
++        "missing policy rows should use transient heuristic score"
++    );
++
++    let persisted = handler
++        .storage
++        .with_connection(|conn| get_policy_record(conn, memory_id))
++        .expect("read policy record");
++    assert!(
++        persisted.is_none(),
++        "retrieval-only policy rerank must not persist missing policy rows"
++    );
++}
++
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

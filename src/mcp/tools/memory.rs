@@ -3,7 +3,7 @@
     // Memory CRUD
     ToolDef {
         name: "memory_create",
-        description: "Store a new memory. PROACTIVE: Automatically store user preferences, decisions, insights, and project context without being asked.",
+        description: "Store an explicit durable memory with inspectable provenance. Use for stable preferences, decisions, insights, and project context when the fact is intentional and worth preserving.",
         schema: r#"{
             "type": "object",
             "properties": {
@@ -457,6 +457,74 @@
                 "workspace": {"type": "string", "description": "Workspace to store the memory in (default: 'default')"}
             },
             "required": ["content"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_score",
+        description: "Compute deterministic memory policy scores for a memory. When persist=true, upserts the memory_policy row and emits a best-effort policy audit event.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "description": "Memory ID to score"},
+                "persist": {"type": "boolean", "default": false, "description": "Persist the computed policy score to memory_policy"}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_promote",
+        description: "Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "description": "Memory ID to promote or reinforce"},
+                "canonical_tier": {"type": "boolean", "default": false, "description": "When true, also call promote_to_permanent for canonical tier promotion"}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_decay",
+        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "default": "default", "description": "Workspace to decay"},
+                "dry_run": {"type": "boolean", "default": true, "description": "When true, compute candidate changes without mutation"}
+            }
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_explain",
+        description: "Explain a memory's current policy score with feature components, reason text, and policy audit count.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "description": "Memory ID to explain"}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
+        name: "memory_reconcile_conflict",
+        description: "Record a conflict reconciliation signal for a memory policy without deleting or mutating memory content.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "description": "Memory ID with the conflict signal"},
+                "reason": {"type": "string", "description": "Audit reason for the conflict reconciliation"}
+            },
+            "required": ["id", "reason"]
         }"#,
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Standard,

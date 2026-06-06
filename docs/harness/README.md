@@ -78,6 +78,7 @@ bash docs/harness/bin/doctor.sh
 | `bin/review-gate.sh`           | Gate de review cross-CLI / cross-model (generalizado) |
 | `bin/baseline.sh`              | Snapshot estático barato em `.baseline-last` para drift review |
 | `bin/quarterly-audit.sh`       | Auditoria evidence-only; nunca apaga, arquiva ou reescreve |
+| `bin/vc-gate.sh`               | Gate opcional de version control para issue boundaries, `jj` local e releases Git/Cargo |
 | `bin/check-commit-msg.sh`      | Validador de Conventional Commit com scope |
 
 ## Leitura Obrigatória (em ordem)
@@ -106,26 +107,32 @@ bash docs/harness/bin/bootstrap.sh
 # 2. Review prévio (advisory, mas findings são input obrigatório)
 bash docs/harness/bin/review-gate.sh pre <task-id>
 
-# 3. Implementar a menor mudança correta
+# 3. Gate de version control no inicio da issue (recomendado)
+bash docs/harness/bin/vc-gate.sh start <task-id>
+
+# 4. Implementar a menor mudança correta
 #    Rust: TDD onde aplicável, clippy limpo, cobertura de comportamentos alterados.
 #    Use `just ci` localmente para paridade com GitHub (ou `make ci` onde `just` não estiver disponível).
 
-# 4. Rodar sensores determinísticos (hard gate)
+# 5. Rodar sensores determinísticos (hard gate)
 bash docs/harness/bin/sensors.sh
 
-# 5. Review pós-mudança (hard gate — PASS exigido)
+# 6. Review pós-mudança (hard gate — PASS exigido)
 bash docs/harness/bin/review-gate.sh post <task-id>
 
-# 6. Atualizar memória canônica (obrigatório)
+# 7. Atualizar memória canônica (obrigatório)
 $EDITOR docs/harness/progress.md
 $EDITOR docs/harness/progress/<active-plan-filename>.md
 
-# 7. Validar mensagem de commit
+# 8. Validar mensagem de commit
 bash docs/harness/bin/check-commit-msg.sh --message "<type>(<scope>): <description>"
 
-# 8. Commitar arquivos específicos (nunca "git add .")
+# 9. Commitar arquivos específicos (nunca "git add .")
 git add <arquivos específicos>
 git commit -m "<type>(<scope>): <description>"
+
+# 10. Gate de version control no fechamento da issue (recomendado)
+bash docs/harness/bin/vc-gate.sh done <task-id>
 ```
 
 Não pule a atualização de progresso. `progress.md` + o log da sprint são a **memória canônica** do repositório para agentes futuros.
@@ -151,6 +158,38 @@ Tipos comuns: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `ci`, `chore`, 
 Scopes recomendados: `harness`, `mcp`, `storage`, `search`, `intelligence`, `hooks`, `sdk-python`, `sdk-ts`, `cli`, `server`, `ci`, ou identificadores de issue/RFC (`engra-22`, `rfc-0001`).
 
 Sem `Co-Authored-By` ou trailers de atribuição de IA.
+
+## Version Control Gate e jj
+
+`vc-gate.sh` existe para impedir que trabalho de varias issues acumule em um
+worktree sujo sem fronteira clara. Ele complementa Git; nao substitui GitHub,
+tags de release ou `cargo publish`.
+
+Uso recomendado:
+
+```bash
+# Antes de iniciar uma issue
+bash docs/harness/bin/vc-gate.sh start ENGRA-84
+
+# Durante trabalho local com jj, se adotado pelo time
+jj new -m "feat(storage): ENGRA-84 memory policy layer"
+jj split
+jj describe -m "feat(storage): ENGRA-84 add memory policy layer"
+
+# Antes de marcar done
+bash docs/harness/bin/vc-gate.sh done ENGRA-84
+
+# Antes de release/publish
+bash docs/harness/bin/vc-gate.sh release 0.21.1
+```
+
+Regras:
+
+- `jj` pode ser usado para evoluir, splitar e descrever work-in-progress local.
+- Git continua canônico para release commits, tags e crates.io.
+- O gate nao cria commits, nao roda `jj new`, nao move tags e nao publica.
+- Dirty worktree em `start`, `done` ou `release` precisa ser resolvido ou
+  explicitamente atribuido com uma flag de allow.
 
 ## Sensores (Camada Determinística)
 
@@ -243,6 +282,7 @@ Uma tarefa só está pronta quando:
 - [ ] `progress.md` + log da sprint atualizados
 - [ ] Review artifacts relevantes preservados
 - [ ] Mensagem de commit validada e arquivos específicos commitados
+- [ ] `vc-gate.sh done <task-id>` passou ou skip foi registrado
 - [ ] Evidência adicional registrada para mudanças em MCP surface, storage schema, hooks, embeddings, sync, ou breaking changes em SDKs
 
 ## Situações que Exigem Cuidado Extra

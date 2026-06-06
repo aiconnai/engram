@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::{EngramError, Result};
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 40;
+pub const SCHEMA_VERSION: i32 = 41;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -191,6 +191,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 40 {
         migrate_v40(conn)?;
+    }
+
+    if current_version < 41 {
+        migrate_v41(conn)?;
     }
 
     Ok(())
@@ -2009,6 +2013,39 @@ fn migrate_v40(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_v41(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v41: Creating memory_policy table...");
+
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS memory_policy (
+            memory_id INTEGER PRIMARY KEY,
+            salience_score REAL NOT NULL DEFAULT 0.5 CHECK (salience_score >= 0.0 AND salience_score <= 1.0),
+            retention_score REAL NOT NULL DEFAULT 0.5 CHECK (retention_score >= 0.0 AND retention_score <= 1.0),
+            retrieval_priority REAL NOT NULL DEFAULT 0.5 CHECK (retrieval_priority >= 0.0 AND retrieval_priority <= 1.0),
+            last_reinforced_at TEXT,
+            reinforcement_count INTEGER NOT NULL DEFAULT 0 CHECK (reinforcement_count >= 0),
+            contradiction_count INTEGER NOT NULL DEFAULT 0 CHECK (contradiction_count >= 0),
+            policy_version TEXT NOT NULL DEFAULT 'heuristic-v1',
+            policy_reason TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(memory_id) REFERENCES memories(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_memory_policy_retrieval_priority
+            ON memory_policy(retrieval_priority DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_memory_policy_retention_score
+            ON memory_policy(retention_score ASC);
+
+        INSERT INTO schema_version (version) VALUES (41);
+        "#,
+    )?;
+
+    tracing::info!("Migration v41 complete: memory_policy table created");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2030,12 +2067,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 40);
+        assert_eq!(version, 41);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 40);
+        assert_eq!(SCHEMA_VERSION, 41);
     }
 
     #[test]
@@ -2190,7 +2227,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 40, "should reach v40 after full migration");
+        assert_eq!(version, 41, "should reach v41 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
@@ -2237,5 +2274,21 @@ mod tests {
             [],
         );
         assert!(result.is_err(), "NULL operation_id should be rejected");
+    }
+
+    #[test]
+    fn test_memory_policy_table_exists() {
+        let conn = in_memory_conn();
+        let exists: i32 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='memory_policy'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query sqlite_master");
+        assert_eq!(
+            exists, 1,
+            "memory_policy table should exist after migration"
+        );
     }
 }

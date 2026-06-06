@@ -24,6 +24,7 @@ use engram::mcp::{
     MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
 };
 use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
+use engram::storage::queries::{get_policy_record, upsert_policy_record, PolicyRecordInput};
 use engram::storage::Storage;
 use engram::types::EmbeddingConfig;
 
@@ -214,6 +215,109 @@ fn make_request(id: i64, method: &str, params: Value) -> McpRequest {
         id: Some(json!(id)),
         method: method.to_string(),
         params,
+    }
+}
+
+fn call_tool_json(handler: &TestHandler, id: i64, name: &str, arguments: Value) -> Value {
+    let req = make_request(
+        id,
+        "tools/call",
+        json!({
+            "name": name,
+            "arguments": arguments
+        }),
+    );
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none(), "{} failed: {:?}", name, resp.error);
+
+    let result = resp.result.expect("Expected result");
+    let content = result["content"]
+        .as_array()
+        .expect("Expected content array");
+    let text = content[0]["text"].as_str().expect("Expected text content");
+    serde_json::from_str(text).expect("Tool result should contain JSON")
+}
+
+fn create_memory_for_search(handler: &TestHandler, id: i64, content: &str) -> i64 {
+    let created = call_tool_json(
+        handler,
+        id,
+        "memory_create",
+        json!({
+            "content": content,
+            "memory_type": "note",
+            "importance": 0.5
+        }),
+    );
+    created["id"].as_i64().expect("created memory id")
+}
+
+fn set_policy_priority(handler: &TestHandler, memory_id: i64, priority: f32, reason: &str) {
+    handler
+        .storage
+        .with_connection(|conn| {
+            upsert_policy_record(
+                conn,
+                PolicyRecordInput {
+                    memory_id,
+                    salience_score: priority,
+                    retention_score: priority,
+                    retrieval_priority: priority,
+                    policy_version: "heuristic-v1".to_string(),
+                    policy_reason: reason.to_string(),
+                },
+            )
+            .map(|_| ())
+        })
+        .expect("set policy priority");
+}
+
+#[test]
+fn memory_policy_tools_are_listed_and_valid_calls_return_json() {
+    let handler = TestHandler::new();
+
+    let list_resp = handler.handle_request(make_request(1, methods::LIST_TOOLS, json!({})));
+    assert!(list_resp.error.is_none(), "tools/list should succeed");
+    let tools = list_resp.result.expect("tools/list result")["tools"]
+        .as_array()
+        .expect("tools array")
+        .clone();
+    for name in [
+        "memory_score",
+        "memory_promote",
+        "memory_decay",
+        "memory_explain",
+        "memory_reconcile_conflict",
+    ] {
+        assert!(
+            tools.iter().any(|tool| tool["name"] == name),
+            "{name} should be listed"
+        );
+    }
+
+    let memory_id = create_memory_for_search(&handler, 2, "Task 5 policy layer seeded memory");
+    assert_eq!(memory_id, 1, "fresh test DB should seed memory id 1");
+
+    let calls = [
+        ("memory_score", json!({"id": 1, "persist": true})),
+        ("memory_promote", json!({"id": 1, "canonical_tier": false})),
+        (
+            "memory_decay",
+            json!({"workspace": "default", "dry_run": true}),
+        ),
+        ("memory_explain", json!({"id": 1})),
+        (
+            "memory_reconcile_conflict",
+            json!({"id": 1, "reason": "superseded by newer user correction"}),
+        ),
+    ];
+
+    for (index, (name, arguments)) in calls.into_iter().enumerate() {
+        let result = call_tool_json(&handler, 10 + index as i64, name, arguments);
+        assert!(
+            result.get("error").is_none(),
+            "{name} returned error: {result}"
+        );
     }
 }
 
@@ -455,6 +559,49 @@ fn test_tools_list_includes_annotations() {
 }
 
 #[test]
+fn memory_search_tool_schema_exposes_policy_rerank_flags() {
+    let handler = TestHandler::new();
+    let req = make_request(122, "tools/list", json!({}));
+
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none(), "Expected no error: {:?}", resp.error);
+
+    let result = resp.result.expect("Expected result");
+    let tools = result["tools"].as_array().expect("Expected tools array");
+    let memory_search = tools
+        .iter()
+        .find(|tool| tool["name"] == "memory_search")
+        .expect("tools/list should include memory_search");
+    let properties = memory_search["inputSchema"]["properties"]
+        .as_object()
+        .expect("memory_search inputSchema should expose properties");
+
+    let policy_rerank = properties
+        .get("policy_rerank")
+        .expect("memory_search schema should include policy_rerank");
+    assert_eq!(policy_rerank["type"].as_str(), Some("boolean"));
+    assert_eq!(policy_rerank["default"].as_bool(), Some(false));
+    assert_eq!(
+        policy_rerank["description"].as_str(),
+        Some(
+            "Apply memory policy retrieval_priority as an opt-in rerank layer after hybrid search."
+        )
+    );
+
+    let policy_explain = properties
+        .get("policy_explain")
+        .expect("memory_search schema should include policy_explain");
+    assert_eq!(policy_explain["type"].as_str(), Some("boolean"));
+    assert_eq!(policy_explain["default"].as_bool(), Some(false));
+    assert_eq!(
+        policy_explain["description"].as_str(),
+        Some(
+            "Include policy score and reason for each reranked result when policy_rerank is true."
+        )
+    );
+}
+
+#[test]
 fn test_memory_council_round_trips_through_tools_call() {
     let handler = TestHandler::new();
     let (council_url, server_handle) = start_council_stub_server(
@@ -520,6 +667,190 @@ fn test_memory_council_round_trips_through_tools_call() {
     assert!(
         inner["memory_id"].is_number(),
         "Persisted council result should return a memory id"
+    );
+}
+
+#[test]
+fn memory_search_without_policy_rerank_keeps_existing_response_shape() {
+    let handler = TestHandler::new();
+    create_memory_for_search(
+        &handler,
+        120,
+        "plain memory search response shape marker alpha",
+    );
+
+    let results = call_tool_json(
+        &handler,
+        121,
+        "memory_search",
+        json!({
+            "query": "plain memory search response shape marker",
+            "rerank": false
+        }),
+    );
+    let results = results
+        .as_array()
+        .expect("memory_search should return array");
+
+    assert!(!results.is_empty(), "expected search results");
+    assert!(
+        results[0]["memory"].is_object(),
+        "result must include memory"
+    );
+    assert!(results[0]["score"].is_number(), "result must include score");
+    assert!(
+        results[0]["match_info"].is_object(),
+        "result must include match_info"
+    );
+    assert!(
+        results[0].get("policy").is_none(),
+        "default response must not include policy"
+    );
+}
+
+#[test]
+fn memory_search_policy_rerank_orders_by_policy_priority() {
+    let handler = TestHandler::new();
+    let low_id = create_memory_for_search(
+        &handler,
+        130,
+        "policy ordering shared needle identical query target",
+    );
+    let high_id = create_memory_for_search(
+        &handler,
+        131,
+        "policy ordering shared needle identical query target",
+    );
+    set_policy_priority(&handler, low_id, 0.0, "low-priority-test");
+    set_policy_priority(&handler, high_id, 1.0, "high-priority-test");
+
+    let results = call_tool_json(
+        &handler,
+        132,
+        "memory_search",
+        json!({
+            "query": "policy ordering shared needle identical query target",
+            "limit": 2,
+            "rerank": false,
+            "policy_rerank": true
+        }),
+    );
+    let results = results
+        .as_array()
+        .expect("memory_search should return array");
+
+    assert!(results.len() >= 2, "expected both seeded memories");
+    assert_eq!(
+        results[0]["memory"]["id"].as_i64(),
+        Some(high_id),
+        "policy_rerank should promote higher retrieval_priority"
+    );
+    assert!(
+        results[0].get("policy").is_none(),
+        "policy explanation must remain opt-in"
+    );
+}
+
+#[test]
+fn memory_search_policy_explain_only_when_policy_rerank_is_true() {
+    let handler = TestHandler::new();
+    let memory_id =
+        create_memory_for_search(&handler, 140, "policy explanation visibility search marker");
+    set_policy_priority(&handler, memory_id, 0.9, "policy-explain-test");
+
+    let without_rerank = call_tool_json(
+        &handler,
+        141,
+        "memory_search",
+        json!({
+            "query": "policy explanation visibility",
+            "rerank": false,
+            "policy_explain": true
+        }),
+    );
+    let without_rerank = without_rerank
+        .as_array()
+        .expect("memory_search should return array");
+    assert!(
+        without_rerank[0].get("policy").is_none(),
+        "policy_explain alone must not alter response shape"
+    );
+
+    let with_rerank = call_tool_json(
+        &handler,
+        142,
+        "memory_search",
+        json!({
+            "query": "policy explanation visibility",
+            "rerank": false,
+            "policy_rerank": true,
+            "policy_explain": true
+        }),
+    );
+    let with_rerank = with_rerank
+        .as_array()
+        .expect("memory_search should return array");
+    let policy = with_rerank[0]["policy"]
+        .as_object()
+        .expect("policy explanation object");
+
+    assert!(
+        policy["score"].is_number(),
+        "policy score should be present"
+    );
+    assert!(
+        policy["reason"]
+            .as_str()
+            .unwrap_or("")
+            .contains("policy-explain-test"),
+        "policy reason should be present"
+    );
+}
+
+#[test]
+fn memory_search_policy_rerank_missing_policy_row_is_transient() {
+    let handler = TestHandler::new();
+    let memory_id =
+        create_memory_for_search(&handler, 150, "transient missing policy row search marker");
+    handler
+        .storage
+        .with_connection(|conn| {
+            conn.execute(
+                "DELETE FROM memory_policy WHERE memory_id = ?1",
+                rusqlite::params![memory_id],
+            )?;
+            Ok(())
+        })
+        .expect("delete policy row");
+
+    let results = call_tool_json(
+        &handler,
+        151,
+        "memory_search",
+        json!({
+            "query": "transient missing policy row",
+            "rerank": false,
+            "policy_rerank": true,
+            "policy_explain": true
+        }),
+    );
+    let results = results
+        .as_array()
+        .expect("memory_search should return array");
+    assert!(!results.is_empty(), "expected transient policy result");
+    assert_eq!(
+        results[0]["policy"]["source"].as_str(),
+        Some("heuristic-v1"),
+        "missing policy rows should use transient heuristic score"
+    );
+
+    let persisted = handler
+        .storage
+        .with_connection(|conn| get_policy_record(conn, memory_id))
+        .expect("read policy record");
+    assert!(
+        persisted.is_none(),
+        "retrieval-only policy rerank must not persist missing policy rows"
     );
 }
 

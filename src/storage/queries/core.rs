@@ -1,6 +1,10 @@
 //! Database queries for memory operations
 
+use crate::intelligence::{extract_features, score_policy, PolicyFeatureInput};
 use crate::storage::queries::sync::{record_event, MemoryEventType};
+use crate::storage::queries::{
+    emit_policy_event, record_reinforcement, upsert_policy_record, PolicyRecordInput,
+};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Row};
 use sha2::{Digest, Sha256};
@@ -816,7 +820,41 @@ pub fn create_memory(conn: &Connection, input: &CreateMemoryInput) -> Result<Mem
         [],
     )?;
 
-    get_memory_internal(conn, id, false)
+    let memory = get_memory_internal(conn, id, false)?;
+    if let Err(e) = initialize_memory_policy(conn, &memory) {
+        tracing::warn!(
+            target = "engram::storage::memory_policy",
+            memory_id = memory.id,
+            error = %e,
+            "failed to initialize memory policy metadata; continuing"
+        );
+    }
+
+    Ok(memory)
+}
+
+fn initialize_memory_policy(conn: &Connection, memory: &Memory) -> Result<()> {
+    let features = extract_features(PolicyFeatureInput {
+        memory,
+        existing_policy: None,
+        event: None,
+        hybrid_search_score: None,
+        session_relevance: None,
+    });
+    let score = score_policy(&features);
+    let policy = upsert_policy_record(
+        conn,
+        PolicyRecordInput {
+            memory_id: memory.id,
+            salience_score: score.salience_score,
+            retention_score: score.retention_score,
+            retrieval_priority: score.retrieval_priority,
+            policy_version: score.policy_version,
+            policy_reason: score.policy_reason,
+        },
+    )?;
+    emit_policy_event(conn, "create_memory", &policy, false);
+    Ok(())
 }
 
 /// Ensure a tag exists and return its ID
@@ -1060,7 +1098,95 @@ pub fn promote_to_permanent(conn: &Connection, id: i64) -> Result<Memory> {
 
     tracing::info!(memory_id = id, "Promoted memory to permanent tier");
 
+    if let Err(e) = record_reinforcement(conn, id, 0.25, "memory_promote_to_permanent") {
+        tracing::warn!(
+            memory_id = id,
+            error = %e,
+            "failed to record policy reinforcement for promotion; continuing"
+        );
+    }
+
     get_memory_internal(conn, id, false)
+}
+
+#[cfg(test)]
+mod policy_integration_tests {
+    use super::*;
+    use crate::storage::queries::get_policy_record;
+    use crate::storage::Storage;
+
+    fn policy_test_memory_input(content: &str) -> CreateMemoryInput {
+        CreateMemoryInput {
+            content: content.to_string(),
+            memory_type: MemoryType::Note,
+            tags: vec![],
+            metadata: HashMap::new(),
+            importance: None,
+            scope: Default::default(),
+            workspace: None,
+            tier: Default::default(),
+            defer_embedding: true,
+            ttl_seconds: None,
+            dedup_mode: Default::default(),
+            dedup_threshold: None,
+            event_time: None,
+            event_duration_seconds: None,
+            trigger_pattern: None,
+            summary_of_id: None,
+            media_url: None,
+        }
+    }
+
+    #[test]
+    fn create_memory_initializes_policy_record() {
+        let storage = Storage::open_in_memory().unwrap();
+
+        storage
+            .with_connection(|conn| {
+                let memory = create_memory(conn, &policy_test_memory_input("policy init"))?;
+                let policy = get_policy_record(conn, memory.id)?
+                    .expect("create_memory should initialize memory_policy");
+
+                assert_eq!(policy.memory_id, memory.id);
+                assert_eq!(policy.reinforcement_count, 0);
+                assert_eq!(policy.policy_version, "heuristic-v1");
+
+                let events: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM enrichment_events
+                     WHERE memory_id = ?1
+                       AND event_type = 'memory_policy'
+                       AND triggered_by = 'create_memory'",
+                    params![memory.id],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(events, 1);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn promote_to_permanent_records_policy_reinforcement() {
+        let storage = Storage::open_in_memory().unwrap();
+
+        storage
+            .with_connection(|conn| {
+                let mut input = policy_test_memory_input("policy promotion");
+                input.tier = MemoryTier::Daily;
+                input.ttl_seconds = Some(3600);
+                let memory = create_memory(conn, &input)?;
+
+                let promoted = promote_to_permanent(conn, memory.id)?;
+                assert_eq!(promoted.tier, MemoryTier::Permanent);
+
+                let policy = get_policy_record(conn, memory.id)?
+                    .expect("promotion should keep policy record");
+                assert_eq!(policy.reinforcement_count, 1);
+                assert!(policy.last_reinforced_at.is_some());
+                Ok(())
+            })
+            .unwrap();
+    }
 }
 
 /// Move a memory to a different workspace.

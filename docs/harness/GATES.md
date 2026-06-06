@@ -25,6 +25,33 @@ Ele executa (em ordem):
 
 O script `sensors.sh` grava o resultado parseável em `docs/harness/.sensors-last` (status, timestamp, exclusões, etc.).
 
+### Version-Control Gate
+
+Wrapper: `bash docs/harness/bin/vc-gate.sh`
+
+Este gate e opcional durante desenvolvimento normal, mas recomendado em
+fronteiras de issue e obrigatorio antes de releases manuais.
+
+Modos:
+
+- `status [ISSUE]` — mostra branch, `HEAD`, dirty/untracked count e estado `jj`
+  quando disponivel.
+- `start ISSUE` — bloqueia iniciar uma nova issue com worktree sujo, a menos
+  que `--allow-dirty-current-issue` torne a atribuicao explicita.
+- `done ISSUE` — exige worktree limpo e evidencia recente de commit Git ou
+  descricao `jj` mencionando a issue.
+- `release VERSION` — exige worktree limpo, versao do `Cargo.toml` alinhada e
+  tag `vVERSION` apontando para `HEAD`; use `--allow-untagged` apenas para
+  checagens pre-tag antes do dry-run.
+
+Contrato:
+
+- `jj` e permitido como camada local para evoluir, splitar e descrever trabalho
+  de issue.
+- Git continua canonico para commits de release, tags e `cargo publish`.
+- O gate nao cria commits, nao roda `jj new`, nao move tags e nao publica crate.
+- Falhas de `vc-gate.sh release` bloqueiam qualquer tentativa de publish.
+
 ### Exclusões Documentadas (Contrato Rigoroso)
 
 Exclusão só existe para **dependências externas temporárias** (ex.: API de embedding paga indisponível, serviço de terceiros em outage).

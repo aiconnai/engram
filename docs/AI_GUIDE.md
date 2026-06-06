@@ -161,6 +161,10 @@ Local HTTP MCP authentication is documented in [`docs/MCP_AUTH.md`](MCP_AUTH.md)
 | `stale` | Yes | Not accessed recently |
 | `archived` | No (unless `include_archived: true`) | Compressed or summarized |
 
+### Memory Policy Boundary
+
+Engram's memory policy layer ranks and manages explicit memories; it does not store canonical truth in model weights or hidden session state. SQLite rows, FTS, embeddings, graph edges, and provenance/audit records remain the inspectable source of truth.
+
 ---
 
 ## 3. Memory CRUD
@@ -364,13 +368,13 @@ Increases importance score. Capped at 1.0.
 }
 ```
 
-Engram combines **4 search signals** automatically:
+Engram combines **3 base retrieval signals**:
 
 1. **BM25** — keyword matching via SQLite FTS5
 2. **Vector similarity** — semantic embeddings via sqlite-vec
 3. **Fuzzy matching** — typo tolerance
-4. **Reciprocal Rank Fusion (RRF)** — merges all signals
-5. **Multi-signal reranking** — recency, importance, quality
+
+Reciprocal Rank Fusion (RRF) merges those retrieval signals. The default heuristic reranker is controlled by the `rerank` parameter. Policy-based retrieval priority is separate and opt-in via `policy_rerank`.
 
 **Search Parameters:**
 

@@ -369,3 +369,32 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - `bash docs/harness/bin/doctor.sh` final — PASS.
 
 Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado nesta iteracao; a validacao executada foi a lane `baseline` especifica do plano de melhoria do harness.
+
+## Version-control gate / jj adoption — 2026-06-05
+
+- Adicionado `docs/harness/bin/vc-gate.sh` como gate opcional de fronteira de issue e gate recomendado antes de release.
+- Contrato adotado:
+  - `jj` pode ser usado como camada local para evoluir, splitar e descrever work-in-progress;
+  - Git continua canônico para release commits, tags e `cargo publish`;
+  - o gate nao cria commits, nao roda `jj new`, nao move tags e nao publica.
+- Modos documentados: `status`, `start ISSUE`, `done ISSUE`, `release VERSION`.
+- Criado Review Canvas em `docs/harness/canvas/2026-06-05-jj-version-control-gate.md` porque a mudanca toca scripts/policy do harness.
+- Validação nao executada nesta iteração por instrução operacional atual de nao rodar verificações sem pedido explícito.
+
+## vc-gate release guard review fix — 2026-06-06
+
+- Post-review for `memory-policy-layer` found `vc-gate.sh release` could print `release_gate=pass` without a release version.
+- Fixed `docs/harness/bin/vc-gate.sh` so release mode requires `VERSION` or `vVERSION`.
+- Targeted validation:
+  - `bash -n docs/harness/bin/vc-gate.sh` — PASS.
+  - `bash docs/harness/bin/vc-gate.sh release --allow-dirty` — expected FAIL with `release requires VERSION or vVERSION`.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+
+## Memory policy layer Phase 1 — 2026-06-06
+
+- Added deterministic `heuristic-v1` memory policy scoring with durable `memory_policy` records.
+- Added MCP tools for score, promote, decay, explain, and conflict reconciliation.
+- Integrated optional retrieval-time policy reranking through `policy_rerank` without changing default search behavior.
+- Preserved SQLite/FTS/vector/graph/provenance as canonical state; no automatic synthesized memory writes were added.
+- Validation passed: focused checks, `make ci`, `doctor.sh`, and post-review gate.
+- Post-review artifact: `docs/harness/reviews/2026-06-06-memory-policy-layer-v2-post.md` with `REVIEW_VERDICT: PASS`.

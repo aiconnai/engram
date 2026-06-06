@@ -26,5 +26,8 @@ pub use maintenance::*;
 mod sync;
 pub use sync::*;
 
+mod memory_policy;
+pub use memory_policy::*;
+
 #[cfg(test)]
 mod tests;

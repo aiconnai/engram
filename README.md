@@ -35,6 +35,7 @@ curl -X POST localhost:8080/mcp \
 **What you get:**
 - Automatic ingestion of notes, meetings, transcripts, and project artifacts
 - Hybrid search (BM25 + vectors + fuzzy) in one call
+- Memory policy layer: deterministic scoring for salience, retention, retrieval priority, reinforcement, decay, and conflict demotion over explicit memories.
 - MCP / REST / WebSocket / CLI access to the same organized memory
 - Predictable p95 latency with a single Rust binary and local-first storage
 
