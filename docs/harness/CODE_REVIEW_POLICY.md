@@ -139,6 +139,16 @@ Ver `GATES.md` para a lista completa. O reviewer deve ativamente procurar por:
 
 Reviewers must apply these checks in addition to the normal finding format and output contract.
 
+### Security Boundary
+
+Read `docs/harness/security/anthropic-reference-harness.md`.
+
+Flag as `[BLOCKER]` when a harness change implies autonomous execution against Engram without ADR, strong sandboxing, egress constraints, no credential mounts, and an explicit target contract.
+
+Flag as `[HIGH]` or `[BLOCKER]` when `.claude/scan-extras.txt` or `.claude/fp-rules.txt` weakens the core policy, adds blanket suppressions, or moves org-specific tuning into invariant text.
+
+The Anthropic reference harness is a pattern source only. Imports of its C/C++/ASAN execution pipeline are out of scope unless a separate ADR explicitly authorizes that design.
+
 ### Negative Scope
 
 Read `docs/harness/WHAT_WE_DONT_DO.md`.

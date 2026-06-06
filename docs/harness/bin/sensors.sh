@@ -249,6 +249,8 @@ if [ -n "$EXCLUDE_SENSOR" ] || [ -n "$KNOWN_ISSUE" ] || [ -n "$EXCLUSION_REASON"
 fi
 
 echo "==> [harness] sensors.sh starting at $(date -u +%Y-%m-%dT%H:%M:%SZ) (mode=$MODE)"
+echo "==> [harness] security contract: docs/harness/security/anthropic-reference-harness.md (DEFAULT_MODE=static_read_only)"
+echo "==> [harness] tuning files: .claude/scan-extras.txt, .claude/fp-rules.txt"
 
 CI_STATUS="pass"
 DOCTOR_STATUS="pass"

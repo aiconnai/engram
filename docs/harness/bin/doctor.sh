@@ -7,6 +7,7 @@
 # Validates:
 # - Required files and executability
 # - Cross-references between README, bootstrap, review-gate, GATES, CODE_REVIEW_POLICY
+# - Security contract anchors and scan/triage tuning files
 # - Drift between SPEC.md and progress.md (sprint/task/plan)
 # - Active plan file exists
 # - Latest review for active task has parseable PASS/FAIL and explicit REVIEW_VERDICT marker (if present)
@@ -62,6 +63,9 @@ require_file docs/harness/GATES.md
 require_file docs/harness/CODE_REVIEW_POLICY.md
 require_file docs/harness/README.md
 require_file docs/harness/progress.md
+require_file docs/harness/security/anthropic-reference-harness.md
+require_file .claude/scan-extras.txt
+require_file .claude/fp-rules.txt
 require_file docs/harness/bin/bootstrap.sh
 require_file docs/harness/bin/doctor.sh
 require_file docs/harness/bin/baseline.sh
@@ -69,6 +73,7 @@ require_file docs/harness/bin/quarterly-audit.sh
 require_dir docs/harness/progress
 require_dir docs/harness/reviews
 require_dir docs/harness/known-issues
+require_dir docs/harness/security
 require_dir docs/harness/canvas
 require_dir docs/harness/audits
 require_file docs/harness/canvas/README.md
@@ -88,14 +93,21 @@ require_exec docs/harness/bin/quarterly-audit.sh
 # Cross-references (bootstrap + README point at the policy and doctor)
 require_grep docs/harness/bin/bootstrap.sh 'CODE_REVIEW_POLICY\.md' 'read-next includes the local review policy'
 require_grep docs/harness/bin/bootstrap.sh 'WHAT_WE_DONT_DO\.md' 'read-next includes negative-scope policy'
+require_grep docs/harness/bin/bootstrap.sh 'anthropic-reference-harness\.md' 'read-next includes security boundary'
 require_grep docs/harness/README.md 'WHAT_WE_DONT_DO\.md' 'workflow mentions the negative-scope policy'
 require_grep docs/harness/README.md 'CODE_REVIEW_POLICY\.md' 'structure table or workflow mentions the policy file'
+require_grep docs/harness/README.md 'anthropic-reference-harness\.md' 'workflow mentions the security boundary'
+require_grep docs/harness/README.md '\.claude/scan-extras\.txt' 'workflow mentions scan tuning'
+require_grep docs/harness/README.md '\.claude/fp-rules\.txt' 'workflow mentions false-positive tuning'
 require_grep docs/harness/README.md 'doctor\.sh' 'workflow mentions the doctor check'
 require_grep docs/harness/README.md 'known-issues/' 'structure table or workflow mentions known issues'
 require_grep docs/harness/README.md 'baseline\.sh' 'workflow mentions baseline snapshots'
 require_grep docs/harness/README.md 'quarterly-audit\.sh' 'workflow mentions evidence-only audits'
 require_grep docs/harness/README.md 'Sensor modes' 'workflow lists optional sensor modes'
 require_grep docs/harness/GATES.md 'WHAT_WE_DONT_DO\.md' 'gates reference negative-scope policy'
+require_grep docs/harness/GATES.md 'anthropic-reference-harness\.md' 'gates reference security boundary'
+require_grep docs/harness/GATES.md '\.claude/scan-extras\.txt' 'gates reference scan tuning'
+require_grep docs/harness/GATES.md '\.claude/fp-rules\.txt' 'gates reference false-positive tuning'
 require_grep docs/harness/GATES.md 'Review Canvas' 'gates define review canvas requirement'
 require_grep docs/harness/GATES.md 'baseline\.sh' 'gates document baseline snapshots'
 require_grep docs/harness/GATES.md 'quarterly-audit\.sh' 'gates document evidence-only audit'
@@ -104,11 +116,17 @@ require_grep docs/harness/GATES.md 'docs/harness/bin' 'gates protect harness scr
 require_grep docs/harness/GATES.md 'Exclus' 'documented exclusion policy exists'
 require_grep docs/harness/GATES.md 'known-issue' 'exclusion policy points at known-issue docs'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'WHAT_WE_DONT_DO\.md' 'review policy enforces negative-scope policy'
+require_grep docs/harness/CODE_REVIEW_POLICY.md 'anthropic-reference-harness\.md' 'review policy enforces security boundary'
+require_grep docs/harness/CODE_REVIEW_POLICY.md '\.claude/scan-extras\.txt' 'review policy references scan tuning'
+require_grep docs/harness/CODE_REVIEW_POLICY.md '\.claude/fp-rules\.txt' 'review policy references false-positive tuning'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'Review Canvas' 'review policy checks complex-change canvas evidence'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'Harness script changes' 'review policy checks harness scripts directly'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'Finding Format|Finding format|severidade' 'review policy defines finding format'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'PASS <resumo|Harness Output Contract' 'review policy defines output contract'
 require_grep docs/harness/bin/review-gate.sh 'WHAT_WE_DONT_DO\.md' 'review-gate prompt includes negative-scope policy'
+require_grep docs/harness/bin/review-gate.sh 'anthropic-reference-harness\.md' 'review-gate prompt includes security boundary'
+require_grep docs/harness/bin/review-gate.sh '\.claude/scan-extras\.txt' 'review-gate prompt includes scan tuning'
+require_grep docs/harness/bin/review-gate.sh '\.claude/fp-rules\.txt' 'review-gate prompt includes false-positive tuning'
 require_grep docs/harness/bin/review-gate.sh 'Review Canvas' 'review-gate prompt includes review canvas checks'
 require_grep docs/harness/bin/review-gate.sh 'docs/harness/bin' 'review-gate protects harness script changes'
 require_grep docs/harness/bin/sensors.sh 'quick' 'sensors supports quick mode'
@@ -116,6 +134,20 @@ require_grep docs/harness/bin/sensors.sh 'full' 'sensors supports full mode'
 require_grep docs/harness/bin/sensors.sh 'docs' 'sensors supports docs mode'
 require_grep docs/harness/bin/sensors.sh 'mcp' 'sensors supports mcp mode'
 require_grep docs/harness/bin/sensors.sh 'baseline' 'sensors supports baseline mode'
+require_grep docs/harness/bin/sensors.sh 'anthropic-reference-harness\.md' 'sensors summary includes security boundary'
+require_grep docs/harness/bin/sensors.sh '\.claude/scan-extras\.txt' 'sensors summary includes scan tuning'
+require_grep docs/harness/bin/sensors.sh '\.claude/fp-rules\.txt' 'sensors summary includes false-positive tuning'
+require_grep docs/harness/INVARIANTS.md 'Static/read-only first' 'invariants declare static/read-only default'
+require_grep docs/harness/INVARIANTS.md 'ADR.*sandbox|sandbox.*ADR' 'invariants require ADR and sandbox for autonomous execution'
+require_grep docs/harness/INVARIANTS.md '\.claude/scan-extras\.txt' 'invariants point tuning outside core policy'
+require_grep docs/harness/INVARIANTS.md '\.claude/fp-rules\.txt' 'invariants point false-positive tuning outside core policy'
+require_grep docs/harness/security/anthropic-reference-harness.md 'ENGRAM-HARNESS-SECURITY-CONTRACT-v1' 'security contract version anchor'
+require_grep docs/harness/security/anthropic-reference-harness.md 'DEFAULT_MODE=static_read_only' 'security contract default mode anchor'
+require_grep docs/harness/security/anthropic-reference-harness.md 'AUTONOMOUS_EXECUTION_REQUIRES_ADR=true' 'security contract ADR anchor'
+require_grep docs/harness/security/anthropic-reference-harness.md 'NO_CREDENTIAL_MOUNTS=true' 'security contract credential anchor'
+require_grep docs/harness/security/anthropic-reference-harness.md 'TUNING_FILES=\.claude/scan-extras\.txt,\.claude/fp-rules\.txt' 'security contract tuning anchor'
+require_grep .claude/scan-extras.txt 'scan-extras' 'scan tuning file identifies itself'
+require_grep .claude/fp-rules.txt 'fp-rules' 'false-positive tuning file identifies itself'
 
 field_value() {
   local file="$1"

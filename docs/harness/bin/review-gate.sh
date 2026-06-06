@@ -16,7 +16,8 @@
 #   REVIEWER_TIMEOUT_SECS=...                        (future non-interactive exec)
 #
 # The script builds a rich prompt including SPEC, INVARIANTS, WHAT_WE_DONT_DO, GATES, CODE_REVIEW_POLICY,
-# fake-success patterns, and the relevant diff (with harness artifacts excluded).
+# docs/harness/security/anthropic-reference-harness.md, .claude/scan-extras.txt,
+# .claude/fp-rules.txt, fake-success patterns, and the relevant diff (with harness artifacts excluded).
 # It writes artifacts to docs/harness/reviews/ with iteration versioning.
 # Verdict is parsed from an explicit marker line:
 #   REVIEW_VERDICT: PASS ...
@@ -127,6 +128,8 @@ PROMPT_FILE="/tmp/engram-review-${TASK_ID}-$$.md"
   echo "- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)"
   echo "- docs/harness/GATES.md (especially the fake-success patterns section)"
   echo "- docs/harness/CODE_REVIEW_POLICY.md (this policy)"
+  echo "- docs/harness/security/anthropic-reference-harness.md (security boundary)"
+  echo "- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)"
   echo "- docs/harness/README.md (workflow)"
   echo "- Root INVARIANTS.md (data layer invariants for the memory system)"
   echo
@@ -134,6 +137,8 @@ PROMPT_FILE="/tmp/engram-review-${TASK_ID}-$$.md"
   echo
   echo "Additional harness-specific requirements:"
   echo "- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work."
+  echo "- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present."
+  echo "- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions."
   echo "- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table."
   echo "- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate."
   if [ -n "$HARNESS_SCRIPT_CHANGES" ]; then
@@ -154,6 +159,7 @@ PROMPT_FILE="/tmp/engram-review-${TASK_ID}-$$.md"
   echo "8. Progress docs (harness or active plan) not updated for a domain change."
   echo "9. Cross-SDK (python/typescript) contract drift not reflected."
   echo "10. Reviewer is being shown a self-referential or incomplete prompt (call it out)."
+  echo "11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default."
   echo
   echo "## Diff Under Review"
   echo

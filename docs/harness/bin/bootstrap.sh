@@ -7,6 +7,7 @@
 #   - Completes in < 800 ms
 #   - Output contains: "engram harness state", "Branch:", "Active sprint", "Read next"
 #   - No side effects (read-only)
+#   - Security contract remains static/read-only first; see docs/harness/security/anthropic-reference-harness.md
 #   - Safe for any agent CLI: Claude Code, Grok Build TUI, Codex, Cursor, Aider, etc.
 #
 # Called manually at session start per AGENTS.md / Claude.md.
@@ -122,6 +123,7 @@ echo "  docs/harness/INVARIANTS.md           (hard process rules; canonical)"
 echo "  docs/harness/WHAT_WE_DONT_DO.md      (negative scope; no hidden expansion)"
 echo "  docs/harness/GATES.md                (sensors + review criteria + fake-success)"
 echo "  docs/harness/CODE_REVIEW_POLICY.md   (local policy for external reviewer)"
+echo "  docs/harness/security/anthropic-reference-harness.md (security boundary)"
 echo "  docs/harness/README.md               (workflow + harness loop)"
 echo "  docs/harness/progress.md             (live state)"
 echo "  AGENTS.md + Claude.md                (onboarding)"

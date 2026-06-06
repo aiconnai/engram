@@ -74,8 +74,12 @@ bash docs/harness/bin/bootstrap.sh
 ```
 
 Then read in order: `docs/harness/SPEC.md`, `docs/harness/INVARIANTS.md`,
-`docs/harness/GATES.md`, `docs/harness/CODE_REVIEW_POLICY.md`,
-`docs/harness/progress.md`.
+`docs/harness/WHAT_WE_DONT_DO.md`, `docs/harness/GATES.md`,
+`docs/harness/CODE_REVIEW_POLICY.md`,
+`docs/harness/security/anthropic-reference-harness.md`,
+`docs/harness/README.md`, `docs/harness/progress.md`, the active plan,
+`AGENTS.md`, root `INVARIANTS.md`, `STANDARDS.md`, and
+`ERRORS_AND_LESSONS.md`.
 
 This operational harness (inspired by proven backend patterns) ensures resumable, auditable, high-signal work across Claude Code CLI and Grok Build TUI while keeping the same operational truth available to the team and its agents.
 
