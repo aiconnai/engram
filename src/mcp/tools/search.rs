@@ -21,6 +21,16 @@
                 "explain": {"type": "boolean", "default": false, "description": "Include match explanations"},
                 "rerank": {"type": "boolean", "default": true, "description": "Apply reranking to improve result quality"},
                 "rerank_strategy": {"type": "string", "enum": ["none", "heuristic", "multi_signal"], "default": "heuristic", "description": "Reranking strategy to use"},
+                "policy_rerank": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Apply memory policy retrieval_priority as an opt-in rerank layer after hybrid search."
+                },
+                "policy_explain": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include policy score and reason for each reranked result when policy_rerank is true."
+                },
                 "filter": {
                     "type": "object",
                     "description": "Advanced filter with AND/OR logic. Supports workspace, tier, and metadata fields. Example: {\"AND\": [{\"workspace\": {\"eq\": \"my-project\"}}, {\"importance\": {\"gte\": 0.5}}]}"

@@ -670,3 +670,74 @@ Comparação com o harness mbras identificou melhorias úteis para Engram sem im
 - `bash docs/harness/bin/doctor.sh` final — PASS.
 
 Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado nesta iteracao; a validacao executada foi a lane `baseline` especifica do plano de melhoria do harness.
+
+## 2026-06-05 — Version-control gate / jj adoption
+
+### Contexto
+
+Durante preparação de release Cargo, a branch mostrou tag `v0.21.0` apontando
+para commit diferente de `HEAD` e worktree sujo com mudanças de issue ainda nao
+commitadas. O problema operacional: varias issues evoluem, mas version control
+nao avanca no mesmo ritmo.
+
+### Ações realizadas
+
+- Adicionado `docs/harness/bin/vc-gate.sh` para checagens explicitas de fronteira
+  de issue e release:
+  - `status [ISSUE]`
+  - `start ISSUE`
+  - `done ISSUE`
+  - `release VERSION`
+- Documentado uso opcional de `jj` como camada local de evolucao/split/describe
+  de trabalho por issue.
+- Mantido Git como fonte canonica para releases, tags e `cargo publish`.
+- Atualizados `README.md`, `INVARIANTS.md` e `GATES.md` com o contrato.
+- Criado Review Canvas:
+  `docs/harness/canvas/2026-06-05-jj-version-control-gate.md`.
+
+### Limites
+
+- O gate nao cria commits, nao roda `jj new`, nao move tags e nao publica crate.
+- `doctor.sh`, `bootstrap.sh` e `sensors.sh` nao foram alterados; a nova trilha
+  permanece opcional/explicita.
+- Validação nao executada nesta iteração por instrução operacional atual de nao
+  rodar verificações sem pedido explícito.
+
+## 2026-06-06 — vc-gate release guard review fix
+
+### Contexto
+
+Post-review de `memory-policy-layer` apontou falso sucesso em `docs/harness/bin/vc-gate.sh release` quando nenhuma versão era informada.
+
+### Ações realizadas
+
+- Atualizado uso de `release` para exigir `VERSION|vVERSION`.
+- `check_release_version` agora falha com `release requires VERSION or vVERSION` quando a versão está ausente.
+
+### Evidência
+
+- `bash -n docs/harness/bin/vc-gate.sh` — PASS.
+- `bash docs/harness/bin/vc-gate.sh release --allow-dirty` — FAIL esperado por versão ausente.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+
+## 2026-06-06 — Memory policy layer Phase 1 completed
+
+### Resultado
+
+- Implementado `memory_policy` como camada determinística e auditável de salience, retention e retrieval priority.
+- Adicionadas ferramentas MCP `memory_score`, `memory_promote`, `memory_decay`, `memory_explain` e `memory_reconcile_conflict`.
+- `memory_search` ganhou `policy_rerank` / `policy_explain` opt-in, mantendo ranking padrão compatível.
+- Hooks passaram a reforçar policy apenas para IDs explícitos; `session_end` no server usa resumo policy-only sem escrever fatos ocultos.
+- Docs e `docs/MCP_TOOLS.md` atualizados para reforçar que verdade canônica permanece em SQLite/FTS/vetores/grafo/proveniência.
+
+### Evidência
+
+- `cargo fmt --all -- --check` — PASS.
+- `cargo clippy --all-targets --all-features -- -D warnings` — PASS.
+- `cargo test memory_policy -- --nocapture` — PASS.
+- `cargo test salience --lib -- --nocapture` — PASS.
+- `cargo test memory_search --test mcp_protocol_tests -- --nocapture` — PASS.
+- `./scripts/generate-mcp-reference.sh --check` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `make ci` — PASS.
+- `bash docs/harness/bin/review-gate.sh post memory-policy-layer --review-file docs/harness/reviews/2026-06-06-memory-policy-layer-v2-post.md` — POST-GATE PASS.

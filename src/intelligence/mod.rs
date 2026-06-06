@@ -37,6 +37,7 @@ pub mod entities;
 pub mod entity_extraction;
 pub mod fact_extraction;
 pub mod gardening;
+pub mod memory_policy;
 pub mod memory_update;
 pub mod natural_language;
 pub mod proactive;
@@ -137,6 +138,12 @@ pub use memory_update::{
     apply_update, create_update_log, list_update_logs, ConflictType as UpdateConflictType,
     UpdateAction, UpdateCandidate, UpdateDetector, UpdateLogEntry, UpdateResult,
     CREATE_UPDATE_LOG_TABLE,
+};
+
+pub use memory_policy::{
+    blend_retrieval_priority, explain_policy_score, extract_features, score_policy, PolicyEvent,
+    PolicyEventKind, PolicyExplanation, PolicyFeatureInput, PolicyFeatures, PolicyScore,
+    POLICY_VERSION,
 };
 
 // RML-1215: Emotional & Reflective Memory

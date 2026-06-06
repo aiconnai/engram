@@ -275,9 +275,12 @@ impl EngramHandler {
     /// `tools/call` dispatch will fire `PostToolUse`.
     #[cfg(feature = "hooks")]
     fn enable_hooks(&mut self) {
-        use engram::hooks::{HookManager, HookResult, LifecycleHook};
+        use engram::hooks::{
+            HookManager, HookResult, LifecycleHook, PostToolUseHandler, SessionEndHandler,
+        };
 
         let mut hm = HookManager::new();
+        let storage = self.storage.clone();
 
         hm.register(LifecycleHook::SessionStart, |_hook, ctx| {
             tracing::info!(
@@ -289,23 +292,15 @@ impl EngramHandler {
             Ok(HookResult::Continue)
         });
 
-        hm.register(LifecycleHook::PostToolUse, |_hook, ctx| {
-            tracing::debug!(
-                target = "engram::hooks",
-                tool = ?ctx.metadata.get("tool_name"),
-                "PostToolUse"
-            );
-            Ok(HookResult::Continue)
+        let post_tool_use_handler = PostToolUseHandler::new(storage.clone());
+        hm.register(LifecycleHook::PostToolUse, move |hook, ctx| {
+            post_tool_use_handler.handle(hook, ctx)
         });
 
         hm.register(LifecycleHook::Stop, |_hook, _ctx| Ok(HookResult::Continue));
-        hm.register(LifecycleHook::SessionEnd, |_hook, ctx| {
-            tracing::info!(
-                target = "engram::hooks",
-                session_id = ?ctx.session_id,
-                "SessionEnd"
-            );
-            Ok(HookResult::Continue)
+        let session_end_handler = SessionEndHandler::policy_summary_only(storage);
+        hm.register(LifecycleHook::SessionEnd, move |hook, ctx| {
+            session_end_handler.handle(hook, ctx)
         });
 
         self.hook_manager = Some(Arc::new(hm));

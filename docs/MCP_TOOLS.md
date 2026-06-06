@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **261**
+Total tools: **266**
 
 ## Summary
 
@@ -36,6 +36,11 @@ Total tools: **261**
 | `workspace_move` | standard | mutating (no MCP hints) | `id`, `workspace` |
 | `workspace_delete` | advanced | destructiveHint | `workspace` |
 | `memory_create_daily` | standard | mutating (no MCP hints) | `content` |
+| `memory_score` | standard | mutating (no MCP hints) | `id` |
+| `memory_promote` | standard | mutating (no MCP hints) | `id` |
+| `memory_decay` | standard | mutating (no MCP hints) | none |
+| `memory_explain` | standard | readOnlyHint | `id` |
+| `memory_reconcile_conflict` | standard | mutating (no MCP hints) | `id`, `reason` |
 | `memory_promote_to_permanent` | standard | mutating (no MCP hints) | `id` |
 | `embedding_cache_stats` | advanced | readOnlyHint | none |
 | `embedding_cache_clear` | advanced | destructiveHint | none |
@@ -278,7 +283,7 @@ Total tools: **261**
 
 ### `memory_create`
 
-Store a new memory. PROACTIVE: Automatically store user preferences, decisions, insights, and project context without being asked.
+Store an explicit durable memory with inspectable provenance. Use for stable preferences, decisions, insights, and project context when the fact is intentional and worth preserving.
 
 - Tier: `essential`
 - Annotations: mutating (no MCP hints)
@@ -639,6 +644,70 @@ Create a daily (ephemeral) memory that auto-expires after the specified TTL. Use
 | `importance` | `number` | no | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
 | `ttl_seconds` | `integer` | no | Time-to-live in seconds (default: 24 hours) Default: `86400`. |
 | `workspace` | `string` | no | Workspace to store the memory in (default: 'default') |
+
+### `memory_score`
+
+Compute deterministic memory policy scores for a memory. When persist=true, upserts the memory_policy row and emits a best-effort policy audit event.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to score |
+| `persist` | `boolean` | no | Persist the computed policy score to memory_policy Default: `false`. |
+
+### `memory_promote`
+
+Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to promote or reinforce |
+| `canonical_tier` | `boolean` | no | When true, also call promote_to_permanent for canonical tier promotion Default: `false`. |
+
+### `memory_decay`
+
+Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to decay Default: `default`. |
+| `dry_run` | `boolean` | no | When true, compute candidate changes without mutation Default: `true`. |
+
+### `memory_explain`
+
+Explain a memory's current policy score with feature components, reason text, and policy audit count.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to explain |
+
+### `memory_reconcile_conflict`
+
+Record a conflict reconciliation signal for a memory policy without deleting or mutating memory content.
+
+- Tier: `standard`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `reason`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID with the conflict signal |
+| `reason` | `string` | yes | Audit reason for the conflict reconciliation |
 
 ### `memory_promote_to_permanent`
 
@@ -1744,6 +1813,8 @@ Search memories using hybrid search (keyword + semantic). Automatically selects 
 | `explain` | `boolean` | no | Include match explanations Default: `false`. |
 | `rerank` | `boolean` | no | Apply reranking to improve result quality Default: `true`. |
 | `rerank_strategy` | `string` | no | Reranking strategy to use Default: `heuristic`. Allowed: `none`, `heuristic`, `multi_signal`. |
+| `policy_rerank` | `boolean` | no | Apply memory policy retrieval_priority as an opt-in rerank layer after hybrid search. Default: `false`. |
+| `policy_explain` | `boolean` | no | Include policy score and reason for each reranked result when policy_rerank is true. Default: `false`. |
 | `filter` | `object` | no | Advanced filter with AND/OR logic. Supports workspace, tier, and metadata fields. Example: {"AND": [{"workspace": {"eq": "my-project"}}, {"importance": {"gte": 0.5}}]} |
 | `global` | `boolean` | no | Search across all workspaces (default: false). When true, ignores any workspace filter and returns results from all workspaces with a workspace field in each result. Default: `false`. |
 

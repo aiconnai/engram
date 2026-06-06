@@ -1,17 +1,52 @@
 //! Search tool handlers.
 
+use std::collections::HashMap;
+
 use serde_json::{json, Value};
 
+use crate::intelligence::memory_policy::{
+    blend_retrieval_priority, extract_features, score_policy, PolicyFeatureInput,
+};
 use crate::search::{hybrid_search, RerankConfig, RerankStrategy, Reranker};
+use crate::storage::queries::get_policy_record;
 use crate::types::*;
 
 use super::HandlerContext;
+
+#[derive(Clone)]
+struct PolicyRerankInfo {
+    score: f32,
+    blended_score: f32,
+    reason: String,
+    version: String,
+    source: &'static str,
+}
+
+impl PolicyRerankInfo {
+    fn to_json(&self) -> Value {
+        json!({
+            "score": self.score,
+            "blended_score": self.blended_score,
+            "reason": self.reason,
+            "version": self.version,
+            "source": self.source
+        })
+    }
+}
 
 pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
     use crate::search::result_cache::CacheFilterParams;
 
     let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
     let mut options: SearchOptions = serde_json::from_value(params.clone()).unwrap_or_default();
+    let policy_rerank = params
+        .get("policy_rerank")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let policy_explain = params
+        .get("policy_explain")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     // Global search opt-in: when `global` is true, ignore workspace filters.
     let global = params
@@ -52,7 +87,7 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    if !skip_cache && !rerank_enabled {
+    if !skip_cache && !rerank_enabled && !policy_rerank {
         if let Some(cached_results) = ctx.search_cache.get(query, embedding_ref, &cache_filters) {
             if global {
                 let results_with_ws: Vec<Value> = cached_results
@@ -81,15 +116,64 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
-            let results = hybrid_search(conn, query, embedding_ref, &options, &search_config)?;
+            let mut results = hybrid_search(conn, query, embedding_ref, &options, &search_config)?;
 
-            if !rerank_enabled && !skip_cache {
+            if !rerank_enabled && !skip_cache && !policy_rerank {
                 ctx.search_cache.put(
                     query,
                     query_embedding.clone(),
                     cache_filters.clone(),
                     results.clone(),
                 );
+            }
+
+            let mut policy_info_by_memory_id = HashMap::new();
+            if policy_rerank {
+                for result in &mut results {
+                    let hybrid_score = result.score;
+                    let stored_policy = get_policy_record(conn, result.memory.id)?;
+                    let (policy_score, source) = if let Some(policy) = stored_policy.as_ref() {
+                        (
+                            crate::intelligence::memory_policy::PolicyScore {
+                                salience_score: policy.salience_score,
+                                retention_score: policy.retention_score,
+                                retrieval_priority: policy.retrieval_priority,
+                                policy_version: policy.policy_version.clone(),
+                                policy_reason: policy.policy_reason.clone(),
+                            },
+                            "stored",
+                        )
+                    } else {
+                        let features = extract_features(PolicyFeatureInput {
+                            memory: &result.memory,
+                            existing_policy: None,
+                            event: None,
+                            hybrid_search_score: Some(hybrid_score),
+                            session_relevance: None,
+                        });
+                        (score_policy(&features), "heuristic-v1")
+                    };
+                    let blended_score =
+                        blend_retrieval_priority(hybrid_score, policy_score.retrieval_priority);
+
+                    result.score = blended_score;
+                    policy_info_by_memory_id.insert(
+                        result.memory.id,
+                        PolicyRerankInfo {
+                            score: policy_score.retrieval_priority,
+                            blended_score,
+                            reason: policy_score.policy_reason,
+                            version: policy_score.policy_version,
+                            source,
+                        },
+                    );
+                }
+
+                results.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
 
             if rerank_enabled && rerank_strategy != RerankStrategy::None {
@@ -113,6 +197,11 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                             if global {
                                 obj["workspace"] = json!(r.result.memory.workspace);
                             }
+                            if policy_rerank && policy_explain {
+                                if let Some(policy) = policy_info_by_memory_id.get(&r.result.memory.id) {
+                                    obj["policy"] = policy.to_json();
+                                }
+                            }
                             obj
                         }).collect::<Vec<_>>(),
                         "reranked": true,
@@ -130,6 +219,11 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                             if global {
                                 obj["workspace"] = json!(r.result.memory.workspace);
                             }
+                            if policy_rerank && policy_explain {
+                                if let Some(policy) = policy_info_by_memory_id.get(&r.result.memory.id) {
+                                    obj["policy"] = policy.to_json();
+                                }
+                            }
                             obj
                         })
                         .collect::<Vec<_>>()))
@@ -139,16 +233,37 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                 Ok(json!(results
                     .iter()
                     .map(|r| {
-                        json!({
+                        let mut obj = json!({
                             "memory": r.memory,
                             "score": r.score,
                             "match_info": r.match_info,
                             "workspace": r.memory.workspace
-                        })
+                        });
+                        if policy_rerank && policy_explain {
+                            if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
+                                obj["policy"] = policy.to_json();
+                            }
+                        }
+                        obj
                     })
                     .collect::<Vec<_>>()))
             } else {
-                Ok(json!(results))
+                Ok(json!(results
+                    .iter()
+                    .map(|r| {
+                        let mut obj = json!({
+                            "memory": r.memory,
+                            "score": r.score,
+                            "match_info": r.match_info
+                        });
+                        if policy_rerank && policy_explain {
+                            if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
+                                obj["policy"] = policy.to_json();
+                            }
+                        }
+                        obj
+                    })
+                    .collect::<Vec<_>>()))
             }
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))

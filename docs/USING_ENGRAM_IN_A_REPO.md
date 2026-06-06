@@ -167,6 +167,10 @@ Suggested MCP tools:
 - `memory_search` before implementation or debugging
 - `memory_create` for new durable knowledge
 - `memory_list` to inspect recent memories
+- `memory_score` before promoting uncertain context
+- `memory_explain` before trusting a surprising result
+- `memory_reconcile_conflict` when a newer correction contradicts older memory
+- `memory_promote_to_permanent` only when you intend to change canonical retention tier
 ```
 
 ## 5. Store Initial Project Context

@@ -31,6 +31,7 @@ pub mod identity;
 pub mod lifecycle;
 pub mod markdown_export;
 pub mod memory_crud;
+pub mod memory_policy;
 pub mod misc;
 pub mod pending_injections;
 pub mod project_context;
@@ -125,6 +126,11 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_create_issue" => memory_crud::create_issue(ctx, params),
         "memory_ingest_fact" => memory_crud::memory_ingest_fact(ctx, params),
         "memory_ingest_fact_batch" => memory_crud::memory_ingest_fact_batch(ctx, params),
+        "memory_score" => memory_policy::memory_score(ctx, params),
+        "memory_promote" => memory_policy::memory_promote(ctx, params),
+        "memory_decay" => memory_policy::memory_decay(ctx, params),
+        "memory_explain" => memory_policy::memory_explain(ctx, params),
+        "memory_reconcile_conflict" => memory_policy::memory_reconcile_conflict(ctx, params),
 
         // ── Search ───────────────────────────────────────────────────────────
         "memory_search" => search::memory_search(ctx, params),
