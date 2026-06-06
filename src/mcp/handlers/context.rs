@@ -26,6 +26,69 @@ fn safe_truncate(s: &str, max_bytes: usize) -> &str {
     &s[..boundary]
 }
 
+// ── Operational Context retrieval ────────────────────────────────────────────
+
+/// Record a command/tool/action event into Operational Context.
+pub fn context_record(ctx: &HandlerContext, params: Value) -> Value {
+    let policy = crate::context::policy::OperationalContextPolicy::from_params(&params);
+    let request: crate::context::ContextRecordRequest = match serde_json::from_value(params) {
+        Ok(request) => request,
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+
+    ctx.storage
+        .with_connection(|conn| crate::context::record_context(conn, &policy, request))
+        .map(|response| json!(response))
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+/// Record an Operational Context artifact pointer or policy-approved raw blob.
+pub fn context_record_artifact(ctx: &HandlerContext, params: Value) -> Value {
+    let policy = crate::context::policy::OperationalContextPolicy::from_params(&params);
+    let request: crate::context::ContextRecordArtifactRequest = match serde_json::from_value(params)
+    {
+        Ok(request) => request,
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+
+    ctx.storage
+        .with_connection(|conn| crate::context::record_context_artifact(conn, &policy, request))
+        .map(|response| json!(response))
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+/// Search scoped Operational Context events and derived summaries.
+pub fn context_search(ctx: &HandlerContext, params: Value) -> Value {
+    let query = match params.get("query").and_then(|v| v.as_str()) {
+        Some(query) if !query.trim().is_empty() => query,
+        _ => return json!({"error": "query is required"}),
+    };
+    let mut request: crate::context::ContextSearchRequest =
+        match serde_json::from_value(params.clone()) {
+            Ok(request) => request,
+            Err(e) => return json!({"error": e.to_string()}),
+        };
+    request.query = Some(query.to_string());
+
+    ctx.storage
+        .with_connection(|conn| crate::context::search_context(conn, &request))
+        .map(|response| json!(response))
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+/// Build a compact Operational Context bundle for resuming work.
+pub fn context_build_bundle(ctx: &HandlerContext, params: Value) -> Value {
+    let request: crate::context::ContextBundleRequest = match serde_json::from_value(params) {
+        Ok(request) => request,
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+
+    ctx.storage
+        .with_connection(|conn| crate::context::build_context_bundle(conn, &request))
+        .map(|bundle| json!(bundle))
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
 // ── Fact extraction ───────────────────────────────────────────────────────────
 
 /// Extract SPO facts from a memory's content and persist them.
