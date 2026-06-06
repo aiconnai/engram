@@ -13,7 +13,7 @@ last_updated: 2026-03-09
 
 This file provides guidance to Claude Code when working in this repository.
 
-**Quick reference:** [QUICKSTART.md](QUICKSTART.md)
+**Quick reference:** [docs/QUICKSTART.md](docs/QUICKSTART.md)
 **Standards:** [STANDARDS.md](STANDARDS.md)
 **Mistakes:** [ERRORS_AND_LESSONS.md](ERRORS_AND_LESSONS.md)
 
