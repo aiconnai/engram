@@ -8,6 +8,7 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
 - `REFERENCE.md`: Cloud HTTP/MCP API reference, auth, tenant resolution, and error codes.
 - `OPERATIONS.md`: SLOs, alerts, backup/restore, and incident playbooks.
 - `CONTROL_PLANE_SCHEMA.sql`: Postgres schema for the cloud control plane.
+- `QUICKSTART.md`: Command-first local quick reference.
 - `SCHEMA.md`: Local Engram SQLite schema and migrations.
 - `rfcs/`: Proposed design records and product-boundary RFCs.
 - `USING_ENGRAM_IN_A_REPO.md`: How another repository connects to Engram through MCP, CLI, or HTTP.
@@ -15,5 +16,6 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
 ## Notes
 
 - Cloud documents describe Engram Cloud (SaaS). They do not change core Engram behavior.
-- Core/OSS documentation remains in the repo root and `docs/SCHEMA.md`.
+- Root stays reserved for repository identity, build/config entrypoints, GitHub-visible policy files, and agent context files consumed by tooling.
+- Core/OSS documentation lives in the repo root when tools expect it there, or under `docs/` when it is reference material.
 - The README explains the product thesis and primary workflows; this directory explains how the cloud, local schema, and repo integration pieces fit together.

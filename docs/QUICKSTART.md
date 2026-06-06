@@ -2,7 +2,7 @@
 
 # Quick Start — Command Reference
 
-Commands only. For context: [CLAUDE.md](CLAUDE.md). For rules: [STANDARDS.md](STANDARDS.md).
+Commands only. For context: [CLAUDE.md](../CLAUDE.md). For rules: [STANDARDS.md](../STANDARDS.md).
 
 ---
 
@@ -53,9 +53,9 @@ git push -u origin feature/my-feature
 
 ## References
 
-- [CLAUDE.md](CLAUDE.md)
-- [STANDARDS.md](STANDARDS.md)
-- [ERRORS_AND_LESSONS.md](ERRORS_AND_LESSONS.md)
+- [CLAUDE.md](../CLAUDE.md)
+- [STANDARDS.md](../STANDARDS.md)
+- [ERRORS_AND_LESSONS.md](../ERRORS_AND_LESSONS.md)
 
 ---
 **Last Updated:** 2026-03-09

@@ -81,7 +81,7 @@ O Engram expõe as ferramentas MCP documentadas em [`docs/MCP_TOOLS.md`](docs/MC
 - **Cliente Python**: `sdks/python/engram_client/client.py`
 - **Cliente TypeScript**: `sdks/typescript/src/index.ts`
 - **Testes de integração**: `tests/*.rs`
-- **Documentação da API**: `REFERENCE.md` (Engram Cloud), `INVARIANTS.md` (regras do projeto)
+- **Documentação da API**: `docs/REFERENCE.md` (Engram Cloud), `INVARIANTS.md` (regras do projeto)
 - **Tese do produto**: `README.md`, `docs/README.md`, `docs/AI_GUIDE.md`, `docs/USING_ENGRAM_IN_A_REPO.md`
 
 ## Harness de Desenvolvimento (Obrigatório no Início de Toda Sessão)
