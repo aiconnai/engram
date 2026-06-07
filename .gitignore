@@ -166,5 +166,8 @@ vendor/
 # Temporary benchmark results
 benchmark_*.txt
 .claude/worktrees/
+# Local project skills carry internal operational detail (Huly workspace, tokens);
+# keep them project-scoped but out of the public repo.
+.claude/skills/
 .orchestrator/
 .worktrees/
