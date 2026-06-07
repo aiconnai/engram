@@ -26,6 +26,7 @@ env:
   RUST_BACKTRACE: 1
   RUSTUP_MAX_RETRIES: 10
 
+# Superseded runs for the same workflow/event/ref are cancelled automatically.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -60,7 +61,6 @@ permissions:
 # — so normal `main` pushes never wait on them. Use `workflow_dispatch` to run
 # them on demand. In all cases the four required jobs above are the gate; do not
 # wait on any extended job before considering a `main` push landed.
-# Superseded runs for the same workflow/event/ref are cancelled automatically.
 #
 # This keeps GitHub Actions as an enforceable gate without incurring high
 # per-PR costs (especially macOS minutes and long-running jobs).
