@@ -15,6 +15,16 @@ cargo bench --bench mcp_dispatch
 cargo bench --bench entity_extraction
 cargo bench --bench community_detection
 cargo bench --bench traversal
+
+# Run RFC 0003 search scale package
+ENGRAM_SEARCH_BENCH_SCALE=large cargo bench --bench search search_scale
+
+# Generate RFC 0003 five-dimension report
+ENGRAM_SEARCH_BENCH_REPORT=1 \
+ENGRAM_SEARCH_BENCH_REPORT_SIZES=100000,1000000 \
+ENGRAM_SEARCH_BENCH_EMBEDDING_DIMS=384 \
+ENGRAM_SEARCH_BENCH_REPORT_ITERS=100 \
+cargo bench --bench search search_index_v2_report
 ```
 
 ## Benchmark Suites
@@ -22,7 +32,7 @@ cargo bench --bench traversal
 | File | Layer | What it measures |
 |------|-------|-----------------|
 | [`memory_ops.rs`](memory_ops.rs) | Storage | Create, get, list, cross-reference, and stats queries |
-| [`search.rs`](search.rs) | Search | BM25, hybrid (BM25+vector), TF-IDF embedding, fuzzy correction, scale tests |
+| [`search.rs`](search.rs) | Search | BM25, hybrid (BM25+vector), semantic-only scan, TF-IDF embedding, fuzzy correction, scale tests, RFC 0003 report |
 | [`mcp_dispatch.rs`](mcp_dispatch.rs) | MCP | End-to-end tool dispatch latency (JSON params through handler to response) |
 | [`entity_extraction.rs`](entity_extraction.rs) | Intelligence | NER construction cost and extraction throughput |
 | [`community_detection.rs`](community_detection.rs) | Graph | Louvain-style community detection on clustered synthetic graphs |
@@ -81,6 +91,46 @@ Captured on Apple Silicon. Median values from 100-sample Criterion runs.
 | `search_scale/1K memories` | 516 us |
 | `search_scale/10K memories` | 2.2 ms |
 
+## RFC 0003 Search Index v2 Package
+
+`search.rs` includes an opt-in benchmark package for the RFC 0003 backend
+decision. Default `cargo bench --bench search` remains sized for normal local
+development. Larger corpora are enabled by environment variable:
+
+| Command | Corpus sizes |
+|---------|--------------|
+| `cargo bench --bench search search_scale` | 100, 1K, 10K |
+| `ENGRAM_SEARCH_BENCH_SCALE=medium cargo bench --bench search search_scale` | 100, 1K, 10K, 100K |
+| `ENGRAM_SEARCH_BENCH_SCALE=large cargo bench --bench search search_scale` | 100, 1K, 10K, 100K, 1M |
+
+To generate the RFC report:
+
+```bash
+ENGRAM_SEARCH_BENCH_REPORT=1 \
+ENGRAM_SEARCH_BENCH_REPORT_SIZES=100000,1000000 \
+ENGRAM_SEARCH_BENCH_EMBEDDING_DIMS=384 \
+ENGRAM_SEARCH_BENCH_REPORT_ITERS=100 \
+cargo bench --bench search search_index_v2_report
+```
+
+Output:
+
+```text
+target/criterion/search-index-v2/report.md
+```
+
+The report covers quality, latency, rebuild time, delete lag, and disk growth.
+Quality metrics use deterministic TF-IDF embeddings, so they validate benchmark
+plumbing and synthetic-topic relevance rather than production semantic quality.
+The report also includes a bench-only `sqlite-vec` spike with `vec0_ideal` and
+`vec0_postfilter`; only `vec0_postfilter` is production-relevant because it
+models KNN-first over-fetch followed by the same default search filters.
+Use at least `ENGRAM_SEARCH_BENCH_EMBEDDING_DIMS=384` and
+`ENGRAM_SEARCH_BENCH_REPORT_ITERS=100` for decision-grade latency.
+Use `ENGRAM_SEARCH_BENCH_VEC0_OVERFETCH` to tune the post-filter over-fetch
+multiplier; the default is `10`.
+See [`../docs/rfcs/0003-search-index-v2-benchmark.md`](../docs/rfcs/0003-search-index-v2-benchmark.md).
+
 ### MCP Dispatch (`mcp_dispatch.rs`)
 
 | Benchmark | Median |
@@ -112,7 +162,7 @@ Each benchmark constructs its own dataset to control for variance:
 | Suite | Corpus | Structure |
 |-------|--------|-----------|
 | `memory_ops` | 100-1000 memories | Flat, 10 tag groups, mixed Note/Todo types |
-| `search` | 100-10000 memories | 10 software-engineering topics, rotated content |
+| `search` | 100-10000 memories by default; opt-in 100K/1M | 10 software-engineering topics, rotated content |
 | `mcp_dispatch` | 100 memories | Flat, synthetic content for dispatch overhead |
 | `entity_extraction` | 1 sentence | Mixed entities: persons, orgs, dates, URLs |
 | `community_detection` | 500 nodes | 10 clusters of 50, 5% inter-cluster density |
