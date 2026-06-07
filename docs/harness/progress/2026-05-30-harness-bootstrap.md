@@ -771,3 +771,28 @@ Post-review de `memory-policy-layer` apontou falso sucesso em `docs/harness/bin/
   pipeline import unless an ADR and explicit target contract exist.
 - No autonomous execution pipeline, target runner, credential mount, or `src/`
   change is included in this branch.
+
+## 2026-06-07 — CI superseded-run cancellation + ENGRA-92
+
+### Contexto
+
+Pushes sucessivos em `main` (`0ece5db` seguido de `c5ea6e9`) deixaram runs
+antigos executando jobs extended depois de supersedidos. O mesmo diagnóstico
+também expôs `doctor.sh` vermelho por falta dos identificadores literais em
+`.claude/scan-extras.txt` e `.claude/fp-rules.txt`.
+
+### Ações realizadas
+
+- Adicionado `concurrency` em `.github/workflows/ci.yml`, com grupo por
+  workflow/event/ref e `cancel-in-progress: true`.
+- Mantida a política de gate required barata para PRs e `main`.
+- Mantido `Full Feature Tests` fora de push em `main`; ele segue apenas para
+  `schedule` e `workflow_dispatch`.
+- Corrigido `ENGRA-92` adicionando `File: .claude/scan-extras.txt` e
+  `File: .claude/fp-rules.txt` aos arquivos de tuning.
+
+### Evidência
+
+- `git diff --check` — PASS.
+- YAML parse de `.github/workflows/ci.yml` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.

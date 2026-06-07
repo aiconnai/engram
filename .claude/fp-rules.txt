@@ -1,4 +1,5 @@
 # Engram false-positive rules v1
+# File: .claude/fp-rules.txt
 #
 # Purpose:
 # - Capture org-specific triage exclusions for recurring security scan noise.

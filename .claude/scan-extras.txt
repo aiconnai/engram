@@ -1,4 +1,5 @@
 # Engram security scan extras v1
+# File: .claude/scan-extras.txt
 #
 # Purpose:
 # - Augment the core harness policy docs with Engram-specific scan focus.

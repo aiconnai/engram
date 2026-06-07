@@ -26,6 +26,10 @@ env:
   RUST_BACKTRACE: 1
   RUSTUP_MAX_RETRIES: 10
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # Least-privilege default for GITHUB_TOKEN. Jobs that need more opt in with
 # their own job-level `permissions:` block below.
 permissions:
@@ -43,9 +47,20 @@ permissions:
 # These four jobs protect main. Contributors should run `make ci` or `just ci`
 # locally before pushing.
 #
-# Everything else (macOS, full-feature checks, property-tests, golden-tests,
-# coverage, benchmarks, cargo-deny, security-audit) is "extended". It runs on
-# schedule and on manual dispatch. It does NOT block PRs by default.
+# Everything else (property-tests, golden-tests, full-feature clippy, backend
+# smoke, benchmarks, cargo-deny, security-audit, release builds) is "extended".
+# It runs on the nightly schedule, on manual dispatch, AND on every direct push
+# to `main` as a post-merge safety net. It does NOT run on PRs, and it does NOT
+# block: a push to `main` is already merged, so a red extended job is a signal
+# to investigate, not a gate that holds anything back.
+#
+# The heaviest long-tail jobs (`Full Feature Tests` which compiles
+# `--all-features` single-threaded, `Test (macos-latest)`, and `Coverage`) are
+# trimmed even further — schedule + manual dispatch only, NOT on push to `main`
+# — so normal `main` pushes never wait on them. Use `workflow_dispatch` to run
+# them on demand. In all cases the four required jobs above are the gate; do not
+# wait on any extended job before considering a `main` push landed.
+# Superseded runs for the same workflow/event/ref are cancelled automatically.
 #
 # This keeps GitHub Actions as an enforceable gate without incurring high
 # per-PR costs (especially macOS minutes and long-running jobs).

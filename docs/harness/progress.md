@@ -428,3 +428,19 @@ Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado n
   pipeline import unless an ADR and explicit target contract exist.
 - No autonomous execution pipeline, target runner, credential mount, or `src/`
   change is included in this branch.
+
+## CI superseded-run cancellation + ENGRA-92 — 2026-06-07
+
+- Added GitHub Actions `concurrency` for CI runs keyed by
+  workflow/event/ref, so superseded pushes on `main` cancel older in-progress
+  runs instead of leaving obsolete extended jobs consuming runners.
+- Preserved the required PR gate shape: `fmt`, `clippy`, `Test
+  (ubuntu-latest)`, and `Documentation`.
+- Confirmed `Full Feature Tests` remains schedule/manual only for new pushes.
+- Fixed `ENGRA-92` by making `.claude/scan-extras.txt` and
+  `.claude/fp-rules.txt` identify themselves with the literal filenames that
+  `doctor.sh` validates.
+- Verification:
+  - `git diff --check` — PASS.
+  - YAML parse of `.github/workflows/ci.yml` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
