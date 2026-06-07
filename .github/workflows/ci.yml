@@ -279,7 +279,7 @@ jobs:
       - name: Test local embedding backend
         run: cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
       - name: Test neural rerank backend
-        run: cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
+        run: cargo test --profile ci --no-default-features --features neural-rerank --lib search::neural_rerank
 
   # =============================================================================
   # Security & Supply Chain

@@ -18,6 +18,7 @@ pub mod auto_consolidate;
 pub mod autonomous;
 pub mod compression;
 pub mod context;
+#[cfg(feature = "http-client")]
 pub mod council;
 pub mod document_ingest;
 #[cfg(feature = "dream-phase")]
@@ -134,7 +135,18 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
 
         // ── Search ───────────────────────────────────────────────────────────
         "memory_search" => search::memory_search(ctx, params),
-        "memory_council" => council::memory_council(ctx, params),
+        "memory_council" => {
+            #[cfg(feature = "http-client")]
+            {
+                council::memory_council(ctx, params)
+            }
+            #[cfg(not(feature = "http-client"))]
+            {
+                let _ = ctx;
+                let _ = params;
+                json!({"error": "memory_council requires the `http-client` feature"})
+            }
+        }
         "memory_smart_retrieve" => smart_retrieve::memory_smart_retrieve(ctx, params),
         "memory_search_suggest" => search::search_suggest(ctx, params),
         "memory_search_by_identity" => search::memory_search_by_identity(ctx, params),

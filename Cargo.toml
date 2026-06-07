@@ -57,20 +57,23 @@ bench = false
 [features]
 default = ["cloud", "openai"]
 
+# Shared HTTP client dependency for optional integrations.
+http-client = ["dep:reqwest"]
+
 # Cloud sync (S3/R2/GCS) - adds ~2MB to binary
 cloud = ["dep:aws-sdk-s3", "dep:aws-config", "dep:aes-gcm"]
 
 # OpenAI embeddings - requires API key
-openai = ["dep:reqwest"]
+openai = ["http-client"]
 
 # Multimodal vision processing (Gemini + OpenAI Vision)
-multimodal = ["dep:reqwest", "dep:async-trait"]
+multimodal = ["http-client", "dep:async-trait"]
 
 # PDF document ingestion
 pdf = ["dep:pdf-extract"]
 
 # Langfuse observability integration (Phase 3 - ENG-35)
-langfuse = ["dep:reqwest"]
+langfuse = ["http-client"]
 
 # Turso/libSQL support (Phase 6 - ENG-54)
 turso = ["dep:libsql"]
@@ -79,7 +82,7 @@ turso = ["dep:libsql"]
 meilisearch = ["dep:meilisearch-sdk"]
 
 # File/browser/app watcher daemon
-watcher = ["dep:toml", "dep:tempfile", "dep:notify", "dep:reqwest"]
+watcher = ["dep:toml", "dep:tempfile", "dep:notify", "http-client"]
 
 # Emergent graph: auto-links (semantic/temporal/co-occurrence) and community detection clusters
 emergent-graph = []
@@ -103,7 +106,7 @@ voyage = []
 local-embeddings = ["onnx-embed"]
 
 # ONNX-based local embedding models
-onnx-embed = ["dep:ort", "dep:ndarray", "dep:tokenizers", "dep:reqwest"]
+onnx-embed = ["dep:ort", "dep:ndarray", "dep:tokenizers", "http-client"]
 
 # Neural cross-encoder reranking via ONNX
 neural-rerank = ["dep:ort", "dep:ndarray"]
