@@ -39,7 +39,7 @@ Foundation layer. Defined the `StorageBackend` trait (18 methods) so future back
 
 - SQLite + WAL mode for crash recovery
 - Connection pooling with read/write separation
-- Hybrid search: BM25 (FTS5) + vector (sqlite-vec) + fuzzy (Levenshtein) + RRF fusion
+- Hybrid search: BM25 (FTS5) + vector (cosine over embedding BLOBs) + fuzzy (Levenshtein) + RRF fusion
 - Knowledge graph with entity extraction, traversal, shortest-path
 - Cloud sync (S3/R2) with AES-256 encryption
 - MCP, REST, WebSocket, CLI interfaces

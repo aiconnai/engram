@@ -448,7 +448,7 @@ This backend uses ONNX Runtime with `all-MiniLM-L6-v2` (384 dimensions). The mod
 │  • Context compression  • Lifecycle management                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Search Layer                               │
-│  • BM25 (FTS5)  • Vectors (sqlite-vec)  • Fuzzy  • RRF fusion  │
+│  • BM25 (FTS5)  • Vectors (cosine)  • Fuzzy  • RRF fusion       │
 │  • Optional Meilisearch backend for scaled deployments          │
 ├─────────────────────────────────────────────────────────────────┤
 │                     Storage Layer                               │

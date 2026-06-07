@@ -371,7 +371,7 @@ Increases importance score. Capped at 1.0.
 Engram combines **3 base retrieval signals**:
 
 1. **BM25** — keyword matching via SQLite FTS5
-2. **Vector similarity** — semantic embeddings via sqlite-vec
+2. **Vector similarity** — semantic embeddings (cosine similarity over BLOBs in the `embeddings` table)
 3. **Fuzzy matching** — typo tolerance
 
 Reciprocal Rank Fusion (RRF) merges those retrieval signals. The default heuristic reranker is controlled by the `rerank` parameter. Policy-based retrieval priority is separate and opt-in via `policy_rerank`.
