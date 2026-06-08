@@ -597,6 +597,24 @@ versionado (`/v1/mcp`) e REST local antigo (`/v1/memories`, `/v1/search`).
 - ENG-1241 ainda pode ter extensoes separadas para rate-limit MCP,
   observabilidade especifica de transport e verificacao real de deploy Fly.io.
 
+## 2026-06-08 — ENGRA-84 rate-limit hardening
+
+### Contexto
+
+Auditoria de `ENGRA-84` mostrou que `ENGRA-58/59/60` estavam essencialmente
+implementados, mas o contrato de hardening ainda tinha lacunas testaveis:
+ordem auth vs rate-limit, fallback `x-real-ip`, e comportamento sob pressao de
+buckets.
+
+### Ações realizadas
+
+- `POST /mcp` e `POST /v1/mcp` agora avaliam Bearer auth antes de consultar ou
+  gastar tokens do rate limiter.
+- Extraido helper puro para aplicar mutacao do token bucket, permitindo testar
+  cleanup de stale buckets e eviction de bucket mais antigo sem rede/Axum.
+- `docs/MCP_AUTH.md` explicita que requests nao autorizados nao consomem tokens
+  de rate limit.
+
 ## 2026-06-04 — Security reference harness adaptation
 
 ### Contexto da sessão

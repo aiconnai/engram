@@ -303,6 +303,14 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - **ENGRA-59 (implementado):** observabilidade do transporte (métricas, tracing e `GET /health` com estado de proteção).
 - **ENGRA-60 (implementado):** rollout/documentação de validação de deploy (Fly.io) para auth + rate limit.
 
+## ENGRA-84 — MCP HTTP rate-limit hardening
+
+- Auth agora é avaliado antes do rate limit no `POST /mcp` e `POST /v1/mcp`;
+  requests sem Bearer válido continuam retornando `401` e não consomem bucket.
+- Regressões adicionadas para interação auth/rate-limit, fallback por
+  `x-real-ip`, cleanup de buckets stale e eviction sob pressão de
+  `max_buckets`.
+
 ## Security fixes — 2026-06-04
 
 - **Merkle `hash_pair` length-separation** (OBS. 9133):
