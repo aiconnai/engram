@@ -1,6 +1,6 @@
 //! MCP handlers for the Dream Phase.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::dream::candidates::{run_candidate_generation, DreamCandidateGenerationConfig};
 use crate::dream::{run_once_all, DreamConfig};
@@ -248,7 +248,7 @@ fn apply_candidate(conn: &rusqlite::Connection, id: &str, dry_run: bool) -> Resu
 }
 
 fn planned_application(candidate: &DreamCandidate) -> Result<Value> {
-    let target_ids = target_memory_ids(candidate)?;
+    let target_ids = planned_target_memory_ids(candidate)?;
     Ok(json!({
         "candidate_id": candidate.id,
         "kind": candidate.kind,
@@ -292,12 +292,7 @@ fn execute_application(
             canonical_memory_ids.push(memory.id);
         }
         "merge" => {
-            let targets = target_memory_ids(candidate)?;
-            if targets.len() < 2 {
-                return Err(EngramError::InvalidInput(
-                    "merge candidates require at least two target_memory_ids".to_string(),
-                ));
-            }
+            let targets = merge_targets(candidate)?;
             let memory = create_candidate_memory(conn, candidate, Some(targets.clone()))?;
             for target in &targets {
                 create_crossref(
@@ -341,22 +336,36 @@ fn execute_application(
             lifecycle_changes = json!({"superseded_memory_id": target});
         }
         "expire" => {
-            let targets = target_memory_ids(candidate)?;
+            let targets = one_or_more_targets(candidate)?;
+            for target in &targets {
+                ensure_expirable_target(conn, candidate, *target)?;
+            }
+            let now = chrono::Utc::now().to_rfc3339();
             let mut changed = 0usize;
             for target in &targets {
                 changed += conn.execute(
                     "UPDATE memories
                      SET lifecycle_state = 'archived',
-                         updated_at = datetime('now')
-                     WHERE id = ?1 AND valid_to IS NULL",
-                    params![target],
+                         updated_at = ?2
+                     WHERE id = ?1
+                       AND valid_to IS NULL
+                       AND COALESCE(lifecycle_state, 'active') != 'archived'",
+                    params![target, &now],
                 )?;
+            }
+            if changed != targets.len() {
+                return Err(EngramError::Conflict(format!(
+                    "expire candidate {} changed {} of {} target memories",
+                    candidate.id,
+                    changed,
+                    targets.len()
+                )));
             }
             canonical_memory_ids.extend(targets.iter().copied());
             lifecycle_changes = json!({"archived": changed});
         }
         "promote" => {
-            let targets = target_memory_ids(candidate)?;
+            let targets = one_or_more_targets(candidate)?;
             for target in &targets {
                 record_reinforcement(conn, *target, 0.10, "dream_candidate_apply")?;
             }
@@ -364,7 +373,7 @@ fn execute_application(
             lifecycle_changes = json!({"policy_reinforced": canonical_memory_ids.len()});
         }
         "demote" => {
-            let targets = target_memory_ids(candidate)?;
+            let targets = one_or_more_targets(candidate)?;
             for target in &targets {
                 demote_policy(conn, *target)?;
             }
@@ -455,6 +464,19 @@ fn memory_type_for_candidate(candidate: &DreamCandidate) -> MemoryType {
     }
 }
 
+fn planned_target_memory_ids(candidate: &DreamCandidate) -> Result<Vec<MemoryId>> {
+    match candidate.proposed_action.as_str() {
+        "create" | "ignore" => Ok(Vec::new()),
+        "update" | "supersede" => exactly_one_target(candidate).map(|target| vec![target]),
+        "merge" => merge_targets(candidate),
+        "expire" | "promote" | "demote" => one_or_more_targets(candidate),
+        other => Err(EngramError::InvalidInput(format!(
+            "unsupported dream candidate action: {}",
+            other
+        ))),
+    }
+}
+
 fn target_memory_ids(candidate: &DreamCandidate) -> Result<Vec<MemoryId>> {
     let ids = candidate
         .metadata
@@ -468,18 +490,53 @@ fn target_memory_ids(candidate: &DreamCandidate) -> Result<Vec<MemoryId>> {
         })?;
 
     let mut parsed = Vec::with_capacity(ids.len());
+    let mut seen = HashSet::with_capacity(ids.len());
     for id in ids {
-        if let Some(id) = id.as_i64() {
-            parsed.push(id);
+        let id = if let Some(id) = id.as_i64() {
+            id
         } else if let Some(id) = id.as_str().and_then(|s| s.parse::<i64>().ok()) {
-            parsed.push(id);
+            id
         } else {
             return Err(EngramError::InvalidInput(
                 "metadata.target_memory_ids must contain integers".to_string(),
             ));
+        };
+        if id <= 0 {
+            return Err(EngramError::InvalidInput(
+                "metadata.target_memory_ids must contain positive integers".to_string(),
+            ));
         }
+        if !seen.insert(id) {
+            return Err(EngramError::InvalidInput(
+                "metadata.target_memory_ids must not contain duplicate ids".to_string(),
+            ));
+        }
+        parsed.push(id);
     }
     Ok(parsed)
+}
+
+fn one_or_more_targets(candidate: &DreamCandidate) -> Result<Vec<MemoryId>> {
+    let ids = target_memory_ids(candidate)?;
+    if ids.is_empty() {
+        Err(EngramError::InvalidInput(format!(
+            "{} candidates require at least one target_memory_ids entry",
+            candidate.proposed_action
+        )))
+    } else {
+        Ok(ids)
+    }
+}
+
+fn merge_targets(candidate: &DreamCandidate) -> Result<Vec<MemoryId>> {
+    let ids = target_memory_ids(candidate)?;
+    if ids.len() < 2 {
+        Err(EngramError::InvalidInput(
+            "merge candidates require at least two target_memory_ids".to_string(),
+        ))
+    } else {
+        Ok(ids)
+    }
 }
 
 fn exactly_one_target(candidate: &DreamCandidate) -> Result<MemoryId> {
@@ -490,6 +547,30 @@ fn exactly_one_target(candidate: &DreamCandidate) -> Result<MemoryId> {
         Err(EngramError::InvalidInput(format!(
             "{} candidates require exactly one target_memory_ids entry",
             candidate.proposed_action
+        )))
+    }
+}
+
+fn ensure_expirable_target(
+    conn: &rusqlite::Connection,
+    candidate: &DreamCandidate,
+    target: MemoryId,
+) -> Result<()> {
+    let expirable_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM memories
+         WHERE id = ?1
+           AND valid_to IS NULL
+           AND COALESCE(lifecycle_state, 'active') != 'archived'",
+        params![target],
+        |row| row.get(0),
+    )?;
+    if expirable_count == 1 {
+        Ok(())
+    } else {
+        Err(EngramError::Conflict(format!(
+            "expire candidate {} target memory {} is missing, archived, or no longer active",
+            candidate.id, target
         )))
     }
 }
