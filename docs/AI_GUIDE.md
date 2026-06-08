@@ -26,19 +26,20 @@ The emphasis here is operational: ingest the material, structure it, search it, 
 12. [Snapshots & Portability](#12-snapshots--portability)
 13. [Attestation Chain](#13-attestation-chain)
 14. [Retention Policies](#14-retention-policies)
-15. [Project Context Scanning](#15-project-context-scanning)
-16. [Entity Extraction](#16-entity-extraction)
-17. [Semantic Deduplication](#17-semantic-deduplication)
-18. [Advanced Filtering](#18-advanced-filtering)
-19. [Multi-Agent Sync (Cloud)](#19-multi-agent-sync-cloud)
-20. [Transport Options](#20-transport-options)
-21. [Watcher Daemon](#21-watcher-daemon)
-22. [Recipes & Patterns](#22-recipes--patterns)
-23. [Tool Reference](#23-tool-reference)
-24. [Progressive Tool Discovery](#24-progressive-tool-discovery)
-25. [Session Handoff Protocol](#25-session-handoff-protocol)
-26. [Markdown Export](#26-markdown-export)
-27. [Recent Activity](#27-recent-activity)
+15. [Dream Snapshot Review Pipeline](#15-dream-snapshot-review-pipeline)
+16. [Project Context Scanning](#16-project-context-scanning)
+17. [Entity Extraction](#17-entity-extraction)
+18. [Semantic Deduplication](#18-semantic-deduplication)
+19. [Advanced Filtering](#19-advanced-filtering)
+20. [Multi-Agent Sync (Cloud)](#20-multi-agent-sync-cloud)
+21. [Transport Options](#21-transport-options)
+22. [Watcher Daemon](#22-watcher-daemon)
+23. [Recipes & Patterns](#23-recipes--patterns)
+24. [Tool Reference](#24-tool-reference)
+25. [Progressive Tool Discovery](#25-progressive-tool-discovery)
+26. [Session Handoff Protocol](#26-session-handoff-protocol)
+27. [Markdown Export](#27-markdown-export)
+28. [Recent Activity](#28-recent-activity)
 
 ---
 
@@ -1062,7 +1063,36 @@ Runs the 3-phase retention pipeline:
 
 ---
 
-## 15. Project Context Scanning
+## 15. Dream Snapshot Review Pipeline
+
+Dream Snapshot Review Pipeline is planned in RFC 0007 as a reviewable memory
+synthesis workflow. Dream jobs produce candidates for summaries, preferences,
+constraints, stale facts, contradictions, merges, promotions, decay, and
+temporal updates. Those candidates are proposals, not canonical memory.
+
+Safety boundary:
+
+- Candidate generation must not create, update, expire, promote, demote, or
+  delete canonical memories.
+- Applying a candidate requires explicit review and `confirm=true`.
+- Unaccepted candidates do not appear in default memory or context search.
+- Candidate provenance must point back to source memories, context events,
+  artifacts, commits, issues, or harness records where available.
+- Raw logs, raw transcripts, terminal dumps, secrets, and environment dumps are
+  excluded by default.
+
+Implementation and eval details:
+
+- Contract: [`docs/rfcs/0007-dream-snapshot-review-pipeline.md`](rfcs/0007-dream-snapshot-review-pipeline.md)
+- Eval scaffold: [`docs/DREAM_SNAPSHOT_EVALS.md`](DREAM_SNAPSHOT_EVALS.md)
+
+The generated MCP tool reference remains the source of truth for live tools.
+Do not call planned `dream_*` tools until they appear in
+[`docs/MCP_TOOLS.md`](MCP_TOOLS.md).
+
+---
+
+## 16. Project Context Scanning
 
 Automatically discover and ingest AI instruction files from project directories.
 
@@ -1111,7 +1141,7 @@ Lists detected files without ingesting them.
 
 ---
 
-## 16. Entity Extraction
+## 17. Entity Extraction
 
 Extract named entities (people, organizations, technologies, locations) from memory content.
 
@@ -1142,7 +1172,7 @@ Idempotent — re-extracting from the same memory is safe.
 
 ---
 
-## 17. Semantic Deduplication
+## 18. Semantic Deduplication
 
 Prevent duplicate memories using embedding-based similarity detection.
 
@@ -1198,7 +1228,7 @@ Merges `source` into `target` — combines tags and metadata, deletes source.
 
 ---
 
-## 18. Advanced Filtering
+## 19. Advanced Filtering
 
 Use structured filters for complex queries beyond text search.
 
@@ -1248,7 +1278,7 @@ Use structured filters for complex queries beyond text search.
 
 ---
 
-## 19. Multi-Agent Sync (Cloud)
+## 20. Multi-Agent Sync (Cloud)
 
 When using Engram Cloud, multiple AI agents can coordinate through shared memory.
 
@@ -1310,7 +1340,7 @@ Returns the agent's saved context + last 5 session summaries.
 
 ---
 
-## 20. Transport Options
+## 21. Transport Options
 
 Engram server supports multiple transport protocols simultaneously.
 
@@ -1350,7 +1380,7 @@ engram-server --transport both --http-port 3000 --http-api-key sk_my_secret
 
 ---
 
-## 21. Watcher Daemon
+## 22. Watcher Daemon
 
 The Engram Watcher is a separate binary that proactively captures context from your environment.
 
@@ -1409,7 +1439,7 @@ exclude_apps = ["Finder", "Dock"]
 
 ---
 
-## 22. Recipes & Patterns
+## 23. Recipes & Patterns
 
 ### Pattern 1: Cold Start — Seed a Knowledge Base
 
@@ -1566,7 +1596,7 @@ else:
 
 ---
 
-## 23. Tool Reference
+## 24. Tool Reference
 
 ### Quick Reference Table
 
@@ -1641,7 +1671,7 @@ Every tool includes MCP 2025-11-25 annotations:
 
 ---
 
-## 24. Progressive Tool Discovery
+## 25. Progressive Tool Discovery
 
 Engram exposes the generated tool set shown in the MCP reference. To avoid overwhelming agents, tools are organized into three tiers:
 
@@ -1680,7 +1710,7 @@ Response includes tool names, descriptions, tiers, and summary counts. Agents ca
 
 ---
 
-## 25. Session Handoff Protocol
+## 26. Session Handoff Protocol
 
 Inspired by Beads' "land the plane" pattern, Engram provides a structured end-of-session handoff:
 
@@ -1721,7 +1751,7 @@ This guides you through: summarize progress → capture open items → call sess
 
 ---
 
-## 26. Markdown Export
+## 27. Markdown Export
 
 Export memories as human-readable Markdown files, inspired by Basic Memory:
 
@@ -1774,7 +1804,7 @@ Project architecture uses a layered approach with...
 
 ---
 
-## 27. Recent Activity
+## 28. Recent Activity
 
 Discover what changed recently with the `recent_activity` tool:
 
