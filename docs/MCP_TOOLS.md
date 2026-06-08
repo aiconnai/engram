@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **276**
+Total tools: **277**
 
 ## Summary
 
@@ -133,6 +133,7 @@ Total tools: **276**
 | `memory_enrichment_audit` | advanced | readOnlyHint | none |
 | `memory_search` | essential | readOnlyHint | `query` |
 | `memory_smart_retrieve` | essential | readOnlyHint | `query` |
+| `memory_digest` | essential | readOnlyHint | `topic` |
 | `memory_council` | standard | mutating (no MCP hints) | `prompt` |
 | `memory_search_suggest` | standard | readOnlyHint | `query` |
 | `memory_find_duplicates` | standard | readOnlyHint | none |
@@ -1979,6 +1980,30 @@ Intent-aware unified retrieval. Classifies the query (lookup, exploration, conte
 | `limit` | `integer` | no | Default: `10`. Minimum: `1`. Maximum: `100`. |
 | `workspace` | `string` | no | Optional workspace filter |
 | `force_intents` | `array` | no | Override the classifier (for testing/debugging) Items: `string`. |
+
+### `memory_digest`
+
+Build an actionable, source-linked digest for a topic by orchestrating existing read-only retrieval, graph, and operational-context tools. Returns summaries, source memory IDs, relationships, next actions, provenance, and warnings without mutating memory or invoking an LLM.
+
+- Tier: `essential`
+- Annotations: readOnlyHint
+- Required inputs: `topic`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `topic` | `string` | yes | Topic, task, decision, or question to summarize from memory |
+| `workspace` | `string` | no | Optional workspace scope |
+| `mode` | `string` | no | Digest depth and section size Default: `standard`. Allowed: `brief`, `standard`, `deep`. |
+| `limit` | `integer` | no | Maximum source memories to inspect Default: `12`. Minimum: `1`. Maximum: `50`. |
+| `related_depth` | `integer` | no | How many relationship hops to include from selected source memories Default: `1`. Minimum: `0`. Maximum: `2`. |
+| `total_budget` | `integer` | no | Token budget passed to context assembly for accounting only; raw prompt content is not returned Default: `4096`. Minimum: `512`. Maximum: `12000`. |
+| `include_types` | `array` | no | Optional memory_type allowlist for digest source memories Items: `string`. |
+| `timeframe` | `string` | no | Time window for context assembly Default: `all`. Allowed: `1h`, `24h`, `7d`, `30d`, `all`. |
+| `include_graph` | `boolean` | no | Include cross-reference relationships for source memories Default: `true`. |
+| `include_operational_context` | `boolean` | no | Include compact Operational Context bundle sections Default: `true`. |
+| `include_next_actions` | `boolean` | no | Include extractive next-action suggestions grounded in source IDs Default: `true`. |
+| `current_git_branch` | `string` | no | Current branch used for Operational Context staleness warnings |
+| `current_commit_hash` | `string` | no | Current commit used for Operational Context staleness warnings |
 
 ### `memory_council`
 

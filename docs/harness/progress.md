@@ -472,3 +472,23 @@ Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado n
   - `git diff --check` — PASS.
   - YAML parse of `.github/workflows/ci.yml` — PASS.
   - `bash docs/harness/bin/doctor.sh` — PASS.
+
+## ENGRA-103 `memory_digest` MCP implementation — 2026-06-08
+
+- Added read-only MCP tool `memory_digest` as the actionable retrieval entry
+  point defined by RFC 0008.
+- The v1 implementation is a thin orchestrator over existing primitives:
+  `memory_smart_retrieve`, `memory_build_context`, `crossrefs`, and
+  `context_build_bundle`.
+- Preserved the product boundary: no schema migration, no LLM call, no memory
+  mutation, no Dream candidate application, and no raw artifact content return.
+- Response includes extractive summary/key points, top memory previews with
+  IDs, relationships, Operational Context sections, next actions, provenance,
+  and warnings.
+- Updated MCP registry/dispatch and regenerated `docs/MCP_TOOLS.md`
+  (`Total tools: 277`).
+- Added protocol coverage for tools/list read-only metadata, successful
+  dispatch with source relationships, input validation, and empty-source
+  warnings.
+- Validation passed: focused `memory_digest` protocol tests, MCP reference
+  check, fmt, clippy, doctor, and full `sensors.sh` (`make ci` + doctor).

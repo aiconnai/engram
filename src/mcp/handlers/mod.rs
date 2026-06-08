@@ -20,6 +20,7 @@ pub mod compression;
 pub mod context;
 #[cfg(feature = "http-client")]
 pub mod council;
+pub mod digest;
 pub mod document_ingest;
 #[cfg(feature = "dream-phase")]
 pub mod dream;
@@ -148,6 +149,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
             }
         }
         "memory_smart_retrieve" => smart_retrieve::memory_smart_retrieve(ctx, params),
+        "memory_digest" => digest::memory_digest(ctx, params),
         "memory_search_suggest" => search::search_suggest(ctx, params),
         "memory_search_by_identity" => search::memory_search_by_identity(ctx, params),
         "memory_session_search" => search::memory_session_search(ctx, params),

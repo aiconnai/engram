@@ -853,3 +853,45 @@ próximos passos em um call.
 - `bash docs/harness/bin/bootstrap.sh` — PASS em worktree limpa.
 - `bash docs/harness/bin/doctor.sh` — PASS.
 - Huly create idempotente retornou `ENGRA-103`.
+
+## 2026-06-08 — ENGRA-103 `memory_digest` MCP implementation
+
+### Contexto da sessao
+
+Depois do contrato docs-only de RFC 0008, a branch implementou a primeira
+fatia de codigo: uma ferramenta MCP read-only que devolve um pacote acionavel
+de recuperacao sem criar novo schema ou acionar LLM.
+
+### Ações realizadas
+
+- Criado `src/mcp/handlers/digest.rs`.
+- Registrado `pub mod digest` e dispatch `"memory_digest"` em
+  `src/mcp/handlers/mod.rs`.
+- Adicionado `memory_digest` em `src/mcp/tools/registry.rs` como
+  `ToolTier::Essential` e `ToolAnnotations::read_only()`.
+- Regenerado `docs/MCP_TOOLS.md`; contagem total passou para 277 tools.
+- Adicionados testes em `tests/mcp_protocol_tests.rs` cobrindo:
+  - exposicao em `tools/list` com `readOnlyHint`;
+  - dispatch via `tools/call`;
+  - retorno de source IDs e `crossrefs`;
+  - validacao de `topic`;
+  - warning quando nao ha fontes.
+
+### Decisões
+
+- O digest usa resumo deterministico/extrativo de previews e IDs; nao tenta
+  sintetizar fatos novos.
+- `memory_build_context` e usado para metricas/contabilidade, mas o prompt
+  montado nao e retornado no payload para evitar atalho de conteudo bruto.
+- `context_build_bundle` entra apenas como secoes estruturadas de Operational
+  Context e mantem `include_artifact_pointers=false`.
+
+### Evidência
+
+- `cargo test --test mcp_protocol_tests memory_digest -- --nocapture` — PASS.
+- `git diff --check` — PASS.
+- `./scripts/generate-mcp-reference.sh --check` — PASS.
+- `cargo fmt --all -- --check` — PASS.
+- `cargo clippy --lib --tests -- -D warnings` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS (`make ci` + doctor).
