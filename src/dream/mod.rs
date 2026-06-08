@@ -32,6 +32,9 @@ use crate::intelligence::consolidation_offline::{
 };
 use crate::storage::Storage;
 
+pub mod candidates;
+pub mod eval;
+
 /// Configuration for the Dream Phase runner.
 #[derive(Debug, Clone)]
 pub struct DreamConfig {

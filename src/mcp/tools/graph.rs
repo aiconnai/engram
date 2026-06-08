@@ -9,7 +9,7 @@
             "properties": {
                 "from_id": {"type": "integer"},
                 "to_id": {"type": "integer"},
-                "edge_type": {"type": "string", "enum": ["related_to", "supersedes", "contradicts", "implements", "extends", "references", "depends_on", "blocks", "follows_up"], "default": "related_to"},
+                "edge_type": {"type": "string", "enum": ["related_to", "supersedes", "contradicts", "implements", "extends", "references", "derived_from", "depends_on", "blocks", "follows_up"], "default": "related_to"},
                 "strength": {"type": "number", "minimum": 0, "maximum": 1, "description": "Relationship strength"},
                 "source_context": {"type": "string", "description": "Why this link exists"},
                 "pinned": {"type": "boolean", "default": false, "description": "Exempt from confidence decay"}

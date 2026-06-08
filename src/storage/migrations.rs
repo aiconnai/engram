@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::{EngramError, Result};
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 43;
+pub const SCHEMA_VERSION: i32 = 44;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -203,6 +203,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 43 {
         migrate_v43(conn)?;
+    }
+
+    if current_version < 44 {
+        migrate_v44(conn)?;
     }
 
     Ok(())
@@ -2278,6 +2282,132 @@ fn migrate_v43(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_v44(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v44: Creating dream snapshot review tables...");
+
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS dream_jobs (
+            id TEXT PRIMARY KEY CHECK (length(id) > 0),
+            workspace TEXT NOT NULL CHECK (length(workspace) > 0),
+            status TEXT NOT NULL
+                CHECK (status IN (
+                    'pending',
+                    'running',
+                    'completed',
+                    'failed',
+                    'canceled',
+                    'archived'
+                )),
+            instructions TEXT,
+            model_profile TEXT NOT NULL DEFAULT 'deterministic-local-v1'
+                CHECK (length(model_profile) > 0),
+            input_summary_json TEXT NOT NULL DEFAULT '{}',
+            output_summary_json TEXT NOT NULL DEFAULT '{}',
+            error_json TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            archived_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dream_jobs_workspace_status
+            ON dream_jobs(workspace, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_dream_jobs_created
+            ON dream_jobs(created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS dream_candidates (
+            id TEXT PRIMARY KEY CHECK (length(id) > 0),
+            job_id TEXT NOT NULL
+                REFERENCES dream_jobs(id) ON DELETE CASCADE,
+            workspace TEXT NOT NULL CHECK (length(workspace) > 0),
+            kind TEXT NOT NULL
+                CHECK (kind IN (
+                    'summary',
+                    'preference',
+                    'constraint',
+                    'project_state',
+                    'stale_fact',
+                    'contradiction',
+                    'merge',
+                    'promotion',
+                    'decay',
+                    'temporal_update'
+                )),
+            proposed_action TEXT NOT NULL
+                CHECK (proposed_action IN (
+                    'create',
+                    'update',
+                    'merge',
+                    'supersede',
+                    'expire',
+                    'promote',
+                    'demote',
+                    'ignore'
+                )),
+            review_state TEXT NOT NULL DEFAULT 'pending'
+                CHECK (review_state IN (
+                    'pending',
+                    'accepted',
+                    'edited',
+                    'rejected',
+                    'applied',
+                    'archived'
+                )),
+            confidence REAL NOT NULL
+                CHECK (confidence >= 0.0 AND confidence <= 1.0),
+            freshness_state TEXT NOT NULL DEFAULT 'unknown'
+                CHECK (freshness_state IN (
+                    'current',
+                    'stale',
+                    'future_due',
+                    'expired',
+                    'conflicted',
+                    'unknown'
+                )),
+            content_preview TEXT NOT NULL CHECK (length(content_preview) > 0),
+            proposed_content TEXT,
+            reason_codes TEXT NOT NULL DEFAULT '[]',
+            policy_explanation_json TEXT NOT NULL DEFAULT '{}',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            application_result_json TEXT,
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            applied_at TEXT,
+            CHECK (
+                proposed_action NOT IN ('create', 'update', 'merge')
+                OR (proposed_content IS NOT NULL AND length(proposed_content) > 0)
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dream_candidates_job
+            ON dream_candidates(job_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_dream_candidates_workspace_review
+            ON dream_candidates(workspace, review_state, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_dream_candidates_kind
+            ON dream_candidates(kind, freshness_state, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS dream_candidate_sources (
+            candidate_id TEXT NOT NULL
+                REFERENCES dream_candidates(id) ON DELETE CASCADE,
+            source_type TEXT NOT NULL CHECK (length(source_type) > 0),
+            source_id TEXT NOT NULL CHECK (length(source_id) > 0),
+            source_ref TEXT,
+            evidence_json TEXT NOT NULL DEFAULT '{}',
+            PRIMARY KEY (candidate_id, source_type, source_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dream_candidate_sources_source
+            ON dream_candidate_sources(source_type, source_id);
+
+        INSERT INTO schema_version (version) VALUES (44);
+        "#,
+    )?;
+
+    tracing::info!("Migration v44 complete: dream snapshot review tables created");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2299,12 +2429,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 43);
+        assert_eq!(version, 44);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 43);
+        assert_eq!(SCHEMA_VERSION, 44);
     }
 
     #[test]
@@ -2459,7 +2589,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 43, "should reach v43 after full migration");
+        assert_eq!(version, 44, "should reach v44 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
@@ -2630,6 +2760,48 @@ mod tests {
         assert_eq!(
             exists, 1,
             "memory_policy table should exist after migration"
+        );
+    }
+
+    #[test]
+    fn test_dream_snapshot_review_tables_exist() {
+        let conn = in_memory_conn();
+        for table in ["dream_jobs", "dream_candidates", "dream_candidate_sources"] {
+            let exists: i32 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                    rusqlite::params![table],
+                    |row| row.get(0),
+                )
+                .expect("query sqlite_master");
+            assert_eq!(exists, 1, "{table} table should exist after migration");
+        }
+    }
+
+    #[test]
+    fn test_dream_candidates_require_content_for_create_update_merge() {
+        let conn = in_memory_conn();
+        conn.execute(
+            "INSERT INTO dream_jobs (id, workspace, status, created_at)
+             VALUES ('job-1', 'default', 'completed', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("insert job");
+
+        let result = conn.execute(
+            "INSERT INTO dream_candidates
+                (id, job_id, workspace, kind, proposed_action, confidence,
+                 freshness_state, content_preview, reason_codes,
+                 policy_explanation_json, metadata_json, created_at)
+             VALUES
+                ('cand-1', 'job-1', 'default', 'summary', 'create', 0.9,
+                 'current', 'preview', '[]', '{}', '{}',
+                 '2026-01-01T00:00:00Z')",
+            [],
+        );
+        assert!(
+            result.is_err(),
+            "create/update/merge candidates should require proposed_content"
         );
     }
 }

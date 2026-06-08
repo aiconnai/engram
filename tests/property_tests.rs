@@ -311,6 +311,7 @@ mod edge_type_tests {
             Just(EdgeType::Contradicts),
             Just(EdgeType::Implements),
             Just(EdgeType::Extends),
+            Just(EdgeType::DerivedFrom),
         ]) {
             let s = edge_type.as_str();
             let parsed: EdgeType = s.parse().unwrap();

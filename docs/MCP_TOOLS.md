@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **266**
+Total tools: **276**
 
 ## Summary
 
@@ -31,6 +31,16 @@ Total tools: **266**
 | `memory_list_instruction_files` | advanced | readOnlyHint | none |
 | `memory_ingest_document` | advanced | mutating (no MCP hints) | `path` |
 | `dream_run_now` | advanced | idempotentHint | none |
+| `dream_create` | advanced | mutating (no MCP hints) | none |
+| `dream_get` | advanced | readOnlyHint | `id` |
+| `dream_list` | advanced | readOnlyHint | none |
+| `dream_cancel` | advanced | idempotentHint | `id` |
+| `dream_archive` | advanced | idempotentHint | `id` |
+| `dream_candidates_list` | advanced | readOnlyHint | none |
+| `dream_candidate_get` | advanced | readOnlyHint | `id` |
+| `dream_candidate_review` | advanced | mutating (no MCP hints) | `id`, `review_state` |
+| `dream_candidate_apply` | advanced | mutating (no MCP hints) | `id` |
+| `dream_eval_run` | advanced | readOnlyHint | none |
 | `workspace_list` | essential | readOnlyHint | none |
 | `workspace_stats` | standard | readOnlyHint | `workspace` |
 | `workspace_move` | standard | mutating (no MCP hints) | `id`, `workspace` |
@@ -576,6 +586,143 @@ Manually trigger the Dream Phase (background consolidation) across all workspace
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | _(none)_ |  | no | No input properties declared. |
+
+### `dream_create`
+
+Create a reviewable dream snapshot job and optionally run deterministic candidate generation. Generated candidates are proposals, not canonical memories.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Default: `default`. |
+| `job_id` | `string` | no | Optional stable job id. Omit to generate one. |
+| `instructions` | `string` | no | No description. |
+| `run` | `boolean` | no | When true, run deterministic generation immediately. Default: `true`. |
+| `max_memories` | `integer` | no | Default: `50`. Minimum: `1`. |
+| `max_candidates` | `integer` | no | Default: `25`. Minimum: `1`. |
+| `summary_min_memories` | `integer` | no | Default: `2`. Minimum: `1`. |
+
+### `dream_get`
+
+Inspect one dream snapshot job.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream job id |
+
+### `dream_list`
+
+List dream snapshot jobs by workspace and status.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | No description. |
+| `status` | `string` | no | Allowed: `pending`, `running`, `completed`, `failed`, `canceled`, `archived`. |
+| `limit` | `integer` | no | Default: `100`. Minimum: `1`. Maximum: `1000`. |
+
+### `dream_cancel`
+
+Cancel a pending or running dream snapshot job idempotently.
+
+- Tier: `advanced`
+- Annotations: idempotentHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream job id |
+
+### `dream_archive`
+
+Archive a terminal dream snapshot job.
+
+- Tier: `advanced`
+- Annotations: idempotentHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream job id |
+
+### `dream_candidates_list`
+
+List review candidates emitted by dream snapshot jobs. Results are proposals and are not canonical memory facts.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | No description. |
+| `job_id` | `string` | no | No description. |
+| `review_state` | `string` | no | Allowed: `pending`, `accepted`, `edited`, `rejected`, `applied`, `archived`. |
+| `limit` | `integer` | no | Default: `100`. Minimum: `1`. Maximum: `1000`. |
+
+### `dream_candidate_get`
+
+Inspect one dream candidate and its evidence sources.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream candidate id |
+
+### `dream_candidate_review`
+
+Review a dream candidate by accepting, editing, rejecting, or archiving it. This does not mutate canonical memory.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `review_state`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream candidate id |
+| `review_state` | `string` | yes | Allowed: `accepted`, `edited`, `rejected`, `archived`. |
+| `edited_content` | `string` | no | Reviewed replacement content when review_state is edited. |
+| `metadata_patch` | `object` | no | Optional review metadata merged into candidate metadata. |
+
+### `dream_candidate_apply`
+
+Apply an accepted or edited dream candidate to canonical memory. Requires confirm=true unless dry_run=true; repeated apply is idempotent.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream candidate id |
+| `confirm` | `boolean` | no | Must be true for canonical mutation. Default: `false`. |
+| `dry_run` | `boolean` | no | Preview planned canonical mutation without applying. Default: `false`. |
+
+### `dream_eval_run`
+
+Run deterministic local dream snapshot evaluation fixtures and return parseable CI-safe metrics. Does not require network, credentials, or model access.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `fixtures` | `array` | no | Optional subset of fixed fixture names. Omit to run all fixtures. Items: `string`. |
+| `include_details` | `boolean` | no | Include per-fixture candidate details. Default: `true`. |
 
 ### `workspace_list`
 
@@ -2144,7 +2291,7 @@ Create a cross-reference between two memories
 |-------|------|----------|---------|
 | `from_id` | `integer` | yes | No description. |
 | `to_id` | `integer` | yes | No description. |
-| `edge_type` | `string` | no | Default: `related_to`. Allowed: `related_to`, `supersedes`, `contradicts`, `implements`, `extends`, `references`, `depends_on`, `blocks`, `follows_up`. |
+| `edge_type` | `string` | no | Default: `related_to`. Allowed: `related_to`, `supersedes`, `contradicts`, `implements`, `extends`, `references`, `derived_from`, `depends_on`, `blocks`, `follows_up`. |
 | `strength` | `number` | no | Relationship strength Minimum: `0`. Maximum: `1`. |
 | `source_context` | `string` | no | Why this link exists |
 | `pinned` | `boolean` | no | Exempt from confidence decay Default: `false`. |

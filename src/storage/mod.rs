@@ -25,6 +25,7 @@ pub mod backend;
 pub mod clustering;
 mod confidence;
 mod connection;
+pub mod dream_snapshots;
 pub mod enrichment_events;
 pub mod entity_queries;
 pub mod feedback;
@@ -76,6 +77,14 @@ pub use clustering::{
 };
 pub use confidence::*;
 pub use connection::{Storage, StoragePool};
+pub use dream_snapshots::{
+    add_dream_candidate_source, create_dream_candidate, create_dream_job, get_dream_candidate,
+    get_dream_candidate_with_sources, get_dream_job, list_dream_candidate_sources,
+    list_dream_candidates, list_dream_jobs, record_dream_candidate_application,
+    review_dream_candidate, transition_dream_job, DreamCandidate, DreamCandidateApplication,
+    DreamCandidateSource, DreamCandidateWithSources, DreamJob, NewDreamCandidate,
+    NewDreamCandidateSource, NewDreamJob,
+};
 pub use entity_queries::{
     delete_entity, find_entity, get_entities_for_memory, get_entity, get_entity_stats,
     get_memories_for_entity, link_entity_to_memory, list_entities, search_entities,

@@ -277,6 +277,26 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         // ── Dream Phase ──────────────────────────────────────────────────────
         #[cfg(feature = "dream-phase")]
         "dream_run_now" => dream::dream_run_now(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_create" => dream::dream_create(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_get" => dream::dream_get(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_list" => dream::dream_list(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_cancel" => dream::dream_cancel(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_archive" => dream::dream_archive(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_candidates_list" => dream::dream_candidates_list(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_candidate_get" => dream::dream_candidate_get(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_candidate_review" => dream::dream_candidate_review(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_candidate_apply" => dream::dream_candidate_apply(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_eval_run" => dream::dream_eval_run(ctx, params),
 
         // ── Auto-consolidation ────────────────────────────────────────────────
         "memory_auto_consolidate" => auto_consolidate::memory_auto_consolidate(ctx, params),
