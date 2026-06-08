@@ -118,3 +118,115 @@ fn test_mcp_tool_dream_run_now() {
     assert_eq!(result.get("status").unwrap(), "success");
     assert!(result.get("report").is_some());
 }
+
+#[cfg(feature = "dream-phase")]
+#[test]
+fn test_mcp_dream_candidate_review_and_apply() {
+    use engram::embedding::EmbeddingCache;
+    use engram::mcp::handlers::{dispatch, HandlerContext};
+    use engram::search::{FuzzyEngine, SearchConfig, SearchResultCache};
+    use engram::storage::Storage;
+    use parking_lot::Mutex;
+    use rusqlite::params;
+    use serde_json::json;
+    use std::sync::Arc;
+
+    let storage = Storage::open_in_memory().unwrap();
+    storage
+        .with_connection(|conn| {
+            for content in [
+                "Release checklist requires local CI before merge.",
+                "Huly owns issue metadata for implementation planning.",
+            ] {
+                conn.execute(
+                    "INSERT INTO memories (content, workspace, importance, created_at, updated_at)
+                     VALUES (?1, 'default', 0.8, datetime('now'), datetime('now'))",
+                    params![content],
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+
+    let ctx = HandlerContext {
+        storage: storage.clone(),
+        embedder: engram::embedding::create_embedder(&Default::default()).unwrap(),
+        fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
+        search_config: SearchConfig::default(),
+        realtime: None,
+        embedding_cache: Arc::new(EmbeddingCache::default()),
+        search_cache: Arc::new(SearchResultCache::new(Default::default())),
+        #[cfg(feature = "meilisearch")]
+        meili: None,
+        #[cfg(feature = "meilisearch")]
+        meili_indexer: None,
+        #[cfg(feature = "meilisearch")]
+        meili_sync_interval: 60,
+        #[cfg(feature = "langfuse")]
+        langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+    };
+
+    let create = dispatch(
+        &ctx,
+        "dream_create",
+        json!({
+            "job_id": "mcp-dream-job",
+            "workspace": "default",
+            "run": true,
+            "max_candidates": 1
+        }),
+    );
+    assert_eq!(create.get("status").unwrap(), "success");
+    let candidate_id = create["report"]["candidate_ids"][0]
+        .as_str()
+        .expect("candidate id")
+        .to_string();
+
+    let listed = dispatch(
+        &ctx,
+        "dream_candidates_list",
+        json!({"job_id": "mcp-dream-job", "review_state": "pending"}),
+    );
+    assert_eq!(listed["count"], 1);
+
+    let reviewed = dispatch(
+        &ctx,
+        "dream_candidate_review",
+        json!({"id": candidate_id, "review_state": "accepted"}),
+    );
+    assert_eq!(reviewed.get("status").unwrap(), "success");
+
+    let dry_run = dispatch(
+        &ctx,
+        "dream_candidate_apply",
+        json!({"id": reviewed["candidate"]["id"], "dry_run": true}),
+    );
+    assert_eq!(dry_run.get("status").unwrap(), "dry_run");
+
+    let before_count: i64 = storage
+        .with_connection(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
+                .map_err(Into::into)
+        })
+        .unwrap();
+    let applied = dispatch(
+        &ctx,
+        "dream_candidate_apply",
+        json!({"id": reviewed["candidate"]["id"], "confirm": true}),
+    );
+    assert_eq!(applied.get("status").unwrap(), "completed");
+    let after_count: i64 = storage
+        .with_connection(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
+                .map_err(Into::into)
+        })
+        .unwrap();
+    assert_eq!(after_count, before_count + 1);
+
+    let applied_again = dispatch(
+        &ctx,
+        "dream_candidate_apply",
+        json!({"id": reviewed["candidate"]["id"], "confirm": true}),
+    );
+    assert_eq!(applied_again.get("status").unwrap(), "already_applied");
+}

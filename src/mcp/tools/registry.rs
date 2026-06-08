@@ -390,6 +390,136 @@
         annotations: ToolAnnotations::idempotent(),
         tier: ToolTier::Advanced,
     },
+    ToolDef {
+        name: "dream_create",
+        description: "Create a reviewable dream snapshot job and optionally run deterministic candidate generation. Generated candidates are proposals, not canonical memories.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string", "default": "default"},
+                "job_id": {"type": "string", "description": "Optional stable job id. Omit to generate one."},
+                "instructions": {"type": "string"},
+                "run": {"type": "boolean", "default": true, "description": "When true, run deterministic generation immediately."},
+                "max_memories": {"type": "integer", "default": 50, "minimum": 1},
+                "max_candidates": {"type": "integer", "default": 25, "minimum": 1},
+                "summary_min_memories": {"type": "integer", "default": 2, "minimum": 1}
+            }
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "dream_get",
+        description: "Inspect one dream snapshot job.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Dream job id"}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "dream_list",
+        description: "List dream snapshot jobs by workspace and status.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string"},
+                "status": {"type": "string", "enum": ["pending", "running", "completed", "failed", "canceled", "archived"]},
+                "limit": {"type": "integer", "default": 100, "minimum": 1, "maximum": 1000}
+            }
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "dream_cancel",
+        description: "Cancel a pending or running dream snapshot job idempotently.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Dream job id"}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::idempotent(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "dream_archive",
+        description: "Archive a terminal dream snapshot job.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Dream job id"}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::idempotent(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "dream_candidates_list",
+        description: "List review candidates emitted by dream snapshot jobs. Results are proposals and are not canonical memory facts.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {"type": "string"},
+                "job_id": {"type": "string"},
+                "review_state": {"type": "string", "enum": ["pending", "accepted", "edited", "rejected", "applied", "archived"]},
+                "limit": {"type": "integer", "default": 100, "minimum": 1, "maximum": 1000}
+            }
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "dream_candidate_get",
+        description: "Inspect one dream candidate and its evidence sources.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Dream candidate id"}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "dream_candidate_review",
+        description: "Review a dream candidate by accepting, editing, rejecting, or archiving it. This does not mutate canonical memory.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Dream candidate id"},
+                "review_state": {"type": "string", "enum": ["accepted", "edited", "rejected", "archived"]},
+                "edited_content": {"type": "string", "description": "Reviewed replacement content when review_state is edited."},
+                "metadata_patch": {"type": "object", "description": "Optional review metadata merged into candidate metadata."}
+            },
+            "required": ["id", "review_state"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
+        name: "dream_candidate_apply",
+        description: "Apply an accepted or edited dream candidate to canonical memory. Requires confirm=true unless dry_run=true; repeated apply is idempotent.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Dream candidate id"},
+                "confirm": {"type": "boolean", "default": false, "description": "Must be true for canonical mutation."},
+                "dry_run": {"type": "boolean", "default": false, "description": "Preview planned canonical mutation without applying."}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
     // Workspace Management
     ToolDef {
         name: "workspace_list",

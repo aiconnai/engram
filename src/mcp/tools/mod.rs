@@ -70,7 +70,16 @@ fn tool_feature_available(name: &str) -> bool {
         }
 
         // dream-phase feature
-        "dream_run_now" => cfg!(feature = "dream-phase"),
+        "dream_run_now"
+        | "dream_create"
+        | "dream_get"
+        | "dream_list"
+        | "dream_cancel"
+        | "dream_archive"
+        | "dream_candidates_list"
+        | "dream_candidate_get"
+        | "dream_candidate_review"
+        | "dream_candidate_apply" => cfg!(feature = "dream-phase"),
 
         // agent-portability feature
         "attestation_log"
