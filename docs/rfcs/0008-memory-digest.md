@@ -238,6 +238,12 @@ Registration requirements:
 - No raw artifact content in the response.
 - No canonical mutation, Dream candidate application, or consolidation.
 - Source memory IDs and context event IDs remain inspectable.
+- Design rationale: Chen, Su, and Chiang's "The Self-Correction Illusion"
+  (arXiv:2606.05976) reports that models correct the same erroneous claim more
+  reliably when it is presented as an external role, including a
+  `system <memory>` block, than when it appears as the model's own thought.
+  `memory_digest` therefore keeps claims externally addressable through source
+  IDs instead of turning them into untraceable agent prose.
 - Empty result sets return a structured empty digest, not an error.
 - Malformed request inputs return structured validation errors.
 
