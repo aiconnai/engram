@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Documentation updates across root README, SDK READMEs, AI guide, and repo
     integration guide.
 
+### Changed
+
+- **MCP HTTP auth/rate-limit order** — Bearer authentication now runs before
+  MCP request rate limiting. Unauthorized requests return `401` without
+  consuming rate-limit tokens, which may shift rejected traffic from
+  `mcp_rate_limited_total` to `mcp_unauthorized_total`.
+
 ---
 
 ## [0.21.0] - 2026-05-10

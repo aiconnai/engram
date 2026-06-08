@@ -50,6 +50,10 @@ If a configured token is missing or wrong, `POST /mcp` and `POST /v1/mcp`
 return `401 Unauthorized` with a JSON-RPC error response (`code=-32001`) and
 message `Unauthorized`. `GET /v1/events` returns `401 Unauthorized`.
 
+HTTP auth is evaluated before MCP request rate limiting. Unauthorized requests
+do not consume rate-limit tokens and should continue to return `401` even when a
+bucket for the same client identity is exhausted.
+
 ## Rate limiting (HTTP MCP)
 
 Engram can enforce a token-bucket rate limit for MCP HTTP requests:

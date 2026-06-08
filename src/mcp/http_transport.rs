@@ -207,6 +207,39 @@ struct RateLimiterState {
     buckets: HashMap<String, RateLimitBucket>,
 }
 
+struct RateLimitDecision {
+    allowed: bool,
+    stale_cleanup: u64,
+    eviction_cleanup: u64,
+}
+
+fn rate_limited_response(
+    id: Option<serde_json::Value>,
+    is_notification: bool,
+    route: &str,
+) -> (StatusCode, serde_json::Value) {
+    if is_notification {
+        return (StatusCode::ACCEPTED, serde_json::Value::Null);
+    }
+
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        serde_json::to_value(McpResponse::error(
+            id,
+            -32005,
+            "Too Many Requests".to_string(),
+        ))
+        .unwrap_or_else(|e| {
+            tracing::error!(
+                error = %e,
+                route = %route,
+                "failed to serialize error response"
+            );
+            serde_json::Value::Null
+        }),
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -235,31 +268,7 @@ async fn handle_mcp(
     let mut is_rate_limited = false;
     let mut include_retry_after = false;
 
-    let (status, response_payload) = if !is_rate_limit_allowed(&state, &headers).await {
-        is_rate_limited = true;
-        decision = "rate_limited";
-        include_retry_after = true;
-        if is_notification {
-            (StatusCode::ACCEPTED, serde_json::Value::Null)
-        } else {
-            (
-                StatusCode::TOO_MANY_REQUESTS,
-                serde_json::to_value(McpResponse::error(
-                    request.id,
-                    -32005,
-                    "Too Many Requests".to_string(),
-                ))
-                .unwrap_or_else(|e| {
-                    tracing::error!(
-                        error = %e,
-                        route = %uri.path(),
-                        "failed to serialize error response"
-                    );
-                    serde_json::Value::Null
-                }),
-            )
-        }
-    } else if let Some(ref expected) = state.api_key {
+    let (status, response_payload) = if let Some(ref expected) = state.api_key {
         if !check_bearer(&headers, expected) {
             is_unauthorized = true;
             decision = "unauthorized";
@@ -289,6 +298,11 @@ async fn handle_mcp(
                     })
                 },
             )
+        } else if !is_rate_limit_allowed(&state, &headers).await {
+            is_rate_limited = true;
+            decision = "rate_limited";
+            include_retry_after = true;
+            rate_limited_response(request.id, is_notification, uri.path())
         } else {
             if is_notification {
                 (StatusCode::ACCEPTED, serde_json::Value::Null)
@@ -303,6 +317,11 @@ async fn handle_mcp(
                 )
             }
         }
+    } else if !is_rate_limit_allowed(&state, &headers).await {
+        is_rate_limited = true;
+        decision = "rate_limited";
+        include_retry_after = true;
+        rate_limited_response(request.id, is_notification, uri.path())
     } else if is_notification {
         decision = "success";
         (StatusCode::ACCEPTED, serde_json::Value::Null)
@@ -367,6 +386,21 @@ async fn is_rate_limit_allowed(state: &AppState, headers: &HeaderMap) -> bool {
     let mut limiter = rate_limiter.lock().await;
     let config = limiter.config.clone();
     let bucket_key = rate_limit_key(&config, headers);
+    let decision = apply_rate_limit(&mut limiter, bucket_key, now);
+
+    state
+        .metrics
+        .on_rate_limit_cleanup(decision.stale_cleanup, decision.eviction_cleanup);
+
+    decision.allowed
+}
+
+fn apply_rate_limit(
+    limiter: &mut RateLimiterState,
+    bucket_key: String,
+    now: Instant,
+) -> RateLimitDecision {
+    let config = limiter.config.clone();
     let mut stale_cleanup = 0u64;
     let mut eviction_cleanup = 0u64;
 
@@ -396,10 +430,6 @@ async fn is_rate_limit_allowed(state: &AppState, headers: &HeaderMap) -> bool {
         }
     }
 
-    state
-        .metrics
-        .on_rate_limit_cleanup(stale_cleanup, eviction_cleanup);
-
     let bucket = limiter
         .buckets
         .entry(bucket_key)
@@ -409,18 +439,28 @@ async fn is_rate_limit_allowed(state: &AppState, headers: &HeaderMap) -> bool {
             last_refill_at: now,
         });
 
-    let elapsed = now.duration_since(bucket.last_refill_at).as_secs_f64();
+    let elapsed = now
+        .saturating_duration_since(bucket.last_refill_at)
+        .as_secs_f64();
     let refill = elapsed * config.requests_per_second;
     bucket.tokens = (bucket.tokens + refill).min(config.burst);
     bucket.last_refill_at = now;
     bucket.last_seen = now;
 
     if bucket.tokens < 1.0 {
-        return false;
+        return RateLimitDecision {
+            allowed: false,
+            stale_cleanup,
+            eviction_cleanup,
+        };
     }
 
     bucket.tokens -= 1.0;
-    true
+    RateLimitDecision {
+        allowed: true,
+        stale_cleanup,
+        eviction_cleanup,
+    }
 }
 
 fn rate_limit_key(config: &RateLimiterConfig, headers: &HeaderMap) -> String {
@@ -969,6 +1009,19 @@ mod tests {
         )
     }
 
+    fn test_rate_limiter_state(max_buckets: usize, stale_after: Duration) -> RateLimiterState {
+        RateLimiterState {
+            config: RateLimiterConfig {
+                requests_per_second: 0.0,
+                burst: 1.0,
+                key_header: None,
+                max_buckets,
+                stale_after,
+            },
+            buckets: HashMap::new(),
+        }
+    }
+
     // ---- check_bearer tests ------------------------------------------------
 
     /// Ensure `check_bearer` correctly validates tokens.
@@ -1263,6 +1316,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_post_mcp_auth_failure_does_not_consume_rate_limit_bucket() {
+        let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, None);
+
+        let unauthorized = app
+            .clone()
+            .oneshot(json_rpc_request("/mcp", None))
+            .await
+            .expect("request should be handled");
+        assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+
+        let authorized = app
+            .clone()
+            .oneshot(json_rpc_request("/mcp", Some("secret-key")))
+            .await
+            .expect("request should be handled");
+        assert_eq!(authorized.status(), StatusCode::OK);
+
+        let exhausted = app
+            .oneshot(json_rpc_request("/mcp", Some("secret-key")))
+            .await
+            .expect("request should be handled");
+        assert_eq!(exhausted.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn test_post_mcp_auth_failure_stays_unauthorized_when_bucket_exhausted() {
+        let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, None);
+
+        let authorized = app
+            .clone()
+            .oneshot(json_rpc_request("/mcp", Some("secret-key")))
+            .await
+            .expect("request should be handled");
+        assert_eq!(authorized.status(), StatusCode::OK);
+
+        let unauthorized = app
+            .oneshot(json_rpc_request("/mcp", None))
+            .await
+            .expect("request should be handled");
+        assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
     async fn test_post_mcp_notification_rate_limit_returns_accepted_without_payload() {
         let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, None);
         let first = app
@@ -1379,6 +1475,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_post_mcp_rate_limit_uses_x_real_ip_fallback() {
+        let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, None);
+
+        let first_ip = app
+            .clone()
+            .oneshot(json_rpc_request_with_headers(
+                "/mcp",
+                Some("secret-key"),
+                &[("x-real-ip", "198.51.100.10")],
+            ))
+            .await
+            .expect("request should be handled");
+        assert_eq!(first_ip.status(), StatusCode::OK);
+
+        let first_ip_again = app
+            .clone()
+            .oneshot(json_rpc_request_with_headers(
+                "/mcp",
+                Some("secret-key"),
+                &[("x-real-ip", "198.51.100.10")],
+            ))
+            .await
+            .expect("request should be handled");
+        assert_eq!(first_ip_again.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        let second_ip = app
+            .oneshot(json_rpc_request_with_headers(
+                "/mcp",
+                Some("secret-key"),
+                &[("x-real-ip", "198.51.100.11")],
+            ))
+            .await
+            .expect("request should be handled");
+        assert_eq!(second_ip.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_post_mcp_rate_limit_prefers_x_forwarded_for_over_x_real_ip() {
+        let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, None);
+
+        let xff_first = app
+            .clone()
+            .oneshot(json_rpc_request_with_headers(
+                "/mcp",
+                Some("secret-key"),
+                &[
+                    ("x-forwarded-for", "198.51.100.10"),
+                    ("x-real-ip", "198.51.100.20"),
+                ],
+            ))
+            .await
+            .expect("request should be handled");
+        assert_eq!(xff_first.status(), StatusCode::OK);
+
+        let same_xff_different_real_ip = app
+            .clone()
+            .oneshot(json_rpc_request_with_headers(
+                "/mcp",
+                Some("secret-key"),
+                &[
+                    ("x-forwarded-for", "198.51.100.10"),
+                    ("x-real-ip", "198.51.100.21"),
+                ],
+            ))
+            .await
+            .expect("request should be handled");
+        assert_eq!(
+            same_xff_different_real_ip.status(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+
+        let different_xff_same_real_ip = app
+            .oneshot(json_rpc_request_with_headers(
+                "/mcp",
+                Some("secret-key"),
+                &[
+                    ("x-forwarded-for", "198.51.100.11"),
+                    ("x-real-ip", "198.51.100.20"),
+                ],
+            ))
+            .await
+            .expect("request should be handled");
+        assert_eq!(different_xff_same_real_ip.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn test_post_mcp_rate_limit_empty_key_disables_header_keying() {
         let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, Some(""));
 
@@ -1422,6 +1604,80 @@ mod tests {
             .await
             .expect("request should be handled");
         assert_eq!(tenant_b.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_rate_limit_cleans_stale_buckets_under_max_bucket_pressure() {
+        let now = Instant::now();
+        let stale_seen = now
+            .checked_sub(Duration::from_secs(601))
+            .expect("test instant should support stale offset");
+        let fresh_seen = now
+            .checked_sub(Duration::from_secs(1))
+            .expect("test instant should support fresh offset");
+        let mut limiter = test_rate_limiter_state(2, Duration::from_secs(600));
+        limiter.buckets.insert(
+            "ip:stale".to_string(),
+            RateLimitBucket {
+                last_seen: stale_seen,
+                tokens: 1.0,
+                last_refill_at: stale_seen,
+            },
+        );
+        limiter.buckets.insert(
+            "ip:fresh".to_string(),
+            RateLimitBucket {
+                last_seen: fresh_seen,
+                tokens: 1.0,
+                last_refill_at: fresh_seen,
+            },
+        );
+
+        let decision = apply_rate_limit(&mut limiter, "ip:new".to_string(), now);
+
+        assert!(decision.allowed);
+        assert_eq!(decision.stale_cleanup, 1);
+        assert_eq!(decision.eviction_cleanup, 0);
+        assert!(!limiter.buckets.contains_key("ip:stale"));
+        assert!(limiter.buckets.contains_key("ip:fresh"));
+        assert!(limiter.buckets.contains_key("ip:new"));
+    }
+
+    #[test]
+    fn test_rate_limit_evicts_oldest_bucket_when_no_stale_bucket_exists() {
+        let now = Instant::now();
+        let older_seen = now
+            .checked_sub(Duration::from_secs(10))
+            .expect("test instant should support older offset");
+        let newer_seen = now
+            .checked_sub(Duration::from_secs(1))
+            .expect("test instant should support newer offset");
+        let mut limiter = test_rate_limiter_state(2, Duration::from_secs(600));
+        limiter.buckets.insert(
+            "ip:older".to_string(),
+            RateLimitBucket {
+                last_seen: older_seen,
+                tokens: 1.0,
+                last_refill_at: older_seen,
+            },
+        );
+        limiter.buckets.insert(
+            "ip:newer".to_string(),
+            RateLimitBucket {
+                last_seen: newer_seen,
+                tokens: 1.0,
+                last_refill_at: newer_seen,
+            },
+        );
+
+        let decision = apply_rate_limit(&mut limiter, "ip:new".to_string(), now);
+
+        assert!(decision.allowed);
+        assert_eq!(decision.stale_cleanup, 0);
+        assert_eq!(decision.eviction_cleanup, 1);
+        assert!(!limiter.buckets.contains_key("ip:older"));
+        assert!(limiter.buckets.contains_key("ip:newer"));
+        assert!(limiter.buckets.contains_key("ip:new"));
     }
 
     #[tokio::test]
