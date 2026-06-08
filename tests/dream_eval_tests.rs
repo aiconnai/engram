@@ -61,3 +61,77 @@ fn dream_snapshot_eval_runbook_defines_ci_safe_metrics() {
         );
     }
 }
+
+#[cfg(feature = "dream-phase")]
+fn test_handler_context(
+    storage: engram::storage::Storage,
+) -> engram::mcp::handlers::HandlerContext {
+    use engram::embedding::EmbeddingCache;
+    use engram::mcp::handlers::HandlerContext;
+    use engram::search::{FuzzyEngine, SearchConfig, SearchResultCache};
+    use parking_lot::Mutex;
+    use std::sync::Arc;
+
+    HandlerContext {
+        storage,
+        embedder: engram::embedding::create_embedder(&Default::default()).unwrap(),
+        fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
+        search_config: SearchConfig::default(),
+        realtime: None,
+        embedding_cache: Arc::new(EmbeddingCache::default()),
+        search_cache: Arc::new(SearchResultCache::new(Default::default())),
+        #[cfg(feature = "meilisearch")]
+        meili: None,
+        #[cfg(feature = "meilisearch")]
+        meili_indexer: None,
+        #[cfg(feature = "meilisearch")]
+        meili_sync_interval: 60,
+        #[cfg(feature = "langfuse")]
+        langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+    }
+}
+
+#[cfg(feature = "dream-phase")]
+#[test]
+fn dream_eval_runner_emits_required_metrics() {
+    use engram::dream::eval::{run_dream_eval, DreamEvalOptions};
+
+    let report = run_dream_eval(DreamEvalOptions::default()).expect("run dream eval");
+    assert_eq!(report.status, "success");
+    assert_eq!(report.metrics.fixtures_run, 6);
+    assert_eq!(report.metrics.fixtures_passed, report.metrics.fixtures_run);
+    assert_eq!(report.metrics.required_candidate_recall, 1.0);
+    assert_eq!(report.metrics.provenance_coverage, 1.0);
+    assert_eq!(report.metrics.unsafe_payload_rejection_rate, 1.0);
+    assert_eq!(report.metrics.canonical_mutation_violations, 0);
+    assert_eq!(report.metrics.freshness_parse_failures, 0);
+}
+
+#[cfg(feature = "dream-phase")]
+#[test]
+fn dream_eval_run_mcp_tool_is_registered_and_dispatches() {
+    use engram::mcp::handlers::dispatch;
+    use engram::mcp::tools::get_tool_definitions;
+    use engram::storage::Storage;
+    use serde_json::json;
+
+    let has_tool = get_tool_definitions()
+        .iter()
+        .any(|tool| tool.name == "dream_eval_run");
+    assert!(has_tool, "tools/list should include dream_eval_run");
+
+    let ctx = test_handler_context(Storage::open_in_memory().unwrap());
+    let result = dispatch(
+        &ctx,
+        "dream_eval_run",
+        json!({"fixtures": ["freshness_temporal"], "include_details": false}),
+    );
+    assert_eq!(result["status"], "success");
+    assert_eq!(result["metrics"]["fixtures_run"], 1);
+    assert_eq!(result["metrics"]["fixtures_passed"], 1);
+    assert_eq!(result["metrics"]["freshness_parse_failures"], 0);
+    assert_eq!(
+        result["fixtures"][0]["details"].as_array().unwrap().len(),
+        0
+    );
+}

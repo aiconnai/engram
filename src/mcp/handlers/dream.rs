@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::dream::candidates::{run_candidate_generation, DreamCandidateGenerationConfig};
+use crate::dream::eval::{run_dream_eval, DreamEvalOptions};
 use crate::dream::{run_once_all, DreamConfig};
 use crate::error::{EngramError, Result};
 use crate::mcp::handlers::HandlerContext;
@@ -210,6 +211,36 @@ pub fn dream_candidate_apply(ctx: &HandlerContext, params: Value) -> Value {
     result.unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+pub fn dream_eval_run(ctx: &HandlerContext, params: Value) -> Value {
+    let _ = ctx;
+    let fixtures = match params.get("fixtures") {
+        Some(Value::Array(values)) => {
+            let mut fixtures = Vec::with_capacity(values.len());
+            for value in values {
+                let Some(fixture) = value.as_str().filter(|fixture| !fixture.trim().is_empty())
+                else {
+                    return json!({"error": "fixtures must contain non-empty strings"});
+                };
+                fixtures.push(fixture.to_string());
+            }
+            Some(fixtures)
+        }
+        Some(_) => return json!({"error": "fixtures must be an array of strings"}),
+        None => None,
+    };
+    let include_details = params
+        .get("include_details")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    run_dream_eval(DreamEvalOptions {
+        fixtures,
+        include_details,
+    })
+    .map(|report| json!(report))
+    .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
 fn apply_candidate(conn: &rusqlite::Connection, id: &str, dry_run: bool) -> Result<Value> {
     let with_sources = get_dream_candidate_with_sources(conn, id)?
         .ok_or_else(|| EngramError::InvalidInput(format!("dream candidate not found: {}", id)))?;
@@ -300,8 +331,8 @@ fn execute_application(
                     &CreateCrossRefInput {
                         from_id: memory.id,
                         to_id: *target,
-                        edge_type: EdgeType::Supersedes,
-                        strength: Some(1.0),
+                        edge_type: EdgeType::DerivedFrom,
+                        strength: Some(0.75),
                         source_context: Some(format!("dream_candidate:{}", candidate.id)),
                         pinned: false,
                     },

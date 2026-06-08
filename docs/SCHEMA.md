@@ -309,7 +309,7 @@ CREATE TABLE crossrefs (
 );
 ```
 
-**Edge Types:** `related_to`, `supersedes`, `contradicts`, `depends_on`, `implements`, `extends`, `references`, `blocks`, `follows_up`
+**Edge Types:** `related_to`, `supersedes`, `contradicts`, `depends_on`, `implements`, `extends`, `references`, `derived_from`, `blocks`, `follows_up`
 
 ---
 

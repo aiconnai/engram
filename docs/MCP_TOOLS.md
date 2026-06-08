@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **275**
+Total tools: **276**
 
 ## Summary
 
@@ -40,6 +40,7 @@ Total tools: **275**
 | `dream_candidate_get` | advanced | readOnlyHint | `id` |
 | `dream_candidate_review` | advanced | mutating (no MCP hints) | `id`, `review_state` |
 | `dream_candidate_apply` | advanced | mutating (no MCP hints) | `id` |
+| `dream_eval_run` | advanced | readOnlyHint | none |
 | `workspace_list` | essential | readOnlyHint | none |
 | `workspace_stats` | standard | readOnlyHint | `workspace` |
 | `workspace_move` | standard | mutating (no MCP hints) | `id`, `workspace` |
@@ -709,6 +710,19 @@ Apply an accepted or edited dream candidate to canonical memory. Requires confir
 | `id` | `string` | yes | Dream candidate id |
 | `confirm` | `boolean` | no | Must be true for canonical mutation. Default: `false`. |
 | `dry_run` | `boolean` | no | Preview planned canonical mutation without applying. Default: `false`. |
+
+### `dream_eval_run`
+
+Run deterministic local dream snapshot evaluation fixtures and return parseable CI-safe metrics. Does not require network, credentials, or model access.
+
+- Tier: `advanced`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `fixtures` | `array` | no | Optional subset of fixed fixture names. Omit to run all fixtures. Items: `string`. |
+| `include_details` | `boolean` | no | Include per-fixture candidate details. Default: `true`. |
 
 ### `workspace_list`
 
@@ -2277,7 +2291,7 @@ Create a cross-reference between two memories
 |-------|------|----------|---------|
 | `from_id` | `integer` | yes | No description. |
 | `to_id` | `integer` | yes | No description. |
-| `edge_type` | `string` | no | Default: `related_to`. Allowed: `related_to`, `supersedes`, `contradicts`, `implements`, `extends`, `references`, `depends_on`, `blocks`, `follows_up`. |
+| `edge_type` | `string` | no | Default: `related_to`. Allowed: `related_to`, `supersedes`, `contradicts`, `implements`, `extends`, `references`, `derived_from`, `depends_on`, `blocks`, `follows_up`. |
 | `strength` | `number` | no | Relationship strength Minimum: `0`. Maximum: `1`. |
 | `source_context` | `string` | no | Why this link exists |
 | `pinned` | `boolean` | no | Exempt from confidence decay Default: `false`. |

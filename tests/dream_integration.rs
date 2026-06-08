@@ -493,3 +493,123 @@ fn test_mcp_expire_candidate_does_not_apply_when_target_is_no_longer_active() {
     assert!(candidate.application_result.is_none());
     assert!(candidate.applied_at.is_none());
 }
+
+#[cfg(feature = "dream-phase")]
+#[test]
+fn test_mcp_merge_candidate_uses_derived_from_edges_without_superseding_sources() {
+    use engram::mcp::handlers::dispatch;
+    use engram::storage::{
+        create_dream_candidate, create_dream_job, NewDreamCandidate, NewDreamJob, Storage,
+    };
+    use rusqlite::params;
+    use serde_json::json;
+
+    let storage = Storage::open_in_memory().unwrap();
+    let (source_a, source_b): (i64, i64) = storage
+        .with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO memories (content, workspace, importance, created_at, updated_at)
+                 VALUES ('Source memory A.', 'default', 0.7, datetime('now'), datetime('now'))",
+                [],
+            )?;
+            let source_a = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO memories (content, workspace, importance, created_at, updated_at)
+                 VALUES ('Source memory B.', 'default', 0.7, datetime('now'), datetime('now'))",
+                [],
+            )?;
+            Ok((source_a, conn.last_insert_rowid()))
+        })
+        .unwrap();
+
+    storage
+        .with_connection(|conn| {
+            create_dream_job(
+                conn,
+                &NewDreamJob {
+                    id: Some("merge-edge-job"),
+                    workspace: "default",
+                    instructions: Some("merge edge regression"),
+                    model_profile: None,
+                    input_summary: &json!({}),
+                },
+            )?;
+            create_dream_candidate(
+                conn,
+                &NewDreamCandidate {
+                    id: Some("merge-edge-candidate"),
+                    job_id: "merge-edge-job",
+                    workspace: "default",
+                    kind: "merge",
+                    proposed_action: "merge",
+                    confidence: 0.86,
+                    freshness_state: "current",
+                    content_preview: "Merged source memory.",
+                    proposed_content: Some("Merged source memory."),
+                    reason_codes: &json!(["merge_related_context"]),
+                    policy_explanation: &json!({}),
+                    metadata: &json!({"target_memory_ids": [source_a, source_b]}),
+                },
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+    let ctx = test_handler_context(storage.clone());
+    let reviewed = dispatch(
+        &ctx,
+        "dream_candidate_review",
+        json!({"id": "merge-edge-candidate", "review_state": "accepted"}),
+    );
+    assert_eq!(reviewed.get("status").unwrap(), "success");
+
+    let applied = dispatch(
+        &ctx,
+        "dream_candidate_apply",
+        json!({"id": "merge-edge-candidate", "confirm": true}),
+    );
+    assert_eq!(applied.get("status").unwrap(), "completed");
+    let merged_id = applied["application"]["canonical_memory_ids"][0]
+        .as_i64()
+        .expect("merged canonical memory id");
+
+    storage
+        .with_connection(|conn| {
+            let derived_edges: i64 = conn.query_row(
+                "SELECT COUNT(*)
+                 FROM crossrefs
+                 WHERE from_id = ?1
+                   AND to_id IN (?2, ?3)
+                   AND edge_type = 'derived_from'
+                   AND valid_to IS NULL",
+                params![merged_id, source_a, source_b],
+                |row| row.get(0),
+            )?;
+            assert_eq!(derived_edges, 2);
+
+            let supersedes_edges: i64 = conn.query_row(
+                "SELECT COUNT(*)
+                 FROM crossrefs
+                 WHERE from_id = ?1
+                   AND to_id IN (?2, ?3)
+                   AND edge_type = 'supersedes'
+                   AND valid_to IS NULL",
+                params![merged_id, source_a, source_b],
+                |row| row.get(0),
+            )?;
+            assert_eq!(supersedes_edges, 0);
+
+            let active_sources: i64 = conn.query_row(
+                "SELECT COUNT(*)
+                 FROM memories
+                 WHERE id IN (?1, ?2)
+                   AND valid_to IS NULL
+                   AND COALESCE(lifecycle_state, 'active') = 'active'",
+                params![source_a, source_b],
+                |row| row.get(0),
+            )?;
+            assert_eq!(active_sources, 2);
+            Ok(())
+        })
+        .unwrap();
+}

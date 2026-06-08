@@ -79,7 +79,8 @@ fn tool_feature_available(name: &str) -> bool {
         | "dream_candidates_list"
         | "dream_candidate_get"
         | "dream_candidate_review"
-        | "dream_candidate_apply" => cfg!(feature = "dream-phase"),
+        | "dream_candidate_apply"
+        | "dream_eval_run" => cfg!(feature = "dream-phase"),
 
         // agent-portability feature
         "attestation_log"

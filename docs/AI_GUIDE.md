@@ -557,7 +557,7 @@ Query procedures filtered by success rate:
 }
 ```
 
-**Built-in edge types:** `related_to`, `supersedes`, `contradicts`, `depends_on`, `implements`, `extends`, `references`, `blocks`, `follows_up`
+**Built-in edge types:** `related_to`, `supersedes`, `contradicts`, `depends_on`, `implements`, `extends`, `references`, `derived_from`, `blocks`, `follows_up`
 
 ### Get Related Memories
 

@@ -520,6 +520,23 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
+    ToolDef {
+        name: "dream_eval_run",
+        description: "Run deterministic local dream snapshot evaluation fixtures and return parseable CI-safe metrics. Does not require network, credentials, or model access.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "fixtures": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["carry_forward_context", "preferences_constraints", "freshness_temporal", "provenance_correctness", "unsafe_raw_log_rejection", "no_canonical_mutation_before_apply"]},
+                    "description": "Optional subset of fixed fixture names. Omit to run all fixtures."
+                },
+                "include_details": {"type": "boolean", "default": true, "description": "Include per-fixture candidate details."}
+            }
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Advanced,
+    },
     // Workspace Management
     ToolDef {
         name: "workspace_list",
@@ -2396,7 +2413,7 @@
             "properties": {
                 "from_id": {"type": "integer"},
                 "to_id": {"type": "integer"},
-                "edge_type": {"type": "string", "enum": ["related_to", "supersedes", "contradicts", "implements", "extends", "references", "depends_on", "blocks", "follows_up"], "default": "related_to"},
+                "edge_type": {"type": "string", "enum": ["related_to", "supersedes", "contradicts", "implements", "extends", "references", "derived_from", "depends_on", "blocks", "follows_up"], "default": "related_to"},
                 "strength": {"type": "number", "minimum": 0, "maximum": 1, "description": "Relationship strength"},
                 "source_context": {"type": "string", "description": "Why this link exists"},
                 "pinned": {"type": "boolean", "default": false, "description": "Exempt from confidence decay"}

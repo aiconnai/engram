@@ -219,18 +219,26 @@ fn build_proposals(
     config: &DreamCandidateGenerationConfig,
 ) -> Vec<CandidateProposal> {
     let mut proposals = Vec::new();
+    let safe_memories: Vec<_> = memories
+        .iter()
+        .filter(|memory| !is_unsafe_raw_payload(&memory.content))
+        .collect();
 
-    if memories.len() >= config.summary_min_memories {
-        proposals.push(summary_proposal(memories, &config.workspace));
+    if safe_memories.len() >= config.summary_min_memories {
+        proposals.push(summary_proposal(&safe_memories, &config.workspace));
     }
 
-    for memory in memories {
+    for proposal in stable_signal_proposals(&safe_memories) {
+        proposals.push(proposal);
+    }
+
+    for memory in &safe_memories {
         if let Some(proposal) = stale_or_expired_proposal(memory) {
             proposals.push(proposal);
         }
     }
 
-    for memory in memories {
+    for memory in &safe_memories {
         if let Some(proposal) = policy_proposal(memory) {
             proposals.push(proposal);
         }
@@ -239,8 +247,12 @@ fn build_proposals(
     proposals
 }
 
-fn summary_proposal(memories: &[MemoryEvidence], workspace: &str) -> CandidateProposal {
-    let selected: Vec<_> = memories.iter().take(SUMMARY_SOURCE_LIMIT).collect();
+fn summary_proposal(memories: &[&MemoryEvidence], workspace: &str) -> CandidateProposal {
+    let selected: Vec<_> = memories
+        .iter()
+        .copied()
+        .take(SUMMARY_SOURCE_LIMIT)
+        .collect();
     let bullets: Vec<String> = selected
         .iter()
         .map(|memory| format!("- {}", preview(&memory.content, 96)))
@@ -283,6 +295,101 @@ fn summary_proposal(memories: &[MemoryEvidence], workspace: &str) -> CandidatePr
             .map(|memory| memory_source(memory, "summary_source"))
             .collect(),
     }
+}
+
+fn stable_signal_proposals(memories: &[&MemoryEvidence]) -> Vec<CandidateProposal> {
+    let preference_sources: Vec<_> = memories
+        .iter()
+        .copied()
+        .filter(|memory| durable_preference_signal(memory))
+        .take(SUMMARY_SOURCE_LIMIT)
+        .collect();
+    let constraint_sources: Vec<_> = memories
+        .iter()
+        .copied()
+        .filter(|memory| durable_constraint_signal(memory))
+        .take(SUMMARY_SOURCE_LIMIT)
+        .collect();
+    let mut proposals = Vec::new();
+    if preference_sources.len() >= 2 {
+        proposals.push(stable_signal_proposal(
+            "preference",
+            "Stable preferences detected",
+            "stable_preference",
+            "repeated_preference_evidence",
+            preference_sources,
+        ));
+    }
+    if constraint_sources.len() >= 2 {
+        proposals.push(stable_signal_proposal(
+            "constraint",
+            "Stable constraints detected",
+            "stable_constraint",
+            "repeated_constraint_evidence",
+            constraint_sources,
+        ));
+    }
+    proposals
+}
+
+fn stable_signal_proposal(
+    kind: &'static str,
+    label: &str,
+    primary_reason: &'static str,
+    secondary_reason: &'static str,
+    sources: Vec<&MemoryEvidence>,
+) -> CandidateProposal {
+    let bullets: Vec<String> = sources
+        .iter()
+        .map(|memory| format!("- {}", preview(&memory.content, 96)))
+        .collect();
+    let proposed_content = format!("{}:\n{}", label, bullets.join("\n"));
+    let avg_confidence = sources
+        .iter()
+        .map(|memory| memory.retrieval_priority.unwrap_or(memory.importance))
+        .sum::<f64>()
+        / sources.len() as f64;
+
+    CandidateProposal {
+        kind,
+        proposed_action: "create",
+        confidence: avg_confidence.clamp(0.5, 0.9),
+        freshness_state: "current",
+        content_preview: preview(&proposed_content, PREVIEW_LIMIT),
+        proposed_content: Some(proposed_content),
+        reason_codes: vec![primary_reason, secondary_reason],
+        policy_explanation: json!({
+            "generator": GENERATOR_VERSION,
+            "source_count": sources.len()
+        }),
+        metadata: json!({
+            "generator_version": GENERATOR_VERSION,
+            "reducer": "deterministic_stable_signal_v1",
+            "target_memory_ids": sources.iter().map(|memory| memory.id).collect::<Vec<_>>()
+        }),
+        sources: sources
+            .into_iter()
+            .map(|memory| memory_source(memory, secondary_reason))
+            .collect(),
+    }
+}
+
+fn durable_preference_signal(memory: &MemoryEvidence) -> bool {
+    let content = memory.content.to_lowercase();
+    memory.memory_type == "preference"
+        || content.contains("prefer")
+        || content.contains("preference")
+        || content.contains("wants ")
+}
+
+fn durable_constraint_signal(memory: &MemoryEvidence) -> bool {
+    let content = memory.content.to_lowercase();
+    memory.memory_type == "decision"
+        || content.contains("must ")
+        || content.contains("requires")
+        || content.contains("required")
+        || content.contains("cannot")
+        || content.contains("never ")
 }
 
 fn stale_or_expired_proposal(memory: &MemoryEvidence) -> Option<CandidateProposal> {
@@ -444,6 +551,17 @@ fn planned_event_is_stale(memory: &MemoryEvidence, now: DateTime<Utc>) -> bool {
     ["planned", "scheduled", "due", "todo", "will ", "deadline"]
         .iter()
         .any(|needle| content.contains(needle))
+}
+
+fn is_unsafe_raw_payload(content: &str) -> bool {
+    let lower = content.to_lowercase();
+    lower.contains("-----begin")
+        || lower.contains("api_key=")
+        || lower.contains("secret=")
+        || lower.contains("password=")
+        || lower.contains("authorization: bearer")
+        || lower.contains("env:")
+        || lower.contains("terminal dump")
 }
 
 fn memory_source(memory: &MemoryEvidence, reason: &'static str) -> SourceProposal {

@@ -295,6 +295,8 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "dream_candidate_review" => dream::dream_candidate_review(ctx, params),
         #[cfg(feature = "dream-phase")]
         "dream_candidate_apply" => dream::dream_candidate_apply(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_eval_run" => dream::dream_eval_run(ctx, params),
 
         // ── Auto-consolidation ────────────────────────────────────────────────
         "memory_auto_consolidate" => auto_consolidate::memory_auto_consolidate(ctx, params),
