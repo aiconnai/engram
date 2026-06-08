@@ -59,6 +59,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque Grok Build TUI e Claude Code CLI estão sendo usados side-by-side.
 - Dogfooding com o próprio engram (via MCP + hooks) é objetivo explícito de longo prazo, guiado por RFC 0001, mas fora do escopo de v0 bootstrap.
 - Invariants do harness são separados dos data invariants (`INVARIANTS.md` na raiz) para manter clareza.
+- 2026-06-08: `ENGRA-103` aberto no Huly para `memory_digest`; RFC 0008 define a ferramenta como digest read-only, determinístico, sem schema novo e com provenance explícita.
 
 ## Próximos passos imediatos
 
@@ -77,6 +78,25 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - Contrato adotado: static/read-only first; pipeline autônoma bloqueada por
   default até existir ADR, sandbox forte e target contract Rust.
 - README e GATES do harness agora referenciam o fluxo de segurança.
+
+## ENGRA-103 / RFC 0008 — `memory_digest` planning — 2026-06-08
+
+- Criado contrato proposto para `memory_digest` em
+  `docs/rfcs/0008-memory-digest.md`.
+- Criado plano de implementação em
+  `docs/harness/plans/2026-06-08-memory-digest-implementation-plan.md`.
+- Criado Review Canvas em
+  `docs/harness/canvas/2026-06-08-memory-digest.md`.
+- Decisão de escopo:
+  - v1 é ferramenta MCP read-only;
+  - sem schema migration;
+  - sem LLM obrigatório;
+  - sem raw artifact retrieval;
+  - sem mutação de memórias canônicas;
+  - implementação deve orquestrar `memory_smart_retrieve`,
+    `memory_build_context`, graph/crossrefs e `context_build_bundle`.
+- Huly: `ENGRA-103` (`MCP memory_digest actionable retrieval digest`) criado
+  com prioridade High.
 
 ## Nota da sessão — 2026-05-31
 
