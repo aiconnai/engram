@@ -958,6 +958,41 @@ de recuperacao sem criar novo schema ou acionar LLM.
 - `bash docs/harness/bin/doctor.sh` — PASS.
 - `bash docs/harness/bin/sensors.sh` — PASS (`make ci` + doctor).
 
+## 2026-06-09 — ENGRA-111 deterministic MCP mock parity harness
+
+### Contexto da sessao
+
+Claw-style mock parity discipline foi aplicado como um teste offline e
+deterministico sobre a superficie MCP existente, sem adicionar ferramenta nova
+ou dependencia externa.
+
+### Acoes realizadas
+
+- Criado `tests/fixtures/mcp_mock_parity_scenarios.json` com tres cenarios:
+  `memory_create`/`memory_search`, `context_record`/`context_search`, e erro de
+  ferramenta desconhecida.
+- Adicionado teste `mcp_mock_parity_scenarios_match_fixture_contract` em
+  `tests/mcp_protocol_tests.rs`.
+- Criado `tests/fixtures/README.md` explicando como Python e TypeScript SDKs
+  podem reutilizar os mesmos nomes de cenarios e o bloco `expected_normalized`.
+- Criado Review Canvas:
+  `docs/harness/canvas/2026-06-09-engra-111-mock-parity.md`.
+
+### Decisoes
+
+- A comparacao ignora IDs, timestamps, scores e valores gerados, mas preserva a
+  forma publica dos envelopes de resposta.
+- O harness roda pelo caminho real `tools/call` com banco SQLite em memoria.
+
+### Evidencia
+
+- `cargo test --test mcp_protocol_tests mcp_mock_parity -- --nocapture` — PASS.
+- `cargo fmt --all -- --check` — PASS.
+- `cargo test --test mcp_protocol_tests` — PASS, 35 tests.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `git diff --check` — PASS.
+- `make ci` — PASS.
+
 ## 2026-06-12 — Crate maintenance review fixes
 
 ### Contexto
