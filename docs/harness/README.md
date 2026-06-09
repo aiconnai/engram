@@ -55,6 +55,11 @@ bash docs/harness/bin/doctor.sh
 
 `doctor.sh` é read-only e valida a consistência interna do harness (drift entre SPEC/progress, scripts executáveis, referências à policy local, etc.). Ele **bloqueia** mudanças no harness quando há inconsistência.
 
+Quando automação precisar de output parseável, use o contrato em
+[`JSON_OUTPUTS.md`](./JSON_OUTPUTS.md). O modo humano continua sendo o default;
+flags JSON devem ser opt-in e nunca devem emitir segredos, tokens, headers,
+cookies ou dumps de ambiente.
+
 ## Estrutura
 
 | Caminho                        | Papel |
@@ -65,6 +70,7 @@ bash docs/harness/bin/doctor.sh
 | `WHAT_WE_DONT_DO.md`           | Escopo negativo e anti-patterns para evitar expansão silenciosa |
 | `GATES.md`                     | Sensores, thresholds, retry policy, exclusões documentadas, fake-success patterns |
 | `CODE_REVIEW_POLICY.md`        | Política local consumida pelo review-gate (cross-model / cross-CLI) |
+| `JSON_OUTPUTS.md`              | Contrato de output JSON para automação do harness |
 | `security/`                    | Contrato de segurança do harness, incluindo a adaptação Anthropic |
 | `.claude/scan-extras.txt`      | Tuning versionado para categorias extras de scan/triage |
 | `.claude/fp-rules.txt`         | Tuning versionado para exclusões conservadoras de falso positivo |
