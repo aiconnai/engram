@@ -25,6 +25,11 @@ Ele executa (em ordem):
 
 O script `sensors.sh` grava o resultado parseável em `docs/harness/.sensors-last` (status, timestamp, exclusões, etc.).
 
+Saídas JSON opt-in para scripts do harness devem seguir
+[`JSON_OUTPUTS.md`](./JSON_OUTPUTS.md): um único objeto JSON em stdout,
+vocabulário de status estável, exit code preservado e nenhum segredo ou dump de
+ambiente. O output humano continua sendo o default.
+
 ### Version-Control Gate
 
 Wrapper: `bash docs/harness/bin/vc-gate.sh`
