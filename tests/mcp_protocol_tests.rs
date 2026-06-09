@@ -252,6 +252,143 @@ fn create_memory_for_search(handler: &TestHandler, id: i64, content: &str) -> i6
     created["id"].as_i64().expect("created memory id")
 }
 
+#[test]
+fn mcp_mock_parity_scenarios_match_fixture_contract() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/mcp_mock_parity_scenarios.json"))
+            .expect("mock parity fixture should be valid JSON");
+    assert_eq!(fixture["version"].as_str(), Some("mcp-mock-parity-v1"));
+
+    let handler = TestHandler::new();
+    let scenarios = fixture["scenarios"]
+        .as_array()
+        .expect("fixture scenarios should be an array");
+    let mut normalized = Vec::new();
+
+    for (index, scenario) in scenarios.iter().enumerate() {
+        let name = scenario["name"]
+            .as_str()
+            .expect("fixture scenario should have a name");
+        let steps = scenario["steps"]
+            .as_array()
+            .expect("fixture scenario should have steps");
+        let base_id = 300 + (index as i64 * 10);
+
+        match name {
+            "memory_create_search" => {
+                let create = call_tool_json(
+                    &handler,
+                    base_id,
+                    steps[0]["tool"].as_str().expect("create tool name"),
+                    steps[0]["arguments"].clone(),
+                );
+                let search = call_tool_json(
+                    &handler,
+                    base_id + 1,
+                    steps[1]["tool"].as_str().expect("search tool name"),
+                    steps[1]["arguments"].clone(),
+                );
+
+                let expected_content = steps[0]["arguments"]["content"]
+                    .as_str()
+                    .expect("memory fixture content");
+                let tags = create["tags"].as_array().expect("memory tags array");
+                let search_results = search
+                    .as_array()
+                    .expect("memory_search response should stay an array");
+                let hit = search_results
+                    .iter()
+                    .find(|item| item["memory"]["content"].as_str() == Some(expected_content))
+                    .expect("memory_search should return the created fixture memory");
+
+                normalized.push(json!({
+                    "name": name,
+                    "create": {
+                        "type": if create.is_object() { "object" } else { "other" },
+                        "has_id": create["id"].is_i64(),
+                        "content_matches": create["content"].as_str() == Some(expected_content),
+                        "memory_type": create["memory_type"].as_str()
+                            .or_else(|| create["type"].as_str())
+                            .unwrap_or(""),
+                        "has_parity_tag": tags.iter().any(|tag| tag.as_str() == Some("parity")),
+                        "has_issue_tag": tags.iter().any(|tag| tag.as_str() == Some("engra-111"))
+                    },
+                    "search": {
+                        "type": if search.is_array() { "array" } else { "other" },
+                        "hit_content_matches": hit["memory"]["content"].as_str() == Some(expected_content),
+                        "hit_shape": {
+                            "memory": hit["memory"].is_object(),
+                            "score": hit["score"].is_number(),
+                            "match_info": hit["match_info"].is_object()
+                        }
+                    }
+                }));
+            }
+            "context_record_search" => {
+                let record = call_tool_json(
+                    &handler,
+                    base_id,
+                    steps[0]["tool"].as_str().expect("record tool name"),
+                    steps[0]["arguments"].clone(),
+                );
+                let search = call_tool_json(
+                    &handler,
+                    base_id + 1,
+                    steps[1]["tool"].as_str().expect("context search tool name"),
+                    steps[1]["arguments"].clone(),
+                );
+
+                let event_id = record["created_ids"]["event_id"].as_i64();
+                let results = search["results"]
+                    .as_array()
+                    .expect("context_search results should stay an array");
+                let hit = results
+                    .iter()
+                    .find(|item| item["provenance"]["event_id"].as_i64() == event_id)
+                    .expect("context_search should return the recorded fixture event");
+                let artifact_pointers = hit["artifact_pointers"]
+                    .as_array()
+                    .expect("context_search artifact_pointers should stay an array");
+
+                normalized.push(json!({
+                    "name": name,
+                    "record": {
+                        "type": if record.is_object() { "object" } else { "other" },
+                        "has_event_id": event_id.is_some(),
+                        "has_summary_id": record["created_ids"]["summary_id"].is_i64()
+                    },
+                    "search": {
+                        "type": if search.is_object() { "object" } else { "other" },
+                        "query": search["query"].as_str().unwrap_or(""),
+                        "results_type": if search["results"].is_array() { "array" } else { "other" },
+                        "hit_event_type": hit["event"]["event_type"].as_str().unwrap_or(""),
+                        "hit_reducer_name": hit["summary"]["reducer_name"].as_str().unwrap_or(""),
+                        "artifact_pointer_present": artifact_pointers.iter().any(|pointer| {
+                            pointer["artifact_id"].as_str() == Some("engra-111-parity-artifact")
+                        }),
+                        "provenance_present": hit["provenance"].is_object()
+                    }
+                }));
+            }
+            "unknown_tool_error" => {
+                let result = call_tool_json(
+                    &handler,
+                    base_id,
+                    steps[0]["tool"].as_str().expect("unknown tool name"),
+                    steps[0]["arguments"].clone(),
+                );
+                normalized.push(json!({
+                    "name": name,
+                    "error": result["error"].as_str().unwrap_or("")
+                }));
+            }
+            other => panic!("unhandled mock parity scenario: {other}"),
+        }
+    }
+
+    assert_eq!(json!(normalized), fixture["expected_normalized"]);
+}
+
 fn set_policy_priority(handler: &TestHandler, memory_id: i64, priority: f32, reason: &str) {
     handler
         .storage

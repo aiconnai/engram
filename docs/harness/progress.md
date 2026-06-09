@@ -98,6 +98,17 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - Huly: `ENGRA-103` (`MCP memory_digest actionable retrieval digest`) criado
   com prioridade High.
 
+## ENGRA-111 — deterministic MCP mock parity harness — 2026-06-09
+
+- Added fixture-driven parity coverage for three public MCP shapes:
+  `memory_create`/`memory_search`, `context_record`/`context_search`, and the
+  unknown-tool error envelope.
+- The fixture stores stable normalized expectations only; generated memory IDs,
+  timestamps, scores, and UUID-like values stay out of the contract.
+- SDK expansion note lives with the fixture so Python and TypeScript parity can
+  reuse the same scenario names and expected normalized output later.
+- Review Canvas: `docs/harness/canvas/2026-06-09-engra-111-mock-parity.md`.
+
 ## Nota da sessão — 2026-05-31
 
 - Compressão: `ContextCompressor` agora expõe diagnósticos de orçamento/skips,
