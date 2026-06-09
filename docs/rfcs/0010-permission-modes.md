@@ -227,6 +227,15 @@ Do not add broad enforcement until review confirms:
 - tests cover allow and deny cases;
 - docs make the explicit mode source clear.
 
+Implemented first step:
+
+- `src/mcp/permission.rs` classifies MCP tools by minimum mode.
+- `handlers::dispatch` checks `ENGRAM_PERMISSION_MODE` only when it is explicitly
+  set.
+- No environment variable means existing local MCP behavior is unchanged.
+- `ENGRAM_PERMISSION_MODE=read_only` denies admin/maintenance/write tools with
+  the structured denial shape above.
+
 ## Open Questions
 
 - Should `memory_cleanup_expired` be `maintenance` or `admin` by default? It is

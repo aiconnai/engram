@@ -6,6 +6,7 @@
 pub mod grpc_transport;
 pub mod handlers;
 pub mod http_transport;
+pub mod permission;
 pub mod prompts;
 pub mod protocol;
 pub mod resources;
