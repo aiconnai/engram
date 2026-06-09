@@ -32,6 +32,10 @@ Existing scripts may document a more specific non-zero exit code, but the JSON
 
 ## Common Envelope
 
+Every harness JSON mode must return the common envelope below unless the tool
+documents a narrower read-only status command. Tool-specific fields may be added,
+but the common fields must keep their meaning across scripts.
+
 ```json
 {
   "schema_version": "harness-json-v1",
@@ -62,6 +66,23 @@ Required common fields:
 - `checks`: array of check result objects.
 - `artifacts`: array of repo-relative artifact paths or structured artifact
   objects.
+
+Tool-specific fields should be shallow, stable, and non-secret. Prefer:
+
+- scalar identifiers such as `repo_root`, `active_plan`, `active_task`, `mode`,
+  `sensor`, `known_issue`, or `review_file`;
+- counts such as `failure_count`, `warning_count`, or `check_count`;
+- short status summaries that use the common status vocabulary or a
+  documented tool-specific vocabulary.
+
+Avoid:
+
+- raw command logs;
+- full reviewer output;
+- environment variable dumps;
+- request or response bodies that could contain credentials;
+- provider headers, cookies, bearer tokens, or API keys;
+- absolute local paths unless the command cannot diagnose setup without them.
 
 Warning and failure entries may be strings in `harness-json-v1`, but structured
 objects are preferred:
@@ -104,6 +125,83 @@ Stable check id families:
 - `sensors_last`
 - `bootstrap_contract`
 - `exclusion_record`
+- `gate_status`
+- `artifact`
+- `json_contract`
+
+## JSON-Only Output vs Artifacts
+
+Use JSON-only stdout when the complete machine-readable result is small and safe
+to keep in process output. Examples:
+
+- `doctor.sh --json`
+- `sensors.sh status --json`
+- read-only status or validation commands
+
+Use `artifacts` when output is large, reviewer-authored, log-like, or useful as
+durable evidence. In that case, stdout still contains one JSON object and the
+large material is written elsewhere. The `artifacts` array points to those
+repo-relative paths:
+
+```json
+{
+  "artifacts": [
+    {
+      "path": "docs/harness/reviews/2026-06-09-example-post.md",
+      "kind": "review",
+      "format": "markdown"
+    }
+  ]
+}
+```
+
+Artifact rules:
+
+- Artifact paths must be repo-relative.
+- Artifact objects should include `path`, `kind`, and `format`.
+- Artifact files must follow the same secret rules as JSON stdout.
+- JSON mode must not hide failures inside artifacts; `status`, `failures`, and
+  `checks` still summarize blocking results.
+- A command that is read-only in human mode must remain read-only in JSON mode.
+
+## `.sensors-last` Relationship
+
+`docs/harness/.sensors-last` is the current lightweight parseable state file for
+the full harness gate. It remains supported for compatibility, but it is not the
+general JSON contract.
+
+Migration path:
+
+1. Keep writing `.sensors-last` exactly as existing users expect.
+2. Add a JSON status surface that translates `.sensors-last` into the common
+   envelope without running the full gate, for example `sensors.sh status --json`.
+3. For full gate runs, either support `sensors.sh --json` directly or emit a JSON
+   envelope that points to `.sensors-last` through `artifacts`.
+4. Do not require automation to scrape human `sensors.sh` output once a JSON
+   status surface exists.
+
+Suggested `sensors` fields:
+
+- `tool`: `sensors`
+- `mode`: selected lane, for example `full`, `quick`, `docs`, `mcp`,
+  `baseline`, or `status`
+- `ci_status`: current CI/gate status from `.sensors-last`
+- `doctor_status`: result of the doctor check when available
+- `known_issue`: repo-relative known-issue path when an exclusion is active
+- `excluded_sensor`: excluded sensor name when an exclusion is active
+- `artifacts`: include `docs/harness/.sensors-last` when it is the source of
+  truth for the reported state
+
+## Compatibility Rules
+
+- Human output remains the default.
+- JSON flags are opt-in and must not weaken existing gates.
+- Exit codes must preserve the existing human-mode meaning.
+- `--help` may remain human-readable unless a tool documents a JSON help mode.
+- JSON status commands may be read-only snapshots and do not need to run the full
+  gate.
+- Full gate JSON mode must still run the same checks as the human full gate
+  unless the command name clearly says it is a status snapshot.
 
 ## `doctor.sh --json`
 
@@ -125,6 +223,7 @@ Required fields:
 - `failures`
 - `warnings`
 - `checks`
+- `artifacts`
 
 Compatibility requirements:
 
