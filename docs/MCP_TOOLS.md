@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **277**
+Total tools: **278**
 
 ## Summary
 
@@ -250,6 +250,7 @@ Total tools: **277**
 | `memory_build_context` | standard | readOnlyHint | `query` |
 | `context_record` | standard | mutating (no MCP hints) | `event_type`, `session_id`, `source` |
 | `context_record_artifact` | standard | mutating (no MCP hints) | `kind` |
+| `context_get_artifact` | standard | readOnlyHint | `artifact_id`, `reason` |
 | `context_search` | standard | readOnlyHint | `query` |
 | `context_build_bundle` | standard | readOnlyHint | none |
 | `recent_activity` | essential | readOnlyHint | none |
@@ -3670,6 +3671,28 @@ Record an Operational Context artifact pointer or explicitly retained redacted r
 | `ttl_seconds` | `integer` | no | Optional raw retention TTL from now |
 | `stale_after_seconds` | `integer` | no | Optional stale threshold from now |
 | `metadata` | `object` | no | Additional metadata redacted recursively before storage |
+
+### `context_get_artifact`
+
+Explicitly retrieve retained Operational Context artifact content after access, retention, staleness, and redaction checks. Search and bundle tools return artifact pointers only; this tool requires an artifact_id and reason.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: `artifact_id`, `reason`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `artifact_id` | `string` | yes | Artifact ID to retrieve; broad search queries are not accepted |
+| `reason` | `string` | yes | Why raw or retained artifact content is needed |
+| `requester_agent_id` | `string` | no | Agent identity used for same_agent access checks |
+| `session_id` | `string` | no | Session scope used for same_session access checks |
+| `task_id` | `string` | no | Task scope used for same_task access checks |
+| `repo_id` | `string` | no | Repository scope used for repo access checks |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope used for repo/workspace access checks |
+| `workspace` | `string` | no | Alias for workspace_path_hash |
+| `max_bytes` | `integer` | no | Maximum raw bytes to return; response marks truncation explicitly Minimum: `1`. |
+| `allow_stale` | `boolean` | no | Allow retrieval after stale_at has passed Default: `false`. |
+| `require_redacted` | `boolean` | no | Require a redaction status that permits raw retrieval Default: `true`. |
 
 ### `context_search`
 

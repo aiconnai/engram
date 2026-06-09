@@ -1808,6 +1808,106 @@ fn test_memory_create_emits_audit_event() {
 }
 
 #[test]
+fn test_tools_list_includes_context_get_artifact() {
+    let handler = TestHandler::new();
+    let req = make_request(132, "tools/list", json!({}));
+    let resp = handler.handle_request(req);
+    assert!(resp.error.is_none(), "tools/list should succeed");
+
+    let list_result = resp.result.unwrap();
+    let tools = list_result["tools"]
+        .as_array()
+        .expect("tools/list result must include tools");
+    let tool = tools
+        .iter()
+        .find(|tool| tool["name"].as_str() == Some("context_get_artifact"))
+        .expect("tools/list must include context_get_artifact");
+
+    assert_eq!(
+        tool["annotations"]["readOnlyHint"].as_bool(),
+        Some(true),
+        "context_get_artifact must be advertised as read-only"
+    );
+}
+
+#[test]
+fn test_context_get_artifact_returns_retained_raw_content() {
+    let handler = TestHandler::new();
+
+    let record_req = make_request(
+        133,
+        "tools/call",
+        json!({
+            "name": "context_record_artifact",
+            "arguments": {
+                "repo_id": "github:aiconnai/engram",
+                "session_id": "session-a",
+                "kind": "test_report",
+                "raw_content": "fixture output",
+                "retain_raw": true,
+                "metadata": {"command": "cargo test"}
+            }
+        }),
+    );
+    let record_resp = handler.handle_request(record_req);
+    assert!(
+        record_resp.error.is_none(),
+        "context_record_artifact failed: {:?}",
+        record_resp.error
+    );
+    let record_text = record_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let record_data: Value =
+        serde_json::from_str(&record_text).expect("record response should be valid JSON");
+    let artifact_id = record_data["artifact_id"]
+        .as_str()
+        .expect("record response must include artifact_id")
+        .to_string();
+
+    let get_req = make_request(
+        134,
+        "tools/call",
+        json!({
+            "name": "context_get_artifact",
+            "arguments": {
+                "artifact_id": artifact_id,
+                "session_id": "session-a",
+                "reason": "verify retained test output",
+                "max_bytes": 7
+            }
+        }),
+    );
+    let get_resp = handler.handle_request(get_req);
+    assert!(
+        get_resp.error.is_none(),
+        "context_get_artifact failed: {:?}",
+        get_resp.error
+    );
+    let get_text = get_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let get_data: Value =
+        serde_json::from_str(&get_text).expect("get artifact response should be valid JSON");
+
+    assert_eq!(get_data["content"].as_str(), Some("fixture"));
+    assert_eq!(get_data["encoding"].as_str(), Some("utf8"));
+    assert_eq!(get_data["returned_bytes"].as_u64(), Some(7));
+    assert_eq!(get_data["original_bytes"].as_u64(), Some(14));
+    assert_eq!(get_data["truncated"].as_bool(), Some(true));
+    assert_eq!(
+        get_data["artifact"]["id"].as_str(),
+        Some(artifact_id.as_str())
+    );
+    assert_eq!(
+        get_data["artifact"]["redaction_status"].as_str(),
+        Some("passed")
+    );
+}
+
+#[test]
 fn test_recent_activity_preview_truncated_at_100_chars() {
     let handler = TestHandler::new();
 

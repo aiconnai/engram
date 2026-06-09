@@ -407,6 +407,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_prepare_context" => context::memory_prepare_context(ctx, params),
         "context_record" => context::context_record(ctx, params),
         "context_record_artifact" => context::context_record_artifact(ctx, params),
+        "context_get_artifact" => context::context_get_artifact(ctx, params),
         "context_search" => context::context_search(ctx, params),
         "context_build_bundle" => context::context_build_bundle(ctx, params),
         "memory_observe_tool_use" => context::memory_observe_tool_use(ctx, params),
