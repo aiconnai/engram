@@ -90,6 +90,10 @@ pub struct HandlerContext {
 ///
 /// Returns the JSON value that should be placed in the MCP `ToolCallResult`.
 pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
+    if let Some(denial) = crate::mcp::permission::permission_denial_from_env(tool_name) {
+        return denial;
+    }
+
     match tool_name {
         // ── Memory CRUD ──────────────────────────────────────────────────────
         "memory_create" => memory_crud::memory_create(ctx, params),
