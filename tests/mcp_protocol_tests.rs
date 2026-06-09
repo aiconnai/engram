@@ -1908,6 +1908,349 @@ fn test_context_get_artifact_returns_retained_raw_content() {
 }
 
 #[test]
+fn test_context_search_returns_scoped_results_with_provenance_staleness_and_pointers() {
+    let handler = TestHandler::new();
+
+    let record = call_tool_json(
+        &handler,
+        135,
+        "context_record",
+        json!({
+            "source": "codex",
+            "repo_id": "github:aiconnai/engram",
+            "session_id": "session-search",
+            "task_id": "ENGRA-73",
+            "event_type": "command",
+            "command": "cargo test context_search",
+            "cwd": "/repo",
+            "exit_code": 101,
+            "git_branch": "feature/old-search",
+            "commit_hash": "old-search-sha",
+            "started_at": "2026-05-01T00:00:00Z",
+            "summary": "Bundle smoke failure for context_search direct coverage",
+            "key_errors": ["context_search missing direct protocol coverage"],
+            "touched_files": ["src/context/search.rs"],
+            "raw_artifact_id": "ctx-artifact-search-1",
+            "reducer": {
+                "name": "engra_73_search_fixture",
+                "version": "1",
+                "lossy": true,
+                "confidence": 0.91,
+                "structured_facts": {
+                    "files": ["src/context/search.rs"],
+                    "decision": "add direct context_search coverage"
+                },
+                "tokens_raw_est": 400,
+                "tokens_compact_est": 40
+            }
+        }),
+    );
+    assert!(
+        record.get("error").is_none(),
+        "context_record failed: {record}"
+    );
+    let event_id = record["created_ids"]["event_id"]
+        .as_i64()
+        .expect("record response must include event_id");
+    let summary_id = record["created_ids"]["summary_id"]
+        .as_i64()
+        .expect("record response must include summary_id");
+
+    let search = call_tool_json(
+        &handler,
+        136,
+        "context_search",
+        json!({
+            "query": "bundle smoke",
+            "repo_id": "github:aiconnai/engram",
+            "session_id": "session-search",
+            "task_id": "ENGRA-73",
+            "include_artifact_pointers": true,
+            "current_git_branch": "main",
+            "current_commit_hash": "new-search-sha",
+            "stale_after_days": 1,
+            "max_results": 10
+        }),
+    );
+    assert!(
+        search.get("error").is_none(),
+        "context_search failed: {search}"
+    );
+    assert_eq!(search["query"].as_str(), Some("bundle smoke"));
+    assert_eq!(
+        search["scope"]["repo_id"].as_str(),
+        Some("github:aiconnai/engram")
+    );
+    assert_eq!(
+        search["scope"]["session_id"].as_str(),
+        Some("session-search")
+    );
+    assert_eq!(search["scope"]["isolation_applied"].as_bool(), Some(true));
+    assert_eq!(
+        search["filters"]["include_artifact_pointers"].as_bool(),
+        Some(true)
+    );
+
+    let results = search["results"]
+        .as_array()
+        .expect("context_search results must be an array");
+    let item = results
+        .iter()
+        .find(|item| item["event"]["id"].as_i64() == Some(event_id))
+        .expect("context_search must return recorded event");
+
+    assert_eq!(item["result_type"].as_str(), Some("summary"));
+    assert_eq!(item["event"]["event_type"].as_str(), Some("command"));
+    assert_eq!(
+        item["summary"]["reducer_name"].as_str(),
+        Some("engra_73_search_fixture")
+    );
+    assert_eq!(item["summary"]["derived"].as_bool(), Some(true));
+    assert_eq!(item["summary"]["lossy"].as_bool(), Some(true));
+    assert_eq!(item["provenance"]["event_id"].as_i64(), Some(event_id));
+    assert_eq!(item["provenance"]["summary_id"].as_i64(), Some(summary_id));
+    assert_eq!(
+        item["provenance"]["repo_id"].as_str(),
+        Some("github:aiconnai/engram")
+    );
+
+    let files = item["extracted_files"]
+        .as_array()
+        .expect("extracted_files must be an array");
+    assert!(
+        files
+            .iter()
+            .any(|file| file.as_str() == Some("src/context/search.rs")),
+        "context_search should extract touched files, got: {files:?}"
+    );
+
+    let artifact_pointers = item["artifact_pointers"]
+        .as_array()
+        .expect("artifact_pointers must be an array");
+    assert!(
+        artifact_pointers
+            .iter()
+            .any(|pointer| pointer["artifact_id"].as_str() == Some("ctx-artifact-search-1")),
+        "context_search should return requested artifact pointers, got: {artifact_pointers:?}"
+    );
+
+    let staleness = item["staleness"]
+        .as_array()
+        .expect("staleness must be an array");
+    for kind in ["branch_mismatch", "commit_mismatch", "age"] {
+        assert!(
+            staleness
+                .iter()
+                .any(|warning| warning["kind"].as_str() == Some(kind)),
+            "missing staleness warning {kind}: {staleness:?}"
+        );
+    }
+}
+
+#[test]
+fn test_context_build_bundle_groups_sections_and_excludes_raw_artifact_content() {
+    let handler = TestHandler::new();
+
+    let artifact = call_tool_json(
+        &handler,
+        137,
+        "context_record_artifact",
+        json!({
+            "id": "ctx-artifact-bundle-raw",
+            "repo_id": "github:aiconnai/engram",
+            "session_id": "session-bundle",
+            "task_id": "ENGRA-73",
+            "kind": "test_report",
+            "raw_content": "RAW_CONTEXT_BUNDLE_OUTPUT_SHOULD_NOT_RENDER",
+            "retain_raw": true,
+            "metadata": {"command": "cargo test context_build_bundle"}
+        }),
+    );
+    assert!(
+        artifact.get("error").is_none(),
+        "context_record_artifact failed: {artifact}"
+    );
+    let artifact_id = artifact["artifact_id"]
+        .as_str()
+        .expect("artifact response must include artifact_id");
+    assert_eq!(artifact["storage_kind"].as_str(), Some("raw_retained"));
+
+    let record = call_tool_json(
+        &handler,
+        138,
+        "context_record",
+        json!({
+            "source": "codex",
+            "repo_id": "github:aiconnai/engram",
+            "session_id": "session-bundle",
+            "task_id": "ENGRA-73",
+            "event_type": "command",
+            "command": "cargo test context_build_bundle",
+            "cwd": "/repo",
+            "exit_code": 101,
+            "git_branch": "feature/old-bundle",
+            "commit_hash": "old-bundle-sha",
+            "started_at": "2026-05-01T00:00:00Z",
+            "summary": "Decision: add context bundle smoke coverage. Blocker unresolved because direct tests were missing. Failure observed for context bundle smoke.",
+            "key_errors": ["context_build_bundle missing direct protocol coverage"],
+            "touched_files": ["src/context/bundle.rs"],
+            "raw_artifact_id": artifact_id,
+            "reducer": {
+                "name": "engra_73_bundle_fixture",
+                "version": "1",
+                "lossy": true,
+                "confidence": 0.92,
+                "structured_facts": {
+                    "decision": "add direct context_build_bundle coverage",
+                    "blocker": "missing direct test coverage",
+                    "files": ["src/context/bundle.rs"]
+                },
+                "tokens_raw_est": 600,
+                "tokens_compact_est": 60
+            }
+        }),
+    );
+    assert!(
+        record.get("error").is_none(),
+        "context_record failed: {record}"
+    );
+    let event_id = record["created_ids"]["event_id"]
+        .as_i64()
+        .expect("record response must include event_id");
+
+    let bundle = call_tool_json(
+        &handler,
+        139,
+        "context_build_bundle",
+        json!({
+            "query": "context bundle smoke",
+            "repo_id": "github:aiconnai/engram",
+            "session_id": "session-bundle",
+            "task_id": "ENGRA-73",
+            "include_artifact_pointers": true,
+            "current_git_branch": "main",
+            "current_commit_hash": "new-bundle-sha",
+            "stale_after_days": 1,
+            "section_limit": 5
+        }),
+    );
+    assert!(
+        bundle.get("error").is_none(),
+        "context_build_bundle failed: {bundle}"
+    );
+    assert_eq!(bundle["bundle_type"].as_str(), Some("operational_context"));
+    assert_eq!(
+        bundle["artifact_policy"].as_str(),
+        Some("Artifact pointers included; raw artifact content is never included.")
+    );
+
+    let failures = bundle["failures"]
+        .as_array()
+        .expect("failures must be an array");
+    assert!(
+        failures
+            .iter()
+            .any(|entry| entry["provenance"]["event_id"].as_i64() == Some(event_id)),
+        "bundle should include failure entry for recorded event, got: {failures:?}"
+    );
+
+    let blockers = bundle["unresolved_blockers"]
+        .as_array()
+        .expect("unresolved_blockers must be an array");
+    assert!(
+        blockers
+            .iter()
+            .any(|entry| entry["provenance"]["event_id"].as_i64() == Some(event_id)),
+        "bundle should include blocker entry for recorded event, got: {blockers:?}"
+    );
+
+    let decisions = bundle["recent_decisions"]
+        .as_array()
+        .expect("recent_decisions must be an array");
+    assert!(
+        decisions
+            .iter()
+            .any(|entry| entry["provenance"]["event_id"].as_i64() == Some(event_id)),
+        "bundle should include decision entry for recorded event, got: {decisions:?}"
+    );
+
+    let commands = bundle["commands_already_run"]
+        .as_array()
+        .expect("commands_already_run must be an array");
+    assert!(
+        commands.iter().any(|entry| {
+            entry["command_name"].as_str() == Some("cargo test context_build_bundle")
+                && entry["exit_code"].as_i64() == Some(101)
+        }),
+        "bundle should include command entry, got: {commands:?}"
+    );
+
+    let files = bundle["files_inspected_or_touched"]
+        .as_array()
+        .expect("files_inspected_or_touched must be an array");
+    assert!(
+        files
+            .iter()
+            .any(|entry| entry["path"].as_str() == Some("src/context/bundle.rs")),
+        "bundle should include touched file, got: {files:?}"
+    );
+
+    let staleness = bundle["stale_warnings"]
+        .as_array()
+        .expect("stale_warnings must be an array");
+    for kind in ["branch_mismatch", "commit_mismatch", "age"] {
+        assert!(
+            staleness
+                .iter()
+                .any(|entry| entry["warning"]["kind"].as_str() == Some(kind)),
+            "missing bundle staleness warning {kind}: {staleness:?}"
+        );
+    }
+
+    let artifact_pointers = bundle["artifact_pointers"]
+        .as_array()
+        .expect("artifact_pointers must be an array");
+    assert!(
+        artifact_pointers
+            .iter()
+            .any(|pointer| pointer["artifact_id"].as_str() == Some(artifact_id)),
+        "bundle should include artifact pointer, got: {artifact_pointers:?}"
+    );
+
+    let markdown = bundle["markdown"]
+        .as_str()
+        .expect("bundle markdown must be a string");
+    assert!(markdown.contains("Artifact pointers"));
+    assert!(
+        !markdown.contains("RAW_CONTEXT_BUNDLE_OUTPUT_SHOULD_NOT_RENDER"),
+        "bundle markdown must not include raw artifact content"
+    );
+
+    assert_eq!(bundle["metrics"]["estimated"].as_bool(), Some(true));
+    assert_eq!(
+        bundle["metrics"]["raw_artifact_return_count"].as_u64(),
+        Some(0)
+    );
+    assert!(
+        bundle["metrics"]["artifact_pointer_count"]
+            .as_u64()
+            .unwrap_or_default()
+            >= 1,
+        "bundle metrics should count artifact pointers"
+    );
+    let notes = bundle["metrics"]["notes"]
+        .as_array()
+        .expect("metric notes must be an array");
+    assert!(
+        notes.iter().any(|note| {
+            note.as_str()
+                .is_some_and(|text| text.contains("Raw artifact content is never included"))
+        }),
+        "bundle metrics should document raw artifact exclusion, got: {notes:?}"
+    );
+}
+
+#[test]
 fn test_recent_activity_preview_truncated_at_100_chars() {
     let handler = TestHandler::new();
 
