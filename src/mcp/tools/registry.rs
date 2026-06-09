@@ -2055,6 +2055,31 @@
         tier: ToolTier::Essential,
     },
     ToolDef {
+        name: "memory_digest",
+        description: "Build an actionable, source-linked digest for a topic by orchestrating existing read-only retrieval, graph, and operational-context tools. Returns summaries, source memory IDs, relationships, next actions, provenance, and warnings without mutating memory or invoking an LLM.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Topic, task, decision, or question to summarize from memory"},
+                "workspace": {"type": "string", "description": "Optional workspace scope"},
+                "mode": {"type": "string", "enum": ["brief", "standard", "deep"], "default": "standard", "description": "Digest depth and section size"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 12, "description": "Maximum source memories to inspect"},
+                "related_depth": {"type": "integer", "minimum": 0, "maximum": 2, "default": 1, "description": "How many relationship hops to include from selected source memories"},
+                "total_budget": {"type": "integer", "minimum": 512, "maximum": 12000, "default": 4096, "description": "Token budget passed to context assembly for accounting only; raw prompt content is not returned"},
+                "include_types": {"type": "array", "items": {"type": "string"}, "description": "Optional memory_type allowlist for digest source memories"},
+                "timeframe": {"type": "string", "enum": ["1h", "24h", "7d", "30d", "all"], "default": "all", "description": "Time window for context assembly"},
+                "include_graph": {"type": "boolean", "default": true, "description": "Include cross-reference relationships for source memories"},
+                "include_operational_context": {"type": "boolean", "default": true, "description": "Include compact Operational Context bundle sections"},
+                "include_next_actions": {"type": "boolean", "default": true, "description": "Include extractive next-action suggestions grounded in source IDs"},
+                "current_git_branch": {"type": "string", "description": "Current branch used for Operational Context staleness warnings"},
+                "current_commit_hash": {"type": "string", "description": "Current commit used for Operational Context staleness warnings"}
+            },
+            "required": ["topic"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Essential,
+    },
+    ToolDef {
         name: "memory_council",
         description: "Run a question through an llm-council instance (Karpathy council orchestration) and return consolidated stage outputs and final answer. Optionally persist a checkpoint memory.",
         schema: r#"{

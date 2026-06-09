@@ -602,6 +602,158 @@ fn memory_search_tool_schema_exposes_policy_rerank_flags() {
 }
 
 #[test]
+fn memory_digest_tool_is_listed_read_only_and_dispatches() {
+    let handler = TestHandler::new();
+    let list_resp = handler.handle_request(make_request(123, "tools/list", json!({})));
+    assert!(
+        list_resp.error.is_none(),
+        "Expected no error: {:?}",
+        list_resp.error
+    );
+
+    let result = list_resp.result.expect("Expected result");
+    let tools = result["tools"].as_array().expect("Expected tools array");
+    let memory_digest = tools
+        .iter()
+        .find(|tool| tool["name"] == "memory_digest")
+        .expect("tools/list should include memory_digest");
+    assert_eq!(
+        memory_digest["annotations"]["readOnlyHint"].as_bool(),
+        Some(true),
+        "memory_digest must be read-only"
+    );
+    let required = memory_digest["inputSchema"]["required"]
+        .as_array()
+        .expect("required array");
+    assert!(
+        required.iter().any(|item| item.as_str() == Some("topic")),
+        "memory_digest should require topic"
+    );
+
+    let first = create_memory_for_search(
+        &handler,
+        124,
+        "digest-keyword-auth-flow decision: authenticate bearer tokens before rate limiting.",
+    );
+    let second = create_memory_for_search(
+        &handler,
+        125,
+        "digest-keyword-auth-flow evidence: unauthorized requests must not consume rate-limit buckets.",
+    );
+    let link = call_tool_json(
+        &handler,
+        126,
+        "memory_link",
+        json!({
+            "from_id": first,
+            "to_id": second,
+            "edge_type": "related_to",
+            "strength": 0.8
+        }),
+    );
+    assert!(link.get("error").is_none(), "memory_link failed: {link}");
+
+    let digest = call_tool_json(
+        &handler,
+        127,
+        "memory_digest",
+        json!({
+            "topic": "digest-keyword-auth-flow",
+            "limit": 5,
+            "related_depth": 1,
+            "include_operational_context": false
+        }),
+    );
+    assert!(
+        digest.get("error").is_none(),
+        "memory_digest failed: {digest}"
+    );
+    assert_eq!(digest["topic"].as_str(), Some("digest-keyword-auth-flow"));
+    assert_eq!(
+        digest["provenance"]["policy"]["read_only"].as_bool(),
+        Some(true)
+    );
+    assert_eq!(
+        digest["provenance"]["policy"]["llm_used"].as_bool(),
+        Some(false)
+    );
+
+    let top_memories = digest["top_memories"]
+        .as_array()
+        .expect("top_memories array");
+    assert!(
+        top_memories
+            .iter()
+            .any(|memory| memory["id"].as_i64() == Some(first)),
+        "digest should include the first source memory: {digest}"
+    );
+    let source_ids = digest["provenance"]["source_memory_ids"]
+        .as_array()
+        .expect("source memory ids");
+    assert!(
+        source_ids.iter().any(|id| id.as_i64() == Some(first)),
+        "provenance should include source memory id {first}: {digest}"
+    );
+
+    let relationships = digest["relationships"]
+        .as_array()
+        .expect("relationships array");
+    assert!(
+        relationships.iter().any(|edge| {
+            edge["from_id"].as_i64() == Some(first)
+                && edge["to_id"].as_i64() == Some(second)
+                && edge["edge_type"].as_str() == Some("related_to")
+        }),
+        "digest should include source cross-reference: {digest}"
+    );
+}
+
+#[test]
+fn memory_digest_validates_topic_and_returns_empty_digest_without_sources() {
+    let handler = TestHandler::new();
+
+    let invalid = call_tool_json(
+        &handler,
+        128,
+        "memory_digest",
+        json!({
+            "topic": "   "
+        }),
+    );
+    assert_eq!(invalid["error"].as_str(), Some("topic is required"));
+
+    let empty = call_tool_json(
+        &handler,
+        129,
+        "memory_digest",
+        json!({
+            "topic": "no-such-digest-topic",
+            "include_operational_context": false
+        }),
+    );
+    assert!(
+        empty.get("error").is_none(),
+        "memory_digest failed: {empty}"
+    );
+    assert_eq!(
+        empty["top_memories"].as_array().map(Vec::len),
+        Some(0),
+        "empty DB should produce no top memories"
+    );
+    assert!(
+        empty["warnings"]
+            .as_array()
+            .expect("warnings array")
+            .iter()
+            .any(|warning| warning
+                .as_str()
+                .unwrap_or_default()
+                .contains("No source memories")),
+        "empty digest should warn about missing sources: {empty}"
+    );
+}
+
+#[test]
 fn test_memory_council_round_trips_through_tools_call() {
     let handler = TestHandler::new();
     let (council_url, server_handle) = start_council_stub_server(
