@@ -223,6 +223,8 @@ Modos opcionais existem apenas como atalhos de desenvolvimento:
 - `docs` — referência MCP gerada, rustdoc com warnings como erro e `doctor.sh`.
 - `mcp` — referência MCP gerada, testes de protocolo MCP e `doctor.sh`.
 - `baseline` — `baseline.sh` + `doctor.sh`.
+- `status --json` — snapshot read-only de `docs/harness/.sensors-last` no
+  envelope de `JSON_OUTPUTS.md`; nao roda o gate completo.
 
 Essas lanes opcionais não substituem o gate completo para merge, handoff ou claim de conclusão.
 
