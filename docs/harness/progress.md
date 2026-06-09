@@ -473,6 +473,24 @@ Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado n
   - YAML parse of `.github/workflows/ci.yml` — PASS.
   - `bash docs/harness/bin/doctor.sh` — PASS.
 
+## Huly backlog audit + ENGRA-74 — 2026-06-07
+
+- Used the local Huly skill and Platform API token flow to read project `ENGRA`.
+- Huly returned 22 `Backlog` issues; most were stale against the current repo
+  state (rate-limit/observability/deploy docs, harness cross-improvements, and
+  Operational Context foundations already exist locally).
+- Implemented the remaining visible code gap for **ENGRA-74**:
+  `context_get_artifact` now exposes explicit retained artifact retrieval over
+  MCP with `artifact_id`, `reason`, scope fields, `max_bytes`, staleness, and
+  redaction checks.
+- Updated `docs/MCP_TOOLS.md` through the generator.
+- Focused validation:
+  - `cargo test context_get_artifact --test mcp_protocol_tests -- --nocapture`
+    — PASS.
+  - `./scripts/generate-mcp-reference.sh --check` — PASS.
+  - `cargo clippy --all-targets --tests -- -D warnings` — PASS.
+  - `make ci` — PASS.
+
 ## ENGRA-103 `memory_digest` MCP implementation — 2026-06-08
 
 - Added read-only MCP tool `memory_digest` as the actionable retrieval entry

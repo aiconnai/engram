@@ -815,6 +815,44 @@ também expôs `doctor.sh` vermelho por falta dos identificadores literais em
 - YAML parse de `.github/workflows/ci.yml` — PASS.
 - `bash docs/harness/bin/doctor.sh` — PASS.
 
+## 2026-06-07 — Huly backlog audit + ENGRA-74 context artifact retrieval
+
+### Contexto
+
+Pedido do usuário: usar a skill local de Huly para buscar os issues a codar.
+A skill em `.claude/skills/huly/SKILL.md` foi usada via Platform API com
+`HULY_APY_TOKEN` como fallback aceito. O lookup read-only confirmou o projeto
+`ENGRA`.
+
+### Resultado do audit Huly
+
+- Huly retornou 87 issues no projeto e 22 em `Backlog`.
+- Vários itens em `Backlog` estavam stale contra o repositório:
+  - ENGRA-58/59/60 ja aparecem implementados no progresso local.
+  - ENGRA-78/79/80/81/82/83 ja aparecem implementados no progresso local.
+  - Operational Context ja possui RFC, storage, policies, reducers,
+    `context_record`, `context_record_artifact`, `context_search` e
+    `context_build_bundle`.
+- Gap real identificado: ENGRA-74 pedia retrieval explícito de raw artifact,
+  mas não havia ferramenta MCP `context_get_artifact`.
+
+### Ações realizadas
+
+- Adicionado handler `context_get_artifact` em `src/mcp/handlers/context.rs`.
+- Adicionado dispatch em `src/mcp/handlers/mod.rs`.
+- Adicionada definição read-only em `src/mcp/tools/registry.rs`.
+- Atualizados testes MCP em `tests/mcp_protocol_tests.rs`.
+- Regenerado `docs/MCP_TOOLS.md`.
+
+### Verificações
+
+- `cargo fmt --all` — PASS.
+- `cargo test context_get_artifact --test mcp_protocol_tests -- --nocapture`
+  — PASS.
+- `./scripts/generate-mcp-reference.sh --check` — PASS.
+- `cargo clippy --all-targets --tests -- -D warnings` — PASS.
+- `make ci` — PASS.
+
 ## 2026-06-08 — ENGRA-103 / RFC 0008 (`memory_digest`) planning
 
 ### Contexto da sessão

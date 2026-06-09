@@ -3953,6 +3953,29 @@
         tier: ToolTier::Standard,
     },
     ToolDef {
+        name: "context_get_artifact",
+        description: "Explicitly retrieve retained Operational Context artifact content after access, retention, staleness, and redaction checks. Search and bundle tools return artifact pointers only; this tool requires an artifact_id and reason.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "artifact_id": {"type": "string", "description": "Artifact ID to retrieve; broad search queries are not accepted"},
+                "reason": {"type": "string", "description": "Why raw or retained artifact content is needed"},
+                "requester_agent_id": {"type": "string", "description": "Agent identity used for same_agent access checks"},
+                "session_id": {"type": "string", "description": "Session scope used for same_session access checks"},
+                "task_id": {"type": "string", "description": "Task scope used for same_task access checks"},
+                "repo_id": {"type": "string", "description": "Repository scope used for repo access checks"},
+                "workspace_path_hash": {"type": "string", "description": "Workspace path hash scope used for repo/workspace access checks"},
+                "workspace": {"type": "string", "description": "Alias for workspace_path_hash"},
+                "max_bytes": {"type": "integer", "minimum": 1, "description": "Maximum raw bytes to return; response marks truncation explicitly"},
+                "allow_stale": {"type": "boolean", "default": false, "description": "Allow retrieval after stale_at has passed"},
+                "require_redacted": {"type": "boolean", "default": true, "description": "Require a redaction status that permits raw retrieval"}
+            },
+            "required": ["artifact_id", "reason"]
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
         name: "context_search",
         description: "Search scoped Operational Context events and derived summaries. Searches event metadata, command/tool names, summaries, structured facts, failure signals, decisions, inspected/touched file metadata, and artifact pointers without returning raw artifact content.",
         schema: r#"{

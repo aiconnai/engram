@@ -6,6 +6,9 @@
 //! - Prompt-context assembly via ContextBuilder
 //! - Self-editing memory blocks (Letta/MemGPT-style)
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use chrono::Utc;
+use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::HandlerContext;
@@ -54,6 +57,89 @@ pub fn context_record_artifact(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_connection(|conn| crate::context::record_context_artifact(conn, &policy, request))
         .map(|response| json!(response))
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+#[derive(Debug, Deserialize)]
+struct ContextGetArtifactRequest {
+    artifact_id: String,
+    requester_agent_id: Option<String>,
+    session_id: Option<String>,
+    task_id: Option<String>,
+    repo_id: Option<String>,
+    workspace_path_hash: Option<String>,
+    #[serde(default)]
+    workspace: Option<String>,
+    max_bytes: Option<usize>,
+    #[serde(default)]
+    allow_stale: bool,
+    #[serde(default = "default_require_redacted")]
+    require_redacted: bool,
+    reason: String,
+}
+
+fn default_require_redacted() -> bool {
+    true
+}
+
+/// Explicitly retrieve retained Operational Context artifact content.
+pub fn context_get_artifact(ctx: &HandlerContext, params: Value) -> Value {
+    let request: ContextGetArtifactRequest = match serde_json::from_value(params) {
+        Ok(request) => request,
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+    if request.reason.trim().is_empty() {
+        return json!({"error": "context_get_artifact requires a non-empty reason"});
+    }
+
+    let require_redacted = request.require_redacted;
+    let storage_request = crate::storage::ArtifactRetrievalRequest {
+        artifact_id: request.artifact_id,
+        requester_agent_id: request.requester_agent_id,
+        session_id: request.session_id,
+        task_id: request.task_id,
+        repo_id: request.repo_id,
+        workspace_path_hash: request.workspace_path_hash.or(request.workspace),
+        max_bytes: request.max_bytes,
+        allow_stale: request.allow_stale,
+        reason: Some(request.reason),
+    };
+
+    ctx.storage
+        .with_connection(|conn| {
+            crate::storage::retrieve_context_artifact_raw(conn, storage_request)
+        })
+        .map(|retrieved| {
+            if require_redacted && !retrieved.artifact.redaction_status.allows_raw_storage() {
+                return json!({
+                    "error": "artifact redaction status does not permit raw retrieval",
+                    "redaction_status": retrieved.artifact.redaction_status.as_str()
+                });
+            }
+
+            let now = Utc::now();
+            let stale = retrieved.artifact.is_stale_at(now);
+            let expired = retrieved.artifact.is_expired_at(now);
+            let returned_bytes = retrieved.returned_bytes;
+            let original_bytes = retrieved.original_bytes;
+            let truncated = retrieved.truncated;
+            let artifact = retrieved.artifact;
+            let (encoding, content) = match String::from_utf8(retrieved.content) {
+                Ok(content) => ("utf8", content),
+                Err(err) => ("base64", BASE64.encode(err.into_bytes())),
+            };
+
+            json!({
+                "artifact": artifact,
+                "content": content,
+                "encoding": encoding,
+                "returned_bytes": returned_bytes,
+                "original_bytes": original_bytes,
+                "truncated": truncated,
+                "stale": stale,
+                "expired": expired
+            })
+        })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
