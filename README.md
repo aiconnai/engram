@@ -1,12 +1,74 @@
 # Engram
 
-**Persistent memory for AI agents and teams working on proprietary context.**  
-Engram ingests meetings, docs, transcripts, and project decisions, structures them, indexes them with hybrid search, and exposes them through MCP so agents can query the source of truth directly.
+**MCP memory server for Claude Code, Cursor, and AI agents.**
+Engram is a Rust, local-first memory layer for teams that need agents to
+remember proprietary project context across sessions. It ingests meetings, docs,
+transcripts, and decisions; stores them in SQLite; indexes them with hybrid
+BM25/vector/fuzzy search and knowledge graph links; and exposes the same source
+of truth through MCP, HTTP, WebSocket, CLI, Python, and TypeScript.
+
+Use Engram when coding agents, research crews, or internal AI tools need durable
+memory with provenance instead of rebuilding context from chat history.
 
 [![Crates.io](https://img.shields.io/crates/v/engram-core)](https://crates.io/crates/engram-core)
 [![docs.rs](https://img.shields.io/docsrs/engram-core)](https://docs.rs/engram-core)
 [![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+---
+
+## Native Support
+
+- MCP server over stdio and HTTP for Claude Code, Cursor, VS Code MCP clients,
+  and other Model Context Protocol hosts.
+- REST/HTTP JSON-RPC, WebSocket events, and `engram-cli` over the same memory
+  store.
+- Rust single binary with SQLite + WAL local storage, optional cloud sync, and
+  optional Meilisearch indexing.
+- Python SDK and TypeScript SDK for application code and hosted deployments.
+- Python adapters for CrewAI, LangChain, LlamaIndex, and OpenAI Assistants API
+  threads.
+- Project Context Discovery for `CLAUDE.md`, `AGENTS.md`, `.cursorrules`,
+  GitHub Copilot instructions, and similar repo policy files.
+
+## Workflows and Ecosystems That Benefit
+
+The native adapters above cover MCP clients, the SDKs, and the listed Python
+framework integrations. The same MCP/HTTP/SDK surface can also harden workflows
+built around OpenAI Agents SDK, LangGraph, FastMCP servers, Playwright MCP,
+Browser Use, and other agent runtimes, but those are integration patterns rather
+than first-party adapters in this repository.
+
+## Works With
+
+| Ecosystem | How this project helps |
+|-----------|------------------------|
+| Claude Code | Native MCP server gives Claude durable project memory, decision search, and repo context retrieval. |
+| Cursor | Native MCP configuration lets Cursor query the same memory store from `.cursor/mcp.json`. |
+| VS Code MCP clients | Stdio and HTTP MCP transports expose memory tools to MCP-aware VS Code setups. |
+| CrewAI | Python SDK includes short-term, long-term, and entity memory adapters backed by Engram. |
+| LangChain | Python SDK includes chat history and vector-store-style adapters over Engram hybrid search. |
+| LlamaIndex | Python SDK includes document store, vector store, and chat store adapters. |
+| OpenAI Assistants API / Threads | Python adapter syncs thread messages into searchable Engram session memory. |
+| OpenAI Agents SDK | No native adapter yet; use MCP, HTTP JSON-RPC, or the SDKs to persist agent state and decisions. |
+| LangGraph | No native adapter yet; use Engram as a separate durable memory/retrieval service from graph nodes. |
+| FastMCP servers | FastMCP projects can call Engram as an external memory server or HTTP service. |
+| Playwright MCP | Store browser task findings, QA notes, and crawl decisions; Engram does not automate the browser. |
+| Browser Use | Persist web task context and decisions across runs; browser control stays in Browser Use. |
+
+## Searchable Guides
+
+- [MCP memory server guide](docs/mcp-memory-server.md)
+- [Claude Code MCP memory guide](docs/claude-code-mcp-memory.md)
+- [Cursor MCP memory guide](docs/cursor-mcp-memory.md)
+- [OpenAI Agents memory guide](docs/openai-agents-memory.md)
+
+## Runnable Examples
+
+- [Claude MCP](examples/claude-mcp/) - Claude Code MCP config plus a seed/search smoke test.
+- [OpenAI Agents SDK](examples/openai-agents-sdk/) - function tools that call Engram over HTTP JSON-RPC.
+- [FastMCP server](examples/fastmcp-server/) - FastMCP tools backed by Engram memory calls.
+- [LangGraph tool](examples/langgraph-tool/) - graph nodes that search and store Engram memory.
 
 ---
 
