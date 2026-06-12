@@ -27,7 +27,6 @@ exclude = [
     "docs/harness/**",
     "docs/private/**",
     "engram-wasm/**",
-    "rml-928-document-ingestion/**",
     "sdks/**",
     "skills/**",
 ]
