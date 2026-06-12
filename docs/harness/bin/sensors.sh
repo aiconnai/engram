@@ -19,6 +19,8 @@ cd "$REPO_ROOT"
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$BIN_DIR/lib.sh"
 
+SUPPRESS_ABORT_MESSAGE=0
+
 cleanup_tmp() {
   if [ -n "${CI_OUTPUT:-}" ] && [ -f "$CI_OUTPUT" ]; then
     rm -f "$CI_OUTPUT"
@@ -28,7 +30,7 @@ cleanup_tmp() {
 on_exit() {
   local rc=$?
   cleanup_tmp
-  if [ "$rc" -ne 0 ]; then
+  if [ "$rc" -ne 0 ] && [ "${SUPPRESS_ABORT_MESSAGE:-0}" -ne 1 ]; then
     echo "FAIL: sensors.sh aborted" >&2
   fi
 }
@@ -43,20 +45,144 @@ Usage:
   docs/harness/bin/sensors.sh docs
   docs/harness/bin/sensors.sh mcp
   docs/harness/bin/sensors.sh baseline
+  docs/harness/bin/sensors.sh status --json
   docs/harness/bin/sensors.sh [--exclude-sensor <name> --known-issue docs/harness/known-issues/YYYY-MM-DD-slug.md --reason "short reason"]
 
 Default/full: clean run of `just ci` (or `make ci` fallback) + harness doctor.
 Optional lanes are developer aids and do not replace the full gate.
+Status JSON is a read-only snapshot of docs/harness/.sensors-last and does not run the gate.
 Exclusion mode is reserved for documented external-dependency outages (ex.: API embedding, watcher GUI, socket/grpc transport)
 and must be pre-registered in progress.md + known-issue file.
 USAGE
 }
 
 MODE="full"
+JSON_MODE=0
 EXCLUDE_SENSOR=""
 KNOWN_ISSUE=""
 EXCLUSION_REASON=""
 CI_OUTPUT=""
+
+emit_status_json() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ERROR: python3 is required for sensors.sh status --json" >&2
+    exit 2
+  fi
+
+  python3 - "$REPO_ROOT" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+repo_root = Path(sys.argv[1])
+snapshot_path = repo_root / "docs/harness/.sensors-last"
+repo_snapshot_path = "docs/harness/.sensors-last"
+
+fields = {}
+warnings = []
+failures = []
+checks = []
+artifacts = []
+
+
+def add_check(check_id, status, message, path=None):
+    item = {"id": check_id, "status": status, "message": message}
+    if path is not None:
+        item["path"] = path
+    checks.append(item)
+
+
+if snapshot_path.exists():
+    artifacts.append({
+        "path": repo_snapshot_path,
+        "kind": "sensors_last",
+        "format": "key_value"
+    })
+    for raw_line in snapshot_path.read_text(encoding="utf-8").splitlines():
+        if "=" not in raw_line:
+            continue
+        key, value = raw_line.split("=", 1)
+        fields[key] = value
+    add_check("sensors_last:file", "pass", ".sensors-last exists", repo_snapshot_path)
+else:
+    warnings.append(".sensors-last missing; run sensors.sh at least once")
+    add_check("sensors_last:file", "warn", ".sensors-last missing", repo_snapshot_path)
+
+last_status = fields.get("status", "")
+ci_status = fields.get("ci_status", "")
+doctor_status = fields.get("doctor_status", "")
+last_mode = fields.get("mode", "")
+last_timestamp = fields.get("timestamp", "")
+
+valid_statuses = {"pass", "pass_with_exclusion", "fail"}
+if snapshot_path.exists():
+    if last_status not in valid_statuses:
+        failures.append(".sensors-last has invalid status")
+        add_check("sensors_last:status", "fail", ".sensors-last status is invalid", repo_snapshot_path)
+    else:
+        add_check("sensors_last:status", "pass", ".sensors-last status is parseable", repo_snapshot_path)
+
+    for key, value in {
+        "ci_status": ci_status,
+        "doctor_status": doctor_status,
+        "mode": last_mode,
+        "timestamp": last_timestamp
+    }.items():
+        if value == "":
+            warnings.append(f".sensors-last missing {key}")
+            add_check(f"sensors_last:{key}", "warn", f".sensors-last missing {key}", repo_snapshot_path)
+        else:
+            add_check(f"sensors_last:{key}", "pass", f".sensors-last {key} is present", repo_snapshot_path)
+
+if failures:
+    common_status = "fail"
+    exit_code = 1
+elif last_status == "fail" or ci_status == "fail" or doctor_status == "fail":
+    common_status = "fail"
+    exit_code = 1
+elif last_status == "pass_with_exclusion" or ci_status == "pass_with_exclusion":
+    common_status = "warn"
+    exit_code = 0
+elif warnings:
+    common_status = "warn"
+    exit_code = 0
+else:
+    common_status = "pass"
+    exit_code = 0
+
+summary = "sensors status snapshot"
+if last_status:
+    summary = f"sensors last status: {last_status}"
+elif warnings:
+    summary = "sensors status unavailable"
+
+payload = {
+    "schema_version": "harness-json-v1",
+    "tool": "sensors",
+    "mode": "status",
+    "status": common_status,
+    "exit_code": exit_code,
+    "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    "summary": summary,
+    "warnings": warnings,
+    "failures": failures,
+    "checks": checks,
+    "artifacts": artifacts,
+    "repo_root": str(repo_root),
+    "last_mode": last_mode,
+    "last_timestamp": last_timestamp,
+    "ci_status": ci_status,
+    "doctor_status": doctor_status,
+    "known_issue": fields.get("excluded_known_issue", ""),
+    "excluded_sensor": fields.get("excluded_sensor", ""),
+    "exclusion_reason": fields.get("excluded_reason", "")
+}
+
+print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+sys.exit(exit_code)
+PY
+}
 
 write_sensors_last() {
   local status="$1"
@@ -180,6 +306,14 @@ while [ "$#" -gt 0 ]; do
       MODE="$1"
       shift
       ;;
+    status)
+      MODE="status"
+      shift
+      ;;
+    --json)
+      JSON_MODE=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -191,6 +325,25 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+if [ "$JSON_MODE" -eq 1 ] && [ "$MODE" != "status" ]; then
+  echo "ERROR: --json is currently supported only by 'sensors.sh status --json'" >&2
+  exit 2
+fi
+
+if [ "$MODE" = "status" ]; then
+  if [ "$JSON_MODE" -eq 1 ]; then
+    SUPPRESS_ABORT_MESSAGE=1
+    emit_status_json
+    exit $?
+  fi
+  if [ -f docs/harness/.sensors-last ]; then
+    cat docs/harness/.sensors-last
+    exit 0
+  fi
+  echo "WARN: docs/harness/.sensors-last missing (run sensors.sh at least once)" >&2
+  exit 1
+fi
 
 if [ "$MODE" != "full" ] && { [ -n "$EXCLUDE_SENSOR" ] || [ -n "$KNOWN_ISSUE" ] || [ -n "$EXCLUSION_REASON" ]; }; then
   echo "ERROR: documented exclusions are supported only by the full canonical gate" >&2
