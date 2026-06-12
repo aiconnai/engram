@@ -82,6 +82,20 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `bash scripts/ci.sh` — PASS.
   - `bash docs/harness/bin/doctor.sh` — PASS.
 
+## Version control gate — 2026-06-12
+
+- Corrigido `docs/harness/bin/vc-gate.sh` para não usar pipeline
+  `git log | grep -q` sob `set -o pipefail`; quando o `grep -q` encontrava
+  uma correspondência cedo, `git log` podia receber SIGPIPE e fazer o gate
+  reportar falso negativo.
+- `latest_git_mentions_issue` e `jj_current_mentions_issue` agora fazem match
+  sobre strings capturadas, preservando o contrato de fechar issue apenas com
+  evidência recente no Git ou descrição atual do jj.
+- Evidência local:
+  - `bash -n docs/harness/bin/vc-gate.sh` — PASS.
+  - `bash docs/harness/bin/vc-gate.sh done ci` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+
 ## Próximos passos imediatos
 
 1. Fechar post review do estado atual com artefato `REVIEW_VERDICT: PASS`.

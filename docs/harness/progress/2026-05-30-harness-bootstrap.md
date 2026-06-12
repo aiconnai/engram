@@ -306,6 +306,30 @@ da stack de compressão.
 - Observação: este PASS foi criado por Codex/manual sob instrução explícita do
   usuário, não por reviewer cross-CLI independente.
 
+## 2026-06-12 — correção do version control gate
+
+### Contexto
+
+Durante o fechamento do trabalho de manutenção dos crates, `vc-gate.sh done ci`
+falhou mesmo com commit recente `chore(ci): ...` presente no log. A reprodução
+manual da regex passava, indicando falso negativo dentro do script.
+
+### Correção aplicada
+
+- `latest_git_mentions_issue` deixou de usar `git log --oneline -30 | grep -q`
+  sob `set -o pipefail`; o match agora roda sobre o log capturado em variável.
+- `jj_current_mentions_issue` recebeu o mesmo tratamento para manter simetria
+  com o path Git.
+- Causa: quando `grep -q` encontra uma correspondência cedo, ele pode fechar o
+  pipe antes de `git log` terminar; com `pipefail`, esse SIGPIPE fazia o gate
+  falhar apesar da evidência existir.
+
+### Verificações
+
+- `bash -n docs/harness/bin/vc-gate.sh` — PASS.
+- `bash docs/harness/bin/vc-gate.sh done ci` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+
 ### Correções de code review aplicadas
 
 - `docs/harness/bin/review-gate.sh` passou a usar `set -euo pipefail`, evitando
