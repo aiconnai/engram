@@ -25,6 +25,16 @@ Generates the MCP tool reference from `src/mcp/tools/registry.rs`.
 ./scripts/generate-mcp-reference.sh --check
 ```
 
+### `validate_mcp_contract.py`
+
+Validates the static MCP contract across tool definitions, handler dispatch,
+generated docs, schemas, and annotations. It is read-only and emits the harness
+JSON envelope for automation.
+
+```bash
+python3 scripts/validate_mcp_contract.py --json | jq .
+```
+
 ### `bench-baseline.sh`
 
 Saves a Criterion benchmark baseline with a given name.
