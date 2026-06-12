@@ -10,6 +10,12 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
 - `CONTROL_PLANE_SCHEMA.sql`: Postgres schema for the cloud control plane.
 - `QUICKSTART.md`: Command-first local quick reference.
 - `SCHEMA.md`: Local Engram SQLite schema and migrations.
+- `mcp-memory-server.md`: Searchable guide for running Engram as an MCP memory server.
+- `claude-code-mcp-memory.md`: Claude Code MCP memory setup.
+- `cursor-mcp-memory.md`: Cursor MCP memory setup.
+- `openai-agents-memory.md`: OpenAI agent workflow memory pattern, with native-support limits.
+- `awesome-list-submissions.md`: External awesome-list targets, opened PRs, and blocked/manual submissions.
+- `../examples/`: Runnable MCP and ecosystem memory examples for Claude, Cursor, OpenAI Agents SDK, FastMCP, LangGraph, and CrewAI.
 - `rfcs/`: Proposed design records and product-boundary RFCs.
 - `USING_ENGRAM_IN_A_REPO.md`: How another repository connects to Engram through MCP, CLI, or HTTP.
 
