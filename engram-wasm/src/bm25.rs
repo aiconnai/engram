@@ -88,8 +88,8 @@ pub fn bm25_score(
         let idf = ((doc_count - df + 0.5) / (df + 0.5) + 1.0).ln();
 
         // Normalized TF
-        let tf_norm =
-            (tf * (params.k1 + 1.0)) / (tf + params.k1 * (1.0 - params.b + params.b * doc_len / avg_doc_len));
+        let tf_norm = (tf * (params.k1 + 1.0))
+            / (tf + params.k1 * (1.0 - params.b + params.b * doc_len / avg_doc_len));
 
         score += idf * tf_norm;
     }
@@ -139,8 +139,8 @@ pub fn bm25_score_with_df(
         let df = *term_doc_freqs.get(query_term).unwrap_or(&1) as f64;
         let idf = ((n - df + 0.5) / (df + 0.5) + 1.0).ln();
 
-        let tf_norm =
-            (tf * (params.k1 + 1.0)) / (tf + params.k1 * (1.0 - params.b + params.b * doc_len / avg_doc_len));
+        let tf_norm = (tf * (params.k1 + 1.0))
+            / (tf + params.k1 * (1.0 - params.b + params.b * doc_len / avg_doc_len));
 
         score += idf * tf_norm;
     }
@@ -198,7 +198,10 @@ mod tests {
         let doc_high = vec!["rust", "rust", "rust", "rust"];
         let low = bm25_score(&query, &doc_low, 100, 5.0, Bm25Params::default());
         let high = bm25_score(&query, &doc_high, 100, 5.0, Bm25Params::default());
-        assert!(high > low, "Higher TF should score higher (before saturation)");
+        assert!(
+            high > low,
+            "Higher TF should score higher (before saturation)"
+        );
     }
 
     #[test]

@@ -216,14 +216,10 @@ mod tests {
     #[test]
     fn test_rrf_weighted_lists() {
         // List with weight 2.0 should dominate
-        let list_low = RankedList::with_weight(
-            vec![RankedItem::new(1, 1), RankedItem::new(2, 2)],
-            1.0,
-        );
-        let list_high = RankedList::with_weight(
-            vec![RankedItem::new(2, 1), RankedItem::new(1, 2)],
-            2.0,
-        );
+        let list_low =
+            RankedList::with_weight(vec![RankedItem::new(1, 1), RankedItem::new(2, 2)], 1.0);
+        let list_high =
+            RankedList::with_weight(vec![RankedItem::new(2, 1), RankedItem::new(1, 2)], 2.0);
         let result = rrf_merge(&[list_low, list_high], DEFAULT_K);
         // Doc 2 is rank 1 in the high-weight list → should win overall
         assert_eq!(result[0].0, 2);

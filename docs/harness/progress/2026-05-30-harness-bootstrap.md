@@ -933,3 +933,47 @@ de recuperacao sem criar novo schema ou acionar LLM.
 - `cargo clippy --lib --tests -- -D warnings` — PASS.
 - `bash docs/harness/bin/doctor.sh` — PASS.
 - `bash docs/harness/bin/sensors.sh` — PASS (`make ci` + doctor).
+
+## 2026-06-12 — Crate maintenance review fixes
+
+### Contexto
+
+Correção dos achados de code review nos crates: advisories do lockfile,
+empacotamento amplo demais, `engram-wasm` fora do workspace/gates e metadata
+incompleta do crate WASM.
+
+### Ações realizadas
+
+- `engram-wasm` adicionado ao workspace raiz, com lockfile canônico movido para
+  `Cargo.lock`.
+- Gate local e GitHub CI passam a checar `engram-wasm` nativo e
+  `wasm32-unknown-unknown`.
+- `engram-core` passou a excluir artefatos internos do pacote publicado
+  (`docs/harness/**`, SDKs, skills, worktrees, `rml-928-document-ingestion/**`,
+  etc.).
+- Metadata do `engram-wasm` completada com repository/homepage/docs/readme.
+- Advisories corrigíveis atualizados:
+  - `rustls-webpki` 0.103.13;
+  - `tar` 0.4.46;
+  - `time` 0.3.47;
+  - `rand` 0.8.6;
+  - `aws-lc-rs` 1.17.0 / `aws-lc-sys` 0.41.0.
+- Dependências opcionais afetadas atualizadas:
+  - `libsql` 0.9.30;
+  - `notify` 8.2.0;
+  - `tokenizers` 0.23.1.
+- `cargo audit` e `cargo deny` alinhados: ignores obsoletos removidos; ignores
+  restantes limitados a transitivos upstream-blocked ou unmaintained sem safe
+  upgrade.
+
+### Verificações
+
+- `cargo check --all-targets` — PASS.
+- `cargo check --all-targets --no-default-features --features turso,local-embeddings` — PASS.
+- `cargo audit` — PASS.
+- `cargo deny check` — PASS.
+- `cargo package -p engram-core --allow-dirty --no-verify` — PASS.
+- `cargo package -p engram-wasm --allow-dirty --no-verify` — PASS.
+- `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml")'` — PASS.
+- `bash scripts/ci.sh` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.

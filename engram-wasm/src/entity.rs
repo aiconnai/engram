@@ -362,7 +362,10 @@ mod tests {
             ..Default::default()
         };
         let entities = extract_entities("See https://github.com/foo/bar", &config);
-        assert!(entities.is_empty(), "github.com should be filtered as common domain");
+        assert!(
+            entities.is_empty(),
+            "github.com should be filtered as common domain"
+        );
     }
 
     #[test]

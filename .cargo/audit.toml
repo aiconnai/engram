@@ -1,25 +1,10 @@
 [advisories]
-# Pre-existing advisories in transitive dependencies. None are reachable from
-# our code paths; all are blocked on upstream releases. Tracked separately —
-# revisit when bumping axum (rand 0.8.5), rustls/jsonwebtoken (aws-lc-sys),
-# libsql (tar/time/rustls-webpki), etc.
+# Pre-existing advisories in transitive dependencies. Keep this list narrow:
+# direct fixes must be applied in Cargo.lock first, and only upstream-blocked
+# transitives stay ignored here.
 ignore = [
-    # rand 0.8.5 unsoundness with custom logger — comes from axum 0.7.9 via
-    # tungstenite. Not reachable: we do not install a custom logger that
-    # touches `rand::rng`.
-    "RUSTSEC-2026-0097",
-
-    # aws-lc-sys CVEs — used by rustls (default crypto provider) and
-    # jsonwebtoken via meilisearch-sdk. Fixed in newer aws-lc-sys releases;
-    # waiting on rustls/meilisearch-sdk to pick them up.
-    "RUSTSEC-2026-0044",
-    "RUSTSEC-2026-0045",
-    "RUSTSEC-2026-0046",
-    "RUSTSEC-2026-0047",
-    "RUSTSEC-2026-0048",
-
     # rustls-webpki — multiple name-constraint advisories. Comes from old
-    # rustls pulled by aws-config / libsql. Same upstream-bump dependency.
+    # rustls pulled by the current AWS SDK and libsql/hyper-rustls stacks.
     "RUSTSEC-2026-0049",
     "RUSTSEC-2026-0098",
     "RUSTSEC-2026-0099",
@@ -28,15 +13,8 @@ ignore = [
     # quinn-proto — comes via libsql replication; not on the request path.
     "RUSTSEC-2026-0037",
 
-    # tar 0.4.x — used by aws-sdk transitively for archive handling.
-    "RUSTSEC-2026-0067",
-    "RUSTSEC-2026-0068",
-
-    # time 0.1 unsoundness — old version pulled by a transitive dep.
-    "RUSTSEC-2026-0009",
-
     # Unmaintained crates — not vulnerabilities, just warnings.
-    "RUSTSEC-2024-0384",  # instant (parking_lot transitive)
-    "RUSTSEC-2025-0134",  # rustls-pemfile (rustls transitive)
     "RUSTSEC-2025-0141",  # bincode 1.x
+    "RUSTSEC-2024-0436",  # paste
+    "RUSTSEC-2025-0134",  # rustls-pemfile
 ]

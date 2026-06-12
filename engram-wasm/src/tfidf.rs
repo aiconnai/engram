@@ -125,7 +125,11 @@ fn hash_sign(token: &str) -> f32 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     token.hash(&mut hasher);
     "_sign".hash(&mut hasher);
-    if hasher.finish() % 2 == 0 { 1.0 } else { -1.0 }
+    if hasher.finish() % 2 == 0 {
+        1.0
+    } else {
+        -1.0
+    }
 }
 
 /// Sign (+1 or -1) for a bigram.
@@ -135,7 +139,11 @@ fn hash_bigram_sign(t1: &str, t2: &str) -> f32 {
     "_".hash(&mut hasher);
     t2.hash(&mut hasher);
     "_sign".hash(&mut hasher);
-    if hasher.finish() % 2 == 0 { 1.0 } else { -1.0 }
+    if hasher.finish() % 2 == 0 {
+        1.0
+    } else {
+        -1.0
+    }
 }
 
 #[cfg(test)]
@@ -158,21 +166,30 @@ mod tests {
     #[test]
     fn test_embed_empty_is_zero() {
         let v = tfidf_embed("", 384);
-        assert!(v.iter().all(|&x| x == 0.0), "Empty input should give zero vector");
+        assert!(
+            v.iter().all(|&x| x == 0.0),
+            "Empty input should give zero vector"
+        );
     }
 
     #[test]
     fn test_embed_non_empty_is_normalized() {
         let v = tfidf_embed("rust programming language", 384);
         let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-        assert!((norm - 1.0).abs() < 1e-4, "Non-empty embedding should be L2-normalized");
+        assert!(
+            (norm - 1.0).abs() < 1e-4,
+            "Non-empty embedding should be L2-normalized"
+        );
     }
 
     #[test]
     fn test_cosine_similarity_identical() {
         let v = tfidf_embed("rust is great", 384);
         let sim = cosine_similarity(&v, &v);
-        assert!((sim - 1.0).abs() < 1e-5, "Identical vectors should have similarity ~1.0");
+        assert!(
+            (sim - 1.0).abs() < 1e-5,
+            "Identical vectors should have similarity ~1.0"
+        );
     }
 
     #[test]
