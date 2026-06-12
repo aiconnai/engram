@@ -118,6 +118,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - name: Install protoc
         run: |
           if command -v apt-get >/dev/null 2>&1; then
@@ -153,6 +155,10 @@ jobs:
           source scripts/ci-required-features.env
           cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-server
           cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-watcher
+      - name: Check WASM crate
+        run: |
+          cargo check -p engram-wasm --all-targets
+          cargo check -p engram-wasm --target wasm32-unknown-unknown
 
   # Extended / expensive macOS testing. Only runs on schedule + manual trigger.
   # Not required for PR merge (avoids high macOS minute costs).
@@ -322,7 +328,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check bans licenses sources
+          command: check advisories bans licenses sources
 
   # =============================================================================
   # Coverage (with threshold)

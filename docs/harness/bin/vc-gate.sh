@@ -119,13 +119,15 @@ require_clean_unless_allowed() {
 
 latest_git_mentions_issue() {
   local issue="$1"
-  git log --oneline -30 2>/dev/null | grep -Eiq "(^|[^A-Za-z0-9_-])${issue}([^A-Za-z0-9_-]|$)"
+  local recent_log
+  recent_log="$(git log --oneline -30 2>/dev/null || true)"
+  grep -Eiq "(^|[^A-Za-z0-9_-])${issue}([^A-Za-z0-9_-]|$)" <<<"$recent_log"
 }
 
 jj_current_mentions_issue() {
   local issue="$1"
   [[ "$jj_repo" -eq 1 ]] || return 1
-  printf '%s\n' "$jj_description" | grep -Eiq "(^|[^A-Za-z0-9_-])${issue}([^A-Za-z0-9_-]|$)"
+  grep -Eiq "(^|[^A-Za-z0-9_-])${issue}([^A-Za-z0-9_-]|$)" <<<"$jj_description"
 }
 
 check_release_version() {

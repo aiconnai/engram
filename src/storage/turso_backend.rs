@@ -427,7 +427,7 @@ impl TursoBackend {
     /// Execute a query and return results
     async fn query_memories(&self, sql: &str, params: Vec<libsql::Value>) -> Result<Vec<Memory>> {
         let conn = self.conn.read().await;
-        let mut stmt = conn
+        let stmt = conn
             .prepare(sql)
             .await
             .map_err(|e| EngramError::Storage(e.to_string()))?;
@@ -577,7 +577,7 @@ impl TursoBackend {
         conn: &Connection,
         memory_id: MemoryId,
     ) -> Result<Vec<String>> {
-        let mut stmt = conn
+        let stmt = conn
             .prepare(
                 "SELECT t.name
                  FROM tags t
@@ -1204,7 +1204,7 @@ impl StorageBackend for TursoBackend {
         tokio::task::block_in_place(|| {
             rt.block_on(async {
                 let conn = self.conn.read().await;
-                let mut stmt = conn
+                let stmt = conn
                     .prepare(
                         "SELECT from_id, to_id, edge_type, score, confidence, strength, source,
                         source_context, created_at, valid_from, valid_to, pinned, metadata
@@ -1295,7 +1295,7 @@ impl StorageBackend for TursoBackend {
         tokio::task::block_in_place(|| {
             rt.block_on(async {
                 let conn = self.conn.read().await;
-                let mut stmt = conn
+                let stmt = conn
                     .prepare(
                         "SELECT t.name, COUNT(mt.memory_id) as count
                  FROM tags t
@@ -1344,7 +1344,7 @@ impl StorageBackend for TursoBackend {
         tokio::task::block_in_place(|| {
             rt.block_on(async {
                 let conn = self.conn.read().await;
-                let mut stmt = conn.prepare(
+                let stmt = conn.prepare(
                 "SELECT workspace, COUNT(*) FROM memories WHERE valid_to IS NULL GROUP BY workspace"
             ).await.map_err(|e| EngramError::Storage(e.to_string()))?;
 

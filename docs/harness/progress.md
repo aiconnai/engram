@@ -61,6 +61,41 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - Invariants do harness são separados dos data invariants (`INVARIANTS.md` na raiz) para manter clareza.
 - 2026-06-08: `ENGRA-103` aberto no Huly para `memory_digest`; RFC 0008 define a ferramenta como digest read-only, determinístico, sem schema novo e com provenance explícita.
 
+## Crate maintenance — 2026-06-12
+
+- Corrigida a revisão dos crates:
+  - `engram-wasm` entrou no workspace raiz e no gate local/GitHub CI.
+  - `engram-core` passou a excluir artefatos internos do pacote publicado.
+  - Advisories corrigíveis foram atualizados no `Cargo.lock` (`rustls-webpki`
+    0.103.13, `tar` 0.4.46, `time` 0.3.47, `rand` 0.8.6,
+    `aws-lc-rs` 1.17.0 / `aws-lc-sys` 0.41.0).
+  - Dependências opcionais afetadas atualizadas: `libsql` 0.9.30,
+    `notify` 8.2.0, `tokenizers` 0.23.1.
+  - `cargo audit` e `cargo deny check` passam; ignores restantes são
+    transitivos upstream-blocked (`rustls-webpki` via AWS/libsql,
+    `quinn-proto`, e unmaintained transitivos sem safe upgrade).
+- Verificações:
+  - `cargo check --all-targets` — PASS.
+  - `cargo check --all-targets --no-default-features --features turso,local-embeddings` — PASS.
+  - `cargo audit` — PASS.
+  - `cargo deny check` — PASS.
+  - `bash scripts/ci.sh` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+
+## Version control gate — 2026-06-12
+
+- Corrigido `docs/harness/bin/vc-gate.sh` para não usar pipeline
+  `git log | grep -q` sob `set -o pipefail`; quando o `grep -q` encontrava
+  uma correspondência cedo, `git log` podia receber SIGPIPE e fazer o gate
+  reportar falso negativo.
+- `latest_git_mentions_issue` e `jj_current_mentions_issue` agora fazem match
+  sobre strings capturadas, preservando o contrato de fechar issue apenas com
+  evidência recente no Git ou descrição atual do jj.
+- Evidência local:
+  - `bash -n docs/harness/bin/vc-gate.sh` — PASS.
+  - `bash docs/harness/bin/vc-gate.sh done ci` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+
 ## Próximos passos imediatos
 
 1. Fechar post review do estado atual com artefato `REVIEW_VERDICT: PASS`.

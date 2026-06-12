@@ -11,6 +11,30 @@ documentation = "https://docs.rs/engram-core"
 keywords = ["ai", "memory", "mcp", "semantic-search", "sqlite"]
 categories = ["database", "text-processing"]
 readme = "README.md"
+exclude = [
+    ".air/**",
+    ".aider.conf.yml",
+    ".claude/**",
+    ".dockerignore",
+    ".env*",
+    ".github/**",
+    ".githooks/**",
+    ".orchestrator/**",
+    ".worktrees/**",
+    "Cargo.toml.orig",
+    "LAZYCODEX_USAGE.md",
+    "benchmark_*.txt",
+    "docs/harness/**",
+    "docs/private/**",
+    "engram-wasm/**",
+    "sdks/**",
+    "skills/**",
+]
+
+[workspace]
+members = [".", "engram-wasm"]
+default-members = ["."]
+resolver = "2"
 
 [lib]
 name = "engram"
@@ -193,7 +217,7 @@ ed25519-dalek = { version = "2.1", optional = true, features = ["rand_core"] }
 
 # Turso/libSQL (Phase 6 - ENG-54)
 # Enable core + replication + remote for full functionality
-libsql = { version = "0.6", optional = true, features = ["core", "replication", "remote"] }
+libsql = { version = "0.9", optional = true, features = ["core", "replication", "remote"] }
 
 # Logging & tracing
 tracing = "0.1"
@@ -252,13 +276,13 @@ ort = { version = "2.0.0-rc.12", optional = true, default-features = false, feat
     "api-24",
 ] }
 ndarray = { version = "0.16", optional = true }
-tokenizers = { version = "0.20", optional = true, default-features = false, features = ["onig"] }
+tokenizers = { version = "0.23", optional = true, default-features = false, features = ["onig"] }
 
 # TOML config parsing (watcher feature)
 toml = { version = "0.8", optional = true }
 
 # Watcher: filesystem events
-notify = { version = "7", optional = true }
+notify = { version = "8.2", optional = true }
 
 # Watcher: temp-file copying for locked browser DBs
 tempfile = { version = "3.9", optional = true }

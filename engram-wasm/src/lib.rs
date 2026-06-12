@@ -187,7 +187,9 @@ fn parse_edges(edges_json: &str) -> Vec<graph::Edge> {
         return Vec::new();
     };
 
-    raw.into_iter().map(|e| graph::Edge::new(e.from, e.to)).collect()
+    raw.into_iter()
+        .map(|e| graph::Edge::new(e.from, e.to))
+        .collect()
 }
 
 // ==============================================================================
@@ -281,8 +283,16 @@ pub fn rrf_hybrid(
         return "[]".to_string();
     };
 
-    let kw = if keyword_weight <= 0.0 { 1.0 } else { keyword_weight };
-    let sw = if semantic_weight <= 0.0 { 1.0 } else { semantic_weight };
+    let kw = if keyword_weight <= 0.0 {
+        1.0
+    } else {
+        keyword_weight
+    };
+    let sw = if semantic_weight <= 0.0 {
+        1.0
+    } else {
+        semantic_weight
+    };
     let k_val = if k <= 0.0 { rrf::DEFAULT_K } else { k };
 
     let result = rrf::rrf_hybrid(&keyword_ids, &semantic_ids, kw, sw, k_val);
