@@ -1,0 +1,131 @@
+{
+  "version": "mcp-mock-parity-v1",
+  "scenarios": [
+    {
+      "name": "memory_create_search",
+      "steps": [
+        {
+          "tool": "memory_create",
+          "arguments": {
+            "content": "ENGRA-111 parity fixture memory alpha decision marker",
+            "memory_type": "decision",
+            "tags": ["parity", "engra-111"],
+            "importance": 0.6,
+            "dedup_mode": "allow"
+          }
+        },
+        {
+          "tool": "memory_search",
+          "arguments": {
+            "query": "alpha decision marker",
+            "limit": 5,
+            "rerank": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "context_record_search",
+      "steps": [
+        {
+          "tool": "context_record",
+          "arguments": {
+            "source": "codex",
+            "repo_id": "github:aiconnai/engram",
+            "session_id": "engra-111-parity",
+            "task_id": "ENGRA-111",
+            "event_type": "command",
+            "command": "cargo test mcp_mock_parity",
+            "cwd": "/repo",
+            "exit_code": 0,
+            "git_branch": "main",
+            "commit_hash": "parity-sha",
+            "started_at": "2026-06-09T00:00:00Z",
+            "summary": "ENGRA-111 parity context smoke confirms deterministic context search shape.",
+            "key_errors": [],
+            "touched_files": ["tests/mcp_protocol_tests.rs"],
+            "raw_artifact_id": "engra-111-parity-artifact",
+            "reducer": {
+              "name": "engra_111_parity_fixture",
+              "version": "1",
+              "lossy": true,
+              "confidence": 0.99,
+              "structured_facts": {
+                "decision": "add deterministic mock parity harness",
+                "files": ["tests/mcp_protocol_tests.rs"]
+              },
+              "tokens_raw_est": 120,
+              "tokens_compact_est": 32
+            }
+          }
+        },
+        {
+          "tool": "context_search",
+          "arguments": {
+            "query": "parity context smoke",
+            "repo_id": "github:aiconnai/engram",
+            "session_id": "engra-111-parity",
+            "task_id": "ENGRA-111",
+            "include_artifact_pointers": true,
+            "current_git_branch": "main",
+            "current_commit_hash": "parity-sha",
+            "stale_after_days": 30,
+            "max_results": 5
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown_tool_error",
+      "steps": [
+        {
+          "tool": "mcp_mock_parity_missing_tool",
+          "arguments": {}
+        }
+      ]
+    }
+  ],
+  "expected_normalized": [
+    {
+      "name": "memory_create_search",
+      "create": {
+        "type": "object",
+        "has_id": true,
+        "content_matches": true,
+        "memory_type": "decision",
+        "has_parity_tag": true,
+        "has_issue_tag": true
+      },
+      "search": {
+        "type": "array",
+        "hit_content_matches": true,
+        "hit_shape": {
+          "memory": true,
+          "score": true,
+          "match_info": true
+        }
+      }
+    },
+    {
+      "name": "context_record_search",
+      "record": {
+        "type": "object",
+        "has_event_id": true,
+        "has_summary_id": true
+      },
+      "search": {
+        "type": "object",
+        "query": "parity context smoke",
+        "results_type": "array",
+        "hit_event_type": "command",
+        "hit_reducer_name": "engra_111_parity_fixture",
+        "artifact_pointer_present": true,
+        "provenance_present": true
+      }
+    },
+    {
+      "name": "unknown_tool_error",
+      "error": "Unknown tool: mcp_mock_parity_missing_tool"
+    }
+  ]
+}
