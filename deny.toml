@@ -8,8 +8,16 @@ all-features = true
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
+unmaintained = "workspace"
 ignore = [
-    # No ignored advisories - reqwest upgraded to 0.12+
+    # 2026-06-12: rustls-webpki 0.103.x is patched in Cargo.lock. These
+    # advisory IDs still match older rustls 0.21/0.22 stacks pulled by current
+    # AWS SDK and libsql/hyper-rustls transitives; cargo update cannot lift
+    # them until those upstreams move to rustls-webpki 0.103+.
+    "RUSTSEC-2026-0049",
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
 ]
 
 [licenses]
@@ -23,11 +31,9 @@ allow = [
     "Zlib",
     "MPL-2.0",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "CC0-1.0",
     "BSL-1.0",
     "CDLA-Permissive-2.0",  # webpki-roots
-    "OpenSSL",              # aws-lc-sys (legacy BoringSSL imports via rustls/jsonwebtoken)
 ]
 confidence-threshold = 0.8
 

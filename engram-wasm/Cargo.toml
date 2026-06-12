@@ -4,6 +4,13 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Engram algorithms compiled to WebAssembly — pure-Rust, no I/O dependencies"
+repository = "https://github.com/aiconnai/engram"
+homepage = "https://github.com/aiconnai/engram"
+documentation = "https://docs.rs/engram-wasm"
+readme = "README.md"
+keywords = ["ai", "memory", "search", "wasm"]
+categories = ["algorithms", "wasm"]
+exclude = ["Cargo.toml.orig"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

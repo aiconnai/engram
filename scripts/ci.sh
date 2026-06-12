@@ -22,13 +22,13 @@ fi
 
 : "${CI_REQUIRED_FEATURES:?CI_REQUIRED_FEATURES must be set or defined in $SCRIPT_DIR/ci-required-features.env}"
 
-echo "==> [1/4] Format"
+echo "==> [1/5] Format"
 cargo fmt --all -- --check
 
-echo "==> [2/4] Clippy (required PR features)"
+echo "==> [2/5] Clippy (required PR features)"
 cargo clippy --all-targets --no-default-features --features "$CI_REQUIRED_FEATURES" -- -D warnings
 
-echo "==> [3/4] Core tests (lib + integration, matching required GitHub CI job)"
+echo "==> [3/5] Core tests (lib + integration, matching required GitHub CI job)"
 # Mirrors the required "Test (ubuntu-latest)" job as closely as practical for local work.
 export CARGO_BUILD_JOBS=1
 cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests -- --test-threads=1
@@ -49,7 +49,16 @@ fi
 cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-server
 cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-watcher
 
-echo "==> [4/4] Documentation + generated MCP reference"
+echo "==> [4/5] WASM crate"
+if ! rustup target list --installed | grep -qx "wasm32-unknown-unknown"; then
+  echo "wasm32-unknown-unknown target is required for CI parity." >&2
+  echo "Install it with: rustup target add wasm32-unknown-unknown" >&2
+  exit 1
+fi
+cargo check -p engram-wasm --all-targets
+cargo check -p engram-wasm --target wasm32-unknown-unknown
+
+echo "==> [5/5] Documentation + generated MCP reference"
 ./scripts/generate-mcp-reference.sh --check
 RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features "$CI_REQUIRED_FEATURES" --no-deps --document-private-items
 
