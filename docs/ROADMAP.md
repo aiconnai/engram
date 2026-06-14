@@ -241,9 +241,13 @@ Multi-agent memory sharing with access control, resumable SSE streams, browser-s
 
 All 20 phases complete. Future directions under consideration:
 
-- **OpenClaw integration**: Memory plugin for the 192K-star AI assistant platform
+- **OpenClaw integration**: Memory plugin for the AI assistant platform
 - **Agent-to-agent messaging**: Event-driven communication via the agent registry
 - **Advanced WASM**: Full engram-wasm with storage persistence in IndexedDB
+
+For non-canonical product and competitive planning notes, see
+[`strategy/`](strategy/). Those notes are inputs for future RFCs and issues, not
+committed delivery milestones.
 
 ---
 
