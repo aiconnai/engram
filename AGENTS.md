@@ -75,6 +75,15 @@ O Engram expõe as ferramentas MCP documentadas em [`docs/MCP_TOOLS.md`](docs/MC
 - `identity_create`, `identity_resolve`
 - `memory_temporal_contradictions`, `memory_scope_set`
 
+## Huly
+Se o skill `huly` estiver disponível no seu ambiente (`.claude/skills/huly/SKILL.md`, não versionado), leia-o primeiro. Caso contrário, as regras abaixo são auto-suficientes.
+
+- Prefira a Huly Platform API para automação com token, especialmente quando o login humano usa GitHub/Google/OIDC.
+- Variáveis mínimas: `HULY_URL`, `HULY_WORKSPACE`, `HULY_PROJECT`, `HULY_API_TOKEN`.
+- Fallbacks aceitos: `HULY_TOKEN` e `HULY_APY_TOKEN`.
+- Nunca imprima tokens, headers, cookies ou dumps de ambiente com credenciais.
+- Antes de qualquer escrita, faça um lookup read-only para confirmar workspace, token e projeto.
+
 ## Onde Encontrar O Que
 - **Hooks de ciclo de vida**: `src/hooks/`
 - **Implementação MCP**: `src/mcp/`
