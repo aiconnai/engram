@@ -10,10 +10,9 @@ on:
       - 'LICENSE'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.air/**'
-      - 'LICENSE'
+    # Branch protection requires the required contexts on every PR. Do not
+    # path-filter PR events, or docs-only PRs can wait forever for checks that
+    # GitHub expected but this workflow never reported.
   workflow_dispatch:
   schedule:
     # Extended / expensive checks run on a schedule so normal PRs stay cheap
