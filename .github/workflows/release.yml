@@ -172,9 +172,14 @@ jobs:
       - name: Commit and push
         if: steps.homebrew-token.outputs.available == 'true'
         run: |
+          REF="${{ env.RELEASE_VERSION }}"
           cd homebrew-engram
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/engram.rb
-          git commit -m "chore: update engram to ${REF}" || echo "No changes"
+          if git diff --cached --quiet; then
+            echo "No Homebrew formula changes"
+            exit 0
+          fi
+          git commit -m "chore: update engram to ${REF}"
           git push
