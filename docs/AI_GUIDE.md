@@ -1,6 +1,6 @@
 # Engram — Complete AI Agent Guide
 
-> **Version:** 0.20.0 | **Protocol:** MCP 2025-11-25 | **Tools:** [generated reference](docs/MCP_TOOLS.md) | **Schema:** v34
+> **Version:** 0.21.1 | **Protocol:** MCP 2025-11-25 | **Tools:** [generated reference](MCP_TOOLS.md) | **Schema:** v44
 
 This guide shows agents how to turn scattered meetings, docs, transcripts, and project decisions into a shared source of truth that can be queried through MCP.
 
@@ -1088,7 +1088,7 @@ Implementation and eval details:
 
 The generated MCP tool reference remains the source of truth for live tools.
 Do not call planned `dream_*` tools until they appear in
-[`docs/MCP_TOOLS.md`](MCP_TOOLS.md).
+[`MCP_TOOLS.md`](MCP_TOOLS.md).
 
 ---
 
@@ -1961,5 +1961,5 @@ Intent-aware unified retrieval — combines semantic search, graph traversal, an
 
 ---
 
-*Engram v0.20.0 — AI Memory Engine*  
-*MCP tool reference: [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) (generated) | Hybrid search | Knowledge graphs | Cloud sync | Multimodal | Agent portability | Progressive discovery*
+*Engram v0.21.1 - AI Memory Engine*
+*MCP tool reference: [MCP_TOOLS.md](MCP_TOOLS.md) (generated) | Hybrid search | Knowledge graphs | Cloud sync | Multimodal | Agent portability | Progressive discovery*
