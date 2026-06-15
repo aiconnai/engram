@@ -16,6 +16,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
 
 jobs:
@@ -111,20 +112,35 @@ jobs:
     name: Update Homebrew Formula
     needs: release
     runs-on: ubuntu-latest
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
+      - name: Check Homebrew token
+        id: homebrew-token
+        run: |
+          if [ -n "${HOMEBREW_TAP_TOKEN}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew formula update."
+          fi
+
       - name: Download SHA256 files
+        if: steps.homebrew-token.outputs.available == 'true'
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
       - name: Checkout homebrew-engram
+        if: steps.homebrew-token.outputs.available == 'true'
         uses: actions/checkout@v5
         with:
           repository: aiconnai/homebrew-engram
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ env.HOMEBREW_TAP_TOKEN }}
           path: homebrew-engram
 
       - name: Update formula
+        if: steps.homebrew-token.outputs.available == 'true'
         run: |
           REF="${{ env.RELEASE_VERSION }}"
           VERSION="${REF#v}"
@@ -154,6 +170,7 @@ jobs:
           cat Formula/engram.rb
 
       - name: Commit and push
+        if: steps.homebrew-token.outputs.available == 'true'
         run: |
           cd homebrew-engram
           git config user.name "github-actions[bot]"
