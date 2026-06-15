@@ -2,6 +2,10 @@
 
 Performance benchmarks for Engram's hot paths. All benchmarks use [Criterion.rs](https://bheisler.github.io/criterion.rs/book/) with in-memory SQLite to isolate CPU cost from disk I/O.
 
+Historical benchmark snapshots live in [`results/`](results/). Ad hoc or
+machine-generated benchmark output should go under `benches/results/generated/`
+or `target/criterion/`, both of which stay out of normal source review.
+
 ## Quick Start
 
 ```bash

@@ -58,10 +58,10 @@ than first-party adapters in this repository.
 
 ## Searchable Guides
 
-- [MCP memory server guide](docs/mcp-memory-server.md)
-- [Claude Code MCP memory guide](docs/claude-code-mcp-memory.md)
-- [Cursor MCP memory guide](docs/cursor-mcp-memory.md)
-- [OpenAI Agents memory guide](docs/openai-agents-memory.md)
+- [MCP memory server guide](docs/integrations/mcp-memory-server.md)
+- [Claude Code MCP memory guide](docs/integrations/claude-code-mcp-memory.md)
+- [Cursor MCP memory guide](docs/integrations/cursor-mcp-memory.md)
+- [OpenAI Agents memory guide](docs/integrations/openai-agents-memory.md)
 
 ## Runnable Examples
 

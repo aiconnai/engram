@@ -21,6 +21,7 @@ exclude = [
     ".githooks/**",
     ".orchestrator/**",
     ".worktrees/**",
+    "benches/results/**",
     "Cargo.toml.orig",
     "LAZYCODEX_USAGE.md",
     "benchmark_*.txt",

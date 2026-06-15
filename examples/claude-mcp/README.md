@@ -55,5 +55,5 @@ reads or writes by itself.
 
 See also:
 
-- [Claude Code MCP memory guide](../../docs/claude-code-mcp-memory.md)
+- [Claude Code MCP memory guide](../../docs/integrations/claude-code-mcp-memory.md)
 - [MCP tools reference](../../docs/MCP_TOOLS.md)
