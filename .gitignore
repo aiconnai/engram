@@ -82,6 +82,7 @@ htmlcov/
 # =============================================================================
 criterion/
 bench_results/
+benches/results/generated/
 
 # =============================================================================
 # Documentation (generated)
@@ -165,6 +166,7 @@ vendor/
 
 # Temporary benchmark results
 benchmark_*.txt
+!benches/results/benchmark_*.txt
 .claude/worktrees/
 # Local project skills carry internal operational detail (Huly workspace, tokens);
 # keep them project-scoped but out of the public repo.

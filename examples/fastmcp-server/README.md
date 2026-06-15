@@ -35,4 +35,4 @@ The FastMCP server exposes two tools:
 Keep FastMCP responsible for your domain tools. Use Engram only for durable
 memory, search, decisions, and provenance.
 
-See [MCP memory server guide](../../docs/mcp-memory-server.md).
+See [MCP memory server guide](../../docs/integrations/mcp-memory-server.md).

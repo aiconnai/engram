@@ -45,4 +45,4 @@ The script exposes two OpenAI Agents SDK function tools:
 Wire these calls into your own OpenAI Agents SDK tool or lifecycle hook. This is
 an integration pattern, not native SDK support.
 
-See [OpenAI Agents memory guide](../../docs/openai-agents-memory.md).
+See [OpenAI Agents memory guide](../../docs/integrations/openai-agents-memory.md).

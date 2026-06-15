@@ -35,4 +35,4 @@ The graph has two nodes:
 LangGraph remains responsible for graph state and control flow. Engram provides
 external memory and retrieval, not graph orchestration.
 
-See [MCP memory server guide](../../docs/mcp-memory-server.md).
+See [MCP memory server guide](../../docs/integrations/mcp-memory-server.md).
