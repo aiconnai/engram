@@ -27,7 +27,9 @@ Roadmap de evolução do Engram como memória persistente para agentes e times q
 | K | Temporal Graph & Platform Maturity | Done | v0.11.0 | Temporal knowledge graph, hierarchical scoping, benchmark suite |
 | L | Multi-Agent Sharing & Platform | Done | v0.12.0 | Multi-agent memory sharing with scope-based access grants, advanced SSE with resumable streams, engram-wasm crate, cross-host federation |
 
-All 20 phases complete. Published as v0.12.0.
+The original 20-phase roadmap was completed by the v0.12.0 line. Current
+release status is tracked in [`../CHANGELOG.md`](../CHANGELOG.md), and generated
+MCP tool details are tracked in [`MCP_TOOLS.md`](MCP_TOOLS.md).
 
 ---
 
@@ -42,8 +44,8 @@ Foundation layer. Defined the `StorageBackend` trait (18 methods) so future back
 - Hybrid search: BM25 (FTS5) + vector (cosine over embedding BLOBs) + fuzzy (Levenshtein) + RRF fusion
 - Knowledge graph with entity extraction, traversal, shortest-path
 - Cloud sync (S3/R2) with AES-256 encryption
-- MCP, REST, WebSocket, CLI interfaces
-- 80+ MCP tools
+- MCP stdio, HTTP JSON-RPC, optional WebSocket events, and CLI interfaces
+- MCP tool surface documented in the generated reference
 
 ### Phase 1: Cognitive Memory Types (v0.3.0)
 
@@ -132,7 +134,7 @@ Ensure memory quality doesn't degrade over time.
 Modernize to MCP 2025-11-25 spec with improved tooling and server architecture.
 
 - **MCP Protocol Upgrade**: v2024-11-05 → v2025-11-25 with full backward compatibility
-- **Tool Annotations**: All 155+ MCP tools classified with `readOnlyHint`, `destructiveHint`, `idempotentHint` per MCP spec
+- **Tool Annotations**: MCP tools classified with `readOnlyHint`, `destructiveHint`, `idempotentHint` per MCP spec
 - **MCP Resources**: 5 resource URI templates exposing memory/workspace/stats as queryable resources
 - **MCP Prompts**: 4 guided workflow prompts for common agent patterns (create-knowledge-base, daily-review, search-and-organize, seed-entity)
 - **Streamable HTTP Transport**: Axum-based HTTP server with `--transport http|stdio|both` CLI flag, bearer token auth, CORS
@@ -173,7 +175,7 @@ Self-improving memory with utility scoring and emotional awareness. Feature flag
 
 Advanced knowledge graph capabilities. Feature flag: `advanced-graph` (depends on `emergent-graph`).
 
-- **Conflict Detection & Resolution**: Mem0g-inspired contradiction, cycle, and orphan detection
+- **Conflict Detection & Resolution**: contradiction, cycle, and orphan detection
 - **Temporal Coactivation / Hebbian Learning**: "Neurons that fire together wire together" edge strengthening
 - **Semantic Triplet Matching**: SPARQL-like SPO pattern matching with transitive inference
 - Schema v29: `coactivation_edges`, `graph_conflicts`, `knowledge_triplets` tables
@@ -209,7 +211,7 @@ LLM context optimization pipeline. Feature flag: `context-engineering`.
 
 - **Automatic Fact Extraction**: Rule-based SPO triple extraction (80% compression target)
 - **Memory-Aware Prompt Construction**: 3 strategies (Greedy/Balanced/Recency) with token counting
-- **Self-Editing Memory Blocks**: Letta-inspired 3-tier blocks (system/persona/human) with edit log
+- **Self-Editing Memory Blocks**: 3-tier blocks (system/persona/human) with edit log
 - Schema v22-23: `facts`, `memory_blocks`, `block_edit_log` tables
 - 10 MCP tools: `memory_extract_facts`, `memory_list_facts`, `memory_fact_graph`, `memory_build_context`, `memory_prompt_template`, `memory_token_estimate`, `memory_block_get/edit/list/create`
 
@@ -217,7 +219,7 @@ LLM context optimization pipeline. Feature flag: `context-engineering`.
 
 Temporal knowledge graphs and hierarchical scoping. Feature flag: `temporal-graph`.
 
-- **Temporal Knowledge Graph**: Zep/Graphiti-inspired edges with validity periods, auto-invalidation, snapshot-at-time
+- **Temporal Knowledge Graph**: edges with validity periods, auto-invalidation, snapshot-at-time
 - **Hierarchical Memory Scoping**: 5-level scope: Global > Org > User > Session > Agent
 - **Standardized Benchmark Suite**: LOCOMO, LongMemEval, MemBench frameworks
 - Schema v24-25: `temporal_edges` table, `scope_path` column
@@ -239,7 +241,7 @@ Multi-agent memory sharing with access control, resumable SSE streams, browser-s
 
 ## What's Next
 
-All 20 phases complete. Future directions under consideration:
+The original 20-phase roadmap is complete. Future directions under consideration:
 
 - **OpenClaw integration**: Memory plugin for the AI assistant platform
 - **Agent-to-agent messaging**: Event-driven communication via the agent registry
@@ -253,16 +255,16 @@ committed delivery milestones.
 
 ## Version History
 
-| Version | Date | Phases | MCP Tools |
-|---------|------|--------|-----------|
-| v0.1.0 | 2025-01-23 | 0 | 80+ |
-| v0.2.0 | 2026-01-28 | 0 | 110+ |
-| v0.3.0 | 2026-01-30 | 0-6 | 130+ |
-| v0.4.0 | 2026-02-12 | 0-6, 8-9 | 140+ |
-| v0.4.1 | 2026-02-13 | 0-6, 8-9 | 140+ |
-| v0.5.0 | 2026-02-13 | 0-9 (all) | 144+ |
-| v0.6.0 | 2026-03-09 | 0-10 (all) | 155+ |
-| v0.7.0 | 2026-03-09 | 0-11 (all) | 161+ |
-| v0.8.1 | 2026-03-09 | 0-11, Round 1 | 161+ |
-| v0.11.0 | 2026-03-09 | All (0-K) | 207+ |
-| v0.12.0 | 2026-03-09 | All (0-L) | 217+ |
+| Version | Date | Phases | Tool reference |
+|---------|------|--------|----------------|
+| v0.1.0 | 2025-01-23 | 0 | See release tag |
+| v0.2.0 | 2026-01-28 | 0 | See release tag |
+| v0.3.0 | 2026-01-30 | 0-6 | See release tag |
+| v0.4.0 | 2026-02-12 | 0-6, 8-9 | See release tag |
+| v0.4.1 | 2026-02-13 | 0-6, 8-9 | See release tag |
+| v0.5.0 | 2026-02-13 | 0-9 | See release tag |
+| v0.6.0 | 2026-03-09 | 0-10 | See release tag |
+| v0.7.0 | 2026-03-09 | 0-11 | See release tag |
+| v0.8.1 | 2026-03-09 | 0-11, Round 1 | See release tag |
+| v0.11.0 | 2026-03-09 | 0-K | See release tag |
+| v0.12.0 | 2026-03-09 | 0-L | See release tag |

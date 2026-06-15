@@ -5,24 +5,23 @@ Engram is a Rust, local-first memory layer for teams that need agents to
 remember proprietary project context across sessions. It ingests meetings, docs,
 transcripts, and decisions; stores them in SQLite; indexes them with hybrid
 BM25/vector/fuzzy search and knowledge graph links; and exposes the same source
-of truth through MCP, HTTP, WebSocket, CLI, Python, and TypeScript.
+of truth through MCP, HTTP JSON-RPC, CLI, Python, and TypeScript SDKs.
 
 Use Engram when coding agents, research crews, or internal AI tools need durable
 memory with provenance instead of rebuilding context from chat history.
 
 [![Crates.io](https://img.shields.io/crates/v/engram-core)](https://crates.io/crates/engram-core)
 [![docs.rs](https://img.shields.io/docsrs/engram-core)](https://docs.rs/engram-core)
-[![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
 
-## Native Support
+## Supported Interfaces and Adapters
 
 - MCP server over stdio and HTTP for Claude Code, Cursor, VS Code MCP clients,
   and other Model Context Protocol hosts.
-- REST/HTTP JSON-RPC, WebSocket events, and `engram-cli` over the same memory
-  store.
+- HTTP JSON-RPC MCP endpoints, optional WebSocket event streaming, and
+  `engram-cli` over the same memory store.
 - Rust single binary with SQLite + WAL local storage, optional cloud sync, and
   optional Meilisearch indexing.
 - Python SDK and TypeScript SDK for application code and hosted deployments.
@@ -95,11 +94,11 @@ curl -X POST localhost:8080/mcp \
 ```
 
 **What you get:**
-- Automatic ingestion of notes, meetings, transcripts, and project artifacts
+- Structured ingestion workflows for notes, meetings, transcripts, and project artifacts
 - Hybrid search (BM25 + vectors + fuzzy) in one call
 - Memory policy layer: deterministic scoring for salience, retention, retrieval priority, reinforcement, decay, and conflict demotion over explicit memories.
-- MCP / REST / WebSocket / CLI access to the same organized memory
-- Predictable p95 latency with a single Rust binary and local-first storage
+- MCP / HTTP JSON-RPC / CLI / SDK access to the same organized memory
+- Local-first storage with a single Rust binary and benchmarkable deployment profile
 
 </td>
 <td width="50%" valign="top">
@@ -244,7 +243,7 @@ Engram turns that into a fast, queryable memory system that keeps the team align
 
 | Problem | Engram Solution |
 |---------|-----------------|
-| Knowledge is spread across meetings, docs, and chats | **Automatic ingestion** into one memory layer |
+| Knowledge is spread across meetings, docs, and chats | **Structured ingestion workflows** into one memory layer |
 | Search misses exact terms or related concepts | **Hybrid search**: BM25 + vectors + fuzzy, fused and ranked |
 | Context disappears between sessions | **Persistent memory** on SQLite + WAL |
 | Teams need a private source of truth | **Local-first** with optional sync and shared workspaces |
@@ -253,19 +252,13 @@ Engram turns that into a fast, queryable memory system that keeps the team align
 
 ---
 
-## How It Compares
+## Positioning
 
-| Feature | Engram | Mem0 | Zep | Letta |
-|---------|--------|------|-----|-------|
-| Language | Rust | Python | Python | Python |
-| MCP Native | Yes | Plugin | No | No |
-| Single Binary | Yes | No | No | No |
-| Local-first | Yes | Optional | Cloud-first | Optional |
-| Hybrid Search | BM25+Vec+Fuzzy | Vec+KV | Vec+Graph | Vec |
-| Project Context | Yes | No | No | No |
-| Edge-Native Latency | Yes | No | No | No |
-
-> "Edge-native" here means runs beside the agent, with predictable p95 latency and no dependency chain.
+Engram's strongest fit is local-first, MCP-native memory for proprietary project
+context: decisions, repo policy, meetings, transcripts, and agent handoffs. For
+competitive and marketing planning notes, see [`docs/strategy/`](docs/strategy/).
+Those notes are intentionally not public-use claims until competitor, feature,
+and performance statements have been independently fact-checked.
 
 ---
 
@@ -339,9 +332,10 @@ Multi-hop traversal and shortest-path are available via MCP tools:
 ### Multiple Interfaces
 
 - **MCP**: Native Model Context Protocol for Claude Code, Cursor, VS Code MCP clients
-- **REST**: Standard HTTP API for any client
-- **WebSocket**: Real-time updates
+- **HTTP JSON-RPC**: MCP-compatible endpoint at `POST /mcp` and `POST /v1/mcp`
+- **WebSocket**: Optional event stream when `ENGRAM_WS_PORT` is enabled
 - **CLI**: Developer-friendly commands
+- **SDKs**: Python and TypeScript clients for application code
 
 ### Salience Scoring
 
@@ -385,7 +379,7 @@ engram-server --meilisearch-url http://localhost:7700 --meilisearch-indexer
 
 SQLite remains the source of truth. MeilisearchIndexer syncs changes in the background.
 
-### MCP Resources & Prompts (v0.6.0)
+### MCP Resources & Prompts
 
 Engram exposes MCP Resources and Prompts for richer agent integration:
 
@@ -402,7 +396,7 @@ Engram exposes MCP Resources and Prompts for richer agent integration:
 - `search-and-organize` — Search results with suggested tags
 - `seed-entity` — Initialize entity graph from project
 
-### Streamable HTTP Transport (v0.6.0)
+### Streamable HTTP Transport
 
 Run Engram as HTTP server with JSON-RPC 2.0 support:
 
@@ -512,7 +506,7 @@ This backend uses ONNX Runtime with `all-MiniLM-L6-v2` (384 dimensions). The mod
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Engram Server                           │
 ├─────────────────────────────────────────────────────────────────┤
-│  MCP (stdio)  │  REST (HTTP)  │  WebSocket  │  CLI              │
+│  MCP stdio    │  HTTP MCP     │  WebSocket* │  CLI / SDKs       │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Intelligence Layer                           │
 │  • Salience scoring  • Quality assessment  • Entity extraction  │
@@ -527,6 +521,8 @@ This backend uses ONNX Runtime with `all-MiniLM-L6-v2` (384 dimensions). The mod
 │  • Optional S3/R2 sync with AES-256 encryption                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+* WebSocket event streaming is opt-in via `ENGRAM_WS_PORT`; the MCP stdio and
+  HTTP JSON-RPC transports are the primary agent interfaces.
 
 ---
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+---
+
+## [0.21.1] - 2026-06-15
+
 ### Added
 
 - **Consensus workflow skill (`memory_council`)** — Added MCP tool wiring and dispatch for
@@ -25,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   MCP request rate limiting. Unauthorized requests return `401` without
   consuming rate-limit tokens, which may shift rejected traffic from
   `mcp_rate_limited_total` to `mcp_unauthorized_total`.
+- **Public documentation claim hygiene** — README, roadmap, and AI guide now use
+  conservative wording for supported transports, strategy notes, schema version,
+  and performance or competitor positioning.
+- **Documentation organization** — Integration guides and benchmark result
+  snapshots are organized under clearer public documentation paths.
+
+### Fixed
+
+- **Required GitHub checks for documentation PRs** — PR check routing now keeps
+  required status contexts reportable even for docs-focused changes.
 
 ---
 
@@ -356,8 +372,8 @@ engram-server --transport grpc --grpc-port 50051
 - Clippy warnings: `single_match` in compression/evolution handlers, `map_or` → `is_some_and` in SSE
 
 ### Changed
-- 224+ MCP tools (217 + 7 new)
-- 780+ tests
+- Expanded MCP tool surface for agent portability workflows
+- Expanded test coverage for snapshot and attestation behavior
 
 ---
 
@@ -401,7 +417,7 @@ engram-server --transport grpc --grpc-port 50051
 
 ### Changed
 - Schema v31: `scope_grants` table
-- 810+ tests (756 engram-core + 54 engram-wasm)
+- Expanded test coverage across engram-core and engram-wasm
 
 ---
 
@@ -434,7 +450,7 @@ Feature flag: `agentic-evolution`
 
 Feature flag: `advanced-graph`
 
-- **Graph Conflict Detection & Resolution** — Mem0g-inspired contradiction, cycle, and orphan detection (`src/graph/conflicts.rs`)
+- **Graph Conflict Detection & Resolution** — contradiction, cycle, and orphan detection (`src/graph/conflicts.rs`)
 - **Temporal Coactivation / Hebbian Learning** — "Neurons that fire together wire together" edge strengthening (`src/graph/coactivation.rs`)
 - **Semantic Triplet Matching** — SPARQL-like SPO pattern matching with transitive inference (`src/graph/triplets.rs`)
 - MCP tools: `memory_detect_conflicts`, `memory_resolve_conflict`, `memory_coactivation_report`, `memory_query_triplets`, `memory_add_knowledge`
@@ -467,14 +483,14 @@ Feature flag: `context-engineering`
 
 - **Automatic Fact Extraction** — Rule-based SPO triple extraction with 80% compression target (`src/intelligence/fact_extraction.rs`)
 - **Memory-Aware Prompt Construction** — 3 strategies (Greedy/Balanced/Recency) with token counting (`src/intelligence/context_builder.rs`)
-- **Self-Editing Memory Blocks** — Letta-inspired 3-tier blocks with edit log (`src/storage/memory_blocks.rs`)
+- **Self-Editing Memory Blocks** — 3-tier blocks with edit log (`src/storage/memory_blocks.rs`)
 - MCP tools: `memory_extract_facts`, `memory_list_facts`, `memory_fact_graph`, `memory_build_context`, `memory_prompt_template`, `memory_token_estimate`, `memory_block_get`, `memory_block_edit`, `memory_block_list`, `memory_block_create`
 
 #### Phase K: Temporal Graph & Platform Maturity (RML-1226, RML-1235..1237)
 
 Feature flag: `temporal-graph`
 
-- **Temporal Knowledge Graph** — Zep/Graphiti-inspired edges with validity periods, contradiction detection, snapshot-at-time (`src/graph/temporal.rs`)
+- **Temporal Knowledge Graph** — edges with validity periods, contradiction detection, snapshot-at-time (`src/graph/temporal.rs`)
 - **Hierarchical Memory Scoping** — 5-level scope: Global > Org > User > Session > Agent (`src/storage/scoping.rs`)
 - **Standardized Benchmark Suite** — LOCOMO, LongMemEval, MemBench frameworks (`src/bench/`)
 - New binary: `engram-bench` (LOCOMO/LongMemEval/MemBench suites)
@@ -485,8 +501,8 @@ Feature flag: `temporal-graph`
 - Schema: v17 → v30 (14 additive migrations)
 - Feature flags: 12 new (`compression`, `agentic-evolution`, `advanced-graph`, `autonomous-agent`, `retrieval-excellence`, `ollama`, `cohere`, `voyage`, `onnx-embed`, `neural-rerank`, `context-engineering`, `temporal-graph`)
 - Binaries: 2 new (`engram-agent`, `engram-bench`)
-- MCP tools: 161+ → 207+ (46 new tools across 7 phases)
-- Tests: 300+ → 672+
+- Expanded MCP tool surface across 7 phases
+- Expanded test coverage across the new memory modules
 
 ---
 
@@ -524,7 +540,7 @@ Feature flag: `temporal-graph`
 - Schema: v16 → v17 (additive: `agents` table with indexes)
 - `serve_http()` now accepts `Option<RealtimeManager>` for SSE support
 - `RealtimeManager` always created in server (not gated on WebSocket port)
-- MCP tools: 155+ → 161+ (6 new agent registry tools)
+- Expanded MCP tool surface with agent registry tools
 
 ---
 
@@ -533,7 +549,7 @@ Feature flag: `temporal-graph`
 ### Added
 
 - **MCP 2025-11-25 protocol upgrade** — Updated from 2024-11-05 to 2025-11-25 with backward compatibility
-- **Tool annotations** — All 155+ MCP tools classified with readOnlyHint, destructiveHint, idempotentHint per MCP spec
+- **Tool annotations** — MCP tools classified with readOnlyHint, destructiveHint, idempotentHint per MCP spec
 - **MCP Resources** — 5 resource URI templates: `engram://memory/{id}`, `engram://workspace/{name}`, `engram://workspace/{name}/memories`, `engram://stats`, `engram://entities`
 - **MCP Prompts** — 4 guided workflow prompts: create-knowledge-base, daily-review, search-and-organize, seed-entity
 - **Streamable HTTP transport** — Axum-based HTTP transport with `--transport http|stdio|both`, bearer token auth, CORS
@@ -603,7 +619,7 @@ All 10 planned phases (0-9) are now complete.
 
 ### Changed
 - Published to crates.io as `engram-core` (lib name remains `engram` for API compatibility)
-- 144+ MCP tools total (4 new Meilisearch tools)
+- Expanded MCP tool surface for Meilisearch support
 
 ## [0.4.0] - 2026-02-12
 
@@ -735,7 +751,7 @@ Requires `--features langfuse` to compile.
 
 ### Changed
 - Schema version updated to v13
-- 21 new MCP tools (110+ total)
+- Added MCP tools for salience and context quality workflows
 - Updated ROADMAP.md with completion status
 - Updated README.md with new tool documentation
 
@@ -885,7 +901,11 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 
 ## Version History
 
-- **0.11.0** - Cognitive Evolution & Platform Excellence (Phases E-K) — 46+ new MCP tools, schema v30
+- **0.21.1** - Release notes, public documentation claim hygiene, and docs/CI cleanup
+- **0.21.0** - Lifecycle hooks wired into MCP server, Dream Phase, smart retrieval, and server build fixes
+- **0.20.0** - Progressive MCP discovery, session handoff, markdown export, advanced filters, and SDK updates
+- **0.19.0** - Multimodal memory support, media sync, and cross-modal image search
+- **0.11.0** - Cognitive Evolution & Platform Excellence (Phases E-K), schema v30
 - **0.8.1** - Reactive Infrastructure (Phase 11) — Emergent graph, document ingestion
 - **0.7.0** - SSE Event Streaming, Agent Registry (Phase 11)
 - **0.6.0** - MCP Modernization (Phase 10) — Resources, Prompts, HTTP transport
@@ -893,9 +913,13 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 - **0.4.1** - Published as engram-core on crates.io
 - **0.4.0** - Salience & Context Quality (Phases 8-9)
 - **0.3.0** - Context Engineering Platform (Phases 1-5)
-- **0.2.0** - Memora Feature Parity (24 new tools)
+- **0.2.0** - Early feature parity milestone
 - **0.1.0** - Initial release with full feature set
 
+[0.21.1]: https://github.com/aiconnai/engram/compare/v0.21.0...v0.21.1
+[0.21.0]: https://github.com/aiconnai/engram/compare/v0.20.0...v0.21.0
+[0.20.0]: https://github.com/aiconnai/engram/compare/v0.19.0...v0.20.0
+[0.19.0]: https://github.com/aiconnai/engram/compare/v0.11.0...v0.19.0
 [0.11.0]: https://github.com/aiconnai/engram/compare/v0.8.1...v0.11.0
 [0.8.1]: https://github.com/aiconnai/engram/compare/v0.7.0...v0.8.1
 [0.7.0]: https://github.com/aiconnai/engram/compare/v0.6.0...v0.7.0
