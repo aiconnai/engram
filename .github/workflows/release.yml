@@ -37,7 +37,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -67,7 +67,7 @@ jobs:
           shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: |
@@ -79,10 +79,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -97,7 +97,7 @@ jobs:
           cat release/CHECKSUMS.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_VERSION }}
           draft: false
@@ -127,13 +127,13 @@ jobs:
 
       - name: Download SHA256 files
         if: steps.homebrew-token.outputs.available == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
       - name: Checkout homebrew-engram
         if: steps.homebrew-token.outputs.available == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: aiconnai/homebrew-engram
           token: ${{ env.HOMEBREW_TAP_TOKEN }}
