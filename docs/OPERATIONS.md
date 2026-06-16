@@ -1,8 +1,14 @@
 # Engram Cloud Operations
 
-This document covers the operating model for the managed Engram memory service: availability, latency, backups, metering, and recovery for the team knowledge source of truth.
+This document covers the operating model for a managed or private hosted Engram
+memory service: availability targets, latency targets, backups, metering, and
+recovery for the team knowledge source of truth.
 
-## SLOs (M1 baseline)
+These targets are planning baselines for hosted deployments. Do not publish
+them as public SLOs unless the specific deployment, monitoring, and incident
+process have been verified.
+
+## Target SLOs (M1 planning baseline)
 - Gateway availability: 99.9%
 - p95 latency (gateway + storage, excluding model calls): < 250ms
 - Error rate: < 0.5%

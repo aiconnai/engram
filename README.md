@@ -148,7 +148,12 @@ Engram is built for teams that accumulate more context than a single person can 
 ### Quick Start
 
 ```bash
-# Install from crates.io
+# Install with Homebrew (tracks the GitHub release artifacts)
+brew install aiconnai/engram/engram
+
+# Or install from crates.io
+# The crates.io package can lag the latest GitHub/Homebrew release; check the
+# badge above when you need an exact version.
 cargo install engram-core
 
 # Or from source
@@ -170,6 +175,9 @@ Engram exposes the MCP tool `memory_council` and both SDKs now include a reusabl
 - TypeScript SDK: `CouncilSkill` from `engram-client`
 - `memory_council` MCP tool: direct fallback via HTTP/MCP
 
+The hosted URLs below are placeholders for your own deployment. They are not a
+claim that a public Engram SaaS endpoint is generally available.
+
 Python:
 
 ```python
@@ -178,7 +186,7 @@ from engram_client.integrations import CouncilSkill
 
 async def run_review() -> None:
     async with EngramClient(
-        base_url="https://your-engram-api.fly.dev",
+        base_url="https://your-hosted-engram.example.com",
         api_key="ek_...",
         tenant="my-tenant",
     ) as client:
@@ -198,7 +206,7 @@ TypeScript:
 import { CouncilSkill, EngramClient } from "engram-client";
 
 const client = new EngramClient({
-  baseUrl: "https://your-engram-api.fly.dev",
+  baseUrl: "https://your-hosted-engram.example.com",
   apiKey: "ek_...",
   tenant: "my-tenant",
 });

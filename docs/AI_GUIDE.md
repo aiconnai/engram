@@ -103,14 +103,17 @@ engram-server --transport grpc --grpc-port 50051 --grpc-api-key my-secret
 
 Uses `proto/mcp.proto` — params and results are JSON strings inside protobuf messages.
 
-### Via Engram Cloud (multi-tenant SaaS)
+### Via Hosted Engram HTTP
 
 ```bash
-POST https://your-engram-api.fly.dev/v1/mcp
+POST https://your-hosted-engram.example.com/v1/mcp
 Authorization: Bearer eg_live_YOUR_API_KEY
 X-Tenant: your-tenant-slug
 Content-Type: application/json
 ```
+
+This is a deployment pattern for your own hosted Engram service. It does not
+assert that a public multi-tenant Engram SaaS endpoint is generally available.
 
 Local HTTP MCP authentication is documented in [`docs/MCP_AUTH.md`](MCP_AUTH.md).
 
@@ -1280,7 +1283,8 @@ Use structured filters for complex queries beyond text search.
 
 ## 20. Multi-Agent Sync (Cloud)
 
-When using Engram Cloud, multiple AI agents can coordinate through shared memory.
+When using a hosted or shared Engram deployment, multiple AI agents can
+coordinate through shared memory.
 
 ### List Sessions by Agent
 
@@ -1489,7 +1493,7 @@ Higher confidence → longer TTL. Confidence 1.0 creates permanent memories.
 
 ```
 1. Record decisions as they happen:
-   memory_create(content: "Chose gRPC for internal services — 3x faster than REST for our payload sizes", type: "decision", tags: ["architecture", "grpc"])
+   memory_create(content: "Chose gRPC for internal services because streaming and typed contracts fit our payloads", type: "decision", tags: ["architecture", "grpc"])
 
 2. Link related decisions:
    memory_link(source_id: 10, target_id: 20, relation: "supports")
@@ -1537,7 +1541,7 @@ from engram_client.integrations import CouncilSkill
 
 async def run_arch_review() -> None:
     async with EngramClient(
-        base_url="https://your-engram-api.fly.dev",
+        base_url="https://your-hosted-engram.example.com",
         api_key="ek_...",
         tenant="my-tenant",
     ) as client:
@@ -1559,7 +1563,7 @@ TypeScript (SDK helper):
 import { CouncilSkill, EngramClient } from "engram-client";
 
 const client = new EngramClient({
-  baseUrl: "https://your-engram-api.fly.dev",
+  baseUrl: "https://your-hosted-engram.example.com",
   apiKey: "ek_...",
   tenant: "my-tenant",
 });
@@ -1658,7 +1662,11 @@ Every tool includes MCP 2025-11-25 annotations:
 
 ---
 
-## Performance Targets
+## Performance Planning Targets
+
+These are engineering targets for validation, not published benchmark claims.
+Verify them with current benchmark commands and raw artifacts before using them
+in public material.
 
 | Operation | Target |
 |-----------|--------|
