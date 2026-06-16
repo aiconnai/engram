@@ -1126,6 +1126,10 @@ verificada por `cargo machete`, e remoção do bin dummy `engram-core`.
 - LSP diagnostics não puderam ser coletados porque `basedpyright` e
   `typescript-language-server` não estão instalados localmente; a decisão de
   não instalar foi registrada no LSP tool porque o usuário não pediu instalação.
-- Post-review prompt gerado em
-  `docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md.raw`,
-  mas ainda não há `REVIEW_VERDICT` independente.
+- Post-review fechado com resposta independente em
+  `docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md`.
+- `bash docs/harness/bin/review-gate.sh post code-quality-maintenance --review-file docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md`
+  — PASS.
+- O reviewer registrou dois follow-ups `MED` nao bloqueantes: teste de regressao
+  para `_mcp_call` apos `close()` no Python SDK e alinhamento do README do SDK
+  Python com as novas opcoes publicas.

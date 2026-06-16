@@ -115,9 +115,12 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   deduplicações maiores; eles exigem revisão de compatibilidade pública.
 - Review Canvas:
   `docs/harness/canvas/2026-06-16-code-quality-maintenance.md`.
-- Post-review prompt gerado em
-  `docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md.raw`;
-  sem verdict independente ainda porque o fluxo exige outro CLI/reviewer.
+- Post-review fechado com resposta independente em
+  `docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md`;
+  `REVIEW_VERDICT: PASS`.
+- O reviewer registrou dois follow-ups `MED` nao bloqueantes: teste de regressao
+  para `_mcp_call` apos `close()` no Python SDK e alinhamento do README do SDK
+  Python com as novas opcoes publicas.
 - Verificações:
   - `npm test` em `sdks/typescript` — PASS.
   - `npm run type-check` em `sdks/typescript` — PASS.
@@ -132,13 +135,14 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `git diff --check` — PASS.
   - `make ci` — PASS.
   - `bash docs/harness/bin/sensors.sh` — PASS (`make ci + doctor`).
+  - `bash docs/harness/bin/review-gate.sh post code-quality-maintenance --review-file docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md`
+    — PASS.
 
 ## Próximos passos imediatos
 
-1. Fechar post review do estado atual com artefato `REVIEW_VERDICT: PASS`.
-2. Concluir Fase 1: manter mini-artifacts dos blocos 1.1–1.3 e audit report em `docs/harness/plans/`.
-3. Entrar em Fase 2 (decisões/P1/P0): 28, 29, 26, 31, 32.
-4. Preparar Fase 4 com base no contrato de `harness_record` + `harness_status`.
+1. Concluir Fase 1: manter mini-artifacts dos blocos 1.1–1.3 e audit report em `docs/harness/plans/`.
+2. Entrar em Fase 2 (decisões/P1/P0): 28, 29, 26, 31, 32.
+3. Preparar Fase 4 com base no contrato de `harness_record` + `harness_status`.
 
 ## AgentShield loop MVL — 2026-06-16
 
