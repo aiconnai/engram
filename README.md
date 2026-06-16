@@ -98,7 +98,7 @@ curl -X POST localhost:8080/mcp \
 - Hybrid search (BM25 + vectors + fuzzy) in one call
 - Memory policy layer: deterministic scoring for salience, retention, retrieval priority, reinforcement, decay, and conflict demotion over explicit memories.
 - MCP / HTTP JSON-RPC / CLI / SDK access to the same organized memory
-- Local-first storage with a single Rust binary and benchmarkable deployment profile
+- Local-first storage with a single Rust binary and documented deployment profile
 
 </td>
 <td width="50%" valign="top">
@@ -239,7 +239,7 @@ The skill follows this flow:
 
 Agents forget between sessions. Context windows overflow. Important knowledge gets buried in chat logs and meeting notes.
 
-Engram turns that into a fast, queryable memory system that keeps the team aligned on the same facts.
+Engram turns that into a queryable memory system that keeps the team aligned on the same facts.
 
 | Problem | Engram Solution |
 |---------|-----------------|

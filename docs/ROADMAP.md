@@ -2,6 +2,13 @@
 
 Roadmap de evolução do Engram como memória persistente para agentes e times que precisam organizar contexto proprietário, reduzir assimetria de informação e consultar a mesma base factual via MCP, CLI e APIs.
 
+This is a historical implementation roadmap. Use [`../CHANGELOG.md`](../CHANGELOG.md),
+release tags, and the generated [`MCP_TOOLS.md`](MCP_TOOLS.md) reference for
+current shipped state. Exact tool counts, benchmark ratios, protocol versions,
+schema versions, and phase descriptions below are implementation notes, not
+public marketing claims, unless they are re-verified against current source and
+dated artifacts.
+
 ## Phase Overview
 
 | Phase | Name | Status | Version | Description |
@@ -18,7 +25,7 @@ Roadmap de evolução do Engram como memória persistente para agentes e times q
 | 9 | Context Quality | Done | v0.4.0 | 5-component quality scoring, near-duplicate detection, conflict resolution, source trust |
 | 10 | MCP Modernization | Done | v0.6.0 | MCP 2025-11-25 protocol, Resources, Prompts, tool annotations, HTTP transport, server modularization |
 | 11 | Reactive Infrastructure | Done | v0.7.0 | SSE event streaming, agent registry, MCP dispatch benchmark |
-| E | Memory Compression & Consolidation | Done | v0.11.0 | Semantic compression (30x), online synthesis, sleep-time consolidation, context compression |
+| E | Memory Compression & Consolidation | Done | v0.11.0 | Semantic compression, online synthesis, sleep-time consolidation, context compression |
 | F | Agentic Memory Evolution | Done | v0.11.0 | Historical memory update, retrieval utility scoring, emotional & reflective memory |
 | G | Advanced Graph Intelligence | Done | v0.11.0 | Conflict detection/resolution, Hebbian coactivation, semantic triplet matching |
 | H | Autonomous Memory Agent | Done | v0.11.0 | Proactive acquisition, autonomous gardening, observe→decide→act agent loop |
@@ -154,7 +161,7 @@ Real-time event delivery, multi-agent federation foundation, and performance ben
 
 Cognitive-inspired memory compression and consolidation. Feature flag: `compression`.
 
-- **Semantic Structured Compression**: SimpleMem-inspired 30x token reduction via filler removal, SVO extraction, dedup
+- **Semantic Structured Compression**: SimpleMem-inspired token reduction via filler removal, SVO extraction, dedup
 - **Online Semantic Synthesis**: Intra-session dedup with Jaccard overlap detection
 - **Sleep-time Consolidation**: LightMem-inspired offline batch consolidation
 - **Active Context Compression**: Token-budget aware adaptive compression
@@ -241,7 +248,8 @@ Multi-agent memory sharing with access control, resumable SSE streams, browser-s
 
 ## What's Next
 
-The original 20-phase roadmap is complete. Future directions under consideration:
+This original 20-phase roadmap is archived as a historical implementation plan.
+Future directions under consideration:
 
 - **OpenClaw integration**: Memory plugin for the AI assistant platform
 - **Agent-to-agent messaging**: Event-driven communication via the agent registry
