@@ -103,6 +103,20 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 3. Entrar em Fase 2 (decisões/P1/P0): 28, 29, 26, 31, 32.
 4. Preparar Fase 4 com base no contrato de `harness_record` + `harness_status`.
 
+## AgentShield loop MVL — 2026-06-16
+
+- Added the minimum viable loop components for a bounded AgentShield security
+  scan:
+  - Automation: `.github/workflows/agentshield-loop.yml` runs weekly and by
+    manual dispatch.
+  - Skill: `skills/agentshield-scan/SKILL.md`.
+  - State: `docs/loops/agentshield-scan/STATE.md`.
+  - Gate: `scripts/run-agentshield-loop.sh`, also exposed as `make
+    loop-security` and `just loop-security`.
+- Scope is static triage only: no automatic remediation, no production
+  credentials, no auto-commit, and `LOOP_MAX_ITERATIONS` is capped at 5.
+- The loop is optional and not part of required PR branch protection.
+
 ## Security reference harness adaptation — 2026-06-04
 
 - Adicionada adaptação local do

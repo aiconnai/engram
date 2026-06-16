@@ -1,0 +1,54 @@
+name: AgentShield Loop
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      max_iterations:
+        description: "Bounded loop iteration cap"
+        required: false
+        default: "1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agentshield-loop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: AgentShield Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: agentshield-loop-v0.8.7
+
+      - name: Install AgentShield
+        run: |
+          cargo install \
+            --git https://github.com/limaronaldo/agentshield \
+            --tag v0.8.7 \
+            --features full \
+            --locked \
+            --force
+
+      - name: Run bounded AgentShield loop
+        env:
+          LOOP_MAX_ITERATIONS: ${{ github.event.inputs.max_iterations || '1' }}
+          LOOP_STATE_WRITE: "1"
+        run: bash scripts/run-agentshield-loop.sh
+
+      - name: Upload loop state
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: agentshield-loop-state
+          path: docs/loops/agentshield-scan/STATE.md

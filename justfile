@@ -33,3 +33,6 @@ backend-smoke:
 docs:
     ./scripts/generate-mcp-reference.sh --check
     RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --no-deps --document-private-items
+
+loop-security:
+    @bash scripts/run-agentshield-loop.sh

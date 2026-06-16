@@ -82,6 +82,34 @@ Enfram é o candidato natural para o **Memory Manager** layer porque ele já pro
 
 ---
 
+## 2026-06-16 — AgentShield loop MVL
+
+### Contexto
+
+Usuário pediu implementação de um loop engineering mínimo para AgentShield,
+com uma automação, uma skill, um arquivo de estado e um gate verificável.
+
+### Decisões
+
+- O loop fica fora dos checks obrigatórios de PR; ele roda semanalmente ou por
+  dispatch manual.
+- O gate local é `scripts/run-agentshield-loop.sh`, com `LOOP_MAX_ITERATIONS`
+  default `1` e hard cap `5`.
+- Baseline `.agentshield-baseline.json` só pode ser criada por opt-in explícito
+  com `LOOP_WRITE_BASELINE=1`; CI não reescreve baseline automaticamente.
+- O loop não faz remediação automática, commit, push, mudança de dependência ou
+  acesso a credenciais de produção.
+
+### Artefatos
+
+- `.github/workflows/agentshield-loop.yml`
+- `skills/agentshield-scan/SKILL.md`
+- `docs/loops/agentshield-scan/STATE.md`
+- `scripts/run-agentshield-loop.sh`
+- Targets `loop-security` em `Makefile` e `justfile`.
+
+---
+
 ## 2026-05-31 — Session 2: Phase 0 Stabilization, Exclusion Trail, and PASS Evidence
 
 ### Contexto da sessão
