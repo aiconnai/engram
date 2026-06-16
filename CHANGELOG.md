@@ -11,6 +11,22 @@ No unreleased changes yet.
 
 ---
 
+## [0.21.2] - 2026-06-16
+
+### Changed
+
+- **Release notes source** — GitHub Release bodies now come from the reviewed
+  `CHANGELOG.md` section for the requested tag instead of GitHub-generated
+  notes, preventing reruns from expanding old PR lists.
+- **Release automation hygiene** — Release preflight now blocks existing tags
+  unless `overwrite_assets=true` is explicitly requested, and Homebrew formula
+  updates skip no-op commits while checking for the tap token up front.
+- **Public claims hygiene** — README, roadmap, and release docs now use more
+  conservative wording and document which public-use claims still need
+  publication-time fact-checking.
+
+---
+
 ## [0.21.1] - 2026-06-15
 
 ### Added
@@ -901,6 +917,7 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 
 ## Version History
 
+- **0.21.2** - Release-note source control, release immutability guard, and public claims hygiene
 - **0.21.1** - Release notes, public documentation claim hygiene, and docs/CI cleanup
 - **0.21.0** - Lifecycle hooks wired into MCP server, Dream Phase, smart retrieval, and server build fixes
 - **0.20.0** - Progressive MCP discovery, session handoff, markdown export, advanced filters, and SDK updates
@@ -916,6 +933,7 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 - **0.2.0** - Early feature parity milestone
 - **0.1.0** - Initial release with full feature set
 
+[0.21.2]: https://github.com/aiconnai/engram/compare/v0.21.1...v0.21.2
 [0.21.1]: https://github.com/aiconnai/engram/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/aiconnai/engram/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/aiconnai/engram/compare/v0.19.0...v0.20.0
