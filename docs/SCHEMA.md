@@ -3,8 +3,13 @@
 This schema backs the persistent memory layer that stores team context, retrieval indexes, provenance, and coordination data for agents and humans working against the same source of truth.
 
 **Date:** March 9, 2026
-**Current Version:** v31
+**Historical Snapshot Version:** v31
 **Engine:** SQLite with WAL mode
+
+**Status:** This file is a historical schema narrative and may lag the current
+source. The current source-of-truth schema version is `SCHEMA_VERSION` in
+`src/storage/migrations.rs`; as of v0.21.2 it is v44. Verify the source before
+using schema details in public docs or migration work.
 
 ---
 

@@ -4,9 +4,9 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
 
 ## What Lives Where
 
-- `ARCHITECTURE.md`: Cloud/hosted architecture, request flow, and tenant isolation model.
-- `REFERENCE.md`: Cloud HTTP/MCP API reference, auth, tenant resolution, and error codes.
-- `OPERATIONS.md`: SLOs, alerts, backup/restore, and incident playbooks.
+- `ARCHITECTURE.md`: Hosted/cloud architecture reference, request flow, and tenant isolation model.
+- `REFERENCE.md`: Hosted HTTP/MCP API reference, auth, tenant resolution, and error codes.
+- `OPERATIONS.md`: Hosted deployment targets, alerts, backup/restore, and incident playbooks.
 - `CONTROL_PLANE_SCHEMA.sql`: Postgres schema for the cloud control plane.
 - `QUICKSTART.md`: Command-first local quick reference.
 - `SCHEMA.md`: Local Engram SQLite schema and migrations.
@@ -20,7 +20,7 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
 
 ## Notes
 
-- Cloud documents describe Engram Cloud (SaaS). They do not change core Engram behavior.
+- Cloud documents describe hosted deployment patterns and planned managed-service surfaces. They do not change core Engram behavior, and public SaaS availability or SLO claims need deployment-time verification.
 - Root stays reserved for repository identity, build/config entrypoints, GitHub-visible policy files, and agent context files consumed by tooling.
 - Core/OSS documentation lives in the repo root when tools expect it there, or under `docs/` when it is reference material.
 - The README explains the product thesis and primary workflows; this directory explains how the cloud, local schema, and repo integration pieces fit together.

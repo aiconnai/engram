@@ -14,9 +14,10 @@ the reviewed changelog.
 
 ## Next Version Decision
 
-Use the next patch version, currently `0.21.2`, for release automation,
+Use the next patch version after the latest released tag for release automation,
 documentation hygiene, claim hygiene, token/secret rotation, and other changes
-that do not alter public runtime behavior.
+that do not alter public runtime behavior. After `v0.21.2`, that next patch
+version is `0.21.3`.
 
 Use `0.22.0` when the next release includes product-facing changes to MCP
 tools, SDK APIs, CLI behavior, storage behavior, or agent workflows.

@@ -87,17 +87,20 @@ Use `ENGRAM_CORS_ORIGINS="*"` only for explicitly open deployments.
 For each new Fly.io deployment of `engram-server` with HTTP transport enabled,
 run this validation sequence before routing production traffic:
 
+Replace `https://your-fly-app.fly.dev` with your own deployment URL. The
+placeholder is not a public Engram service endpoint.
+
 1. **Health and protection state**
 
 ```bash
-curl -sS https://your-engram-api.fly.dev/health | jq '.protection, .transport.http.mcp_requests_total'
+curl -sS https://your-fly-app.fly.dev/health | jq '.protection, .transport.http.mcp_requests_total'
 ```
 
 2. **Unauthorized access must fail**
 
 ```bash
 curl -sS -o /tmp/mcp-no-auth.json -w "%{http_code}\n" \
-  https://your-engram-api.fly.dev/mcp \
+  https://your-fly-app.fly.dev/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
@@ -111,7 +114,7 @@ Expect:
 
 ```bash
 curl -sS -o /tmp/mcp-with-auth.json -w "%{http_code}\n" \
-  https://your-engram-api.fly.dev/mcp \
+  https://your-fly-app.fly.dev/mcp \
   -H "Authorization: Bearer $ENGRAM_HTTP_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
@@ -130,7 +133,7 @@ for i in 1 2 3; do
     -H "Authorization: Bearer $ENGRAM_HTTP_API_KEY" \
     -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-    https://your-engram-api.fly.dev/mcp
+    https://your-fly-app.fly.dev/mcp
 done
 ```
 
@@ -144,7 +147,7 @@ Expect the third request to return:
 
 ```bash
 curl -sS -o /tmp/events-unauth.json -w "%{http_code}\n" \
-  "https://your-engram-api.fly.dev/v1/events?workspace=default" \
+  "https://your-fly-app.fly.dev/v1/events?workspace=default" \
   -H "Accept: text/event-stream"
 ```
 
@@ -153,7 +156,7 @@ Expect HTTP `401`.
 6. **Confirm metrics are exposed**
 
 ```bash
-curl -sS https://your-engram-api.fly.dev/health | jq '.transport.http'
+curl -sS https://your-fly-app.fly.dev/health | jq '.transport.http'
 ```
 
 Check that `mcp_requests_total`, `mcp_rate_limited_total`, and

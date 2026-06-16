@@ -1,13 +1,17 @@
-# Engram Cloud Architecture
+# Engram Hosted/Cloud Architecture
 
 **Date:** 2026-05-27 *(updated to reflect v32–v39 migration phases)*  
 **Goal:** Provide a managed source of truth for team memory without forcing every project to build its own ingestion, indexing, and retrieval stack.
 
+**Status:** This document is an architecture reference for hosted deployments
+and managed-service planning. It is not a public availability, enterprise SKU,
+or production SLO claim unless those services are verified separately.
+
 ## Product Line
 
 - **Engram OSS (MIT):** single-tenant, BYO storage, self-hosted memory for teams and agents.
-- **Engram Cloud (SaaS):** multi-tenant, managed hosting, shared workspaces, quotas, metering, and a dashboard.
-- **Engram Enterprise:** Cloud + SSO/SCIM, audit, governance, SLA.
+- **Engram Cloud / hosted deployment:** multi-tenant managed hosting pattern with shared workspaces, quotas, metering, and a dashboard.
+- **Engram Enterprise:** hosted deployment plus SSO/SCIM, audit, governance, and SLA requirements when contracted and implemented.
 
 ## High-level System
 

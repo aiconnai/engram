@@ -5,9 +5,18 @@ All notable changes to Engram will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Older entries preserve historical release wording. Do not reuse benchmark,
+competitor, package-version, or hosted-service language from this changelog as
+public marketing copy without re-verifying it against current source, releases,
+package registries, and dated external sources.
+
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+
+- **Public documentation claim hygiene** — Qualified hosted/cloud references,
+  package-channel lag, schema snapshots, release guidance, and benchmark-style
+  examples so public copy distinguishes verified facts from deployment patterns.
 
 ---
 

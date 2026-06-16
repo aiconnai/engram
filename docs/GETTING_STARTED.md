@@ -12,7 +12,7 @@ Use Engram when you need one place for meetings, decisions, transcripts, and rec
 
 ```bash
 git clone https://github.com/aiconnai/engram.git
-cd engram/engram
+cd engram
 cargo install --path .
 ```
 
@@ -20,24 +20,16 @@ This installs two binaries: `engram-server` and `engram-cli`.
 
 ### Pre-built Binaries
 
-Download from [GitHub Releases](https://github.com/aiconnai/engram/releases):
+Download platform archives from [GitHub Releases](https://github.com/aiconnai/engram/releases).
+Release artifacts are tarballs named `engram-vX.Y.Z-<target>.tar.gz` and
+contain both `engram-server` and `engram-cli`.
 
 ```bash
-# macOS (Apple Silicon)
-curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-server-macos-arm64 -o engram-server
-curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-cli-macos-arm64 -o engram-cli
-chmod +x engram-server engram-cli
-sudo mv engram-server engram-cli /usr/local/bin/
-
-# macOS (Intel)
-curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-server-macos-x86_64 -o engram-server
-curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-cli-macos-x86_64 -o engram-cli
-chmod +x engram-server engram-cli
-sudo mv engram-server engram-cli /usr/local/bin/
-
-# Linux (x86_64)
-curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-server-linux-x86_64 -o engram-server
-curl -L https://github.com/aiconnai/engram/releases/latest/download/engram-cli-linux-x86_64 -o engram-cli
+# Replace VERSION and TARGET with the release tag and platform target you need.
+VERSION=v0.21.2
+TARGET=x86_64-unknown-linux-gnu
+curl -L "https://github.com/aiconnai/engram/releases/download/${VERSION}/engram-${VERSION}-${TARGET}.tar.gz" -o engram.tar.gz
+tar -xzf engram.tar.gz
 chmod +x engram-server engram-cli
 sudo mv engram-server engram-cli /usr/local/bin/
 ```
@@ -48,10 +40,14 @@ sudo mv engram-server engram-cli /usr/local/bin/
 brew install aiconnai/engram/engram
 ```
 
-### Docker
+### Local Docker Build
+
+A Dockerfile is included for local builds. A public GHCR image is not verified
+as part of the current release channel.
 
 ```bash
-docker run -v engram-data:/data ghcr.io/aiconnai/engram-server:latest
+docker build -t engram:local .
+docker run -v engram-data:/data engram:local
 ```
 
 ---

@@ -7,9 +7,12 @@ This guide shows how to connect any project repository to Engram so coding agent
 Use one of these modes:
 
 - **Local mode**: each machine runs `engram-server` and stores memory in a local SQLite database.
-- **Cloud mode**: repositories and agents connect to a shared private Engram server over HTTPS.
+- **Hosted mode**: repositories and agents connect to a shared private Engram server over HTTPS.
 
-For personal or internal project memory, cloud mode is usually simpler: one persistent memory service, separated by workspaces, without running a multi-tenant SaaS gateway. Local mode is better when the repository should own its own context store and keep the data beside the codebase.
+For personal or internal project memory, hosted mode is often simpler: one
+persistent memory service, separated by workspaces, without requiring a public
+multi-tenant SaaS gateway. Local mode is better when the repository should own
+its own context store and keep the data beside the codebase.
 
 ## 1. Install Engram
 
@@ -18,6 +21,9 @@ From crates.io:
 ```bash
 cargo install engram-core
 ```
+
+The crates.io package can lag the latest GitHub/Homebrew release. Check the
+crate badge or release page if you need an exact version.
 
 Or from this repository:
 
@@ -105,14 +111,14 @@ Add this server to your Claude Code MCP config:
 
 Use an absolute path for global configs so the server starts with the intended database.
 
-### Option B: Private Cloud MCP Server
+### Option B: Private Hosted MCP Server
 
-Use this when all repos should share the same Engram cloud instance.
+Use this when all repos should share the same private Engram instance.
 
-Current private cloud endpoint:
+Example private hosted endpoint:
 
 ```text
-https://your-engram-mcp.fly.dev/mcp
+https://engram.example.com/mcp
 ```
 
 The server requires:
@@ -137,7 +143,7 @@ MCP clients differ in how they support remote HTTP MCP servers. If your client s
 {
   "mcpServers": {
     "engram-cloud": {
-      "url": "https://your-engram-mcp.fly.dev/mcp",
+      "url": "https://engram.example.com/mcp",
       "headers": {
         "Authorization": "Bearer ${ENGRAM_HTTP_API_KEY}"
       }
@@ -146,7 +152,7 @@ MCP clients differ in how they support remote HTTP MCP servers. If your client s
 }
 ```
 
-If your MCP client only supports local command servers, run a small local proxy or use the local `engram-server` mode instead. Application code can still call the cloud server directly over HTTP as shown below.
+If your MCP client only supports local command servers, run a small local proxy or use the local `engram-server` mode instead. Application code can still call the hosted server directly over HTTP as shown below.
 
 ## 4. Add Repo Instructions for Agents
 
@@ -189,14 +195,14 @@ engram-cli create "Run cargo fmt --check, cargo clippy, and cargo test before PR
   --tags "workflow,verification"
 ```
 
-### Cloud MCP
+### Hosted MCP
 
-Call the cloud MCP endpoint with the project workspace:
+Call the hosted MCP endpoint with the project workspace:
 
 ```bash
 TOKEN=$(cat ~/.config/engram/engram-mcp-http-api-key)
 
-curl -X POST https://your-engram-mcp.fly.dev/mcp \
+curl -X POST https://engram.example.com/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -233,12 +239,12 @@ MCP prompt:
 
 > Search Engram for prior decisions about database migrations before changing the schema.
 
-Cloud MCP search:
+Hosted MCP search:
 
 ```bash
 TOKEN=$(cat ~/.config/engram/engram-mcp-http-api-key)
 
-curl -X POST https://your-engram-mcp.fly.dev/mcp \
+curl -X POST https://engram.example.com/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -310,14 +316,14 @@ curl -X POST http://localhost:8080/mcp \
   }'
 ```
 
-### Private Cloud HTTP
+### Private Hosted HTTP
 
-Use the shared cloud endpoint:
+Use the shared hosted endpoint:
 
 ```bash
 TOKEN=$(cat ~/.config/engram/engram-mcp-http-api-key)
 
-curl -X POST https://your-engram-mcp.fly.dev/mcp \
+curl -X POST https://engram.example.com/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -366,7 +372,7 @@ Recommended `.gitignore` entry:
 .engram/
 ```
 
-### Cloud Mode
+### Hosted Mode
 
 Commit only documentation and non-secret config:
 
@@ -381,7 +387,7 @@ your-repo/
 Example `.env.example`:
 
 ```bash
-ENGRAM_MCP_URL=https://your-engram-mcp.fly.dev/mcp
+ENGRAM_MCP_URL=https://engram.example.com/mcp
 ENGRAM_WORKSPACE=my-org/my-repo
 # Set locally, never commit:
 # ENGRAM_HTTP_API_KEY=...
@@ -407,7 +413,7 @@ from engram_client.integrations import CouncilSkill
 
 async def run_consensus() -> None:
     async with EngramClient(
-        base_url="https://your-engram-api.fly.dev",
+        base_url="https://engram.example.com",
         api_key="ek_...",
         tenant="my-tenant",
     ) as client:
@@ -428,7 +434,7 @@ TypeScript:
 import { CouncilSkill, EngramClient } from "engram-client";
 
 const client = new EngramClient({
-  baseUrl: "https://your-engram-api.fly.dev",
+  baseUrl: "https://engram.example.com",
   apiKey: "ek_...",
   tenant: "my-tenant",
 });
@@ -446,7 +452,7 @@ const result = await skill.askWithPersistence(
 Direct MCP fallback:
 
 ```bash
-curl -X POST https://your-engram-mcp.fly.dev/mcp \
+curl -X POST https://engram.example.com/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
