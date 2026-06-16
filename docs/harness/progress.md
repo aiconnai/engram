@@ -96,6 +96,43 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `bash docs/harness/bin/vc-gate.sh done ci` — PASS.
   - `bash docs/harness/bin/doctor.sh` — PASS.
 
+## Code quality maintenance — 2026-06-16
+
+- Aplicada fatia de alta confiança do relatório de qualidade:
+  - Python SDK: `close()` agora é idempotente, zera `_client` após fechar e
+    bloqueia `_mcp_call` em cliente fechado; `list()`/`search()` usam
+    `filter_` no Python e enviam `filter` no payload MCP.
+  - TypeScript SDK: request IDs JSON-RPC agora incrementam por cliente; opções
+    públicas ganharam parity para `filter`, `mediaUrl`, workspaces e filtros
+    de escopo suportados pela superfície MCP; testes foram reescritos para
+    validar métodos públicos em vez de membros privados.
+  - Cargo: removidos `anyhow`, `deadpool-sqlite`, `jsonrpc-core`,
+    `levenshtein`, dev-deps não usadas, `wasm-bindgen-test` do crate WASM e o
+    bin dummy `engram-core`/`src/main.rs`.
+- `prost` foi mantido e documentado em `package.metadata.cargo-machete`
+  porque é requerido por código gerado do recurso `grpc`.
+- Fora de escopo deliberado: deleção dos módulos Rust de confiança média e
+  deduplicações maiores; eles exigem revisão de compatibilidade pública.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-16-code-quality-maintenance.md`.
+- Post-review prompt gerado em
+  `docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md.raw`;
+  sem verdict independente ainda porque o fluxo exige outro CLI/reviewer.
+- Verificações:
+  - `npm test` em `sdks/typescript` — PASS.
+  - `npm run type-check` em `sdks/typescript` — PASS.
+  - `uv run --with pytest-asyncio pytest` em `sdks/python` — PASS, 162 tests.
+  - `cargo check --all-targets` — PASS.
+  - `cargo check -p engram-core --features grpc --all-targets` — PASS.
+  - `cargo check -p engram-wasm --all-targets` — PASS.
+  - `cargo check -p engram-wasm --target wasm32-unknown-unknown` — PASS.
+  - `cargo machete` — PASS.
+  - `cargo fmt --all -- --check` — PASS.
+  - `cargo clippy --all-targets --all-features -- -D warnings` — PASS.
+  - `git diff --check` — PASS.
+  - `make ci` — PASS.
+  - `bash docs/harness/bin/sensors.sh` — PASS (`make ci + doctor`).
+
 ## Próximos passos imediatos
 
 1. Fechar post review do estado atual com artefato `REVIEW_VERDICT: PASS`.

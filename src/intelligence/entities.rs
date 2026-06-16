@@ -521,15 +521,14 @@ impl EntityExtractor {
         // Extract concepts
         if self.config.extract_concepts {
             for concept in &self.known_concepts {
-                if let Some(pos) = text_lower.find(concept) {
-                    let original = &text[pos..pos + concept.len()];
+                if let Some((pos, original)) = find_case_insensitive_match(text, concept) {
                     entities.push(ExtractedEntity {
                         text: original.to_string(),
                         normalized: concept.clone(),
                         entity_type: EntityType::Concept,
                         confidence: 0.85,
                         offset: pos,
-                        length: concept.len(),
+                        length: original.len(),
                         suggested_relation: EntityRelation::About,
                     });
                 }
@@ -594,6 +593,27 @@ impl Default for EntityExtractor {
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+fn find_case_insensitive_match<'a>(text: &'a str, needle: &str) -> Option<(usize, &'a str)> {
+    let needle_len = needle.chars().count();
+    if needle_len == 0 {
+        return None;
+    }
+
+    for (start, _) in text.char_indices() {
+        let end = match text[start..].char_indices().nth(needle_len) {
+            Some((offset, _)) => start + offset,
+            None => text.len(),
+        };
+        let candidate = &text[start..end];
+
+        if candidate.chars().count() == needle_len && candidate.to_lowercase() == needle {
+            return Some((start, candidate));
+        }
+    }
+
+    None
+}
 
 /// Normalize a name for matching
 fn normalize_name(name: &str) -> String {

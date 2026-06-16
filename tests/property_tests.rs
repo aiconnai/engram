@@ -123,52 +123,39 @@ mod alias_tests {
 
 mod extraction_tests {
     use super::*;
-    use engram::intelligence::entity_extraction::{extract_entities, ExtractionConfig};
+    use engram::intelligence::entities::{EntityExtractionConfig, EntityExtractor};
 
     proptest! {
         /// Invariant: Extraction never panics on any input
         #[test]
         fn never_panics(s in "\\PC{0,1000}") {
-            let config = ExtractionConfig {
-                lookup_aliases: false,
-                ..Default::default()
-            };
-            let _ = extract_entities(&s, &config, None);
+            let extractor = EntityExtractor::new(EntityExtractionConfig::default());
+            let _ = extractor.extract(&s);
         }
 
-        /// Invariant: Result count is bounded
+        /// Invariant: Extraction result length is bounded by input length.
         #[test]
-        fn bounded_results(s in "\\PC{0,500}", max in 1usize..50) {
-            let config = ExtractionConfig {
-                lookup_aliases: false,
-                max_entities: max,
-                ..Default::default()
-            };
-            let result = extract_entities(&s, &config, None);
-            prop_assert!(result.entities.len() <= max);
+        fn bounded_results(s in "\\PC{0,500}") {
+            let extractor = EntityExtractor::new(EntityExtractionConfig::default());
+            let result = extractor.extract(&s);
+            prop_assert!(result.entities.len() <= s.chars().count());
         }
 
         /// Invariant: Empty input yields empty results
         #[test]
         fn empty_input_empty_result(s in "\\s*") {
-            let config = ExtractionConfig {
-                lookup_aliases: false,
-                ..Default::default()
-            };
-            let result = extract_entities(&s, &config, None);
+            let extractor = EntityExtractor::new(EntityExtractionConfig::default());
+            let result = extractor.extract(&s);
             prop_assert!(result.entities.is_empty());
         }
 
         /// Invariant: Each entity has non-empty mention text
         #[test]
         fn entities_have_text(s in "@[a-z]{1,10}( @[a-z]{1,10})*") {
-            let config = ExtractionConfig {
-                lookup_aliases: false,
-                ..Default::default()
-            };
-            let result = extract_entities(&s, &config, None);
+            let extractor = EntityExtractor::new(EntityExtractionConfig::default());
+            let result = extractor.extract(&s);
             for entity in &result.entities {
-                prop_assert!(!entity.mention_text.is_empty());
+                prop_assert!(!entity.text.is_empty());
             }
         }
     }

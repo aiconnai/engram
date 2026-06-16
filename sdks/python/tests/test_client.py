@@ -36,6 +36,7 @@ def mock_response():
     response = MagicMock()
     response.status_code = 200
     response.text = "OK"
+    response.raise_for_status.return_value = None
     response.json.return_value = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -103,9 +104,8 @@ class TestMCPCall:
 
     @pytest.mark.asyncio
     async def test_mcp_call_http_error(self, mock_client):
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_response.text = "Not Found"
+        request = httpx.Request("POST", "https://test.engram.dev/v1/mcp")
+        mock_response = httpx.Response(404, text="Not Found", request=request)
         mock_client._client.post.return_value = mock_response
 
         with pytest.raises(EngramError, match="HTTP 404"):

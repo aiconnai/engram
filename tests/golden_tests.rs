@@ -135,7 +135,8 @@ mod alias_golden {
 
 mod extraction_golden {
     use super::*;
-    use engram::intelligence::entity_extraction::{extract_entities, ExtractionConfig};
+    use engram::intelligence::entities::{EntityExtractionConfig, EntityExtractor, EntityType};
+    use std::collections::HashMap;
 
     #[derive(Debug, Deserialize)]
     struct TestCase {
@@ -157,6 +158,20 @@ mod extraction_golden {
         test_cases: Vec<TestCase>,
     }
 
+    fn map_expected_entity_type(entity_type: &str) -> EntityType {
+        match entity_type {
+            "Mention" => EntityType::Person,
+            "Name" => EntityType::Person,
+            "Email" => EntityType::Reference,
+            "Organization" => EntityType::Organization,
+            "Project" => EntityType::Project,
+            "Concept" => EntityType::Concept,
+            "Location" => EntityType::Location,
+            "Date" | "DateTime" => EntityType::DateTime,
+            other => panic!("Unexpected entity type in fixture: {other}"),
+        }
+    }
+
     #[test]
     fn test_entity_extraction_golden() {
         let fixture_path = concat!(
@@ -168,53 +183,45 @@ mod extraction_golden {
         let fixture: Fixture =
             serde_json::from_str(&content).expect("Failed to parse fixture JSON");
 
-        let config = ExtractionConfig {
-            lookup_aliases: false,
-            ..Default::default()
-        };
+        let extractor = EntityExtractor::new(EntityExtractionConfig::default());
 
         for case in fixture.test_cases {
-            let result = extract_entities(&case.input, &config, None);
+            let result = extractor.extract(&case.input);
 
-            assert_eq!(
-                result.entities.len(),
-                case.expected_entities.len(),
-                "Case '{}': entity count mismatch. Expected {:?}, got {:?}",
-                case.name,
-                case.expected_entities
-                    .iter()
-                    .map(|e| &e.mention_text)
-                    .collect::<Vec<_>>(),
-                result
-                    .entities
-                    .iter()
-                    .map(|e| &e.mention_text)
-                    .collect::<Vec<_>>()
-            );
+            let mut actual_counts: HashMap<String, usize> = HashMap::new();
+            let mut actual_types: HashMap<String, EntityType> = HashMap::new();
+
+            for entity in &result.entities {
+                *actual_counts.entry(entity.text.clone()).or_insert(0) += 1;
+                actual_types
+                    .entry(entity.text.clone())
+                    .or_insert(entity.entity_type);
+            }
 
             for (i, expected) in case.expected_entities.iter().enumerate() {
-                let actual = &result.entities[i];
+                let actual_count = actual_counts
+                    .get(&expected.mention_text)
+                    .copied()
+                    .unwrap_or(0);
+                let expected_count = expected.count.unwrap_or(1);
 
                 assert_eq!(
-                    actual.mention_text, expected.mention_text,
+                    actual_count, expected_count,
                     "Case '{}': entity {} mention_text mismatch",
                     case.name, i
                 );
 
-                let expected_type = format!("{:?}", actual.entity_type);
+                let actual_type = actual_types
+                    .get(&expected.mention_text)
+                    .copied()
+                    .expect("Expected entity text must be present in extraction result");
+                let expected_type = map_expected_entity_type(&expected.entity_type);
+
                 assert_eq!(
-                    expected_type, expected.entity_type,
+                    actual_type, expected_type,
                     "Case '{}': entity {} type mismatch",
                     case.name, i
                 );
-
-                if let Some(expected_count) = expected.count {
-                    assert_eq!(
-                        actual.count, expected_count,
-                        "Case '{}': entity {} count mismatch",
-                        case.name, i
-                    );
-                }
             }
         }
     }

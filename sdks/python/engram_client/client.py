@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import count
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -43,7 +43,7 @@ class EngramClient:
     ):
         self.base_url = base_url.rstrip("/")
         self.tenant = tenant
-        self._client = httpx.AsyncClient(
+        self._client: httpx.AsyncClient | None = httpx.AsyncClient(
             base_url=self.base_url,
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -55,7 +55,11 @@ class EngramClient:
         self._id_counter = count(1)  # JSON-RPC id (thread/coroutine-safe)
 
     async def close(self) -> None:
-        await self._client.aclose()
+        client = self._client
+        if client is None:
+            return
+        await client.aclose()
+        self._client = None
 
     async def __aenter__(self) -> "EngramClient":
         return self
@@ -67,6 +71,9 @@ class EngramClient:
 
     async def _mcp_call(self, method: str, params: dict[str, Any] | None = None) -> Any:
         """Execute an MCP tool call over HTTP."""
+        client = self._client
+        if client is None:
+            raise EngramError("EngramClient is closed")
         payload = {
             "jsonrpc": "2.0",
             "id": next(self._id_counter),
@@ -76,7 +83,7 @@ class EngramClient:
                 "arguments": params or {},
             },
         }
-        resp = await self._client.post("/v1/mcp", json=payload)
+        resp = await client.post("/v1/mcp", json=payload)
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as e:
@@ -162,16 +169,17 @@ class EngramClient:
         workspace: str | None = None,
         memory_type: str | None = None,
         tags: list[str] | None = None,
-        filter: dict | None = None,
+        filter_: dict[str, Any] | None = None,
         sort_by: str | None = None,
         sort_order: str | None = None,
     ) -> dict[str, Any]:
         """List memories with optional filters.
 
-        Advanced filtering is supported via the ``filter`` parameter using
-        AND/OR combinators and comparison operators::
+        Advanced filtering is supported via the ``filter_`` parameter, which is
+        sent to the MCP API as ``filter`` using AND/OR combinators and
+        comparison operators::
 
-            client.list(filter={
+            client.list(filter_={
                 "AND": [
                     {"importance": {"gte": 0.8}},
                     {"metadata.project": {"eq": "engram"}},
@@ -188,8 +196,8 @@ class EngramClient:
             params["memory_type"] = memory_type
         if tags is not None:
             params["tags"] = tags
-        if filter is not None:
-            params["filter"] = filter
+        if filter_ is not None:
+            params["filter"] = filter_
         if sort_by is not None:
             params["sort_by"] = sort_by
         if sort_order is not None:
@@ -204,18 +212,18 @@ class EngramClient:
         *,
         limit: int = 10,
         workspace: str | None = None,
-        filter: dict[str, Any] | None = None,
+        filter_: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Hybrid search (BM25 + vector + fuzzy).
 
-        Accepts the same ``filter`` syntax as :meth:`list` for advanced
+        Accepts the same ``filter_`` syntax as :meth:`list` for advanced
         metadata filtering on search results.
         """
         params: dict[str, Any] = {"query": query, "limit": limit}
         if workspace is not None:
             params["workspace"] = workspace
-        if filter is not None:
-            params["filter"] = filter
+        if filter_ is not None:
+            params["filter"] = filter_
         return await self._mcp_call("memory_search", params)
 
     async def memory_council(

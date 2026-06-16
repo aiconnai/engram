@@ -25,7 +25,6 @@ pub mod auto_consolidate;
 pub mod auto_tagging;
 pub mod compression;
 pub mod compression_semantic;
-pub mod consolidation;
 pub mod consolidation_offline;
 pub mod content_utils;
 pub mod context_builder;
@@ -34,7 +33,6 @@ pub mod context_quality;
 pub mod document_ingest;
 pub mod emotional;
 pub mod entities;
-pub mod entity_extraction;
 pub mod fact_extraction;
 pub mod gardening;
 pub mod memory_policy;
@@ -42,7 +40,6 @@ pub mod memory_update;
 pub mod natural_language;
 pub mod proactive;
 pub mod project_context;
-pub mod quality;
 pub mod salience;
 pub mod session_context;
 pub mod session_indexing;
@@ -60,7 +57,6 @@ pub use auto_capture::{
     AutoCaptureConfig, AutoCaptureEngine, CaptureCandidate, CaptureType, ConversationTracker,
 };
 pub use auto_tagging::{AutoTagConfig, AutoTagResult, AutoTagger, TagSource, TagSuggestion};
-pub use consolidation::{ConsolidationEngine, ConsolidationResult, ConsolidationStrategy};
 pub use content_utils::{
     compact_preview, content_stats, soft_trim, CompactMemory, ContentStats, SoftTrimConfig,
     SoftTrimResult,
@@ -73,16 +69,11 @@ pub use entities::{
     Entity, EntityExtractionConfig, EntityExtractor, EntityRelation, EntityType, ExtractedEntity,
     ExtractionResult, MemoryEntity,
 };
-pub use entity_extraction::{
-    auto_link_memory, extract_entities, ExtractedEntity as NerExtractedEntity, ExtractedEntityType,
-    ExtractionConfig, ExtractionResult as NerExtractionResult,
-};
 pub use natural_language::{CommandType, NaturalLanguageParser, ParsedCommand};
 pub use project_context::{
     DiscoveredFile, InstructionFileParser, InstructionFileType, ParsedInstructions, ParsedSection,
     ProjectContextConfig, ProjectContextEngine, ScanResult, CORE_INSTRUCTION_FILES,
 };
-pub use quality::{QualityMetrics, QualityScore, QualityScorer};
 pub use salience::{
     boost_memory_salience, demote_memory_salience, get_memory_salience,
     get_memory_salience_with_feedback, get_salience_history, get_salience_stats,

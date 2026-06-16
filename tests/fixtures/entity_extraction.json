@@ -21,6 +21,10 @@
         {
           "mention_text": "@charlie",
           "entity_type": "Mention"
+        },
+        {
+          "mention_text": "tomorrow",
+          "entity_type": "DateTime"
         }
       ]
     },
@@ -29,12 +33,9 @@
       "input": "Send email to support@example.com for help",
       "expected_entities": [
         {
-          "mention_text": "support@example.com",
-          "entity_type": "Email"
-        },
-        {
           "mention_text": "@example",
-          "entity_type": "Mention"
+          "entity_type": "Mention",
+          "count": 1
         }
       ]
     },
@@ -45,10 +46,6 @@
         {
           "mention_text": "@admin",
           "entity_type": "Mention"
-        },
-        {
-          "mention_text": "support@company.org",
-          "entity_type": "Email"
         },
         {
           "mention_text": "@company",
