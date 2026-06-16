@@ -24,4 +24,5 @@ Append one entry per run. Retain the last 30 days or last 200 entries.
 
 | run_id | level | items | actions | escalations | tokens | outcome |
 |---|---|---:|---:|---:|---:|---|
+| 2026-06-16T22:17:24Z | L1 | 1 | 0 | 1 | 6500 | escalated |
 | 2026-06-16T22:05:37Z | L1 | 3 | 0 | 0 | 9500 | report-only |
