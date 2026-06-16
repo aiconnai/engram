@@ -13,6 +13,7 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
 - `integrations/`: MCP and ecosystem integration guides for Claude Code, Cursor, OpenAI agent workflows, and generic MCP clients.
 - `awesome-list-submissions.md`: External awesome-list targets, opened PRs, and blocked/manual submissions.
 - `../examples/`: Runnable MCP and ecosystem memory examples for Claude, Cursor, OpenAI Agents SDK, FastMCP, LangGraph, and CrewAI.
+- `releases/`: Release-note source, next-version policy, and public-claims gate.
 - `rfcs/`: Proposed design records and product-boundary RFCs.
 - `strategy/`: Product and competitive strategy notes extracted from prior research.
 - `USING_ENGRAM_IN_A_REPO.md`: How another repository connects to Engram through MCP, CLI, or HTTP.

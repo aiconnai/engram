@@ -138,13 +138,15 @@ jobs:
           cat release/*.sha256 >> release/CHECKSUMS.md
           echo '```' >> release/CHECKSUMS.md
           cat release/CHECKSUMS.md
+          .github/scripts/extract-release-notes.sh "${RELEASE_VERSION}" CHANGELOG.md release/RELEASE_NOTES.md
+          cat release/RELEASE_NOTES.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_VERSION }}
           draft: false
-          generate_release_notes: true
+          body_path: release/RELEASE_NOTES.md
           files: |
             release/*.tar.gz
             release/*.sha256
