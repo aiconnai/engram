@@ -14,6 +14,9 @@ package registries, and dated external sources.
 
 ### Changed
 
+- **AgentShield loop scaffold** — Added a bounded weekly/manual security scan
+  loop with a repository skill, state handoff, local Make/just target, and
+  explicit high-severity AgentShield gate.
 - **Public documentation claim hygiene** — Qualified hosted/cloud references,
   package-channel lag, schema snapshots, release guidance, and benchmark-style
   examples so public copy distinguishes verified facts from deployment patterns.
