@@ -15,39 +15,35 @@ pip install engram-client
 ## Quick Start
 
 ```python
-from engram_client import EngramClient
-
-client = EngramClient(
-    base_url="https://your-engram-api.fly.dev",
-    api_key="ek_...",
-    tenant="my-tenant",
-)
-
-# Create a memory
-memory = client.create(
-    "User prefers dark mode",
-    tags=["preferences", "ui"],
-    workspace="my-project",
-)
-
-# Search (hybrid: BM25 + vector + fuzzy)
-results = client.search("user preferences")
-
-# Run a council consensus session
 import asyncio
+from engram_client import EngramClient
 
 
 async def example() -> None:
-    async with EngramClient(base_url="https://your-engram-api.fly.dev", api_key="ek_...", tenant="my-tenant") as client:
-        await client.create("User prefers dark mode")
+    async with EngramClient(
+        base_url="https://your-engram-api.fly.dev",
+        api_key="ek_...",
+        tenant="my-tenant",
+    ) as client:
+        # Create a memory
+        memory = await client.create(
+            "User prefers dark mode",
+            tags=["preferences", "ui"],
+            workspace="my-project",
+        )
 
+        # Search (hybrid: BM25 + vector + fuzzy)
+        results = await client.search("user preferences")
+
+        # Run a council consensus session
         council = await client.memory_council(
             "Should we use Redis or Postgres for caching?",
             timeout_seconds=120,
             persist=True,
             workspace="architecture",
         )
-        print(council)
+
+        print(memory, results, council)
 
 
 asyncio.run(example())
@@ -85,27 +81,37 @@ asyncio.run(example())
 ```
 
 ```python
-# List with filters
-memories = client.list(limit=20, workspace="my-project")
+async with EngramClient(base_url="...", api_key="...", tenant="...") as client:
+    # List with workspace and metadata filters
+    memories = await client.list(
+        limit=20,
+        workspace="my-project",
+        filter_={"metadata.source": {"eq": "support"}},
+    )
 
-# Get by ID
-memory = client.get(42)
+    # Get by ID
+    memory = await client.get(42)
 
-# Update
-client.update(42, content="User prefers light mode", tags=["preferences"])
+    # Update content and multimodal media URL
+    await client.update(
+        42,
+        content="User prefers light mode",
+        tags=["preferences"],
+        media_url="https://example.com/preference.png",
+    )
 
-# Delete
-client.delete(42)
+    # Delete
+    await client.delete(42)
 
-# Stats
-stats = client.stats()
+    # Stats
+    stats = await client.stats()
 ```
 
 ## Context Manager
 
 ```python
-with EngramClient(base_url="...", api_key="...", tenant="...") as client:
-    client.create("Hello from Python SDK")
+async with EngramClient(base_url="...", api_key="...", tenant="...") as client:
+    await client.create("Hello from Python SDK")
 ```
 
 ## API Reference
@@ -126,11 +132,16 @@ with EngramClient(base_url="...", api_key="...", tenant="...") as client:
 
 ### Parameters
 
-**create / update kwargs:** `tags`, `workspace`, `memory_type`, `importance`, `metadata`, `tier`
+**create kwargs:** `memory_type`, `tags`, `workspace`, `metadata`, `importance`, `media_url`
 
-**list kwargs:** `limit`, `offset`, `workspace`, `memory_type`, `tags`, `sort_by`, `sort_order`
+**update kwargs:** `content`, `tags`, `metadata`, `importance`, `media_url`
 
-**search kwargs:** `limit`, `workspace`, `tags`, `memory_type`, `include_archived`
+**list kwargs:** `limit`, `offset`, `workspace`, `memory_type`, `tags`, `filter_`, `sort_by`, `sort_order`
+
+**search kwargs:** `limit`, `workspace`, `filter_`
+
+`filter_` is sent to the MCP API as `filter` and supports the same AND/OR and comparison-operator syntax as the server.
+
 **memory_council kwargs:** `conversation_id`, `council_url`, `timeout_seconds`, `include_raw_stages`, `persist`, `workspace`, `memory_tags`
 
 ## Requirements

@@ -388,6 +388,27 @@ class TestClose:
         # Should not raise
         await client.close()
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "args"),
+        [
+            ("create", ("closed client regression",)),
+            ("list", ()),
+            ("search", ("closed client regression",)),
+        ],
+    )
+    async def test_public_methods_raise_after_close(self, method_name, args):
+        client = EngramClient("https://example.com", "key", "tenant")
+        mock_http_client = AsyncMock()
+        client._client = mock_http_client
+
+        await client.close()
+
+        method = getattr(client, method_name)
+        with pytest.raises(EngramError, match="EngramClient is closed"):
+            await method(*args)
+        mock_http_client.post.assert_not_called()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
