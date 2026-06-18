@@ -407,7 +407,6 @@ impl EntityExtractor {
     pub fn extract(&self, text: &str) -> ExtractionResult {
         let start = std::time::Instant::now();
         let mut entities = Vec::new();
-        let text_lower = text.to_lowercase();
 
         // Extract @mentions (high confidence)
         if self.config.extract_people {
@@ -457,9 +456,7 @@ impl EntityExtractor {
 
             // Check for known organizations
             for org in &self.known_organizations {
-                if let Some(pos) = text_lower.find(org) {
-                    // Get the original case version
-                    let original = &text[pos..pos + org.len()];
+                if let Some((pos, original)) = find_case_insensitive_match(text, org) {
                     // Avoid duplicates
                     if !entities.iter().any(|e| e.offset == pos) {
                         entities.push(ExtractedEntity {
@@ -468,7 +465,7 @@ impl EntityExtractor {
                             entity_type: EntityType::Organization,
                             confidence: 0.9,
                             offset: pos,
-                            length: org.len(),
+                            length: original.len(),
                             suggested_relation: EntityRelation::Mentions,
                         });
                     }
@@ -696,6 +693,21 @@ mod tests {
 
         assert_eq!(refs.len(), 1);
         assert!(refs[0].text.contains("github.com"));
+    }
+
+    #[test]
+    fn test_extract_known_organization_with_unicode_prefix() {
+        let extractor = EntityExtractor::default();
+        let result = extractor.extract("İ OpenAI");
+
+        let orgs: Vec<_> = result
+            .entities
+            .iter()
+            .filter(|e| e.entity_type == EntityType::Organization)
+            .collect();
+
+        assert_eq!(orgs.len(), 1);
+        assert_eq!(orgs[0].text, "OpenAI");
     }
 
     #[test]

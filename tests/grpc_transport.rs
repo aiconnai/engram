@@ -12,6 +12,8 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+#[cfg(feature = "langfuse")]
+use std::sync::OnceLock;
 
 use parking_lot::Mutex;
 use serde_json::{json, Value};
@@ -63,10 +65,18 @@ impl TestHandler {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+            langfuse_runtime: test_langfuse_runtime(),
         };
         Self { storage, ctx }
     }
+}
+
+#[cfg(feature = "langfuse")]
+fn test_langfuse_runtime() -> Arc<tokio::runtime::Runtime> {
+    static RUNTIME: OnceLock<Arc<tokio::runtime::Runtime>> = OnceLock::new();
+    Arc::clone(
+        RUNTIME.get_or_init(|| Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime"))),
+    )
 }
 
 impl McpHandler for TestHandler {
@@ -129,20 +139,31 @@ fn pick_free_port() -> u16 {
 ///
 /// The server runs for the lifetime of the test process.
 async fn start_server(api_key: Option<String>) -> SocketAddr {
-    let port = pick_free_port();
-    let handler: Arc<dyn McpHandler> = Arc::new(TestHandler::new());
-    let api_key_clone = api_key.clone();
+    for _ in 0..10 {
+        let port = pick_free_port();
+        let addr: SocketAddr = format!("127.0.0.1:{port}").parse().expect("valid addr");
+        let handler: Arc<dyn McpHandler> = Arc::new(TestHandler::new());
+        let api_key_clone = api_key.clone();
 
-    tokio::spawn(async move {
-        serve_grpc(handler, port, api_key_clone, None)
-            .await
-            .expect("grpc server failed");
-    });
+        let server =
+            tokio::spawn(async move { serve_grpc(handler, port, api_key_clone, None).await });
 
-    // Give the server a moment to bind
-    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        for _ in 0..20 {
+            if server.is_finished() {
+                break;
+            }
 
-    format!("127.0.0.1:{port}").parse().expect("valid addr")
+            if tokio::net::TcpStream::connect(addr).await.is_ok() {
+                return addr;
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(25)).await;
+        }
+
+        server.abort();
+    }
+
+    panic!("failed to start test grpc server after retries")
 }
 
 /// Connect a tonic client to `addr`.

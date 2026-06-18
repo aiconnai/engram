@@ -172,5 +172,10 @@ benchmark_*.txt
 # keep them project-scoped but out of the public repo.
 .claude/skills/
 .agents/
+.codex/
 .orchestrator/
 .worktrees/
+LOOP.md
+STATE.md
+loop-budget.md
+loop-run-log.md
