@@ -20,6 +20,10 @@ package registries, and dated external sources.
 - **Public documentation claim hygiene** — Qualified hosted/cloud references,
   package-channel lag, schema snapshots, release guidance, and benchmark-style
   examples so public copy distinguishes verified facts from deployment patterns.
+- **0.22.0 release prep** — PR #90 cleanup is now reflected in release notes: SDK
+  client API consistency (`filter_` handling, request IDs, lifecycle safety,
+  and option parity) plus Cargo cleanup in `Cargo.toml`/`Cargo.lock` to keep
+  feature-gated, API-facing behavior coherent after the 0.21.2 baseline.
 
 ---
 
