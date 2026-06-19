@@ -27,19 +27,32 @@ export interface CreateOptions {
   workspace?: string;
   metadata?: Record<string, unknown>;
   importance?: number;
+  mediaUrl?: string;
 }
 
 export interface ListOptions {
   limit?: number;
   offset?: number;
   workspace?: string;
+  workspaces?: string[];
   memoryType?: string;
   tags?: string[];
+  tier?: string;
+  sortBy?: string;
+  sortOrder?: string;
+  filter?: Record<string, unknown>;
 }
 
 export interface SearchOptions {
   limit?: number;
   workspace?: string;
+  workspaces?: string[];
+  tags?: string[];
+  memoryType?: string;
+  tier?: string;
+  includeArchived?: boolean;
+  filter?: Record<string, unknown>;
+  global?: boolean;
 }
 
 export interface MemoryCouncilOptions {
@@ -81,6 +94,7 @@ export interface UpdateOptions {
   tags?: string[];
   metadata?: Record<string, unknown>;
   importance?: number;
+  mediaUrl?: string | null;
 }
 
 // -- Compression --
@@ -257,6 +271,7 @@ export class EngramClient {
   private baseUrl: string;
   private headers: Record<string, string>;
   private timeout: number;
+  private requestId: number;
 
   constructor(config: EngramConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -266,15 +281,18 @@ export class EngramClient {
       "X-Tenant-Slug": config.tenant,
       "Content-Type": "application/json",
     };
+    this.requestId = 1;
   }
 
   private async mcpCall(
     method: string,
     params: Record<string, unknown> = {}
   ): Promise<unknown> {
+    const id = this.requestId;
+    this.requestId += 1;
     const payload = {
       jsonrpc: "2.0",
-      id: 1,
+      id,
       method: "tools/call",
       params: { name: method, arguments: params },
     };
@@ -321,6 +339,7 @@ export class EngramClient {
     if (options?.metadata) params.metadata = options.metadata;
     if (options?.importance !== undefined)
       params.importance = options.importance;
+    if (options?.mediaUrl !== undefined) params.media_url = options.mediaUrl;
     return this.mcpCall("memory_create", params);
   }
 
@@ -335,6 +354,7 @@ export class EngramClient {
     if (options.metadata !== undefined) params.metadata = options.metadata;
     if (options.importance !== undefined)
       params.importance = options.importance;
+    if (options.mediaUrl !== undefined) params.media_url = options.mediaUrl;
     return this.mcpCall("memory_update", params);
   }
 
@@ -348,8 +368,13 @@ export class EngramClient {
       offset: options?.offset ?? 0,
     };
     if (options?.workspace) params.workspace = options.workspace;
+    if (options?.workspaces) params.workspaces = options.workspaces;
     if (options?.memoryType) params.memory_type = options.memoryType;
     if (options?.tags) params.tags = options.tags;
+    if (options?.tier) params.tier = options.tier;
+    if (options?.sortBy) params.sort_by = options.sortBy;
+    if (options?.sortOrder) params.sort_order = options.sortOrder;
+    if (options?.filter) params.filter = options.filter;
     return this.mcpCall("memory_list", params);
   }
 
@@ -361,6 +386,14 @@ export class EngramClient {
       limit: options?.limit ?? 10,
     };
     if (options?.workspace) params.workspace = options.workspace;
+    if (options?.workspaces) params.workspaces = options.workspaces;
+    if (options?.tags) params.tags = options.tags;
+    if (options?.memoryType) params.memory_type = options.memoryType;
+    if (options?.tier) params.tier = options.tier;
+    if (options?.includeArchived !== undefined)
+      params.include_archived = options.includeArchived;
+    if (options?.filter) params.filter = options.filter;
+    if (options?.global !== undefined) params.global = options.global;
     return this.mcpCall("memory_search", params);
   }
 

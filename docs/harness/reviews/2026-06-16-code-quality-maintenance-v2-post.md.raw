@@ -1,0 +1,874 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: code-quality-maintenance
+**Mode**: post
+**Date (UTC)**: 2026-06-16
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/Cargo.lock b/Cargo.lock
+index bc93841..2ac8a04 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1716,41 +1715,0 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
+-[[package]]
+-name = "deadpool"
+-version = "0.12.3"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0be2b1d1d6ec8d846f05e137292d0b89133caf95ef33695424c09568bdd39b1b"
+-dependencies = [
+- "deadpool-runtime",
+- "lazy_static",
+- "num_cpus",
+- "tokio",
+-]
+-
+-[[package]]
+-name = "deadpool-runtime"
+-version = "0.1.4"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "092966b41edc516079bdf31ec78a2e0588d1d0c08f78b91d8307215928642b2b"
+-dependencies = [
+- "tokio",
+-]
+-
+-[[package]]
+-name = "deadpool-sqlite"
+-version = "0.8.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2f9cc6210316f8b7ced394e2a5d2833ce7097fb28afb5881299c61bc18e8e0e9"
+-dependencies = [
+- "deadpool",
+- "deadpool-sync",
+- "rusqlite",
+-]
+-
+-[[package]]
+-name = "deadpool-sync"
+-version = "0.1.4"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "524bc3df0d57e98ecd022e21ba31166c2625e7d3e5bcc4510efaeeab4abcab04"
+-dependencies = [
+- "deadpool-runtime",
+-]
+-
+@@ -1829,12 +1787,0 @@ dependencies = [
+-[[package]]
+-name = "deunicode"
+-version = "1.6.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
+-
+-[[package]]
+-name = "diff"
+-version = "0.1.13"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
+-
+@@ -1923,12 +1869,0 @@ dependencies = [
+-[[package]]
+-name = "dummy"
+-version = "0.8.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1cac124e13ae9aa56acc4241f8c8207501d93afdd8d8e62f0c1f2e12f6508c65"
+-dependencies = [
+- "darling",
+- "proc-macro2",
+- "quote",
+- "syn 2.0.114",
+-]
+-
+@@ -2021 +1955,0 @@ dependencies = [
+- "anyhow",
+@@ -2033 +1966,0 @@ dependencies = [
+- "deadpool-sqlite",
+@@ -2037 +1969,0 @@ dependencies = [
+- "fake",
+@@ -2040,2 +1971,0 @@ dependencies = [
+- "jsonrpc-core",
+- "levenshtein",
+@@ -2051 +1980,0 @@ dependencies = [
+- "pretty_assertions",
+@@ -2071 +1999,0 @@ dependencies = [
+- "tokio-test",
+@@ -2092 +2019,0 @@ dependencies = [
+- "wasm-bindgen-test",
+@@ -2147,11 +2073,0 @@ dependencies = [
+-[[package]]
+-name = "fake"
+-version = "2.10.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2d391ba4af7f1d93f01fcf7b2f29e2bc9348e109dfdbf4dcbdc51dfa38dab0b6"
+-dependencies = [
+- "deunicode",
+- "dummy",
+- "rand 0.8.6",
+-]
+-
+@@ -3107,15 +3022,0 @@ dependencies = [
+-[[package]]
+-name = "jsonrpc-core"
+-version = "18.0.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "14f7f76aef2d054868398427f6c54943cf3d1caa9a7ec7d0c38d69df97a965eb"
+-dependencies = [
+- "futures",
+- "futures-executor",
+- "futures-util",
+- "log",
+- "serde",
+- "serde_derive",
+- "serde_json",
+-]
+-
+@@ -3169,6 +3069,0 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
+-[[package]]
+-name = "levenshtein"
+-version = "1.0.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "db13adb97ab515a3691f56e4dbab09283d0b86cb45abd991d8634a9d6f501760"
+-
+@@ -3617,10 +3511,0 @@ dependencies = [
+-[[package]]
+-name = "minicov"
+-version = "0.3.8"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "4869b6a491569605d66d3952bcdf03df789e5b536e5f0cf7758a7f08a55ae24d"
+-dependencies = [
+- "cc",
+- "walkdir",
+-]
+-
+@@ -3848,10 +3732,0 @@ dependencies = [
+-[[package]]
+-name = "num_cpus"
+-version = "1.17.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
+-dependencies = [
+- "hermit-abi",
+- "libc",
+-]
+-
+@@ -4234,10 +4108,0 @@ dependencies = [
+-[[package]]
+-name = "pretty_assertions"
+-version = "1.4.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
+-dependencies = [
+- "diff",
+- "yansi",
+-]
+-
+@@ -5772,11 +5636,0 @@ dependencies = [
+-[[package]]
+-name = "tokio-test"
+-version = "0.4.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
+-dependencies = [
+- "futures-core",
+- "tokio",
+- "tokio-stream",
+-]
+-
+@@ -6475,39 +6328,0 @@ dependencies = [
+-[[package]]
+-name = "wasm-bindgen-test"
+-version = "0.3.58"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "45649196a53b0b7a15101d845d44d2dda7374fc1b5b5e2bbf58b7577ff4b346d"
+-dependencies = [
+- "async-trait",
+- "cast",
+- "js-sys",
+- "libm",
+- "minicov",
+- "nu-ansi-term",
+- "num-traits",
+- "oorandom",
+- "serde",
+- "serde_json",
+- "wasm-bindgen",
+- "wasm-bindgen-futures",
+- "wasm-bindgen-test-macro",
+- "wasm-bindgen-test-shared",
+-]
+-
+-[[package]]
+-name = "wasm-bindgen-test-macro"
+-version = "0.3.58"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f579cdd0123ac74b94e1a4a72bd963cf30ebac343f2df347da0b8df24cdebed2"
+-dependencies = [
+- "proc-macro2",
+- "quote",
+- "syn 2.0.114",
+-]
+-
+-[[package]]
+-name = "wasm-bindgen-test-shared"
+-version = "0.2.108"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a8145dd1593bf0fb137dbfa85b8be79ec560a447298955877804640e40c2d6ea"
+-
+@@ -6941,6 +6755,0 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
+-[[package]]
+-name = "yansi"
+-version = "1.0.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
+-
+diff --git a/Cargo.toml b/Cargo.toml
+index bb096cd..5bebbee 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -34,0 +35,3 @@ exclude = [
++[package.metadata.cargo-machete]
++ignored = ["prost"]
++
+@@ -74,8 +76,0 @@ bench = false
+-# Implicit binary from src/main.rs (matches package name). Listed
+-# explicitly so `bench = false` applies — otherwise `cargo bench` tries
+-# to invoke its libtest harness and chokes on `--output-format bencher`.
+-[[bin]]
+-name = "engram-core"
+-path = "src/main.rs"
+-bench = false
+-
+@@ -178 +172,0 @@ rusqlite = { version = "0.31", features = ["bundled", "vtab", "functions", "trac
+-deadpool-sqlite = "0.8"
+@@ -194,3 +187,0 @@ tower-http = { version = "0.5", features = ["cors", "trace"] }
+-# MCP Protocol (JSON-RPC over stdio)
+-jsonrpc-core = "18.0"
+-
+@@ -232 +222,0 @@ thiserror = "1.0"
+-anyhow = "1.0"
+@@ -242 +231,0 @@ regex = "1.10"
+-levenshtein = "1.0"
+@@ -301,3 +289,0 @@ tempfile = "3.9"
+-tokio-test = "0.4"
+-pretty_assertions = "1.4"
+-fake = { version = "2.9", features = ["derive"] }
+diff --git a/engram-wasm/Cargo.toml b/engram-wasm/Cargo.toml
+index 5d47561..01aa70e 100644
+--- a/engram-wasm/Cargo.toml
++++ b/engram-wasm/Cargo.toml
+@@ -24,3 +23,0 @@ once_cell = "1"
+-
+-[dev-dependencies]
+-wasm-bindgen-test = "0.3"
+diff --git a/sdks/python/engram_client/client.py b/sdks/python/engram_client/client.py
+index 982923b..a095bf7 100644
+--- a/sdks/python/engram_client/client.py
++++ b/sdks/python/engram_client/client.py
+@@ -6 +6 @@ from itertools import count
+-from typing import Any, Optional
++from typing import Any
+@@ -46 +46 @@ class EngramClient:
+-        self._client = httpx.AsyncClient(
++        self._client: httpx.AsyncClient | None = httpx.AsyncClient(
+@@ -58 +58,5 @@ class EngramClient:
+-        await self._client.aclose()
++        client = self._client
++        if client is None:
++            return
++        await client.aclose()
++        self._client = None
+@@ -69,0 +74,3 @@ class EngramClient:
++        client = self._client
++        if client is None:
++            raise EngramError("EngramClient is closed")
+@@ -79 +86 @@ class EngramClient:
+-        resp = await self._client.post("/v1/mcp", json=payload)
++        resp = await client.post("/v1/mcp", json=payload)
+@@ -165 +172 @@ class EngramClient:
+-        filter: dict | None = None,
++        filter_: dict[str, Any] | None = None,
+@@ -171,2 +178,3 @@ class EngramClient:
+-        Advanced filtering is supported via the ``filter`` parameter using
+-        AND/OR combinators and comparison operators::
++        Advanced filtering is supported via the ``filter_`` parameter, which is
++        sent to the MCP API as ``filter`` using AND/OR combinators and
++        comparison operators::
+@@ -174 +182 @@ class EngramClient:
+-            client.list(filter={
++            client.list(filter_={
+@@ -191,2 +199,2 @@ class EngramClient:
+-        if filter is not None:
+-            params["filter"] = filter
++        if filter_ is not None:
++            params["filter"] = filter_
+@@ -207 +215 @@ class EngramClient:
+-        filter: dict[str, Any] | None = None,
++        filter_: dict[str, Any] | None = None,
+@@ -211 +219 @@ class EngramClient:
+-        Accepts the same ``filter`` syntax as :meth:`list` for advanced
++        Accepts the same ``filter_`` syntax as :meth:`list` for advanced
+@@ -217,2 +225,2 @@ class EngramClient:
+-        if filter is not None:
+-            params["filter"] = filter
++        if filter_ is not None:
++            params["filter"] = filter_
+diff --git a/sdks/python/tests/test_client.py b/sdks/python/tests/test_client.py
+index 71ed574..01364f8 100644
+--- a/sdks/python/tests/test_client.py
++++ b/sdks/python/tests/test_client.py
+@@ -38,0 +39 @@ def mock_response():
++    response.raise_for_status.return_value = None
+@@ -106,3 +107,2 @@ class TestMCPCall:
+-        mock_response = MagicMock()
+-        mock_response.status_code = 404
+-        mock_response.text = "Not Found"
++        request = httpx.Request("POST", "https://test.engram.dev/v1/mcp")
++        mock_response = httpx.Response(404, text="Not Found", request=request)
+diff --git a/sdks/typescript/README.md b/sdks/typescript/README.md
+index a399f19..52f76af 100644
+--- a/sdks/typescript/README.md
++++ b/sdks/typescript/README.md
+@@ -110 +110 @@ interface EngramConfig {
+-**CreateOptions:** `tags`, `workspace`, `memoryType`, `importance`, `metadata`, `tier`
++**CreateOptions:** `tags`, `workspace`, `memoryType`, `importance`, `metadata`, `mediaUrl`
+@@ -112 +112 @@ interface EngramConfig {
+-**ListOptions:** `limit`, `offset`, `workspace`, `memoryType`, `tags`, `sortBy`, `sortOrder`
++**ListOptions:** `limit`, `offset`, `workspace`, `workspaces`, `memoryType`, `tags`, `tier`, `sortBy`, `sortOrder`, `filter`
+@@ -114 +114 @@ interface EngramConfig {
+-- **SearchOptions:** `limit`, `workspace`, `tags`, `memoryType`, `includeArchived`
++- **SearchOptions:** `limit`, `workspace`, `workspaces`, `tags`, `memoryType`, `tier`, `includeArchived`, `filter`, `global`
+diff --git a/sdks/typescript/src/index.test.ts b/sdks/typescript/src/index.test.ts
+index 1638655..d7662b0 100644
+--- a/sdks/typescript/src/index.test.ts
++++ b/sdks/typescript/src/index.test.ts
+@@ -1,2 +1,2 @@
+-import { describe, it, expect, vi, beforeEach } from 'vitest';
+-import { EngramClient } from './index';
++import { describe, it, expect, vi, beforeEach } from "vitest";
++import { EngramClient } from "./index";
+@@ -4 +3,0 @@ import { EngramClient } from './index';
+-// Mock global fetch
+@@ -6 +5,30 @@ const mockFetch = vi.fn();
+-vi.stubGlobal('fetch', mockFetch);
++vi.stubGlobal("fetch", mockFetch);
++
++const config = {
++  baseUrl: "https://test.engram.dev",
++  apiKey: "test-key",
++  tenant: "test-tenant",
++  timeout: 5000,
++};
++
++function okResponse(result: unknown = {}) {
++  return {
++    ok: true,
++    status: 200,
++    statusText: "OK",
++    json: () =>
++      Promise.resolve({
++        jsonrpc: "2.0",
++        id: 1,
++        result,
++      }),
++  };
++}
++
++function requestBody(index = 0) {
++  return JSON.parse(mockFetch.mock.calls[index][1].body);
++}
++
++function requestArguments(index = 0) {
++  return requestBody(index).params.arguments;
++}
+@@ -8 +36 @@ vi.stubGlobal('fetch', mockFetch);
+-describe('EngramClient', () => {
++describe("EngramClient", () => {
+@@ -10,6 +37,0 @@ describe('EngramClient', () => {
+-  const config = {
+-    baseUrl: 'https://test.engram.dev',
+-    apiKey: 'test-key',
+-    tenant: 'test-tenant',
+-    timeout: 5000,
+-  };
+@@ -19 +41 @@ describe('EngramClient', () => {
+-    mockFetch.mockClear();
++    mockFetch.mockReset();
+@@ -22,2 +44,2 @@ describe('EngramClient', () => {
+-  describe('constructor', () => {
+-    it('should store config values', () => {
++  describe("constructor", () => {
++    it("should store config values", () => {
+@@ -27,2 +49,2 @@ describe('EngramClient', () => {
+-    it('should strip trailing slash from baseUrl', () => {
+-      const c = new EngramClient({
++    it("should strip trailing slash from baseUrl", async () => {
++      const slashClient = new EngramClient({
+@@ -30 +52 @@ describe('EngramClient', () => {
+-        baseUrl: 'https://test.engram.dev/',
++        baseUrl: "https://test.engram.dev/",
+@@ -32,2 +54,8 @@ describe('EngramClient', () => {
+-      // Access private property via type assertion for testing
+-      expect((c as any).config.baseUrl).toBe('https://test.engram.dev');
++      mockFetch.mockResolvedValueOnce(okResponse());
++
++      await slashClient.get(123);
++
++      expect(mockFetch).toHaveBeenCalledWith(
++        "https://test.engram.dev/v1/mcp",
++        expect.objectContaining({ method: "POST" })
++      );
+@@ -37,11 +65,5 @@ describe('EngramClient', () => {
+-  describe('mcpCall', () => {
+-    it('should make POST request with correct headers', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({
+-          jsonrpc: '2.0',
+-          id: 1,
+-          result: { id: 123, content: 'Test' },
+-        }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
++  describe("mcpCall", () => {
++    it("should make POST request with correct headers", async () => {
++      mockFetch.mockResolvedValueOnce(
++        okResponse({ id: 123, content: "Test" })
++      );
+@@ -49,2 +71 @@ describe('EngramClient', () => {
+-      // Access private method via type assertion
+-      const result = await (client as any).mcpCall('memory_create', { content: 'test' });
++      const result = await client.create("test");
+@@ -53 +74 @@ describe('EngramClient', () => {
+-        'https://test.engram.dev/v1/mcp',
++        "https://test.engram.dev/v1/mcp",
+@@ -55 +76 @@ describe('EngramClient', () => {
+-          method: 'POST',
++          method: "POST",
+@@ -57,3 +78,3 @@ describe('EngramClient', () => {
+-            'Authorization': 'Bearer test-key',
+-            'X-Tenant-Slug': 'test-tenant',
+-            'Content-Type': 'application/json',
++            Authorization: "Bearer test-key",
++            "X-Tenant-Slug": "test-tenant",
++            "Content-Type": "application/json",
+@@ -63 +84 @@ describe('EngramClient', () => {
+-      expect(result).toEqual({ id: 123, content: 'Test' });
++      expect(result).toEqual({ id: 123, content: "Test" });
+@@ -66,2 +87,2 @@ describe('EngramClient', () => {
+-    it('should handle HTTP errors', async () => {
+-      const mockResponse = {
++    it("should handle HTTP errors", async () => {
++      mockFetch.mockResolvedValueOnce({
+@@ -70,3 +91,3 @@ describe('EngramClient', () => {
+-        text: () => Promise.resolve('Not Found'),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
++        statusText: "Not Found",
++        text: () => Promise.resolve("Not Found"),
++      });
+@@ -74,2 +95 @@ describe('EngramClient', () => {
+-      await expect((client as any).mcpCall('memory_get', { id: 999 }))
+-        .rejects.toThrow('HTTP 404');
++      await expect(client.get(999)).rejects.toThrow("HTTP 404");
+@@ -78,2 +98,2 @@ describe('EngramClient', () => {
+-    it('should handle JSON-RPC errors', async () => {
+-      const mockResponse = {
++    it("should handle JSON-RPC errors", async () => {
++      mockFetch.mockResolvedValueOnce({
+@@ -81,10 +101,9 @@ describe('EngramClient', () => {
+-        json: () => Promise.resolve({
+-          jsonrpc: '2.0',
+-          id: 1,
+-          error: { message: 'Invalid params', code: -32602 },
+-        }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
+-
+-      await expect((client as any).mcpCall('memory_get', { id: 'invalid' }))
+-        .rejects.toThrow('Invalid params');
++        json: () =>
++          Promise.resolve({
++            jsonrpc: "2.0",
++            id: 1,
++            error: { message: "Invalid params", code: -32602 },
++          }),
++      });
++
++      await expect(client.get(999)).rejects.toThrow("Invalid params");
+@@ -93,6 +112,2 @@ describe('EngramClient', () => {
+-    it('should increment request IDs', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
+-      };
+-      mockFetch.mockResolvedValue(mockResponse);
++    it("should increment request IDs", async () => {
++      mockFetch.mockResolvedValue(okResponse());
+@@ -100,3 +115,3 @@ describe('EngramClient', () => {
+-      await (client as any).mcpCall('test', {});
+-      await (client as any).mcpCall('test', {});
+-      await (client as any).mcpCall('test', {});
++      await client.stats();
++      await client.stats();
++      await client.stats();
+@@ -104,3 +119,3 @@ describe('EngramClient', () => {
+-      const calls = mockFetch.mock.calls;
+-      const ids = calls.map((call: any) => JSON.parse(call[1].body).id);
+-      expect(ids).toEqual([1, 2, 3]);
++      expect([requestBody(0).id, requestBody(1).id, requestBody(2).id]).toEqual([
++        1, 2, 3,
++      ]);
+@@ -110,17 +125,9 @@ describe('EngramClient', () => {
+-  describe('create', () => {
+-    it('should call mcpCall with correct params', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({
+-          jsonrpc: '2.0',
+-          id: 1,
+-          result: { id: 123 },
+-        }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
+-
+-      const result = await client.create('Hello world');
+-
+-      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+-      expect(callBody.params.arguments.content).toBe('Hello world');
+-      expect(callBody.params.arguments.memory_type).toBe('note'); // default
++  describe("create", () => {
++    it("should call mcpCall with correct params", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse({ id: 123 }));
++
++      const result = await client.create("Hello world");
++
++      const args = requestArguments();
++      expect(args.content).toBe("Hello world");
++      expect(args.memory_type).toBe("note");
+@@ -130,16 +137,2 @@ describe('EngramClient', () => {
+-    it('should pass all optional params', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
+-
+-      await client.create(
+-        'Test content',
+-        'image',
+-        ['tag1', 'tag2'],
+-        'my-workspace',
+-        { source: 'test' },
+-        0.8,
+-        'https://example.com/img.jpg'
+-      );
++    it("should pass all optional params", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse());
+@@ -147,6 +140,15 @@ describe('EngramClient', () => {
+-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
+-      expect(args.content).toBe('Test content');
+-      expect(args.memory_type).toBe('image');
+-      expect(args.tags).toEqual(['tag1', 'tag2']);
+-      expect(args.workspace).toBe('my-workspace');
+-      expect(args.metadata).toEqual({ source: 'test' });
++      await client.create("Test content", {
++        memoryType: "image",
++        tags: ["tag1", "tag2"],
++        workspace: "my-workspace",
++        metadata: { source: "test" },
++        importance: 0.8,
++        mediaUrl: "https://example.com/img.jpg",
++      });
++
++      const args = requestArguments();
++      expect(args.content).toBe("Test content");
++      expect(args.memory_type).toBe("image");
++      expect(args.tags).toEqual(["tag1", "tag2"]);
++      expect(args.workspace).toBe("my-workspace");
++      expect(args.metadata).toEqual({ source: "test" });
+@@ -154 +156 @@ describe('EngramClient', () => {
+-      expect(args.media_url).toBe('https://example.com/img.jpg');
++      expect(args.media_url).toBe("https://example.com/img.jpg");
+@@ -158,7 +160,3 @@ describe('EngramClient', () => {
+-  describe('list', () => {
+-    it('should use default params', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
++  describe("list", () => {
++    it("should use default params", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse());
+@@ -168 +166 @@ describe('EngramClient', () => {
+-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
++      const args = requestArguments();
+@@ -170,0 +169 @@ describe('EngramClient', () => {
++      expect(args.filter).toBeUndefined();
+@@ -173,9 +172,16 @@ describe('EngramClient', () => {
+-    it('should map filter_ to filter in API call', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
+-
+-      const filter = { field: 'value' };
+-      await client.list(undefined, undefined, undefined, undefined, filter);
++    it("should pass advanced filters using the MCP filter field", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse());
++
++      const filter = { field: "value" };
++      await client.list({
++        limit: 25,
++        offset: 5,
++        workspace: "workspace-a",
++        workspaces: ["workspace-a", "workspace-b"],
++        memoryType: "decision",
++        tags: ["tag1"],
++        tier: "permanent",
++        sortBy: "importance",
++        sortOrder: "asc",
++        filter,
++      });
+@@ -183,2 +189,11 @@ describe('EngramClient', () => {
+-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
+-      expect(args.filter).toEqual(filter); // Mapped to "filter" for API
++      const args = requestArguments();
++      expect(args.limit).toBe(25);
++      expect(args.offset).toBe(5);
++      expect(args.workspace).toBe("workspace-a");
++      expect(args.workspaces).toEqual(["workspace-a", "workspace-b"]);
++      expect(args.memory_type).toBe("decision");
++      expect(args.tags).toEqual(["tag1"]);
++      expect(args.tier).toBe("permanent");
++      expect(args.sort_by).toBe("importance");
++      expect(args.sort_order).toBe("asc");
++      expect(args.filter).toEqual(filter);
+@@ -188,7 +203,3 @@ describe('EngramClient', () => {
+-  describe('search', () => {
+-    it('should call with query and default limit', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
++  describe("search", () => {
++    it("should call with query and default limit", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse());
+@@ -196 +207 @@ describe('EngramClient', () => {
+-      await client.search('test query');
++      await client.search("test query");
+@@ -198,2 +209,2 @@ describe('EngramClient', () => {
+-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
+-      expect(args.query).toBe('test query');
++      const args = requestArguments();
++      expect(args.query).toBe("test query");
+@@ -201,0 +213,29 @@ describe('EngramClient', () => {
++
++    it("should pass search filters and optional scopes", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse());
++
++      const filter = { workspace: { eq: "test" } };
++      await client.search("query", {
++        limit: 7,
++        workspace: "test",
++        workspaces: ["test", "archive"],
++        tags: ["planning"],
++        memoryType: "note",
++        tier: "daily",
++        includeArchived: true,
++        filter,
++        global: true,
++      });
++
++      const args = requestArguments();
++      expect(args.query).toBe("query");
++      expect(args.limit).toBe(7);
++      expect(args.workspace).toBe("test");
++      expect(args.workspaces).toEqual(["test", "archive"]);
++      expect(args.tags).toEqual(["planning"]);
++      expect(args.memory_type).toBe("note");
++      expect(args.tier).toBe("daily");
++      expect(args.include_archived).toBe(true);
++      expect(args.filter).toEqual(filter);
++      expect(args.global).toBe(true);
++    });
+@@ -204,7 +244,3 @@ describe('EngramClient', () => {
+-  describe('get/update/delete', () => {
+-    it('should get memory by id', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
++  describe("get/update/delete", () => {
++    it("should get memory by id", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse());
+@@ -214 +250 @@ describe('EngramClient', () => {
+-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
++      const args = requestArguments();
+@@ -218,6 +254,2 @@ describe('EngramClient', () => {
+-    it('should update memory', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
++    it("should update memory", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse());
+@@ -225 +257,4 @@ describe('EngramClient', () => {
+-      await client.update(123, 'Updated content');
++      await client.update(123, {
++        content: "Updated content",
++        mediaUrl: null,
++      });
+@@ -227 +262 @@ describe('EngramClient', () => {
+-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
++      const args = requestArguments();
+@@ -229 +264,2 @@ describe('EngramClient', () => {
+-      expect(args.content).toBe('Updated content');
++      expect(args.content).toBe("Updated content");
++      expect(args.media_url).toBeNull();
+@@ -232,6 +268,2 @@ describe('EngramClient', () => {
+-    it('should delete memory', async () => {
+-      const mockResponse = {
+-        ok: true,
+-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
+-      };
+-      mockFetch.mockResolvedValueOnce(mockResponse);
++    it("should delete memory", async () => {
++      mockFetch.mockResolvedValueOnce(okResponse());
+@@ -241 +273 @@ describe('EngramClient', () => {
+-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
++      const args = requestArguments();
+diff --git a/sdks/typescript/src/index.ts b/sdks/typescript/src/index.ts
+index a26606a..162c2d1 100644
+--- a/sdks/typescript/src/index.ts
++++ b/sdks/typescript/src/index.ts
+@@ -29,0 +30 @@ export interface CreateOptions {
++  mediaUrl?: string;
+@@ -35,0 +37 @@ export interface ListOptions {
++  workspaces?: string[];
+@@ -37,0 +40,4 @@ export interface ListOptions {
++  tier?: string;
++  sortBy?: string;
++  sortOrder?: string;
++  filter?: Record<string, unknown>;
+@@ -42,0 +49,7 @@ export interface SearchOptions {
++  workspaces?: string[];
++  tags?: string[];
++  memoryType?: string;
++  tier?: string;
++  includeArchived?: boolean;
++  filter?: Record<string, unknown>;
++  global?: boolean;
+@@ -83,0 +97 @@ export interface UpdateOptions {
++  mediaUrl?: string | null;
+@@ -259,0 +274 @@ export class EngramClient {
++  private requestId: number;
+@@ -268,0 +284 @@ export class EngramClient {
++    this.requestId = 1;
+@@ -274,0 +291,2 @@ export class EngramClient {
++    const id = this.requestId;
++    this.requestId += 1;
+@@ -277 +295 @@ export class EngramClient {
+-      id: 1,
++      id,
+@@ -323,0 +342 @@ export class EngramClient {
++    if (options?.mediaUrl !== undefined) params.media_url = options.mediaUrl;
+@@ -337,0 +357 @@ export class EngramClient {
++    if (options.mediaUrl !== undefined) params.media_url = options.mediaUrl;
+@@ -350,0 +371 @@ export class EngramClient {
++    if (options?.workspaces) params.workspaces = options.workspaces;
+@@ -352,0 +374,4 @@ export class EngramClient {
++    if (options?.tier) params.tier = options.tier;
++    if (options?.sortBy) params.sort_by = options.sortBy;
++    if (options?.sortOrder) params.sort_order = options.sortOrder;
++    if (options?.filter) params.filter = options.filter;
+@@ -363,0 +389,8 @@ export class EngramClient {
++    if (options?.workspaces) params.workspaces = options.workspaces;
++    if (options?.tags) params.tags = options.tags;
++    if (options?.memoryType) params.memory_type = options.memoryType;
++    if (options?.tier) params.tier = options.tier;
++    if (options?.includeArchived !== undefined)
++      params.include_archived = options.includeArchived;
++    if (options?.filter) params.filter = options.filter;
++    if (options?.global !== undefined) params.global = options.global;
+diff --git a/src/main.rs b/src/main.rs
+deleted file mode 100644
+index e7a11a9..0000000
+--- a/src/main.rs
++++ /dev/null
+@@ -1,3 +0,0 @@
+-fn main() {
+-    println!("Hello, world!");
+-}
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

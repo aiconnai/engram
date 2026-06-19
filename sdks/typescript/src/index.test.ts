@@ -1,244 +1,276 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EngramClient } from './index';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { EngramClient } from "./index";
 
-// Mock global fetch
 const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
+vi.stubGlobal("fetch", mockFetch);
 
-describe('EngramClient', () => {
-  let client: EngramClient;
-  const config = {
-    baseUrl: 'https://test.engram.dev',
-    apiKey: 'test-key',
-    tenant: 'test-tenant',
-    timeout: 5000,
+const config = {
+  baseUrl: "https://test.engram.dev",
+  apiKey: "test-key",
+  tenant: "test-tenant",
+  timeout: 5000,
+};
+
+function okResponse(result: unknown = {}) {
+  return {
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: () =>
+      Promise.resolve({
+        jsonrpc: "2.0",
+        id: 1,
+        result,
+      }),
   };
+}
+
+function requestBody(index = 0) {
+  return JSON.parse(mockFetch.mock.calls[index][1].body);
+}
+
+function requestArguments(index = 0) {
+  return requestBody(index).params.arguments;
+}
+
+describe("EngramClient", () => {
+  let client: EngramClient;
 
   beforeEach(() => {
     client = new EngramClient(config);
-    mockFetch.mockClear();
+    mockFetch.mockReset();
   });
 
-  describe('constructor', () => {
-    it('should store config values', () => {
+  describe("constructor", () => {
+    it("should store config values", () => {
       expect(client).toBeDefined();
     });
 
-    it('should strip trailing slash from baseUrl', () => {
-      const c = new EngramClient({
+    it("should strip trailing slash from baseUrl", async () => {
+      const slashClient = new EngramClient({
         ...config,
-        baseUrl: 'https://test.engram.dev/',
+        baseUrl: "https://test.engram.dev/",
       });
-      // Access private property via type assertion for testing
-      expect((c as any).config.baseUrl).toBe('https://test.engram.dev');
+      mockFetch.mockResolvedValueOnce(okResponse());
+
+      await slashClient.get(123);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://test.engram.dev/v1/mcp",
+        expect.objectContaining({ method: "POST" })
+      );
     });
   });
 
-  describe('mcpCall', () => {
-    it('should make POST request with correct headers', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({
-          jsonrpc: '2.0',
-          id: 1,
-          result: { id: 123, content: 'Test' },
-        }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+  describe("mcpCall", () => {
+    it("should make POST request with correct headers", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({ id: 123, content: "Test" })
+      );
 
-      // Access private method via type assertion
-      const result = await (client as any).mcpCall('memory_create', { content: 'test' });
+      const result = await client.create("test");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://test.engram.dev/v1/mcp',
+        "https://test.engram.dev/v1/mcp",
         expect.objectContaining({
-          method: 'POST',
+          method: "POST",
           headers: expect.objectContaining({
-            'Authorization': 'Bearer test-key',
-            'X-Tenant-Slug': 'test-tenant',
-            'Content-Type': 'application/json',
+            Authorization: "Bearer test-key",
+            "X-Tenant-Slug": "test-tenant",
+            "Content-Type": "application/json",
           }),
         })
       );
-      expect(result).toEqual({ id: 123, content: 'Test' });
+      expect(result).toEqual({ id: 123, content: "Test" });
     });
 
-    it('should handle HTTP errors', async () => {
-      const mockResponse = {
+    it("should handle HTTP errors", async () => {
+      mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 404,
-        text: () => Promise.resolve('Not Found'),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+        statusText: "Not Found",
+        text: () => Promise.resolve("Not Found"),
+      });
 
-      await expect((client as any).mcpCall('memory_get', { id: 999 }))
-        .rejects.toThrow('HTTP 404');
+      await expect(client.get(999)).rejects.toThrow("HTTP 404");
     });
 
-    it('should handle JSON-RPC errors', async () => {
-      const mockResponse = {
+    it("should handle JSON-RPC errors", async () => {
+      mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          jsonrpc: '2.0',
-          id: 1,
-          error: { message: 'Invalid params', code: -32602 },
-        }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+        json: () =>
+          Promise.resolve({
+            jsonrpc: "2.0",
+            id: 1,
+            error: { message: "Invalid params", code: -32602 },
+          }),
+      });
 
-      await expect((client as any).mcpCall('memory_get', { id: 'invalid' }))
-        .rejects.toThrow('Invalid params');
+      await expect(client.get(999)).rejects.toThrow("Invalid params");
     });
 
-    it('should increment request IDs', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
-      };
-      mockFetch.mockResolvedValue(mockResponse);
+    it("should increment request IDs", async () => {
+      mockFetch.mockResolvedValue(okResponse());
 
-      await (client as any).mcpCall('test', {});
-      await (client as any).mcpCall('test', {});
-      await (client as any).mcpCall('test', {});
+      await client.stats();
+      await client.stats();
+      await client.stats();
 
-      const calls = mockFetch.mock.calls;
-      const ids = calls.map((call: any) => JSON.parse(call[1].body).id);
-      expect(ids).toEqual([1, 2, 3]);
+      expect([requestBody(0).id, requestBody(1).id, requestBody(2).id]).toEqual([
+        1, 2, 3,
+      ]);
     });
   });
 
-  describe('create', () => {
-    it('should call mcpCall with correct params', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({
-          jsonrpc: '2.0',
-          id: 1,
-          result: { id: 123 },
-        }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+  describe("create", () => {
+    it("should call mcpCall with correct params", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ id: 123 }));
 
-      const result = await client.create('Hello world');
+      const result = await client.create("Hello world");
 
-      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(callBody.params.arguments.content).toBe('Hello world');
-      expect(callBody.params.arguments.memory_type).toBe('note'); // default
+      const args = requestArguments();
+      expect(args.content).toBe("Hello world");
+      expect(args.memory_type).toBe("note");
       expect(result).toEqual({ id: 123 });
     });
 
-    it('should pass all optional params', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+    it("should pass all optional params", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse());
 
-      await client.create(
-        'Test content',
-        'image',
-        ['tag1', 'tag2'],
-        'my-workspace',
-        { source: 'test' },
-        0.8,
-        'https://example.com/img.jpg'
-      );
+      await client.create("Test content", {
+        memoryType: "image",
+        tags: ["tag1", "tag2"],
+        workspace: "my-workspace",
+        metadata: { source: "test" },
+        importance: 0.8,
+        mediaUrl: "https://example.com/img.jpg",
+      });
 
-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
-      expect(args.content).toBe('Test content');
-      expect(args.memory_type).toBe('image');
-      expect(args.tags).toEqual(['tag1', 'tag2']);
-      expect(args.workspace).toBe('my-workspace');
-      expect(args.metadata).toEqual({ source: 'test' });
+      const args = requestArguments();
+      expect(args.content).toBe("Test content");
+      expect(args.memory_type).toBe("image");
+      expect(args.tags).toEqual(["tag1", "tag2"]);
+      expect(args.workspace).toBe("my-workspace");
+      expect(args.metadata).toEqual({ source: "test" });
       expect(args.importance).toBe(0.8);
-      expect(args.media_url).toBe('https://example.com/img.jpg');
+      expect(args.media_url).toBe("https://example.com/img.jpg");
     });
   });
 
-  describe('list', () => {
-    it('should use default params', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+  describe("list", () => {
+    it("should use default params", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse());
 
       await client.list();
 
-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
+      const args = requestArguments();
       expect(args.limit).toBe(50);
       expect(args.offset).toBe(0);
+      expect(args.filter).toBeUndefined();
     });
 
-    it('should map filter_ to filter in API call', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+    it("should pass advanced filters using the MCP filter field", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse());
 
-      const filter = { field: 'value' };
-      await client.list(undefined, undefined, undefined, undefined, filter);
+      const filter = { field: "value" };
+      await client.list({
+        limit: 25,
+        offset: 5,
+        workspace: "workspace-a",
+        workspaces: ["workspace-a", "workspace-b"],
+        memoryType: "decision",
+        tags: ["tag1"],
+        tier: "permanent",
+        sortBy: "importance",
+        sortOrder: "asc",
+        filter,
+      });
 
-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
-      expect(args.filter).toEqual(filter); // Mapped to "filter" for API
+      const args = requestArguments();
+      expect(args.limit).toBe(25);
+      expect(args.offset).toBe(5);
+      expect(args.workspace).toBe("workspace-a");
+      expect(args.workspaces).toEqual(["workspace-a", "workspace-b"]);
+      expect(args.memory_type).toBe("decision");
+      expect(args.tags).toEqual(["tag1"]);
+      expect(args.tier).toBe("permanent");
+      expect(args.sort_by).toBe("importance");
+      expect(args.sort_order).toBe("asc");
+      expect(args.filter).toEqual(filter);
     });
   });
 
-  describe('search', () => {
-    it('should call with query and default limit', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+  describe("search", () => {
+    it("should call with query and default limit", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse());
 
-      await client.search('test query');
+      await client.search("test query");
 
-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
-      expect(args.query).toBe('test query');
+      const args = requestArguments();
+      expect(args.query).toBe("test query");
       expect(args.limit).toBe(10);
     });
+
+    it("should pass search filters and optional scopes", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse());
+
+      const filter = { workspace: { eq: "test" } };
+      await client.search("query", {
+        limit: 7,
+        workspace: "test",
+        workspaces: ["test", "archive"],
+        tags: ["planning"],
+        memoryType: "note",
+        tier: "daily",
+        includeArchived: true,
+        filter,
+        global: true,
+      });
+
+      const args = requestArguments();
+      expect(args.query).toBe("query");
+      expect(args.limit).toBe(7);
+      expect(args.workspace).toBe("test");
+      expect(args.workspaces).toEqual(["test", "archive"]);
+      expect(args.tags).toEqual(["planning"]);
+      expect(args.memory_type).toBe("note");
+      expect(args.tier).toBe("daily");
+      expect(args.include_archived).toBe(true);
+      expect(args.filter).toEqual(filter);
+      expect(args.global).toBe(true);
+    });
   });
 
-  describe('get/update/delete', () => {
-    it('should get memory by id', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+  describe("get/update/delete", () => {
+    it("should get memory by id", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse());
 
       await client.get(123);
 
-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
+      const args = requestArguments();
       expect(args.id).toBe(123);
     });
 
-    it('should update memory', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+    it("should update memory", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse());
 
-      await client.update(123, 'Updated content');
+      await client.update(123, {
+        content: "Updated content",
+        mediaUrl: null,
+      });
 
-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
+      const args = requestArguments();
       expect(args.id).toBe(123);
-      expect(args.content).toBe('Updated content');
+      expect(args.content).toBe("Updated content");
+      expect(args.media_url).toBeNull();
     });
 
-    it('should delete memory', async () => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: {} }),
-      };
-      mockFetch.mockResolvedValueOnce(mockResponse);
+    it("should delete memory", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse());
 
       await client.delete(123);
 
-      const args = JSON.parse(mockFetch.mock.calls[0][1].body).params.arguments;
+      const args = requestArguments();
       expect(args.id).toBe(123);
     });
   });

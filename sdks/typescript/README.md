@@ -107,11 +107,11 @@ interface EngramConfig {
 
 ### Options
 
-**CreateOptions:** `tags`, `workspace`, `memoryType`, `importance`, `metadata`, `tier`
+**CreateOptions:** `tags`, `workspace`, `memoryType`, `importance`, `metadata`, `mediaUrl`
 
-**ListOptions:** `limit`, `offset`, `workspace`, `memoryType`, `tags`, `sortBy`, `sortOrder`
+**ListOptions:** `limit`, `offset`, `workspace`, `workspaces`, `memoryType`, `tags`, `tier`, `sortBy`, `sortOrder`, `filter`
 
-- **SearchOptions:** `limit`, `workspace`, `tags`, `memoryType`, `includeArchived`
+- **SearchOptions:** `limit`, `workspace`, `workspaces`, `tags`, `memoryType`, `tier`, `includeArchived`, `filter`, `global`
 - **MemoryCouncilOptions:** `conversationId`, `councilUrl`, `timeoutSeconds`, `includeRawStages`, `persist`, `workspace`, `memoryTags`
 - **MemoryReplayAtTimeOptions:** `eventType`, `includeEvents`, `includeFailed`, `includeDryRuns`, `eventLimit`
 - **CouncilSkillOptions:** `defaultWorkspace`, `defaultTimeoutSeconds`, `defaultIncludeRawStages`

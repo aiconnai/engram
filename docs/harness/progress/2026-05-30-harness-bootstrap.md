@@ -1064,3 +1064,72 @@ incompleta do crate WASM.
 - `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml")'` — PASS.
 - `bash scripts/ci.sh` — PASS.
 - `bash docs/harness/bin/doctor.sh` — PASS.
+
+## 2026-06-16 — Code quality maintenance report follow-through
+
+### Contexto
+
+Aplicação da parte de alta confiança do relatório de qualidade anexado:
+falhas reproduzidas nos SDKs Python/TypeScript, limpeza de dependências
+verificada por `cargo machete`, e remoção do bin dummy `engram-core`.
+
+### Ações realizadas
+
+- Python SDK:
+  - `EngramClient.close()` passou a ser idempotente e limpa `_client`;
+  - `_mcp_call` retorna erro explícito se o cliente já estiver fechado;
+  - `list()` e `search()` aceitaram `filter_` como keyword pública e mantêm
+    `filter` no payload MCP.
+- TypeScript SDK:
+  - `mcpCall` passou a incrementar IDs JSON-RPC por cliente;
+  - `CreateOptions`, `UpdateOptions`, `ListOptions` e `SearchOptions` foram
+    alinhados com os campos MCP já documentados (`filter`, `mediaUrl`,
+    workspaces e filtros de escopo);
+  - testes foram reescritos contra métodos públicos, removendo acesso a
+    membros privados e chamadas posicionais antigas.
+- Cargo:
+  - removidos `anyhow`, `deadpool-sqlite`, `jsonrpc-core`, `levenshtein`,
+    `tokio-test`, `pretty_assertions`, `fake`, `wasm-bindgen-test`;
+  - removido `src/main.rs` e o bin `engram-core` que só imprimia
+    `Hello, world!`;
+  - mantido `prost` com ignore explícito do `cargo-machete`, pois o recurso
+    `grpc` depende do código gerado.
+- Criado Review Canvas:
+  `docs/harness/canvas/2026-06-16-code-quality-maintenance.md`.
+
+### Escopo recusado
+
+- Módulos Rust marcados como dead code com confiança média não foram removidos
+  nesta iteração, porque ainda aparecem em reexports/testes e exigem revisão de
+  compatibilidade pública.
+- Deduplicações amplas de helpers/tokenizers ficaram fora desta fatia.
+
+### Verificações
+
+- `npm test` em `sdks/typescript` — PASS.
+- `npm run type-check` em `sdks/typescript` — PASS.
+- `uv run --with pytest-asyncio pytest` em `sdks/python` — PASS, 162 tests.
+- `cargo check --all-targets` — PASS.
+- `cargo check -p engram-core --features grpc --all-targets` — PASS.
+- `cargo check -p engram-wasm --all-targets` — PASS.
+- `cargo check -p engram-wasm --target wasm32-unknown-unknown` — PASS.
+- `cargo machete` — PASS.
+- `cargo fmt --all -- --check` — PASS.
+- `cargo clippy --all-targets --all-features -- -D warnings` — PASS.
+- `git diff --check` — PASS.
+- `make ci` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS (`make ci + doctor`).
+
+### Limitações
+
+- LSP diagnostics não puderam ser coletados porque `basedpyright` e
+  `typescript-language-server` não estão instalados localmente; a decisão de
+  não instalar foi registrada no LSP tool porque o usuário não pediu instalação.
+- Post-review fechado com resposta independente em
+  `docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md`.
+- `bash docs/harness/bin/review-gate.sh post code-quality-maintenance --review-file docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md`
+  — PASS.
+- O reviewer registrou dois follow-ups `MED` nao bloqueantes: teste de regressao
+  para `_mcp_call` apos `close()` no Python SDK e alinhamento do README do SDK
+  Python com as novas opcoes publicas.
