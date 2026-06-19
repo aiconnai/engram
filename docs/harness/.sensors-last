@@ -1,6 +1,6 @@
 status=pass
 ci_status=pass
 doctor_status=pass
-mode=full
-timestamp=2026-06-16T11:34:12Z
-ci=make ci + harness doctor
+mode=docs
+timestamp=2026-06-19T22:51:57Z
+ci=mcp reference + rustdoc + harness doctor

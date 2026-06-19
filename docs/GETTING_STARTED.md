@@ -26,7 +26,7 @@ contain both `engram-server` and `engram-cli`.
 
 ```bash
 # Replace VERSION and TARGET with the release tag and platform target you need.
-VERSION=v0.21.2
+VERSION=v0.22.0
 TARGET=x86_64-unknown-linux-gnu
 curl -L "https://github.com/aiconnai/engram/releases/download/${VERSION}/engram-${VERSION}-${TARGET}.tar.gz" -o engram.tar.gz
 tar -xzf engram.tar.gz
