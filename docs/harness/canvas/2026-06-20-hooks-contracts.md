@@ -29,13 +29,14 @@ Scope: Align lifecycle hook wiring and PostToolUse behavior with implemented con
 | Edge case | Verification plan |
 |---|---|
 | Tool output includes content but no explicit memory ID | Unit test asserts PostToolUse does not create synthetic memories. |
+| Old placeholder branch is reintroduced | Integration test scans the local hook source for the legacy fake-success markers. |
 | Stop hook enabled in server wiring | Server hook wiring test triggers `LifecycleHook::Stop` and expects `Continue`. |
 
 ## Breakage Risk
 
 | Risk | Impact | Mitigation | Verification |
 |---|---|---|---|
-| Callers relied on `auto_memory` field | Compile-time failure exposes the mismatch; field only guarded a TODO branch. | Remove misleading field instead of preserving no-op behavior. | `cargo test --features hooks post_tool_use`. |
+| Callers relied on `auto_memory` field | Compile-time failure exposes the mismatch; field only guarded a TODO branch. | Remove misleading field instead of preserving no-op behavior, and record the feature-gated public API cleanup in `CHANGELOG.md`. | `cargo test --features hooks post_tool_use`. |
 | Stop hook wiring changes runtime path | Low; handler returns `Continue`. | Regression test covers manager dispatch. | `cargo test --features hooks test_hook_wiring`. |
 
 ## Decision

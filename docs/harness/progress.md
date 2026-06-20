@@ -145,6 +145,9 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - `src/hooks/post_tool_use.rs` now documents and implements only best-effort
   memory policy reinforcement from explicit memory IDs; the misleading
   `auto_memory` field and unfinished fake auto-memory branch were removed.
+- `CHANGELOG.md` now records the feature-gated public API cleanup, and the
+  hook integration tests guard against reintroducing the legacy fake-success
+  marker.
 - Review Canvas:
   `docs/harness/canvas/2026-06-20-hooks-contracts.md`.
 - Verificações:
@@ -154,6 +157,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `rtk cargo test --features hooks test_stop_handler` — PASS.
   - `rtk cargo test --features hooks test_post_tool_use_handler` — PASS.
   - `rtk cargo test --features hooks post_tool_use` — PASS.
+  - `rtk cargo test --features hooks --test hooks_contract_tests` — PASS.
   - `rtk cargo clippy -p engram-core --features hooks --all-targets -- -D warnings`
     — PASS.
   - `rtk bash docs/harness/bin/doctor.sh` — PASS.

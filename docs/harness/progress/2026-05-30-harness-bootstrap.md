@@ -1150,10 +1150,12 @@ though the implementation only logged a placeholder.
 - `src/hooks/post_tool_use.rs` now describes and implements PostToolUse as
   best-effort policy reinforcement only.
 - The unfinished auto-memory placeholder field and logging branch were removed.
+- `CHANGELOG.md` now calls out the feature-gated public API cleanup.
 - Regression coverage asserts:
   - `enable_hooks()` dispatches `LifecycleHook::Stop` and receives
     `HookResult::Continue`;
   - PostToolUse does not create synthetic memories from arbitrary tool output;
+  - legacy fake-success markers are not reintroduced in the hook source;
   - policy reinforcement does not create additional memories.
 - Review Canvas:
   `docs/harness/canvas/2026-06-20-hooks-contracts.md`.
@@ -1167,5 +1169,6 @@ though the implementation only logged a placeholder.
 - `rtk cargo test --features hooks test_stop_handler` — PASS.
 - `rtk cargo test --features hooks test_post_tool_use_handler` — PASS.
 - `rtk cargo test --features hooks post_tool_use` — PASS.
+- `rtk cargo test --features hooks --test hooks_contract_tests` — PASS.
 - `rtk cargo clippy --features hooks --all-targets --all-features -- -D warnings`
   — PASS.
