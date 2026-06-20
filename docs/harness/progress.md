@@ -7,7 +7,7 @@
 | Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
 | Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
 | Last review | `2026-05-31 — pass: docs/harness/reviews/2026-05-31-harness-bootstrap-v9-post.md` |
-| Last sensors | `2026-05-31T15:52:49Z — status=pass` |
+| Last sensors | `2026-06-20T14:53:04Z — status=pass (full)` |
 | Last commit | `f2b1799` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -33,7 +33,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - [x] Estrutura de diretórios `docs/harness/{bin,progress,reviews,known-issues}`
 - [x] `README.md` — guia operacional completo adaptado para engram/Rust/MCP/dual-CLI
 - [x] `SPEC.md` — escopo da sprint v0
-- [x] `INVARIANTS.md` — 18 regras de processo invioláveis (session, commits, review, harness self-consistency, Rust/engram specifics)
+- [x] `INVARIANTS.md` — regras de processo invioláveis (session, commits, review, harness self-consistency, Rust/engram specifics)
 - [x] `GATES.md` — 3 camadas, thresholds, fake-success patterns específicos de engram (embedding features, MCP, schema version, hooks, etc.)
 - [x] `CODE_REVIEW_POLICY.md` — política injetada no reviewer externo, com adaptações para dual-CLI e domínios de engram
 - [x] `progress/2026-05-30-harness-bootstrap.md` — log detalhado (este arquivo)
@@ -42,6 +42,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - [x] `bin/sensors.sh` — wrapper sobre `just ci` + doctor + engram-specific
 - [x] `bin/review-gate.sh` — generalizado para claude/grok/etc, com prompt engineering, continuity, versioning, timeout
 - [x] `bin/check-commit-msg.sh` — validador de commits
+- [x] `bin/check-pr-title.sh` — validador de títulos de PR sem o marcador `[codex]`
 - [x] `docs/harness/known-issues/2026-05-31-grpc-transport-port-bind.md` — limitação formal para sensor `grpc-transport`
 - [x] Atualização de `AGENTS.md` + `Claude.md` para exigir bootstrap
 - [x] Execução do loop completo nesta sprint + evidência de PASS
@@ -60,6 +61,26 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - Dogfooding com o próprio engram (via MCP + hooks) é objetivo explícito de longo prazo, guiado por RFC 0001, mas fora do escopo de v0 bootstrap.
 - Invariants do harness são separados dos data invariants (`INVARIANTS.md` na raiz) para manter clareza.
 - 2026-06-08: `ENGRA-103` aberto no Huly para `memory_digest`; RFC 0008 define a ferramenta como digest read-only, determinístico, sem schema novo e com provenance explícita.
+- 2026-06-20: títulos de PR criados ou editados por automação não podem conter o marcador `[codex]`; `check-pr-title.sh` e `doctor.sh` agora guardam essa regra.
+
+## PR title guard — 2026-06-20
+
+- Adicionado `docs/harness/bin/check-pr-title.sh` para validar títulos fornecidos por `--title` ou buscados com `--pr`.
+- `doctor.sh` agora exige o script, valida executabilidade e testa tanto o caminho permitido quanto o caminho bloqueado.
+- README, GATES e INVARIANTS documentam que PR titles devem descrever a mudança sem o marcador `[codex]`.
+- Review Canvas: `docs/harness/canvas/2026-06-20-pr-title-guard.md`.
+- Verificações:
+  - `bash docs/harness/bin/check-pr-title.sh --title "align lifecycle hook contracts"` — PASS.
+  - `bash -c 'if docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts"; then exit 1; else exit 0; fi'` — PASS, o checker rejeitou o marcador.
+  - `bash docs/harness/bin/check-pr-title.sh --pr 91` — PASS.
+  - `bash -c 'if docs/harness/bin/check-pr-title.sh --pr --help; then exit 1; else exit 0; fi'` — PASS, o checker rejeitou identificador de PR não numérico antes de chamar `gh`.
+  - `bash -c 'if docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" --help; then exit 1; else exit 0; fi'` — PASS, `--help` não ignora validação pendente.
+  - `bash -c 'if docs/harness/bin/check-pr-title.sh --pr 91 --help; then exit 1; else exit 0; fi'` — PASS, `--help` não ignora validação de PR.
+  - `bash -c 'if docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" --title "align lifecycle hook contracts"; then exit 1; else exit 0; fi'` — PASS, argumentos duplicados não sobrescrevem validação.
+  - `bash -n docs/harness/bin/check-pr-title.sh docs/harness/bin/doctor.sh` — PASS.
+  - `bash docs/harness/bin/doctor.sh` — PASS.
+  - `bash docs/harness/bin/sensors.sh quick` — PASS (`cargo fmt --all -- --check`, `cargo check`, doctor).
+  - `bash docs/harness/bin/sensors.sh` — PASS (`make ci + doctor`).
 
 ## Crate maintenance — 2026-06-12
 

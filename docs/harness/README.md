@@ -88,6 +88,7 @@ cookies ou dumps de ambiente.
 | `bin/quarterly-audit.sh`       | Auditoria evidence-only; nunca apaga, arquiva ou reescreve |
 | `bin/vc-gate.sh`               | Gate opcional de version control para issue boundaries, `jj` local e releases Git/Cargo |
 | `bin/check-commit-msg.sh`      | Validador de Conventional Commit com scope |
+| `bin/check-pr-title.sh`        | Validador de títulos de PR, incluindo bloqueio do marcador `[codex]` |
 
 ## Leitura Obrigatória (em ordem)
 
@@ -136,11 +137,14 @@ $EDITOR docs/harness/progress/<active-plan-filename>.md
 # 8. Validar mensagem de commit
 bash docs/harness/bin/check-commit-msg.sh --message "<type>(<scope>): <description>"
 
-# 9. Commitar arquivos específicos (nunca "git add .")
+# 9. Validar título de PR antes de criar ou editar PRs por automação
+bash docs/harness/bin/check-pr-title.sh --title "<concise PR title>"
+
+# 10. Commitar arquivos específicos (nunca "git add .")
 git add <arquivos específicos>
 git commit -m "<type>(<scope>): <description>"
 
-# 10. Gate de version control no fechamento da issue (recomendado)
+# 11. Gate de version control no fechamento da issue (recomendado)
 bash docs/harness/bin/vc-gate.sh done <task-id>
 ```
 
@@ -167,6 +171,13 @@ Tipos comuns: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `ci`, `chore`, 
 Scopes recomendados: `harness`, `mcp`, `storage`, `search`, `intelligence`, `hooks`, `sdk-python`, `sdk-ts`, `cli`, `server`, `ci`, ou identificadores de issue/RFC (`engra-22`, `rfc-0001`).
 
 Sem `Co-Authored-By` ou trailers de atribuição de IA.
+
+PR titles também não carregam o marcador `[codex]`. Antes de `gh pr create` ou
+`gh pr edit`, rode:
+
+```bash
+bash docs/harness/bin/check-pr-title.sh --title "concise PR title"
+```
 
 ## Version Control Gate e jj
 
