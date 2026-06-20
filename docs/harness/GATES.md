@@ -57,6 +57,25 @@ Contrato:
 - O gate nao cria commits, nao roda `jj new`, nao move tags e nao publica crate.
 - Falhas de `vc-gate.sh release` bloqueiam qualquer tentativa de publish.
 
+### PR Title Gate
+
+Wrapper: `bash docs/harness/bin/check-pr-title.sh`
+
+Este gate é obrigatório antes de criar ou editar PRs por automação.
+
+Contrato:
+
+- PR titles não podem conter o marcador `[codex]`.
+- PR titles devem descrever a mudança, não a ferramenta ou agente que a criou.
+- `doctor.sh` faz self-test do caminho permitido e do caminho bloqueado.
+
+Exemplos:
+
+```bash
+bash docs/harness/bin/check-pr-title.sh --title "align lifecycle hook contracts"
+bash docs/harness/bin/check-pr-title.sh --pr 123
+```
+
 ### Exclusões Documentadas (Contrato Rigoroso)
 
 Exclusão só existe para **dependências externas temporárias** (ex.: API de embedding paga indisponível, serviço de terceiros em outage).
