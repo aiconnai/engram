@@ -121,6 +121,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - O reviewer registrou dois follow-ups `MED` nao bloqueantes: teste de regressao
   para `_mcp_call` apos `close()` no Python SDK e alinhamento do README do SDK
   Python com as novas opcoes publicas.
+
 - Verificações:
   - `npm test` em `sdks/typescript` — PASS.
   - `npm run type-check` em `sdks/typescript` — PASS.
@@ -137,6 +138,39 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `bash docs/harness/bin/sensors.sh` — PASS (`make ci + doctor`).
   - `bash docs/harness/bin/review-gate.sh post code-quality-maintenance --review-file docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md`
     — PASS.
+
+## Storage extension semantics cleanup — 2026-06-20
+
+- Storage extension placeholders now fail explicitly instead of returning
+  success-shaped no-op data:
+  - SQLite `CloudSyncBackend::push` / `pull`;
+  - SQLite and Turso `TransactionalBackend::with_transaction`;
+  - Turso `sync_delta` / `sync_state`.
+- Savepoint names are validated as simple SQL identifiers before interpolation
+  in SQLite and Turso backends.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-20-storage-extension-semantics.md`.
+- Verificações:
+  - `rtk cargo test sqlite_backend` — PASS.
+  - `rtk cargo test --test turso_backend_tests --features turso` — PASS.
+  - `rtk cargo fmt --all -- --check` — PASS.
+  - `rtk git diff --check` — PASS.
+  - `rtk cargo clippy -p engram-core --all-targets --features turso -- -D warnings`
+    — PASS.
+  - `rtk cargo clippy --test turso_backend_tests --features turso -- -D warnings`
+    — PASS.
+  - `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- Verificações:
+  - `rtk cargo test sqlite_backend` - PASS, 15 passed.
+  - `rtk cargo test --test turso_backend_tests --features turso` - PASS, 6
+    passed.
+  - `rtk cargo clippy --workspace --all-targets --all-features -- -D warnings`
+    - FAIL on unrelated `engram-wasm` warnings outside this task scope
+    (`engram-wasm/src/graph.rs:197`, `engram-wasm/src/tfidf.rs:128`,
+    `engram-wasm/src/tfidf.rs:142`).
+  - `rtk cargo clippy -p engram-core --all-targets --features turso -- -D warnings`
+    - PASS.
+  - `rtk git diff --check` - PASS.
 
 ## Próximos passos imediatos
 
