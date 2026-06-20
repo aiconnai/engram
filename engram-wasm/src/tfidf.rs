@@ -125,7 +125,7 @@ fn hash_sign(token: &str) -> f32 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     token.hash(&mut hasher);
     "_sign".hash(&mut hasher);
-    if hasher.finish() % 2 == 0 {
+    if (hasher.finish() & 1) == 0 {
         1.0
     } else {
         -1.0
@@ -139,7 +139,7 @@ fn hash_bigram_sign(t1: &str, t2: &str) -> f32 {
     "_".hash(&mut hasher);
     t2.hash(&mut hasher);
     "_sign".hash(&mut hasher);
-    if hasher.finish() % 2 == 0 {
+    if (hasher.finish() & 1) == 0 {
         1.0
     } else {
         -1.0
