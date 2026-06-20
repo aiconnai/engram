@@ -29,7 +29,6 @@ Scope: Align lifecycle hook wiring and PostToolUse behavior with implemented con
 | Edge case | Verification plan |
 |---|---|
 | Tool output includes content but no explicit memory ID | Unit test asserts PostToolUse does not create synthetic memories. |
-| Old placeholder branch is reintroduced | Integration test scans the local hook source for the legacy fake-success markers. |
 | Stop hook enabled in server wiring | Server hook wiring test triggers `LifecycleHook::Stop` and expects `Continue`. |
 
 ## Breakage Risk
