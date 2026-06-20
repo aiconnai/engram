@@ -159,6 +159,29 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   - `bash docs/harness/bin/review-gate.sh post code-quality-maintenance --review-file docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md`
     — PASS.
 
+## Hook contract cleanup — 2026-06-20
+
+- `src/bin/server.rs::enable_hooks` now registers the exported `StopHandler`
+  for `LifecycleHook::Stop`, preserving `HookResult::Continue`.
+- `src/hooks/post_tool_use.rs` now documents and implements only best-effort
+  memory policy reinforcement from explicit memory IDs; the misleading
+  `auto_memory` field and unfinished fake auto-memory branch were removed.
+- `CHANGELOG.md` now records the feature-gated public API cleanup; the hook
+  contract remains covered by behavior tests instead of brittle source-text
+  assertions.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-20-hooks-contracts.md`.
+- Verificações:
+  - `rtk cargo fmt --all -- --check` — PASS.
+  - `rtk git diff --check` — PASS.
+  - `rtk cargo test --features hooks test_hook_wiring` — PASS.
+  - `rtk cargo test --features hooks test_stop_handler` — PASS.
+  - `rtk cargo test --features hooks test_post_tool_use_handler` — PASS.
+  - `rtk cargo test --features hooks post_tool_use` — PASS.
+  - `rtk cargo clippy -p engram-core --features hooks --all-targets -- -D warnings`
+    — PASS.
+  - `rtk bash docs/harness/bin/doctor.sh` — PASS.
+
 ## Próximos passos imediatos
 
 1. Concluir Fase 1: manter mini-artifacts dos blocos 1.1–1.3 e audit report em `docs/harness/plans/`.

@@ -277,6 +277,7 @@ impl EngramHandler {
     fn enable_hooks(&mut self) {
         use engram::hooks::{
             HookManager, HookResult, LifecycleHook, PostToolUseHandler, SessionEndHandler,
+            StopHandler,
         };
 
         let mut hm = HookManager::new();
@@ -297,7 +298,10 @@ impl EngramHandler {
             post_tool_use_handler.handle(hook, ctx)
         });
 
-        hm.register(LifecycleHook::Stop, |_hook, _ctx| Ok(HookResult::Continue));
+        let stop_handler = StopHandler;
+        hm.register(LifecycleHook::Stop, move |hook, ctx| {
+            stop_handler.handle(hook, ctx)
+        });
         let session_end_handler = SessionEndHandler::policy_summary_only(storage);
         hm.register(LifecycleHook::SessionEnd, move |hook, ctx| {
             session_end_handler.handle(hook, ctx)
@@ -958,7 +962,7 @@ mod tests {
     #[cfg(feature = "hooks")]
     #[test]
     fn test_hook_wiring() {
-        use engram::hooks::{HookContext, LifecycleHook};
+        use engram::hooks::{HookContext, HookResult, LifecycleHook};
 
         let mut handler = test_handler();
         assert!(
@@ -976,5 +980,17 @@ mod tests {
         ctx.metadata
             .insert("tool_name".into(), json!("memory_create"));
         handler.trigger_hook(LifecycleHook::PostToolUse, ctx);
+
+        let stop_context = HookContext::new(Some("test-session".into()), Some("default".into()));
+        let stop_results = handler
+            .hook_manager
+            .as_ref()
+            .expect("hook manager should be enabled")
+            .trigger(LifecycleHook::Stop, &stop_context)
+            .expect("Stop hook should run without error");
+        assert!(
+            matches!(stop_results.as_slice(), [HookResult::Continue]),
+            "Stop hook should be registered and continue, got {stop_results:?}"
+        );
     }
 }

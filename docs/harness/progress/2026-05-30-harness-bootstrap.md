@@ -1179,3 +1179,40 @@ verificada por `cargo machete`, e remoção do bin dummy `engram-core`.
 - O reviewer registrou dois follow-ups `MED` nao bloqueantes: teste de regressao
   para `_mcp_call` apos `close()` no Python SDK e alinhamento do README do SDK
   Python com as novas opcoes publicas.
+
+## 2026-06-20 — Hook contract cleanup follow-through
+
+### Contexto
+
+Code-quality review found that server hook docs advertised default `Stop`
+wiring while `enable_hooks()` registered an inline no-op, and that
+`PostToolUseHandler.auto_memory` suggested automatic memory creation even
+though the implementation only logged a placeholder.
+
+### Ações realizadas
+
+- `src/bin/server.rs` now registers the exported `StopHandler` for
+  `LifecycleHook::Stop`.
+- `src/hooks/post_tool_use.rs` now describes and implements PostToolUse as
+  best-effort policy reinforcement only.
+- The unfinished auto-memory placeholder field and logging branch were removed.
+- `CHANGELOG.md` now calls out the feature-gated public API cleanup.
+- Regression coverage asserts:
+  - `enable_hooks()` dispatches `LifecycleHook::Stop` and receives
+    `HookResult::Continue`;
+  - PostToolUse does not create synthetic memories from arbitrary tool output;
+  - policy reinforcement does not create additional memories.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-20-hooks-contracts.md`.
+
+### Verificações
+
+- `rtk cargo test --features hooks test_hook_wiring test_stop_handler test_post_tool_use_handler`
+  — INVALIDO: Cargo aceita apenas um filtro antes de `--`; filtros rodados
+  separadamente.
+- `rtk cargo test --features hooks test_hook_wiring` — PASS.
+- `rtk cargo test --features hooks test_stop_handler` — PASS.
+- `rtk cargo test --features hooks test_post_tool_use_handler` — PASS.
+- `rtk cargo test --features hooks post_tool_use` — PASS.
+- `rtk cargo clippy --features hooks --all-targets --all-features -- -D warnings`
+  — PASS.
