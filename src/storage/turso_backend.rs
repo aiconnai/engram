@@ -45,9 +45,9 @@ use crate::types::{
 };
 
 use super::backend::{
-    BatchCreateResult, BatchDeleteResult, CloudSyncBackend, DerivedIndexHealth, DerivedIndexStatus,
-    HealthStatus, StorageBackend, StorageStats, SyncDelta, SyncResult, SyncState,
-    TransactionalBackend,
+    validate_savepoint_name, BatchCreateResult, BatchDeleteResult, CloudSyncBackend,
+    DerivedIndexHealth, DerivedIndexStatus, HealthStatus, StorageBackend, StorageStats, SyncDelta,
+    SyncResult, SyncState, TransactionalBackend,
 };
 
 const MEMORY_COLUMNS: &str = "id, content, memory_type, importance, access_count, created_at, updated_at, last_accessed_at, owner_id, visibility, version, has_embedding, metadata, scope_type, scope_id, workspace, tier, expires_at, content_hash, event_time, event_duration_seconds, trigger_pattern, procedure_success_count, procedure_failure_count, summary_of_id, lifecycle_state";
@@ -1617,16 +1617,19 @@ impl StorageBackend for TursoBackend {
 }
 
 impl TransactionalBackend for TursoBackend {
-    fn with_transaction<F, T>(&self, f: F) -> Result<T>
+    fn with_transaction<F, T>(&self, _f: F) -> Result<T>
     where
         F: FnOnce(&dyn StorageBackend) -> Result<T>,
     {
-        // libSQL handles transactions automatically for single operations
-        // For explicit transactions, we'd need async transaction support
-        f(self)
+        Err(EngramError::Storage(
+            "TursoBackend::with_transaction is unsupported: callers should use real \
+             Turso/libSQL transaction APIs until a transaction-scoped StorageBackend exists"
+                .to_string(),
+        ))
     }
 
     fn savepoint(&self, name: &str) -> Result<()> {
+        let name = validate_savepoint_name(name)?;
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
@@ -1642,6 +1645,7 @@ impl TransactionalBackend for TursoBackend {
     }
 
     fn release_savepoint(&self, name: &str) -> Result<()> {
+        let name = validate_savepoint_name(name)?;
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
@@ -1657,6 +1661,7 @@ impl TransactionalBackend for TursoBackend {
     }
 
     fn rollback_to_savepoint(&self, name: &str) -> Result<()> {
+        let name = validate_savepoint_name(name)?;
         let rt = tokio::runtime::Handle::try_current()
             .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
 
@@ -1686,23 +1691,19 @@ impl CloudSyncBackend for TursoBackend {
     }
 
     fn sync_delta(&self, _since_version: u64) -> Result<SyncDelta> {
-        // Turso handles sync internally via embedded replicas
-        Ok(SyncDelta {
-            created: Vec::new(),
-            updated: Vec::new(),
-            deleted: Vec::new(),
-            version: 0,
-        })
+        Err(EngramError::Sync(
+            "Turso backend does not expose CloudSyncBackend::sync_delta; embedded replica \
+             synchronization is handled by sync()"
+                .to_string(),
+        ))
     }
 
     fn sync_state(&self) -> Result<SyncState> {
-        Ok(SyncState {
-            local_version: 0,
-            remote_version: None,
-            last_sync: Some(chrono::Utc::now()),
-            has_pending_changes: false,
-            pending_count: 0,
-        })
+        Err(EngramError::Sync(
+            "Turso backend does not expose CloudSyncBackend::sync_state; embedded replica \
+             synchronization is handled by sync()"
+                .to_string(),
+        ))
     }
 
     fn force_sync(&self) -> Result<SyncResult> {

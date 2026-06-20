@@ -1180,6 +1180,40 @@ verificada por `cargo machete`, e remoção do bin dummy `engram-core`.
   para `_mcp_call` apos `close()` no Python SDK e alinhamento do README do SDK
   Python com as novas opcoes publicas.
 
+## 2026-06-20 — Storage extension semantics cleanup
+
+### Contexto
+
+Code-quality review found fake-success risk in storage extension traits:
+backend-level transaction wrappers executed closures without a transaction,
+SQLite `push` / `pull` returned success with zero work, Turso
+`sync_delta` / `sync_state` returned fabricated zero/current-time data, and
+savepoint helpers interpolated raw names.
+
+### Ações realizadas
+
+- Added `validate_savepoint_name` for simple SQL identifiers before savepoint
+  SQL interpolation.
+- SQLite and Turso savepoint helpers now reject invalid names with
+  `EngramError::InvalidInput`.
+- SQLite `CloudSyncBackend::push` / `pull` now return explicit
+  `EngramError::Sync` instead of success-shaped no-ops.
+- SQLite and Turso `TransactionalBackend::with_transaction` now return explicit
+  `EngramError::Storage` until a transaction-scoped `StorageBackend` exists.
+- Turso `sync_delta` / `sync_state` now return explicit `EngramError::Sync`
+  instead of fabricated data.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-20-storage-extension-semantics.md`.
+
+### Verificações
+
+- `rtk cargo test sqlite_backend` - PASS, 15 passed.
+- `rtk cargo test --test turso_backend_tests --features turso` - PASS, 6
+  passed.
+- `rtk cargo clippy -p engram-core --all-targets --features turso -- -D warnings`
+  - PASS.
+- `rtk git diff --check` - PASS.
+
 ## 2026-06-20 — Hook contract cleanup follow-through
 
 ### Contexto
