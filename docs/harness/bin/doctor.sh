@@ -262,6 +262,7 @@ require_file docs/harness/bin/doctor.sh
 require_file docs/harness/bin/baseline.sh
 require_file docs/harness/bin/quarterly-audit.sh
 require_file docs/harness/bin/check-pr-title.sh
+require_file docs/harness/bin/pr-title-policy.sh
 require_dir docs/harness/progress
 require_dir docs/harness/reviews
 require_dir docs/harness/known-issues
@@ -277,6 +278,7 @@ require_exec docs/harness/bin/doctor.sh
 require_exec docs/harness/bin/baseline.sh
 require_exec docs/harness/bin/quarterly-audit.sh
 require_exec docs/harness/bin/check-pr-title.sh
+require_exec docs/harness/bin/pr-title-policy.sh
 
 # If the advanced scripts exist, they should be executable
 [ -f docs/harness/bin/sensors.sh ] && require_exec docs/harness/bin/sensors.sh || true
@@ -289,10 +291,40 @@ else
   fail "check-pr-title.sh rejects a plain PR title" "pr_title_guard:allow_plain" "docs/harness/bin/check-pr-title.sh"
 fi
 
+if bash docs/harness/bin/pr-title-policy.sh --title "align lifecycle hook contracts" >/dev/null 2>&1; then
+  add_check "pr_title_policy:allow_plain" "pass" "plain PR title is accepted by canonical policy" "docs/harness/bin/pr-title-policy.sh"
+else
+  fail "pr-title-policy.sh rejects a plain PR title" "pr_title_policy:allow_plain" "docs/harness/bin/pr-title-policy.sh"
+fi
+
+PR_TITLE_POLICY_STATUS=0
+bash docs/harness/bin/pr-title-policy.sh --title "[codex] align lifecycle hook contracts" >/dev/null 2>&1 || PR_TITLE_POLICY_STATUS=$?
+if [ "$PR_TITLE_POLICY_STATUS" -eq 4 ]; then
+  add_check "pr_title_policy:block_codex_marker_exit4" "pass" "canonical policy rejects [codex] with exit 4" "docs/harness/bin/pr-title-policy.sh"
+else
+  fail "pr-title-policy.sh must reject [codex] PR marker with exit 4 (got ${PR_TITLE_POLICY_STATUS})" "pr_title_policy:block_codex_marker_exit4" "docs/harness/bin/pr-title-policy.sh"
+fi
+
+PR_TITLE_POLICY_SPACED_STATUS=0
+bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] align lifecycle hook contracts" >/dev/null 2>&1 || PR_TITLE_POLICY_SPACED_STATUS=$?
+if [ "$PR_TITLE_POLICY_SPACED_STATUS" -eq 4 ]; then
+  add_check "pr_title_policy:block_spaced_codex_marker_exit4" "pass" "canonical policy rejects spaced/mixed-case [codex] with exit 4" "docs/harness/bin/pr-title-policy.sh"
+else
+  fail "pr-title-policy.sh must reject spaced/mixed-case [codex] PR marker with exit 4 (got ${PR_TITLE_POLICY_SPACED_STATUS})" "pr_title_policy:block_spaced_codex_marker_exit4" "docs/harness/bin/pr-title-policy.sh"
+fi
+
 if bash docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" >/dev/null 2>&1; then
   fail "check-pr-title.sh allows forbidden [codex] PR marker" "pr_title_guard:block_codex_marker" "docs/harness/bin/check-pr-title.sh"
 else
   add_check "pr_title_guard:block_codex_marker" "pass" "forbidden [codex] PR marker is blocked" "docs/harness/bin/check-pr-title.sh"
+fi
+
+CHECK_PR_TITLE_STATUS=0
+bash docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" >/dev/null 2>&1 || CHECK_PR_TITLE_STATUS=$?
+if [ "$CHECK_PR_TITLE_STATUS" -eq 4 ]; then
+  add_check "pr_title_guard:block_codex_marker_exit4" "pass" "compat wrapper shares canonical exit 4" "docs/harness/bin/check-pr-title.sh"
+else
+  fail "check-pr-title.sh must share canonical [codex] exit 4 (got ${CHECK_PR_TITLE_STATUS})" "pr_title_guard:block_codex_marker_exit4" "docs/harness/bin/check-pr-title.sh"
 fi
 
 if bash docs/harness/bin/check-pr-title.sh --pr --help >/dev/null 2>&1; then
@@ -335,6 +367,7 @@ require_grep docs/harness/README.md 'baseline\.sh' 'workflow mentions baseline s
 require_grep docs/harness/README.md 'quarterly-audit\.sh' 'workflow mentions evidence-only audits'
 require_grep docs/harness/README.md 'Sensor modes' 'workflow lists optional sensor modes'
 require_grep docs/harness/README.md 'check-pr-title\.sh' 'workflow mentions PR title validation'
+require_grep docs/harness/README.md 'pr-title-policy\.sh' 'workflow mentions canonical PR title policy'
 require_grep docs/harness/GATES.md 'WHAT_WE_DONT_DO\.md' 'gates reference negative-scope policy'
 require_grep docs/harness/GATES.md 'anthropic-reference-harness\.md' 'gates reference security boundary'
 require_grep docs/harness/GATES.md '\.claude/scan-extras\.txt' 'gates reference scan tuning'
@@ -346,6 +379,7 @@ require_grep docs/harness/GATES.md 'optional lanes do not replace the full gate'
 require_grep docs/harness/GATES.md 'docs/harness/bin' 'gates protect harness script changes'
 require_grep docs/harness/GATES.md 'JSON_OUTPUTS\.md' 'gates reference JSON output contract'
 require_grep docs/harness/GATES.md 'check-pr-title\.sh' 'gates document PR title validation'
+require_grep docs/harness/GATES.md 'pr-title-policy\.sh' 'gates document canonical PR title policy'
 require_grep docs/harness/GATES.md 'Exclus' 'documented exclusion policy exists'
 require_grep docs/harness/GATES.md 'known-issue' 'exclusion policy points at known-issue docs'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'WHAT_WE_DONT_DO\.md' 'review policy enforces negative-scope policy'
@@ -372,6 +406,7 @@ require_grep docs/harness/bin/sensors.sh 'mcp' 'sensors supports mcp mode'
 require_grep docs/harness/bin/sensors.sh 'baseline' 'sensors supports baseline mode'
 require_grep docs/harness/bin/sensors.sh 'status' 'sensors supports status mode'
 require_grep docs/harness/bin/sensors.sh '\-\-json' 'sensors supports JSON status output'
+require_grep docs/harness/bin/sensors.sh 'pr-title-policy\.sh' 'sensors runs canonical PR title policy'
 require_grep docs/harness/bin/sensors.sh 'anthropic-reference-harness\.md' 'sensors summary includes security boundary'
 require_grep docs/harness/bin/sensors.sh '\.claude/scan-extras\.txt' 'sensors summary includes scan tuning'
 require_grep docs/harness/bin/sensors.sh '\.claude/fp-rules\.txt' 'sensors summary includes false-positive tuning'
