@@ -782,3 +782,30 @@ Verification:
   `.sensors-last` in `43506c7`.
 - Final review rerun `v3` — PASS; official `review-gate.sh post` accepted the
   `REVIEW_VERDICT: PASS` artifact.
+
+## AgentShield harness parity B2 — loop-engineering skill + SKILLS.md policy — 2026-06-21
+
+- Ported AgentShield's `loop-engineering` base skill to
+  `skills/loop-engineering/SKILL.md`, adapting product references to Engram
+  MCP/memory loops while preserving the L1/L2/L3 safety model.
+- Added `docs/harness/SKILLS.md` with the current Engram skill inventory,
+  canvas-gated promotion policy, and follow-up list for the other AgentShield
+  loop skills that are intentionally out of B2 scope.
+- Wired conservative skill validation into `doctor.sh`: `SKILLS.md` is required,
+  `README.md` cross-links it, each tracked `skills/*/SKILL.md` must have matching
+  frontmatter `name`, a `description`, and membership in the current-skills
+  inventory.
+- Linked `SKILLS.md` from `docs/harness/README.md`.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-21-b2-loop-skills-policy.md`.
+
+Verification:
+
+- `bash -n docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS in the original B2 run.
+- `bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): add SKILLS.md policy and loop-engineering skill"`
+  — PASS.
+- Independent cross-model review iterated through the B2 findings and finished
+  with `REVIEW_VERDICT: PASS`; the review artifacts are committed under
+  `docs/harness/reviews/2026-06-21-b2-loop-skills-policy*-post.md`.
