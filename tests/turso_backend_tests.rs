@@ -9,7 +9,11 @@
 
 use std::collections::HashMap;
 
-use engram::storage::{DerivedIndexKind, DerivedIndexStatus, StorageBackend, TursoBackend};
+use engram::error::EngramError;
+use engram::storage::{
+    CloudSyncBackend, DerivedIndexKind, DerivedIndexStatus, StorageBackend, TransactionalBackend,
+    TursoBackend,
+};
 use engram::types::*;
 
 #[tokio::test]
@@ -99,4 +103,52 @@ async fn test_turso_crud() {
     backend.delete_memory(memory.id).unwrap();
     let deleted = backend.get_memory(memory.id).unwrap();
     assert!(deleted.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_turso_with_transaction_reports_unsupported_wrapper_when_called() {
+    let backend = TursoBackend::in_memory().await.unwrap();
+    let mut called = false;
+
+    let result = backend.with_transaction(|_| -> Result<(), EngramError> {
+        called = true;
+        Ok(())
+    });
+
+    assert!(!called);
+    assert!(
+        matches!(result, Err(EngramError::Storage(message)) if message.contains("transaction-scoped StorageBackend"))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_turso_savepoint_rejects_invalid_names_before_sql() {
+    let backend = TursoBackend::in_memory().await.unwrap();
+
+    for name in ["", "1bad", "bad-name", "bad name", "bad;DROP"] {
+        let savepoint = backend.savepoint(name);
+        let release = backend.release_savepoint(name);
+        let rollback = backend.rollback_to_savepoint(name);
+
+        assert!(
+            matches!(savepoint, Err(EngramError::InvalidInput(message)) if message.contains("savepoint name"))
+        );
+        assert!(
+            matches!(release, Err(EngramError::InvalidInput(message)) if message.contains("savepoint name"))
+        );
+        assert!(
+            matches!(rollback, Err(EngramError::InvalidInput(message)) if message.contains("savepoint name"))
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_turso_sync_delta_and_sync_state_report_unsupported_extensions() {
+    let backend = TursoBackend::in_memory().await.unwrap();
+
+    let delta = backend.sync_delta(0);
+    let state = backend.sync_state();
+
+    assert!(matches!(delta, Err(EngramError::Sync(message)) if message.contains("Turso backend")));
+    assert!(matches!(state, Err(EngramError::Sync(message)) if message.contains("Turso backend")));
 }

@@ -10,16 +10,16 @@ use std::time::Instant;
 use crate::embedding::{
     get_embedding_queue_health, DEFAULT_MAX_EMBEDDING_RETRIES, DEFAULT_STALE_PROCESSING_AFTER,
 };
-use crate::error::Result;
+use crate::error::{EngramError, Result};
 use crate::types::{
     CreateCrossRefInput, CreateMemoryInput, CrossReference, EdgeType, ListOptions, Memory,
     MemoryId, SearchOptions, SearchResult, StorageConfig, UpdateMemoryInput, WorkspaceStats,
 };
 
 use super::backend::{
-    BatchCreateResult, BatchDeleteResult, CloudSyncBackend, DerivedIndexHealth, DerivedIndexKind,
-    DerivedIndexStatus, HealthStatus, StorageBackend, StorageStats, SyncDelta, SyncResult,
-    SyncState, TransactionalBackend,
+    validate_savepoint_name, BatchCreateResult, BatchDeleteResult, CloudSyncBackend,
+    DerivedIndexHealth, DerivedIndexKind, DerivedIndexStatus, HealthStatus, StorageBackend,
+    StorageStats, SyncDelta, SyncResult, SyncState, TransactionalBackend,
 };
 use super::connection::Storage;
 use super::queries::{
@@ -452,19 +452,19 @@ impl StorageBackend for SqliteBackend {
 }
 
 impl TransactionalBackend for SqliteBackend {
-    fn with_transaction<F, T>(&self, f: F) -> Result<T>
+    fn with_transaction<F, T>(&self, _f: F) -> Result<T>
     where
         F: FnOnce(&dyn StorageBackend) -> Result<T>,
     {
-        // Note: This is where we would ideally pass a transaction-aware
-        // backend wrapper. For now, since SQLite doesn't support nested
-        // transactions easily without savepoints (which we are adding),
-        // we just execute the closure.
-        // The closure expects &dyn StorageBackend, so we pass self.
-        f(self)
+        Err(EngramError::Storage(
+            "SqliteBackend::with_transaction is unsupported: callers should use real \
+             SQLite transaction APIs until a transaction-scoped StorageBackend exists"
+                .to_string(),
+        ))
     }
 
     fn savepoint(&self, name: &str) -> Result<()> {
+        let name = validate_savepoint_name(name)?;
         self.storage.with_connection(|conn| {
             conn.execute(&format!("SAVEPOINT {}", name), [])?;
             Ok(())
@@ -472,6 +472,7 @@ impl TransactionalBackend for SqliteBackend {
     }
 
     fn release_savepoint(&self, name: &str) -> Result<()> {
+        let name = validate_savepoint_name(name)?;
         self.storage.with_connection(|conn| {
             conn.execute(&format!("RELEASE SAVEPOINT {}", name), [])?;
             Ok(())
@@ -479,6 +480,7 @@ impl TransactionalBackend for SqliteBackend {
     }
 
     fn rollback_to_savepoint(&self, name: &str) -> Result<()> {
+        let name = validate_savepoint_name(name)?;
         self.storage.with_connection(|conn| {
             conn.execute(&format!("ROLLBACK TO SAVEPOINT {}", name), [])?;
             Ok(())
@@ -488,27 +490,17 @@ impl TransactionalBackend for SqliteBackend {
 
 impl CloudSyncBackend for SqliteBackend {
     fn push(&self) -> Result<SyncResult> {
-        // Placeholder - actual cloud sync is handled by the sync module
-        Ok(SyncResult {
-            success: true,
-            pushed_count: 0,
-            pulled_count: 0,
-            conflicts_resolved: 0,
-            error: None,
-            new_version: 0,
-        })
+        Err(EngramError::Sync(
+            "SQLite backend does not implement CloudSyncBackend::push; use the sync module"
+                .to_string(),
+        ))
     }
 
     fn pull(&self) -> Result<SyncResult> {
-        // Placeholder - actual cloud sync is handled by the sync module
-        Ok(SyncResult {
-            success: true,
-            pushed_count: 0,
-            pulled_count: 0,
-            conflicts_resolved: 0,
-            error: None,
-            new_version: 0,
-        })
+        Err(EngramError::Sync(
+            "SQLite backend does not implement CloudSyncBackend::pull; use the sync module"
+                .to_string(),
+        ))
     }
 
     fn sync_delta(&self, since_version: u64) -> Result<SyncDelta> {
@@ -838,6 +830,7 @@ fn sqlite_table_exists(conn: &rusqlite::Connection, table_name: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::EngramError;
     use crate::types::{MemoryScope, MemoryTier, MemoryType};
     use rusqlite::params;
 
@@ -1222,5 +1215,90 @@ mod tests {
         backend.delete_memory(memory.id).unwrap();
         let deleted = backend.get_memory(memory.id).unwrap();
         assert!(deleted.is_none());
+    }
+
+    #[test]
+    fn test_with_transaction_reports_unsupported_wrapper_when_called() {
+        let backend = SqliteBackend::in_memory().unwrap();
+
+        let result = backend.with_transaction(|_| Ok(()));
+
+        assert!(
+            matches!(result, Err(EngramError::Storage(message)) if message.contains("transaction-scoped StorageBackend"))
+        );
+    }
+
+    #[test]
+    fn test_savepoint_rejects_invalid_names_before_sql() {
+        let backend = SqliteBackend::in_memory().unwrap();
+
+        for name in ["", "1bad", "bad-name", "bad name", "bad;DROP"] {
+            let savepoint = backend.savepoint(name);
+            let release = backend.release_savepoint(name);
+            let rollback = backend.rollback_to_savepoint(name);
+
+            assert!(
+                matches!(savepoint, Err(EngramError::InvalidInput(message)) if message.contains("savepoint name"))
+            );
+            assert!(
+                matches!(release, Err(EngramError::InvalidInput(message)) if message.contains("savepoint name"))
+            );
+            assert!(
+                matches!(rollback, Err(EngramError::InvalidInput(message)) if message.contains("savepoint name"))
+            );
+        }
+    }
+
+    #[test]
+    fn test_valid_savepoint_rollback_restores_temp_table_state() {
+        let backend = SqliteBackend::in_memory().unwrap();
+
+        backend
+            .storage()
+            .with_connection(|conn| {
+                conn.execute("CREATE TEMP TABLE savepoint_probe (value TEXT)", [])?;
+                Ok(())
+            })
+            .unwrap();
+
+        backend.savepoint("sp_valid_1").unwrap();
+        backend
+            .storage()
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO savepoint_probe (value) VALUES ('rolled-back')",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        backend.rollback_to_savepoint("sp_valid_1").unwrap();
+        backend.release_savepoint("sp_valid_1").unwrap();
+
+        let count = backend
+            .storage()
+            .with_connection(|conn| {
+                let count = conn.query_row("SELECT COUNT(*) FROM savepoint_probe", [], |row| {
+                    row.get::<_, i64>(0)
+                })?;
+                Ok(count)
+            })
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_push_and_pull_report_unsupported_sync() {
+        let backend = SqliteBackend::in_memory().unwrap();
+
+        let push = backend.push();
+        let pull = backend.pull();
+
+        assert!(
+            matches!(push, Err(EngramError::Sync(message)) if message.contains("SQLite backend"))
+        );
+        assert!(
+            matches!(pull, Err(EngramError::Sync(message)) if message.contains("SQLite backend"))
+        );
     }
 }

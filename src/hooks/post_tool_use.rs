@@ -1,5 +1,5 @@
-// PostToolUse hook handler
-// Triggered after a tool use completes - inspired by claude-mem's automatic observation capture
+// PostToolUse hook handler.
+// Triggered after a tool use completes to apply best-effort policy reinforcement.
 
 use super::{HookContext, HookResult};
 use crate::storage::{queries::record_reinforcement, Storage};
@@ -9,28 +9,19 @@ use std::collections::{BTreeSet, HashMap};
 
 const POST_TOOL_REINFORCEMENT_BOOST: f32 = 0.05;
 
-/// Handler for PostToolUse hook
-/// Automatically captures tool usage and creates memory observations
+/// Handler for the PostToolUse hook.
+///
+/// The handler reinforces memory policy from explicit memory IDs in hook
+/// metadata. It does not synthesize or create memories from tool output.
+#[derive(Default)]
 pub struct PostToolUseHandler {
-    /// Whether to automatically create memories from tool outputs
-    pub auto_memory: bool,
     /// Optional storage handle for best-effort policy reinforcement.
     pub storage: Option<Storage>,
-}
-
-impl Default for PostToolUseHandler {
-    fn default() -> Self {
-        Self {
-            auto_memory: true,
-            storage: None,
-        }
-    }
 }
 
 impl PostToolUseHandler {
     pub fn new(storage: Storage) -> Self {
         Self {
-            auto_memory: true,
             storage: Some(storage),
         }
     }
@@ -42,20 +33,6 @@ impl PostToolUseHandler {
         );
 
         self.reinforce_policy_from_metadata(context);
-
-        // If auto-memory is enabled, create a memory from tool output
-        if self.auto_memory {
-            if let Some(tool_name) = context.metadata.get("tool_name") {
-                if let Some(_tool_output) = context.metadata.get("tool_output") {
-                    // TODO: Call storage layer to create memory
-                    // This would integrate with engram's memory creation flow
-                    eprintln!(
-                        "[Hook] Would create memory for tool: {}",
-                        tool_name.as_str().unwrap_or("unknown")
-                    );
-                }
-            }
-        }
 
         Ok(HookResult::Continue)
     }
@@ -286,8 +263,8 @@ fn collect_memory_id_from_result_object(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::queries::{create_memory, get_policy_record};
-    use crate::types::{CreateMemoryInput, MemoryType};
+    use crate::storage::queries::{create_memory, get_policy_record, list_memories};
+    use crate::types::{CreateMemoryInput, ListOptions, MemoryType};
     use serde_json::json;
 
     fn test_memory_input(content: &str) -> CreateMemoryInput {
@@ -312,9 +289,18 @@ mod tests {
         }
     }
 
+    fn stored_memory_count(storage: &Storage) -> usize {
+        storage
+            .with_connection(|conn| {
+                list_memories(conn, &ListOptions::default()).map(|memories| memories.len())
+            })
+            .unwrap()
+    }
+
     #[test]
     fn test_post_tool_use_handler() {
-        let handler = PostToolUseHandler::default();
+        let storage = Storage::open_in_memory().unwrap();
+        let handler = PostToolUseHandler::new(storage.clone());
         let mut context = HookContext {
             session_id: Some("test-session".to_string()),
             workspace: Some("default".to_string()),
@@ -326,10 +312,15 @@ mod tests {
             .insert("tool_name".to_string(), json!("memory_create"));
         context
             .metadata
-            .insert("tool_output".to_string(), json!({"status": "success"}));
+            .insert("tool_output".to_string(), json!({"content": "fake memory"}));
 
         let result = handler.handle(crate::hooks::LifecycleHook::PostToolUse, &context);
-        assert!(result.is_ok());
+        assert!(matches!(result, Ok(HookResult::Continue)));
+        assert_eq!(
+            stored_memory_count(&storage),
+            0,
+            "PostToolUse must not create synthetic memories from tool output"
+        );
     }
 
     #[test]
@@ -338,6 +329,7 @@ mod tests {
         let memory = storage
             .with_connection(|conn| create_memory(conn, &test_memory_input("post tool policy")))
             .unwrap();
+        assert_eq!(stored_memory_count(&storage), 1);
         let handler = PostToolUseHandler::new(storage.clone());
         let mut context = HookContext {
             session_id: Some("test-session".to_string()),
@@ -361,6 +353,11 @@ mod tests {
             .unwrap()
             .expect("policy record");
         assert_eq!(policy.reinforcement_count, 1);
+        assert_eq!(
+            stored_memory_count(&storage),
+            1,
+            "policy reinforcement must not create additional memories"
+        );
     }
 
     #[test]

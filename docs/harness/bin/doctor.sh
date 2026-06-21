@@ -261,7 +261,7 @@ require_file docs/harness/bin/bootstrap.sh
 require_file docs/harness/bin/doctor.sh
 require_file docs/harness/bin/baseline.sh
 require_file docs/harness/bin/quarterly-audit.sh
-require_file docs/harness/bin/pr-title-policy.sh
+require_file docs/harness/bin/check-pr-title.sh
 require_dir docs/harness/progress
 require_dir docs/harness/reviews
 require_dir docs/harness/known-issues
@@ -276,12 +276,48 @@ require_exec docs/harness/bin/bootstrap.sh
 require_exec docs/harness/bin/doctor.sh
 require_exec docs/harness/bin/baseline.sh
 require_exec docs/harness/bin/quarterly-audit.sh
-require_exec docs/harness/bin/pr-title-policy.sh
+require_exec docs/harness/bin/check-pr-title.sh
 
 # If the advanced scripts exist, they should be executable
 [ -f docs/harness/bin/sensors.sh ] && require_exec docs/harness/bin/sensors.sh || true
 [ -f docs/harness/bin/review-gate.sh ] && require_exec docs/harness/bin/review-gate.sh || true
 [ -f docs/harness/bin/check-commit-msg.sh ] && require_exec docs/harness/bin/check-commit-msg.sh || true
+
+if bash docs/harness/bin/check-pr-title.sh --title "align lifecycle hook contracts" >/dev/null 2>&1; then
+  add_check "pr_title_guard:allow_plain" "pass" "plain PR title is accepted" "docs/harness/bin/check-pr-title.sh"
+else
+  fail "check-pr-title.sh rejects a plain PR title" "pr_title_guard:allow_plain" "docs/harness/bin/check-pr-title.sh"
+fi
+
+if bash docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" >/dev/null 2>&1; then
+  fail "check-pr-title.sh allows forbidden [codex] PR marker" "pr_title_guard:block_codex_marker" "docs/harness/bin/check-pr-title.sh"
+else
+  add_check "pr_title_guard:block_codex_marker" "pass" "forbidden [codex] PR marker is blocked" "docs/harness/bin/check-pr-title.sh"
+fi
+
+if bash docs/harness/bin/check-pr-title.sh --pr --help >/dev/null 2>&1; then
+  fail "check-pr-title.sh allows option-like PR identifiers" "pr_title_guard:block_option_like_pr" "docs/harness/bin/check-pr-title.sh"
+else
+  add_check "pr_title_guard:block_option_like_pr" "pass" "option-like PR identifiers are blocked before gh invocation" "docs/harness/bin/check-pr-title.sh"
+fi
+
+if bash docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" --help >/dev/null 2>&1; then
+  fail "check-pr-title.sh allows trailing help to bypass title validation" "pr_title_guard:block_trailing_help_title" "docs/harness/bin/check-pr-title.sh"
+else
+  add_check "pr_title_guard:block_trailing_help_title" "pass" "trailing help cannot bypass title validation" "docs/harness/bin/check-pr-title.sh"
+fi
+
+if bash docs/harness/bin/check-pr-title.sh --pr 91 --help >/dev/null 2>&1; then
+  fail "check-pr-title.sh allows trailing help to bypass PR validation" "pr_title_guard:block_trailing_help_pr" "docs/harness/bin/check-pr-title.sh"
+else
+  add_check "pr_title_guard:block_trailing_help_pr" "pass" "trailing help cannot bypass PR validation" "docs/harness/bin/check-pr-title.sh"
+fi
+
+if bash docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" --title "align lifecycle hook contracts" >/dev/null 2>&1; then
+  fail "check-pr-title.sh allows duplicate title arguments to bypass validation" "pr_title_guard:block_duplicate_title" "docs/harness/bin/check-pr-title.sh"
+else
+  add_check "pr_title_guard:block_duplicate_title" "pass" "duplicate title arguments cannot bypass validation" "docs/harness/bin/check-pr-title.sh"
+fi
 
 # Cross-references (bootstrap + README point at the policy and doctor)
 require_grep docs/harness/bin/bootstrap.sh 'CODE_REVIEW_POLICY\.md' 'read-next includes the local review policy'
@@ -298,6 +334,7 @@ require_grep docs/harness/README.md 'known-issues/' 'structure table or workflow
 require_grep docs/harness/README.md 'baseline\.sh' 'workflow mentions baseline snapshots'
 require_grep docs/harness/README.md 'quarterly-audit\.sh' 'workflow mentions evidence-only audits'
 require_grep docs/harness/README.md 'Sensor modes' 'workflow lists optional sensor modes'
+require_grep docs/harness/README.md 'check-pr-title\.sh' 'workflow mentions PR title validation'
 require_grep docs/harness/GATES.md 'WHAT_WE_DONT_DO\.md' 'gates reference negative-scope policy'
 require_grep docs/harness/GATES.md 'anthropic-reference-harness\.md' 'gates reference security boundary'
 require_grep docs/harness/GATES.md '\.claude/scan-extras\.txt' 'gates reference scan tuning'
@@ -308,9 +345,9 @@ require_grep docs/harness/GATES.md 'quarterly-audit\.sh' 'gates document evidenc
 require_grep docs/harness/GATES.md 'optional lanes do not replace the full gate' 'gates preserve full sensor gate'
 require_grep docs/harness/GATES.md 'docs/harness/bin' 'gates protect harness script changes'
 require_grep docs/harness/GATES.md 'JSON_OUTPUTS\.md' 'gates reference JSON output contract'
+require_grep docs/harness/GATES.md 'check-pr-title\.sh' 'gates document PR title validation'
 require_grep docs/harness/GATES.md 'Exclus' 'documented exclusion policy exists'
 require_grep docs/harness/GATES.md 'known-issue' 'exclusion policy points at known-issue docs'
-require_grep docs/harness/GATES.md 'PR title policy' 'gates document PR title policy'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'WHAT_WE_DONT_DO\.md' 'review policy enforces negative-scope policy'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'anthropic-reference-harness\.md' 'review policy enforces security boundary'
 require_grep docs/harness/CODE_REVIEW_POLICY.md '\.claude/scan-extras\.txt' 'review policy references scan tuning'
@@ -328,7 +365,6 @@ require_grep docs/harness/bin/review-gate.sh '\.claude/scan-extras\.txt' 'review
 require_grep docs/harness/bin/review-gate.sh '\.claude/fp-rules\.txt' 'review-gate prompt includes false-positive tuning'
 require_grep docs/harness/bin/review-gate.sh 'Review Canvas' 'review-gate prompt includes review canvas checks'
 require_grep docs/harness/bin/review-gate.sh 'docs/harness/bin' 'review-gate protects harness script changes'
-require_grep docs/harness/bin/pr-title-policy.sh '\[codex\]' 'PR title policy rejects codex marker'
 require_grep docs/harness/bin/sensors.sh 'quick' 'sensors supports quick mode'
 require_grep docs/harness/bin/sensors.sh 'full' 'sensors supports full mode'
 require_grep docs/harness/bin/sensors.sh 'docs' 'sensors supports docs mode'
@@ -336,11 +372,11 @@ require_grep docs/harness/bin/sensors.sh 'mcp' 'sensors supports mcp mode'
 require_grep docs/harness/bin/sensors.sh 'baseline' 'sensors supports baseline mode'
 require_grep docs/harness/bin/sensors.sh 'status' 'sensors supports status mode'
 require_grep docs/harness/bin/sensors.sh '\-\-json' 'sensors supports JSON status output'
-require_grep docs/harness/bin/sensors.sh 'pr-title-policy\.sh' 'sensors runs PR title policy'
 require_grep docs/harness/bin/sensors.sh 'anthropic-reference-harness\.md' 'sensors summary includes security boundary'
 require_grep docs/harness/bin/sensors.sh '\.claude/scan-extras\.txt' 'sensors summary includes scan tuning'
 require_grep docs/harness/bin/sensors.sh '\.claude/fp-rules\.txt' 'sensors summary includes false-positive tuning'
 require_grep docs/harness/INVARIANTS.md 'Static/read-only first' 'invariants declare static/read-only default'
+require_grep docs/harness/INVARIANTS.md 'PR title.*\[codex\]' 'invariants forbid codex PR title marker'
 require_grep docs/harness/INVARIANTS.md 'ADR.*sandbox|sandbox.*ADR' 'invariants require ADR and sandbox for autonomous execution'
 require_grep docs/harness/INVARIANTS.md '\.claude/scan-extras\.txt' 'invariants point tuning outside core policy'
 require_grep docs/harness/INVARIANTS.md '\.claude/fp-rules\.txt' 'invariants point false-positive tuning outside core policy'

@@ -226,6 +226,27 @@ pub trait StorageBackend: Send + Sync {
     fn schema_version(&self) -> Result<i32, EngramError>;
 }
 
+/// Validate an identifier before interpolating it into savepoint SQL.
+pub(crate) fn validate_savepoint_name(name: &str) -> Result<&str, EngramError> {
+    let mut bytes = name.bytes();
+    let Some(first) = bytes.next() else {
+        return Err(EngramError::InvalidInput(
+            "invalid savepoint name: expected [A-Za-z_][A-Za-z0-9_]*".to_string(),
+        ));
+    };
+
+    let valid_start = first == b'_' || first.is_ascii_alphabetic();
+    let valid_rest = bytes.all(|byte| byte == b'_' || byte.is_ascii_alphanumeric());
+
+    if valid_start && valid_rest {
+        Ok(name)
+    } else {
+        Err(EngramError::InvalidInput(
+            "invalid savepoint name: expected [A-Za-z_][A-Za-z0-9_]*".to_string(),
+        ))
+    }
+}
+
 /// Extension trait for backends that support transactions (ENG-18)
 pub trait TransactionalBackend: StorageBackend {
     /// Execute a closure within a transaction

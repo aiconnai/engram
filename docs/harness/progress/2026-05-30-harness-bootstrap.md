@@ -7,6 +7,52 @@
 
 ---
 
+## 2026-06-20 — PR title guard
+
+### Contexto
+
+Usuário pediu que PRs nunca mais recebam o marcador `[codex]` no título e que
+o harness bloqueie essa prática daqui para frente.
+
+### Ações realizadas
+
+1. Adicionado `docs/harness/bin/check-pr-title.sh`:
+   - valida título fornecido via `--title`;
+   - valida título de PR existente via `--pr` usando `gh pr view`;
+   - falha para título vazio;
+   - falha para o marcador `[codex]`, com comparação case-insensitive;
+   - falha para identificador de PR não numérico antes de chamar `gh`;
+   - falha quando `--help` é combinado com uma validação de título ou PR;
+   - falha quando argumentos de validação são duplicados ou combinados.
+2. `doctor.sh` passou a:
+   - exigir o script como arquivo versionado e executável;
+   - fazer self-test de um título permitido;
+   - fazer self-test de um título bloqueado.
+3. Documentação atualizada em `README.md`, `GATES.md` e `INVARIANTS.md`.
+4. Criado Review Canvas:
+   `docs/harness/canvas/2026-06-20-pr-title-guard.md`.
+
+### Evidência
+
+- `bash docs/harness/bin/check-pr-title.sh --title "align lifecycle hook contracts"` — PASS.
+- `bash -c 'if docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts"; then exit 1; else exit 0; fi'` — PASS, o checker rejeitou o marcador.
+- `bash docs/harness/bin/check-pr-title.sh --pr 91` — PASS.
+- `bash -c 'if docs/harness/bin/check-pr-title.sh --pr --help; then exit 1; else exit 0; fi'` — PASS, o checker rejeitou identificador de PR não numérico antes de chamar `gh`.
+- `bash -c 'if docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" --help; then exit 1; else exit 0; fi'` — PASS, `--help` não ignora validação pendente.
+- `bash -c 'if docs/harness/bin/check-pr-title.sh --pr 91 --help; then exit 1; else exit 0; fi'` — PASS, `--help` não ignora validação de PR.
+- `bash -c 'if docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts" --title "align lifecycle hook contracts"; then exit 1; else exit 0; fi'` — PASS, argumentos duplicados não sobrescrevem validação.
+- `bash -n docs/harness/bin/check-pr-title.sh docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh quick` — PASS (`cargo fmt --all -- --check`, `cargo check`, doctor).
+- `bash docs/harness/bin/sensors.sh` — PASS (`make ci + doctor`).
+
+### Resultado
+
+Regra registrada: títulos de PR criados ou editados por automação devem
+descrever a mudança e não carregar o marcador `[codex]`.
+
+---
+
 ## 2026-05-30 — Session 1: Exploration + Scaffolding
 
 ### Contexto da sessão
@@ -1133,3 +1179,74 @@ verificada por `cargo machete`, e remoção do bin dummy `engram-core`.
 - O reviewer registrou dois follow-ups `MED` nao bloqueantes: teste de regressao
   para `_mcp_call` apos `close()` no Python SDK e alinhamento do README do SDK
   Python com as novas opcoes publicas.
+
+## 2026-06-20 — Storage extension semantics cleanup
+
+### Contexto
+
+Code-quality review found fake-success risk in storage extension traits:
+backend-level transaction wrappers executed closures without a transaction,
+SQLite `push` / `pull` returned success with zero work, Turso
+`sync_delta` / `sync_state` returned fabricated zero/current-time data, and
+savepoint helpers interpolated raw names.
+
+### Ações realizadas
+
+- Added `validate_savepoint_name` for simple SQL identifiers before savepoint
+  SQL interpolation.
+- SQLite and Turso savepoint helpers now reject invalid names with
+  `EngramError::InvalidInput`.
+- SQLite `CloudSyncBackend::push` / `pull` now return explicit
+  `EngramError::Sync` instead of success-shaped no-ops.
+- SQLite and Turso `TransactionalBackend::with_transaction` now return explicit
+  `EngramError::Storage` until a transaction-scoped `StorageBackend` exists.
+- Turso `sync_delta` / `sync_state` now return explicit `EngramError::Sync`
+  instead of fabricated data.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-20-storage-extension-semantics.md`.
+
+### Verificações
+
+- `rtk cargo test sqlite_backend` - PASS, 15 passed.
+- `rtk cargo test --test turso_backend_tests --features turso` - PASS, 6
+  passed.
+- `rtk cargo clippy -p engram-core --all-targets --features turso -- -D warnings`
+  - PASS.
+- `rtk git diff --check` - PASS.
+
+## 2026-06-20 — Hook contract cleanup follow-through
+
+### Contexto
+
+Code-quality review found that server hook docs advertised default `Stop`
+wiring while `enable_hooks()` registered an inline no-op, and that
+`PostToolUseHandler.auto_memory` suggested automatic memory creation even
+though the implementation only logged a placeholder.
+
+### Ações realizadas
+
+- `src/bin/server.rs` now registers the exported `StopHandler` for
+  `LifecycleHook::Stop`.
+- `src/hooks/post_tool_use.rs` now describes and implements PostToolUse as
+  best-effort policy reinforcement only.
+- The unfinished auto-memory placeholder field and logging branch were removed.
+- `CHANGELOG.md` now calls out the feature-gated public API cleanup.
+- Regression coverage asserts:
+  - `enable_hooks()` dispatches `LifecycleHook::Stop` and receives
+    `HookResult::Continue`;
+  - PostToolUse does not create synthetic memories from arbitrary tool output;
+  - policy reinforcement does not create additional memories.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-20-hooks-contracts.md`.
+
+### Verificações
+
+- `rtk cargo test --features hooks test_hook_wiring test_stop_handler test_post_tool_use_handler`
+  — INVALIDO: Cargo aceita apenas um filtro antes de `--`; filtros rodados
+  separadamente.
+- `rtk cargo test --features hooks test_hook_wiring` — PASS.
+- `rtk cargo test --features hooks test_stop_handler` — PASS.
+- `rtk cargo test --features hooks test_post_tool_use_handler` — PASS.
+- `rtk cargo test --features hooks post_tool_use` — PASS.
+- `rtk cargo clippy --features hooks --all-targets --all-features -- -D warnings`
+  — PASS.

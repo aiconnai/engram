@@ -27,6 +27,10 @@ No public changes are queued yet for the next release.
 - **AgentShield loop scaffold** — Added a bounded weekly/manual security scan
   loop with a repository skill, state handoff, local Make/just target, and
   explicit high-severity AgentShield gate.
+- **Lifecycle hook contracts** — `PostToolUseHandler` now only reinforces
+  explicit memory policy metadata and no longer exposes the unfinished
+  `auto_memory` placeholder field; `Stop` dispatch now uses the exported
+  `StopHandler`.
 - **Public documentation claim hygiene** — Qualified hosted/cloud references,
   package-channel lag, schema snapshots, release guidance, and benchmark-style
   examples so public copy distinguishes verified facts from deployment patterns.
