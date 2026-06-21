@@ -745,3 +745,11 @@ Verification:
   — PASS; explicit `--title` is not made ambiguous by `PR_TITLE`.
 - `bash docs/harness/bin/sensors.sh full` — PASS; full deterministic gate
   green for final broad-review range.
+- `bash docs/harness/bin/review-gate.sh post final-harness-parity --range 2e932ad..HEAD`
+  — initial FAIL found PR-title policy divergence and missing canonical doctor
+  validation; fixed in `eb4c175`.
+- Final review rerun `v2` — FAIL because the range needed full deterministic
+  gate evidence; fixed by running `sensors.sh full` and recording
+  `.sensors-last` in `43506c7`.
+- Final review rerun `v3` — PASS; official `review-gate.sh post` accepted the
+  `REVIEW_VERDICT: PASS` artifact.
