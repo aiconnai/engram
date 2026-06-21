@@ -1,0 +1,8 @@
+FAIL loop-engineering adds unpinned npm execution guidance, and progress records review evidence that is not actually tracked
+
+- [HIGH] `skills/loop-engineering/SKILL.md:48` tells future agents to run `npx @cobusgreyling/loop-init`, `loop-cost`, and `loop-audit` from the repo. That expands network/code-execution and likely repo-write surface without an ADR, pinned package, sandbox, or egress contract, while `docs/harness/security/anthropic-reference-harness.md:24` keeps harness work static/read-only by default and requires explicit constraints for future execution. Replace these with non-executing reference guidance, or gate them behind a reviewed ADR and pinned/sandboxed target contract.
+- [MED] `docs/harness/progress.md:677` says the final PASS review artifact “is committed as separate review evidence,” but `git ls-files docs/harness/reviews/2026-06-21-b2-loop-skills-policy*` returned no tracked files and the live tree has those B2 review artifacts untracked. That makes the canonical progress log claim stronger evidence than version control contains. Commit the review evidence first, or change the progress wording so it does not claim committed PASS evidence before it exists.
+
+REVIEW_VERDICT: FAIL unpinned npx execution guidance violates the harness security posture, and progress overstates tracked review evidence
+
+

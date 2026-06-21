@@ -6,9 +6,9 @@
 | Active sprint | `Harness Engineering v0 — bootstrap & core gates` |
 | Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
 | Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
-| Last review | `2026-05-31 — pass: docs/harness/reviews/2026-05-31-harness-bootstrap-v9-post.md` |
-| Last sensors | `2026-06-20T14:53:04Z — status=pass (full)` |
-| Last commit | `f2b1799` |
+| Last review | `2026-06-21 — pass: docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v8-post.md` |
+| Last sensors | `2026-06-21 — status=pass (full gate)` |
+| Last commit | `913917b` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 

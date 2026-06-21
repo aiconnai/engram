@@ -1,0 +1,742 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: b2-loop-skills-policy
+**Mode**: post
+**Date (UTC)**: 2026-06-21
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+Harness script changes detected:
+- docs/harness/bin/doctor.sh
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/docs/harness/README.md b/docs/harness/README.md
+index 6115a51..de5030c 100644
+--- a/docs/harness/README.md
++++ b/docs/harness/README.md
+@@ -73,0 +74 @@ cookies ou dumps de ambiente.
++| `SKILLS.md`                    | Inventário e política de promoção de skills repo-locais (`skills/<name>/SKILL.md`) |
+diff --git a/docs/harness/SKILLS.md b/docs/harness/SKILLS.md
+new file mode 100644
+index 0000000..72fb5e5
+--- /dev/null
++++ b/docs/harness/SKILLS.md
+@@ -0,0 +1,59 @@
++# Repository Skills
++
++Engram keeps repository-specific agent skills under `skills/<name>/SKILL.md`.
++These are part of the local harness surface when they describe repeatable
++project work, review policy, loop behavior, or external-system operation.
++
++Skills are explicit operational context, while diagnostics and doctor checks
++keep the harness observable. Repo-local skills must therefore be tracked,
++reviewed, and validated instead of left as accidental untracked files.
++
++## Current Skills
++
++| Skill | Purpose | Default level |
++|---|---|---|
++| `agentshield-scan` | Weekly/manual AgentShield security triage loop with a hard iteration cap | L1 report-only |
++| `engram-council` | Structured consensus via `memory_council` / `CouncilSkill` for design, policy, security, and tradeoff decisions | Read-only decision support |
++| `engram-onboarding` | Bootstrap an agent's engram memory session in a new repository | Policy/reference |
++| `loop-engineering` | Shared safety model for repeatable agent loops | Policy/reference |
++
++## Available for Follow-Up (Not Ported in B2)
++
++The following skills exist in AgentShield's repo-local harness and are candidates
++for a future port to Engram. They are **intentionally not ported in Task B2** —
++B2 carries only `loop-engineering` (the shared safety base) plus this policy, so
++the gate and review stay scoped to one new operational surface. Each of these
++introduces its own operating surface (CI parsing, dependency advisories, PR
++triage) and warrants its own task, port, and review canvas.
++
++| Skill | Purpose | Suggested level on port |
++|---|---|---|
++| `loop-triage` | Daily signal triage for CI, issues, PRs, commits, and chat | L1 report-only |
++| `loop-triage-ci` | CI failure grouping and bounded minimal-fix handoff | L1 report, L2 only with verifier |
++| `dependency-triage` | Dependency advisory and patch-candidate triage | L1 report, patch-only candidates |
++| `pr-review-triage` | PR aging, CI block, and reviewer-thread triage | L1 report, L2 only with verifier |
++
++## Policy
++
++- Every repo-local skill must live at `skills/<name>/SKILL.md`.
++- Every skill must have YAML frontmatter with `name` and `description`.
++- `name` must match the directory name.
++- New skills require a harness review canvas when they change loop behavior,
++  gate behavior, external-system operations, or automation level.
++- Skills that only support a single operator and should not affect the repo
++  belong in that operator's personal CLI skills directory (for example
++  `~/.codex/skills` or `~/.claude/skills`), not this repository.
++- Local run artifacts, sub-agent evidence, and review transcripts belong in
++  `docs/harness/reviews/` or the loop's `docs/loops/<name>/` directory according
++  to their purpose.
++
++## Promotion Checklist
++
++Before adding a new skill:
++
++1. Decide whether it is repo policy or a personal operator shortcut.
++2. Confirm the skill is report-only by default unless the user explicitly
++   requests write-path work.
++3. Name the verification commands or manual evidence the skill requires.
++4. Add or update harness docs if the skill changes process.
++5. Run `bash docs/harness/bin/doctor.sh`.
+diff --git a/docs/harness/bin/doctor.sh b/docs/harness/bin/doctor.sh
+index 0ce1f54..c0ba7c8 100755
+--- a/docs/harness/bin/doctor.sh
++++ b/docs/harness/bin/doctor.sh
+@@ -254,0 +255 @@ require_file docs/harness/JSON_OUTPUTS.md
++require_file docs/harness/SKILLS.md
+@@ -354,0 +356,72 @@ require_grep .claude/fp-rules.txt 'fp-rules' 'false-positive tuning file identif
++# Repository skills inventory and frontmatter validation
++require_grep docs/harness/README.md 'SKILLS\.md' 'README mentions SKILLS.md'
++require_grep docs/harness/SKILLS.md '`loop-engineering`' 'SKILLS documents loop-engineering'
++require_grep docs/harness/SKILLS.md '~/.codex/skills' 'SKILLS documents personal skill location'
++
++UNTRACKED_SKILLS="$(git ls-files --others --exclude-standard -- 'skills/*/SKILL.md' 2>/dev/null || true)"
++if [ -n "$UNTRACKED_SKILLS" ]; then
++  fail "untracked repo-local skills found: $UNTRACKED_SKILLS" "skills:untracked" ""
++else
++  add_check "skills:untracked" "pass" "repo-local skills are tracked or ignored" "skills"
++fi
++
++# Extract the YAML frontmatter block (between the leading `---` and the next `---`).
++# Returns nothing if the file does not start with a `---` fence.
++skill_frontmatter() {
++  local file="$1"
++  awk '
++    NR == 1 && $0 !~ /^---[[:space:]]*$/ { exit }
++    NR == 1 { next }
++    /^---[[:space:]]*$/ { exit }
++    { print }
++  ' "$file" 2>/dev/null || true
++}
++
++# Validate a `key:` line exists inside the frontmatter block, optionally matching a value regex.
++require_frontmatter_field() {
++  local file="$1"
++  local key="$2"
++  local value_re="$3"
++  local label="$4"
++  local block
++  block="$(skill_frontmatter "$file")"
++  if [ -z "$block" ]; then
++    fail "skill has no YAML frontmatter block: $file ($label)" "skill_frontmatter:$file:$key" "$file"
++    return
++  fi
++  if printf '%s\n' "$block" | grep -qE "^${key}:[[:space:]]*${value_re}[[:space:]]*$"; then
++    add_check "skill_frontmatter:$file:$key" "pass" "frontmatter field present: $label" "$file"
++  else
++    fail "skill frontmatter missing/invalid $key: $file ($label)" "skill_frontmatter:$file:$key" "$file"
++  fi
++}
++
++# disk -> inventory: every on-disk skill must have valid frontmatter and be inventoried.
++while IFS= read -r skill_file; do
++  [ -n "$skill_file" ] || continue
++  skill_dir="$(basename "$(dirname "$skill_file")")"
++  require_frontmatter_field "$skill_file" "name" "$skill_dir" "skill name matches dir: $skill_dir"
++  require_frontmatter_field "$skill_file" "description" ".+" "skill has description: $skill_dir"
++  require_grep docs/harness/SKILLS.md "\`$skill_dir\`" "skill is inventoried: $skill_dir"
++done < <(find skills -mindepth 2 -maxdepth 2 -name SKILL.md | sort)
++
++# inventory -> disk: every skill named in the SKILLS.md "Current Skills" table must exist on disk.
++# Only the Current Skills section counts; the "Available for Follow-Up" table lists skills not yet ported.
++while IFS= read -r inv_skill; do
++  [ -n "$inv_skill" ] || continue
++  if [ -f "skills/$inv_skill/SKILL.md" ]; then
++    add_check "skill_inventory_exists:$inv_skill" "pass" "inventoried skill exists on disk: $inv_skill" "skills/$inv_skill/SKILL.md"
++  else
++    fail "inventoried skill missing on disk: skills/$inv_skill/SKILL.md" "skill_inventory_exists:$inv_skill" "skills/$inv_skill/SKILL.md"
++  fi
++done < <(awk '
++  /^## Current Skills/ { in_section = 1; next }
++  /^## / { in_section = 0 }
++  in_section && /^\| `[^`]+` \|/ {
++    line = $0
++    sub(/^\| `/, "", line)
++    sub(/`.*$/, "", line)
++    print line
++  }
++' docs/harness/SKILLS.md 2>/dev/null | sort -u)
++
+diff --git a/docs/harness/canvas/2026-06-21-b2-loop-skills-policy.md b/docs/harness/canvas/2026-06-21-b2-loop-skills-policy.md
+new file mode 100644
+index 0000000..7383ad1
+--- /dev/null
++++ b/docs/harness/canvas/2026-06-21-b2-loop-skills-policy.md
+@@ -0,0 +1,67 @@
++# Review Canvas: b2-loop-skills-policy
++
++Date: 2026-06-21
++Owner: Claude (Opus); reviewed cross-model by Codex
++Scope: Port AgentShield's `loop-engineering` base skill plus the `SKILLS.md`
++repository-skill promotion policy into Engram, and wire skill-frontmatter
++validation into the deterministic harness doctor. The other four AgentShield
++loop skills (`loop-triage`, `loop-triage-ci`, `dependency-triage`,
++`pr-review-triage`) are intentionally out of scope and documented as follow-ups.
++
++## Trigger
++
++| Trigger | Evidence |
++|---|---|
++| Harness gate/policy change | Adds inventory + frontmatter validation to `docs/harness/bin/doctor.sh` and adds `docs/harness/SKILLS.md` policy. |
++| More than 200 non-generated lines | `skills/loop-engineering/SKILL.md` is ~358 lines of new content. |
++| Process-critical script touched | `doctor.sh` is in `docs/harness/bin/*`; required `[BLOCKER]`-level canvas per `CODE_REVIEW_POLICY.md`. |
++
++## Approaches Considered
++
++| Approach | Decision | Reason |
++|---|---|---|
++| Port only `loop-engineering` + `SKILLS.md` policy this task | Accepted | Keeps the gate and review scoped to one new operational surface; the safety base is the prerequisite for the other four skills. |
++| Port the whole 5-skill family at once | Rejected | Mixes skill policy with several new operating surfaces (CI parsing, dependency advisories, PR triage), making the gate/review harder and broadening blast radius. Documented as follow-ups in `SKILLS.md`. |
++| Read sources by checking out `chore/repo-local-harness-skills` in AgentShield | Rejected | Mutating that branch is unnecessary; `git show <branch>:<path>` reads the sources without touching any working tree. |
++| Copy `SKILL.md` verbatim from AgentShield | Rejected | Source is AgentShield-specific (`cargo run -- scan`, `release.yml`, Homebrew/crates.io). Adapted product references to Engram (MCP/memory loops, `just ci`, `agentshield-scan` worked example) while preserving the L1/L2/L3 model and frontmatter. |
++| Port the AgentShield `.omo/`-ignored-evidence doctor check | Rejected | Engram's `.gitignore` has no `.omo/` convention; porting it would assert a convention the repo does not have. |
++
++## Hot Path Complexity
++
++| Path | Time impact | Space impact | Notes |
++|---|---|---|---|
++| `doctor.sh` skill loop | O(k) in number of `skills/*/SKILL.md` (currently 4) | O(1) | One `git ls-files` + a bounded `find -mindepth 2 -maxdepth 2`; three `grep` per skill. |
++| `doctor.sh` cross-references | O(1) | O(1) | Three additional `require_grep` calls (README + SKILLS anchors). |
++| `sensors.sh quick` | Constant extra work | O(1) | Doctor already runs in the quick lane; skill checks add bounded greps. |
++
++## Edge Cases
++
++| Edge case | Verification plan |
++|---|---|
++| New skill file left untracked | `git ls-files --others` check fails doctor until the skill is tracked. Verified: doctor FAILed on untracked `skills/loop-engineering/SKILL.md`, passed after `git add`. |
++| Skill `name:` does not match its directory | `require_frontmatter_field name "$skill_dir"` fails for that skill. Verified in a temp clone: a `name: wrong-name` frontmatter FAILs doctor (exit 1). |
++| Skill not listed in `SKILLS.md` inventory | `require_grep` for `` `$skill_dir` `` against `SKILLS.md` fails if a skill is missing from the table. |
++| Inventoried skill deleted from disk (inventory→disk gap) | The "Current Skills" table is parsed and each named skill must have `skills/<name>/SKILL.md`. Verified: deleting `loop-engineering/SKILL.md` in a temp clone FAILs doctor (`inventoried skill missing on disk`), where the disk→inventory `find` loop alone passed. Found by cross-model (Codex) review v2. |
++| Frontmatter keys present only in the markdown body | `name:`/`description:` are validated inside the leading `---`…`---` YAML block via `skill_frontmatter`, not anywhere in the file. Verified: a body-only `name:`/`description:` (no fence) FAILs doctor (`no YAML frontmatter block`). Found by cross-model (Codex) review v2. |
++| `SKILLS.md` or its required anchors removed | `require_file docs/harness/SKILLS.md` + `require_grep` for `` `loop-engineering` `` and `~/.codex/skills` fail. |
++| README loses the SKILLS.md reference | `require_grep docs/harness/README.md 'SKILLS\.md'` fails. |
++
++## Breakage Risk
++
++| Risk | Impact | Mitigation | Rollback | Verification |
++|---|---|---|---|---|
++| Untracked-skills check blocks unrelated WIP skill dirs | Local doctor fails until tracked/ignored | Check matches only `skills/*/SKILL.md`; `--exclude-standard` honors `.gitignore` | Revert this commit to drop the skill loop | `doctor.sh` exits 0 with the 4 tracked skills. |
++| Backtick quoting in the `inventoried` grep mis-parses | False FAIL/PASS on inventory check | Pattern uses `\`$skill_dir\`` (literal backtick in ERE) and was exercised against all 4 skills | Revert this commit | `doctor.sh` exits 0; removing a skill from `SKILLS.md` would FAIL. |
++| `require_grep` arg order differs from AgentShield source | Wrong file/pattern checked | Engram contract is `require_grep <path> <pattern> <label>`; all new calls follow it | Revert this commit | `doctor.sh` exits 0 and FAILs when an anchor is removed. |
++| Adapted skill content drifts from real Engram gates | Skill points at non-existent commands/paths | Worked examples (`agentshield-scan`, `just ci`, `sensors.sh quick`) and human-gated paths (`release.yml`, `proto/`, attestation, auth) were checked against the live repo | Revert the `SKILL.md` add | `doctor.sh` validates frontmatter + inventory; manual read confirms commands exist. |
++
++## Decision
++
++Proceed.
++
++Reason: This ports an accepted AgentShield safety base plus a small deterministic
++inventory/frontmatter gate, scoped to a single new skill. Sources were read
++without mutating any branch, product references were adapted to Engram, and the
++out-of-scope skills are documented as explicit follow-ups. Cheap local
++verification (`doctor.sh`, `sensors.sh quick`) and a direct per-commit rollback
++path exist.
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 298b19f..6fe99ee 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -10,2 +10,2 @@
+-| Last sensors | `2026-05-31T15:52:49Z — status=pass` |
+-| Last commit | `f2b1799` |
++| Last sensors | `2026-06-21 — status=pass (quick lane)` |
++| Last commit | `0a27283` |
+@@ -643,0 +644,54 @@ Verification:
++
++## AgentShield harness parity B2 — loop-engineering skill + SKILLS.md policy — 2026-06-21
++
++- Ported AgentShield's `loop-engineering` base skill to
++  `skills/loop-engineering/SKILL.md`, adapting product references
++  (AgentShield `cargo scan`, `release.yml`, Homebrew/crates.io) to Engram
++  (MCP/memory loops, `just ci`, the `agentshield-scan` worked example) while
++  preserving the L1/L2/L3 safety model and frontmatter.
++- Added `docs/harness/SKILLS.md`: an inventory of the four current Engram skills
++  (`agentshield-scan`, `engram-council`, `engram-onboarding`,
++  `loop-engineering`), the canvas-gated promotion policy, and a personal-skill
++  location note for the multi-CLI setup.
++- Documented the four remaining AgentShield loop skills (`loop-triage`,
++  `loop-triage-ci`, `dependency-triage`, `pr-review-triage`) as explicit
++  follow-ups, intentionally not ported in B2 to keep the gate/review scoped.
++- Wired skill validation into `doctor.sh`: `require_file docs/harness/SKILLS.md`,
++  README + SKILLS cross-reference anchors, an untracked-skills check, and a
++  bounded `find skills -mindepth 2 -maxdepth 2 -name SKILL.md` loop validating
++  name-match, description presence, and inventory membership per skill.
++- Linked `SKILLS.md` from `docs/harness/README.md`.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-06-21-b2-loop-skills-policy.md`.
++- Source `SKILL.md`/`SKILLS.md`/doctor block read from the AgentShield branch
++  `chore/repo-local-harness-skills` via `git show` without mutating any branch.
++
++Verification:
++
++- `bash -n docs/harness/bin/doctor.sh` — PASS.
++- `bash docs/harness/bin/doctor.sh` — PASS (exit 0; FAILed first on the
++  untracked skill, then passed once `loop-engineering` was tracked).
++- `bash docs/harness/bin/sensors.sh quick` — PASS (`PASS (quick lane green)`).
++- `bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): add SKILLS.md policy and loop-engineering skill"`
++  — PASS.
++- Independent cross-model review (Codex) of the `926ff43..HEAD` range. The
++  iterative review artifacts live under
++  `docs/harness/reviews/2026-06-21-b2-loop-skills-policy*-post.md`. The final
++  PASS artifact will be committed as separate review evidence in a follow-up
++  commit (same pattern as B1's `docs(harness): add B1 PR title policy review
++  evidence` commit), so this feature commit does not embed a self-referential
++  verdict. Earlier iterations FAILed; each finding was verified against the
++  codebase and fixed:
++  - v1 FAIL (missing canvas + progress): added a Review Canvas and this entry.
++  - v2 FAIL (doctor skill validation too weak): hardened `doctor.sh` so
++    frontmatter `name:`/`description:` are checked inside the leading `---`…`---`
++    block (a body-only key no longer passes) and the `SKILLS.md` "Current Skills"
++    table is parsed so a deleted-but-inventoried skill now FAILs. Verified with
++    four adversarial temp-clone cases (good=0, deleted=1, body-only=1,
++    name-mismatch=1).
++  - v3 FAIL (progress referenced a FAIL/untracked review as "pass"): corrected
++    the `Last review` header to the real last passing tracked review.
++  - v4 FAIL (unpinned `npx` scaffolding guidance + overstated review evidence):
++    rewrote the loop `Quick Bootstrap` to reference-only guidance that defers to
++    the static/read-only security contract, and reworded the review-evidence
++    note from present to future tense.
+diff --git a/skills/loop-engineering/SKILL.md b/skills/loop-engineering/SKILL.md
+new file mode 100644
+index 0000000..05e1f8b
+--- /dev/null
++++ b/skills/loop-engineering/SKILL.md
+@@ -0,0 +1,365 @@
++---
++name: loop-engineering
++description: Use when designing, implementing, auditing, hardening, or operating autonomous agent loops in this repository, including Claude Code/Grok Build/Codex style `/loop` workflows, explicit `/goal` runs, Git worktree orchestration, MCP and memory automation, sub-agent execution, STATE.md handoffs, cost controls, maker/checker verification, and the Engram security gate (AgentShield scan + `just ci`).
++---
++
++# Loop Engineering
++
++Use this skill when work is repeatable, observable, and can be resumed safely
++across runs. Treat loops as small control systems: they discover work, hand it
++to agents, verify results, persist state, and decide whether to continue,
++revise, stop, or escalate.
++
++In Engram the canonical worked examples are the `agentshield-scan` loop
++(`docs/loops/agentshield-scan/`, a bounded weekly security scan) and the
++`engram-council` review loop. Use them as references for cadence, state shape,
++and hard-stop discipline.
++
++## Use This Only If
++
++Loop only when all four conditions are true:
++
++- **Repeatable objective:** the work can be expressed as iterations toward a
++  stable outcome.
++- **Observable oracle:** each iteration has evidence from commands, tests,
++  artifacts, reviews, scans, or a manual QA surface.
++- **Bounded action space:** allowed tools, files, MCP operations, costs, and
++  side effects are explicit enough to stop unsafe drift.
++- **Durable state:** progress can be persisted in a `STATE.md`-style file
++  without relying on hidden chat context.
++
++Do not start a loop if a required secret is missing, the next step is
++destructive or irreversible, the acceptance oracle is unclear, or the loop would
++write to live external systems (MCP write-path, storage, sync, attestation,
++release) without a read-only probe and an idempotent write plan.
++
++## What This Skill Does Not Do
++
++- It does not justify uncertain actions.
++- It does not perform high-risk refactors on first contact.
++- It does not bypass human gates on risky paths.
++- It does not make a loop safe just because an agent can run it repeatedly.
++
++## Quick Bootstrap
++
++A new loop starts at L1 report-only. Scaffold it by hand from the
++`agentshield-scan` loop (`docs/loops/agentshield-scan/`): copy its `STATE.md`
++shape, set an explicit objective, scope, non-goals, stop condition, and a hard
++iteration cap, and keep the first runs read-only.
++
++Do not introduce loop scaffolding by executing unpinned third-party tooling
++(for example `npx <package>` runners) from inside the repository. Per
++`docs/harness/security/anthropic-reference-harness.md`, harness work is
++static/read-only by default, and any autonomous or network/code-execution step
++against Engram requires an accepted ADR, a sandbox boundary, and an explicit
++target/egress contract first. Treat external loop-scaffolding CLIs as reference
++material to read, not commands to run by default.
++
++Upgrade beyond report-only only after at least one stable week of accurate
++reports, low noise, clear cost behavior, and no untriaged safety findings.
++
++## Required Scaffolding
++
++Every production loop needs:
++
++- `STATE.md` or a pattern-specific state file (Engram keeps these under
++  `docs/loops/<loop-name>/`, as `agentshield-scan` does).
++- `loop-budget.md` with daily caps, attempt caps, and a kill switch.
++- `loop-run-log.md` as append-only run history.
++- `LOOP.md` with cadence, budgets, ownership, escalation rules, and allowed
++  actions.
++- A verifier role separated from the implementer role; no self-approval.
++- A path/API denylist and an explicit auto-merge allowlist.
++- The Engram security gate (AgentShield scan + `just ci`) and policy for the
++  repository surfaces the loop can touch.
++
++Use `docs/loops/<loop-name>/` for repository-wide loops that should survive
++merge. Use `.worktrees/<loop-name>/` only for disposable, worktree-local state.
++
++## 14-Step Execution Loop
++
++1. **Name the loop:** write the objective, owner, scope, and non-goals.
++2. **Apply the 4-condition test:** record why the task is loopable or stop.
++3. **Define the success oracle:** list the exact commands, artifacts, manual QA,
++   and review criteria that prove completion.
++4. **Map the action boundary:** identify files, directories, MCP operations,
++   external services, and permissions the loop may touch.
++5. **Choose the orchestration primitive:** select `/loop`, `/goal`, worktrees,
++   skills, MCP tools, sub-agents, or a combination.
++6. **Create isolation:** use a Git worktree or branch when parallel work,
++   risky edits, or long-running changes could collide with the main checkout.
++7. **Initialize `STATE.md`:** create or update the loop state before starting
++   implementation.
++8. **Capture baseline signal:** record status, existing failures, prior run
++   timestamp, and active branch/worktree before making changes.
++9. **Plan one smallest next action:** define the next observable change and its
++   expected evidence.
++10. **Run the budget guard:** check `loop-budget.md`, attempt count, cost cap,
++    pause flags, and kill switch before write actions.
++11. **Execute at the allowed level:** L1 is report-only, L2 is minimal-fix
++    proposals in an isolated worktree plus verifier, and L3 requires explicit
++    mature safety gates.
++12. **Record evidence:** write command evidence, files changed, outcomes, and
++    artifacts to `STATE.md` and `loop-run-log.md`.
++13. **Run mandatory verification:** execute relevant tests/lint/scans, review
++    scope diff, and check the denylist.
++14. **Decide continue, revise, or stop:** compare evidence to the oracle and the
++    loop readiness rubric; close with final gate results or escalate clearly.
++
++## Execution Levels
++
++- **L1 report-only:** triage, classify, summarize, and recommend. No writes
++  outside state/log files unless the user explicitly asks.
++- **L2 assisted fixes:** create minimal diffs in an isolated branch or worktree,
++  then require an independent verifier before merge, PR, or external write.
++- **L3 mature automation:** allow narrow automated actions only after stable L1
++  and L2 metrics, explicit allowlists, budget caps, denylist enforcement,
++  Engram security gates, and human-approved escalation paths are in place.
++
++## Building Blocks
++
++Use `/loop` for bounded iterative work where the user expects repeated
++execution until a named stop condition is met. State the stop condition before
++the first iteration and re-check it after every gate.
++
++Use `/goal` only when the user explicitly asks for a goal-style long-running
++objective. Keep the objective concrete, do not mark it complete until the
++matching surface has been exercised, and do not use `/goal` as a substitute for
++clear acceptance criteria.
++
++Treat any external loop-scaffolding CLI as reference material, not a default
++command to execute (see Quick Bootstrap). If a reviewed ADR ever authorizes
++running one, review every generated file before trusting it, then adapt its
++budgets, cadence, and denylist to the Engram harness.
++
++Use Git worktrees when two agents may touch different ownership boundaries or
++when a loop needs isolation from the user's active checkout:
++
++```bash
++git worktree add .worktrees/<loop-name> -b <branch-name>
++```
++
++Do not create nested worktrees. Check the current worktree first with:
++
++```bash
++git rev-parse --git-dir
++git rev-parse --git-common-dir
++git branch --show-current
++```
++
++Use repository skills before generic reasoning. Load only the skill files needed
++for the active task, then follow the repository-specific rules for MCP tools,
++storage, search, the SDKs (Python/TypeScript), Rust, and release work.
++
++Use connectors for systems of record such as GitHub, Linear, Slack, or Vercel
++only after identifying whether the operation is read-only or write-path. For
++writes, probe the target first, make the operation idempotent, and never print
++tokens or full environment values.
++
++Use sub-agents for parallel exploration, independent review, or isolated
++implementation on disjoint files. Give each sub-agent a worktree, scope,
++allowed files, expected evidence, and return format. Do not use sub-agents to
++hide missing acceptance criteria or to bypass connector permissions.
++
++## Maker / Checker Split
++
++The implementer produces the smallest diff that satisfies the current
++iteration. The verifier independently checks scope, tests, security, and intent.
++
++Never combine implementer and verifier in the same loop iteration. If a separate
++agent is unavailable, require a human verifier or stop at L1/L2 proposal status.
++Default verifier stance is **reject until proven safe**. This mirrors the
++harness Single-Process Judgment rule: the agent that wrote a change is not the
++final judge of it — route post-review to a different CLI/model via
++`docs/harness/bin/review-gate.sh`.
++
++The verifier must check:
++
++- The diff stays inside the declared file and API boundary.
++- The change matches the user's intent and the loop oracle.
++- Tests, lint, AgentShield scan, and manual QA evidence are relevant.
++- Denylisted paths and external systems were not touched.
++- Connector and MCP writes were preceded by read-only probes and are idempotent.
++
++## Safety And Cost Controls
++
++Abort or pause the loop when:
++
++- The attempt cap is reached; default to 3 attempts per item.
++- Budget is at or above 100 percent.
++- `loop-pause-all` or the configured kill switch is present.
++- No actionable items are found.
++- Verification is inconclusive after the allowed attempts.
++- Uncertainty is higher than confidence.
++- Risk is medium or high without explicit human approval.
++
++Never auto-merge without an explicit allowlist. Enforce denylist rules for
++secrets, auth, migrations, infrastructure, production data, release publishing,
++and any repo-specific high-risk path.
++
++In Engram, treat at least these paths/actions as human-gated unless the loop
++charter explicitly allows them:
++
++- `.env`, credential files, tokens, signing keys, and release secrets.
++- `.github/workflows/release.yml`, `.github/workflows/ci.yml`,
++  `.github/workflows/nightly.yml`, the `release/` directory, crates.io / npm /
++  PyPI publishing, installers, and release artifacts.
++- Attestation and snapshot code, sync write-path, and MCP server write tools.
++- Storage migrations, the `proto/` protocol surface, auth flows, and production
++  connector or MCP writes.
++
++## Structured State
++
++Keep loop state in a version-controlled `STATE.md` near the work:
++
++- Repository-wide or release loops: `docs/loops/<loop-name>/STATE.md`
++- Feature worktrees: `.worktrees/<loop-name>/STATE.md` when the state is local
++  to that worktree, or `docs/loops/<loop-name>/STATE.md` when it should survive
++  merge.
++- Short repository skills or docs loops: `skills/<skill-name>/STATE.md` only if
++  the state is part of the skill authoring record; otherwise use `docs/loops`.
++
++Use this minimal structure:
++
++```markdown
++# <Loop Name> State
++
++Objective:
++Scope:
++Non-goals:
++Stop condition:
++Level: L1 | L2 | L3
++Owner:
++Last run:
++
++## Current Iteration
++- Number:
++- Planned change:
++- Expected evidence:
++
++## High Priority
++
++## Watch
++
++## Noise
++
++## Attempts
++| Item | Attempts | Current status |
++|---|---:|---|
++
++## Evidence
++| Time | Command or action | Result | Notes |
++|---|---|---|---|
++
++## Decisions
++| Time | Decision | Reason |
++|---|---|---|
++
++## Risks
++| Risk | Mitigation | Status |
++|---|---|---|
++
++## Human Escalations
++| Time | Issue | Outcome |
++|---|---|---|
++
++## Run Log Summary
++- Append one line per run to `loop-run-log.md`.
++
++## Next Step
++```
++
++Update `STATE.md` before handoff, before context-heavy pauses, and after every
++iteration gate. Record facts, not private chain-of-thought. Do not store secrets,
++access tokens, full environment dumps, or unredacted customer data.
++
++`loop-budget.md` should include daily spend cap, per-run cap, attempt cap,
++pause flag name, kill switch path, and the human escalation contact or channel.
++
++`loop-run-log.md` should be append-only:
++
++```markdown
++| Time | Loop | Level | Result | Cost/Budget | Evidence | Next |
++|---|---|---|---|---|---|---|
++```
++
++## Security Gate
++
++Treat the AgentShield scan plus `just ci` as the primary automated security and
++quality gate for loop work. Run them after changing agent code, skills, MCP
++servers, connector scripts, tool schemas, runtime policies, CI workflows, or
++anything that affects execution, data, or network surfaces.
++
++The `agentshield-scan` loop (`docs/loops/agentshield-scan/`) is the worked
++example: it runs a bounded scan via `scripts/run-agentshield-loop.sh`, caps
++iterations with `LOOP_MAX_ITERATIONS` (default `1`, hard cap `5`), gates on
++`--fail-on high`, and only accepts pre-existing findings through a reviewed
++`.agentshield-baseline.json`.
++
++Recommended local gate:
++
++```bash
++agentshield scan . --ignore-tests --fail-on high --explain
++just ci
++```
++
++Recommended machine-readable artifacts:
++
++```bash
++mkdir -p target/agentshield
++agentshield scan . --ignore-tests --format json --output target/agentshield/loop-scan.json
++agentshield scan . --ignore-tests --format sarif --output target/agentshield/loop-scan.sarif
++```
++
++For an established repository with accepted findings, create a baseline once,
++review it, commit it, and then gate only new findings:
++
++```bash
++agentshield scan . --write-baseline .agentshield-baseline.json
++agentshield scan . --ignore-tests --baseline .agentshield-baseline.json --fail-on high --explain
++```
++
++Do not rewrite `.agentshield-baseline.json` automatically inside a loop. Update
++it only after intentional review of the findings being accepted — the
++`agentshield-scan` STATE.md records this rule explicitly.
++
++Run the deterministic harness sensors as the local hard gate before any commit:
++
++```bash
++bash docs/harness/bin/sensors.sh quick
++```
++
++If a test, parser, detector, policy, baseline, scan, or sensor check fails,
++rerun the specific command directly before making code changes based on the
++failure. Do not rely on filtered output for security decisions.
++
++## Anti-Patterns
++
++- Endless retry loops.
++- Narrative-only triage with no actionable evidence.
++- Shared unstructured state across multiple loops.
++- Auto-fix beyond L1 before evidence and metrics are stable.
++- Silent baseline rewrites that hide new findings.
++- Self-approval by the implementer.
++- Connector or MCP writes without read-only probes and idempotency checks.
++- Manual QA claims without exercising the matching surface.
++
++## Acceptance Checklist
++
++Before calling a loop complete, verify:
++
++- The 4-condition test still holds or the loop has been stopped deliberately.
++- Evidence and verification match the oracle.
++- `STATE.md` and `loop-run-log.md` contain the latest objective, evidence,
++  attempts, decisions, risks, human escalations, and next step or closeout.
++- Budget, L1/L2/L3 safety rules, pause flags, and escalation rules were honored.
++- All connector and MCP writes were preceded by read-only probes and are
++  idempotent.
++- Sub-agent outputs were reviewed in the coordinating worktree.
++- Maker/checker roles were separated, or the loop stopped at proposal status.
++- The relevant build, lint, test, and manual QA surfaces have been exercised.
++- The AgentShield scan and `just ci` have passed, or every remaining finding is
++  explicitly triaged with a reviewed baseline or suppression.
++- Human-required items are escalated clearly.
++- No generated JSON, SARIF, HTML, console report, baseline, egress policy, or
++  attestation was altered by output filtering.
+```
+
+## Previous Review Context (if any)
+
+Previous review file: docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v4-post.md
+(Only [BLOCKER] and [HIGH] findings from a prior FAIL are carried; PASS/LOW are not.)
+```
+- [HIGH] `skills/loop-engineering/SKILL.md:48` tells future agents to run `npx @cobusgreyling/loop-init`, `loop-cost`, and `loop-audit` from the repo. That expands network/code-execution and likely repo-write surface without an ADR, pinned package, sandbox, or egress contract, while `docs/harness/security/anthropic-reference-harness.md:24` keeps harness work static/read-only by default and requires explicit constraints for future execution. Replace these with non-executing reference guidance, or gate them behind a reviewed ADR and pinned/sandboxed target contract.
+```
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

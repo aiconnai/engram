@@ -1,0 +1,5 @@
+FAIL gate weakening: `loop-engineering` makes the optional quick sensor lane sound like the hard commit gate
+
+- [HIGH] `skills/loop-engineering/SKILL.md:326` and `skills/loop-engineering/SKILL.md:329` say to run `bash docs/harness/bin/sensors.sh quick` as “the local hard gate before any commit.” That contradicts the canonical sensor contract in `docs/harness/GATES.md:154`, `docs/harness/GATES.md:166`, `docs/harness/README.md:218`, and `docs/harness/README.md:230`, which state the no-argument/full `sensors.sh` gate is canonical and optional lanes do not replace it for merge, handoff, or completion. Because this is a repo-local operational skill, future loop work could treat quick-only fmt/check/doctor as sufficient and skip `just ci`/`make ci`, docs, tests, and MCP reference coverage. Fix by changing the skill to require full `bash docs/harness/bin/sensors.sh` for commit/handoff/completion, with `quick` labeled only as a development preflight.
+
+REVIEW_VERDICT: FAIL loop-engineering weakens the canonical harness sensor gate by naming quick mode as the hard commit gate.
