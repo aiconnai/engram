@@ -7,6 +7,7 @@ use rand::Rng;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 /// API key with prefix for easy identification
@@ -155,7 +156,12 @@ impl<'a> ApiKeyManager<'a> {
         let result = rows
             .into_iter()
             .find(|(_, _, _, _, _, _, stored_hash, salt)| {
-                hash_key_with_salt(raw_key, salt) == *stored_hash
+                // Constant-time comparison to avoid leaking the stored hash via
+                // timing of byte-wise string equality.
+                hash_key_with_salt(raw_key, salt)
+                    .as_bytes()
+                    .ct_eq(stored_hash.as_bytes())
+                    .into()
             });
 
         if let Some((
