@@ -1250,3 +1250,38 @@ though the implementation only logged a placeholder.
 - `rtk cargo test --features hooks post_tool_use` — PASS.
 - `rtk cargo clippy --features hooks --all-targets --all-features -- -D warnings`
   — PASS.
+
+## 2026-06-21 — Enrichment audit subsecond replay fix
+
+### Contexto
+
+The leftover `fix/code-quality-pass` cleanup stash contained one behavior fix
+outside the already-merged API-key/wasm clippy PR: `memory_replay_at_time`
+used SQLite `datetime(...)`, which normalizes RFC3339 timestamps to whole
+seconds and can include a future memory version or enrichment event when the
+replay timestamp falls between subsecond writes.
+
+### Ações realizadas
+
+- Restored only `src/mcp/handlers/enrichment_audit.rs` onto a clean branch from
+  `origin/main`.
+- Replaced replay cutoff comparisons with `julianday(...)` for memory versions
+  and enrichment events.
+- Replaced event ordering with `julianday(e.created_at) DESC, e.id DESC`.
+- Added `test_memory_replay_at_time_preserves_subsecond_boundary`, covering a
+  replay at `2026-01-02T00:00:00.100Z` between `.050Z` and `.900Z` writes.
+- Left unrelated stash content (`AGENTS.md`, AI guide docs, AgentShield state,
+  generated sensor state) untouched for separate cleanup.
+
+### Evidência
+
+- `rtk bash docs/harness/bin/bootstrap.sh` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/review-gate.sh pre enrichment-audit-subsecond-replay`
+  — PASS/advisory prompt artifact generated.
+- `rtk cargo fmt --all -- --check` — PASS.
+- `rtk cargo test -p engram-core --lib test_memory_replay_at_time_preserves_subsecond_boundary --locked`
+  — PASS.
+- `rtk cargo test -p engram-core --lib memory_replay_at_time --locked` — PASS.
+- `rtk cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
+- `rtk git diff --check` — PASS.

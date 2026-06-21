@@ -402,7 +402,7 @@ pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
                     r#"
                     SELECT version, content, tags, metadata, created_at, created_by, change_summary
                     FROM memory_versions
-                    WHERE memory_id = ?1 AND datetime(created_at) <= datetime(?2)
+                    WHERE memory_id = ?1 AND julianday(created_at) <= julianday(?2)
                     ORDER BY version DESC
                     LIMIT 1
                     "#,
@@ -478,8 +478,8 @@ pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
                         status, dry_run, created_at \
                      FROM enrichment_events e \
                      {where_clause} \
-                     AND datetime(e.created_at) <= datetime(?2) \
-                     ORDER BY e.created_at DESC, e.id DESC \
+                     AND julianday(e.created_at) <= julianday(?2) \
+                     ORDER BY julianday(e.created_at) DESC, e.id DESC \
                      LIMIT ?{limit_pos}"
                 );
 
@@ -836,6 +836,57 @@ mod tests {
         let events = result["events"].as_array().expect("events");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0]["event_type"], "consolidation");
+        assert_eq!(result["events_count"], 1);
+    }
+
+    #[test]
+    fn test_memory_replay_at_time_preserves_subsecond_boundary() {
+        let (ctx, memory_id) = ctx_with_event();
+
+        ctx.storage
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO memory_versions (memory_id, version, content, tags, metadata, created_at)
+                     VALUES (?1, 1, 'early', '[]', '{}', '2026-01-02T00:00:00.050Z')",
+                    params![memory_id],
+                )?;
+                conn.execute(
+                    "INSERT INTO memory_versions (memory_id, version, content, tags, metadata, created_at)
+                     VALUES (?1, 2, 'future', '[]', '{}', '2026-01-02T00:00:00.900Z')",
+                    params![memory_id],
+                )?;
+                conn.execute(
+                    "INSERT INTO enrichment_events
+                         (operation_id, event_type, memory_id, triggered_by, params, outcome, status, dry_run, created_at)
+                     VALUES ('op-early', 'consolidation', ?1, 'memory_consolidate', '{}', '{\"ok\":true}', 'completed', 0, '2026-01-02T00:00:00.050Z')",
+                    params![memory_id],
+                )?;
+                conn.execute(
+                    "INSERT INTO enrichment_events
+                         (operation_id, event_type, memory_id, triggered_by, params, outcome, status, dry_run, created_at)
+                     VALUES ('op-future', 'consolidation', ?1, 'memory_consolidate', '{}', '{\"ok\":true}', 'completed', 0, '2026-01-02T00:00:00.900Z')",
+                    params![memory_id],
+                )?;
+                Ok(())
+            })
+            .expect("seed replay subsecond boundary data");
+
+        let result = memory_replay_at_time(
+            &ctx,
+            serde_json::json!({
+                "memory_id": memory_id,
+                "timestamp": "2026-01-02T00:00:00.100Z",
+                "include_events": true,
+            }),
+        );
+
+        assert_eq!(result["found"], true);
+        assert_eq!(result["state"]["version"], 1);
+        assert_eq!(result["state"]["content"], "early");
+
+        let events = result["events"].as_array().expect("events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["operation_id"], "op-early");
         assert_eq!(result["events_count"], 1);
     }
 }
