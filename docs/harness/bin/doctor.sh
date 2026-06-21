@@ -261,6 +261,7 @@ require_file docs/harness/bin/bootstrap.sh
 require_file docs/harness/bin/doctor.sh
 require_file docs/harness/bin/baseline.sh
 require_file docs/harness/bin/quarterly-audit.sh
+require_file docs/harness/bin/pr-title-policy.sh
 require_dir docs/harness/progress
 require_dir docs/harness/reviews
 require_dir docs/harness/known-issues
@@ -275,6 +276,7 @@ require_exec docs/harness/bin/bootstrap.sh
 require_exec docs/harness/bin/doctor.sh
 require_exec docs/harness/bin/baseline.sh
 require_exec docs/harness/bin/quarterly-audit.sh
+require_exec docs/harness/bin/pr-title-policy.sh
 
 # If the advanced scripts exist, they should be executable
 [ -f docs/harness/bin/sensors.sh ] && require_exec docs/harness/bin/sensors.sh || true
@@ -308,6 +310,7 @@ require_grep docs/harness/GATES.md 'docs/harness/bin' 'gates protect harness scr
 require_grep docs/harness/GATES.md 'JSON_OUTPUTS\.md' 'gates reference JSON output contract'
 require_grep docs/harness/GATES.md 'Exclus' 'documented exclusion policy exists'
 require_grep docs/harness/GATES.md 'known-issue' 'exclusion policy points at known-issue docs'
+require_grep docs/harness/GATES.md 'PR title policy' 'gates document PR title policy'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'WHAT_WE_DONT_DO\.md' 'review policy enforces negative-scope policy'
 require_grep docs/harness/CODE_REVIEW_POLICY.md 'anthropic-reference-harness\.md' 'review policy enforces security boundary'
 require_grep docs/harness/CODE_REVIEW_POLICY.md '\.claude/scan-extras\.txt' 'review policy references scan tuning'
@@ -325,6 +328,7 @@ require_grep docs/harness/bin/review-gate.sh '\.claude/scan-extras\.txt' 'review
 require_grep docs/harness/bin/review-gate.sh '\.claude/fp-rules\.txt' 'review-gate prompt includes false-positive tuning'
 require_grep docs/harness/bin/review-gate.sh 'Review Canvas' 'review-gate prompt includes review canvas checks'
 require_grep docs/harness/bin/review-gate.sh 'docs/harness/bin' 'review-gate protects harness script changes'
+require_grep docs/harness/bin/pr-title-policy.sh '\[codex\]' 'PR title policy rejects codex marker'
 require_grep docs/harness/bin/sensors.sh 'quick' 'sensors supports quick mode'
 require_grep docs/harness/bin/sensors.sh 'full' 'sensors supports full mode'
 require_grep docs/harness/bin/sensors.sh 'docs' 'sensors supports docs mode'
@@ -332,6 +336,7 @@ require_grep docs/harness/bin/sensors.sh 'mcp' 'sensors supports mcp mode'
 require_grep docs/harness/bin/sensors.sh 'baseline' 'sensors supports baseline mode'
 require_grep docs/harness/bin/sensors.sh 'status' 'sensors supports status mode'
 require_grep docs/harness/bin/sensors.sh '\-\-json' 'sensors supports JSON status output'
+require_grep docs/harness/bin/sensors.sh 'pr-title-policy\.sh' 'sensors runs PR title policy'
 require_grep docs/harness/bin/sensors.sh 'anthropic-reference-harness\.md' 'sensors summary includes security boundary'
 require_grep docs/harness/bin/sensors.sh '\.claude/scan-extras\.txt' 'sensors summary includes scan tuning'
 require_grep docs/harness/bin/sensors.sh '\.claude/fp-rules\.txt' 'sensors summary includes false-positive tuning'
