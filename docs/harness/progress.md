@@ -205,6 +205,35 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
     — PASS.
   - `rtk bash docs/harness/bin/doctor.sh` — PASS.
 
+## Enrichment audit subsecond replay fix — 2026-06-21
+
+- `memory_replay_at_time` now compares replay cutoffs with SQLite
+  `julianday(...)` instead of `datetime(...)`, preserving RFC3339 subsecond
+  boundaries for both memory versions and enrichment events.
+- Event replay ordering now uses `julianday(e.created_at) DESC, e.id DESC` so
+  subsecond event timestamps sort consistently with the cutoff comparison.
+- Added regression coverage for a replay timestamp between `.050Z` and `.900Z`
+  to ensure the future version/event is excluded.
+- Scope kept separate from the leftover harness/docs stash; this branch only
+  restores `src/mcp/handlers/enrichment_audit.rs` plus this progress evidence.
+
+Verification:
+
+- `rtk bash docs/harness/bin/bootstrap.sh` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/review-gate.sh pre enrichment-audit-subsecond-replay`
+  — PASS/advisory prompt artifact generated.
+- `rtk cargo fmt --all -- --check` — PASS.
+- `rtk cargo test -p engram-core --lib test_memory_replay_at_time_preserves_subsecond_boundary --locked`
+  — PASS.
+- `rtk cargo test -p engram-core --lib memory_replay_at_time --locked` — PASS.
+- `rtk cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/review-gate.sh post enrichment-audit-subsecond-replay --range origin/main..HEAD --review-file docs/harness/reviews/2026-06-21-enrichment-audit-subsecond-replay-v2-post.md`
+  — PASS (`REVIEW_VERDICT: PASS`).
+- GitHub PR checks — PASS for Format, Clippy, Documentation, and Test
+  (ubuntu-latest).
+
 ## Próximos passos imediatos
 
 1. Concluir Fase 1: manter mini-artifacts dos blocos 1.1–1.3 e audit report em `docs/harness/plans/`.

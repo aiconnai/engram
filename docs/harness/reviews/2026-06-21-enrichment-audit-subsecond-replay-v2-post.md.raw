@@ -1,0 +1,171 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: enrichment-audit-subsecond-replay
+**Mode**: post
+**Date (UTC)**: 2026-06-21
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 0a8024d..ea0339e 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -207,0 +208,25 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
++## Enrichment audit subsecond replay fix — 2026-06-21
++
++- `memory_replay_at_time` now compares replay cutoffs with SQLite
++  `julianday(...)` instead of `datetime(...)`, preserving RFC3339 subsecond
++  boundaries for both memory versions and enrichment events.
++- Event replay ordering now uses `julianday(e.created_at) DESC, e.id DESC` so
++  subsecond event timestamps sort consistently with the cutoff comparison.
++- Added regression coverage for a replay timestamp between `.050Z` and `.900Z`
++  to ensure the future version/event is excluded.
++- Scope kept separate from the leftover harness/docs stash; this branch only
++  restores `src/mcp/handlers/enrichment_audit.rs` plus this progress evidence.
++
++Verification:
++
++- `rtk bash docs/harness/bin/bootstrap.sh` — PASS.
++- `rtk bash docs/harness/bin/doctor.sh` — PASS.
++- `rtk bash docs/harness/bin/review-gate.sh pre enrichment-audit-subsecond-replay`
++  — PASS/advisory prompt artifact generated.
++- `rtk cargo fmt --all -- --check` — PASS.
++- `rtk cargo test -p engram-core --lib test_memory_replay_at_time_preserves_subsecond_boundary --locked`
++  — PASS.
++- `rtk cargo test -p engram-core --lib memory_replay_at_time --locked` — PASS.
++- `rtk cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
++- `rtk git diff --check` — PASS.
++
+diff --git a/src/mcp/handlers/enrichment_audit.rs b/src/mcp/handlers/enrichment_audit.rs
+index 3f2dead..3e68f70 100644
+--- a/src/mcp/handlers/enrichment_audit.rs
++++ b/src/mcp/handlers/enrichment_audit.rs
+@@ -405 +405 @@ pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
+-                    WHERE memory_id = ?1 AND datetime(created_at) <= datetime(?2)
++                    WHERE memory_id = ?1 AND julianday(created_at) <= julianday(?2)
+@@ -481,2 +481,2 @@ pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
+-                     AND datetime(e.created_at) <= datetime(?2) \
+-                     ORDER BY e.created_at DESC, e.id DESC \
++                     AND julianday(e.created_at) <= julianday(?2) \
++                     ORDER BY julianday(e.created_at) DESC, e.id DESC \
+@@ -840,0 +841,51 @@ mod tests {
++
++    #[test]
++    fn test_memory_replay_at_time_preserves_subsecond_boundary() {
++        let (ctx, memory_id) = ctx_with_event();
++
++        ctx.storage
++            .with_connection(|conn| {
++                conn.execute(
++                    "INSERT INTO memory_versions (memory_id, version, content, tags, metadata, created_at)
++                     VALUES (?1, 1, 'early', '[]', '{}', '2026-01-02T00:00:00.050Z')",
++                    params![memory_id],
++                )?;
++                conn.execute(
++                    "INSERT INTO memory_versions (memory_id, version, content, tags, metadata, created_at)
++                     VALUES (?1, 2, 'future', '[]', '{}', '2026-01-02T00:00:00.900Z')",
++                    params![memory_id],
++                )?;
++                conn.execute(
++                    "INSERT INTO enrichment_events
++                         (operation_id, event_type, memory_id, triggered_by, params, outcome, status, dry_run, created_at)
++                     VALUES ('op-early', 'consolidation', ?1, 'memory_consolidate', '{}', '{\"ok\":true}', 'completed', 0, '2026-01-02T00:00:00.050Z')",
++                    params![memory_id],
++                )?;
++                conn.execute(
++                    "INSERT INTO enrichment_events
++                         (operation_id, event_type, memory_id, triggered_by, params, outcome, status, dry_run, created_at)
++                     VALUES ('op-future', 'consolidation', ?1, 'memory_consolidate', '{}', '{\"ok\":true}', 'completed', 0, '2026-01-02T00:00:00.900Z')",
++                    params![memory_id],
++                )?;
++                Ok(())
++            })
++            .expect("seed replay subsecond boundary data");
++
++        let result = memory_replay_at_time(
++            &ctx,
++            serde_json::json!({
++                "memory_id": memory_id,
++                "timestamp": "2026-01-02T00:00:00.100Z",
++                "include_events": true,
++            }),
++        );
++
++        assert_eq!(result["found"], true);
++        assert_eq!(result["state"]["version"], 1);
++        assert_eq!(result["state"]["content"], "early");
++
++        let events = result["events"].as_array().expect("events");
++        assert_eq!(events.len(), 1);
++        assert_eq!(events[0]["operation_id"], "op-early");
++        assert_eq!(result["events_count"], 1);
++    }
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.
