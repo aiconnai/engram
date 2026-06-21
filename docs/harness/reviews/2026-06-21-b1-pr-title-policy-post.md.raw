@@ -1,0 +1,372 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: b1-pr-title-policy
+**Mode**: post
+**Date (UTC)**: 2026-06-21
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+Harness script changes detected:
+- docs/harness/bin/doctor.sh
+- docs/harness/bin/pr-title-policy.sh
+- docs/harness/bin/sensors.sh
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/docs/harness/GATES.md b/docs/harness/GATES.md
+index c365b0d..4fcba58 100644
+--- a/docs/harness/GATES.md
++++ b/docs/harness/GATES.md
+@@ -24 +24,2 @@ Ele executa (em ordem):
+-| 6 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
++| 6 | PR title policy | `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` rejeita marcador `[codex]` | block; renomear PR/commit de handoff |
++| 7 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
+@@ -32,0 +34,20 @@ ambiente. O output humano continua sendo o default.
++### PR Title Policy
++
++Wrapper: `bash docs/harness/bin/pr-title-policy.sh`
++
++Este gate impede handoffs ou PRs com marcador de ferramenta no título. O padrão
++bloqueado é case-insensitive e tolera espaços dentro dos colchetes:
++`[codex]`, `[ Codex ]`, `[ CoDeX ]`.
++
++Modos:
++
++- `--title "<title>"` — valida um título explícito.
++- `--stdin` — lê o título de stdin.
++- `--current-pr` — lê o título do PR atual via `gh pr view`.
++- Sem argumentos, usa `PR_TITLE` quando a variável estiver definida.
++
++Exit codes: `0` para título aceito, `4` para marcador `[codex]` rejeitado,
++`2` para erro de uso e `3` quando `--current-pr` exige `gh` indisponível.
++`sensors.sh` executa casos positivos e negativos determinísticos para manter
++esse contrato vivo.
++
+diff --git a/docs/harness/bin/doctor.sh b/docs/harness/bin/doctor.sh
+index b93622f..0ce1f54 100755
+--- a/docs/harness/bin/doctor.sh
++++ b/docs/harness/bin/doctor.sh
+@@ -263,0 +264 @@ require_file docs/harness/bin/quarterly-audit.sh
++require_file docs/harness/bin/pr-title-policy.sh
+@@ -277,0 +279 @@ require_exec docs/harness/bin/quarterly-audit.sh
++require_exec docs/harness/bin/pr-title-policy.sh
+@@ -310,0 +313 @@ require_grep docs/harness/GATES.md 'known-issue' 'exclusion policy points at kno
++require_grep docs/harness/GATES.md 'PR title policy' 'gates document PR title policy'
+@@ -327,0 +331 @@ require_grep docs/harness/bin/review-gate.sh 'docs/harness/bin' 'review-gate pro
++require_grep docs/harness/bin/pr-title-policy.sh '\[codex\]' 'PR title policy rejects codex marker'
+@@ -334,0 +339 @@ require_grep docs/harness/bin/sensors.sh '\-\-json' 'sensors supports JSON statu
++require_grep docs/harness/bin/sensors.sh 'pr-title-policy\.sh' 'sensors runs PR title policy'
+diff --git a/docs/harness/bin/pr-title-policy.sh b/docs/harness/bin/pr-title-policy.sh
+new file mode 100755
+index 0000000..00ef9ee
+--- /dev/null
++++ b/docs/harness/bin/pr-title-policy.sh
+@@ -0,0 +1,83 @@
++#!/usr/bin/env bash
++
++set -euo pipefail
++
++REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
++cd "$REPO_ROOT"
++
++usage() {
++  echo "Usage: $0 --title <title> | --current-pr | --stdin" >&2
++}
++
++reject_if_disallowed() {
++  local title="$1"
++
++  if printf '%s\n' "$title" | grep -Eiq '\[[[:space:]]*codex[[:space:]]*\]'; then
++    echo "FAIL: PR title must not contain [codex]" >&2
++    exit 4
++  fi
++
++  echo "OK: PR title policy"
++}
++
++TITLE=""
++READ_STDIN=0
++CURRENT_PR=0
++SOURCE_COUNT=0
++
++if [ $# -eq 0 ] && [ -n "${PR_TITLE:-}" ]; then
++  TITLE="$PR_TITLE"
++  SOURCE_COUNT=1
++fi
++
++while [ $# -gt 0 ]; do
++  case "$1" in
++    --title)
++      if [ $# -lt 2 ]; then
++        usage
++        exit 2
++      fi
++      TITLE="${2:-}"
++      SOURCE_COUNT=$((SOURCE_COUNT + 1))
++      shift 2
++      ;;
++    --current-pr)
++      CURRENT_PR=1
++      SOURCE_COUNT=$((SOURCE_COUNT + 1))
++      shift
++      ;;
++    --stdin)
++      READ_STDIN=1
++      SOURCE_COUNT=$((SOURCE_COUNT + 1))
++      shift
++      ;;
++    *)
++      usage
++      exit 2
++      ;;
++  esac
++done
++
++if [ "$SOURCE_COUNT" -ne 1 ]; then
++  usage
++  exit 2
++fi
++
++if [ "$CURRENT_PR" -eq 1 ]; then
++  if ! command -v gh >/dev/null 2>&1; then
++    echo "FAIL: gh is required for --current-pr" >&2
++    exit 3
++  fi
++  TITLE="$(gh pr view --json title --jq .title)"
++fi
++
++if [ "$READ_STDIN" -eq 1 ]; then
++  TITLE="$(cat)"
++fi
++
++if [ -z "$TITLE" ]; then
++  usage
++  exit 2
++fi
++
++reject_if_disallowed "$TITLE"
+diff --git a/docs/harness/bin/sensors.sh b/docs/harness/bin/sensors.sh
+index f820ee6..dd72ed2 100755
+--- a/docs/harness/bin/sensors.sh
++++ b/docs/harness/bin/sensors.sh
+@@ -214,0 +215,27 @@ run_step() {
++run_expected_exit() {
++  local label="$1"
++  local expected="$2"
++  shift 2
++  local actual
++
++  echo "==> [harness] $label"
++  set +e
++  "$@"
++  actual=$?
++  set -e
++
++  if [ "$actual" -ne "$expected" ]; then
++    echo "FAIL: $label exited $actual; expected $expected" >&2
++    return 1
++  fi
++}
++
++run_pr_title_policy() {
++  run_step "PR title policy accepts clean title" \
++    bash docs/harness/bin/pr-title-policy.sh --title "fix: clean title" || return 1
++  run_expected_exit "PR title policy rejects [codex] title" 4 \
++    bash docs/harness/bin/pr-title-policy.sh --title "[codex] fix: bad title" || return 1
++  run_expected_exit "PR title policy rejects spaced mixed-case codex title" 4 \
++    bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] fix: bad title" || return 1
++}
++
+@@ -419 +446 @@ case "$MODE" in
+-    if run_step "baseline snapshot" bash docs/harness/bin/baseline.sh && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
++    if run_step "baseline snapshot" bash docs/harness/bin/baseline.sh && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+@@ -429,2 +456,2 @@ case "$MODE" in
+-    if run_step "fmt" cargo fmt --all -- --check && run_step "cargo check" cargo check && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+-      write_sensors_last "pass" "pass" "pass" "$MODE" "cargo fmt + cargo check"
++    if run_step "fmt" cargo fmt --all -- --check && run_step "cargo check" cargo check && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
++      write_sensors_last "pass" "pass" "pass" "$MODE" "cargo fmt + cargo check + pr-title-policy"
+@@ -434 +461 @@ case "$MODE" in
+-    write_sensors_last "fail" "fail" "fail" "$MODE" "cargo fmt + cargo check"
++    write_sensors_last "fail" "fail" "fail" "$MODE" "cargo fmt + cargo check + pr-title-policy"
+@@ -439,2 +466,2 @@ case "$MODE" in
+-    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "rustdoc" env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+-      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + rustdoc"
++    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "rustdoc" env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
++      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + rustdoc + pr-title-policy"
+@@ -444 +471 @@ case "$MODE" in
+-    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + rustdoc"
++    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + rustdoc + pr-title-policy"
+@@ -449,2 +476,2 @@ case "$MODE" in
+-    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "MCP protocol tests" cargo test --test mcp_protocol_tests && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+-      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + protocol tests"
++    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "MCP protocol tests" cargo test --test mcp_protocol_tests && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
++      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + protocol tests + pr-title-policy"
+@@ -454 +481 @@ case "$MODE" in
+-    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + protocol tests"
++    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + protocol tests + pr-title-policy"
+@@ -497,0 +525,4 @@ fi
++if ! run_pr_title_policy; then
++  CI_STATUS="fail"
++fi
++
+@@ -516 +547 @@ fi
+-write_sensors_last "$STATUS" "$CI_STATUS" "$DOCTOR_STATUS" "$MODE" "${CI_COMMAND[*]-missing}"
++write_sensors_last "$STATUS" "$CI_STATUS" "$DOCTOR_STATUS" "$MODE" "${CI_COMMAND[*]-missing} + pr-title-policy"
+diff --git a/docs/harness/canvas/2026-06-21-b1-pr-title-policy.md b/docs/harness/canvas/2026-06-21-b1-pr-title-policy.md
+new file mode 100644
+index 0000000..67eca47
+--- /dev/null
++++ b/docs/harness/canvas/2026-06-21-b1-pr-title-policy.md
+@@ -0,0 +1,50 @@
++# Review Canvas: b1-pr-title-policy
++
++Date: 2026-06-21
++Owner: Codex
++Scope: Port the AgentShield PR title policy gate into Engram and wire it into deterministic harness checks.
++
++## Trigger
++
++| Trigger | Evidence |
++|---|---|
++| Harness script change | Adds `docs/harness/bin/pr-title-policy.sh` and wires it into `sensors.sh`. |
++| Harness gate/policy documentation change | Updates `GATES.md` and `doctor.sh` cross-references so the new gate is auditable. |
++
++## Approaches Considered
++
++| Approach | Decision | Reason |
++|---|---|---|
++| Copy AgentShield `pr-title-policy.sh` verbatim and add deterministic harness checks | Accepted | Keeps parity with the accepted source repo and gives Engram the same title contract. |
++| Implement only as documentation guidance | Rejected | Documentation alone would not prevent `[codex]` titles from passing local gates. |
++| Add PR title validation into `review-gate.sh` | Rejected | Review gate is for independent diff review; title validation is a small deterministic sensor. |
++
++## Hot Path Complexity
++
++| Path | Time impact | Space impact | Notes |
++|---|---|---|---|
++| `pr-title-policy.sh --title` | O(n) in title length | O(1) | Single regex scan over one title. |
++| `sensors.sh quick/full` | Constant extra work | O(1) | Runs one accepting title and two expected rejection cases. |
++
++## Edge Cases
++
++| Edge case | Verification plan |
++|---|---|
++| Clean title is accepted | `bash docs/harness/bin/pr-title-policy.sh --title "fix: clean title"` exits 0. |
++| Plain `[codex]` marker is rejected | `bash docs/harness/bin/pr-title-policy.sh --title "[codex] fix: bad title"` exits 4. |
++| Spaced/mixed-case marker is rejected | `bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] fix: bad title"` exits 4. |
++| `--stdin` uses the same parser | `printf '%s' "feat: clean" \| bash docs/harness/bin/pr-title-policy.sh --stdin` exits 0. |
++
++## Breakage Risk
++
++| Risk | Impact | Mitigation | Rollback | Verification |
++|---|---|---|---|---|
++| New sensor check false-positives on normal PR titles | Blocks local harness runs unnecessarily | Regex only rejects bracketed `codex` marker, not ordinary words | Revert this commit to remove the policy gate | Positive title verification exits 0. |
++| `sensors.sh` expected-failure handling masks real policy failure | False green on broken rejection path | `run_expected_exit` compares the exact exit code 4 | Revert this commit or remove the PR title policy calls from `sensors.sh` | Negative title verifications exit exactly 4. |
++| `doctor.sh` requires a script that is not executable | Harness doctor fails after checkout | Commit the script executable and require it in doctor | Revert this commit | `bash docs/harness/bin/doctor.sh` exits 0. |
++
++## Decision
++
++Proceed.
++
++Reason: This is a small deterministic harness gate copied from the accepted AgentShield implementation, with cheap local verification and a direct rollback path.
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 1499fa7..298b19f 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -613,0 +614,30 @@ Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado n
++
++## AgentShield harness parity B1 — PR title policy gate — 2026-06-21
++
++- Ported AgentShield's `docs/harness/bin/pr-title-policy.sh` into Engram.
++- Wired deterministic PR title policy checks into `sensors.sh` so clean titles
++  pass and `[codex]` / `[ CoDeX ]` titles fail with exit 4.
++- Updated `doctor.sh` to require the policy script, executable bit, GATES
++  documentation, and sensors wiring.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-06-21-b1-pr-title-policy.md`.
++
++Verification:
++
++- `bash -n docs/harness/bin/pr-title-policy.sh` — PASS.
++- `bash -n docs/harness/bin/doctor.sh` — PASS.
++- `bash -n docs/harness/bin/sensors.sh` — PASS.
++- `bash docs/harness/bin/pr-title-policy.sh --title "fix: clean title"` —
++  PASS (`OK: PR title policy`).
++- `bash docs/harness/bin/pr-title-policy.sh --title "[codex] fix: bad title"`
++  — expected exit 4.
++- `bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] fix: bad title"`
++  — expected exit 4.
++- `printf "%s" "feat: clean" | bash docs/harness/bin/pr-title-policy.sh --stdin`
++  — PASS.
++- `bash docs/harness/bin/doctor.sh` — PASS.
++- `bash docs/harness/bin/doctor.sh --json` parsed as `status=pass` — PASS.
++- `bash docs/harness/bin/sensors.sh quick` — PASS; includes PR title policy
++  positive and negative checks.
++- `bash docs/harness/bin/check-commit-msg.sh --message "chore(harness): add PR title policy gate"`
++  — PASS.
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.
