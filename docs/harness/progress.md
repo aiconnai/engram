@@ -234,6 +234,21 @@ Verification:
 - GitHub PR checks — PASS for Format, Clippy, Documentation, and Test
   (ubuntu-latest).
 
+## AI operating guide cleanup — 2026-06-21
+
+- Recovered the docs-only `lazycodex-ai` operating guide from the preserved
+  `fix/code-quality-pass` leftovers.
+- `AGENTS.md` now points agents to `docs/AI_OPERATING_GUIDE.md` after the
+  mandatory harness read order, without changing harness precedence.
+- Scope intentionally excludes the already-merged `enrichment_audit` fix,
+  generated `.sensors-last`, and AgentShield state evidence from the same
+  stash.
+
+Verification:
+
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+
 ## Próximos passos imediatos
 
 1. Concluir Fase 1: manter mini-artifacts dos blocos 1.1–1.3 e audit report em `docs/harness/plans/`.
