@@ -741,3 +741,7 @@ Verification:
   — expected exit 4.
 - `bash docs/harness/bin/doctor.sh` — PASS.
 - `bash docs/harness/bin/sensors.sh quick` — PASS.
+- `PR_TITLE="[codex] env title" bash docs/harness/bin/pr-title-policy.sh --title "align lifecycle hook contracts"`
+  — PASS; explicit `--title` is not made ambiguous by `PR_TITLE`.
+- `bash docs/harness/bin/sensors.sh full` — PASS; full deterministic gate
+  green for final broad-review range.
