@@ -194,7 +194,7 @@ pub fn connected_components(edges: &[Edge], all_nodes: &[u64]) -> Vec<Vec<u64>> 
     }
 
     // Sort by size descending
-    components.sort_by(|a, b| b.len().cmp(&a.len()));
+    components.sort_by_key(|b| std::cmp::Reverse(b.len()));
     components
 }
 
