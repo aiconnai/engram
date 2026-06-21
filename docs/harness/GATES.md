@@ -78,9 +78,14 @@ Contrato:
 - O gate nao cria commits, nao roda `jj new`, nao move tags e nao publica crate.
 - Falhas de `vc-gate.sh release` bloqueiam qualquer tentativa de publish.
 
-### PR Title Gate
+### PR Title Compatibility Wrapper
 
-Wrapper: `bash docs/harness/bin/check-pr-title.sh`
+Wrapper legado: `bash docs/harness/bin/check-pr-title.sh`
+
+`pr-title-policy.sh` é a implementação canônica deste gate. O wrapper
+`check-pr-title.sh` existe para comandos antigos (`--title` e `--pr`) e delega a
+validação final para `pr-title-policy.sh`; portanto ele compartilha o mesmo
+contrato de rejeição do marcador `[codex]`, incluindo exit code `4`.
 
 Este gate é obrigatório antes de criar ou editar PRs por automação.
 
@@ -88,11 +93,13 @@ Contrato:
 
 - PR titles não podem conter o marcador `[codex]`.
 - PR titles devem descrever a mudança, não a ferramenta ou agente que a criou.
-- `doctor.sh` faz self-test do caminho permitido e do caminho bloqueado.
+- `doctor.sh` faz self-test do caminho permitido, do caminho bloqueado e do exit
+  code canônico.
 
 Exemplos:
 
 ```bash
+bash docs/harness/bin/pr-title-policy.sh --title "align lifecycle hook contracts"
 bash docs/harness/bin/check-pr-title.sh --title "align lifecycle hook contracts"
 bash docs/harness/bin/check-pr-title.sh --pr 123
 ```

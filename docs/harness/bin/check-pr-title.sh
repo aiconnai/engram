@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+cd "$REPO_ROOT"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -72,14 +75,14 @@ fi
 if [ -n "$PR_NUMBER" ]; then
   case "$PR_NUMBER" in
     ''|*[!0-9]*)
-      echo "FAIL PR number must contain digits only." >&2
-      exit 1
+      echo "ERROR: PR number must contain digits only." >&2
+      exit 2
       ;;
   esac
 
   if ! command -v gh >/dev/null 2>&1; then
     echo "ERROR: gh is required for --pr validation" >&2
-    exit 2
+    exit 3
   fi
   TITLE="$(gh pr view "$PR_NUMBER" --json title --jq '.title')"
 fi
@@ -88,16 +91,8 @@ TRIMMED_TITLE="${TITLE#"${TITLE%%[![:space:]]*}"}"
 TRIMMED_TITLE="${TRIMMED_TITLE%"${TRIMMED_TITLE##*[![:space:]]}"}"
 
 if [ -z "$TRIMMED_TITLE" ]; then
-  echo "FAIL PR title is empty." >&2
-  exit 1
+  echo "ERROR: PR title is empty." >&2
+  exit 2
 fi
 
-LOWER_TITLE="$(printf '%s' "$TRIMMED_TITLE" | tr '[:upper:]' '[:lower:]')"
-case "$LOWER_TITLE" in
-  *"[codex]"*)
-    echo "FAIL PR title must not contain marker [codex]." >&2
-    exit 1
-    ;;
-esac
-
-echo "OK PR title: $TRIMMED_TITLE"
+bash docs/harness/bin/pr-title-policy.sh --title "$TRIMMED_TITLE"

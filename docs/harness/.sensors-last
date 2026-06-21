@@ -1,6 +1,6 @@
 status=pass
 ci_status=pass
 doctor_status=pass
-mode=full
-timestamp=2026-06-20T14:53:04Z
-ci=make ci + harness doctor
+mode=quick
+timestamp=2026-06-21T21:05:35Z
+ci=cargo fmt + cargo check + pr-title-policy + harness doctor

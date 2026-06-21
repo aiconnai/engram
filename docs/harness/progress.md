@@ -708,3 +708,36 @@ Verification:
   positive and negative checks.
 - `bash docs/harness/bin/check-commit-msg.sh --message "chore(harness): add PR title policy gate"`
   — PASS.
+
+## Final broad review fixes — PR title policy alignment — 2026-06-21
+
+- Final broad review found that `check-pr-title.sh` and `pr-title-policy.sh`
+  enforced overlapping PR title policies with divergent exit contracts.
+- Made `pr-title-policy.sh` the canonical implementation and changed
+  `check-pr-title.sh` into a compatibility wrapper that delegates to it.
+- Updated `doctor.sh` to require and exercise the canonical script directly,
+  including exact exit-code `4` checks for `[codex]` and `[ CoDeX ]`.
+- Updated `GATES.md` and `README.md` so the canonical script and wrapper roles
+  are explicit.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-21-final-engram-broad-review-fixes.md`.
+
+Verification:
+
+- `bash -n docs/harness/bin/check-pr-title.sh` — PASS.
+- `bash -n docs/harness/bin/pr-title-policy.sh` — PASS.
+- `bash -n docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/pr-title-policy.sh --title "align lifecycle hook contracts"`
+  — PASS.
+- `bash docs/harness/bin/pr-title-policy.sh --title "[codex] align lifecycle hook contracts"`
+  — expected exit 4.
+- `bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] align lifecycle hook contracts"`
+  — expected exit 4.
+- `bash docs/harness/bin/check-pr-title.sh --title "align lifecycle hook contracts"`
+  — PASS.
+- `bash docs/harness/bin/check-pr-title.sh --title "[codex] align lifecycle hook contracts"`
+  — expected exit 4.
+- `bash docs/harness/bin/check-pr-title.sh --title "[ CoDeX ] align lifecycle hook contracts"`
+  — expected exit 4.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh quick` — PASS.
