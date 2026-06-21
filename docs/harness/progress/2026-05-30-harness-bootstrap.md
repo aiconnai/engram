@@ -1289,3 +1289,25 @@ replay timestamp falls between subsecond writes.
   — PASS (`REVIEW_VERDICT: PASS`).
 - GitHub PR checks — PASS for Format, Clippy, Documentation, and Test
   (ubuntu-latest).
+
+## 2026-06-21 — AI operating guide cleanup
+
+### Contexto
+
+After PRs #96 and #98 were merged, the preserved cleanup stash still contained
+one useful docs-only item: an `AI_OPERATING_GUIDE.md` for deciding when to use
+`lazycodex-ai`, plus the matching `AGENTS.md` pointers. The same stash also
+contained already-merged code and generated state that should not be replayed.
+
+### Ações realizadas
+
+- Restored only `AGENTS.md` from `stash@{0}`.
+- Restored only `docs/AI_OPERATING_GUIDE.md` from the stash untracked parent.
+- Left `docs/harness/.sensors-last`,
+  `docs/loops/agentshield-scan/STATE.md`, and the already-merged
+  `src/mcp/handlers/enrichment_audit.rs` changes out of scope.
+
+### Evidência
+
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.

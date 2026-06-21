@@ -92,6 +92,7 @@ Se o skill `huly` estiver disponível no seu ambiente (`.claude/skills/huly/SKIL
 - **Testes de integração**: `tests/*.rs`
 - **Documentação da API**: `docs/REFERENCE.md` (Engram Cloud), `INVARIANTS.md` (regras do projeto)
 - **Tese do produto**: `README.md`, `docs/README.md`, `docs/AI_GUIDE.md`, `docs/USING_ENGRAM_IN_A_REPO.md`
+- **AI Operating Guide / lazycodex-ai**: `docs/AI_OPERATING_GUIDE.md`
 
 ## Harness de Desenvolvimento (Obrigatório no Início de Toda Sessão)
 
@@ -117,6 +118,14 @@ Em seguida leia (em ordem):
 
 O harness garante que o trabalho seja retomável entre agentes (Claude Code CLI, Grok Build TUI, etc.) e entre sessões. Ele implementa as camadas de Context Engine, Planner, Memory Manager e Verifier diretamente no repositório.
 
+## AI Operating Guide (`lazycodex-ai`)
+
+Para decidir quando delegar trabalho de repositório ao `lazycodex-ai`, leia
+[`docs/AI_OPERATING_GUIDE.md`](docs/AI_OPERATING_GUIDE.md) depois da leitura
+obrigatória do harness. Use esse guia para escolher entre resposta direta,
+`lazycodex-ai doctor` e `lazycodex-ai run`, sempre preservando os gates locais,
+o boundary de segurança do harness e a validação com evidência.
+
 ## Comandos Úteis para Agentes
 ```bash
 # Harness bootstrap + gates (obrigatório)
@@ -140,6 +149,10 @@ git config core.hooksPath .githooks
 
 # Rodar testes Rust
 cargo test
+
+# lazycodex-ai operational delegation
+rtk npx lazycodex-ai doctor
+rtk npx lazycodex-ai run "Task summary with acceptance criteria"
 
 # Verificar tipos TypeScript (se node disponível)
 cd sdks/typescript && npm run type-check
