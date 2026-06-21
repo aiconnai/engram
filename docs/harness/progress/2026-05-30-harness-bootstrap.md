@@ -1285,3 +1285,7 @@ replay timestamp falls between subsecond writes.
 - `rtk cargo test -p engram-core --lib memory_replay_at_time --locked` — PASS.
 - `rtk cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
 - `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/review-gate.sh post enrichment-audit-subsecond-replay --range origin/main..HEAD --review-file docs/harness/reviews/2026-06-21-enrichment-audit-subsecond-replay-v2-post.md`
+  — PASS (`REVIEW_VERDICT: PASS`).
+- GitHub PR checks — PASS for Format, Clippy, Documentation, and Test
+  (ubuntu-latest).
