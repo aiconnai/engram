@@ -88,7 +88,8 @@ cookies ou dumps de ambiente.
 | `bin/quarterly-audit.sh`       | Auditoria evidence-only; nunca apaga, arquiva ou reescreve |
 | `bin/vc-gate.sh`               | Gate opcional de version control para issue boundaries, `jj` local e releases Git/Cargo |
 | `bin/check-commit-msg.sh`      | Validador de Conventional Commit com scope |
-| `bin/check-pr-title.sh`        | Validador de títulos de PR, incluindo bloqueio do marcador `[codex]` |
+| `bin/pr-title-policy.sh`       | Política canônica de títulos de PR, incluindo bloqueio do marcador `[codex]` |
+| `bin/check-pr-title.sh`        | Wrapper compatível para validar títulos de PR via política canônica |
 
 ## Leitura Obrigatória (em ordem)
 
@@ -138,6 +139,8 @@ $EDITOR docs/harness/progress/<active-plan-filename>.md
 bash docs/harness/bin/check-commit-msg.sh --message "<type>(<scope>): <description>"
 
 # 9. Validar título de PR antes de criar ou editar PRs por automação
+bash docs/harness/bin/pr-title-policy.sh --title "<concise PR title>"
+# compatibilidade com automações antigas:
 bash docs/harness/bin/check-pr-title.sh --title "<concise PR title>"
 
 # 10. Commitar arquivos específicos (nunca "git add .")
@@ -176,6 +179,8 @@ PR titles também não carregam o marcador `[codex]`. Antes de `gh pr create` ou
 `gh pr edit`, rode:
 
 ```bash
+bash docs/harness/bin/pr-title-policy.sh --title "concise PR title"
+# compatibilidade com automações antigas:
 bash docs/harness/bin/check-pr-title.sh --title "concise PR title"
 ```
 
