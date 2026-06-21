@@ -678,3 +678,33 @@ Limite deliberado: o full `bash docs/harness/bin/sensors.sh` nao foi executado n
   warnings.
 - Validation passed: focused `memory_digest` protocol tests, MCP reference
   check, fmt, clippy, doctor, and full `sensors.sh` (`make ci` + doctor).
+
+## AgentShield harness parity B1 — PR title policy gate — 2026-06-21
+
+- Ported AgentShield's `docs/harness/bin/pr-title-policy.sh` into Engram.
+- Wired deterministic PR title policy checks into `sensors.sh` so clean titles
+  pass and `[codex]` / `[ CoDeX ]` titles fail with exit 4.
+- Updated `doctor.sh` to require the policy script, executable bit, GATES
+  documentation, and sensors wiring.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-21-b1-pr-title-policy.md`.
+
+Verification:
+
+- `bash -n docs/harness/bin/pr-title-policy.sh` — PASS.
+- `bash -n docs/harness/bin/doctor.sh` — PASS.
+- `bash -n docs/harness/bin/sensors.sh` — PASS.
+- `bash docs/harness/bin/pr-title-policy.sh --title "fix: clean title"` —
+  PASS (`OK: PR title policy`).
+- `bash docs/harness/bin/pr-title-policy.sh --title "[codex] fix: bad title"`
+  — expected exit 4.
+- `bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] fix: bad title"`
+  — expected exit 4.
+- `printf "%s" "feat: clean" | bash docs/harness/bin/pr-title-policy.sh --stdin`
+  — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/doctor.sh --json` parsed as `status=pass` — PASS.
+- `bash docs/harness/bin/sensors.sh quick` — PASS; includes PR title policy
+  positive and negative checks.
+- `bash docs/harness/bin/check-commit-msg.sh --message "chore(harness): add PR title policy gate"`
+  — PASS.

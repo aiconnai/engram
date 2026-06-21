@@ -1,6 +1,6 @@
 # Engram — Complete AI Agent Guide
 
-> **Version:** 0.21.2 | **Protocol:** MCP 2025-11-25 | **Tools:** [generated reference](MCP_TOOLS.md) | **Schema:** v44
+> **Version:** 0.22.0 | **Protocol:** MCP 2025-11-25 | **Tools:** [generated reference](MCP_TOOLS.md) | **Schema:** v44
 
 This guide shows agents how to turn scattered meetings, docs, transcripts, and project decisions into a shared source of truth that can be queried through MCP.
 
@@ -1068,10 +1068,10 @@ Runs the 3-phase retention pipeline:
 
 ## 15. Dream Snapshot Review Pipeline
 
-Dream Snapshot Review Pipeline is planned in RFC 0007 as a reviewable memory
+Dream Snapshot Review Pipeline is implemented in RFC 0007 as a reviewable memory
 synthesis workflow. Dream jobs produce candidates for summaries, preferences,
-constraints, stale facts, contradictions, merges, promotions, decay, and
-temporal updates. Those candidates are proposals, not canonical memory.
+constraints, stale facts, contradictions, merges, promotions, decay, and temporal
+updates. Those candidates are proposals, not canonical memory by default.
 
 Safety boundary:
 
@@ -1084,14 +1084,18 @@ Safety boundary:
 - Raw logs, raw transcripts, terminal dumps, secrets, and environment dumps are
   excluded by default.
 
-Implementation and eval details:
+Implementation and rollout details:
 
 - Contract: [`docs/rfcs/0007-dream-snapshot-review-pipeline.md`](rfcs/0007-dream-snapshot-review-pipeline.md)
 - Eval scaffold: [`docs/DREAM_SNAPSHOT_EVALS.md`](DREAM_SNAPSHOT_EVALS.md)
 
+**Feature gate:** Dream tools are available when Engram is built with
+`--features dream-phase`; they are omitted from MCP tool lists in default builds.
+
 The generated MCP tool reference remains the source of truth for live tools.
-Do not call planned `dream_*` tools until they appear in
-[`MCP_TOOLS.md`](MCP_TOOLS.md).
+Call `dream_*` tools only if they are present in
+[`MCP_TOOLS.md`](MCP_TOOLS.md) and your deployed server was built with the
+`dream-phase` feature.
 
 ---
 
@@ -1969,5 +1973,5 @@ Intent-aware unified retrieval — combines semantic search, graph traversal, an
 
 ---
 
-*Engram v0.21.2 - AI Memory Engine*
+*Engram v0.22.0 - AI Memory Engine*
 *MCP tool reference: [MCP_TOOLS.md](MCP_TOOLS.md) (generated) | Hybrid search | Knowledge graphs | Cloud sync | Multimodal | Agent portability | Progressive discovery*

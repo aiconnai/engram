@@ -14,6 +14,16 @@ package registries, and dated external sources.
 
 ### Changed
 
+No public changes are queued yet for the next release.
+
+## [0.22.0] - 2026-06-19
+
+### Changed
+
+- **0.22.0 release prep** — PR #90 cleanup is now reflected in release notes: SDK
+  client API consistency (`filter_` handling, request IDs, lifecycle safety,
+  and option parity) plus Cargo cleanup in `Cargo.toml`/`Cargo.lock` to keep
+  feature-gated, API-facing behavior coherent after the 0.21.2 baseline.
 - **AgentShield loop scaffold** — Added a bounded weekly/manual security scan
   loop with a repository skill, state handoff, local Make/just target, and
   explicit high-severity AgentShield gate.
@@ -933,6 +943,8 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 
 ## Version History
 
+- **0.22.0** - SDK/client consistency cleanup, release hygiene hardening, and
+  docs consistency updates
 - **0.21.2** - Release-note source control, release immutability guard, and public claims hygiene
 - **0.21.1** - Release notes, public documentation claim hygiene, and docs/CI cleanup
 - **0.21.0** - Lifecycle hooks wired into MCP server, Dream Phase, smart retrieval, and server build fixes
@@ -949,6 +961,7 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 - **0.2.0** - Early feature parity milestone
 - **0.1.0** - Initial release with full feature set
 
+[0.22.0]: https://github.com/aiconnai/engram/compare/v0.21.2...v0.22.0
 [0.21.2]: https://github.com/aiconnai/engram/compare/v0.21.1...v0.21.2
 [0.21.1]: https://github.com/aiconnai/engram/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/aiconnai/engram/compare/v0.20.0...v0.21.0

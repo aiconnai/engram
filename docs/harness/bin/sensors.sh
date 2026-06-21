@@ -212,6 +212,33 @@ run_step() {
   "$@"
 }
 
+run_expected_exit() {
+  local label="$1"
+  local expected="$2"
+  shift 2
+  local actual
+
+  echo "==> [harness] $label"
+  set +e
+  "$@"
+  actual=$?
+  set -e
+
+  if [ "$actual" -ne "$expected" ]; then
+    echo "FAIL: $label exited $actual; expected $expected" >&2
+    return 1
+  fi
+}
+
+run_pr_title_policy() {
+  run_step "PR title policy accepts clean title" \
+    bash docs/harness/bin/pr-title-policy.sh --title "fix: clean title" || return 1
+  run_expected_exit "PR title policy rejects [codex] title" 4 \
+    bash docs/harness/bin/pr-title-policy.sh --title "[codex] fix: bad title" || return 1
+  run_expected_exit "PR title policy rejects spaced mixed-case codex title" 4 \
+    bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] fix: bad title" || return 1
+}
+
 normalize_plan_path() {
   local path="$1"
   case "$path" in
@@ -416,7 +443,7 @@ fi
 
 case "$MODE" in
   baseline)
-    if run_step "baseline snapshot" bash docs/harness/bin/baseline.sh && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+    if run_step "baseline snapshot" bash docs/harness/bin/baseline.sh && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
       write_sensors_last "pass" "pass" "pass" "$MODE" "baseline"
       echo "PASS (baseline lane green)"
       exit 0
@@ -426,32 +453,32 @@ case "$MODE" in
     exit 1
     ;;
   quick)
-    if run_step "fmt" cargo fmt --all -- --check && run_step "cargo check" cargo check && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
-      write_sensors_last "pass" "pass" "pass" "$MODE" "cargo fmt + cargo check"
+    if run_step "fmt" cargo fmt --all -- --check && run_step "cargo check" cargo check && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+      write_sensors_last "pass" "pass" "pass" "$MODE" "cargo fmt + cargo check + pr-title-policy"
       echo "PASS (quick lane green)"
       exit 0
     fi
-    write_sensors_last "fail" "fail" "fail" "$MODE" "cargo fmt + cargo check"
+    write_sensors_last "fail" "fail" "fail" "$MODE" "cargo fmt + cargo check + pr-title-policy"
     echo "FAIL"
     exit 1
     ;;
   docs)
-    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "rustdoc" env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
-      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + rustdoc"
+    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "rustdoc" env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + rustdoc + pr-title-policy"
       echo "PASS (docs lane green)"
       exit 0
     fi
-    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + rustdoc"
+    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + rustdoc + pr-title-policy"
     echo "FAIL"
     exit 1
     ;;
   mcp)
-    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "MCP protocol tests" cargo test --test mcp_protocol_tests && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
-      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + protocol tests"
+    if run_step "MCP reference check" ./scripts/generate-mcp-reference.sh --check && run_step "MCP protocol tests" cargo test --test mcp_protocol_tests && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+      write_sensors_last "pass" "pass" "pass" "$MODE" "mcp reference + protocol tests + pr-title-policy"
       echo "PASS (mcp lane green)"
       exit 0
     fi
-    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + protocol tests"
+    write_sensors_last "fail" "fail" "fail" "$MODE" "mcp reference + protocol tests + pr-title-policy"
     echo "FAIL"
     exit 1
     ;;
@@ -495,6 +522,10 @@ else
   fi
 fi
 
+if ! run_pr_title_policy; then
+  CI_STATUS="fail"
+fi
+
 # Harness doctor (self-consistency of the harness itself)
 if ! SENSORS_CONTEXT_CI_STATUS="$CI_STATUS" \
   SENSORS_CONTEXT_SENSOR="$EXCLUDE_SENSOR" \
@@ -513,7 +544,7 @@ elif [ "$CI_STATUS" != "pass" ] || [ "$DOCTOR_STATUS" != "pass" ]; then
 fi
 
 # Record result (machine parseable for bootstrap / doctor)
-write_sensors_last "$STATUS" "$CI_STATUS" "$DOCTOR_STATUS" "$MODE" "${CI_COMMAND[*]-missing}"
+write_sensors_last "$STATUS" "$CI_STATUS" "$DOCTOR_STATUS" "$MODE" "${CI_COMMAND[*]-missing} + pr-title-policy"
 
 echo
 if [ "$STATUS" = "pass" ]; then

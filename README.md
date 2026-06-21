@@ -466,11 +466,11 @@ The MCP tool reference is generated from source of truth (`src/mcp/tools/registr
 - Generated count and schema are in that reference (single source of truth).
 - Regenerate with: `./scripts/generate-mcp-reference.sh`
 
-### Planned Dream Snapshot Review
+### Dream Snapshot Review Pipeline
 
-RFC 0007 defines a planned reviewable dream snapshot pipeline for derived memory
-proposals. Dream output is candidate memory until it is reviewed and explicitly
-applied with confirmation; it is not canonical memory by default.
+RFC 0007 defines an implemented reviewable dream snapshot pipeline for derived
+memory proposals. Dream output is candidate memory until it is reviewed and
+explicitly applied with confirmation; it is not canonical memory by default.
 
 - Contract: [docs/rfcs/0007-dream-snapshot-review-pipeline.md](docs/rfcs/0007-dream-snapshot-review-pipeline.md)
 - Eval scaffold: [docs/DREAM_SNAPSHOT_EVALS.md](docs/DREAM_SNAPSHOT_EVALS.md)

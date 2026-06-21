@@ -496,12 +496,16 @@ The skill uses the same underlying tools shown above:
 - Use one shared database if you want cross-repo memory and conventions.
 - In cloud mode, always pass `workspace` to keep project memories separated.
 
-## Planned Dream Snapshot Review
+## Dream Snapshot Review Pipeline
 
-RFC 0007 defines a planned Dream Snapshot Review Pipeline for repositories that
-want agents to synthesize project memory without silently changing canonical
-facts. The key rule is that dream output is a review candidate until a user or
-agent explicitly reviews and applies it with confirmation.
+RFC 0007 defines an implemented Dream Snapshot Review Pipeline for repositories that
+want agents to synthesize project memory without silently changing canonical facts.
+The key rule is that dream output is a review candidate until a user or agent
+explicitly reviews and applies it with confirmation.
+
+The shipped behavior is controlled by the `dream-phase` feature flag. If that
+feature is not enabled, `dream_*` tools will not be listed and MCP calls to them
+should not be used.
 
 Use the eval scaffold in
 [`docs/DREAM_SNAPSHOT_EVALS.md`](DREAM_SNAPSHOT_EVALS.md) when validating this
@@ -509,5 +513,5 @@ workflow in a repository harness. It covers carry-forward context,
 preferences/constraints, freshness, provenance, unsafe raw-log rejection, and
 the no-mutation-before-apply boundary.
 
-Do not configure planned `dream_*` MCP tools from this guide until they appear
-in the generated reference at [`docs/MCP_TOOLS.md`](MCP_TOOLS.md).
+Use these tools only if they appear in the generated reference at
+[`docs/MCP_TOOLS.md`](MCP_TOOLS.md), which is also gated by the feature flag.

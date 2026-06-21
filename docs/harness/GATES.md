@@ -21,7 +21,8 @@ Ele executa (em ordem):
 | 3 | test (paridade) | `just ci` (preferencial) ou `make ci` (outra camada equivalente), com lib + integration e CI_FEATURES | block; investigar flakiness ou feature drift |
 | 4 | docs + MCP ref | `./scripts/generate-mcp-reference.sh --check && RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items` | block; atualizar referência ou docs |
 | 5 | harness doctor | `bash docs/harness/bin/doctor.sh` | block; corrigir drift no harness |
-| 6 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
+| 6 | PR title policy | `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` rejeita marcador `[codex]` | block; renomear PR/commit de handoff |
+| 7 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
 
 O script `sensors.sh` grava o resultado parseável em `docs/harness/.sensors-last` (status, timestamp, exclusões, etc.).
 
@@ -29,6 +30,26 @@ Saídas JSON opt-in para scripts do harness devem seguir
 [`JSON_OUTPUTS.md`](./JSON_OUTPUTS.md): um único objeto JSON em stdout,
 vocabulário de status estável, exit code preservado e nenhum segredo ou dump de
 ambiente. O output humano continua sendo o default.
+
+### PR Title Policy
+
+Wrapper: `bash docs/harness/bin/pr-title-policy.sh`
+
+Este gate impede handoffs ou PRs com marcador de ferramenta no título. O padrão
+bloqueado é case-insensitive e tolera espaços dentro dos colchetes:
+`[codex]`, `[ Codex ]`, `[ CoDeX ]`.
+
+Modos:
+
+- `--title "<title>"` — valida um título explícito.
+- `--stdin` — lê o título de stdin.
+- `--current-pr` — lê o título do PR atual via `gh pr view`.
+- Sem argumentos, usa `PR_TITLE` quando a variável estiver definida.
+
+Exit codes: `0` para título aceito, `4` para marcador `[codex]` rejeitado,
+`2` para erro de uso e `3` quando `--current-pr` exige `gh` indisponível.
+`sensors.sh` executa casos positivos e negativos determinísticos para manter
+esse contrato vivo.
 
 ### Version-Control Gate
 

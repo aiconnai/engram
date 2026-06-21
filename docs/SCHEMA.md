@@ -8,7 +8,7 @@ This schema backs the persistent memory layer that stores team context, retrieva
 
 **Status:** This file is a historical schema narrative and may lag the current
 source. The current source-of-truth schema version is `SCHEMA_VERSION` in
-`src/storage/migrations.rs`; as of v0.21.2 it is v44. Verify the source before
+`src/storage/migrations.rs`; as of v0.22.0 it is v44. Verify the source before
 using schema details in public docs or migration work.
 
 ---
