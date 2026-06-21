@@ -71,6 +71,7 @@ cookies ou dumps de ambiente.
 | `GATES.md`                     | Sensores, thresholds, retry policy, exclusões documentadas, fake-success patterns |
 | `CODE_REVIEW_POLICY.md`        | Política local consumida pelo review-gate (cross-model / cross-CLI) |
 | `JSON_OUTPUTS.md`              | Contrato de output JSON para automação do harness |
+| `SKILLS.md`                    | Inventário e política de promoção de skills repo-locais (`skills/<name>/SKILL.md`) |
 | `security/`                    | Contrato de segurança do harness, incluindo a adaptação Anthropic |
 | `.claude/scan-extras.txt`      | Tuning versionado para categorias extras de scan/triage |
 | `.claude/fp-rules.txt`         | Tuning versionado para exclusões conservadoras de falso positivo |

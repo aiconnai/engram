@@ -252,6 +252,7 @@ require_file docs/harness/WHAT_WE_DONT_DO.md
 require_file docs/harness/GATES.md
 require_file docs/harness/CODE_REVIEW_POLICY.md
 require_file docs/harness/JSON_OUTPUTS.md
+require_file docs/harness/SKILLS.md
 require_file docs/harness/README.md
 require_file docs/harness/progress.md
 require_file docs/harness/security/anthropic-reference-harness.md
@@ -422,6 +423,98 @@ require_grep docs/harness/security/anthropic-reference-harness.md 'NO_CREDENTIAL
 require_grep docs/harness/security/anthropic-reference-harness.md 'TUNING_FILES=\.claude/scan-extras\.txt,\.claude/fp-rules\.txt' 'security contract tuning anchor'
 require_grep .claude/scan-extras.txt 'scan-extras' 'scan tuning file identifies itself'
 require_grep .claude/fp-rules.txt 'fp-rules' 'false-positive tuning file identifies itself'
+
+# Repository skills inventory and frontmatter validation
+require_grep docs/harness/README.md 'SKILLS\.md' 'README mentions SKILLS.md'
+require_grep docs/harness/SKILLS.md '`loop-engineering`' 'SKILLS documents loop-engineering'
+require_grep docs/harness/SKILLS.md '~/.codex/skills' 'SKILLS documents personal skill location'
+
+UNTRACKED_SKILLS="$(git ls-files --others --exclude-standard -- 'skills/*/SKILL.md' 2>/dev/null || true)"
+if [ -n "$UNTRACKED_SKILLS" ]; then
+  fail "untracked repo-local skills found: $UNTRACKED_SKILLS" "skills:untracked" ""
+else
+  add_check "skills:untracked" "pass" "repo-local skills are tracked or ignored" "skills"
+fi
+
+# Extract the YAML frontmatter block (between the leading `---` and the next `---`).
+# Fail-closed: returns nothing unless the file starts with a `---` fence AND a
+# matching closing `---` fence is observed. A malformed/unterminated block yields
+# no output, so downstream field checks fail.
+skill_frontmatter() {
+  local file="$1"
+  awk '
+    NR == 1 && $0 !~ /^---[[:space:]]*$/ { exit }
+    NR == 1 { next }
+    /^---[[:space:]]*$/ { closed = 1; exit }
+    { buf = buf $0 "\n" }
+    END { if (closed) printf "%s", buf }
+  ' "$file" 2>/dev/null || true
+}
+
+# Validate a `key:` line exists inside the frontmatter block, optionally matching a value regex.
+require_frontmatter_field() {
+  local file="$1"
+  local key="$2"
+  local value_re="$3"
+  local label="$4"
+  local block
+  block="$(skill_frontmatter "$file")"
+  if [ -z "$block" ]; then
+    fail "skill has no YAML frontmatter block: $file ($label)" "skill_frontmatter:$file:$key" "$file"
+    return
+  fi
+  if printf '%s\n' "$block" | grep -qE "^${key}:[[:space:]]*${value_re}[[:space:]]*$"; then
+    add_check "skill_frontmatter:$file:$key" "pass" "frontmatter field present: $label" "$file"
+  else
+    fail "skill frontmatter missing/invalid $key: $file ($label)" "skill_frontmatter:$file:$key" "$file"
+  fi
+}
+
+# Parse the canonical set of skill names from the SKILLS.md "Current Skills" table only.
+# The "Available for Follow-Up" table lists skills that are documented but NOT yet ported,
+# so it must not count as inventory membership.
+current_skills_set() {
+  awk '
+    /^## Current Skills/ { in_section = 1; next }
+    /^## / { in_section = 0 }
+    in_section && /^\| `[^`]+` \|/ {
+      line = $0
+      sub(/^\| `/, "", line)
+      sub(/`.*$/, "", line)
+      print line
+    }
+  ' docs/harness/SKILLS.md 2>/dev/null | sort -u
+}
+
+CURRENT_SKILLS="$(current_skills_set)"
+
+skill_in_current() {
+  local name="$1"
+  printf '%s\n' "$CURRENT_SKILLS" | grep -qxF "$name"
+}
+
+# disk -> inventory: every on-disk skill must have valid frontmatter and be in the Current Skills table.
+while IFS= read -r skill_file; do
+  [ -n "$skill_file" ] || continue
+  skill_dir="$(basename "$(dirname "$skill_file")")"
+  require_frontmatter_field "$skill_file" "name" "$skill_dir" "skill name matches dir: $skill_dir"
+  require_frontmatter_field "$skill_file" "description" ".+" "skill has description: $skill_dir"
+  if skill_in_current "$skill_dir"; then
+    add_check "skill_inventoried:$skill_dir" "pass" "skill is in SKILLS.md Current Skills table: $skill_dir" "$skill_file"
+  else
+    fail "on-disk skill not in SKILLS.md Current Skills table: $skill_dir (follow-up-only or unlisted skills must be promoted before landing)" "skill_inventoried:$skill_dir" "$skill_file"
+  fi
+done < <(find skills -mindepth 2 -maxdepth 2 -name SKILL.md | sort)
+
+# inventory -> disk: every skill named in the Current Skills table must exist on disk.
+while IFS= read -r inv_skill; do
+  [ -n "$inv_skill" ] || continue
+  if [ -f "skills/$inv_skill/SKILL.md" ]; then
+    add_check "skill_inventory_exists:$inv_skill" "pass" "inventoried skill exists on disk: $inv_skill" "skills/$inv_skill/SKILL.md"
+  else
+    fail "inventoried skill missing on disk: skills/$inv_skill/SKILL.md" "skill_inventory_exists:$inv_skill" "skills/$inv_skill/SKILL.md"
+  fi
+done < <(printf '%s\n' "$CURRENT_SKILLS")
 
 field_value() {
   local file="$1"
