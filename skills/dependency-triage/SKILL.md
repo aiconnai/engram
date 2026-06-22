@@ -50,7 +50,7 @@ Record findings in state:
   verifier is missing.
 - Run the full Engram gate when dependency metadata, CI, scripts, tools, MCP
   connectors, or agent surfaces change: `bash docs/harness/bin/sensors.sh`.
-- Run an AgentShield scan when dependency changes affect scripts, tools,
+- Run targeted security review when dependency changes affect scripts, tools,
   connectors, generated execution surfaces, or agent-controlled code paths.
 
 ## Patch Candidate Gate
