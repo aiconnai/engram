@@ -3,7 +3,50 @@
 **Sprint**: Harness Engineering v0 — bootstrap & core gates
 **Task**: harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)
 **Date started**: 2026-05-30
-**Owner**: Ronaldo + agents (Claude Code CLI + Gemini Flash 3.5 side-by-side)
+**Owner**: Ronaldo + agents (Claude Code CLI + Zed Gemini CLI side-by-side)
+
+---
+
+## 2026-06-22 — Zed Gemini reviewer path clarification
+
+### Contexto
+
+The previous Gemini reviewer-path update used the standalone terminal `gemini`
+CLI as the concrete execution example. The user clarified that the intended
+Gemini reviewer is the **Gemini CLI** agent available in Zed's agent picker.
+
+### Ações realizadas
+
+1. `docs/harness/bin/review-gate.sh` now points reviewer handoff instructions
+   to Zed's Gemini CLI agent.
+2. `docs/harness/README.md` now documents Zed Gemini CLI as the canonical
+   Gemini reviewer path and explicitly avoids treating the terminal `gemini`
+   binary as canonical.
+3. `docs/harness/progress.md` records the correction in live state.
+4. Added Review Canvas:
+   `docs/harness/canvas/2026-06-22-zed-gemini-reviewer-path.md`.
+
+### Evidência
+
+- Computer Use `get_app_state` for `/Applications/Zed.app` — PASS; Zed is open
+  on the Engram workspace and the agent UI is visible.
+- Computer Use click attempts did not reliably open the Zed agent selector, so
+  no review prompt was submitted through the UI from this Codex session.
+- `rtk bash -n docs/harness/bin/review-gate.sh` — PASS.
+- `rtk grep -n "gemini -m" docs/harness/README.md docs/harness/bin/review-gate.sh docs/harness/canvas/2026-06-22-zed-gemini-reviewer-path.md`
+  — PASS; active README/script no longer contain the terminal Gemini example.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS, full gate
+  (`make ci + pr-title-policy + harness doctor`).
+- Post-review artifact:
+  `docs/harness/reviews/2026-06-22-zed-gemini-reviewer-path-v2-post.md`;
+  enforced with `review-gate.sh`, `REVIEW_VERDICT: PASS`.
+
+### Resultado
+
+Future cross-CLI review handoffs should use the Gemini CLI agent in Zed's agent
+picker unless the user explicitly asks for another reviewer.
 
 ---
 
@@ -19,9 +62,9 @@ Code.
 
 1. `docs/harness/bin/review-gate.sh` now documents `REVIEWER_CLI=gemini` and
    points pre/post handoff text at Gemini Flash 3.5.
-2. `docs/harness/README.md` now names Claude Code + Gemini Flash 3.5 as the
-   current active agent pairing and includes a Gemini CLI non-interactive
-   example.
+2. `docs/harness/README.md` named Claude Code + Gemini Flash 3.5 as the active
+   agent pairing in PR #104; the terminal Gemini example is superseded by the
+   Zed Gemini reviewer path clarification above.
 3. `docs/harness/progress.md` records the substitution in live state while
    preserving old dated Grok mentions as historical context.
 4. Added Review Canvas:

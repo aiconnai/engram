@@ -20,7 +20,7 @@
 
 ## Contexto e Motivação
 
-O usuário está usando Claude Code CLI e Gemini Flash 3.5 side-by-side para comparar workflows agentic em terminal. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI.
+O usuário está usando Claude Code CLI e o agente Gemini CLI no Zed side-by-side para comparar workflows agentic em terminal/editor. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI/editor.
 
 Engram é posicionado de forma única porque ele *é* o Memory Manager para agentes e para times que acumulam contexto proprietário mais rápido do que conseguem organizá-lo manualmente. O harness de desenvolvimento do próprio engram pode dogfood o produto (futuro).
 
@@ -57,7 +57,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 ## Últimas decisões registradas
 
 - Harness é **complementar** aos gates existentes (`just ci`, pre-commit, GitHub Actions). Não substitui — adiciona memória persistida, review cross-CLI, e disciplina de processo.
-- Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque Gemini Flash 3.5 e Claude Code CLI estão sendo usados side-by-side.
+- Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque o agente Gemini CLI no Zed e Claude Code CLI estão sendo usados side-by-side.
 - Dogfooding com o próprio engram (via MCP + hooks) é objetivo explícito de longo prazo, guiado por RFC 0001, mas fora do escopo de v0 bootstrap.
 - Invariants do harness são separados dos data invariants (`INVARIANTS.md` na raiz) para manter clareza.
 - 2026-06-08: `ENGRA-103` aberto no Huly para `memory_digest`; RFC 0008 define a ferramenta como digest read-only, determinístico, sem schema novo e com provenance explícita.
@@ -254,8 +254,9 @@ Verification:
 - Active cross-CLI review guidance now uses Gemini Flash 3.5 instead of Grok.
 - `docs/harness/bin/review-gate.sh` documents `REVIEWER_CLI=gemini` and points
   pre/post gate handoff text at Gemini Flash 3.5.
-- `docs/harness/README.md` now describes the current reviewer pairing as Claude
-  Code + Gemini Flash 3.5 and includes a Gemini CLI non-interactive example.
+- `docs/harness/README.md` described the reviewer pairing as Claude Code +
+  Gemini Flash 3.5 in PR #104; the terminal Gemini example is superseded by the
+  Zed Gemini reviewer path clarification below.
 - Historical dated notes that mention Grok remain as historical records rather
   than being rewritten.
 - Review Canvas:
@@ -275,6 +276,35 @@ Verification:
   (`make ci + pr-title-policy + harness doctor`).
 - Post-review artifact:
   `docs/harness/reviews/2026-06-22-reviewer-cli-gemini-substitution-v3-post.md`;
+  enforced with `review-gate.sh`, `REVIEW_VERDICT: PASS`.
+
+## Zed Gemini reviewer path clarification — 2026-06-22
+
+- Follow-up clarification: the intended Gemini reviewer is the **Gemini CLI**
+  agent in Zed's agent picker, not the standalone terminal `gemini` binary.
+- `docs/harness/bin/review-gate.sh` now points handoff instructions to Zed's
+  Gemini CLI agent.
+- `docs/harness/README.md` now documents Zed Gemini CLI as the canonical Gemini
+  reviewer path and explicitly says not to treat the terminal `gemini` binary as
+  canonical for this harness.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-22-zed-gemini-reviewer-path.md`.
+
+Verification:
+
+- Computer Use `get_app_state` for `/Applications/Zed.app` — PASS; Zed is open
+  on the Engram workspace and the agent UI is visible.
+- Computer Use click attempts did not reliably open the Zed agent selector, so
+  no review prompt was submitted through the UI from this Codex session.
+- `rtk bash -n docs/harness/bin/review-gate.sh` — PASS.
+- `rtk grep -n "gemini -m" docs/harness/README.md docs/harness/bin/review-gate.sh docs/harness/canvas/2026-06-22-zed-gemini-reviewer-path.md`
+  — PASS; active README/script no longer contain the terminal Gemini example.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS, full gate
+  (`make ci + pr-title-policy + harness doctor`).
+- Post-review artifact:
+  `docs/harness/reviews/2026-06-22-zed-gemini-reviewer-path-v2-post.md`;
   enforced with `review-gate.sh`, `REVIEW_VERDICT: PASS`.
 
 ## Próximos passos imediatos

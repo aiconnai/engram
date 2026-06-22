@@ -2,7 +2,7 @@
 
 Disciplina operacional do repositório `aiconnai/engram`.
 
-O harness existe para manter o trabalho retomável, auditável e de alta qualidade entre sessões de agentes (Claude Code CLI, Gemini Flash 3.5, Codex, Cursor, etc.) e entre humanos + agentes. Ele fornece spec feed-forward, invariants duros, gates mensuráveis (locais + cross-model review), reviews persistidos como artefatos, e progresso registrado de forma canônica.
+O harness existe para manter o trabalho retomável, auditável e de alta qualidade entre sessões de agentes (Claude Code CLI, Zed Gemini CLI, Codex, Cursor, etc.) e entre humanos + agentes. Ele fornece spec feed-forward, invariants duros, gates mensuráveis (locais + cross-model review), reviews persistidos como artefatos, e progresso registrado de forma canônica.
 
 Se um agente futuro (ou você em outra sessão) não consegue responder rapidamente:
 
@@ -17,7 +17,7 @@ Se um agente futuro (ou você em outra sessão) não consegue responder rapidame
 
 > **The terminal is the product.**
 
-Este harness foi desenhado para agentes que *vivem* no terminal (Gemini CLI, Claude Code CLI, etc.), não para UIs bonitas com chat embutido. O CLI é a interface de mais alto leverage: já instalada, profundamente treinada nos modelos, self-documenting, infinitamente composable, baixa latência, zero chrome.
+Este harness foi desenhado para agentes que *vivem* no terminal ou no editor com CLI agent embutido (Zed Gemini CLI, Claude Code CLI, etc.), não para UIs bonitas com chat embutido. O CLI é a interface de mais alto leverage: já instalada, profundamente treinada nos modelos, self-documenting, infinitamente composable, baixa latência, zero chrome.
 
 O harness não é "outra interface de chat". É o conjunto de camadas (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) que vive *dentro* do repo, onde o trabalho real acontece.
 
@@ -254,7 +254,7 @@ Essas lanes opcionais não substituem o gate completo para merge, handoff ou cla
 `review-gate.sh` implementa o princípio de **Single-Process Judgment**:
 
 - O agente que *escreve* o código não deve ser o juiz final da sua própria saída.
-- Usa outro CLI/modelo (Claude Code, Gemini Flash 3.5, Codex, local via Ollama, etc.) como reviewer independente.
+- Usa outro CLI/modelo (Claude Code, Zed Gemini CLI, Codex, local via Ollama, etc.) como reviewer independente.
 
 Modos:
 
@@ -327,7 +327,7 @@ Uma tarefa só está pronta quando:
 - **Harness em si**: Mudança em `docs/harness/bin/`, INVARIANTS, GATES ou CODE_REVIEW_POLICY exige rodar doctor + sensors + post-gate.
 - **Cross-SDK**: Mudança em Python ou TypeScript SDKs que quebra contrato com o core Rust exige testes de integração e possivelmente versão de crate.
 
-## Integração com Agentes Atuais (Claude Code + Gemini Flash 3.5)
+## Integração com Agentes Atuais (Claude Code + Zed Gemini CLI)
 
 O harness é agnóstico a CLI. O bootstrap funciona em qualquer um.
 
@@ -338,13 +338,10 @@ Para review cross-CLI (o cenário atual do usuário):
 - Salve a resposta completa em `reviews/YYYY-MM-DD-<task>-vN-post.md`.
 - O parser extrai o `PASS`/`FAIL` do artefato.
 
-Quando quiser evitar copy/paste manual, use o Gemini CLI em modo não
-interativo, salvando a resposta completa no artefato indicado pelo
-`review-gate.sh`:
-
-```bash
-gemini -m <gemini-flash-3.5-model-id> -p "$(cat docs/harness/reviews/<prompt>.raw)" > docs/harness/reviews/<task>-post.md
-```
+Para o reviewer Gemini, use o agente **Gemini CLI** no seletor de agentes do
+Zed. Abra o `.raw` gerado pelo `review-gate.sh`, cole o prompt no agente Gemini
+CLI do Zed, e salve a resposta completa no artefato indicado pelo script. Não
+trate o binário terminal `gemini` como o caminho canônico deste harness.
 
 ## Dogfooding com o Próprio Engram
 
