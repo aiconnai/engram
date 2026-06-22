@@ -1,0 +1,8 @@
+Verificação completa. O diff é docs-only no harness, restrito a renomear o reviewer (terminal `gemini` → agente Gemini CLI no Zed). Confirmei: sintaxe shell OK, zero exemplos de terminal `gemini -m` remanescentes nos arquivos ativos, e nenhuma alteração na construção do prompt, no parsing do `REVIEW_VERDICT`, nos exit codes, nas exclusões de diff ou nos contratos de gate. O Review Canvas existe e está completo (approaches, hot-path, edge cases, breakage-risk table). Nenhuma expansão de escopo de segurança, execução autônoma, mounts ou egress. As referências históricas a "Gemini Flash 3.5" no `progress.md` são registros históricos intencionais (append-only), não regressões.
+
+PASS docs-only Zed Gemini reviewer-path clarification; gate construction, verdict parsing, exit codes, and security boundary all unchanged.
+
+- [LOW] Asimetria mínima de fraseado no `review-gate.sh:6` — o header diz "Zed Gemini CLI" mas `REVIEWER_CLI` ainda aceita o valor `gemini` (linha 15) sem distinguir terminal vs. Zed. Não é defeito: o `REVIEWER_CLI` só afeta tom de prompt e o caminho canônico agora é manual/paste, conforme README e canvas. Sem ação requerida.
+- [LOW] No issues found que afetem comportamento: a mudança é puramente textual; `bash -n` passa, `git diff --check` limpo, e o canvas + progress.md documentam a decisão e a evidência (doctor/sensors PASS reportados pelo implementer). A nota de verification do progress.md admite honestamente que o handoff via UI do Zed não foi submetido nesta sessão Codex — transparência correta, não fake-success.
+
+REVIEW_VERDICT: PASS docs-only reviewer-path rename to Zed Gemini CLI agent; no gate weakening, no scope creep, no security boundary drift, shell syntax valid, canvas present and complete.
