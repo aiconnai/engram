@@ -824,3 +824,28 @@ Verification:
 - Independent cross-model review iterated through the B2 findings and finished
   with `REVIEW_VERDICT: PASS`; the review artifacts are committed under
   `docs/harness/reviews/2026-06-21-b2-loop-skills-policy*-post.md`.
+
+## AgentShield harness parity follow-up — loop triage skill family — 2026-06-21
+
+- Promoted the four B2 follow-up skills from AgentShield into Engram:
+  `loop-triage`, `loop-triage-ci`, `dependency-triage`, and
+  `pr-review-triage`.
+- Adapted content to Engram's loop paths, full harness gate, MCP/connectors,
+  storage, attestation, protocol, and release-risk boundaries.
+- Updated `docs/harness/SKILLS.md` so the four skills move from follow-up
+  candidates into the Current Skills inventory.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-21-loop-followup-skills.md`.
+
+Verification:
+
+- Skill frontmatter validation via `quick_validate.py` in a temporary
+  `/tmp/engram-skill-validate` venv — PASS for all four promoted skills.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh quick` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
+  + PR-title policy + harness doctor).
+- `bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): port loop triage skill family"` — PASS.
+- AgentShield-only leakage grep for `AgentShield gate`, `cargo run -- scan`,
+  `release.yml`, `Homebrew`, and `crates.io` across the four new skills — zero
+  matches.
