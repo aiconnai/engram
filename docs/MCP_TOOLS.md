@@ -3920,8 +3920,8 @@ Export all memories to a JSON-serializable format for backup or migration.
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| `workspace` | `string` | no | Optional: export only from specific workspace |
-| `include_embeddings` | `boolean` | no | Include embedding vectors in export (larger file size) Default: `false`. |
+| `workspace` | `string` | no | Export only memories from this workspace (omit for all) |
+| `include_embeddings` | `boolean` | no | Reserved feature: currently not supported (reserved for future embedding-inclusive exports) Default: `false`. |
 
 ### `memory_import`
 

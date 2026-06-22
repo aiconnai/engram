@@ -49,12 +49,21 @@ pub fn memory_validate_tags(ctx: &HandlerContext, _params: Value) -> Value {
 
 // ── Import / Export ───────────────────────────────────────────────────────────
 
-pub fn memory_export(ctx: &HandlerContext, _params: Value) -> Value {
+pub fn memory_export(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::export_memories;
+
+    let workspace = params.get("workspace").and_then(|v| v.as_str());
+    if params
+        .get("include_embeddings")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return json!({"error": "include_embeddings is not supported yet for memory_export"});
+    }
 
     ctx.storage
         .with_connection(|conn| {
-            let data = export_memories(conn)?;
+            let data = export_memories(conn, workspace)?;
             Ok(json!(data))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))

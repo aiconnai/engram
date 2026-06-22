@@ -60,8 +60,8 @@
         schema: r#"{
             "type": "object",
             "properties": {
-                "workspace": {"type": "string", "description": "Optional: export only from specific workspace"},
-                "include_embeddings": {"type": "boolean", "default": false, "description": "Include embedding vectors in export (larger file size)"}
+                "workspace": {"type": "string", "description": "Export only memories from this workspace (omit for all)"},
+                "include_embeddings": {"type": "boolean", "default": false, "description": "Reserved feature: currently not supported (reserved for future embedding-inclusive exports)"}
             }
         }"#,
         annotations: ToolAnnotations::read_only(),
