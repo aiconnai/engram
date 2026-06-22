@@ -846,6 +846,6 @@ Verification:
 - `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
   + PR-title policy + harness doctor).
 - `bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): port loop triage skill family"` — PASS.
-- AgentShield-only leakage grep for `AgentShield gate`, `cargo run -- scan`,
+- Cross-repo leakage grep for `AgentShield`, `cargo run -- scan`,
   `release.yml`, `Homebrew`, and `crates.io` across the four new skills — zero
   matches.
