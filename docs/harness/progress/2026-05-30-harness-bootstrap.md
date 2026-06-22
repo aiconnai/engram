@@ -1311,3 +1311,39 @@ contained already-merged code and generated state that should not be replayed.
 
 - `rtk bash docs/harness/bin/doctor.sh` — PASS.
 - `rtk git diff --check` — PASS.
+
+## 2026-06-22 — Stash recovery: memory export workspace/scope
+
+### Contexto
+
+During cleanup of the remaining old stashes, the split-query leftover stash
+contained one useful behavior fix not present on current `main`: `memory_export`
+advertised `workspace` and `include_embeddings` inputs, but ignored both, and
+JSON import/export lost memory scope information.
+
+### Ações realizadas
+
+- Recovered only the narrow export/import fix from the aggregate stash.
+- `memory_export` now passes the optional `workspace` filter to storage.
+- `include_embeddings=true` now returns an explicit unsupported-feature error.
+- `ExportedMemory` now includes additive `scope_type` and `scope_id` fields
+  with serde defaults for older payloads.
+- `import_memories` restores user/session/agent/global scope and rejects scoped
+  payloads missing `scope_id`.
+- Duplicate import with `skip_duplicates=true` now reports duplicate rows as
+  skipped instead of imported.
+- Regenerated `docs/MCP_TOOLS.md`.
+- Created Review Canvas:
+  `docs/harness/canvas/2026-06-22-memory-export-scope-workspace.md`.
+
+### Evidência
+
+- `rtk cargo fmt --all -- --check` — PASS.
+- `rtk cargo test -p engram-core --lib storage::queries::export --locked` —
+  PASS, 4 tests.
+- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  `make ci` + PR-title policy + harness doctor).

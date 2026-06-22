@@ -849,3 +849,29 @@ Verification:
 - Cross-repo leakage grep for `AgentShield`, `cargo run -- scan`,
   `release.yml`, `Homebrew`, and `crates.io` across the four new skills — zero
   matches.
+
+## Stash recovery — memory export workspace/scope — 2026-06-22
+
+- During cleanup of old aggregate stashes, recovered only the still-relevant
+  `memory_export` behavior fix from the split-query leftovers.
+- `memory_export` now honors its documented `workspace` parameter and rejects
+  `include_embeddings=true` explicitly because embedding-inclusive export is
+  still reserved.
+- JSON export now includes `scope_type` and `scope_id`; import restores
+  non-global scope instead of silently converting everything to global.
+- Duplicate imports with `skip_duplicates=true` now report duplicates as
+  `skipped` instead of `imported`.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-22-memory-export-scope-workspace.md`.
+
+Verification:
+
+- `cargo fmt --all -- --check` — PASS.
+- `cargo test -p engram-core --lib storage::queries::export --locked` — PASS,
+  4 tests.
+- `./scripts/generate-mcp-reference.sh --check` — PASS.
+- `git diff --check` — PASS.
+- `cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
+  + PR-title policy + harness doctor).
