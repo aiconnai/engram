@@ -3,7 +3,7 @@
 #
 # Cross-CLI / cross-model review gate for engram harness.
 #
-# Supports the user's current workflow (Claude Code + Grok Build TUI side-by-side).
+# Supports the user's current workflow (Claude Code + Gemini Flash 3.5 side-by-side).
 #
 # Usage:
 #   review-gate.sh pre  <task-id>                    # advisory; generates prompt + writes pre artifact
@@ -12,7 +12,7 @@
 #   review-gate.sh post <task-id> --review-file reviews/xxx.md  # provide reviewer output directly
 #
 # Environment:
-#   REVIEWER_CLI=claude|grok|codex|ollama|manual   (affects prompt tone; default "manual")
+#   REVIEWER_CLI=claude|gemini|codex|ollama|manual (affects prompt tone; default "manual")
 #   REVIEWER_TIMEOUT_SECS=...                        (future non-interactive exec)
 #
 # The script builds a rich prompt including SPEC, INVARIANTS, WHAT_WE_DONT_DO, GATES, CODE_REVIEW_POLICY,
@@ -240,7 +240,7 @@ echo
 if [ "$MODE" = "pre" ]; then
   echo "=== PRE-GATE (advisory) ==="
   echo "The prompt above is advisory input for the implementer."
-  echo "Copy the content of $RAW_PATH into your other CLI (Grok Build / Claude) if doing cross-CLI review."
+  echo "Copy the content of $RAW_PATH into your other CLI (Gemini Flash 3.5 / Claude) if doing cross-CLI review."
   echo "Save the reviewer's full response as $ARTIFACT_PATH"
   echo "Pre-gates never block (exit 0)."
   cp "$RAW_PATH" "$ARTIFACT_PATH" 2>/dev/null || true
@@ -255,6 +255,7 @@ echo "  1. Open $RAW_PATH"
 echo "  2. Paste the full prompt into the *other* CLI (the reviewer)"
 echo "  3. Save the complete reviewer response to $ARTIFACT_PATH"
 echo "  4. Re-run this script with --review-file $ARTIFACT_PATH (or just run it again after the file exists)"
+echo "  Gemini CLI example: gemini -m <gemini-flash-3.5-model-id> -p \"\$(cat '$RAW_PATH')\" > '$ARTIFACT_PATH'"
 echo
 
 if [ -n "$REVIEW_FILE" ] && [ -f "$REVIEW_FILE" ]; then

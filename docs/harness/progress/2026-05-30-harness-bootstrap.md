@@ -3,7 +3,51 @@
 **Sprint**: Harness Engineering v0 — bootstrap & core gates
 **Task**: harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)
 **Date started**: 2026-05-30
-**Owner**: Ronaldo + agents (Claude Code CLI + Grok Build TUI side-by-side)
+**Owner**: Ronaldo + agents (Claude Code CLI + Gemini Flash 3.5 side-by-side)
+
+---
+
+## 2026-06-22 — Reviewer CLI substitution
+
+### Contexto
+
+Grok is no longer available in the user's workflow. The active cross-CLI review
+path should use Gemini Flash 3.5 as the independent reviewer alongside Claude
+Code.
+
+### Ações realizadas
+
+1. `docs/harness/bin/review-gate.sh` now documents `REVIEWER_CLI=gemini` and
+   points pre/post handoff text at Gemini Flash 3.5.
+2. `docs/harness/README.md` now names Claude Code + Gemini Flash 3.5 as the
+   current active agent pairing and includes a Gemini CLI non-interactive
+   example.
+3. `docs/harness/progress.md` records the substitution in live state while
+   preserving old dated Grok mentions as historical context.
+4. Added Review Canvas:
+   `docs/harness/canvas/2026-06-22-reviewer-cli-gemini-substitution.md`.
+
+### Evidência
+
+- `rtk gemini --help` — PASS; local Gemini CLI is installed and supports
+  non-interactive prompts with `-m/--model`.
+- `rtk gemini -m gemini-3.5-flash "Return exactly OK"` — BLOCKED by local
+  Google account licensing (`SUBSCRIPTION_REQUIRED`), so Gemini could not be
+  used for this post-review run.
+- `rtk bash -n docs/harness/bin/review-gate.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS, full gate
+  (`make ci + pr-title-policy + harness doctor`).
+- Post-review artifact:
+  `docs/harness/reviews/2026-06-22-reviewer-cli-gemini-substitution-v3-post.md`;
+  enforced with `review-gate.sh`, `REVIEW_VERDICT: PASS`.
+
+### Resultado
+
+The active reviewer path no longer points agents at Grok. Future cross-CLI
+review handoffs should use Gemini Flash 3.5 unless the user explicitly asks for
+another reviewer.
 
 ---
 
