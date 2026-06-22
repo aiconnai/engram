@@ -9,7 +9,7 @@ use crate::error::{EngramError, Result};
 use crate::mcp::handlers::HandlerContext;
 use crate::storage::queries::{
     create_crossref, create_memory, get_policy_record, record_reinforcement, update_memory,
-    upsert_policy_record, PolicyRecordInput,
+    update_memory_lifecycle_state, upsert_policy_record, PolicyRecordInput,
 };
 use crate::storage::{
     get_dream_candidate_with_sources, get_dream_job, list_dream_candidates, list_dream_jobs,
@@ -17,7 +17,8 @@ use crate::storage::{
     DreamCandidate, DreamCandidateApplication,
 };
 use crate::types::{
-    CreateCrossRefInput, CreateMemoryInput, EdgeType, MemoryId, MemoryType, UpdateMemoryInput,
+    CreateCrossRefInput, CreateMemoryInput, EdgeType, LifecycleState, MemoryId, MemoryType,
+    UpdateMemoryInput,
 };
 use rusqlite::params;
 use serde_json::{json, Value};
@@ -371,18 +372,10 @@ fn execute_application(
             for target in &targets {
                 ensure_expirable_target(conn, candidate, *target)?;
             }
-            let now = chrono::Utc::now().to_rfc3339();
             let mut changed = 0usize;
             for target in &targets {
-                changed += conn.execute(
-                    "UPDATE memories
-                     SET lifecycle_state = 'archived',
-                         updated_at = ?2
-                     WHERE id = ?1
-                       AND valid_to IS NULL
-                       AND COALESCE(lifecycle_state, 'active') != 'archived'",
-                    params![target, &now],
-                )?;
+                update_memory_lifecycle_state(conn, *target, LifecycleState::Archived)?;
+                changed += 1;
             }
             if changed != targets.len() {
                 return Err(EngramError::Conflict(format!(

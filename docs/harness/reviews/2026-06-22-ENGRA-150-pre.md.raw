@@ -1,0 +1,465 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: ENGRA-150
+**Mode**: pre
+**Date (UTC)**: 2026-06-22
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+commit 369781d942dba89addf00ceb274fbaf8c971c1f9
+Author: Ronaldo Martins <ron@ldinho.com.br>
+Date:   Sun Jun 21 22:52:40 2026 -0300
+
+    fix(mcp): honor memory export workspace and scope
+    
+    Recover memory_export workspace filtering and scope round-trip from old stash cleanup.
+
+diff --git a/docs/MCP_TOOLS.md b/docs/MCP_TOOLS.md
+index 3569f1c..1fb6777 100644
+--- a/docs/MCP_TOOLS.md
++++ b/docs/MCP_TOOLS.md
+@@ -3923,2 +3923,2 @@ Export all memories to a JSON-serializable format for backup or migration.
+-| `workspace` | `string` | no | Optional: export only from specific workspace |
+-| `include_embeddings` | `boolean` | no | Include embedding vectors in export (larger file size) Default: `false`. |
++| `workspace` | `string` | no | Export only memories from this workspace (omit for all) |
++| `include_embeddings` | `boolean` | no | Reserved feature: currently not supported (reserved for future embedding-inclusive exports) Default: `false`. |
+diff --git a/docs/harness/canvas/2026-06-22-memory-export-scope-workspace.md b/docs/harness/canvas/2026-06-22-memory-export-scope-workspace.md
+new file mode 100644
+index 0000000..06a128e
+--- /dev/null
++++ b/docs/harness/canvas/2026-06-22-memory-export-scope-workspace.md
+@@ -0,0 +1,55 @@
++# Review Canvas: memory-export-scope-workspace
++
++Date: 2026-06-22
++Owner: Codex
++Scope: Recover the useful `memory_export` workspace/scope fix from an old
++stash while leaving stale aggregate stash content behind.
++
++## Trigger
++
++| Trigger | Evidence |
++|---|---|
++| MCP tool behavior change | `memory_export` now honors `workspace` and rejects unsupported embedding export requests explicitly. |
++| Storage serialization contract | Exported memories now carry `scope_type` and `scope_id`; import restores them. |
++| Stash recovery | The source was an old aggregate stash with unrelated stale changes, so only the narrow behavior fix is carried forward. |
++
++## Approaches Considered
++
++| Approach | Decision | Reason |
++|---|---|---|
++| Apply the whole stash | Rejected | The stash mixes stale generated artifacts, old storage-query split work, and unrelated docs/config. |
++| Drop the stash entirely | Rejected | `memory_export` still ignored documented params on current `main`. |
++| Recover only export/import behavior | Accepted | Smallest useful change with focused storage tests and regenerated MCP reference. |
++
++## Hot Path Complexity
++
++| Path | Time impact | Space impact | Notes |
++|---|---|---|---|
++| `memory_export` with no workspace | Same query shape, explicit `ListOptions` construction | Scope fields add two serialized fields per memory | Existing all-memory export behavior preserved. |
++| `memory_export` with workspace | Narrows list query by normalized workspace | Smaller output | Invalid workspace returns structured handler error through existing path. |
++| `memory_import` | Same per-memory loop | No persistent schema change | Scope is parsed from export payload before `create_memory`. |
++
++## Edge Cases
++
++| Edge case | Verification plan |
++|---|---|
++| Uppercase workspace input should match normalized stored workspace | Unit test exports with `Some("TEAM")` and returns only `team`. |
++| Non-global exported scope should survive import | Unit test imports a `session` scoped memory and checks DB scope columns. |
++| Scoped payload missing `scope_id` should not silently become global | Unit test expects failed import with `missing scope_id`. |
++| Duplicate import with `skip_duplicates=true` should count as skipped | Unit test imports the same payload twice and checks `skipped=1`. |
++
++## Breakage Risk
++
++| Risk | Impact | Mitigation | Rollback | Verification |
++|---|---|---|---|---|
++| Existing export consumers ignore new fields | Low | Fields are additive and serde defaults keep old import payloads valid | Revert export field additions | Focused storage tests. |
++| `include_embeddings=true` callers now receive explicit error | Low | The schema now marks it reserved/unsupported instead of promising behavior | Revert handler/schema change | MCP reference regenerated and checked. |
++| Scope parsing rejects malformed export payloads | Medium | Malformed scoped payloads fail visibly instead of importing under wrong scope | Revert scope validation block | Missing `scope_id` regression test. |
++
++## Decision
++
++Proceed.
++
++Reason: The current MCP schema advertised options that were ignored or
++misleading, and export/import lost scope information. The recovered change is
++small, testable, and separates the real fix from stale aggregate stash content.
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 841ac9c..4c8a4f0 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -851,0 +852,26 @@ Verification:
++
++## Stash recovery — memory export workspace/scope — 2026-06-22
++
++- During cleanup of old aggregate stashes, recovered only the still-relevant
++  `memory_export` behavior fix from the split-query leftovers.
++- `memory_export` now honors its documented `workspace` parameter and rejects
++  `include_embeddings=true` explicitly because embedding-inclusive export is
++  still reserved.
++- JSON export now includes `scope_type` and `scope_id`; import restores
++  non-global scope instead of silently converting everything to global.
++- Duplicate imports with `skip_duplicates=true` now report duplicates as
++  `skipped` instead of `imported`.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-06-22-memory-export-scope-workspace.md`.
++
++Verification:
++
++- `cargo fmt --all -- --check` — PASS.
++- `cargo test -p engram-core --lib storage::queries::export --locked` — PASS,
++  4 tests.
++- `./scripts/generate-mcp-reference.sh --check` — PASS.
++- `git diff --check` — PASS.
++- `cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
++- `bash docs/harness/bin/doctor.sh` — PASS.
++- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
++  + PR-title policy + harness doctor).
+diff --git a/src/mcp/handlers/misc.rs b/src/mcp/handlers/misc.rs
+index 66aecd0..fe6a7b6 100644
+--- a/src/mcp/handlers/misc.rs
++++ b/src/mcp/handlers/misc.rs
+@@ -52 +52 @@ pub fn memory_validate_tags(ctx: &HandlerContext, _params: Value) -> Value {
+-pub fn memory_export(ctx: &HandlerContext, _params: Value) -> Value {
++pub fn memory_export(ctx: &HandlerContext, params: Value) -> Value {
+@@ -54,0 +55,9 @@ pub fn memory_export(ctx: &HandlerContext, _params: Value) -> Value {
++    let workspace = params.get("workspace").and_then(|v| v.as_str());
++    if params
++        .get("include_embeddings")
++        .and_then(|v| v.as_bool())
++        .unwrap_or(false)
++    {
++        return json!({"error": "include_embeddings is not supported yet for memory_export"});
++    }
++
+@@ -57 +66 @@ pub fn memory_export(ctx: &HandlerContext, _params: Value) -> Value {
+-            let data = export_memories(conn)?;
++            let data = export_memories(conn, workspace)?;
+diff --git a/src/mcp/tools/maintenance.rs b/src/mcp/tools/maintenance.rs
+index 68ec9c2..4ce6561 100644
+--- a/src/mcp/tools/maintenance.rs
++++ b/src/mcp/tools/maintenance.rs
+@@ -63,2 +63,2 @@
+-                "workspace": {"type": "string", "description": "Optional: export only from specific workspace"},
+-                "include_embeddings": {"type": "boolean", "default": false, "description": "Include embedding vectors in export (larger file size)"}
++                "workspace": {"type": "string", "description": "Export only memories from this workspace (omit for all)"},
++                "include_embeddings": {"type": "boolean", "default": false, "description": "Reserved feature: currently not supported (reserved for future embedding-inclusive exports)"}
+diff --git a/src/mcp/tools/registry.rs b/src/mcp/tools/registry.rs
+index b6b01e3..fd44647 100644
+--- a/src/mcp/tools/registry.rs
++++ b/src/mcp/tools/registry.rs
+@@ -4231,2 +4231,2 @@
+-                "workspace": {"type": "string", "description": "Optional: export only from specific workspace"},
+-                "include_embeddings": {"type": "boolean", "default": false, "description": "Include embedding vectors in export (larger file size)"}
++                "workspace": {"type": "string", "description": "Export only memories from this workspace (omit for all)"},
++                "include_embeddings": {"type": "boolean", "default": false, "description": "Reserved feature: currently not supported (reserved for future embedding-inclusive exports)"}
+diff --git a/src/storage/queries/export.rs b/src/storage/queries/export.rs
+index 77b276f..762abb9 100644
+--- a/src/storage/queries/export.rs
++++ b/src/storage/queries/export.rs
+@@ -13,0 +14,4 @@ pub struct ExportedMemory {
++    #[serde(default = "default_scope_type")]
++    pub scope_type: String,
++    #[serde(default)]
++    pub scope_id: Option<String>,
+@@ -18,0 +23,4 @@ pub struct ExportedMemory {
++fn default_scope_type() -> String {
++    "global".to_string()
++}
++
+@@ -29,8 +37,11 @@ pub struct ExportData {
+-pub fn export_memories(conn: &Connection) -> Result<ExportData> {
+-    let memories = list_memories(
+-        conn,
+-        &ListOptions {
+-            limit: Some(100000),
+-            ..Default::default()
+-        },
+-    )?;
++pub fn export_memories(conn: &Connection, workspace: Option<&str>) -> Result<ExportData> {
++    let list_options = ListOptions {
++        limit: Some(100_000),
++        workspace: workspace
++            .map(crate::types::normalize_workspace)
++            .transpose()
++            .map_err(|e| EngramError::InvalidInput(format!("Invalid workspace: {e}")))?,
++        ..Default::default()
++    };
++
++    let memories = list_memories(conn, &list_options)?;
+@@ -47,0 +59,2 @@ pub fn export_memories(conn: &Connection) -> Result<ExportData> {
++            scope_type: m.scope.scope_type().to_string(),
++            scope_id: m.scope.scope_id().map(str::to_string),
+@@ -84,0 +98,50 @@ pub fn import_memories(
++        let scope = match mem.scope_type.as_str() {
++            "global" | "" => MemoryScope::Global,
++            "user" => match &mem.scope_id {
++                Some(scope_id) if !scope_id.is_empty() => MemoryScope::User {
++                    user_id: scope_id.clone(),
++                },
++                _ => {
++                    failed += 1;
++                    errors.push(format!(
++                        "Failed to import memory {}: missing scope_id for scope_type=user",
++                        mem.id
++                    ));
++                    continue;
++                }
++            },
++            "session" => match &mem.scope_id {
++                Some(scope_id) if !scope_id.is_empty() => MemoryScope::Session {
++                    session_id: scope_id.clone(),
++                },
++                _ => {
++                    failed += 1;
++                    errors.push(format!(
++                        "Failed to import memory {}: missing scope_id for scope_type=session",
++                        mem.id
++                    ));
++                    continue;
++                }
++            },
++            "agent" => match &mem.scope_id {
++                Some(scope_id) if !scope_id.is_empty() => MemoryScope::Agent {
++                    agent_id: scope_id.clone(),
++                },
++                _ => {
++                    failed += 1;
++                    errors.push(format!(
++                        "Failed to import memory {}: missing scope_id for scope_type=agent",
++                        mem.id
++                    ));
++                    continue;
++                }
++            },
++            _ => {
++                failed += 1;
++                errors.push(format!(
++                    "Failed to import memory {}: unknown scope_type {}",
++                    mem.id, mem.scope_type
++                ));
++                continue;
++            }
++        };
+@@ -92 +155 @@ pub fn import_memories(
+-            scope: MemoryScope::Global,
++            scope,
+@@ -98 +161 @@ pub fn import_memories(
+-                DedupMode::Skip
++                DedupMode::Reject
+@@ -112 +175 @@ pub fn import_memories(
+-            Err(EngramError::Duplicate { .. }) => skipped += 1,
++            Err(EngramError::Duplicate { .. }) if skip_duplicates => skipped += 1,
+@@ -126,0 +190,143 @@ pub fn import_memories(
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::storage::Storage;
++
++    fn create_test_memory(
++        conn: &Connection,
++        content: &str,
++        workspace: &str,
++        scope: MemoryScope,
++    ) -> Result<()> {
++        create_memory(
++            conn,
++            &CreateMemoryInput {
++                content: content.to_string(),
++                memory_type: MemoryType::Note,
++                workspace: Some(workspace.to_string()),
++                scope,
++                ..Default::default()
++            },
++        )?;
++        Ok(())
++    }
++
++    fn exported_memory(
++        id: i64,
++        content: &str,
++        scope_type: &str,
++        scope_id: Option<&str>,
++    ) -> ExportedMemory {
++        ExportedMemory {
++            id,
++            content: content.to_string(),
++            memory_type: "note".to_string(),
++            tags: Vec::new(),
++            metadata: HashMap::new(),
++            importance: 0.5,
++            workspace: "default".to_string(),
++            scope_type: scope_type.to_string(),
++            scope_id: scope_id.map(str::to_string),
++            tier: "permanent".to_string(),
++            created_at: Utc::now().to_rfc3339(),
++            updated_at: Utc::now().to_rfc3339(),
++        }
++    }
++
++    #[test]
++    fn export_memories_filters_by_workspace() {
++        let storage = Storage::open_in_memory().unwrap();
++        storage
++            .with_connection(|conn| {
++                create_test_memory(conn, "default memory", "default", MemoryScope::Global)?;
++                create_test_memory(conn, "team memory", "team", MemoryScope::Global)?;
++
++                let export = export_memories(conn, Some("TEAM"))?;
++
++                assert_eq!(export.memory_count, 1);
++                assert_eq!(export.memories[0].content, "team memory");
++                assert_eq!(export.memories[0].workspace, "team");
++                Ok(())
++            })
++            .unwrap();
++    }
++
++    #[test]
++    fn import_memories_preserves_non_global_scope() {
++        let data = ExportData {
++            version: "1.0".to_string(),
++            exported_at: Utc::now().to_rfc3339(),
++            memory_count: 1,
++            memories: vec![exported_memory(
++                7,
++                "session scoped",
++                "session",
++                Some("session-1"),
++            )],
++        };
++
++        let storage = Storage::open_in_memory().unwrap();
++        storage
++            .with_connection(|conn| {
++                let result = import_memories(conn, &data, true)?;
++                assert_eq!(result.imported, 1);
++                assert_eq!(result.failed, 0);
++
++                let (scope_type, scope_id): (String, Option<String>) = conn.query_row(
++                    "SELECT scope_type, scope_id FROM memories WHERE content = ?1",
++                    ["session scoped"],
++                    |row| Ok((row.get(0)?, row.get(1)?)),
++                )?;
++                assert_eq!(scope_type, "session");
++                assert_eq!(scope_id.as_deref(), Some("session-1"));
++                Ok(())
++            })
++            .unwrap();
++    }
++
++    #[test]
++    fn import_memories_rejects_scoped_memory_without_scope_id() {
++        let data = ExportData {
++            version: "1.0".to_string(),
++            exported_at: Utc::now().to_rfc3339(),
++            memory_count: 1,
++            memories: vec![exported_memory(8, "bad scope", "user", None)],
++        };
++
++        let storage = Storage::open_in_memory().unwrap();
++        storage
++            .with_connection(|conn| {
++                let result = import_memories(conn, &data, true)?;
++                assert_eq!(result.imported, 0);
++                assert_eq!(result.failed, 1);
++                assert!(result.errors[0].contains("missing scope_id"));
++                Ok(())
++            })
++            .unwrap();
++    }
++
++    #[test]
++    fn import_memories_counts_duplicates_as_skipped() {
++        let data = ExportData {
++            version: "1.0".to_string(),
++            exported_at: Utc::now().to_rfc3339(),
++            memory_count: 1,
++            memories: vec![exported_memory(9, "duplicate", "global", None)],
++        };
++
++        let storage = Storage::open_in_memory().unwrap();
++        storage
++            .with_connection(|conn| {
++                let first = import_memories(conn, &data, true)?;
++                let second = import_memories(conn, &data, true)?;
++
++                assert_eq!(first.imported, 1);
++                assert_eq!(second.imported, 0);
++                assert_eq!(second.skipped, 1);
++                assert_eq!(second.failed, 0);
++                Ok(())
++            })
++            .unwrap();
++    }
++}
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

@@ -23,6 +23,9 @@ pub use export::*;
 mod maintenance;
 pub use maintenance::*;
 
+mod lifecycle;
+pub use lifecycle::*;
+
 mod sync;
 pub use sync::*;
 

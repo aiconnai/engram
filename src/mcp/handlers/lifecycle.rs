@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 
 use super::HandlerContext;
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
+use crate::storage::queries::update_memory_lifecycle_state;
+use crate::types::LifecycleState;
 
 pub fn lifecycle_status(ctx: &HandlerContext, params: Value) -> Value {
     let workspace = params.get("workspace").and_then(|v| v.as_str());
@@ -173,19 +175,13 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
             let mut transitioned_ids: Vec<(i64, &str)> = Vec::new();
 
             for (id, _) in &stale_candidates {
-                conn.execute(
-                    "UPDATE memories SET lifecycle_state = 'stale' WHERE id = ?",
-                    params![id],
-                )?;
+                update_memory_lifecycle_state(conn, *id, LifecycleState::Stale)?;
                 stale_count += 1;
                 transitioned_ids.push((*id, "stale"));
             }
 
             for (id, _) in &archive_candidates {
-                conn.execute(
-                    "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ?",
-                    params![id],
-                )?;
+                update_memory_lifecycle_state(conn, *id, LifecycleState::Archived)?;
                 archive_count += 1;
                 transitioned_ids.push((*id, "archived"));
             }
@@ -233,16 +229,19 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
     if !["active", "stale", "archived"].contains(&state) {
         return json!({"error": "state must be one of: active, stale, archived"});
     }
+    let lifecycle_state = match state.parse::<LifecycleState>() {
+        Ok(state) => state,
+        Err(_) => return json!({"error": "state must be one of: active, stale, archived"}),
+    };
 
     ctx.storage
         .with_connection(|conn| {
-            let updated = conn.execute(
-                "UPDATE memories SET lifecycle_state = ? WHERE id = ? AND valid_to IS NULL",
-                params![state, id],
-            )?;
-
-            if updated == 0 {
-                return Ok(json!({"error": "Memory not found"}));
+            match update_memory_lifecycle_state(conn, id, lifecycle_state) {
+                Ok(_) => {}
+                Err(crate::error::EngramError::NotFound(_)) => {
+                    return Ok(json!({"error": "Memory not found"}));
+                }
+                Err(e) => return Err(e),
             }
 
             let operation_id = uuid::Uuid::new_v4().to_string();
@@ -482,7 +481,8 @@ mod lifecycle_tests {
         // Seed a memory old enough to trigger stale transition:
         // created_at far in the past, low importance, low access_count.
         let old_ts = (Utc::now() - Duration::days(60)).to_rfc3339();
-        ctx.storage
+        let memory_id = ctx
+            .storage
             .with_transaction(|conn| {
                 conn.execute(
                     "INSERT INTO memories (content, memory_type, workspace, importance,
@@ -490,7 +490,7 @@ mod lifecycle_tests {
                      VALUES ('old memory content', 'general', 'default', 0.1, 0, 'active', ?1)",
                     rusqlite::params![old_ts],
                 )?;
-                Ok(())
+                Ok(conn.last_insert_rowid())
             })
             .expect("seed old memory");
 
@@ -530,6 +530,42 @@ mod lifecycle_tests {
         assert!(
             event_count > 0,
             "expected enrichment_events rows for lifecycle_transition, got 0"
+        );
+
+        let update_event_count: i64 = ctx
+            .storage
+            .with_connection(|conn| {
+                let n: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM memory_events
+                     WHERE memory_id = ?1
+                       AND data LIKE '%lifecycle_state%'",
+                    rusqlite::params![memory_id],
+                    |row| row.get(0),
+                )?;
+                Ok(n)
+            })
+            .expect("query memory_events");
+
+        assert_eq!(
+            update_event_count, 1,
+            "expected one memory update event for lifecycle_state"
+        );
+
+        let version_count: i64 = ctx
+            .storage
+            .with_connection(|conn| {
+                let n: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM memory_versions WHERE memory_id = ?1",
+                    rusqlite::params![memory_id],
+                    |row| row.get(0),
+                )?;
+                Ok(n)
+            })
+            .expect("query memory_versions");
+
+        assert_eq!(
+            version_count, 1,
+            "expected lifecycle transition to create a memory version"
         );
     }
 }

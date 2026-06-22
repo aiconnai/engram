@@ -1347,3 +1347,52 @@ JSON import/export lost memory scope information.
 - `rtk bash docs/harness/bin/doctor.sh` — PASS.
 - `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
   `make ci` + PR-title policy + harness doctor).
+
+## 2026-06-22 — ENGRA-150 query-layer lifecycle updates
+
+### Contexto
+
+The code-quality follow-up tracked as ENGRA-150 identified raw
+`UPDATE memories` lifecycle writes in MCP handlers. Those writes changed
+canonical memory rows without using the query-layer update bookkeeping that
+records memory versions, sync events, and pending sync-state changes.
+
+### Ações realizadas
+
+- Added `src/storage/queries/lifecycle.rs` with
+  `update_memory_lifecycle_state`.
+- Wired the new query module through `src/storage/queries/mod.rs`.
+- Replaced Dream candidate `expire` lifecycle writes in
+  `src/mcp/handlers/dream.rs`.
+- Replaced `lifecycle_run` and `memory_set_lifecycle` lifecycle writes in
+  `src/mcp/handlers/lifecycle.rs`.
+- Preserved the existing `memory_set_lifecycle` missing-ID response payload.
+- Added regression coverage in `src/storage/queries/tests.rs` for version and
+  memory-event side effects.
+- Strengthened the lifecycle handler test to assert query-layer side effects.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-22-ENGRA-150-query-layer-lifecycle-updates.md`.
+
+### Evidência
+
+- `rtk bash docs/harness/bin/bootstrap.sh` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/vc-gate.sh start ENGRA-150` — PASS.
+- `rtk bash docs/harness/bin/review-gate.sh pre ENGRA-150` — PASS/advisory
+  prompt artifact generated.
+- `rtk cargo check -p engram-core --all-targets --locked` — PASS.
+- `rtk cargo test -p engram-core --lib test_update_memory_lifecycle_state_records_update_side_effects --locked`
+  — PASS.
+- `rtk cargo test -p engram-core --lib lifecycle_tests --locked` — PASS.
+- `rtk cargo test --test dream_integration --features dream-phase test_mcp_expire_candidate_does_not_apply_when_target_is_no_longer_active --locked`
+  — PASS.
+- `rtk grep "UPDATE memories" src/mcp/handlers/dream.rs src/mcp/handlers/lifecycle.rs`
+  — PASS, zero matches.
+- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
+- `rtk cargo fmt --all -- --check` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  `make ci` + PR-title policy + harness doctor).
+- `rtk bash docs/harness/bin/review-gate.sh post ENGRA-150 --range origin/main..HEAD --review-file docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md`
+  — PASS (`REVIEW_VERDICT: PASS`).

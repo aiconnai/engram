@@ -6,8 +6,8 @@
 | Active sprint | `Harness Engineering v0 — bootstrap & core gates` |
 | Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
 | Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
-| Last review | `2026-06-21 — pass: docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v8-post.md` |
-| Last sensors | `2026-06-21 — status=pass (full gate)` |
+| Last review | `2026-06-22 — pass: docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md` |
+| Last sensors | `2026-06-22 — status=pass (full gate)` |
 | Last commit | `913917b` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -870,6 +870,39 @@ Verification:
 - `cargo test -p engram-core --lib storage::queries::export --locked` — PASS,
   4 tests.
 - `./scripts/generate-mcp-reference.sh --check` — PASS.
+- `git diff --check` — PASS.
+- `cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
+  + PR-title policy + harness doctor).
+- `bash docs/harness/bin/review-gate.sh post ENGRA-150 --range origin/main..HEAD --review-file docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md`
+  — PASS (`REVIEW_VERDICT: PASS`).
+
+## ENGRA-150 query-layer lifecycle updates — 2026-06-22
+
+- Added `storage::queries::update_memory_lifecycle_state` as the canonical
+  lifecycle transition path for memories, including version rows, memory update
+  events, and sync-state bookkeeping.
+- Replaced raw lifecycle `UPDATE memories` writes in
+  `src/mcp/handlers/dream.rs` and `src/mcp/handlers/lifecycle.rs` with the
+  query-layer helper.
+- Preserved `memory_set_lifecycle`'s existing missing-memory response shape.
+- Kept MCP tool schemas unchanged; `docs/MCP_TOOLS.md` remains up to date.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-22-ENGRA-150-query-layer-lifecycle-updates.md`.
+
+Verification:
+
+- `cargo check -p engram-core --all-targets --locked` — PASS.
+- `cargo test -p engram-core --lib test_update_memory_lifecycle_state_records_update_side_effects --locked`
+  — PASS.
+- `cargo test -p engram-core --lib lifecycle_tests --locked` — PASS.
+- `cargo test --test dream_integration --features dream-phase test_mcp_expire_candidate_does_not_apply_when_target_is_no_longer_active --locked`
+  — PASS.
+- `grep "UPDATE memories" src/mcp/handlers/dream.rs src/mcp/handlers/lifecycle.rs`
+  — PASS, zero matches.
+- `./scripts/generate-mcp-reference.sh --check` — PASS.
+- `cargo fmt --all -- --check` — PASS.
 - `git diff --check` — PASS.
 - `cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
 - `bash docs/harness/bin/doctor.sh` — PASS.
