@@ -16,21 +16,9 @@ reviewed, and validated instead of left as accidental untracked files.
 | `engram-council` | Structured consensus via `memory_council` / `CouncilSkill` for design, policy, security, and tradeoff decisions | Read-only decision support |
 | `engram-onboarding` | Bootstrap an agent's engram memory session in a new repository | Policy/reference |
 | `loop-engineering` | Shared safety model for repeatable agent loops | Policy/reference |
-
-## Available for Follow-Up (Not Ported in B2)
-
-The following skills exist in AgentShield's repo-local harness and are candidates
-for a future port to Engram. They are **intentionally not ported in Task B2** —
-B2 carries only `loop-engineering` (the shared safety base) plus this policy, so
-the gate and review stay scoped to one new operational surface. Each of these
-introduces its own operating surface (CI parsing, dependency advisories, PR
-triage) and warrants its own task, port, and review canvas.
-
-| Skill | Purpose | Suggested level on port |
-|---|---|---|
+| `dependency-triage` | Dependency advisory and patch-candidate triage | L1 report, patch-only candidates |
 | `loop-triage` | Daily signal triage for CI, issues, PRs, commits, and chat | L1 report-only |
 | `loop-triage-ci` | CI failure grouping and bounded minimal-fix handoff | L1 report, L2 only with verifier |
-| `dependency-triage` | Dependency advisory and patch-candidate triage | L1 report, patch-only candidates |
 | `pr-review-triage` | PR aging, CI block, and reviewer-thread triage | L1 report, L2 only with verifier |
 
 ## Policy
