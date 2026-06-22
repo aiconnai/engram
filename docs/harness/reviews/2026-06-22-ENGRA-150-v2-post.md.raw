@@ -1,0 +1,451 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: ENGRA-150
+**Mode**: post
+**Date (UTC)**: 2026-06-22
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index c167ed8..aeaba73 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -5 +5 @@ mode=full
+-timestamp=2026-06-21T21:10:49Z
++timestamp=2026-06-22T02:28:27Z
+diff --git a/docs/harness/canvas/2026-06-22-ENGRA-150-query-layer-lifecycle-updates.md b/docs/harness/canvas/2026-06-22-ENGRA-150-query-layer-lifecycle-updates.md
+new file mode 100644
+index 0000000..14fe150
+--- /dev/null
++++ b/docs/harness/canvas/2026-06-22-ENGRA-150-query-layer-lifecycle-updates.md
+@@ -0,0 +1,50 @@
++# Review Canvas: ENGRA-150 query-layer lifecycle updates
++
++Date: 2026-06-22
++Owner: Codex
++Scope: Route Dream and lifecycle handler memory lifecycle transitions through storage query-layer update bookkeeping.
++
++## Trigger
++
++| Trigger | Evidence |
++|---|---|
++| MCP handler mutation change | `src/mcp/handlers/dream.rs` and `src/mcp/handlers/lifecycle.rs` no longer issue raw `UPDATE memories` lifecycle writes. |
++| Storage mutation invariant | Lifecycle transitions now create memory version rows and memory update events like other canonical updates. |
++
++## Approaches Considered
++
++| Approach | Decision | Reason |
++|---|---|---|
++| Add `lifecycle_state` to public `UpdateMemoryInput` | Rejected | It would expand the public Rust/MCP update input shape for an internal cleanup. |
++| Add dedicated query-layer lifecycle transition helper | Accepted | Keeps handler behavior scoped while centralizing version/event/sync bookkeeping. |
++| Keep handler SQL and only add tests | Rejected | Would leave the reviewed raw mutation path in place. |
++
++## Hot Path Complexity
++
++| Path | Time impact | Space impact | Notes |
++|---|---|---|---|
++| `lifecycle_run` transition loop | One extra read/version/event write per transitioned memory | One memory version row and one memory event per transition | Matches update-layer bookkeeping expectations; lifecycle dry-run remains unchanged. |
++| `dream_candidate_apply` expire path | One extra read/version/event write per expired target | One memory version row and one memory event per target | Only runs after explicit candidate acceptance and `confirm=true`. |
++| `memory_set_lifecycle` | One extra read/version/event write | One memory version row and one memory event | Response shape for missing IDs is preserved. |
++
++## Edge Cases
++
++| Edge case | Verification plan |
++|---|---|
++| Expired-but-current rows should keep old lifecycle setter behavior | Helper reads `valid_to IS NULL` rows without adding an `expires_at` filter. |
++| Missing or soft-deleted memory in `memory_set_lifecycle` | Preserve the existing `{"error":"Memory not found"}` response. |
++| Dream expire target became inactive before apply | Existing feature-gated dream regression remains green. |
++
++## Breakage Risk
++
++| Risk | Impact | Mitigation | Verification |
++|---|---|---|---|
++| Extra version/event rows change counts in downstream tests | Medium | Added focused assertions where lifecycle transitions now intentionally use update bookkeeping. | `cargo test -p engram-core --lib lifecycle_tests --locked` |
++| Public MCP schema drift | Low | Did not add a new `memory_update` field or change tool schemas. | No MCP reference regeneration required. |
++| Handler-local raw update remains | Medium | Grep targeted handlers for `UPDATE memories`. | `grep "UPDATE memories" src/mcp/handlers/dream.rs src/mcp/handlers/lifecycle.rs` returns no matches. |
++
++## Decision
++
++Proceed.
++
++Reason: The change removes the reviewed handler-local lifecycle writes while preserving the existing handler contracts and adding update-layer bookkeeping evidence.
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 4c8a4f0..d80312b 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -10 +10 @@
+-| Last sensors | `2026-06-21 — status=pass (full gate)` |
++| Last sensors | `2026-06-22 — status=pass (full gate)` |
+@@ -877,0 +878,31 @@ Verification:
++
++## ENGRA-150 query-layer lifecycle updates — 2026-06-22
++
++- Added `storage::queries::update_memory_lifecycle_state` as the canonical
++  lifecycle transition path for memories, including version rows, memory update
++  events, and sync-state bookkeeping.
++- Replaced raw lifecycle `UPDATE memories` writes in
++  `src/mcp/handlers/dream.rs` and `src/mcp/handlers/lifecycle.rs` with the
++  query-layer helper.
++- Preserved `memory_set_lifecycle`'s existing missing-memory response shape.
++- Kept MCP tool schemas unchanged; `docs/MCP_TOOLS.md` remains up to date.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-06-22-ENGRA-150-query-layer-lifecycle-updates.md`.
++
++Verification:
++
++- `cargo check -p engram-core --all-targets --locked` — PASS.
++- `cargo test -p engram-core --lib test_update_memory_lifecycle_state_records_update_side_effects --locked`
++  — PASS.
++- `cargo test -p engram-core --lib lifecycle_tests --locked` — PASS.
++- `cargo test --test dream_integration --features dream-phase test_mcp_expire_candidate_does_not_apply_when_target_is_no_longer_active --locked`
++  — PASS.
++- `grep "UPDATE memories" src/mcp/handlers/dream.rs src/mcp/handlers/lifecycle.rs`
++  — PASS, zero matches.
++- `./scripts/generate-mcp-reference.sh --check` — PASS.
++- `cargo fmt --all -- --check` — PASS.
++- `git diff --check` — PASS.
++- `cargo clippy -p engram-core --lib --locked -- -D warnings` — PASS.
++- `bash docs/harness/bin/doctor.sh` — PASS.
++- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
++  + PR-title policy + harness doctor).
+diff --git a/src/mcp/handlers/dream.rs b/src/mcp/handlers/dream.rs
+index 71cc7ca..b5a4dd4 100644
+--- a/src/mcp/handlers/dream.rs
++++ b/src/mcp/handlers/dream.rs
+@@ -12 +12 @@ use crate::storage::queries::{
+-    upsert_policy_record, PolicyRecordInput,
++    update_memory_lifecycle_state, upsert_policy_record, PolicyRecordInput,
+@@ -20 +20,2 @@ use crate::types::{
+-    CreateCrossRefInput, CreateMemoryInput, EdgeType, MemoryId, MemoryType, UpdateMemoryInput,
++    CreateCrossRefInput, CreateMemoryInput, EdgeType, LifecycleState, MemoryId, MemoryType,
++    UpdateMemoryInput,
+@@ -374 +374,0 @@ fn execute_application(
+-            let now = chrono::Utc::now().to_rfc3339();
+@@ -377,9 +377,2 @@ fn execute_application(
+-                changed += conn.execute(
+-                    "UPDATE memories
+-                     SET lifecycle_state = 'archived',
+-                         updated_at = ?2
+-                     WHERE id = ?1
+-                       AND valid_to IS NULL
+-                       AND COALESCE(lifecycle_state, 'active') != 'archived'",
+-                    params![target, &now],
+-                )?;
++                update_memory_lifecycle_state(conn, *target, LifecycleState::Archived)?;
++                changed += 1;
+diff --git a/src/mcp/handlers/lifecycle.rs b/src/mcp/handlers/lifecycle.rs
+index 50a184d..3431276 100644
+--- a/src/mcp/handlers/lifecycle.rs
++++ b/src/mcp/handlers/lifecycle.rs
+@@ -7,0 +8,2 @@ use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
++use crate::storage::queries::update_memory_lifecycle_state;
++use crate::types::LifecycleState;
+@@ -176,4 +178 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-                conn.execute(
+-                    "UPDATE memories SET lifecycle_state = 'stale' WHERE id = ?",
+-                    params![id],
+-                )?;
++                update_memory_lifecycle_state(conn, *id, LifecycleState::Stale)?;
+@@ -185,4 +184 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-                conn.execute(
+-                    "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ?",
+-                    params![id],
+-                )?;
++                update_memory_lifecycle_state(conn, *id, LifecycleState::Archived)?;
+@@ -235,0 +232,4 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
++    let lifecycle_state = match state.parse::<LifecycleState>() {
++        Ok(state) => state,
++        Err(_) => return json!({"error": "state must be one of: active, stale, archived"}),
++    };
+@@ -239,7 +239,6 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
+-            let updated = conn.execute(
+-                "UPDATE memories SET lifecycle_state = ? WHERE id = ? AND valid_to IS NULL",
+-                params![state, id],
+-            )?;
+-
+-            if updated == 0 {
+-                return Ok(json!({"error": "Memory not found"}));
++            match update_memory_lifecycle_state(conn, id, lifecycle_state) {
++                Ok(_) => {}
++                Err(crate::error::EngramError::NotFound(_)) => {
++                    return Ok(json!({"error": "Memory not found"}));
++                }
++                Err(e) => return Err(e),
+@@ -485 +484,2 @@ mod lifecycle_tests {
+-        ctx.storage
++        let memory_id = ctx
++            .storage
+@@ -493 +493 @@ mod lifecycle_tests {
+-                Ok(())
++                Ok(conn.last_insert_rowid())
+@@ -533,0 +534,36 @@ mod lifecycle_tests {
++
++        let update_event_count: i64 = ctx
++            .storage
++            .with_connection(|conn| {
++                let n: i64 = conn.query_row(
++                    "SELECT COUNT(*) FROM memory_events
++                     WHERE memory_id = ?1
++                       AND data LIKE '%lifecycle_state%'",
++                    rusqlite::params![memory_id],
++                    |row| row.get(0),
++                )?;
++                Ok(n)
++            })
++            .expect("query memory_events");
++
++        assert_eq!(
++            update_event_count, 1,
++            "expected one memory update event for lifecycle_state"
++        );
++
++        let version_count: i64 = ctx
++            .storage
++            .with_connection(|conn| {
++                let n: i64 = conn.query_row(
++                    "SELECT COUNT(*) FROM memory_versions WHERE memory_id = ?1",
++                    rusqlite::params![memory_id],
++                    |row| row.get(0),
++                )?;
++                Ok(n)
++            })
++            .expect("query memory_versions");
++
++        assert_eq!(
++            version_count, 1,
++            "expected lifecycle transition to create a memory version"
++        );
+diff --git a/src/storage/queries/lifecycle.rs b/src/storage/queries/lifecycle.rs
+new file mode 100644
+index 0000000..e4cacb7
+--- /dev/null
++++ b/src/storage/queries/lifecycle.rs
+@@ -0,0 +1,79 @@
++use rusqlite::{params, Connection};
++
++use super::{load_tags, memory_from_row, record_event, MemoryEventType};
++use crate::error::{EngramError, Result};
++use crate::types::{LifecycleState, Memory};
++
++fn get_current_memory_including_expired(conn: &Connection, id: i64) -> Result<Memory> {
++    let mut stmt = conn.prepare_cached(
++        "SELECT id, content, memory_type, importance, access_count,
++                created_at, updated_at, last_accessed_at, owner_id,
++                visibility, version, has_embedding, metadata,
++                scope_type, scope_id, workspace, tier, expires_at, content_hash,
++                event_time, event_duration_seconds, trigger_pattern, procedure_success_count,
++                procedure_failure_count, summary_of_id, lifecycle_state, media_url
++         FROM memories
++         WHERE id = ? AND valid_to IS NULL",
++    )?;
++
++    let mut memory = stmt
++        .query_row(params![id], memory_from_row)
++        .map_err(|_| EngramError::NotFound(id))?;
++    memory.tags = load_tags(conn, id)?;
++
++    Ok(memory)
++}
++
++/// Update a memory lifecycle state with normal update bookkeeping.
++pub fn update_memory_lifecycle_state(
++    conn: &Connection,
++    id: i64,
++    lifecycle_state: LifecycleState,
++) -> Result<Memory> {
++    let current = get_current_memory_including_expired(conn, id)?;
++    let now = chrono::Utc::now().to_rfc3339();
++    let lifecycle_state_value = lifecycle_state.to_string();
++
++    let updated = conn.execute(
++        "UPDATE memories
++         SET lifecycle_state = ?1,
++             updated_at = ?2,
++             version = version + 1
++         WHERE id = ?3
++           AND valid_to IS NULL",
++        params![&lifecycle_state_value, &now, id],
++    )?;
++
++    if updated == 0 {
++        return Err(EngramError::NotFound(id));
++    }
++
++    let tags_json = serde_json::to_string(&current.tags)?;
++    let metadata_json = serde_json::to_string(&current.metadata)?;
++    conn.execute(
++        "INSERT INTO memory_versions (memory_id, version, content, tags, metadata, created_at)
++         VALUES (?, (SELECT version FROM memories WHERE id = ?), ?, ?, ?, ?)",
++        params![id, id, &current.content, tags_json, metadata_json, &now],
++    )?;
++
++    record_event(
++        conn,
++        MemoryEventType::Updated,
++        Some(id),
++        None,
++        serde_json::json!({
++            "changed_fields": ["lifecycle_state"],
++            "lifecycle_state": {
++                "from": current.lifecycle_state.to_string(),
++                "to": lifecycle_state_value,
++            },
++        }),
++    )?;
++
++    conn.execute(
++        "UPDATE sync_state SET pending_changes = pending_changes + 1, version = (SELECT MAX(id) FROM memory_events) WHERE id = 1",
++        [],
++    )?;
++
++    get_current_memory_including_expired(conn, id)
++}
+diff --git a/src/storage/queries/mod.rs b/src/storage/queries/mod.rs
+index e3544e7..a1a1c0b 100644
+--- a/src/storage/queries/mod.rs
++++ b/src/storage/queries/mod.rs
+@@ -25,0 +26,3 @@ pub use maintenance::*;
++mod lifecycle;
++pub use lifecycle::*;
++
+diff --git a/src/storage/queries/tests.rs b/src/storage/queries/tests.rs
+index 601f411..2124b97 100644
+--- a/src/storage/queries/tests.rs
++++ b/src/storage/queries/tests.rs
+@@ -1506,0 +1507,67 @@ fn test_update_memory_recalculates_hash() {
++#[test]
++fn test_update_memory_lifecycle_state_records_update_side_effects() {
++    let storage = Storage::open_in_memory().unwrap();
++
++    storage
++        .with_transaction(|conn| {
++            let memory = create_memory(
++                conn,
++                &CreateMemoryInput {
++                    content: "Lifecycle candidate".to_string(),
++                    memory_type: MemoryType::Note,
++                    tags: vec![],
++                    metadata: HashMap::new(),
++                    importance: None,
++                    scope: Default::default(),
++                    workspace: None,
++                    tier: Default::default(),
++                    defer_embedding: true,
++                    ttl_seconds: None,
++                    dedup_mode: Default::default(),
++                    dedup_threshold: None,
++                    event_time: None,
++                    event_duration_seconds: None,
++                    trigger_pattern: None,
++                    summary_of_id: None,
++                    media_url: None,
++                },
++            )?;
++            let event_count_before: i64 =
++                conn.query_row("SELECT COUNT(*) FROM memory_events", [], |row| row.get(0))?;
++            let version_count_before: i64 = conn.query_row(
++                "SELECT COUNT(*) FROM memory_versions WHERE memory_id = ?1",
++                params![memory.id],
++                |row| row.get(0),
++            )?;
++
++            let updated = update_memory_lifecycle_state(conn, memory.id, LifecycleState::Archived)?;
++
++            assert_eq!(updated.lifecycle_state, LifecycleState::Archived);
++            assert_eq!(updated.version, memory.version + 1);
++
++            let event_count_after: i64 =
++                conn.query_row("SELECT COUNT(*) FROM memory_events", [], |row| row.get(0))?;
++            assert_eq!(event_count_after, event_count_before + 1);
++
++            let version_count_after: i64 = conn.query_row(
++                "SELECT COUNT(*) FROM memory_versions WHERE memory_id = ?1",
++                params![memory.id],
++                |row| row.get(0),
++            )?;
++            assert_eq!(version_count_after, version_count_before + 1);
++
++            let changed_fields: String = conn.query_row(
++                "SELECT data FROM memory_events
++                 WHERE memory_id = ?1
++                 ORDER BY id DESC
++                 LIMIT 1",
++                params![memory.id],
++                |row| row.get(0),
++            )?;
++            assert!(changed_fields.contains("lifecycle_state"));
++
++            Ok(())
++        })
++        .unwrap();
++}
++
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.
