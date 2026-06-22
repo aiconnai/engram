@@ -20,7 +20,7 @@
 
 ## Contexto e Motivação
 
-O usuário está usando Claude Code CLI e Grok Build TUI side-by-side para comparar workflows agentic em terminal. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI.
+O usuário está usando Claude Code CLI e Gemini Flash 3.5 side-by-side para comparar workflows agentic em terminal. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI.
 
 Engram é posicionado de forma única porque ele *é* o Memory Manager para agentes e para times que acumulam contexto proprietário mais rápido do que conseguem organizá-lo manualmente. O harness de desenvolvimento do próprio engram pode dogfood o produto (futuro).
 
@@ -40,7 +40,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - [x] `bin/bootstrap.sh` — script de orientação (read-only, rápido, determinístico)
 - [x] `bin/doctor.sh` — consistência do harness
 - [x] `bin/sensors.sh` — wrapper sobre `just ci` + doctor + engram-specific
-- [x] `bin/review-gate.sh` — generalizado para claude/grok/etc, com prompt engineering, continuity, versioning, timeout
+- [x] `bin/review-gate.sh` — generalizado para claude/gemini/etc, com prompt engineering, continuity, versioning, timeout
 - [x] `bin/check-commit-msg.sh` — validador de commits
 - [x] `bin/check-pr-title.sh` — validador de títulos de PR sem o marcador `[codex]`
 - [x] `docs/harness/known-issues/2026-05-31-grpc-transport-port-bind.md` — limitação formal para sensor `grpc-transport`
@@ -57,7 +57,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 ## Últimas decisões registradas
 
 - Harness é **complementar** aos gates existentes (`just ci`, pre-commit, GitHub Actions). Não substitui — adiciona memória persistida, review cross-CLI, e disciplina de processo.
-- Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque Grok Build TUI e Claude Code CLI estão sendo usados side-by-side.
+- Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque Gemini Flash 3.5 e Claude Code CLI estão sendo usados side-by-side.
 - Dogfooding com o próprio engram (via MCP + hooks) é objetivo explícito de longo prazo, guiado por RFC 0001, mas fora do escopo de v0 bootstrap.
 - Invariants do harness são separados dos data invariants (`INVARIANTS.md` na raiz) para manter clareza.
 - 2026-06-08: `ENGRA-103` aberto no Huly para `memory_digest`; RFC 0008 define a ferramenta como digest read-only, determinístico, sem schema novo e com provenance explícita.
@@ -248,6 +248,34 @@ Verification:
 
 - `rtk bash docs/harness/bin/doctor.sh` — PASS.
 - `rtk git diff --check` — PASS.
+
+## Reviewer CLI substitution — 2026-06-22
+
+- Active cross-CLI review guidance now uses Gemini Flash 3.5 instead of Grok.
+- `docs/harness/bin/review-gate.sh` documents `REVIEWER_CLI=gemini` and points
+  pre/post gate handoff text at Gemini Flash 3.5.
+- `docs/harness/README.md` now describes the current reviewer pairing as Claude
+  Code + Gemini Flash 3.5 and includes a Gemini CLI non-interactive example.
+- Historical dated notes that mention Grok remain as historical records rather
+  than being rewritten.
+- Review Canvas:
+  `docs/harness/canvas/2026-06-22-reviewer-cli-gemini-substitution.md`.
+
+Verification:
+
+- `rtk gemini --help` — PASS; local Gemini CLI is installed and supports
+  non-interactive prompts with `-m/--model`.
+- `rtk gemini -m gemini-3.5-flash "Return exactly OK"` — BLOCKED by local
+  Google account licensing (`SUBSCRIPTION_REQUIRED`), so Gemini could not be
+  used for this post-review run.
+- `rtk bash -n docs/harness/bin/review-gate.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS, full gate
+  (`make ci + pr-title-policy + harness doctor`).
+- Post-review artifact:
+  `docs/harness/reviews/2026-06-22-reviewer-cli-gemini-substitution-v3-post.md`;
+  enforced with `review-gate.sh`, `REVIEW_VERDICT: PASS`.
 
 ## Próximos passos imediatos
 
