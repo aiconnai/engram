@@ -1,179 +1,250 @@
-# Design: Spacing-Effect Stability for Memory Decay
+# Design: Spacing-Effect Stability for Memory Retention
 
-**Status:** Approved (design)
+**Status:** Approved (design) — rewritten after full-spec cross-model review
 **Date:** 2026-06-26
 **Author:** Ronaldo Lima (with Claude)
-**Cross-model review:** Codex/GPT (gpt-5.5) + Fugu/Sakana — both AGREE on all four decisions
+**Cross-model review:** Codex/GPT (gpt-5.5) + Fugu/Sakana
+- Four base decisions: both AGREE.
+- Full-spec review: Codex returned NEEDS-REWORK (1 BLOCKER, 3 HIGH) — all valid, all addressed below.
+- Revised scope (A3) + refinements: both independently PICK A3 with the same corrections.
 **Origin:** Comparative analysis of MemPalace (github.com/MemPalace/mempalace), which
-implements the spacing effect (Cepeda et al. 2006) on graph connections. This adapts
-the idea to Engram's per-memory salience model.
+implements the spacing effect (Cepeda et al. 2006) on graph connections. This adapts the
+idea to Engram's per-memory salience + lifecycle model.
 
 ---
 
 ## Problem
 
-Engram's recency decay is uniform: every memory decays with a fixed 14-day half-life.
+Engram's memory retention has two independent controls, and the decay control is uniform.
+
+The recency component of the salience score decays with a fixed 14-day half-life for every
+memory:
 
 ```rust
-// src/intelligence/salience.rs (3 call sites: ~230, ~417, ~710)
-recency = 0.5_f32.powf(days_since_access / 14.0)
+// src/intelligence/salience.rs:230 (and two stats-loop copies at ~417, ~710)
+let decay = 0.5_f32.powf(days_since_access / 14.0);  // recency_half_life_days = 14.0
 ```
 
-This contradicts the cognitive reality that **distributed (spaced) reinforcement builds
-more durable memory than massed (bursty) reinforcement** (Cepeda et al. 2006, "Distributed
-practice in verbal recall tasks"). A memory accessed 50 times in 5 minutes is treated
-identically to one accessed 50 times over 50 days. The first is a transient spike; the
-second is genuinely important. The current model cannot tell them apart, so durability
-is not earned — it is uniform.
+This contradicts the cognitive reality that **distributed (spaced) reinforcement builds more
+durable memory than massed (bursty) reinforcement** (Cepeda et al. 2006). A memory accessed
+50 times in 5 minutes is treated identically to one accessed 50 times over 50 days. The first
+is a transient spike; the second is genuinely important. The current model cannot tell them
+apart — durability is uniform, not earned.
+
+### Critical finding: where retention is actually decided (verified against code)
+
+`suggest_lifecycle_state` (`salience.rs:254-278`) gates archival on **two independent
+variables joined by AND**:
+
+```rust
+let days_inactive = (now - last_access).num_days();   // pure wall-clock
+if score < 0.2 && days_inactive >= 90 { return Archived; }   // archive_threshold_days = 90
+if score < 0.4 || days_inactive >= 30 { return Stale; }      // stale_threshold_days = 30
+```
+
+The salience `score` is weighted and floored:
+`score = recency*0.30 + frequency*0.20 + importance*0.30 + feedback*0.20`, then `.max(0.05)`.
+
+**The consequence (both reviewers verified this against the code):** a default memory
+(`importance=0.5`, `feedback=0.5`) already scores ~0.25 from importance+feedback *alone*
+(0.15 + 0.10), before recency, and the never-accessed frequency base adds ~0.02 → ~0.27.
+The `score < 0.2` archive gate is therefore **unreachable for any typical memory**. In
+practice, **only the `days_inactive >= 90` gate drives archival.**
+
+Since `stability` (as originally specced) only lengthens the *recency* component (weight
+0.30) and does **not** touch `days_inactive` (wall-clock), a stability feature that changes
+only the decay formula has **almost no effect on retention** — it would reorder search
+results (ranking) without protecting durable memories from archival. That betrays the
+feature's premise: Cepeda is about what *survives*, not display order.
+
+> One precise caveat (Fugu + Codex): the score gate is not universally dead. A memory with
+> `importance=0` AND `feedback=0` floors at 0.05 and *can* archive via score. "Only
+> `days_inactive` matters" holds for **typical** memories (the ones that matter here).
 
 ## Goal
 
-Introduce a per-memory `stability` factor that lengthens the effective half-life **only**
-when reinforcement is genuinely spaced over time, with diminishing returns and a hard
-ceiling (no immortal memories).
+Introduce a per-memory `stability` factor, earned only through genuinely spaced reinforcement,
+that delivers **retention** by acting where retention is actually decided. Stability does two
+things:
 
-New decay formula:
+1. Lengthens the effective recency half-life: `recency = 0.5^(days_since_access / (14 * stability))`
+   — improves **ranking** of durable memories.
+2. Stretches the **archive** inactivity threshold: `effective_archive_days = min(180, 90 * stability)`
+   — delivers **retention** by acting on the gate that actually governs archival.
 
-```
-recency = 0.5 ^ (days_since_access / (14 * stability))
-```
-
-`stability` defaults to `1.0` (identical to today's behavior) and grows toward a ceiling
-of `4.0` (max effective half-life = 56 days) as the memory is used in a spaced manner.
+`stability` defaults to `1.0` (behavior identical to today on both axes) and grows toward a
+ceiling of `4.0`. With the cap, a maximally-reinforced memory survives up to 180 days of
+inactivity before becoming archive-eligible (vs. 90 today), and ranks as if its half-life were
+56 days.
 
 ## Non-goals
 
-- **Graph connection stability** (halls/tunnels, as MemPalace does it). Engram does not
-  currently use connection strength in memory decay, so it would be inert. Deferred to a
-  future phase, best bundled with "coactivation as a search rank signal" (separate roadmap item).
-- **Retroactive stabilization of existing memories.** See Migration below — existing rows
-  start neutral. A retroactive re-stabilization command is explicitly out of scope here and,
-  if ever built, must be a separate opt-in admin command with audit/provenance, never inside
-  this migration.
-- **Replacing `importance`.** Stability rewards *demonstrated spaced use*. Protecting an
-  old high-value memory that hasn't been re-used is the job of the existing `importance`
-  / `boost` fields, not stability. Clean separation of concerns.
+- **Scaling the stale threshold.** Stale stays fixed at 30 days. (Both reviewers, independently.)
+  Stale is a cheap, reversible early-warning / GC / resurfacing signal; archive is the costly,
+  near-terminal one. Scaling stale would suppress the very signal you want on a normal cadence
+  and let stable-but-cold memories stay `Active` too long. Only **archive** stretches.
+- **Stopping passive search from updating recency** (Codex HIGH). Today, a memory merely
+  appearing in search results bumps `last_accessed_at`, and recency feeds ranking/lifecycle —
+  a mild self-reinforcement loop. This is a **pre-existing, orthogonal** issue: it exists
+  today regardless of this feature, and this feature does not make it worse (stability is
+  explicitly NOT incremented by passive exposure — see §2). Fixing the recency-on-impression
+  loop is a separate change to a hot path used system-wide; tracked as a follow-up, out of
+  scope here.
+- **Graph connection stability** (halls/tunnels, as MemPalace does it). Inert in Engram today
+  (connection strength is not used in memory decay). Deferred to a future phase, best bundled
+  with "coactivation as a search rank signal."
+- **Retroactive stabilization of existing memories.** Existing rows start neutral (§6). A
+  retroactive re-stabilization command, if ever wanted, must be a separate opt-in admin command
+  with audit/provenance — never inside this migration.
+- **Replacing `importance`.** Stability rewards *demonstrated spaced use*. Protecting an old
+  high-value memory that has not been re-used is the job of `importance` / `boost`. Clean
+  separation of concerns — reinforced by the eligibility gate in §5.
 
 ---
 
 ## Design
 
-### 1. Scope — per individual memory (Decision 1, both reviewers AGREE)
+### 1. Scope — per individual memory (base Decision 1)
 
-`stability` lives on the `Memory` struct and is applied in `salience.rs::calculate_recency`
-and the two stats-loop call sites. This is where decay already runs and where the effect is
-immediately observable: search reranking, stale/archive lifecycle decisions, context-budget
-allocation, and priority-queue ordering all consume the salience score.
+`stability` lives on the `Memory` struct. It is consumed in two places in `salience.rs`:
+`calculate_recency` (decay formula) and `suggest_lifecycle_state` (archive threshold). The
+salience surface already drives search reranking, lifecycle decisions, context-budget
+allocation, and the priority queue.
 
-### 2. Reinforcement trigger — "was USED", not "was fetched" (Decision 2, both reviewers AGREE)
+### 2. Reinforcement trigger — "was USED", not "was fetched" (base Decision 2)
 
-The signal that increments `stability` is **evidence of engagement, not exposure**. Fugu's
-framing: *"impressions are not endorsements."*
+The signal that increments `stability` is **evidence of engagement, not exposure** — Fugu:
+*"impressions are not endorsements."*
 
-**Increments stability** (subject to the temporal gate below):
+**Increments stability** (subject to the temporal gate, §4):
 - Explicit `memory_get` of a specific memory
 - `memory_boost`
 - Positive `memory_feedback` ("useful")
-- A search result that is subsequently expanded/cited downstream (the "click", not the "impression")
+- A search result subsequently expanded/cited downstream (the "click", Phase 2)
 
-**Updates recency only (NOT stability):**
+**Does NOT increment stability:**
 - A memory merely appearing in a search result list (passive exposure)
 
-**Rationale.** Salience drives the reranker. If passive search appearance fed back into
-stability, high-ranked memories would rank ever higher in a positive-feedback loop —
-entrenching winners regardless of real value (flagged independently by both reviewers).
+**Rationale.** Salience drives the reranker. If passive search appearance fed stability,
+high-ranked memories would rank ever higher in a positive-feedback loop, entrenching winners
+regardless of value. (Independently flagged by both reviewers.)
 
 **Known gap + mitigation (Fugu).** A memory that is genuinely useful but *only ever consumed
-inside search result lists* (never a discrete `memory_get`) would never gain stability and
-could decay out — a false negative masked by the recency bump. Mitigation: where downstream
-expansion/citation can be captured, treat it as engagement. Where it cannot yet be captured,
-**ship the explicit-only trigger now but log impression-vs-engagement separately** so the
-threshold can be tuned with real data. (See "Phased delivery".)
+inside search result lists* (never a discrete `memory_get`) would not gain stability and
+could eventually archive — a false negative masked by the recency bump. Mitigation: where
+downstream expansion/citation can be captured, treat it as engagement (Phase 2). Until then,
+**ship the explicit-only trigger and log impression-vs-engagement counts separately** so the
+policy can be tuned with real data.
 
-### 3. Stability curve — conservative, diminishing returns, capped (Decision 3, both reviewers AGREE → A)
+### 3. Stability curve — conservative, diminishing returns, capped (base Decision 3)
 
 ```
 stability ∈ [1.0, 4.0],  default 1.0
 
-per reinforcing use (when temporal gate passes):
+per reinforcing use (when temporal gate passes AND eligibility holds):
     stability += 0.15 * (1 - stability / 4.0)
-
-decay:
-    recency = 0.5 ^ (days_since_access / (14 * stability))
 ```
 
-- **Increment `0.15`** (Codex: lowered from an initial 0.2 — with hourly reinforcement
-  allowed, 0.2 climbs too fast for automation loops).
+- **Increment `0.15`** (Codex: lowered from 0.2 — with hourly reinforcement allowed, 0.2
+  climbs too fast for automation loops).
 - **Diminishing returns** `(1 - stability/4.0)`: early reinforcements buy the most durability,
-  later ones almost none — the shape of the Cepeda retention curve. This is the property that
-  rules out option C (flat linear `+= 0.1`, which makes every use worth the same and is just
-  MemPalace mimicry) and option B (ceiling 10.0 / 140-day half-life — a "clutter generator"
-  that keeps a finished project's memories near-full-salience for ~5 months).
+  later ones almost none — the shape of the Cepeda retention curve. This rules out option C
+  (flat `+= 0.1`, every use worth the same — mere MemPalace mimicry) and option B (ceiling
+  10.0 / 140-day half-life — a clutter generator keeping finished-project memories near-full
+  salience for ~5 months).
+- **Ceiling 4.0.** Bounds the recency half-life at 56 days and (with the §5 cap) archive at
+  180 days. No immortal memories.
 
-**Numerical validation against existing lifecycle thresholds (Fugu).** The ceiling of 4.0
-coheres cleanly with the existing `min_salience = 0.05` floor and the 30-day stale / 90-day
-archive thresholds:
+### 4. Temporal gate — 1h spacing AND a true rolling 24h cap (Decision 3 refinement, Fugu)
 
-| Memory | recency @ 90 days | Outcome |
-|---|---|---|
-| Max-reinforced (stability=4) | `0.5^(90/56) ≈ 0.33` | Survives the 90-day archive window — correct: genuinely core memories should not auto-archive |
-| Default (stability=1) | `0.5^(90/14) ≈ 0.012` | Below the 0.05 floor — archived as intended |
-
-The two regimes separate cleanly, and even a maxed memory keeps decaying (half-life 56 < 90)
-rather than going immortal. **The ceiling stays at 4.0 precisely for this reason.**
-
-### 4. Temporal gate — 1h spacing AND a daily cap (Decision 3 refinement, Fugu)
-
-A reinforcement increments stability only when **both** hold:
+A reinforcement increments stability only when **all** hold:
 
 1. `>= 1h` since the last *reinforcing* use of this memory, AND
-2. `<= 3` reinforcements counted in the rolling previous 24h.
+2. `< 3` reinforcing uses in the **rolling** previous 24h, AND
+3. eligibility: `importance >= 0.3` (see §5).
 
-**Rationale (Fugu).** The 1h gate alone is insufficient: a long agent session can fire
-10–16 increments in a single day, rushing a memory to ceiling in 2–3 days — which is
-*massed* practice, the exact opposite of the spacing effect we are paying for. The daily
-cap blocks burst-gaming at trivial cost and preserves Cepeda's "spaced across distinct
-time" intent.
+**Rationale (Fugu).** The 1h gate alone is insufficient: a long agent session can fire 10–16
+increments in a single day, rushing a memory to ceiling in 2–3 days — *massed* practice, the
+opposite of what we are paying for. The daily cap blocks burst-gaming.
 
-To enforce the daily cap we need to know how many reinforcements happened in the last 24h.
-Two implementation options (resolved in the plan, not here):
-- (a) A `last_reinforced_at` timestamp + a small rolling counter (`reinforcement_count_24h`
-  + window start) on the memory row, or
-- (b) Derive the count from the existing `memory_events` audit table (EventType::Accessed),
-  filtered to reinforcing event kinds in the last 24h.
+**Bookkeeping — dedicated table (resolves the prior open question; Codex HIGH).** The earlier
+draft considered (a) a counter + window-start column or (b) deriving from `memory_events`.
+Both are rejected:
+- A counter + fixed window-start is a **tumbling** window, not rolling — it permits bursts
+  straddling the boundary (Codex).
+- `memory_events` / the realtime `EventType` enum (`MemoryCreated/Updated/Deleted/Crossref*`)
+  has **no `Accessed`/reinforcing variant**, and the sync event log is **clearable**
+  (`memory_events_clear`) — deriving a durability signal from a clearable log that doesn't
+  even distinguish reinforcing access from passive exposure is unsafe (verified in code).
 
-Option (b) avoids new columns if `memory_events` already records enough to distinguish
-reinforcing access from passive exposure; otherwise (a) is the fallback. This is the main
-open implementation question for the plan.
-
-### 5. Migration — neutral backfill (Decision 4, both reviewers AGREE → A)
-
-Existing rows get `stability = 1.0`. Their decay behavior is **identical to today** until
-they earn stability from real future use. A schema migration must not silently change the
-observable decay behavior of existing data; `access_count` is an untimestamped scalar that
-structurally cannot distinguish spaced from massed access, so seeding stability from it
-(options B/C) would bake the very massed/spaced confound this feature exists to avoid into
-the starting state.
-
-**Schema (migration 45).** Both reviewers independently proposed the identical constraint:
+Resolution: a dedicated append-only table, indexed for the rolling-window query:
 
 ```sql
-stability REAL NOT NULL DEFAULT 1.0 CHECK (stability >= 1.0 AND stability <= 4.0)
+CREATE TABLE memory_reinforcements (
+    memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    reinforced_at TEXT NOT NULL          -- RFC3339 UTC
+);
+CREATE INDEX idx_reinforcements_mem_time ON memory_reinforcements(memory_id, reinforced_at);
 ```
 
-**SQLite caveat (implementation note).** Engram's migrations use
-`ALTER TABLE memories ADD COLUMN ...` (see `migrations.rs` precedent: `quality_score`,
-`embedding_model`, `media_url`, etc.). SQLite's `ALTER TABLE ADD COLUMN` accepts a
-`DEFAULT` and `NOT NULL`, but **does not enforce a `CHECK` added this way in older
-versions / cannot always add table-level CHECKs via ADD COLUMN**. Resolution for the plan:
-- Apply `... ADD COLUMN stability REAL NOT NULL DEFAULT 1.0` in migration 45 (additive,
-  idempotent DDL), and
-- Enforce the `[1.0, 4.0]` bound at the **application layer** in the single update path
-  (clamp before write), since all stability writes funnel through one reinforcement function.
-- Optionally add a `CHECK` via a column-level constraint if the project's minimum SQLite
-  version supports it cleanly; do not block the migration on it.
+The 1h-gap and rolling-24h-count checks are both exact `COUNT`/`MAX` queries over this table
+for the given `memory_id`. Optionally cache `last_reinforced_at` on the memory row for the
+hot 1h check; the table remains the source of truth. Old rows (> 24h) may be pruned by the
+existing lifecycle/gardening pass — they no longer affect any gate.
 
-The clamp-at-write-site is the load-bearing invariant; the DB CHECK is defense-in-depth.
+### 5. Archive-threshold modulation — the retention mechanism (revised scope: A3)
+
+This is the core change that makes the feature deliver retention rather than mere reordering.
+
+```rust
+// in suggest_lifecycle_state, replacing the constant 90:
+let effective_archive_days = (90.0 * memory.stability as f64).min(180.0) as i64;
+let effective_stale_days   = 30;  // UNCHANGED — see Non-goals
+
+if score < 0.2 && days_inactive >= effective_archive_days { return Archived; }
+if score < 0.4 || days_inactive >= effective_stale_days   { return Stale; }
+```
+
+**Why A3 over A1 (both reviewers PICK A3).** A1 (modulate only the recency component of the
+score) is, per the Critical Finding, a ranking feature with near-zero archival effect for
+typical memories — it does not honor the durability premise. A3 acts on `days_inactive`, the
+gate that actually governs archival, so reinforced memories are genuinely retained longer.
+
+**Perverse effects identified and mitigated (both reviewers):**
+
+| Risk | Mitigation in this design |
+|---|---|
+| **Transient reinforcement → false durability.** One spaced burst lifts stability to ~3, then the memory goes cold but survives ~270 days and isn't even flagged Stale. (Fugu: "sharpest problem".) | (1) **Cap at 180 days** (Codex) bounds the blast radius. (2) **Stale stays at 30** — a transiently-reinforced-then-abandoned memory is still flagged Stale on the normal cadence for GC/resurfacing workflows even while final archival is deferred. |
+| **Stability ⊥ importance** — scaling `days_inactive` grants longevity to low-value memories whose score gate *is* live. | **Eligibility gate `importance >= 0.3`** (Fugu): stability cannot grow for low-importance memories, so spacing can't buy longevity for junk. |
+| **Double protection** — stability in both recency-score and archive-threshold. | Acceptable and intended: the score path is near-inert for typical memories (Critical Finding), so the threshold path carries the effect. Documented, not hidden. |
+| **Near-dead score gate left in place** — `score < 0.2` rarely fires. | Left as-is (changing the score gate / weights is out of scope and risky), but explicitly noted as a latent quirk so a future pass can revisit it. |
+
+**Phase-2 consideration (deferred):** decaying stability itself when a memory goes cold (so
+transient durability erodes) would further tighten risk #1, but adds a second decay process;
+the 180-cap + stale-at-30 combination is sufficient for Phase 1.
+
+### 6. Migration — neutral backfill (base Decision 4)
+
+Existing rows get `stability = 1.0`: decay AND archive behavior **identical to today** until a
+memory earns stability from real future use. A schema migration must not silently change the
+observable lifecycle of existing data; `access_count` is an untimestamped scalar that cannot
+distinguish spaced from massed access, so seeding from it would bake the massed/spaced confound
+into the starting state.
+
+**Schema (migration 45).** Engram links SQLite via `rusqlite 0.31` with the `bundled`
+feature (`libsqlite3-sys 0.28.0` ⇒ SQLite ~3.45.x) — the bundled version is what runs, not
+the system CLI. Column-level `CHECK` added via `ALTER TABLE ADD COLUMN` is long-standing
+SQLite functionality (not a recent addition), so the bundled version supports it. Confirmed
+empirically on the system CLI (3.51): an out-of-range insert is rejected with "CHECK
+constraint failed". The earlier "SQLite can't do this" caveat was wrong (Codex HIGH). The DB
+constraint is therefore the **default**, not optional:
+
+```sql
+ALTER TABLE memories
+  ADD COLUMN stability REAL NOT NULL DEFAULT 1.0 CHECK (stability >= 1.0 AND stability <= 4.0);
+```
+
+Plus the `memory_reinforcements` table from §4. Migration is additive and idempotent.
 
 ---
 
@@ -181,43 +252,61 @@ The clamp-at-write-site is the load-bearing invariant; the DB CHECK is defense-i
 
 | File | Change |
 |---|---|
-| `src/types.rs` | Add `stability: f32` to `Memory` (default 1.0 via serde) |
-| `src/storage/migrations.rs` | Migration 45: `ADD COLUMN stability REAL NOT NULL DEFAULT 1.0` |
-| `src/storage/queries/core.rs` | `memory_from_row` reads `stability`; insert/update paths write it |
-| `src/intelligence/salience.rs` | `calculate_recency` + 2 stats loops use `14 * stability`; new reinforcement fn with the temporal gate + diminishing-returns increment + clamp |
-| Reinforcement call sites (`memory_get`, `memory_boost`, `memory_feedback` handlers) | Invoke the reinforcement fn (explicit-use path only) |
-| `SalienceConfig` | New tunables: `stability_max` (4.0), `stability_increment` (0.15), `reinforcement_min_gap_hours` (1.0), `reinforcement_daily_cap` (3) |
-
-The three duplicated decay formulas should be collapsed into one shared helper as part of
-this work (they must stay in sync once `stability` is a factor).
-
----
+| `src/types.rs` | Add `stability: f32` to `Memory` (serde default 1.0); clamp on deserialize/parse boundary |
+| `src/storage/migrations.rs` | Migration 45: `ADD COLUMN stability ... CHECK (...)` + create `memory_reinforcements` table & index |
+| `src/storage/queries/core.rs` | `memory_from_row` reads `stability`; **all** insert/update SELECT/INSERT column lists include it; clamp before write |
+| `src/intelligence/salience.rs` | `calculate_recency` uses `14 * stability`; `suggest_lifecycle_state` uses `effective_archive_days`; new reinforcement fn (gate + eligibility + diminishing-returns increment + clamp); **collapse the 3 duplicated decay formulas into one shared helper** so they can't drift |
+| `salience.rs` stats loops (`get_salience_stats*`, ~417, ~710) | Their inline `SELECT` must add `stability`; use the shared decay helper |
+| `get_memory_salience_with_feedback` (minimal `Memory` construction) | Must populate `stability` or it silently reads 1.0 |
+| Reinforcement call sites (`memory_get`, `memory_boost`, `memory_feedback` handlers) | Invoke the reinforcement fn (explicit-use path only); append to `memory_reinforcements` |
+| Alternate backends (`turso_backend.rs`, `meilisearch_backend.rs`) + snapshot/import/export + test fixtures | Map/round-trip the new column |
+| `memory_get_public` | Decide whether a public read counts as reinforcement (proposed: **no** — public reads are impressions) |
+| `SalienceConfig` | New tunables: `stability_max` (4.0), `stability_increment` (0.15), `reinforcement_min_gap_hours` (1.0), `reinforcement_daily_cap` (3), `archive_days_cap` (180), `stability_min_importance` (0.3) |
 
 ## Testing
 
-- **Unit (salience):** default stability ⇒ identical curve to current (regression guard);
-  stability=4 ⇒ 56-day half-life; the 90-day threshold-coherence table above as explicit assertions.
-- **Unit (reinforcement gate):** <1h gap ⇒ no increment; >1h gap ⇒ increment; 4th use in
-  24h ⇒ capped; diminishing returns shrink each step; clamp holds at 4.0.
-- **Unit (trigger):** explicit get/boost/feedback increment; simulated passive search
-  appearance does not.
-- **Migration:** existing rows get exactly 1.0; idempotent re-run; no NULLs; out-of-range
-  write is clamped (and rejected by CHECK if present).
-- **Property:** stability is monotonically non-decreasing under reinforcement and never
-  exceeds 4.0 nor drops below 1.0.
+- **Regression (load-bearing):** default `stability=1.0` ⇒ recency curve AND archive behavior
+  **byte-identical** to current. This is the guard that the migration changes nothing for
+  existing data.
+- **Lifecycle (weighted, not raw recency)** (Codex MED): assert on the composite `score` +
+  `days_inactive` AND-gate, e.g. a `stability=2` memory at 120 days inactive is NOT archived
+  (effective 180), a `stability=1` memory at 95 days IS archive-eligible by days but only
+  Stale because score ≥ 0.2 for default importance — encode the Critical Finding as tests.
+- **Archive cap:** `stability=4` ⇒ `effective_archive_days = 180` (not 360).
+- **Stale unchanged:** stale at 30 days regardless of stability.
+- **Eligibility:** `importance < 0.3` ⇒ stability never increments.
+- **Reinforcement gate:** <1h gap ⇒ no increment; ≥1h ⇒ increment; 3rd within rolling 24h ⇒
+  capped; rolling window (not tumbling) verified with timestamps straddling a boundary.
+- **Curve:** diminishing returns shrink each step; clamp holds at 4.0; monotonic non-decreasing.
+- **Trigger:** explicit get/boost/feedback increment AND append a reinforcement row; simulated
+  passive search appearance does neither.
+- **Migration:** existing rows get exactly 1.0; idempotent re-run; no NULLs; out-of-range write
+  rejected by the DB CHECK and by the app clamp (defense-in-depth).
+- **Concurrency** (Codex MED): two concurrent reinforcements of the same memory don't double-
+  count past the cap / corrupt the rolling window.
 
 ## Phased delivery
 
-1. **Phase 1 (this spec):** schema + decay formula + explicit-use reinforcement with the
-   1h/daily-cap gate + neutral migration. Log impression-vs-engagement counts for tuning.
+1. **Phase 1 (this spec):** `stability` column + reinforcements table + decay-formula use +
+   archive-threshold modulation (capped) + eligibility gate + neutral migration. Log
+   impression-vs-engagement counts.
 2. **Phase 2 (later, separate):** downstream expansion/citation as an engagement signal
-   (closes Fugu's search-native-but-used gap); graph-connection stability.
+   (closes the search-native-but-used gap); optional cold-decay of stability; graph-connection
+   stability; revisit the near-dead score gate and the recency-on-impression loop.
 
-## Open questions for the implementation plan
+## Resolved review items (audit trail)
 
-1. Daily-cap bookkeeping: new columns (`last_reinforced_at` + rolling counter) vs. deriving
-   from `memory_events`. Prefer deriving if the event log already distinguishes reinforcing
-   access from passive exposure.
-2. Exact set of handlers that count as "explicit use" vs. "passive" — enumerate against the
-   current call sites that bump `access_count` / `last_accessed_at`.
-3. Whether to expose stability in `memory_get` / stats output for observability.
+- **[BLOCKER]** Numeric lifecycle table used raw recency; archival is a weighted-score AND
+  wall-clock-days gate, and the importance floor makes the score gate near-dead for typical
+  memories → **scope changed A1→A3**; misleading table removed; structural justification added.
+- **[HIGH]** Passive search → recency loop → documented as pre-existing/orthogonal **non-goal**.
+- **[HIGH]** Tumbling-window / clearable-`memory_events` bookkeeping → **dedicated
+  `memory_reinforcements` table** with exact rolling-window queries.
+- **[HIGH]** SQLite CHECK caveat too soft → **verified CHECK works on ADD COLUMN (3.51)**; DB
+  constraint is now the default, app clamp is defense-in-depth.
+- **[MED]** "single write path" fragile → clamp at parse/write boundaries; full backend/fixture
+  list in Affected code.
+- **[MED]** Affected code incomplete → stats SELECTs, `get_memory_salience_with_feedback`,
+  `memory_get_public`, alternate backends added.
+- **[MED]** Tests raw-recency-only → weighted lifecycle + passive non-mutation + concurrency
+  tests added.
