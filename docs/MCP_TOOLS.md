@@ -3760,7 +3760,7 @@ Discover recently created or updated memories. Returns compact previews sorted b
 
 ### `discover_tools`
 
-List available Engram tools by tier and category. Use this to progressively discover capabilities beyond the essential tool set. Returns tool names, descriptions, and tiers.
+List available Engram tools by tier and category. Use this to progressively discover capabilities beyond the essential tool set. The `detail` parameter controls how much per-tool information is returned, from names only up to full input schemas.
 
 - Tier: `essential`
 - Annotations: readOnlyHint
@@ -3771,6 +3771,7 @@ List available Engram tools by tier and category. Use this to progressively disc
 | `tier` | `string` | no | Filter by tier: essential (~20 core tools), standard (~57 common tools), advanced (~104 specialized tools), all (everything) Default: `all`. Allowed: `essential`, `standard`, `advanced`, `all`. |
 | `category` | `string` | no | Filter by category keyword (e.g., 'search', 'graph', 'session', 'identity', 'quality') |
 | `search` | `string` | no | Search tool names and descriptions |
+| `detail` | `string` | no | Per-tool detail level: 'names' (name only, cheapest), 'summary' (name + description + tier, the default), or 'schema' (summary plus the full input schema as a JSON object, so the tool can be called without a separate tools/list round-trip). Default: `summary`. Allowed: `names`, `summary`, `schema`. |
 
 ### `memory_prepare_context`
 

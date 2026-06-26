@@ -966,3 +966,26 @@ Verification:
 - `bash docs/harness/bin/doctor.sh` — PASS.
 - `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
   + PR-title policy + harness doctor).
+
+## discover_tools detail levels — 2026-06-26
+
+- Extended the existing `discover_tools` MCP tool with `detail` levels instead
+  of introducing a redundant discovery tool.
+- `detail: "names"` returns only tool names for cheapest discovery.
+- Omitted `detail` or `detail: "summary"` preserves the existing response shape:
+  name, description and tier.
+- `detail: "schema"` adds the parsed input schema object so agents can call a
+  discovered tool without a second full `tools/list` round-trip.
+- Invalid `detail` values now return an explicit boundary error.
+
+Verification:
+
+- `cargo test --test mcp_protocol_tests discover_tools --locked` — PASS, 5
+  tests passed.
+- `./scripts/generate-mcp-reference.sh --check` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `git diff --check` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate).
+- LSP diagnostics could not be collected because the local LSP transport closed;
+  Rust compiler/test gates are the verification fallback for this session.
+- Codex post-review `docs/harness/reviews/2026-06-26-discover-tools-detail-post.md` — PASS.

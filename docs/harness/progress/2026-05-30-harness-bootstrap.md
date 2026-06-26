@@ -1483,3 +1483,49 @@ records memory versions, sync events, and pending sync-state changes.
   `make ci` + PR-title policy + harness doctor).
 - `rtk bash docs/harness/bin/review-gate.sh post ENGRA-150 --range origin/main..HEAD --review-file docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md`
   — PASS (`REVIEW_VERDICT: PASS`).
+
+## 2026-06-26 — discover_tools detail levels
+
+### Contexto
+
+A avaliação do artigo da Anthropic sobre code execution with MCP indicou que o
+valor real para o Engram não era criar uma nova `mcp_search_tools`, porque o
+Engram já possui `discover_tools`, tiers e artifact handles. O gap mínimo era
+progressive disclosure por nível de detalhe dentro da tool existente.
+
+### Ações realizadas
+
+- `discover_tools` ganhou o parâmetro `detail` com valores `names`, `summary` e
+  `schema`.
+- `summary` é o default e preserva o contrato anterior: `name`, `description` e
+  `tier`.
+- `names` retorna apenas `{ name }` por tool, reduzindo custo para descoberta
+  barata.
+- `schema` retorna o schema de input completo como objeto JSON para permitir que
+  agentes chamem a tool descoberta sem um segundo round-trip de `tools/list`.
+- Valores inválidos de `detail` retornam erro explícito no boundary em vez de
+  fallback silencioso.
+- `docs/MCP_TOOLS.md` foi regenerado a partir da definição MCP canônica.
+
+### Evidência
+
+- `rtk cargo test --test mcp_protocol_tests discover_tools --locked` — PASS, 5
+  tests passed.
+- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate).
+- `rtk bash docs/harness/bin/check-commit-msg.sh --message "feat(mcp): add discover tools detail levels"`
+  — PASS.
+- LSP diagnostics não puderam ser coletados nesta sessão porque o transporte LSP
+  fechou com `Transport closed`; verificação Rust determinística foi usada como
+  fallback.
+
+### Follow-ups separados
+
+- Avaliar cleanup dedicado para o arquivo órfão `src/mcp/tools/discovery.rs`,
+  que não deve ser editado como fonte canônica da tool registry.
+- Criar canvas de decisão separado para `engram mcp export-code-api` antes de
+  qualquer implementação do gerador.
+- Corrigir a contagem aproximada de tools exibida pelo bootstrap em tarefa
+  separada, pois a fonte atual não representa todas as tools por feature/source.

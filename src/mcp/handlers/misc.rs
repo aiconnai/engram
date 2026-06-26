@@ -926,6 +926,17 @@ pub fn meilisearch_config(ctx: &HandlerContext, _params: Value) -> Value {
 
 // ── Tool Discovery ───────────────────────────────────────────────────────────
 
+/// Level of per-tool detail returned by `discover_tools`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DiscoverDetail {
+    /// Only the tool name.
+    Names,
+    /// Name, description, and tier (default; backward-compatible).
+    Summary,
+    /// Summary plus the full input schema as a JSON object.
+    Schema,
+}
+
 /// List available tools by tier, category, or search query.
 pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
     use crate::mcp::tools::{iter_tool_definitions, ToolTier};
@@ -933,6 +944,29 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
     let tier_filter = params.get("tier").and_then(|v| v.as_str());
     let category = params.get("category").and_then(|v| v.as_str());
     let search = params.get("search").and_then(|v| v.as_str());
+
+    // Validate `detail` at the boundary: reject unknown values loudly rather
+    // than silently defaulting, so agents get clear feedback on typos.
+    let detail = match params.get("detail") {
+        None => DiscoverDetail::Summary,
+        Some(value) => match value.as_str() {
+            Some("summary") => DiscoverDetail::Summary,
+            Some("names") => DiscoverDetail::Names,
+            Some("schema") => DiscoverDetail::Schema,
+            Some(other) => {
+                return json!({
+                    "error": format!(
+                        "invalid detail '{other}': expected one of 'names', 'summary', 'schema'"
+                    )
+                });
+            }
+            None => {
+                return json!({
+                    "error": "invalid detail type: expected string value 'names', 'summary', or 'schema'"
+                });
+            }
+        },
+    };
 
     let tools: Vec<Value> = iter_tool_definitions()
         .filter(|def| {
@@ -974,11 +1008,20 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
                 ToolTier::Standard => "standard",
                 ToolTier::Advanced => "advanced",
             };
-            json!({
-                "name": def.name,
-                "description": def.description,
-                "tier": tier_str
-            })
+            match detail {
+                DiscoverDetail::Names => json!({ "name": def.name }),
+                DiscoverDetail::Summary => json!({
+                    "name": def.name,
+                    "description": def.description,
+                    "tier": tier_str
+                }),
+                DiscoverDetail::Schema => json!({
+                    "name": def.name,
+                    "description": def.description,
+                    "tier": tier_str,
+                    "schema": serde_json::from_str::<Value>(def.schema).unwrap_or(json!({}))
+                }),
+            }
         })
         .collect();
 
