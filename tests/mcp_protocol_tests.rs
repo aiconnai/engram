@@ -238,6 +238,51 @@ fn call_tool_json(handler: &TestHandler, id: i64, name: &str, arguments: Value) 
     serde_json::from_str(text).expect("Tool result should contain JSON")
 }
 
+#[test]
+fn test_tools_list_uses_unique_tool_names_from_registry() {
+    use std::collections::BTreeSet;
+
+    let handler = TestHandler::new();
+    let resp = handler.handle_request(make_request(1, methods::LIST_TOOLS, json!({})));
+    assert!(resp.error.is_none(), "tools/list should succeed");
+
+    let result = resp.result.expect("tools/list result");
+    let tools = result["tools"].as_array().expect("tools must be an array");
+    let mut seen = BTreeSet::new();
+    let mut discover_tools_count = 0;
+
+    for tool in tools {
+        let name = tool["name"].as_str().expect("listed tool must have a name");
+        if name == "discover_tools" {
+            discover_tools_count += 1;
+        }
+        assert!(
+            seen.insert(name.to_string()),
+            "tools/list must not contain duplicate tool name: {name}"
+        );
+    }
+
+    assert_eq!(
+        discover_tools_count, 1,
+        "discover_tools must come from the canonical registry exactly once"
+    );
+}
+
+#[test]
+fn test_tool_registry_has_no_orphan_discovery_definition_file() {
+    let orphan = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("mcp")
+        .join("tools")
+        .join("discovery.rs");
+
+    assert!(
+        !orphan.exists(),
+        "tool definitions must live in src/mcp/tools/registry.rs; remove orphan file: {}",
+        orphan.display()
+    );
+}
+
 fn create_memory_for_search(handler: &TestHandler, id: i64, content: &str) -> i64 {
     let created = call_tool_json(
         handler,
