@@ -1,0 +1,17 @@
+schema_version: harness-decision-log-v1
+updated_at: 2026-06-26T11:46:07Z
+entries:
+
+  - id: DEC-0001
+    date: 2026-06-26
+    title: "Evoluir sensor full para execução granular"
+    context: "Wave1: medir melhor rastreabilidade do CI"
+    options:
+    - option: "Full granular stages"
+      pros:
+      - melhor visibilidade de falha
+      - falhas localizadas
+      cons:
+      - perda de paridade textual
+    decision: "sensors.sh full executa etapas fixas (fmt, clippy, test_lib, test_integration, test_integration_watch, doc, ref_check) em vez de monolito just/make ci"
+    rationale: "Permite mapear falhas por etapa e alimentar métricas de tendência"

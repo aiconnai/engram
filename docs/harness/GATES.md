@@ -17,14 +17,64 @@ Ele executa (em ordem):
 | # | Sensor | Comando / Threshold | Action on FAIL |
 |---|--------|---------------------|----------------|
 | 1 | fmt | `cargo fmt --all -- --check` (exit 0) | block; rodar `cargo fmt --all` |
-| 2 | clippy | `cargo clippy --all-targets --all-features -- -D warnings` | block; fix warnings |
-| 3 | test (paridade) | `just ci` (preferencial) ou `make ci` (outra camada equivalente), com lib + integration e CI_FEATURES | block; investigar flakiness ou feature drift |
-| 4 | docs + MCP ref | `./scripts/generate-mcp-reference.sh --check && RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items` | block; atualizar referência ou docs |
-| 5 | harness doctor | `bash docs/harness/bin/doctor.sh` | block; corrigir drift no harness |
-| 6 | PR title policy | `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` rejeita marcador `[codex]` | block; renomear PR/commit de handoff |
-| 7 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
+| 2 | clippy | `cargo clippy --all-targets --no-default-features $CI_REQUIRED_FEATURE_ARGS -- -D warnings` | block; fix warnings |
+| 3 | test_lib | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --lib --tests -- --test-threads=1` | block; investigar flakiness ou feature drift |
+| 4 | test_integration | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --bin engram-server` | block; investigar regressão ou flakiness de integração |
+| 5 | test_integration_watch | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --bin engram-watcher` | block; investigar regressão ou flakiness de integração |
+| 6 | doc | `RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features $CI_REQUIRED_FEATURE_ARGS --no-deps --document-private-items` | block; atualizar docs |
+| 7 | ref_check | `./scripts/generate-mcp-reference.sh --check` | block; atualizar referência MCP |
+| 8 | harness doctor | `bash docs/harness/bin/doctor.sh` | block; corrigir drift no harness |
+| 9 | PR title policy | `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` rejeita marcador `[codex]` | block; renomear PR/commit de handoff |
+| 10 | shell syntax | `doctor.sh` executa `bash -n` nos scripts do harness | block; corrigir sintaxe shell |
+| 11 | shellcheck opcional | `doctor.sh` executa `shellcheck -x` nos scripts quando o binário está instalado | warn se instalado e falhar; skip explícito se ausente |
+| 12 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
 
-O script `sensors.sh` grava o resultado parseável em `docs/harness/.sensors-last` (status, timestamp, exclusões, etc.).
+O script `sensors.sh` grava o resultado parseável mais recente em
+`docs/harness/.sensors-last` (status, timestamp, `duration_sec`, exclusões,
+etc.) e também anexa cada execução em `docs/harness/.sensors-log` para histórico
+de medição.
+
+### Sensors measurement log
+
+`docs/harness/.sensors-log` é JSON Lines append-only e usa
+`schema_version="sensors-log-v1"`. Cada linha deve conter:
+
+- `timestamp` — UTC RFC3339 do fim da execução.
+- `tool` — sempre `sensors`.
+- `mode` — `full`, `quick`, `docs`, `mcp` ou `baseline`.
+- `status` — `pass`, `pass_with_exclusion` ou `fail`.
+- `duration_sec` — duração inteira não negativa.
+- `ci_status` e `doctor_status` — status das duas camadas principais.
+- `ci_steps` — objeto por etapa (`fmt`, `clippy`, `test_lib`, `test_integration`,
+  `test_integration_watch`, `doc`, `ref_check`) com `pass|fail|not_run`.
+- `ci_command` — resumo curto do comando executado, sem logs brutos.
+- `exclusion` — `null` ou `{sensor, known_issue, reason}`.
+- `artifacts` — inclui `docs/harness/.sensors-last` como estado leve atual.
+
+Rotação: antes de anexar uma nova linha, `sensors.sh` rotaciona o arquivo quando
+ele atinge `SENSORS_LOG_MAX_BYTES` (padrão: `1048576`) e mantém
+`SENSORS_LOG_ROTATIONS` gerações (padrão: `5`), como
+`.sensors-log.1`, `.sensors-log.2`, etc. `doctor.sh` valida o JSONL quando o
+arquivo existe.
+
+### Métricas de tendência de sensores (`harness-stats.sh`)
+
+`bash docs/harness/bin/harness-stats.sh` analisa `.sensors-log` e calcula métricas de execução:
+
+- janela móvel (`--window N`, padrão `30`, `0=all`),
+- contagens por status e taxa de sucesso,
+- estatísticas por `mode` (executações e duração média),
+- transições recentes que podem indicar flakiness (ex.: `pass`→`fail`),
+- último estado conhecido de `ci_status` e `doctor_status`.
+
+Formato de uso:
+
+```bash
+bash docs/harness/bin/harness-stats.sh               # saída humana
+bash docs/harness/bin/harness-stats.sh --json         # saída JSON (`sensors`/`harness-stats` metrics envelope)
+```
+
+O script de métricas não altera estado do harness (somente leitura de `.sensors-log`).
 
 Saídas JSON opt-in para scripts do harness devem seguir
 [`JSON_OUTPUTS.md`](./JSON_OUTPUTS.md): um único objeto JSON em stdout,
@@ -195,7 +245,7 @@ Essas lanes opcionais não substituem o gate completo para merge, handoff ou com
 
 `baseline.sh` grava fatos estáticos baratos em `docs/harness/.baseline-last`.
 
-Ele é evidência para drift review, não substitui `sensors.sh`, `make ci`, `just ci` ou review independente.
+Ele é evidência para drift review, não substitui `sensors.sh` (full), `sensors.sh` com lanes `docs/mcp/baseline`, ou review independente.
 
 ### Evidence-Only Audit
 
@@ -304,9 +354,20 @@ Pode pular o review-gate (camada 2) **somente** quando o diff inteiro for:
 
 Em dúvida: rode o review-gate.
 
-## Integração com `just ci` / `make ci`
+## Integração com Paridade CI
 
-O sensor principal delega para `just ci` quando disponível, senão `make ci`. O contrato de paridade com GitHub permanece o mesmo. O harness adiciona:
+O modo `full` do sensor principal `sensors.sh` mantém paridade funcional com o contrato do projeto por meio de etapas equivalentes a `CI_FEATURES`/`just ci`:
+
+- `fmt`
+- `clippy -D warnings`
+- testes de biblioteca (`--lib --tests`)
+- testes de integração (`--bin engram-server`, `--bin engram-watcher`)
+- `cargo doc` com `RUSTDOCFLAGS="-D warnings"`
+- `./scripts/generate-mcp-reference.sh --check`
+
+Essas etapas são registradas granularmente em `.sensors-log` (`ci_steps`) para triagem e análise.
+
+O harness também adiciona:
 
 - Harness doctor como etapa explícita.
 - Review cross-CLI.

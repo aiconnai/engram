@@ -1,0 +1,17 @@
+schema_version: harness-risk-register-v1
+updated_at: 2026-06-26T11:46:09Z
+entries:
+
+  - id: RISK-0001
+    date: 2026-06-26
+    status: monitoring
+    description: "Associatividade de execução por etapas não detecta regressões entre etapas e pode mascarar falha de ordem de comandos"
+    probability: 2
+    impact: 3
+    score: 6
+    owner: @team
+    mitigation: "Manter testes de integração full completos; incluir validação de ordem/timeout e revisão de output completo no fail"
+    contingency: ""
+    monitoring:
+      - falhas repetidas em mesmas etapas
+      - CI_TIMEOUT
