@@ -64,18 +64,24 @@ feature's premise: Cepeda is about what *survives*, not display order.
 ## Goal
 
 Introduce a per-memory `stability` factor, earned only through genuinely spaced reinforcement,
-that delivers **retention** by acting where retention is actually decided. Stability does two
-things:
+that does two things:
 
 1. Lengthens the effective recency half-life: `recency = 0.5^(days_since_access / (14 * stability))`
-   — improves **ranking** of durable memories.
+   — improves **ranking** of durable memories (applies to all memories that gain stability).
 2. Stretches the **archive** inactivity threshold: `effective_archive_days = min(180, 90 * stability)`
-   — delivers **retention** by acting on the gate that actually governs archival.
+   — extends retention for memories that can actually archive.
 
 `stability` defaults to `1.0` (behavior identical to today on both axes) and grows toward a
-ceiling of `4.0`. With the cap, a maximally-reinforced memory survives up to 180 days of
-inactivity before becoming archive-eligible (vs. 90 today), and ranks as if its half-life were
-56 days.
+ceiling of `4.0`. With the cap, a memory that *can* archive survives up to 180 days of inactivity
+before becoming archive-eligible (vs. 90 today), and ranks as if its half-life were 56 days.
+
+**Scope honesty (established by the second review round — see §5):** effect #2 is narrow. The
+archive gate is `score < 0.2 AND days_inactive >= N`, and a default memory (`importance = 0.5`)
+floors at ~0.25, so it *never archives today regardless*. Since stability only grows for
+`importance >= 0.3`, the archive-stretch bites only in the band `importance ∈ [0.3, 0.5)`. For
+typical memories effect #2 is inert; effect #1 (ranking) is what they get. The bigger lifecycle
+finding — high-importance memories never archive at all — is recorded in §5 for a separate pass.
+This feature is a coherent, low-risk Phase-1 step, deliberately not framed as a retention overhaul.
 
 ## Non-goals
 
@@ -192,36 +198,73 @@ for the given `memory_id`. Optionally cache `last_reinforced_at` on the memory r
 hot 1h check; the table remains the source of truth. Old rows (> 24h) may be pruned by the
 existing lifecycle/gardening pass — they no longer affect any gate.
 
-### 5. Archive-threshold modulation — the retention mechanism (revised scope: A3)
+### 5. Archive-threshold modulation — scoped retention (revised scope: A3, archive-only)
 
-This is the core change that makes the feature deliver retention rather than mere reordering.
+A3 modulates **only the archive inactivity threshold**, leaving stale at 30. Second-round
+review (Codex + Fugu, both PICK ARCHIVE-ONLY) confirmed this with the AND/OR asymmetry made
+explicit — see "Honest scope" below.
 
 ```rust
 // in suggest_lifecycle_state, replacing the constant 90:
 let effective_archive_days = (90.0 * memory.stability as f64).min(180.0) as i64;
-let effective_stale_days   = 30;  // UNCHANGED — see Non-goals
+let effective_stale_days   = 30;  // UNCHANGED — scaling it is defeated by the score arm (below)
 
-if score < 0.2 && days_inactive >= effective_archive_days { return Archived; }
-if score < 0.4 || days_inactive >= effective_stale_days   { return Stale; }
+if score < 0.2 && days_inactive >= effective_archive_days { return Archived; }  // AND
+if score < 0.4 || days_inactive >= effective_stale_days   { return Stale; }      // OR
 ```
 
 **Why A3 over A1 (both reviewers PICK A3).** A1 (modulate only the recency component of the
-score) is, per the Critical Finding, a ranking feature with near-zero archival effect for
-typical memories — it does not honor the durability premise. A3 acts on `days_inactive`, the
-gate that actually governs archival, so reinforced memories are genuinely retained longer.
+score) is a ranking feature with near-zero archival effect — it does not honor the durability
+premise. A3 acts on `days_inactive`, the gate that actually governs archival.
+
+**Why archive-only, not scaling stale too (both reviewers, with the AND/OR asymmetry).**
+`Stale` is an **OR** (`score < 0.4 OR days_inactive >= 30`); `Archived` is an **AND**. Scaling
+the day-arm of the stale-OR to `30 * stability` is **defeated by the `score < 0.4` arm**: once
+recency (weight 0.30) decays after a few weeks, a default memory's composite falls to ~0.19–0.25
+< 0.4, so Stale fires on the score arm regardless of any day threshold. Scaling stale "buys
+almost nothing and adds two moving parts" (Fugu). So only `archive` scales.
+
+**Net behavior:** a maxed-stability memory = "Stale from ~day 30, Archived at day 180". This is
+coherent **on a condition Fugu raised and we verified**: Stale must stay *retrievable*. Confirmed
+in code — search only excludes `lifecycle_state = 'archived'` (`search/hybrid.rs:170`,
+`search/bm25.rs:164`); `Stale` memories remain fully searchable and re-access lifts them back to
+Active. So stability here means **"resist death (archive), not resist demotion (stale)"** —
+exactly what it should. If a future change ever made Stale suppress retrieval, this feature would
+fail silently and must be re-evaluated.
+
+**Honest scope (both reviewers, Q3 — this narrows the feature; do not oversell it).** Because the
+archive score-gate is `score < 0.2` and archive is AND:
+- A default memory (`importance = 0.5`) floors at ~0.25 and **can never satisfy `score < 0.2`** —
+  so it **never archives today, with or without A3**. Day-scaling is irrelevant to it.
+- Stability only grows for `importance >= 0.3`. A memory at exactly `0.3` floors at
+  `0.3*0.30 + 0.5*0.20 = 0.09 + 0.10 = 0.19`, which *can* dip below 0.2.
+- **Therefore A3's archive protection bites only in the narrow band `importance ∈ [0.3, 0.5)`.**
+  For the typical 0.5 memory it is inert. A3 is a real but **small-blast-radius** Phase-1 step.
+
+**The larger finding (both reviewers ranked this above the day-count):** high-importance memories
+**never archive at all** under the current predicate (dead score-gate + AND). If the product wants
+eventual terminal cleanup of genuinely abandoned high-importance memories, that needs a **separate
+hard-idle cap or an adjusted archive predicate** — out of scope here, but recorded as the finding
+that matters more than A3's threshold tweak. Tracked for a future lifecycle pass.
 
 **Perverse effects identified and mitigated (both reviewers):**
 
 | Risk | Mitigation in this design |
 |---|---|
-| **Transient reinforcement → false durability.** One spaced burst lifts stability to ~3, then the memory goes cold but survives ~270 days and isn't even flagged Stale. (Fugu: "sharpest problem".) | (1) **Cap at 180 days** (Codex) bounds the blast radius. (2) **Stale stays at 30** — a transiently-reinforced-then-abandoned memory is still flagged Stale on the normal cadence for GC/resurfacing workflows even while final archival is deferred. |
+| **Transient reinforcement → false durability.** One spaced burst lifts stability, then the memory goes cold but resists archive longer. (Fugu: "sharpest problem".) | (1) **Cap at 180 days** (Codex) is a hard ceiling — a reinforced-once-then-abandoned memory still archives at 180 days (given `score < 0.2`). Bounded delay, not immortality; the 4.0-ceiling fear was *unbounded* growth, and the cap closes it. (2) **Stale stays at 30** — still flagged Stale on the normal cadence for GC/resurfacing even while archival is deferred. |
 | **Stability ⊥ importance** — scaling `days_inactive` grants longevity to low-value memories whose score gate *is* live. | **Eligibility gate `importance >= 0.3`** (Fugu): stability cannot grow for low-importance memories, so spacing can't buy longevity for junk. |
-| **Double protection** — stability in both recency-score and archive-threshold. | Acceptable and intended: the score path is near-inert for typical memories (Critical Finding), so the threshold path carries the effect. Documented, not hidden. |
-| **Near-dead score gate left in place** — `score < 0.2` rarely fires. | Left as-is (changing the score gate / weights is out of scope and risky), but explicitly noted as a latent quirk so a future pass can revisit it. |
+| **Double protection** — stability in both recency-score and archive-threshold. | In practice not double: the recency path is inert for archival (score gate near-dead), so only the threshold path acts — and only in the `importance ∈ [0.3, 0.5)` band (see Honest scope). Documented, not hidden. |
+| **Near-dead score gate left in place** — `score < 0.2` rarely fires; high-importance memories never archive. | Left as-is (changing weights/predicate is out of scope and risky). Recorded as the larger finding (see §5) for a future lifecycle pass — it matters more than the day-count. |
 
-**Phase-2 consideration (deferred):** decaying stability itself when a memory goes cold (so
-transient durability erodes) would further tighten risk #1, but adds a second decay process;
-the 180-cap + stale-at-30 combination is sufficient for Phase 1.
+**Optional extra guard (Codex, Phase 1).** Require at least one *post-creation* spaced
+reinforcement event before stability may exceed 1.0 — i.e. initial `importance >= 0.3` alone does
+not lift stability; a real reinforcement must occur. Cheap, tightens transient-durability further.
+Recommended but not mandatory.
+
+**Phase-2 consideration (deferred).** A `last_reinforced` recency term feeding **stability decay**
+(so transient durability erodes when a memory goes cold) is the principled fix for risk #1, but
+adds a second decay process — out of A3's scope. The 180-cap + stale-at-30 + eligibility gate are
+sufficient for Phase 1.
 
 ### 6. Migration — neutral backfill (base Decision 4)
 
@@ -261,7 +304,7 @@ Plus the `memory_reinforcements` table from §4. Migration is additive and idemp
 | Reinforcement call sites (`memory_get`, `memory_boost`, `memory_feedback` handlers) | Invoke the reinforcement fn (explicit-use path only); append to `memory_reinforcements` |
 | Alternate backends (`turso_backend.rs`, `meilisearch_backend.rs`) + snapshot/import/export + test fixtures | Map/round-trip the new column |
 | `memory_get_public` | Decide whether a public read counts as reinforcement (proposed: **no** — public reads are impressions) |
-| `SalienceConfig` | New tunables: `stability_max` (4.0), `stability_increment` (0.15), `reinforcement_min_gap_hours` (1.0), `reinforcement_daily_cap` (3), `archive_days_cap` (180), `stability_min_importance` (0.3) |
+| `SalienceConfig` | New tunables: `stability_max` (4.0), `stability_increment` (0.15), `reinforcement_min_gap_hours` (1.0), `reinforcement_daily_cap` (3), `archive_days_cap` (180), `stability_min_importance` (0.3), `require_post_creation_reinforcement` (true — Codex optional guard: stability > 1.0 needs ≥1 reinforcement event, not just initial importance) |
 
 ## Testing
 
@@ -310,3 +353,24 @@ Plus the `memory_reinforcements` table from §4. Migration is additive and idemp
   `memory_get_public`, alternate backends added.
 - **[MED]** Tests raw-recency-only → weighted lifecycle + passive non-mutation + concurrency
   tests added.
+
+### Second review round (AND/OR asymmetry + exact floors)
+
+After the rewrite, three code-precision facts were surfaced (user) and taken back to both
+reviewers, who had validated a simpler model:
+
+- **Feedback floor exact:** feedback defaults to 0.5 (`salience.rs:293`), so default composite
+  floor is `0.15 + 0.10 = 0.25` — the `score < 0.2` archive gate is unreachable for default memories.
+- **AND/OR asymmetry:** archive is AND, stale is OR → both reviewers **PICK ARCHIVE-ONLY**; scaling
+  stale is defeated by its `score < 0.4` arm. (Confirms §5; recorded the reasoning.)
+- **Accidental immortality:** both confirm the **180-day cap + `importance >= 0.3` gate** bound it
+  sufficiently for Phase 1 (no stability decay needed yet). Codex's optional extra guard
+  (require a post-creation reinforcement before stability > 1.0) added as recommended-not-mandatory.
+- **Verified Fugu's condition:** Stale must stay retrievable for stability to mean "resist death";
+  confirmed search only excludes `archived` (`hybrid.rs:170`, `bm25.rs:164`), Stale stays searchable.
+- **Honest scope correction:** A3 bites only in `importance ∈ [0.3, 0.5)`; for typical 0.5 memories
+  the archive-stretch is inert. Goal + §5 reframed; "deliver retention" overstatement removed.
+- **Larger finding recorded (both ranked above the day-count):** high-importance memories never
+  archive under the current predicate; terminal cleanup needs a separate hard-idle cap / adjusted
+  predicate — deferred, tracked in §5.
+- Fixed a stale number ("~270 days" → 180-cap) that survived from a pre-cap draft.
