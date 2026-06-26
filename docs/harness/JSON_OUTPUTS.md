@@ -206,7 +206,8 @@ Suggested `.sensors-log` fields:
 - `ci_status` and `doctor_status`: status of the two main gate layers
 - `ci_command`: short command label, not raw output
 - `ci_steps`: granular CI step status map (ex.: `fmt`, `clippy`, `test_lib`,
-  `test_integration`, `test_integration_watch`, `doc`, `ref_check`)
+  `test_integration`, `test_integration_watch`, `wasm_target`,
+  `wasm_all_targets`, `wasm_wasm_target`, `doc`, `ref_check`)
 - `exclusion`: `null` or a short `{sensor, known_issue, reason}` object
 - `artifacts`: repo-relative artifact pointers
 

@@ -9,7 +9,7 @@ entries:
     probability: 2
     impact: 3
     score: 6
-    owner: @team
+    owner: "@team"
     mitigation: "Manter testes de integração full completos; incluir validação de ordem/timeout e revisão de output completo no fail"
     contingency: ""
     monitoring:

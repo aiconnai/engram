@@ -46,8 +46,8 @@ Usage:
   docs/harness/bin/sensors.sh status --json
   docs/harness/bin/sensors.sh [--exclude-sensor <name> --known-issue docs/harness/known-issues/YYYY-MM-DD-slug.md --reason "short reason"]
 
-Default/full: clean granular run of fmt -> clippy -> test (lib/integration) -> doc -> MCP reference check, then
-PR title policy and harness doctor.
+Default/full: clean granular run of fmt -> clippy -> test (lib/integration) -> wasm -> doc -> MCP reference
+check, then PR title policy and harness doctor.
 Optional lanes are developer aids and do not replace the full gate.
 Status JSON is a read-only snapshot of docs/harness/.sensors-last and does not run the gate.
 Exclusion mode is reserved for documented external-dependency outages (ex.: API embedding, watcher GUI, socket/grpc transport)
@@ -419,6 +419,10 @@ ci_feature_args() {
   echo "--features ${CI_REQUIRED_FEATURES_VALUE}"
 }
 
+check_wasm_target_installed() {
+  rustup target list --installed | grep -qx "wasm32-unknown-unknown"
+}
+
 run_expected_exit() {
   local label="$1"
   local expected="$2"
@@ -714,7 +718,7 @@ fi
 echo "==> [harness] running granular CI steps"
 CI_OUTPUT="$(mktemp)"
 CI_STATUS="pass"
-CI_COMMAND_LABEL="fmt + clippy + test_lib + test_integration + test_integration_watch + doc + ref_check"
+CI_COMMAND_LABEL="fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check"
 CI_FEATURE_ARGS="$(ci_feature_args)"
 
 run_ci_step "fmt" "fmt" cargo fmt --all -- --check && \
@@ -736,6 +740,18 @@ if [ "$CI_STATUS" = "pass" ]; then
   run_ci_step "test_integration_watch" "test_integration_watch" \
     env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
     cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --bin engram-watcher || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "wasm_target" "wasm_target" check_wasm_target_installed || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "wasm_all_targets" "wasm_all_targets" cargo check -p engram-wasm --all-targets || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "wasm_wasm_target" "wasm_wasm_target" cargo check -p engram-wasm --target wasm32-unknown-unknown || CI_STATUS="fail"
 fi
 
 if [ "$CI_STATUS" = "pass" ]; then

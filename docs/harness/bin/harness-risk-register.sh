@@ -69,6 +69,44 @@ next_risk_id() {
   printf 'RISK-%04d' "$((max_id + 1))"
 }
 
+escape_yaml_scalar() {
+  local value="$1"
+  value="${value//$'\r'/}"
+  value="${value//$'\n'/\\n}"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+validate_yaml() {
+  local file="$1"
+
+  if ! command -v ruby >/dev/null 2>&1; then
+    echo "WARN: ruby not installed; skipping YAML parse validation for $file"
+    return 0
+  fi
+
+  ruby -e 'require "yaml";
+doc = YAML.load_file(ARGV[0]);
+raise "invalid root type" unless doc.is_a?(Hash)
+raise "schema_version missing" unless doc["schema_version"] == "harness-risk-register-v1"
+raise "entries missing" unless doc.key?("entries")
+raise "entries must be array" unless doc["entries"].is_a?(Array)
+doc["entries"].each do |entry|
+  raise "entry must be mapping" unless entry.is_a?(Hash)
+  %w[id date status description probability impact score owner mitigation].each do |field|
+    raise "missing #{field}" unless entry.key?(field)
+    raise "#{field} empty" if entry[field].to_s.empty?
+  end
+  raise "invalid id format" unless entry["id"].to_s =~ /^RISK-[0-9]{4}$/
+  raise "invalid status" unless ["open", "closed", "accepted", "deferred", "monitoring"].include?(entry["status"].to_s)
+  raise "invalid probability" unless entry["probability"].to_i.between?(1, 5)
+  raise "invalid impact" unless entry["impact"].to_i.between?(1, 5)
+  raise "invalid score" unless entry["score"].to_i == entry["probability"].to_i * entry["impact"].to_i
+end
+' "$file"
+}
+
 append_yaml_list_items() {
   local values_raw="$1"
   local indent="$2"
@@ -82,7 +120,7 @@ append_yaml_list_items() {
   IFS=';' read -ra values <<< "$values_raw"
   for value in "${values[@]}"; do
     if [ -n "$value" ]; then
-      printf '%s- %s\n' "$indent" "$(printf '%s' "$value" | sed 's/^ *//;s/ *$//')"
+      printf '%s- "%s"\n' "$indent" "$(escape_yaml_scalar "$(printf '%s' "$value" | sed 's/^ *//;s/ *$//')")"
     fi
   done
 }
@@ -187,14 +225,14 @@ run_add() {
     printf '\n  - id: %s\n' "$id"
     printf '    date: %s\n' "$date"
     printf '    status: %s\n' "$status"
-    printf '    description: "%s"\n' "$description"
+    printf '    description: "%s"\n' "$(escape_yaml_scalar "$description")"
     printf '    probability: %s\n' "$probability"
     printf '    impact: %s\n' "$impact"
     printf '    score: %s\n' "$score"
-    printf '    owner: %s\n' "$owner"
-    printf '    mitigation: "%s"\n' "$mitigation"
+    printf '    owner: "%s"\n' "$(escape_yaml_scalar "$owner")"
+    printf '    mitigation: "%s"\n' "$(escape_yaml_scalar "$mitigation")"
     if [ -n "$contingency" ]; then
-      printf '    contingency: "%s"\n' "$contingency"
+      printf '    contingency: "%s"\n' "$(escape_yaml_scalar "$contingency")"
     else
       printf '    contingency: ""\n'
     fi
@@ -296,6 +334,14 @@ run_validate() {
     echo "FAIL: entries block missing in $RISK_FILE" >&2
     exit 1
   fi
+
+  if ! validate_yaml "$RISK_FILE" >/tmp/harness-risk-validate.out 2>&1; then
+    echo "FAIL: invalid YAML content in $RISK_FILE" >&2
+    cat /tmp/harness-risk-validate.out >&2
+    rm -f /tmp/harness-risk-validate.out
+    exit 1
+  fi
+  rm -f /tmp/harness-risk-validate.out
 
   local dup
   dup="$(grep '^  - id:' "$RISK_FILE" | awk '{print $3}' | tr -d '"' | sort | uniq -d)"

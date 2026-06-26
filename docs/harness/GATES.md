@@ -21,13 +21,16 @@ Ele executa (em ordem):
 | 3 | test_lib | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --lib --tests -- --test-threads=1` | block; investigar flakiness ou feature drift |
 | 4 | test_integration | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --bin engram-server` | block; investigar regressão ou flakiness de integração |
 | 5 | test_integration_watch | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --bin engram-watcher` | block; investigar regressão ou flakiness de integração |
-| 6 | doc | `RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features $CI_REQUIRED_FEATURE_ARGS --no-deps --document-private-items` | block; atualizar docs |
-| 7 | ref_check | `./scripts/generate-mcp-reference.sh --check` | block; atualizar referência MCP |
-| 8 | harness doctor | `bash docs/harness/bin/doctor.sh` | block; corrigir drift no harness |
-| 9 | PR title policy | `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` rejeita marcador `[codex]` | block; renomear PR/commit de handoff |
-| 10 | shell syntax | `doctor.sh` executa `bash -n` nos scripts do harness | block; corrigir sintaxe shell |
-| 11 | shellcheck opcional | `doctor.sh` executa `shellcheck -x` nos scripts quando o binário está instalado | warn se instalado e falhar; skip explícito se ausente |
-| 12 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
+| 6 | wasm_target | `rustup target list --installed | grep -qx "wasm32-unknown-unknown"` | block; instalar `wasm32-unknown-unknown` |
+| 7 | wasm_all_targets | `cargo check -p engram-wasm --all-targets` | block; corrigir falha no WASM crate |
+| 8 | wasm_wasm_target | `cargo check -p engram-wasm --target wasm32-unknown-unknown` | block; corrigir build WASM |
+| 9 | doc | `RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features $CI_REQUIRED_FEATURE_ARGS --no-deps --document-private-items` | block; atualizar docs |
+| 10 | ref_check | `./scripts/generate-mcp-reference.sh --check` | block; atualizar referência MCP |
+| 11 | harness doctor | `bash docs/harness/bin/doctor.sh` | block; corrigir drift no harness |
+| 12 | PR title policy | `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` rejeita marcador `[codex]` | block; renomear PR/commit de handoff |
+| 13 | shell syntax | `doctor.sh` executa `bash -n` nos scripts do harness | block; corrigir sintaxe shell |
+| 14 | shellcheck opcional | `doctor.sh` executa `shellcheck -x` nos scripts quando o binário está instalado | warn se instalado e falhar; skip explícito se ausente |
+| 15 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
 
 O script `sensors.sh` grava o resultado parseável mais recente em
 `docs/harness/.sensors-last` (status, timestamp, `duration_sec`, exclusões,
@@ -46,7 +49,8 @@ de medição.
 - `duration_sec` — duração inteira não negativa.
 - `ci_status` e `doctor_status` — status das duas camadas principais.
 - `ci_steps` — objeto por etapa (`fmt`, `clippy`, `test_lib`, `test_integration`,
-  `test_integration_watch`, `doc`, `ref_check`) com `pass|fail|not_run`.
+  `test_integration_watch`, `wasm_target`, `wasm_all_targets`,
+  `wasm_wasm_target`, `doc`, `ref_check`) com `pass|fail|not_run`.
 - `ci_command` — resumo curto do comando executado, sem logs brutos.
 - `exclusion` — `null` ou `{sensor, known_issue, reason}`.
 - `artifacts` — inclui `docs/harness/.sensors-last` como estado leve atual.

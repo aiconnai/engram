@@ -76,6 +76,40 @@ next_decision_id() {
   printf 'DEC-%04d' "$((max_id + 1))"
 }
 
+escape_yaml_scalar() {
+  local value="$1"
+  value="${value//$'\r'/}"
+  value="${value//$'\n'/\\n}"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+validate_yaml() {
+  local file="$1"
+
+  if ! command -v ruby >/dev/null 2>&1; then
+    echo "WARN: ruby not installed; skipping YAML parse validation for $file"
+    return 0
+  fi
+
+  ruby -e 'require "yaml";
+doc = YAML.load_file(ARGV[0]);
+raise "invalid root type" unless doc.is_a?(Hash)
+raise "schema_version missing" unless doc["schema_version"] == "harness-decision-log-v1"
+raise "entries missing" unless doc.key?("entries")
+raise "entries must be array" unless doc["entries"].is_a?(Array)
+doc["entries"].each do |entry|
+  raise "entry must be mapping" unless entry.is_a?(Hash)
+  %w[id date title context decision rationale].each do |field|
+    raise "missing #{field}" unless entry.key?(field)
+    raise "#{field} empty" if entry[field].to_s.empty?
+  end
+  raise "invalid id format" unless entry["id"].to_s =~ /^DEC-[0-9]{4}$/
+end
+' "$file"
+}
+
 append_yaml_list_items() {
   local values_raw="$1"
   local indent="$2"
@@ -89,7 +123,7 @@ append_yaml_list_items() {
   IFS=';' read -ra values <<< "$values_raw"
   for value in "${values[@]}"; do
     if [ -n "$value" ]; then
-      printf '%s- %s\n' "$indent" "$(printf '%s' "$value" | sed 's/^ *//;s/ *$//')"
+      printf '%s- "%s"\n' "$indent" "$(escape_yaml_scalar "$(printf '%s' "$value" | sed 's/^ *//;s/ *$//')")"
     fi
   done
 }
@@ -105,7 +139,7 @@ append_option_block() {
   pros_raw="${pros_raw%%|*}"
   cons_raw="${option_payload##*|}"
 
-  printf '    - option: "%s"\n' "$value_name"
+  printf '    - option: "%s"\n' "$(escape_yaml_scalar "$value_name")"
   printf '      pros:\n'
   if [ -n "$pros_raw" ] && [ "$pros_raw" != "$cons_raw" ]; then
     append_yaml_list_items "$pros_raw" "      "
@@ -193,8 +227,8 @@ run_new() {
   {
     printf '\n  - id: %s\n' "$id"
     printf '    date: %s\n' "$date"
-    printf '    title: "%s"\n' "$title"
-    printf '    context: "%s"\n' "$context"
+    printf '    title: "%s"\n' "$(escape_yaml_scalar "$title")"
+    printf '    context: "%s"\n' "$(escape_yaml_scalar "$context")"
     if [ "$option_count" -eq 0 ]; then
       printf '    options: []\n'
     else
@@ -203,8 +237,8 @@ run_new() {
         append_option_block "$option"
       done
     fi
-    printf '    decision: "%s"\n' "$decision"
-    printf '    rationale: "%s"\n' "$rationale"
+  printf '    decision: "%s"\n' "$(escape_yaml_scalar "$decision")"
+  printf '    rationale: "%s"\n' "$(escape_yaml_scalar "$rationale")"
   } >> "$DECISION_FILE"
 
   update_file_timestamp "$DECISION_FILE"
@@ -297,6 +331,14 @@ run_validate() {
     echo "FAIL: entries block missing in $DECISION_FILE" >&2
     exit 1
   fi
+
+  if ! validate_yaml "$DECISION_FILE" >/tmp/harness-decision-validate.out 2>&1; then
+    echo "FAIL: invalid YAML content in $DECISION_FILE" >&2
+    cat /tmp/harness-decision-validate.out >&2
+    rm -f /tmp/harness-decision-validate.out
+    exit 1
+  fi
+  rm -f /tmp/harness-decision-validate.out
 
   if ! grep -q '^  - id:' "$DECISION_FILE"; then
     echo "WARN: no entries in decision file" >&2
