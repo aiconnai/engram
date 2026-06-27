@@ -24,7 +24,7 @@ Create `.cursor/mcp.json` in the repository:
   "mcpServers": {
     "engram": {
       "command": "engram-server",
-      "args": ["--mcp"],
+      "args": ["--transport", "stdio"],
       "env": {
         "ENGRAM_DB_PATH": ".engram/memories.db",
         "ENGRAM_EMBEDDING_MODEL": "tfidf"

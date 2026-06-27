@@ -15,7 +15,7 @@ and stores the canonical memory in SQLite.
 
 ```bash
 cargo install engram-core
-ENGRAM_DB_PATH="$HOME/.local/share/engram/memories.db" engram-server --mcp
+ENGRAM_DB_PATH="$HOME/.local/share/engram/memories.db" engram-server --transport stdio
 ```
 
 For HTTP MCP transport:

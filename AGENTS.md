@@ -37,10 +37,10 @@ cd engram
 cargo build --release
 
 # Rode como servidor MCP (para Claude Code, Cursor, etc.)
-./target/release/engram-server --mcp
+./target/release/engram-server --transport stdio
 
 # Ou como API HTTP
-./target/release/engram-server --http --port 8080
+./target/release/engram-server --transport http --http-port 8080
 ```
 
 ## Padrões de Código Importantes

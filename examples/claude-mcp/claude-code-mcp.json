@@ -2,7 +2,7 @@
   "mcpServers": {
     "engram": {
       "command": "engram-server",
-      "args": ["--mcp"],
+      "args": ["--transport", "stdio"],
       "env": {
         "ENGRAM_DB_PATH": "/absolute/path/to/your/repo/.engram/memories.db",
         "ENGRAM_EMBEDDING_MODEL": "tfidf"

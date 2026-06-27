@@ -113,8 +113,8 @@ engram-cli create "The API uses JWT tokens for authentication" --type note
 # Create with tags
 engram-cli create "Deploy to staging before production" --type decision --tags "deploy,process"
 
-# Create in a specific workspace
-engram-cli create "User auth flow uses OAuth2" --workspace my-project
+# The CLI writes to the default workspace. Use MCP/HTTP examples below when
+# you need an explicit workspace.
 ```
 
 ### Using MCP (Any MCP Client)
@@ -168,8 +168,8 @@ engram-cli search "authentication"
 # Search handles typos
 engram-cli search "authentcation"
 
-# Search in a specific workspace
-engram-cli search "deploy" --workspace my-project
+# The CLI searches the default workspace. Use MCP/HTTP examples below when
+# you need an explicit workspace.
 ```
 
 ### MCP Search
@@ -201,18 +201,46 @@ curl -X POST http://localhost:8080/mcp \
 
 ## Organize with Workspaces
 
-Workspaces isolate memories by project or context:
+Workspaces isolate memories by project or context. The CLI uses the default
+workspace; for explicit workspace control, call MCP tools:
 
-```bash
-# Create memories in different workspaces
-engram-cli create "Use PostgreSQL for this project" --workspace backend-api
-engram-cli create "React with TypeScript" --workspace frontend-app
+```json
+{
+  "name": "memory_create",
+  "arguments": {
+    "content": "Use PostgreSQL for this project",
+    "workspace": "backend-api",
+    "memory_type": "decision"
+  }
+}
+```
 
-# List all workspaces
-engram-cli workspace list
+```json
+{
+  "name": "memory_create",
+  "arguments": {
+    "content": "React with TypeScript",
+    "workspace": "frontend-app",
+    "memory_type": "context"
+  }
+}
+```
 
-# Search within a workspace
-engram-cli search "database" --workspace backend-api
+```json
+{
+  "name": "workspace_list",
+  "arguments": {}
+}
+```
+
+```json
+{
+  "name": "memory_search",
+  "arguments": {
+    "query": "database",
+    "workspace": "backend-api"
+  }
+}
 ```
 
 ---
@@ -225,14 +253,28 @@ Use tiers to control memory lifetime:
 - **daily**: Scratch notes that auto-expire after 24 hours
 
 ```bash
-# Permanent memory (default)
+# Permanent memory in the default workspace
 engram-cli create "Architecture: microservices with event sourcing"
+```
 
-# Daily memory (auto-expires)
-engram-cli create "Currently debugging the auth flow" --tier daily
+Daily tier and promotion are MCP operations:
 
-# Promote a daily memory to permanent before it expires
-engram-cli promote 42
+```json
+{
+  "name": "memory_create_daily",
+  "arguments": {
+    "content": "Currently debugging the auth flow"
+  }
+}
+```
+
+```json
+{
+  "name": "memory_promote_to_permanent",
+  "arguments": {
+    "id": 42
+  }
+}
 ```
 
 ---

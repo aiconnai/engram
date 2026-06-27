@@ -7,6 +7,7 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
 - `ARCHITECTURE.md`: Hosted/cloud architecture reference, request flow, and tenant isolation model.
 - `REFERENCE.md`: Hosted HTTP/MCP API reference, auth, tenant resolution, and error codes.
 - `OPERATIONS.md`: Hosted deployment targets, alerts, backup/restore, and incident playbooks.
+- `USER_GUIDE.md`: User-facing instructions for installing, connecting, and using Engram.
 - `CONTROL_PLANE_SCHEMA.sql`: Postgres schema for the cloud control plane.
 - `QUICKSTART.md`: Command-first local quick reference.
 - `SCHEMA.md`: Local Engram SQLite schema and migrations.
