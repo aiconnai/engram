@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782099721139,
+  "lastUpdate": 1782571336118,
   "repoUrl": "https://github.com/aiconnai/engram",
   "entries": {
     "Engram Performance": [
@@ -13895,6 +13895,360 @@ window.BENCHMARK_DATA = {
             "name": "traversal/bfs_depth_3",
             "value": 1201859,
             "range": "± 13104",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ron@ldinho.com.br",
+            "name": "Ronaldo Martins",
+            "username": "limaronaldo"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+          "message": "docs(harness): harden harness and align MCP docs (#107)\n\n* harness: add granular CI steps and risk/decision registries\n\n* fix(harness): restore Wave 1 gate parity and registry validation\n\n* feat(mcp): add discover tools detail levels\n\n* fix(mcp): remove orphan discovery registry\n\nDerive the bootstrap MCP tool count from the canonical registry instead of docs headings. Remove the unreferenced discovery.rs registry duplicate and add regression coverage for unique tools/list names, exactly one discover_tools entry, and absence of the orphan file.\n\n* docs(salience): add stability/spacing-effect design spec\n\nPer-memory stability factor to replace the fixed 14-day decay half-life in\nsalience.rs, implementing the spacing effect (Cepeda 2006). Adapted from\nMemPalace's graph-connection model to Engram's per-memory salience.\n\nFour design decisions, each approved by dual cross-model review (Codex/GPT\n+ Fugu/Sakana):\n- Scope: per individual memory (graph connections deferred to phase 2)\n- Trigger: explicit use, not passive search appearance (avoids reranker loop)\n- Curve: stability in [1.0, 4.0], +=0.15*(1-s/4) diminishing returns,\n  1h gap + 3/24h cap to block burst-gaming\n- Migration 45: neutral backfill (existing rows = 1.0), no access_count seeding\n\n* docs(salience): revise stability spec after full-spec review (A1->A3)\n\nFull-spec cross-model review (Codex) returned NEEDS-REWORK with a BLOCKER:\nthe numeric lifecycle table used raw recency, but archival gates on weighted\nscore AND wall-clock days. Verified in code (salience.rs:254-278): the\nimportance+feedback floor (~0.27 for default memories) makes the score<0.2\narchive gate unreachable, so only days_inactive>=90 drives archival — and\nstability does not touch days_inactive.\n\nScope changed A1->A3 (both reviewers PICK A3): stability now also modulates\neffective_archive_days = min(180, 90*stability), with stale fixed at 30 and\nan importance>=0.3 eligibility gate. Bookkeeping moved to a dedicated\nmemory_reinforcements table (rolling window, not tumbling; memory_events is\nclearable and lacks an Accessed type). SQLite CHECK on ADD COLUMN verified\nto work; passive-recency loop documented as a pre-existing non-goal.\n\n* docs(salience): scope-correct stability spec after 2nd review round\n\nSecond cross-model round (Codex + Fugu, both PICK ARCHIVE-ONLY) examined the\nAND/OR asymmetry and exact score floors, narrowing the feature honestly:\n\n- Archive-only confirmed: stale is OR, so scaling its day-arm is defeated by\n  the score<0.4 arm; only the archive AND-gate is worth scaling.\n- Honest scope: default memories (importance 0.5, floor ~0.25) never satisfy\n  the score<0.2 archive gate, so A3 bites only in importance in [0.3, 0.5).\n  Removed the 'delivers retention' overstatement from Goal and section 5.\n- Verified Fugu's condition in code: Stale stays searchable (search excludes\n  only 'archived', hybrid.rs:170/bm25.rs:164), so stability = resist death,\n  not resist demotion.\n- Recorded the larger finding both reviewers ranked above the day-count:\n  high-importance memories never archive under the current predicate; terminal\n  cleanup needs a separate hard-idle cap (deferred).\n- Added Codex optional guard (post-creation reinforcement before stability>1.0).\n- Fixed a stale '~270 days' number (pre-cap residue) to the 180-day cap.\n\n* docs(intelligence): add lifecycle predicate design\n\n* docs(intelligence): finalize lifecycle predicate spec\n\n* docs(harness): add reference intake checklist\n\n* docs(intelligence): add lifecycle predicate implementation plan\n\n* docs(intelligence): correct lifecycle review provenance\n\n* chore(ci): add code owners for protected surfaces\n\n* ci(harness): add harness contract workflow\n\n* ci(security): add PR security gates and pin supply chain\n\n* docs(harness): document protected PR workflow\n\n* docs(intelligence): add sonnet lifecycle review\n\n* docs(harness): default reviewer to claude sonnet\n\n* docs: align MCP user guides with current transport\n\n* docs(harness): preserve process review artifacts\n\n* docs(harness): update sensors evidence\n\n* fix(security): update vulnerable Rust dependencies",
+          "timestamp": "2026-06-27T11:24:55-03:00",
+          "tree_id": "19d7cf64509fd48aef2854daf8ea8f6bb76fd080",
+          "url": "https://github.com/aiconnai/engram/commit/1aa14e5a34e2cb59e18a2479c69edde4e70f09f7"
+        },
+        "date": 1782571335076,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "community_detection/detect_communities_500_nodes",
+            "value": 5291503,
+            "range": "± 55290",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extractor_new/default",
+            "value": 3495,
+            "range": "± 67",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extraction/extract_mixed",
+            "value": 382617,
+            "range": "± 1139",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_create/memory_create",
+            "value": 363957,
+            "range": "± 6223",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search/memory_search",
+            "value": 529093,
+            "range": "± 4905",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_list/memory_list",
+            "value": 287672,
+            "range": "± 15556",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_stats/memory_stats",
+            "value": 115229,
+            "range": "± 1178",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_error_path/unknown_tool",
+            "value": 350,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_create/no_embedding",
+            "value": 316941,
+            "range": "± 10176",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_get/by_id",
+            "value": 47538,
+            "range": "± 1848",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/10",
+            "value": 114335,
+            "range": "± 7460",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/10",
+            "value": 292302,
+            "range": "± 1570",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/50",
+            "value": 445623,
+            "range": "± 2782",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/50",
+            "value": 690173,
+            "range": "± 7806",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/100",
+            "value": 861472,
+            "range": "± 8912",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/100",
+            "value": 1084947,
+            "range": "± 10611",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/create",
+            "value": 34832,
+            "range": "± 1187",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/get_related",
+            "value": 21738,
+            "range": "± 309",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "get_stats",
+            "value": 329255,
+            "range": "± 3117",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/authentication",
+            "value": 254291,
+            "range": "± 1963",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/database migration",
+            "value": 289472,
+            "range": "± 3168",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/React hooks optimization",
+            "value": 320499,
+            "range": "± 1615",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/API rate limiting Redis",
+            "value": 353802,
+            "range": "± 3249",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/short",
+            "value": 45014,
+            "range": "± 677",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/medium",
+            "value": 12830793,
+            "range": "± 104027",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/long",
+            "value": 12445565,
+            "range": "± 202795",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/short",
+            "value": 861,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/medium",
+            "value": 2315,
+            "range": "± 116",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/long",
+            "value": 5250,
+            "range": "± 28",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/batch_100",
+            "value": 192899,
+            "range": "± 4198",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/1_char_typo",
+            "value": 18453,
+            "range": "± 63",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/2_char_typo",
+            "value": 17388,
+            "range": "± 57",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/transposition",
+            "value": 18412,
+            "range": "± 39",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/100",
+            "value": 1380192,
+            "range": "± 4690",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/100",
+            "value": 1121773,
+            "range": "± 6878",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/1000",
+            "value": 11509033,
+            "range": "± 255956",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/1000",
+            "value": 10709924,
+            "range": "± 51121",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/10000",
+            "value": 115705789,
+            "range": "± 1236378",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/10000",
+            "value": 110965264,
+            "range": "± 1770507",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_index_v2_report/noop",
+            "value": 0,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/100",
+            "value": 6589,
+            "range": "± 48",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/500",
+            "value": 34164,
+            "range": "± 189",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/2000",
+            "value": 139805,
+            "range": "± 275",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/20",
+            "value": 569,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/100",
+            "value": 572,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/500",
+            "value": 572,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/tight_500/500",
+            "value": 2695,
+            "range": "± 91",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/medium_2k/2000",
+            "value": 10031,
+            "range": "± 167",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/loose_8k/8000",
+            "value": 39833,
+            "range": "± 233",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/200",
+            "value": 13123,
+            "range": "± 60",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/1000",
+            "value": 68198,
+            "range": "± 164",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/semantic_compression/fixed_corpus_ratio_recall",
+            "value": 80550774,
+            "range": "± 718983",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/50",
+            "value": 5251213,
+            "range": "± 20186",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/200",
+            "value": 19183201,
+            "range": "± 60557",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "traversal/bfs_depth_3",
+            "value": 1245658,
+            "range": "± 11836",
             "unit": "ns/iter"
           }
         ]
