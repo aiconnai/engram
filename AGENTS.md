@@ -116,7 +116,7 @@ Em seguida leia (em ordem):
 - `INVARIANTS.md` (raiz)
 - `STANDARDS.md` e `ERRORS_AND_LESSONS.md`
 
-O harness garante que o trabalho seja retomável entre agentes (Claude Code CLI, Grok Build TUI, etc.) e entre sessões. Ele implementa as camadas de Context Engine, Planner, Memory Manager e Verifier diretamente no repositório.
+O harness garante que o trabalho seja retomável entre agentes (Claude Code CLI, Claude Code Sonnet reviewer, etc.) e entre sessões. Ele implementa as camadas de Context Engine, Planner, Memory Manager e Verifier diretamente no repositório.
 
 ## AI Operating Guide (`lazycodex-ai`)
 

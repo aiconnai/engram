@@ -8,7 +8,7 @@
 #   - Output contains: "engram harness state", "Branch:", "Active sprint", "Read next"
 #   - No side effects (read-only)
 #   - Security contract remains static/read-only first; see docs/harness/security/anthropic-reference-harness.md
-#   - Safe for any agent CLI: Claude Code, Grok Build TUI, Codex, Cursor, Aider, etc.
+#   - Safe for any agent CLI: Claude Code, Claude Code Sonnet reviewer, Codex, Cursor, Aider, etc.
 #
 # Called manually at session start per AGENTS.md / Claude.md.
 # Later can be wired to session_start hook or MCP tool.

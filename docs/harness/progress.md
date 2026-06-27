@@ -20,7 +20,7 @@
 
 ## Contexto e Motivação
 
-O usuário está usando Claude Code CLI e o agente Gemini CLI no Zed side-by-side para comparar workflows agentic em terminal/editor. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI/editor.
+O usuário está usando Claude Code CLI e Claude Code Sonnet em sessão/processo separado como reviewer cross-model para comparar workflows agentic em terminal/editor. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI/editor.
 
 Engram é posicionado de forma única porque ele *é* o Memory Manager para agentes e para times que acumulam contexto proprietário mais rápido do que conseguem organizá-lo manualmente. O harness de desenvolvimento do próprio engram pode dogfood o produto (futuro).
 
@@ -40,7 +40,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - [x] `bin/bootstrap.sh` — script de orientação (read-only, rápido, determinístico)
 - [x] `bin/doctor.sh` — consistência do harness
 - [x] `bin/sensors.sh` — wrapper sobre `just ci` + doctor + engram-specific
-- [x] `bin/review-gate.sh` — generalizado para claude/gemini/etc, com prompt engineering, continuity, versioning, timeout
+- [x] `bin/review-gate.sh` — generalizado para claude-sonnet/codex/etc, com prompt engineering, continuity, versioning, timeout
 - [x] `bin/check-commit-msg.sh` — validador de commits
 - [x] `bin/check-pr-title.sh` — validador de títulos de PR sem o marcador `[codex]`
 - [x] `docs/harness/known-issues/2026-05-31-grpc-transport-port-bind.md` — limitação formal para sensor `grpc-transport`
@@ -57,7 +57,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 ## Últimas decisões registradas
 
 - Harness é **complementar** aos gates existentes (`just ci`, pre-commit, GitHub Actions). Não substitui — adiciona memória persistida, review cross-CLI, e disciplina de processo.
-- Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque o agente Gemini CLI no Zed e Claude Code CLI estão sendo usados side-by-side.
+- Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque Claude Code CLI e Claude Code Sonnet reviewer são usados em processos/sessões separados.
 - Dogfooding com o próprio engram (via MCP + hooks) é objetivo explícito de longo prazo, guiado por RFC 0001, mas fora do escopo de v0 bootstrap.
 - Invariants do harness são separados dos data invariants (`INVARIANTS.md` na raiz) para manter clareza.
 - 2026-06-08: `ENGRA-103` aberto no Huly para `memory_digest`; RFC 0008 define a ferramenta como digest read-only, determinístico, sem schema novo e com provenance explícita.
@@ -71,6 +71,10 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
   registrar tailoring, risco, medição, evidência e traceability no harness.
 - 2026-06-26: a cópia integral da 12207 é local-only e ignorada pelo Git; o
   repositório deve versionar apenas resumos/checklists próprios do Engram.
+- 2026-06-27: Claude Code Sonnet (`claude --model sonnet`) é o reviewer
+  cross-model padrão permanente. Backends anteriores ficam apenas como histórico
+  em logs/canvas/audits; outro backend requer override explícito do owner e
+  verificação de assinatura/autenticação no momento do review.
 
 ## PR title guard — 2026-06-20
 
@@ -257,6 +261,17 @@ Verification:
 
 - `rtk bash docs/harness/bin/doctor.sh` — PASS.
 - `rtk git diff --check` — PASS.
+
+## Claude Sonnet reviewer path — 2026-06-27
+
+- Claude Code Sonnet (`claude --model sonnet`) is now the permanent default
+  cross-model reviewer in a separate process/session.
+- `review-gate.sh`, `README.md`, `GATES.md`, `SPEC.md`, `INVARIANTS.md`,
+  `CODE_REVIEW_POLICY.md`, `AGENTS.md`, and `CLAUDE.md` point future agents at
+  Sonnet as the canonical reviewer path.
+- Older reviewer-path sections below are historical only. Another backend
+  requires explicit owner override plus authentication/subscription verification
+  at review time.
 
 ## Reviewer CLI substitution — 2026-06-22
 

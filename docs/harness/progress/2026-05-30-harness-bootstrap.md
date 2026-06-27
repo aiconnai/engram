@@ -3,7 +3,33 @@
 **Sprint**: Harness Engineering v0 — bootstrap & core gates
 **Task**: harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)
 **Date started**: 2026-05-30
-**Owner**: Ronaldo + agents (Claude Code CLI + Zed Gemini CLI side-by-side)
+**Owner**: Ronaldo + agents (Claude Code CLI + Claude Code Sonnet reviewer)
+
+---
+
+## 2026-06-27 — Claude Sonnet reviewer path
+
+### Contexto
+
+O owner confirmou que o reviewer cross-model permanente deve ser Claude Code
+Sonnet (`claude --model sonnet`) em sessão/processo separado. As orientações
+anteriores de reviewer externo ficam como histórico e não são o caminho ativo.
+
+### Ações realizadas
+
+1. Contratos ativos (`SPEC.md`, `INVARIANTS.md`, `README.md`, `GATES.md`,
+   `CODE_REVIEW_POLICY.md`) agora apontam para Claude Code Sonnet como reviewer
+   padrão.
+2. `docs/harness/bin/review-gate.sh` atualiza comentários e handoff text para
+   Sonnet.
+3. `AGENTS.md` e `CLAUDE.md` descrevem sessões Claude Code Sonnet reviewer em
+   vez de CLIs externos antigos.
+
+### Resultado
+
+Future cross-CLI review handoffs should use Claude Code Sonnet unless the owner
+explicitly overrides the backend and authentication/subscription is verified at
+review time. Older 2026-06-22 reviewer-path sections below are historical only.
 
 ---
 

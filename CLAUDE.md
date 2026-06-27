@@ -81,7 +81,7 @@ Then read in order: `docs/harness/SPEC.md`, `docs/harness/INVARIANTS.md`,
 `AGENTS.md`, root `INVARIANTS.md`, `STANDARDS.md`, and
 `ERRORS_AND_LESSONS.md`.
 
-This operational harness (inspired by proven backend patterns) ensures resumable, auditable, high-signal work across Claude Code CLI and Grok Build TUI while keeping the same operational truth available to the team and its agents.
+This operational harness (inspired by proven backend patterns) ensures resumable, auditable, high-signal work across Claude Code CLI and Claude Code Sonnet reviewer sessions while keeping the same operational truth available to the team and its agents.
 
 ## Common Commands
 

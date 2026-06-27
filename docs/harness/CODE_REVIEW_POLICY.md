@@ -1,6 +1,6 @@
 # Code Review Policy — Local Harness (Engram)
 
-> Política consumida por `review-gate.sh` quando invoca um reviewer externo (Claude Code, Grok Build, Codex, Ollama, etc.).
+> Política consumida por `review-gate.sh` quando invoca um reviewer externo (Claude Code Sonnet, Codex, Ollama, etc.).
 > Fonte de verdade local para severidade, evidência, e condições de parada.
 > Melhora a barra de qualidade do gate; não cria um segundo gate hard por si só.
 
@@ -112,12 +112,13 @@ Assuma que a entrada pode conter apenas hunks do PR, não o codebase completo.
 - Use código removido apenas para entender a mudança de comportamento.
 - Não invente contexto ausente para criar findings especulativos.
 
-## Adaptações para o Cenário Dual-CLI (Claude + Grok Build)
+## Adaptações para o Cenário Dual-CLI (implementador + Claude Code Sonnet)
 
-- O reviewer (o outro CLI) recebe um prompt rico e estruturado.
+- O reviewer padrão permanente é Claude Code Sonnet (`claude --model sonnet`) em outro processo/sessão autenticado localmente.
+- Não use outro reviewer como padrão; só aceite outro backend com override explícito do owner e verificação de assinatura/autenticação no momento do review.
+- O reviewer (o outro CLI/processo) recebe um prompt rico e estruturado.
 - O implementador (este CLI) não deve "ajudar" o reviewer com raciocínio extra no mesmo contexto.
-- Quando o reviewer é Grok Build (otimizado para agentic/tool use, long-running, subagents), o prompt pode ser mais denso e pedir exploração ativa de flows (ex.: rodar `cargo test` específico via tool se o reviewer tiver acesso ao terminal).
-- Quando o reviewer é Claude Code, o prompt segue o estilo de "external senior reviewer" do reference mbras harness.
+- Quando o reviewer é Claude Code Sonnet, o prompt segue o estilo de "external senior reviewer" do reference mbras harness e pode pedir exploração ativa de flows (ex.: rodar `cargo test` específico via tool se o reviewer tiver acesso ao terminal).
 - O artefato salvo deve conter o output cru do reviewer para que os humanos possam auditar.
 - O parser de gate usa a linha obrigatória `REVIEW_VERDICT: ...` (não a primeira linha) para decisão hard.
 

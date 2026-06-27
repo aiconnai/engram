@@ -6,7 +6,7 @@
 | Active sprint | `Harness Engineering v0 — bootstrap & core gates` |
 | Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
 | Started | `2026-05-30` |
-| Owner | `Ronaldo + agents (Claude + Grok Build side-by-side)` |
+| Owner | `Ronaldo + agents (Claude Code + Claude Code Sonnet reviewer)` |
 | Active spec | `docs/harness/SPEC.md` |
 | Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
 | Tracker | RFC 0001 + this harness adoption (ENGRA-22 area) |
@@ -23,7 +23,7 @@
 
 - **Branch**: (branch atual do trabalho)
 - **Progress log**: [`progress/2026-05-30-harness-bootstrap.md`](./progress/2026-05-30-harness-bootstrap.md)
-- **Status**: active — implementação inicial do harness operacional inspirado no modelo mbras-backend, adaptado para Rust + MCP + multi-SDK + dual CLI (Claude Code + Grok Build).
+- **Status**: active — implementação inicial do harness operacional inspirado no modelo mbras-backend, adaptado para Rust + MCP + multi-SDK + dual CLI (Claude Code + Claude Code Sonnet).
 
 ### Em escopo (v0)
 
@@ -31,7 +31,7 @@
 - Implementar `bootstrap.sh` — orientação rápida, read-only, <50 linhas, imprime estado + ordem de leitura.
 - Implementar `doctor.sh` — validação de consistência do harness (drift SPEC/progress, executáveis, referências à policy, bootstrap size, etc.).
 - Implementar `sensors.sh` — wrapper determinístico sobre `just ci` (fmt + clippy -D + testes paridade Linux + docs + MCP ref) + harness doctor + checks específicos de engram.
-- Implementar `review-gate.sh` — generalizado para múltiplos reviewers (claude, grok, codex, local). Suporte a pre/post, range, continuity em FAILs, versionamento de artefatos, exclusão de paths do harness, timeout, prompt rico com fake-success patterns de Rust/MCP.
+- Implementar `review-gate.sh` — generalizado para múltiplos reviewers (claude-sonnet, codex, local). Suporte a pre/post, range, continuity em FAILs, versionamento de artefatos, exclusão de paths do harness, timeout, prompt rico com fake-success patterns de Rust/MCP.
 - Implementar `check-commit-msg.sh` — validador de Conventional Commits com scopes engram/harness.
 - Criar `CODE_REVIEW_POLICY.md` adaptada para Rust, engram (MCP tools, hooks, embeddings, storage invariants, cross-SDK), e o cenário dual-CLI atual.
 - Criar `GATES.md` com thresholds, fake-success patterns específicos (ex.: tests passando só com features locais mas falhando em CI Linux, schema version drift, MCP protocol breakage, embedding cache bounds violados, etc.).
@@ -57,7 +57,7 @@
 
 - Implementação completa de ingestão automática de eventos de harness no próprio engram (deixa para ENGRA-22+ seguindo RFC 0001).
 - Mudanças em storage schema, MCP tools novos, ou intelligence/consolidation.
-- Suporte nativo non-interactive exec para todos os CLIs (foco em prompt files + paste workflow para o cenário atual Claude + Grok Build side-by-side).
+- Suporte nativo non-interactive exec para todos os CLIs (foco em prompt files + paste workflow para o cenário atual Claude Code + Claude Code Sonnet).
 - Substituição total de `.githooks` ou CI GitHub workflows (o harness complementa, não substitui).
 - Reabrir ou alterar RFC 0001 neste escopo.
 - Mudanças em `INVARIANTS.md` (raiz) ou `STANDARDS.md` — apenas docs de processo do harness.
@@ -67,7 +67,7 @@
 - Dogfooding: usar engram MCP + hooks para registrar sessões de harness, reviews, gate results como memórias com provenance forte.
 - `memory_harness_*` tools ou seção dedicada.
 - Agentes especializados em harness (planner, verifier, context-engine) como MCP tools ou personas em `docs/harness/agents/`.
-- Integração mais profunda com Grok Build TUI (se expuser APIs/exec modes).
+- Integração mais profunda com Claude Code Sonnet como reviewer externo non-interactive.
 - Suporte a Linear/GitHub sync de tasks no harness (se aplicável ao fluxo de engram).
 
 ## Emenda 2026-06-05 — cross-harness improvements

@@ -6,7 +6,7 @@ Cada invariant tem um **gate** indicando como é enforçado.
 
 ## Session & Context
 
-1. **Bootstrap obrigatório no início de toda sessão.** Todo agente (Claude Code, Grok Build, Codex, Cursor, etc.) deve rodar `bash docs/harness/bin/bootstrap.sh` antes de planejar ou editar. Output do bootstrap é o ponto de partida canônico.
+1. **Bootstrap obrigatório no início de toda sessão.** Todo agente (Claude Code, Claude Code Sonnet reviewer, Codex, Cursor, etc.) deve rodar `bash docs/harness/bin/bootstrap.sh` antes de planejar ou editar. Output do bootstrap é o ponto de partida canônico.
    _Gate: revisão manual + codex/review-gate prompt checa menção ao bootstrap; doctor.sh valida que bootstrap roda rápido e sem erro._
 
 2. **Ordem de leitura obrigatória.** Antes de qualquer mudança significativa: SPEC.md → INVARIANTS.md (harness) → WHAT_WE_DONT_DO.md → GATES.md → CODE_REVIEW_POLICY.md → progress.md → active plan.
@@ -106,4 +106,4 @@ Cada invariant tem um **gate** indicando como é enforçado.
 
 **Observação de governance**: Invariants do harness são estáveis dentro de uma sprint. Mudança exige nota explícita em `progress.md` + justificativa no active plan. Para lições históricas que originaram estes invariants, consulte `ERRORS_AND_LESSONS.md` e o RFC 0001.
 
-Estes invariants protegem a **resumibilidade** e **confiabilidade** do trabalho com agentes em escala. Eles não são burocracia — são o que permite que Grok Build, Claude Code e futuros agentes operem no mesmo repo com contexto compartilhado, memória canônica e sem drift silencioso.
+Estes invariants protegem a **resumibilidade** e **confiabilidade** do trabalho com agentes em escala. Eles não são burocracia — são o que permite que Claude Code, Claude Code Sonnet reviewer e futuros agentes operem no mesmo repo com contexto compartilhado, memória canônica e sem drift silencioso.

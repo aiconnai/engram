@@ -372,7 +372,7 @@ Características chave:
 - Continuity: após FAIL, reruns injetam `[BLOCKER]`/`[HIGH]` anteriores relevantes (com ids estáveis para dedup).
 - Exclusões automáticas de diff: `docs/harness/reviews/*`, `docs/harness/progress/*`, `target/`, `coverage/`, artefatos de build, etc. (anti self-referential loop).
 - Timeout configurável via `REVIEWER_TIMEOUT_SECS`.
-- Suporte a múltiplos backends via `REVIEWER_CLI` (claude, grok, codex, ollama, ou "manual" que só gera o prompt file).
+- Suporte a múltiplos backends via `REVIEWER_CLI` (claude-sonnet, codex, ollama, ou "manual" que só gera o prompt file). Claude Code Sonnet é o reviewer padrão; outros backends não são canônicos sem override explícito do owner.
 
 Formato de output esperado do reviewer (primeira linha):
 
