@@ -1044,3 +1044,29 @@ Post-review closure:
 
 - Independent Codex rerun `docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` returned `REVIEW_VERDICT: PASS reference-intake checklist slice meets acceptance criteria`.
 - `rtk bash docs/harness/bin/review-gate.sh post reference-intake-checklist --review-file docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` — PASS; parser accepted the v2 artifact.
+
+## Lifecycle predicate implementation plan — 2026-06-27
+
+- Lifecycle predicate unification spec is committed and cross-model reviewed:
+  - `1f9f25b` — initial lifecycle predicate design.
+  - `a085c0f` — finalized lifecycle predicate spec after v3 re-review PASS.
+- Added the implementation plan at
+  `docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md`.
+- Plan scope: implement `decide_lifecycle_state`, route `lifecycle_run` through
+  the canonical predicate, disarm salience/policy/compression lifecycle writers,
+  preserve domain writers, keep `SCHEMA_VERSION=44`, update MCP metadata,
+  regenerate `docs/MCP_TOOLS.md`, and verify single-writer behavior.
+- Plan review fix: removed `expires_at` from the Step 2.3 `lifecycle_run` SQL
+  pre-filter. The pre-filter now selects only `valid_to IS NULL` and non-Archived
+  rows, with optional workspace filtering.
+- Lesson recorded: lifecycle pre-filters must not filter on fields the canonical
+  predicate does not model. `expires_at` now appears only in the explicit
+  prohibition line.
+- Implementation is intentionally deferred to a dedicated TDD session using this
+  plan as the contract.
+
+Verification:
+
+- `rtk grep -nE "expires_at" docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md` — PASS; single occurrence in the prohibition line.
+- Step 2.3 SQL readback — PASS; only `valid_to IS NULL`, non-Archived, and optional workspace clause remain.
+- `rtk git diff --check -- docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md` — PASS.
