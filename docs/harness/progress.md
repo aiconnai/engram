@@ -927,6 +927,55 @@ Verification:
 - `bash docs/harness/bin/sensors.sh quick` — PASS.
 - `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
   + PR-title policy + harness doctor).
+
+## Lifecycle predicate unification — 2026-06-27
+
+- Added `src/intelligence/lifecycle.rs` with the canonical
+  `LifecycleConfig`, `normalized_importance`, and `decide_lifecycle_state`
+  predicate. The predicate uses `last_accessed_at` with `created_at` fallback,
+  importance as a bounded multiplier, a hard idle cap, and monotonic stale /
+  archived behavior.
+- Reworked `lifecycle_run` to use one permissive SQL candidate query plus the
+  canonical predicate for dry-run and apply parity. `min_importance` remains
+  accepted as deprecated/no-op compatibility only.
+- Made salience decay score/history-only and routed `SalienceScore.suggested_state`
+  through the canonical lifecycle predicate.
+- Made `memory_decay` policy-score-only; lifecycle transitions now remain in
+  `lifecycle_run`.
+- Constrained `memory_archive_old` and `compress_old_memories` to compress only
+  already-Archived memories. The optional server compression scheduler now logs
+  compression rather than archival.
+- Updated public MCP tool metadata and regenerated `docs/MCP_TOOLS.md`.
+- `SCHEMA_VERSION` remains 44; no migration was added.
+
+Verification:
+
+- `rtk cargo test intelligence::lifecycle --lib` — PASS.
+- `rtk cargo test mcp::handlers::lifecycle --lib` — PASS.
+- `rtk cargo test intelligence::salience --lib` — PASS.
+- `rtk cargo test mcp::handlers::quality --lib` — PASS.
+- `rtk cargo test mcp::handlers::memory_policy --lib` — PASS.
+- `rtk cargo test mcp::handlers::summarize --lib` — PASS, including
+  idempotent compression coverage.
+- `rtk cargo test retention --lib` — PASS, including idempotent compression
+  coverage.
+- `rtk cargo test storage::queries --lib` — PASS.
+- `rtk cargo test --test mcp_protocol_tests` — PASS.
+- `rtk cargo check --workspace --all-targets --locked` — PASS.
+- `rtk cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+  — PASS.
+- `rtk cargo test --workspace --all-targets --locked` — PASS, 1227 tests.
+- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk grep -n "SET lifecycle_state|UPDATE memories SET lifecycle_state|update_memory_lifecycle_state\\(" src`
+  — PASS; remaining matches are canonical lifecycle/manual/domain/helper/test
+  write sites only.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
+  + PR-title policy + harness doctor).
+- Post-review v1/v2 FAIL findings were addressed by adding the missing
+  plan/spec/review/canvas evidence chain, correcting README/ROADMAP wording,
+  and making compression paths idempotent.
 - `bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): port loop triage skill family"` — PASS.
 - Cross-repo leakage grep for `AgentShield`, `cargo run -- scan`,
   `release.yml`, `Homebrew`, and `crates.io` across the four new skills — zero

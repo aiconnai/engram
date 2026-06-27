@@ -1,0 +1,1482 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: lifecycle-predicate-unification
+**Mode**: post
+**Date (UTC)**: 2026-06-27
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/docs/MCP_TOOLS.md b/docs/MCP_TOOLS.md
+index 1fb6777..b01c620 100644
+--- a/docs/MCP_TOOLS.md
++++ b/docs/MCP_TOOLS.md
+@@ -86 +86 @@ Total tools: **278**
+-| `memory_archive_old` | advanced | destructiveHint | none |
++| `memory_archive_old` | advanced | mutating (no MCP hints) | none |
+@@ -101 +101 @@ Total tools: **278**
+-| `salience_decay_run` | advanced | destructiveHint | none |
++| `salience_decay_run` | advanced | mutating (no MCP hints) | none |
+@@ -825 +825 @@ Reinforce a memory's policy record, optionally promoting a Daily-tier memory to
+-Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.
++Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply updates memory_policy scores only. Use lifecycle_run for lifecycle_state transitions.
+@@ -1284 +1284 @@ Drop every pending_injections row whose expires_at has passed. Idempotent. Retur
+-Archive old, low-importance memories by creating summaries. Moves originals to archived state.
++Compress already-Archived memories by creating summary rows. Does not move originals to archived state; use lifecycle_run for lifecycle transitions.
+@@ -1287 +1287 @@ Archive old, low-importance memories by creating summaries. Moves originals to a
+-- Annotations: destructiveHint
++- Annotations: mutating (no MCP hints)
+@@ -1292,3 +1292,3 @@ Archive old, low-importance memories by creating summaries. Moves originals to a
+-| `max_age_days` | `integer` | no | Archive memories older than this many days Default: `90`. |
+-| `max_importance` | `number` | no | Only archive memories with importance below this Default: `0.5`. |
+-| `min_access_count` | `integer` | no | Skip memories accessed more than this many times Default: `5`. |
++| `max_age_days` | `integer` | no | Compress archived memories older than this many days Default: `90`. |
++| `max_importance` | `number` | no | Only compress already-Archived memories with importance below this Default: `0.5`. |
++| `min_access_count` | `integer` | no | Skip already-Archived memories accessed more than this many times Default: `5`. |
+@@ -1296 +1296 @@ Archive old, low-importance memories by creating summaries. Moves originals to a
+-| `dry_run` | `boolean` | no | If true, only report what would be archived Default: `true`. |
++| `dry_run` | `boolean` | no | If true, only report what would be compressed Default: `true`. |
+@@ -1327 +1327 @@ Get lifecycle statistics (active/stale/archived counts by workspace).
+-Manually trigger a lifecycle cycle (mark stale, archive old). Dry run by default.
++Run the canonical lifecycle predicate to mark stale and archive idle memories. Dry run by default; this is the only decay-derived lifecycle writer.
+@@ -1337,3 +1337,4 @@ Manually trigger a lifecycle cycle (mark stale, archive old). Dry run by default
+-| `stale_days` | `integer` | no | Mark memories older than this as stale Default: `30`. |
+-| `archive_days` | `integer` | no | Archive memories older than this Default: `90`. |
+-| `min_importance` | `number` | no | Only process memories below this importance Default: `0.5`. |
++| `stale_days` | `integer` | no | Base idle days before marking as stale Default: `30`. |
++| `archive_days` | `integer` | no | Base idle days before archiving Default: `90`. |
++| `hard_idle_cap_days` | `integer` | no | Absolute idle-day cap before archiving Default: `365`. |
++| `max_importance_mult` | `number` | no | Maximum multiplier by which importance extends stale/archive windows Default: `4.0`. |
+@@ -1356 +1357 @@ Manually set the lifecycle state of a memory.
+-Get or set lifecycle configuration (intervals, thresholds).
++Get lifecycle predicate configuration defaults and optional overrides.
+@@ -1364,4 +1365,4 @@ Get or set lifecycle configuration (intervals, thresholds).
+-| `stale_days` | `integer` | no | Days before marking as stale |
+-| `archive_days` | `integer` | no | Days before auto-archiving |
+-| `min_importance` | `number` | no | Importance threshold for lifecycle |
+-| `min_access_count` | `integer` | no | Access count threshold |
++| `stale_days` | `integer` | no | Base idle days before marking as stale |
++| `archive_days` | `integer` | no | Base idle days before archiving |
++| `hard_idle_cap_days` | `integer` | no | Absolute idle-day cap before archiving |
++| `max_importance_mult` | `number` | no | Maximum multiplier by which importance extends stale/archive windows |
+@@ -1371 +1372 @@ Get or set lifecycle configuration (intervals, thresholds).
+-Set a retention policy for a workspace. Controls auto-compression, max memory count, and auto-deletion.
++Set a retention policy for a workspace. Controls compression of already-Archived memories, max memory count, and auto-deletion.
+@@ -1382,2 +1383,2 @@ Set a retention policy for a workspace. Controls auto-compression, max memory co
+-| `compress_after_days` | `integer` | no | Auto-compress memories older than this |
+-| `compress_max_importance` | `number` | no | Only compress memories with importance <= this (default 0.3) |
++| `compress_after_days` | `integer` | no | Compress already-Archived memories older than this |
++| `compress_max_importance` | `number` | no | Only compress already-Archived memories with importance <= this (default 0.3) |
+@@ -1492 +1493 @@ Demote a memory's salience score. Useful for marking memories as less relevant.
+-Run temporal decay on all memories. Updates lifecycle states (Active → Stale → Archived) based on salience scores.
++Run salience score decay and optionally record salience history. Does not update lifecycle_state; use lifecycle_run for lifecycle transitions.
+@@ -1495 +1496 @@ Run temporal decay on all memories. Updates lifecycle states (Active → Stale 
+-- Annotations: destructiveHint
++- Annotations: mutating (no MCP hints)
+@@ -1500 +1501 @@ Run temporal decay on all memories. Updates lifecycle states (Active → Stale 
+-| `dry_run` | `boolean` | no | If true, compute changes without persisting updates Default: `false`. |
++| `dry_run` | `boolean` | no | If true, compute score/history changes without persisting updates Default: `false`. |
+@@ -1503,2 +1503,0 @@ Run temporal decay on all memories. Updates lifecycle states (Active → Stale 
+-| `stale_threshold_days` | `integer` | no | Days of inactivity before marking stale Minimum: `1`. |
+-| `archive_threshold_days` | `integer` | no | Days of inactivity before suggesting archive Minimum: `1`. |
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index 59b508c..96906f4 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -5 +5 @@ mode=full
+-timestamp=2026-06-22T03:15:08Z
++timestamp=2026-06-27T10:16:31Z
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 73986a9..d3465eb 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -905,0 +906,44 @@ Verification:
++
++## Lifecycle predicate unification — 2026-06-27
++
++- Added `src/intelligence/lifecycle.rs` with the canonical
++  `LifecycleConfig`, `normalized_importance`, and `decide_lifecycle_state`
++  predicate. The predicate uses `last_accessed_at` with `created_at` fallback,
++  importance as a bounded multiplier, a hard idle cap, and monotonic stale /
++  archived behavior.
++- Reworked `lifecycle_run` to use one permissive SQL candidate query plus the
++  canonical predicate for dry-run and apply parity. `min_importance` remains
++  accepted as deprecated/no-op compatibility only.
++- Made salience decay score/history-only and routed `SalienceScore.suggested_state`
++  through the canonical lifecycle predicate.
++- Made `memory_decay` policy-score-only; lifecycle transitions now remain in
++  `lifecycle_run`.
++- Constrained `memory_archive_old` and `compress_old_memories` to compress only
++  already-Archived memories. The optional server compression scheduler now logs
++  compression rather than archival.
++- Updated public MCP tool metadata and regenerated `docs/MCP_TOOLS.md`.
++- `SCHEMA_VERSION` remains 44; no migration was added.
++
++Verification:
++
++- `rtk cargo test intelligence::lifecycle --lib` — PASS.
++- `rtk cargo test mcp::handlers::lifecycle --lib` — PASS.
++- `rtk cargo test intelligence::salience --lib` — PASS.
++- `rtk cargo test mcp::handlers::quality --lib` — PASS.
++- `rtk cargo test mcp::handlers::memory_policy --lib` — PASS.
++- `rtk cargo test mcp::handlers::summarize --lib` — PASS.
++- `rtk cargo test retention --lib` — PASS.
++- `rtk cargo test storage::queries --lib` — PASS.
++- `rtk cargo test --test mcp_protocol_tests` — PASS.
++- `rtk cargo check --workspace --all-targets --locked` — PASS.
++- `rtk cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
++  — PASS.
++- `rtk cargo test --workspace --all-targets --locked` — PASS, 1225 tests.
++- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
++- `rtk bash docs/harness/bin/doctor.sh` — PASS.
++- `rtk git diff --check` — PASS.
++- `rtk grep -n "SET lifecycle_state|UPDATE memories SET lifecycle_state|update_memory_lifecycle_state\\(" src`
++  — PASS; remaining matches are canonical lifecycle/manual/domain/helper/test
++  write sites only.
++- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
++  + PR-title policy + harness doctor).
+diff --git a/src/bin/server.rs b/src/bin/server.rs
+index eac7fe6..b664da1 100644
+--- a/src/bin/server.rs
++++ b/src/bin/server.rs
+@@ -751,3 +751,6 @@ fn main() -> Result<()> {
+-                    Ok(archived) => {
+-                        if archived > 0 {
+-                            tracing::info!("Compression scheduler archived {} memories", archived);
++                    Ok(compressed) => {
++                        if compressed > 0 {
++                            tracing::info!(
++                                "Compression scheduler compressed {} archived memories",
++                                compressed
++                            );
+diff --git a/src/intelligence/mod.rs b/src/intelligence/mod.rs
+index a6f1a48..58009e2 100644
+--- a/src/intelligence/mod.rs
++++ b/src/intelligence/mod.rs
+@@ -39,0 +40 @@ pub mod gardening;
++pub mod lifecycle;
+@@ -117,0 +119,2 @@ pub use fact_extraction::{
++pub use lifecycle::{decide_lifecycle_state, normalized_importance, LifecycleConfig};
++
+diff --git a/src/intelligence/salience.rs b/src/intelligence/salience.rs
+index 50254c8..eddca70 100644
+--- a/src/intelligence/salience.rs
++++ b/src/intelligence/salience.rs
+@@ -12 +12 @@
+-//! - Automatic archival decisions
++//! - Canonical lifecycle suggestions
+@@ -19,0 +20 @@ use crate::error::Result;
++use crate::intelligence::{decide_lifecycle_state, LifecycleConfig};
+@@ -79 +80 @@ pub struct SalienceScore {
+-    /// Suggested lifecycle state based on salience
++    /// Suggested lifecycle state from the canonical lifecycle predicate
+@@ -210,2 +211 @@ impl SalienceCalculator {
+-        // Suggest lifecycle state based on score and age
+-        let suggested_state = self.suggest_lifecycle_state(memory, score, now);
++        let suggested_state = decide_lifecycle_state(memory, now, &LifecycleConfig::default());
+@@ -253,28 +252,0 @@ impl SalienceCalculator {
+-    /// Suggest lifecycle state based on salience and age
+-    fn suggest_lifecycle_state(
+-        &self,
+-        memory: &Memory,
+-        score: f32,
+-        now: DateTime<Utc>,
+-    ) -> LifecycleState {
+-        let last_access = memory.last_accessed_at.unwrap_or(memory.created_at);
+-        let days_inactive = (now - last_access).num_days();
+-
+-        // Already archived stays archived
+-        if memory.lifecycle_state == LifecycleState::Archived {
+-            return LifecycleState::Archived;
+-        }
+-
+-        // Low salience + long inactivity = suggest archive
+-        if score < 0.2 && days_inactive >= self.config.archive_threshold_days {
+-            return LifecycleState::Archived;
+-        }
+-
+-        // Medium-low salience or moderate inactivity = stale
+-        if score < 0.4 || days_inactive >= self.config.stale_threshold_days {
+-            return LifecycleState::Stale;
+-        }
+-
+-        LifecycleState::Active
+-    }
+-
+@@ -317 +289 @@ use std::collections::HashMap;
+-/// Run decay on all memories and update lifecycle states
++/// Run salience score decay and optionally record salience history.
+@@ -335,2 +306,0 @@ pub fn run_salience_decay_in_workspace(
+-    let _calculator = SalienceCalculator::new(config.clone());
+-
+@@ -389,2 +359,2 @@ pub fn run_salience_decay_in_workspace(
+-    let mut marked_stale = 0i64;
+-    let mut suggested_archive = 0i64;
++    let marked_stale = 0i64;
++    let suggested_archive = 0i64;
+@@ -400 +370 @@ pub fn run_salience_decay_in_workspace(
+-        current_state,
++        _current_state,
+@@ -437,24 +406,0 @@ pub fn run_salience_decay_in_workspace(
+-        // Determine suggested state
+-        let days_inactive = (now - last_access).num_days();
+-        let new_state = if score < 0.2 && days_inactive >= config.archive_threshold_days {
+-            "archived"
+-        } else if score < 0.4 || days_inactive >= config.stale_threshold_days {
+-            "stale"
+-        } else {
+-            "active"
+-        };
+-
+-        // Update state if changed
+-        if new_state != current_state {
+-            conn.execute(
+-                "UPDATE memories SET lifecycle_state = ?, updated_at = ? WHERE id = ?",
+-                params![new_state, now_str, id],
+-            )?;
+-
+-            if new_state == "stale" {
+-                marked_stale += 1;
+-            } else if new_state == "archived" {
+-                suggested_archive += 1;
+-            }
+-        }
+-
+@@ -965 +911,3 @@ mod tests {
+-    fn test_lifecycle_suggestion() {
++    fn test_lifecycle_suggestion_matches_canonical_predicate() {
++        use crate::intelligence::{decide_lifecycle_state, LifecycleConfig};
++
+@@ -966,0 +915 @@ mod tests {
++        let memory = create_test_memory(1, 0.1, 0, 100);
+@@ -968,4 +917 @@ mod tests {
+-        // Recent with good engagement = active
+-        let active = create_test_memory(1, 0.8, 20, 5);
+-        let score_active = calculator.calculate(&active, 0.5);
+-        assert_eq!(score_active.suggested_state, LifecycleState::Active);
++        let score = calculator.calculate(&memory, 0.1);
+@@ -973,4 +919,5 @@ mod tests {
+-        // Old with low engagement = stale
+-        let stale = create_test_memory(2, 0.3, 2, 45);
+-        let score_stale = calculator.calculate(&stale, 0.5);
+-        assert_eq!(score_stale.suggested_state, LifecycleState::Stale);
++        assert_eq!(
++            score.suggested_state,
++            decide_lifecycle_state(&memory, score.calculated_at, &LifecycleConfig::default())
++        );
++    }
+@@ -978,4 +925,62 @@ mod tests {
+-        // Very old with very low engagement = archived
+-        let archived = create_test_memory(3, 0.1, 0, 100);
+-        let score_archived = calculator.calculate(&archived, 0.1);
+-        assert_eq!(score_archived.suggested_state, LifecycleState::Archived);
++    #[test]
++    fn test_salience_decay_records_history_without_lifecycle_transition() {
++        use crate::storage::queries::create_memory;
++        use crate::storage::Storage;
++        use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
++        use chrono::Duration;
++
++        let storage = Storage::open_in_memory().expect("in-memory storage");
++        let old_ts = (Utc::now() - Duration::days(100)).to_rfc3339();
++        let memory_id = storage
++            .with_transaction(|conn| {
++                let memory = create_memory(
++                    conn,
++                    &CreateMemoryInput {
++                        content: "old salience memory".to_string(),
++                        memory_type: MemoryType::Note,
++                        importance: Some(0.0),
++                        workspace: Some("default".to_string()),
++                        tier: MemoryTier::Permanent,
++                        ..Default::default()
++                    },
++                )?;
++                conn.execute(
++                    "UPDATE memories
++                     SET created_at = ?1,
++                         updated_at = ?1,
++                         last_accessed_at = ?1,
++                         access_count = 0,
++                         lifecycle_state = 'active'
++                     WHERE id = ?2",
++                    params![old_ts, memory.id],
++                )?;
++                Ok(memory.id)
++            })
++            .expect("seed old memory");
++
++        let result = storage
++            .with_transaction(|conn| {
++                run_salience_decay_in_workspace(
++                    conn,
++                    &SalienceConfig::default(),
++                    true,
++                    Some("default"),
++                )
++            })
++            .expect("run salience decay");
++
++        assert_eq!(result.processed, 1);
++        assert_eq!(result.marked_stale, 0);
++        assert_eq!(result.suggested_archive, 0);
++        assert_eq!(result.history_records, 1);
++
++        let state = storage
++            .with_connection(|conn| {
++                Ok(conn.query_row(
++                    "SELECT lifecycle_state FROM memories WHERE id = ?1",
++                    params![memory_id],
++                    |row| row.get::<_, String>(0),
++                )?)
++            })
++            .expect("query lifecycle state");
++        assert_eq!(state, "active");
+diff --git a/src/mcp/handlers/lifecycle.rs b/src/mcp/handlers/lifecycle.rs
+index 3431276..c65ecb4 100644
+--- a/src/mcp/handlers/lifecycle.rs
++++ b/src/mcp/handlers/lifecycle.rs
+@@ -2,0 +3 @@
++use chrono::{DateTime, Utc};
+@@ -6,0 +8 @@ use super::HandlerContext;
++use crate::intelligence::{decide_lifecycle_state, LifecycleConfig};
+@@ -9 +11 @@ use crate::storage::queries::update_memory_lifecycle_state;
+-use crate::types::LifecycleState;
++use crate::types::{LifecycleState, Memory, MemoryScope, MemoryTier, MemoryType, Visibility};
+@@ -74,2 +75,0 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-    use chrono::{Duration, Utc};
+-
+@@ -81,15 +81,2 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-    let stale_days = params
+-        .get("stale_days")
+-        .and_then(|v| v.as_i64())
+-        .unwrap_or(30);
+-    let archive_days = params
+-        .get("archive_days")
+-        .and_then(|v| v.as_i64())
+-        .unwrap_or(90);
+-    let min_importance = params
+-        .get("min_importance")
+-        .and_then(|v| v.as_f64())
+-        .unwrap_or(0.5) as f32;
+-
+-    let stale_cutoff = (Utc::now() - Duration::days(stale_days)).to_rfc3339();
+-    let archive_cutoff = (Utc::now() - Duration::days(archive_days)).to_rfc3339();
++    let config = lifecycle_config_from_params(&params);
++    let now = Utc::now();
+@@ -99,8 +86,9 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-            let stale_query = if workspace.is_some() {
+-                "SELECT id, content FROM memories
+-                 WHERE workspace = ?
+-                   AND (lifecycle_state IS NULL OR lifecycle_state = 'active')
+-                   AND created_at < ?
+-                   AND importance < ?
+-                   AND access_count < 5
+-                   AND valid_to IS NULL"
++            let candidate_query = if workspace.is_some() {
++                "SELECT id, content, memory_type, importance, access_count,
++                        created_at, updated_at, last_accessed_at, lifecycle_state,
++                        workspace, tier
++                 FROM memories
++                 WHERE valid_to IS NULL
++                   AND COALESCE(lifecycle_state, 'active') != 'archived'
++                   AND workspace = ?
++                 ORDER BY id ASC"
+@@ -108,6 +96,7 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-                "SELECT id, content FROM memories
+-                 WHERE (lifecycle_state IS NULL OR lifecycle_state = 'active')
+-                   AND created_at < ?
+-                   AND importance < ?
+-                   AND access_count < 5
+-                   AND valid_to IS NULL"
++                "SELECT id, content, memory_type, importance, access_count,
++                        created_at, updated_at, last_accessed_at, lifecycle_state,
++                        workspace, tier
++                 FROM memories
++                 WHERE valid_to IS NULL
++                   AND COALESCE(lifecycle_state, 'active') != 'archived'
++                 ORDER BY id ASC"
+@@ -116,2 +105,2 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-            let stale_candidates: Vec<(i64, String)> = {
+-                let mut stmt = conn.prepare(stale_query)?;
++            let candidates: Vec<Memory> = {
++                let mut stmt = conn.prepare(candidate_query)?;
+@@ -119,4 +108,2 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-                    stmt.query_map(params![ws, &stale_cutoff, min_importance], |row| {
+-                        Ok((row.get(0)?, row.get(1)?))
+-                    })?
+-                    .collect::<rusqlite::Result<Vec<_>>>()?
++                    stmt.query_map(params![ws], |row| lifecycle_memory_from_row(row, now))?
++                        .collect::<rusqlite::Result<Vec<_>>>()?
+@@ -124,4 +111,2 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-                    stmt.query_map(params![&stale_cutoff, min_importance], |row| {
+-                        Ok((row.get(0)?, row.get(1)?))
+-                    })?
+-                    .collect::<rusqlite::Result<Vec<_>>>()?
++                    stmt.query_map([], |row| lifecycle_memory_from_row(row, now))?
++                        .collect::<rusqlite::Result<Vec<_>>>()?
+@@ -131,12 +116,14 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-            let archive_query = if workspace.is_some() {
+-                "SELECT id, content FROM memories
+-                 WHERE workspace = ?
+-                   AND lifecycle_state = 'stale'
+-                   AND created_at < ?
+-                   AND valid_to IS NULL"
+-            } else {
+-                "SELECT id, content FROM memories
+-                 WHERE lifecycle_state = 'stale'
+-                   AND created_at < ?
+-                   AND valid_to IS NULL"
+-            };
++            let transitions: Vec<LifecycleTransition> = candidates
++                .into_iter()
++                .filter_map(|memory| {
++                    let next = decide_lifecycle_state(&memory, now, &config);
++                    if next == memory.lifecycle_state {
++                        return None;
++                    }
++                    Some(LifecycleTransition {
++                        id: memory.id,
++                        preview: memory.content.chars().take(50).collect(),
++                        next,
++                    })
++                })
++                .collect();
+@@ -144,14 +131,2 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-            let archive_candidates: Vec<(i64, String)> = {
+-                let mut stmt = conn.prepare(archive_query)?;
+-                if let Some(ws) = workspace {
+-                    stmt.query_map(params![ws, &archive_cutoff], |row| {
+-                        Ok((row.get(0)?, row.get(1)?))
+-                    })?
+-                    .collect::<rusqlite::Result<Vec<_>>>()?
+-                } else {
+-                    stmt.query_map(params![&archive_cutoff], |row| {
+-                        Ok((row.get(0)?, row.get(1)?))
+-                    })?
+-                    .collect::<rusqlite::Result<Vec<_>>>()?
+-                }
+-            };
++            let stale_candidates = transition_previews(&transitions, LifecycleState::Stale);
++            let archive_candidates = transition_previews(&transitions, LifecycleState::Archived);
+@@ -164,6 +139,2 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-                    "stale_candidates": stale_candidates.iter().take(10).map(|(id, content)| {
+-                        json!({"id": id, "preview": content.chars().take(50).collect::<String>()})
+-                    }).collect::<Vec<_>>(),
+-                    "archive_candidates": archive_candidates.iter().take(10).map(|(id, content)| {
+-                        json!({"id": id, "preview": content.chars().take(50).collect::<String>()})
+-                    }).collect::<Vec<_>>()
++                    "stale_candidates": stale_candidates,
++                    "archive_candidates": archive_candidates
+@@ -175,12 +146,10 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
+-            let mut transitioned_ids: Vec<(i64, &str)> = Vec::new();
+-
+-            for (id, _) in &stale_candidates {
+-                update_memory_lifecycle_state(conn, *id, LifecycleState::Stale)?;
+-                stale_count += 1;
+-                transitioned_ids.push((*id, "stale"));
+-            }
+-
+-            for (id, _) in &archive_candidates {
+-                update_memory_lifecycle_state(conn, *id, LifecycleState::Archived)?;
+-                archive_count += 1;
+-                transitioned_ids.push((*id, "archived"));
++            let mut transitioned_ids: Vec<(i64, LifecycleState)> = Vec::new();
++
++            for transition in &transitions {
++                update_memory_lifecycle_state(conn, transition.id, transition.next)?;
++                match transition.next {
++                    LifecycleState::Active => {}
++                    LifecycleState::Stale => stale_count += 1,
++                    LifecycleState::Archived => archive_count += 1,
++                }
++                transitioned_ids.push((transition.id, transition.next));
+@@ -190,0 +160 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
++                let new_state = new_state.to_string();
+@@ -217,0 +188,104 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
++#[derive(Clone)]
++struct LifecycleTransition {
++    id: i64,
++    preview: String,
++    next: LifecycleState,
++}
++
++fn lifecycle_config_from_params(params: &Value) -> LifecycleConfig {
++    LifecycleConfig {
++        stale_days_base: params
++            .get("stale_days")
++            .and_then(|v| v.as_i64())
++            .unwrap_or(30),
++        archive_days_base: params
++            .get("archive_days")
++            .and_then(|v| v.as_i64())
++            .unwrap_or(90),
++        hard_idle_cap_days: params
++            .get("hard_idle_cap_days")
++            .and_then(|v| v.as_i64())
++            .unwrap_or(365),
++        max_importance_mult: params
++            .get("max_importance_mult")
++            .and_then(|v| v.as_f64())
++            .unwrap_or(4.0) as f32,
++    }
++}
++
++fn lifecycle_memory_from_row(
++    row: &rusqlite::Row<'_>,
++    now: DateTime<Utc>,
++) -> rusqlite::Result<Memory> {
++    let created_at = parse_rfc3339_or_now(row.get::<_, String>(5)?, now);
++    let updated_at = parse_rfc3339_or_now(row.get::<_, String>(6)?, now);
++    let last_accessed_at = row
++        .get::<_, Option<String>>(7)?
++        .map(|value| parse_rfc3339_or_now(value, now));
++    let lifecycle_state = row
++        .get::<_, Option<String>>(8)?
++        .and_then(|state| state.parse::<LifecycleState>().ok())
++        .unwrap_or(LifecycleState::Active);
++    let memory_type = row
++        .get::<_, String>(2)?
++        .parse::<MemoryType>()
++        .unwrap_or(MemoryType::Note);
++    let tier = row
++        .get::<_, String>(10)?
++        .parse::<MemoryTier>()
++        .unwrap_or(MemoryTier::Permanent);
++
++    Ok(Memory {
++        id: row.get(0)?,
++        content: row.get(1)?,
++        memory_type,
++        tags: Vec::new(),
++        metadata: std::collections::HashMap::new(),
++        importance: row.get(3)?,
++        access_count: row.get(4)?,
++        created_at,
++        updated_at,
++        last_accessed_at,
++        owner_id: None,
++        visibility: Visibility::Private,
++        scope: MemoryScope::Global,
++        workspace: row
++            .get::<_, Option<String>>(9)?
++            .unwrap_or_else(|| "default".to_string()),
++        tier,
++        version: 1,
++        has_embedding: false,
++        expires_at: None,
++        content_hash: None,
++        event_time: None,
++        event_duration_seconds: None,
++        trigger_pattern: None,
++        procedure_success_count: 0,
++        procedure_failure_count: 0,
++        summary_of_id: None,
++        lifecycle_state,
++        media_url: None,
++    })
++}
++
++fn parse_rfc3339_or_now(value: String, now: DateTime<Utc>) -> DateTime<Utc> {
++    DateTime::parse_from_rfc3339(&value)
++        .map(|dt| dt.with_timezone(&Utc))
++        .unwrap_or(now)
++}
++
++fn transition_previews(transitions: &[LifecycleTransition], state: LifecycleState) -> Vec<Value> {
++    transitions
++        .iter()
++        .filter(|transition| transition.next == state)
++        .take(10)
++        .map(|transition| {
++            json!({
++                "id": transition.id,
++                "preview": transition.preview,
++                "target_state": transition.next.to_string()
++            })
++        })
++        .collect()
++}
++
+@@ -271,4 +345 @@ pub fn lifecycle_config(_ctx: &HandlerContext, params: Value) -> Value {
+-    let stale_days = params.get("stale_days").and_then(|v| v.as_i64());
+-    let archive_days = params.get("archive_days").and_then(|v| v.as_i64());
+-    let min_importance = params.get("min_importance").and_then(|v| v.as_f64());
+-    let min_access_count = params.get("min_access_count").and_then(|v| v.as_i64());
++    let config = lifecycle_config_from_params(&params);
+@@ -277,4 +348,4 @@ pub fn lifecycle_config(_ctx: &HandlerContext, params: Value) -> Value {
+-        "stale_days": stale_days.unwrap_or(30),
+-        "archive_days": archive_days.unwrap_or(90),
+-        "min_importance": min_importance.unwrap_or(0.5),
+-        "min_access_count": min_access_count.unwrap_or(5),
++        "stale_days": config.stale_days_base,
++        "archive_days": config.archive_days_base,
++        "hard_idle_cap_days": config.hard_idle_cap_days,
++        "max_importance_mult": config.max_importance_mult,
+@@ -474,0 +546,171 @@ mod lifecycle_tests {
++    fn seed_lifecycle_memory(
++        ctx: &super::super::HandlerContext,
++        content: &str,
++        importance: f32,
++        access_count: i32,
++        idle_days: i64,
++        lifecycle_state: LifecycleState,
++    ) -> i64 {
++        use chrono::{Duration, Utc};
++
++        let old_ts = (Utc::now() - Duration::days(idle_days)).to_rfc3339();
++        ctx.storage
++            .with_transaction(|conn| {
++                conn.execute(
++                    "INSERT INTO memories (
++                         content, memory_type, workspace, tier, importance,
++                         access_count, lifecycle_state, created_at, updated_at,
++                         last_accessed_at
++                     )
++                     VALUES (?1, 'note', 'default', 'permanent', ?2, ?3, ?4, ?5, ?5, ?5)",
++                    rusqlite::params![
++                        content,
++                        importance,
++                        access_count,
++                        lifecycle_state.to_string(),
++                        old_ts
++                    ],
++                )?;
++                Ok(conn.last_insert_rowid())
++            })
++            .expect("seed lifecycle memory")
++    }
++
++    fn lifecycle_state(ctx: &super::super::HandlerContext, id: i64) -> String {
++        ctx.storage
++            .with_connection(|conn| {
++                Ok(conn.query_row(
++                    "SELECT COALESCE(lifecycle_state, 'active') FROM memories WHERE id = ?1",
++                    rusqlite::params![id],
++                    |row| row.get::<_, String>(0),
++                )?)
++            })
++            .expect("query lifecycle state")
++    }
++
++    fn candidate_ids(result: &Value, key: &str) -> Vec<i64> {
++        result[key]
++            .as_array()
++            .expect("candidate array")
++            .iter()
++            .map(|candidate| {
++                candidate["id"]
++                    .as_i64()
++                    .expect("candidate id should be an integer")
++            })
++            .collect()
++    }
++
++    #[test]
++    fn test_lifecycle_run_archives_high_importance_high_access_candidate() {
++        let ctx = test_ctx();
++        let id = seed_lifecycle_memory(
++            &ctx,
++            "important abandoned memory",
++            1.0,
++            100,
++            370,
++            LifecycleState::Active,
++        );
++
++        let result = lifecycle_run(
++            &ctx,
++            json!({
++                "dry_run": false,
++                "workspace": "default",
++                "min_importance": 0.0
++            }),
++        );
++
++        assert!(result.get("error").is_none(), "unexpected error: {result}");
++        assert_eq!(result["archived"].as_i64(), Some(1), "{result}");
++        assert_eq!(lifecycle_state(&ctx, id), "archived");
++    }
++
++    #[test]
++    fn test_lifecycle_run_dry_run_apply_parity() {
++        let ctx = test_ctx();
++        let stale_id =
++            seed_lifecycle_memory(&ctx, "stale candidate", 0.0, 0, 35, LifecycleState::Active);
++        let archive_id = seed_lifecycle_memory(
++            &ctx,
++            "archive candidate",
++            0.0,
++            0,
++            95,
++            LifecycleState::Active,
++        );
++
++        let dry = lifecycle_run(
++            &ctx,
++            json!({
++                "dry_run": true,
++                "workspace": "default"
++            }),
++        );
++        assert!(
++            dry.get("error").is_none(),
++            "unexpected dry-run error: {dry}"
++        );
++        assert_eq!(candidate_ids(&dry, "stale_candidates"), vec![stale_id]);
++        assert_eq!(candidate_ids(&dry, "archive_candidates"), vec![archive_id]);
++
++        let applied = lifecycle_run(
++            &ctx,
++            json!({
++                "dry_run": false,
++                "workspace": "default"
++            }),
++        );
++        assert!(
++            applied.get("error").is_none(),
++            "unexpected apply error: {applied}"
++        );
++        assert_eq!(applied["marked_stale"].as_i64(), Some(1), "{applied}");
++        assert_eq!(applied["archived"].as_i64(), Some(1), "{applied}");
++        assert_eq!(lifecycle_state(&ctx, stale_id), "stale");
++        assert_eq!(lifecycle_state(&ctx, archive_id), "archived");
++    }
++
++    #[test]
++    fn test_lifecycle_run_apply_is_idempotent() {
++        let ctx = test_ctx();
++        let id = seed_lifecycle_memory(
++            &ctx,
++            "idempotent archive",
++            0.0,
++            0,
++            95,
++            LifecycleState::Active,
++        );
++
++        let first = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
++        let second = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
++
++        assert!(
++            first.get("error").is_none(),
++            "unexpected first error: {first}"
++        );
++        assert!(
++            second.get("error").is_none(),
++            "unexpected second error: {second}"
++        );
++        assert_eq!(first["archived"].as_i64(), Some(1), "{first}");
++        assert_eq!(second["marked_stale"].as_i64(), Some(0), "{second}");
++        assert_eq!(second["archived"].as_i64(), Some(0), "{second}");
++        assert_eq!(lifecycle_state(&ctx, id), "archived");
++    }
++
++    #[test]
++    fn test_lifecycle_run_allows_direct_active_to_archived_transition() {
++        let ctx = test_ctx();
++        let id = seed_lifecycle_memory(&ctx, "direct archive", 0.0, 0, 90, LifecycleState::Active);
++
++        let result = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
++
++        assert!(result.get("error").is_none(), "unexpected error: {result}");
++        assert_eq!(result["marked_stale"].as_i64(), Some(0), "{result}");
++        assert_eq!(result["archived"].as_i64(), Some(1), "{result}");
++        assert_eq!(lifecycle_state(&ctx, id), "archived");
++    }
++
+@@ -490 +732 @@ mod lifecycle_tests {
+-                     VALUES ('old memory content', 'general', 'default', 0.1, 0, 'active', ?1)",
++                     VALUES ('old memory content', 'note', 'default', 0.1, 0, 'active', ?1)",
+diff --git a/src/mcp/handlers/memory_policy.rs b/src/mcp/handlers/memory_policy.rs
+index 18eab54..73f2249 100644
+--- a/src/mcp/handlers/memory_policy.rs
++++ b/src/mcp/handlers/memory_policy.rs
+@@ -126 +125,0 @@ pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
+-            let mut lifecycle_updates = 0usize;
+@@ -142,12 +140,0 @@ pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
+-
+-                if let Some(state) = candidate.lifecycle_target {
+-                    let changed = conn.execute(
+-                        "UPDATE memories
+-                         SET lifecycle_state = ?1
+-                         WHERE id = ?2
+-                           AND valid_to IS NULL
+-                           AND COALESCE(lifecycle_state, 'active') = 'active'",
+-                        params![state.to_string(), candidate.memory_id],
+-                    )?;
+-                    lifecycle_updates += changed;
+-                }
+@@ -161 +148 @@ pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
+-                "lifecycle_updates": lifecycle_updates,
++                "lifecycle_updates": 0,
+@@ -163 +150 @@ pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
+-                "concern": "apply is conservative: only memory_policy scores and active lifecycle_state transitions are updated"
++                "concern": "apply is conservative: only memory_policy scores are updated; use lifecycle_run for lifecycle transitions"
+@@ -352,6 +339 @@ fn decay_candidates(conn: &rusqlite::Connection, workspace: &str) -> Result<Vec<
+-        let lifecycle_target =
+-            if memory.lifecycle_state == LifecycleState::Active && new_retention < 0.25 {
+-                Some(LifecycleState::Stale)
+-            } else {
+-                None
+-            };
++        let lifecycle_target = None;
+@@ -414,0 +397,101 @@ fn bucket(score: f32) -> &'static str {
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn test_ctx() -> super::HandlerContext {
++        use crate::embedding::{create_embedder, EmbeddingCache};
++        use crate::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
++        use crate::storage::Storage;
++        use crate::types::EmbeddingConfig;
++        use parking_lot::Mutex;
++        use std::sync::Arc;
++
++        let storage = Storage::open_in_memory().expect("in-memory storage");
++        let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
++        super::HandlerContext {
++            storage,
++            embedder,
++            fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
++            search_config: SearchConfig::default(),
++            realtime: None,
++            embedding_cache: Arc::new(EmbeddingCache::default()),
++            search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
++            #[cfg(feature = "meilisearch")]
++            meili: None,
++            #[cfg(feature = "meilisearch")]
++            meili_indexer: None,
++            #[cfg(feature = "meilisearch")]
++            meili_sync_interval: 60,
++            #[cfg(feature = "langfuse")]
++            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
++        }
++    }
++
++    #[test]
++    fn memory_decay_updates_policy_scores_without_lifecycle_transition() {
++        use crate::storage::queries::create_memory;
++        use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
++
++        let ctx = test_ctx();
++        let memory_id = ctx
++            .storage
++            .with_transaction(|conn| {
++                let memory = create_memory(
++                    conn,
++                    &CreateMemoryInput {
++                        content: "policy decay lifecycle guard".to_string(),
++                        memory_type: MemoryType::Note,
++                        workspace: Some("default".to_string()),
++                        tier: MemoryTier::Permanent,
++                        ..Default::default()
++                    },
++                )?;
++                upsert_policy_record(
++                    conn,
++                    PolicyRecordInput {
++                        memory_id: memory.id,
++                        salience_score: 0.30,
++                        retention_score: 0.20,
++                        retrieval_priority: 0.40,
++                        policy_version: "heuristic-test".to_string(),
++                        policy_reason: "test low retention".to_string(),
++                    },
++                )?;
++                Ok(memory.id)
++            })
++            .expect("seed policy memory");
++
++        let result = memory_decay(
++            &ctx,
++            serde_json::json!({
++                "dry_run": false,
++                "workspace": "default"
++            }),
++        );
++
++        assert!(result.get("error").is_none(), "unexpected error: {result}");
++        assert_eq!(result["policy_updates"].as_u64(), Some(1), "{result}");
++        assert_eq!(result["lifecycle_updates"].as_u64(), Some(0), "{result}");
++
++        let (lifecycle_state, policy) = ctx
++            .storage
++            .with_connection(|conn| {
++                let lifecycle_state: String = conn.query_row(
++                    "SELECT lifecycle_state FROM memories WHERE id = ?1",
++                    params![memory_id],
++                    |row| row.get(0),
++                )?;
++                let policy = get_policy_record(conn, memory_id)?.expect("policy record");
++                Ok((lifecycle_state, policy))
++            })
++            .expect("query policy and lifecycle");
++
++        assert_eq!(lifecycle_state, "active");
++        assert!(
++            policy.retention_score < 0.20,
++            "retention score should decay, got {}",
++            policy.retention_score
++        );
++    }
++}
+diff --git a/src/mcp/handlers/summarize.rs b/src/mcp/handlers/summarize.rs
+index e5fc138..9960dd2 100644
+--- a/src/mcp/handlers/summarize.rs
++++ b/src/mcp/handlers/summarize.rs
+@@ -227 +227 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
+-    use crate::types::{CreateMemoryInput, ListOptions, MemoryTier, MemoryType};
++    use crate::types::{CreateMemoryInput, LifecycleState, ListOptions, MemoryTier, MemoryType};
+@@ -229 +228,0 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
+-    use rusqlite::params;
+@@ -255,0 +255 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
++                include_archived: true,
+@@ -266,0 +267 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
++                        && m.lifecycle_state == LifecycleState::Archived
+@@ -289 +290 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
+-                    "would_archive": candidates.len(),
++                    "would_compress": candidates.len(),
+@@ -294 +295 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
+-            let mut archived = 0;
++            let mut compressed = 0;
+@@ -316 +317 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
+-                    content: format!("[Archived {:?}] {}", memory.memory_type, summary_text),
++                    content: format!("[Compressed {:?}] {}", memory.memory_type, summary_text),
+@@ -328,28 +329,17 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
+-                        match conn.execute(
+-                            "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ? AND valid_to IS NULL",
+-                            params![memory.id],
+-                        ) {
+-                            Ok(_) => {
+-                                archived += 1;
+-                                emit_best_effort(
+-                                    conn,
+-                                    &EnrichmentEvent {
+-                                        operation_id: &operation_id,
+-                                        event_type:   "compression",
+-                                        memory_id:    Some(memory.id),
+-                                        version_id:   None,
+-                                        triggered_by: "memory_archive_old",
+-                                        agent_id:     None,
+-                                        workspace:    Some(memory.workspace.as_str()),
+-                                        params:       json!({}),
+-                                        outcome:      json!({"new_state": "archived"}),
+-                                        status:       "completed",
+-                                        dry_run:      false,
+-                                    },
+-                                );
+-                            }
+-                            Err(e) => errors.push(format!(
+-                                "Memory {}: summary created but failed to mark archived: {}",
+-                                memory.id, e
+-                            )),
+-                        }
++                        compressed += 1;
++                        emit_best_effort(
++                            conn,
++                            &EnrichmentEvent {
++                                operation_id: &operation_id,
++                                event_type: "compression",
++                                memory_id: Some(memory.id),
++                                version_id: None,
++                                triggered_by: "memory_archive_old",
++                                agent_id: None,
++                                workspace: Some(memory.workspace.as_str()),
++                                params: json!({}),
++                                outcome: json!({"compressed": true, "summary_created": true}),
++                                status: "completed",
++                                dry_run: false,
++                            },
++                        );
+@@ -363 +353 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
+-                "archived": archived,
++                "compressed": compressed,
+@@ -422,0 +413,53 @@ mod summarize_tests {
++    fn seed_old_memory(
++        ctx: &super::super::HandlerContext,
++        content: &str,
++        lifecycle_state: &str,
++    ) -> i64 {
++        use chrono::{Duration, Utc};
++
++        let id = seed_memory(ctx, content);
++        let old_ts = (Utc::now() - Duration::days(120)).to_rfc3339();
++        ctx.storage
++            .with_transaction(|conn| {
++                conn.execute(
++                    "UPDATE memories
++                     SET created_at = ?1,
++                         updated_at = ?1,
++                         last_accessed_at = ?1,
++                         importance = 0.0,
++                         access_count = 0,
++                         lifecycle_state = ?2
++                     WHERE id = ?3",
++                    rusqlite::params![old_ts, lifecycle_state, id],
++                )?;
++                Ok(())
++            })
++            .expect("age memory");
++        id
++    }
++
++    fn lifecycle_state(ctx: &super::super::HandlerContext, id: i64) -> String {
++        ctx.storage
++            .with_connection(|conn| {
++                Ok(conn.query_row(
++                    "SELECT lifecycle_state FROM memories WHERE id = ?1",
++                    rusqlite::params![id],
++                    |row| row.get::<_, String>(0),
++                )?)
++            })
++            .expect("query lifecycle state")
++    }
++
++    fn summary_count_for(ctx: &super::super::HandlerContext, id: i64) -> i64 {
++        ctx.storage
++            .with_connection(|conn| {
++                Ok(conn.query_row(
++                    "SELECT COUNT(*) FROM memories
++                     WHERE summary_of_id = ?1 AND memory_type = 'summary' AND valid_to IS NULL",
++                    rusqlite::params![id],
++                    |row| row.get(0),
++                )?)
++            })
++            .expect("query summary count")
++    }
++
+@@ -464,0 +508,44 @@ mod summarize_tests {
++
++    #[test]
++    fn test_memory_archive_old_does_not_compress_active_rows() {
++        let ctx = test_ctx();
++        let id = seed_old_memory(&ctx, "old active memory", "active");
++
++        let result = memory_archive_old(
++            &ctx,
++            serde_json::json!({
++                "dry_run": false,
++                "workspace": "default",
++                "max_age_days": 90,
++                "max_importance": 0.5,
++                "min_access_count": 5
++            }),
++        );
++
++        assert!(result.get("error").is_none(), "unexpected error: {result}");
++        assert_eq!(result["compressed"].as_u64(), Some(0), "{result}");
++        assert_eq!(summary_count_for(&ctx, id), 0);
++        assert_eq!(lifecycle_state(&ctx, id), "active");
++    }
++
++    #[test]
++    fn test_memory_archive_old_compresses_already_archived_rows() {
++        let ctx = test_ctx();
++        let id = seed_old_memory(&ctx, "old archived memory", "archived");
++
++        let result = memory_archive_old(
++            &ctx,
++            serde_json::json!({
++                "dry_run": false,
++                "workspace": "default",
++                "max_age_days": 90,
++                "max_importance": 0.5,
++                "min_access_count": 5
++            }),
++        );
++
++        assert!(result.get("error").is_none(), "unexpected error: {result}");
++        assert_eq!(result["compressed"].as_u64(), Some(1), "{result}");
++        assert_eq!(summary_count_for(&ctx, id), 1);
++        assert_eq!(lifecycle_state(&ctx, id), "archived");
++    }
+diff --git a/src/mcp/tools/memory.rs b/src/mcp/tools/memory.rs
+index 5228049..7f70025 100644
+--- a/src/mcp/tools/memory.rs
++++ b/src/mcp/tools/memory.rs
+@@ -494 +494 @@
+-        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.",
++        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply updates memory_policy scores only. Use lifecycle_run for lifecycle_state transitions.",
+@@ -1038 +1038 @@
+-        description: "Archive old, low-importance memories by creating summaries. Moves originals to archived state.",
++        description: "Compress already-Archived memories by creating summary rows. Does not move originals to archived state; use lifecycle_run for lifecycle transitions.",
+@@ -1042,3 +1042,3 @@
+-                "max_age_days": {"type": "integer", "default": 90, "description": "Archive memories older than this many days"},
+-                "max_importance": {"type": "number", "default": 0.5, "description": "Only archive memories with importance below this"},
+-                "min_access_count": {"type": "integer", "default": 5, "description": "Skip memories accessed more than this many times"},
++                "max_age_days": {"type": "integer", "default": 90, "description": "Compress archived memories older than this many days"},
++                "max_importance": {"type": "number", "default": 0.5, "description": "Only compress already-Archived memories with importance below this"},
++                "min_access_count": {"type": "integer", "default": 5, "description": "Skip already-Archived memories accessed more than this many times"},
+@@ -1046 +1046 @@
+-                "dry_run": {"type": "boolean", "default": true, "description": "If true, only report what would be archived"}
++                "dry_run": {"type": "boolean", "default": true, "description": "If true, only report what would be compressed"}
+@@ -1049 +1049 @@
+-        annotations: ToolAnnotations::destructive(),
++        annotations: ToolAnnotations::mutating(),
+@@ -1084 +1084 @@
+-        description: "Manually trigger a lifecycle cycle (mark stale, archive old). Dry run by default.",
++        description: "Run the canonical lifecycle predicate to mark stale and archive idle memories. Dry run by default; this is the only decay-derived lifecycle writer.",
+@@ -1090,3 +1090,4 @@
+-                "stale_days": {"type": "integer", "default": 30, "description": "Mark memories older than this as stale"},
+-                "archive_days": {"type": "integer", "default": 90, "description": "Archive memories older than this"},
+-                "min_importance": {"type": "number", "default": 0.5, "description": "Only process memories below this importance"}
++                "stale_days": {"type": "integer", "default": 30, "description": "Base idle days before marking as stale"},
++                "archive_days": {"type": "integer", "default": 90, "description": "Base idle days before archiving"},
++                "hard_idle_cap_days": {"type": "integer", "default": 365, "description": "Absolute idle-day cap before archiving"},
++                "max_importance_mult": {"type": "number", "default": 4.0, "description": "Maximum multiplier by which importance extends stale/archive windows"}
+@@ -1114 +1115 @@
+-        description: "Get or set lifecycle configuration (intervals, thresholds).",
++        description: "Get lifecycle predicate configuration defaults and optional overrides.",
+@@ -1118,4 +1119,4 @@
+-                "stale_days": {"type": "integer", "description": "Days before marking as stale"},
+-                "archive_days": {"type": "integer", "description": "Days before auto-archiving"},
+-                "min_importance": {"type": "number", "description": "Importance threshold for lifecycle"},
+-                "min_access_count": {"type": "integer", "description": "Access count threshold"}
++                "stale_days": {"type": "integer", "description": "Base idle days before marking as stale"},
++                "archive_days": {"type": "integer", "description": "Base idle days before archiving"},
++                "hard_idle_cap_days": {"type": "integer", "description": "Absolute idle-day cap before archiving"},
++                "max_importance_mult": {"type": "number", "description": "Maximum multiplier by which importance extends stale/archive windows"}
+@@ -1130 +1131 @@
+-        description: "Set a retention policy for a workspace. Controls auto-compression, max memory count, and auto-deletion.",
++        description: "Set a retention policy for a workspace. Controls compression of already-Archived memories, max memory count, and auto-deletion.",
+@@ -1137,2 +1138,2 @@
+-                "compress_after_days": {"type": "integer", "description": "Auto-compress memories older than this"},
+-                "compress_max_importance": {"type": "number", "description": "Only compress memories with importance <= this (default 0.3)"},
++                "compress_after_days": {"type": "integer", "description": "Compress already-Archived memories older than this"},
++                "compress_max_importance": {"type": "number", "description": "Only compress already-Archived memories with importance <= this (default 0.3)"},
+@@ -1257 +1258 @@
+-        description: "Run temporal decay on all memories. Updates lifecycle states (Active → Stale → Archived) based on salience scores.",
++        description: "Run salience score decay and optionally record salience history. Does not update lifecycle_state; use lifecycle_run for lifecycle transitions.",
+@@ -1261 +1262 @@
+-                "dry_run": {"type": "boolean", "default": false, "description": "If true, compute changes without persisting updates"},
++                "dry_run": {"type": "boolean", "default": false, "description": "If true, compute score/history changes without persisting updates"},
+@@ -1263,3 +1264 @@
+-                "workspace": {"type": "string", "description": "Limit to specific workspace"},
+-                "stale_threshold_days": {"type": "integer", "minimum": 1, "description": "Days of inactivity before marking stale"},
+-                "archive_threshold_days": {"type": "integer", "minimum": 1, "description": "Days of inactivity before suggesting archive"}
++                "workspace": {"type": "string", "description": "Limit to specific workspace"}
+@@ -1268 +1267 @@
+-        annotations: ToolAnnotations::destructive(),
++        annotations: ToolAnnotations::mutating(),
+diff --git a/src/mcp/tools/registry.rs b/src/mcp/tools/registry.rs
+index fd44647..8cd55cc 100644
+--- a/src/mcp/tools/registry.rs
++++ b/src/mcp/tools/registry.rs
+@@ -642 +642 @@
+-        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.",
++        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply updates memory_policy scores only. Use lifecycle_run for lifecycle_state transitions.",
+@@ -1186 +1186 @@
+-        description: "Archive old, low-importance memories by creating summaries. Moves originals to archived state.",
++        description: "Compress already-Archived memories by creating summary rows. Does not move originals to archived state; use lifecycle_run for lifecycle transitions.",
+@@ -1190,3 +1190,3 @@
+-                "max_age_days": {"type": "integer", "default": 90, "description": "Archive memories older than this many days"},
+-                "max_importance": {"type": "number", "default": 0.5, "description": "Only archive memories with importance below this"},
+-                "min_access_count": {"type": "integer", "default": 5, "description": "Skip memories accessed more than this many times"},
++                "max_age_days": {"type": "integer", "default": 90, "description": "Compress archived memories older than this many days"},
++                "max_importance": {"type": "number", "default": 0.5, "description": "Only compress already-Archived memories with importance below this"},
++                "min_access_count": {"type": "integer", "default": 5, "description": "Skip already-Archived memories accessed more than this many times"},
+@@ -1194 +1194 @@
+-                "dry_run": {"type": "boolean", "default": true, "description": "If true, only report what would be archived"}
++                "dry_run": {"type": "boolean", "default": true, "description": "If true, only report what would be compressed"}
+@@ -1197 +1197 @@
+-        annotations: ToolAnnotations::destructive(),
++        annotations: ToolAnnotations::mutating(),
+@@ -1231 +1231 @@
+-        description: "Manually trigger a lifecycle cycle (mark stale, archive old). Dry run by default.",
++        description: "Run the canonical lifecycle predicate to mark stale and archive idle memories. Dry run by default; this is the only decay-derived lifecycle writer.",
+@@ -1237,3 +1237,4 @@
+-                "stale_days": {"type": "integer", "default": 30, "description": "Mark memories older than this as stale"},
+-                "archive_days": {"type": "integer", "default": 90, "description": "Archive memories older than this"},
+-                "min_importance": {"type": "number", "default": 0.5, "description": "Only process memories below this importance"}
++                "stale_days": {"type": "integer", "default": 30, "description": "Base idle days before marking as stale"},
++                "archive_days": {"type": "integer", "default": 90, "description": "Base idle days before archiving"},
++                "hard_idle_cap_days": {"type": "integer", "default": 365, "description": "Absolute idle-day cap before archiving"},
++                "max_importance_mult": {"type": "number", "default": 4.0, "description": "Maximum multiplier by which importance extends stale/archive windows"}
+@@ -1261 +1262 @@
+-        description: "Get or set lifecycle configuration (intervals, thresholds).",
++        description: "Get lifecycle predicate configuration defaults and optional overrides.",
+@@ -1265,4 +1266,4 @@
+-                "stale_days": {"type": "integer", "description": "Days before marking as stale"},
+-                "archive_days": {"type": "integer", "description": "Days before auto-archiving"},
+-                "min_importance": {"type": "number", "description": "Importance threshold for lifecycle"},
+-                "min_access_count": {"type": "integer", "description": "Access count threshold"}
++                "stale_days": {"type": "integer", "description": "Base idle days before marking as stale"},
++                "archive_days": {"type": "integer", "description": "Base idle days before archiving"},
++                "hard_idle_cap_days": {"type": "integer", "description": "Absolute idle-day cap before archiving"},
++                "max_importance_mult": {"type": "number", "description": "Maximum multiplier by which importance extends stale/archive windows"}
+@@ -1277 +1278 @@
+-        description: "Set a retention policy for a workspace. Controls auto-compression, max memory count, and auto-deletion.",
++        description: "Set a retention policy for a workspace. Controls compression of already-Archived memories, max memory count, and auto-deletion.",
+@@ -1284,2 +1285,2 @@
+-                "compress_after_days": {"type": "integer", "description": "Auto-compress memories older than this"},
+-                "compress_max_importance": {"type": "number", "description": "Only compress memories with importance <= this (default 0.3)"},
++                "compress_after_days": {"type": "integer", "description": "Compress already-Archived memories older than this"},
++                "compress_max_importance": {"type": "number", "description": "Only compress already-Archived memories with importance <= this (default 0.3)"},
+@@ -1404 +1405 @@
+-        description: "Run temporal decay on all memories. Updates lifecycle states (Active → Stale → Archived) based on salience scores.",
++        description: "Run salience score decay and optionally record salience history. Does not update lifecycle_state; use lifecycle_run for lifecycle transitions.",
+@@ -1408 +1409 @@
+-                "dry_run": {"type": "boolean", "default": false, "description": "If true, compute changes without persisting updates"},
++                "dry_run": {"type": "boolean", "default": false, "description": "If true, compute score/history changes without persisting updates"},
+@@ -1410,3 +1411 @@
+-                "workspace": {"type": "string", "description": "Limit to specific workspace"},
+-                "stale_threshold_days": {"type": "integer", "minimum": 1, "description": "Days of inactivity before marking stale"},
+-                "archive_threshold_days": {"type": "integer", "minimum": 1, "description": "Days of inactivity before suggesting archive"}
++                "workspace": {"type": "string", "description": "Limit to specific workspace"}
+@@ -1415 +1414 @@
+-        annotations: ToolAnnotations::destructive(),
++        annotations: ToolAnnotations::mutating(),
+diff --git a/src/storage/queries/retention.rs b/src/storage/queries/retention.rs
+index bce9bd4..e77e02b 100644
+--- a/src/storage/queries/retention.rs
++++ b/src/storage/queries/retention.rs
+@@ -155 +154,0 @@ pub fn apply_retention_policies(conn: &Connection) -> Result<i64> {
+-        // 1. Auto-compress based on compress_after_days
+@@ -215,2 +214,2 @@ pub fn apply_retention_policies(conn: &Connection) -> Result<i64> {
+-/// Auto-compress old, rarely-accessed memories by creating summaries and archiving originals.
+-/// Returns the number of memories archived.
++/// Compress already-archived memories by creating summary rows.
++/// Returns the number of memories compressed.
+@@ -227 +225,0 @@ pub fn compress_old_memories(
+-    // Find candidates: old, low-importance, rarely-accessed, not already archived/summary
+@@ -241 +239 @@ pub fn compress_old_memories(
+-              AND COALESCE(m.lifecycle_state, 'active') = 'active'
++              AND COALESCE(m.lifecycle_state, 'active') = 'archived'
+@@ -271 +269 @@ pub fn compress_old_memories(
+-    let mut archived = 0i64;
++    let mut compressed = 0i64;
+@@ -299 +297 @@ pub fn compress_old_memories(
+-            content: format!("[Archived {}] {}", memory_type, summary_text),
++            content: format!("[Compressed {}] {}", memory_type, summary_text),
+@@ -309,9 +307,2 @@ pub fn compress_old_memories(
+-        if create_memory(conn, &input).is_ok()
+-            && conn
+-                .execute(
+-                    "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ? AND valid_to IS NULL",
+-                    params![id],
+-                )
+-                .is_ok()
+-        {
+-            archived += 1;
++        if create_memory(conn, &input).is_ok() {
++            compressed += 1;
+@@ -321 +312,147 @@ pub fn compress_old_memories(
+-    Ok(archived)
++    Ok(compressed)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::storage::Storage;
++
++    fn seed_old_memory(conn: &Connection, lifecycle_state: &str) -> Result<i64> {
++        let memory = create_memory(
++            conn,
++            &CreateMemoryInput {
++                content: format!("old {lifecycle_state} retention memory"),
++                memory_type: MemoryType::Note,
++                importance: Some(0.0),
++                workspace: Some("default".to_string()),
++                tier: MemoryTier::Permanent,
++                ..Default::default()
++            },
++        )?;
++        let old_ts = (Utc::now() - chrono::Duration::days(120)).to_rfc3339();
++        conn.execute(
++            "UPDATE memories
++             SET created_at = ?1,
++                 updated_at = ?1,
++                 last_accessed_at = ?1,
++                 access_count = 0,
++                 lifecycle_state = ?2
++             WHERE id = ?3",
++            params![old_ts, lifecycle_state, memory.id],
++        )?;
++        Ok(memory.id)
++    }
++
++    fn summary_count_for(conn: &Connection, memory_id: i64) -> Result<i64> {
++        Ok(conn.query_row(
++            "SELECT COUNT(*) FROM memories
++             WHERE summary_of_id = ?1 AND memory_type = 'summary' AND valid_to IS NULL",
++            params![memory_id],
++            |row| row.get(0),
++        )?)
++    }
++
++    fn lifecycle_state(conn: &Connection, memory_id: i64) -> Result<String> {
++        Ok(conn.query_row(
++            "SELECT lifecycle_state FROM memories WHERE id = ?1",
++            params![memory_id],
++            |row| row.get(0),
++        )?)
++    }
++
++    #[test]
++    fn compress_old_memories_skips_active_rows() {
++        let storage = Storage::open_in_memory().expect("in-memory storage");
++        storage
++            .with_transaction(|conn| {
++                let id = seed_old_memory(conn, "active")?;
++
++                let compressed = compress_old_memories(conn, 90, 0.5, 5, 10)?;
++
++                assert_eq!(compressed, 0);
++                assert_eq!(summary_count_for(conn, id)?, 0);
++                assert_eq!(lifecycle_state(conn, id)?, "active");
++                Ok(())
++            })
++            .expect("compression should skip active rows");
++    }
++
++    #[test]
++    fn compress_old_memories_summarizes_archived_rows_without_rewriting_lifecycle() {
++        let storage = Storage::open_in_memory().expect("in-memory storage");
++        storage
++            .with_transaction(|conn| {
++                let id = seed_old_memory(conn, "archived")?;
++
++                let compressed = compress_old_memories(conn, 90, 0.5, 5, 10)?;
++
++                assert_eq!(compressed, 1);
++                assert_eq!(summary_count_for(conn, id)?, 1);
++                assert_eq!(lifecycle_state(conn, id)?, "archived");
++                Ok(())
++            })
++            .expect("compression should summarize archived rows");
++    }
++
++    #[test]
++    fn apply_retention_compression_only_summarizes_archived_rows() {
++        let storage = Storage::open_in_memory().expect("in-memory storage");
++        storage
++            .with_transaction(|conn| {
++                let active_id = seed_old_memory(conn, "active")?;
++                let archived_id = seed_old_memory(conn, "archived")?;
++                set_retention_policy(
++                    conn,
++                    "default",
++                    None,
++                    None,
++                    Some(90),
++                    Some(0.5),
++                    Some(5),
++                    None,
++                    None,
++                )?;
++
++                let affected = apply_retention_policies(conn)?;
++
++                assert_eq!(affected, 1);
++                assert_eq!(summary_count_for(conn, active_id)?, 0);
++                assert_eq!(summary_count_for(conn, archived_id)?, 1);
++                assert_eq!(lifecycle_state(conn, active_id)?, "active");
++                assert_eq!(lifecycle_state(conn, archived_id)?, "archived");
++                Ok(())
++            })
++            .expect("retention compression should be archived-only");
++    }
++
++    #[test]
++    fn retention_auto_delete_still_soft_deletes_archived_rows() {
++        let storage = Storage::open_in_memory().expect("in-memory storage");
++        storage
++            .with_transaction(|conn| {
++                let id = seed_old_memory(conn, "archived")?;
++                set_retention_policy(
++                    conn,
++                    "default",
++                    None,
++                    None,
++                    None,
++                    None,
++                    None,
++                    Some(90),
++                    None,
++                )?;
++
++                let affected = apply_retention_policies(conn)?;
++
++                assert_eq!(affected, 1);
++                let valid_to: Option<String> = conn.query_row(
++                    "SELECT valid_to FROM memories WHERE id = ?1",
++                    params![id],
++                    |row| row.get(0),
++                )?;
++                assert!(valid_to.is_some(), "archived row should be soft-deleted");
++                Ok(())
++            })
++            .expect("auto-delete should soft-delete archived rows");
++    }
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

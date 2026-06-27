@@ -410,7 +410,8 @@ Dynamic memory prioritization based on recency, frequency, importance, and feedb
 }
 ```
 
-Salience decays over time, transitioning memories through lifecycle states: Active -> Stale -> Archived.
+Salience decays over time for scoring and history. Lifecycle transitions
+(`Active -> Stale -> Archived`) are decided by `lifecycle_run`.
 
 ### Context Quality
 

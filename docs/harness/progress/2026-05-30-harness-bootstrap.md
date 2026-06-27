@@ -1987,3 +1987,59 @@ Verification:
 - `rtk grep -nE "expires_at" docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md` — PASS; single occurrence in the prohibition line.
 - Step 2.3 SQL readback — PASS; only `valid_to IS NULL`, non-Archived, and optional workspace clause remain.
 - `rtk git diff --check -- docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md` — PASS.
+
+## 2026-06-27 — Lifecycle predicate unification
+
+### Contexto
+
+The implementation plan
+`docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md`
+identified several decay/compression paths that could independently mutate
+`memories.lifecycle_state`. The target invariant is a single decay-derived
+lifecycle writer: `lifecycle_run` through a canonical Rust predicate.
+
+### Ações realizadas
+
+- Added `src/intelligence/lifecycle.rs` with `LifecycleConfig`,
+  `normalized_importance`, and `decide_lifecycle_state`.
+- Replaced restrictive `lifecycle_run` stale/archive SQL filters with a
+  permissive candidate query and canonical in-memory decisions.
+- Preserved explicit domain lifecycle writers: manual lifecycle set,
+  consolidation, retention max-count, context-quality conflict resolution, and
+  approved Dream expiration.
+- Made salience decay score/history-only and canonicalized
+  `SalienceScore.suggested_state`.
+- Made `memory_decay` policy-score-only.
+- Changed `memory_archive_old`, retention compression, and the optional server
+  compression scheduler to compression-only behavior for already-Archived rows.
+- Updated MCP metadata and regenerated `docs/MCP_TOOLS.md`.
+- Kept `SCHEMA_VERSION` at 44.
+
+### Evidência
+
+- `rtk cargo test intelligence::lifecycle --lib` — PASS.
+- `rtk cargo test mcp::handlers::lifecycle --lib` — PASS.
+- `rtk cargo test intelligence::salience --lib` — PASS.
+- `rtk cargo test mcp::handlers::quality --lib` — PASS.
+- `rtk cargo test mcp::handlers::memory_policy --lib` — PASS.
+- `rtk cargo test mcp::handlers::summarize --lib` — PASS, including
+  idempotent compression coverage.
+- `rtk cargo test retention --lib` — PASS, including idempotent compression
+  coverage.
+- `rtk cargo test storage::queries --lib` — PASS.
+- `rtk cargo test --test mcp_protocol_tests` — PASS.
+- `rtk cargo check --workspace --all-targets --locked` — PASS.
+- `rtk cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+  — PASS.
+- `rtk cargo test --workspace --all-targets --locked` — PASS, 1227 tests.
+- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk grep -n "SET lifecycle_state|UPDATE memories SET lifecycle_state|update_memory_lifecycle_state\\(" src`
+  — PASS; remaining matches are canonical lifecycle/manual/domain/helper/test
+  write sites only.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  `make ci` + PR-title policy + harness doctor).
+- Post-review v1/v2 FAIL findings were addressed by adding the missing
+  plan/spec/review/canvas evidence chain, correcting README/ROADMAP wording,
+  and making compression paths idempotent.

@@ -639,7 +639,7 @@
     },
     ToolDef {
         name: "memory_decay",
-        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.",
+        description: "Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply updates memory_policy scores only. Use lifecycle_run for lifecycle_state transitions.",
         schema: r#"{
             "type": "object",
             "properties": {
@@ -1183,18 +1183,18 @@
     },
     ToolDef {
         name: "memory_archive_old",
-        description: "Archive old, low-importance memories by creating summaries. Moves originals to archived state.",
+        description: "Compress already-Archived memories by creating summary rows. Does not move originals to archived state; use lifecycle_run for lifecycle transitions.",
         schema: r#"{
             "type": "object",
             "properties": {
-                "max_age_days": {"type": "integer", "default": 90, "description": "Archive memories older than this many days"},
-                "max_importance": {"type": "number", "default": 0.5, "description": "Only archive memories with importance below this"},
-                "min_access_count": {"type": "integer", "default": 5, "description": "Skip memories accessed more than this many times"},
+                "max_age_days": {"type": "integer", "default": 90, "description": "Compress archived memories older than this many days"},
+                "max_importance": {"type": "number", "default": 0.5, "description": "Only compress already-Archived memories with importance below this"},
+                "min_access_count": {"type": "integer", "default": 5, "description": "Skip already-Archived memories accessed more than this many times"},
                 "workspace": {"type": "string", "description": "Limit to specific workspace"},
-                "dry_run": {"type": "boolean", "default": true, "description": "If true, only report what would be archived"}
+                "dry_run": {"type": "boolean", "default": true, "description": "If true, only report what would be compressed"}
             }
         }"#,
-        annotations: ToolAnnotations::destructive(),
+        annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
     ToolDef {
@@ -1228,15 +1228,16 @@
     },
     ToolDef {
         name: "lifecycle_run",
-        description: "Manually trigger a lifecycle cycle (mark stale, archive old). Dry run by default.",
+        description: "Run the canonical lifecycle predicate to mark stale and archive idle memories. Dry run by default; this is the only decay-derived lifecycle writer.",
         schema: r#"{
             "type": "object",
             "properties": {
                 "dry_run": {"type": "boolean", "default": true, "description": "Preview changes without applying"},
                 "workspace": {"type": "string", "description": "Limit to specific workspace"},
-                "stale_days": {"type": "integer", "default": 30, "description": "Mark memories older than this as stale"},
-                "archive_days": {"type": "integer", "default": 90, "description": "Archive memories older than this"},
-                "min_importance": {"type": "number", "default": 0.5, "description": "Only process memories below this importance"}
+                "stale_days": {"type": "integer", "default": 30, "description": "Base idle days before marking as stale"},
+                "archive_days": {"type": "integer", "default": 90, "description": "Base idle days before archiving"},
+                "hard_idle_cap_days": {"type": "integer", "default": 365, "description": "Absolute idle-day cap before archiving"},
+                "max_importance_mult": {"type": "number", "default": 4.0, "description": "Maximum multiplier by which importance extends stale/archive windows"}
             }
         }"#,
         annotations: ToolAnnotations::idempotent(),
@@ -1258,14 +1259,14 @@
     },
     ToolDef {
         name: "lifecycle_config",
-        description: "Get or set lifecycle configuration (intervals, thresholds).",
+        description: "Get lifecycle predicate configuration defaults and optional overrides.",
         schema: r#"{
             "type": "object",
             "properties": {
-                "stale_days": {"type": "integer", "description": "Days before marking as stale"},
-                "archive_days": {"type": "integer", "description": "Days before auto-archiving"},
-                "min_importance": {"type": "number", "description": "Importance threshold for lifecycle"},
-                "min_access_count": {"type": "integer", "description": "Access count threshold"}
+                "stale_days": {"type": "integer", "description": "Base idle days before marking as stale"},
+                "archive_days": {"type": "integer", "description": "Base idle days before archiving"},
+                "hard_idle_cap_days": {"type": "integer", "description": "Absolute idle-day cap before archiving"},
+                "max_importance_mult": {"type": "number", "description": "Maximum multiplier by which importance extends stale/archive windows"}
             }
         }"#,
         annotations: ToolAnnotations::read_only(),
@@ -1274,15 +1275,15 @@
     // Retention Policies
     ToolDef {
         name: "retention_policy_set",
-        description: "Set a retention policy for a workspace. Controls auto-compression, max memory count, and auto-deletion.",
+        description: "Set a retention policy for a workspace. Controls compression of already-Archived memories, max memory count, and auto-deletion.",
         schema: r#"{
             "type": "object",
             "properties": {
                 "workspace": {"type": "string", "description": "Workspace name"},
                 "max_age_days": {"type": "integer", "description": "Hard age limit — auto-delete after this many days"},
                 "max_memories": {"type": "integer", "description": "Maximum active memories in this workspace"},
-                "compress_after_days": {"type": "integer", "description": "Auto-compress memories older than this"},
-                "compress_max_importance": {"type": "number", "description": "Only compress memories with importance <= this (default 0.3)"},
+                "compress_after_days": {"type": "integer", "description": "Compress already-Archived memories older than this"},
+                "compress_max_importance": {"type": "number", "description": "Only compress already-Archived memories with importance <= this (default 0.3)"},
                 "compress_min_access": {"type": "integer", "description": "Skip compression if access_count >= this (default 3)"},
                 "auto_delete_after_days": {"type": "integer", "description": "Auto-delete archived memories older than this"},
                 "exclude_types": {"type": "array", "items": {"type": "string"}, "description": "Memory types exempt from policy (e.g. [\"decision\", \"checkpoint\"])"}
@@ -1401,18 +1402,16 @@
     },
     ToolDef {
         name: "salience_decay_run",
-        description: "Run temporal decay on all memories. Updates lifecycle states (Active → Stale → Archived) based on salience scores.",
+        description: "Run salience score decay and optionally record salience history. Does not update lifecycle_state; use lifecycle_run for lifecycle transitions.",
         schema: r#"{
             "type": "object",
             "properties": {
-                "dry_run": {"type": "boolean", "default": false, "description": "If true, compute changes without persisting updates"},
+                "dry_run": {"type": "boolean", "default": false, "description": "If true, compute score/history changes without persisting updates"},
                 "record_history": {"type": "boolean", "default": true, "description": "Record salience history entries while updating"},
-                "workspace": {"type": "string", "description": "Limit to specific workspace"},
-                "stale_threshold_days": {"type": "integer", "minimum": 1, "description": "Days of inactivity before marking stale"},
-                "archive_threshold_days": {"type": "integer", "minimum": 1, "description": "Days of inactivity before suggesting archive"}
+                "workspace": {"type": "string", "description": "Limit to specific workspace"}
             }
         }"#,
-        annotations: ToolAnnotations::destructive(),
+        annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
     ToolDef {

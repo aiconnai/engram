@@ -1,12 +1,14 @@
 //! Memory lifecycle and retention policy tool handlers.
 
+use chrono::{DateTime, Utc};
 use rusqlite::params;
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::intelligence::{decide_lifecycle_state, LifecycleConfig};
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::update_memory_lifecycle_state;
-use crate::types::LifecycleState;
+use crate::types::{LifecycleState, Memory, MemoryScope, MemoryTier, MemoryType, Visibility};
 
 pub fn lifecycle_status(ctx: &HandlerContext, params: Value) -> Value {
     let workspace = params.get("workspace").and_then(|v| v.as_str());
@@ -71,123 +73,98 @@ pub fn lifecycle_status(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
-    use chrono::{Duration, Utc};
-
     let dry_run = params
         .get("dry_run")
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
     let workspace = params.get("workspace").and_then(|v| v.as_str());
-    let stale_days = params
-        .get("stale_days")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(30);
-    let archive_days = params
-        .get("archive_days")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(90);
-    let min_importance = params
-        .get("min_importance")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.5) as f32;
-
-    let stale_cutoff = (Utc::now() - Duration::days(stale_days)).to_rfc3339();
-    let archive_cutoff = (Utc::now() - Duration::days(archive_days)).to_rfc3339();
+    let config = match lifecycle_config_from_params(&params) {
+        Ok(config) => config,
+        Err(message) => return json!({"error": message}),
+    };
+    let now = Utc::now();
 
     ctx.storage
         .with_transaction(|conn| {
-            let stale_query = if workspace.is_some() {
-                "SELECT id, content FROM memories
-                 WHERE workspace = ?
-                   AND (lifecycle_state IS NULL OR lifecycle_state = 'active')
-                   AND created_at < ?
-                   AND importance < ?
-                   AND access_count < 5
-                   AND valid_to IS NULL"
+            let candidate_query = if workspace.is_some() {
+                "SELECT id, content, memory_type, importance, access_count,
+                        created_at, updated_at, last_accessed_at, lifecycle_state,
+                        workspace, tier
+                 FROM memories
+                 WHERE valid_to IS NULL
+                   AND COALESCE(lifecycle_state, 'active') != 'archived'
+                   AND workspace = ?
+                 ORDER BY id ASC"
             } else {
-                "SELECT id, content FROM memories
-                 WHERE (lifecycle_state IS NULL OR lifecycle_state = 'active')
-                   AND created_at < ?
-                   AND importance < ?
-                   AND access_count < 5
-                   AND valid_to IS NULL"
+                "SELECT id, content, memory_type, importance, access_count,
+                        created_at, updated_at, last_accessed_at, lifecycle_state,
+                        workspace, tier
+                 FROM memories
+                 WHERE valid_to IS NULL
+                   AND COALESCE(lifecycle_state, 'active') != 'archived'
+                 ORDER BY id ASC"
             };
 
-            let stale_candidates: Vec<(i64, String)> = {
-                let mut stmt = conn.prepare(stale_query)?;
+            let candidates: Vec<Memory> = {
+                let mut stmt = conn.prepare(candidate_query)?;
                 if let Some(ws) = workspace {
-                    stmt.query_map(params![ws, &stale_cutoff, min_importance], |row| {
-                        Ok((row.get(0)?, row.get(1)?))
-                    })?
-                    .collect::<rusqlite::Result<Vec<_>>>()?
+                    stmt.query_map(params![ws], |row| lifecycle_memory_from_row(row, now))?
+                        .collect::<rusqlite::Result<Vec<_>>>()?
                 } else {
-                    stmt.query_map(params![&stale_cutoff, min_importance], |row| {
-                        Ok((row.get(0)?, row.get(1)?))
-                    })?
-                    .collect::<rusqlite::Result<Vec<_>>>()?
+                    stmt.query_map([], |row| lifecycle_memory_from_row(row, now))?
+                        .collect::<rusqlite::Result<Vec<_>>>()?
                 }
             };
 
-            let archive_query = if workspace.is_some() {
-                "SELECT id, content FROM memories
-                 WHERE workspace = ?
-                   AND lifecycle_state = 'stale'
-                   AND created_at < ?
-                   AND valid_to IS NULL"
-            } else {
-                "SELECT id, content FROM memories
-                 WHERE lifecycle_state = 'stale'
-                   AND created_at < ?
-                   AND valid_to IS NULL"
-            };
+            let transitions: Vec<LifecycleTransition> = candidates
+                .into_iter()
+                .filter_map(|memory| {
+                    let next = decide_lifecycle_state(&memory, now, &config);
+                    if next == memory.lifecycle_state {
+                        return None;
+                    }
+                    Some(LifecycleTransition {
+                        id: memory.id,
+                        preview: memory.content.chars().take(50).collect(),
+                        next,
+                    })
+                })
+                .collect();
 
-            let archive_candidates: Vec<(i64, String)> = {
-                let mut stmt = conn.prepare(archive_query)?;
-                if let Some(ws) = workspace {
-                    stmt.query_map(params![ws, &archive_cutoff], |row| {
-                        Ok((row.get(0)?, row.get(1)?))
-                    })?
-                    .collect::<rusqlite::Result<Vec<_>>>()?
-                } else {
-                    stmt.query_map(params![&archive_cutoff], |row| {
-                        Ok((row.get(0)?, row.get(1)?))
-                    })?
-                    .collect::<rusqlite::Result<Vec<_>>>()?
-                }
-            };
+            let stale_candidates = transition_previews(&transitions, LifecycleState::Stale);
+            let archive_candidates = transition_previews(&transitions, LifecycleState::Archived);
 
             if dry_run {
+                // Counts must reflect every transition, not the capped preview
+                // arrays (which are limited to 10 for response size). Reading
+                // `.len()` of the previews would undercount whenever more than
+                // 10 memories transition, making dry_run disagree with apply.
                 return Ok(json!({
                     "dry_run": true,
-                    "would_mark_stale": stale_candidates.len(),
-                    "would_archive": archive_candidates.len(),
-                    "stale_candidates": stale_candidates.iter().take(10).map(|(id, content)| {
-                        json!({"id": id, "preview": content.chars().take(50).collect::<String>()})
-                    }).collect::<Vec<_>>(),
-                    "archive_candidates": archive_candidates.iter().take(10).map(|(id, content)| {
-                        json!({"id": id, "preview": content.chars().take(50).collect::<String>()})
-                    }).collect::<Vec<_>>()
+                    "would_mark_stale": count_transitions(&transitions, LifecycleState::Stale),
+                    "would_archive": count_transitions(&transitions, LifecycleState::Archived),
+                    "stale_candidates": stale_candidates,
+                    "archive_candidates": archive_candidates
                 }));
             }
 
             let mut stale_count = 0;
             let mut archive_count = 0;
-            let mut transitioned_ids: Vec<(i64, &str)> = Vec::new();
+            let mut transitioned_ids: Vec<(i64, LifecycleState)> = Vec::new();
 
-            for (id, _) in &stale_candidates {
-                update_memory_lifecycle_state(conn, *id, LifecycleState::Stale)?;
-                stale_count += 1;
-                transitioned_ids.push((*id, "stale"));
-            }
-
-            for (id, _) in &archive_candidates {
-                update_memory_lifecycle_state(conn, *id, LifecycleState::Archived)?;
-                archive_count += 1;
-                transitioned_ids.push((*id, "archived"));
+            for transition in &transitions {
+                update_memory_lifecycle_state(conn, transition.id, transition.next)?;
+                match transition.next {
+                    LifecycleState::Active => {}
+                    LifecycleState::Stale => stale_count += 1,
+                    LifecycleState::Archived => archive_count += 1,
+                }
+                transitioned_ids.push((transition.id, transition.next));
             }
 
             let operation_id = uuid::Uuid::new_v4().to_string();
             for (mem_id, new_state) in &transitioned_ids {
+                let new_state = new_state.to_string();
                 emit_best_effort(
                     conn,
                     &EnrichmentEvent {
@@ -213,6 +190,170 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
             }))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+#[derive(Clone)]
+struct LifecycleTransition {
+    id: i64,
+    preview: String,
+    next: LifecycleState,
+}
+
+/// Read an optional integer param, distinguishing "absent" (Ok(None)) from
+/// "present but wrong type" (Err). A wrong-typed value must not silently fall
+/// back to a default — these params drive irreversible bulk lifecycle writes.
+fn optional_i64(params: &Value, key: &str) -> Result<Option<i64>, String> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_i64()
+            .map(Some)
+            .ok_or_else(|| format!("{key} must be an integer")),
+    }
+}
+
+/// Read an optional float param, distinguishing "absent" from "wrong type".
+fn optional_f64(params: &Value, key: &str) -> Result<Option<f64>, String> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_f64()
+            .map(Some)
+            .ok_or_else(|| format!("{key} must be a number")),
+    }
+}
+
+/// Build a [`LifecycleConfig`] from MCP params, validating types and ranges.
+///
+/// `lifecycle_run` / `lifecycle_config` are external-input boundaries: a single
+/// malformed call (`max_importance_mult < 1.0`, negative windows, or an inverted
+/// `stale_days > archive_days`) could otherwise drive `decide_lifecycle_state`
+/// to archive the entire active corpus. Reject rather than clamp so the caller
+/// learns their input was wrong.
+fn lifecycle_config_from_params(params: &Value) -> Result<LifecycleConfig, String> {
+    let defaults = LifecycleConfig::default();
+
+    let stale_days_base = optional_i64(params, "stale_days")?.unwrap_or(defaults.stale_days_base);
+    let archive_days_base =
+        optional_i64(params, "archive_days")?.unwrap_or(defaults.archive_days_base);
+    let hard_idle_cap_days =
+        optional_i64(params, "hard_idle_cap_days")?.unwrap_or(defaults.hard_idle_cap_days);
+    let max_importance_mult = optional_f64(params, "max_importance_mult")?
+        .map(|v| v as f32)
+        .unwrap_or(defaults.max_importance_mult);
+
+    if stale_days_base < 0 {
+        return Err("stale_days must be >= 0".to_string());
+    }
+    if archive_days_base < 0 {
+        return Err("archive_days must be >= 0".to_string());
+    }
+    if hard_idle_cap_days < 0 {
+        return Err("hard_idle_cap_days must be >= 0".to_string());
+    }
+    if archive_days_base < stale_days_base {
+        return Err("archive_days must be >= stale_days".to_string());
+    }
+    // A multiplier < 1.0 shrinks the decay windows below the configured base,
+    // inverting "importance protects" into immediate archival; NaN (which fails
+    // every comparison) is rejected here too.
+    if max_importance_mult.is_nan() || max_importance_mult < 1.0 {
+        return Err("max_importance_mult must be >= 1.0".to_string());
+    }
+
+    Ok(LifecycleConfig {
+        stale_days_base,
+        archive_days_base,
+        hard_idle_cap_days,
+        max_importance_mult,
+    })
+}
+
+fn lifecycle_memory_from_row(
+    row: &rusqlite::Row<'_>,
+    now: DateTime<Utc>,
+) -> rusqlite::Result<Memory> {
+    let created_at = parse_rfc3339_or_now(row.get::<_, String>(5)?, now);
+    let updated_at = parse_rfc3339_or_now(row.get::<_, String>(6)?, now);
+    let last_accessed_at = row
+        .get::<_, Option<String>>(7)?
+        .map(|value| parse_rfc3339_or_now(value, now));
+    let lifecycle_state = row
+        .get::<_, Option<String>>(8)?
+        .and_then(|state| state.parse::<LifecycleState>().ok())
+        .unwrap_or(LifecycleState::Active);
+    let memory_type = row
+        .get::<_, String>(2)?
+        .parse::<MemoryType>()
+        .unwrap_or(MemoryType::Note);
+    let tier = row
+        .get::<_, String>(10)?
+        .parse::<MemoryTier>()
+        .unwrap_or(MemoryTier::Permanent);
+
+    Ok(Memory {
+        id: row.get(0)?,
+        content: row.get(1)?,
+        memory_type,
+        tags: Vec::new(),
+        metadata: std::collections::HashMap::new(),
+        importance: row.get(3)?,
+        access_count: row.get(4)?,
+        created_at,
+        updated_at,
+        last_accessed_at,
+        owner_id: None,
+        visibility: Visibility::Private,
+        scope: MemoryScope::Global,
+        workspace: row
+            .get::<_, Option<String>>(9)?
+            .unwrap_or_else(|| "default".to_string()),
+        tier,
+        version: 1,
+        has_embedding: false,
+        expires_at: None,
+        content_hash: None,
+        event_time: None,
+        event_duration_seconds: None,
+        trigger_pattern: None,
+        procedure_success_count: 0,
+        procedure_failure_count: 0,
+        summary_of_id: None,
+        lifecycle_state,
+        media_url: None,
+    })
+}
+
+fn parse_rfc3339_or_now(value: String, now: DateTime<Utc>) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(&value)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or(now)
+}
+
+/// Total number of transitions targeting `state`, uncapped. Used for the
+/// dry_run counts so they match what apply will actually do; the preview arrays
+/// (see [`transition_previews`]) are intentionally capped and must not be used
+/// as a count source.
+fn count_transitions(transitions: &[LifecycleTransition], state: LifecycleState) -> usize {
+    transitions
+        .iter()
+        .filter(|transition| transition.next == state)
+        .count()
+}
+
+fn transition_previews(transitions: &[LifecycleTransition], state: LifecycleState) -> Vec<Value> {
+    transitions
+        .iter()
+        .filter(|transition| transition.next == state)
+        .take(10)
+        .map(|transition| {
+            json!({
+                "id": transition.id,
+                "preview": transition.preview,
+                "target_state": transition.next.to_string()
+            })
+        })
+        .collect()
 }
 
 pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
@@ -268,16 +409,16 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn lifecycle_config(_ctx: &HandlerContext, params: Value) -> Value {
-    let stale_days = params.get("stale_days").and_then(|v| v.as_i64());
-    let archive_days = params.get("archive_days").and_then(|v| v.as_i64());
-    let min_importance = params.get("min_importance").and_then(|v| v.as_f64());
-    let min_access_count = params.get("min_access_count").and_then(|v| v.as_i64());
+    let config = match lifecycle_config_from_params(&params) {
+        Ok(config) => config,
+        Err(message) => return json!({"error": message}),
+    };
 
     json!({
-        "stale_days": stale_days.unwrap_or(30),
-        "archive_days": archive_days.unwrap_or(90),
-        "min_importance": min_importance.unwrap_or(0.5),
-        "min_access_count": min_access_count.unwrap_or(5),
+        "stale_days": config.stale_days_base,
+        "archive_days": config.archive_days_base,
+        "hard_idle_cap_days": config.hard_idle_cap_days,
+        "max_importance_mult": config.max_importance_mult,
         "lifecycle_enabled": std::env::var("ENGRAM_LIFECYCLE_ENABLED")
             .map(|v| v != "false" && v != "0")
             .unwrap_or(true),
@@ -472,6 +613,177 @@ mod lifecycle_tests {
         }
     }
 
+    fn seed_lifecycle_memory(
+        ctx: &super::super::HandlerContext,
+        content: &str,
+        importance: f32,
+        access_count: i32,
+        idle_days: i64,
+        lifecycle_state: LifecycleState,
+    ) -> i64 {
+        use chrono::{Duration, Utc};
+
+        let old_ts = (Utc::now() - Duration::days(idle_days)).to_rfc3339();
+        ctx.storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "INSERT INTO memories (
+                         content, memory_type, workspace, tier, importance,
+                         access_count, lifecycle_state, created_at, updated_at,
+                         last_accessed_at
+                     )
+                     VALUES (?1, 'note', 'default', 'permanent', ?2, ?3, ?4, ?5, ?5, ?5)",
+                    rusqlite::params![
+                        content,
+                        importance,
+                        access_count,
+                        lifecycle_state.to_string(),
+                        old_ts
+                    ],
+                )?;
+                Ok(conn.last_insert_rowid())
+            })
+            .expect("seed lifecycle memory")
+    }
+
+    fn lifecycle_state(ctx: &super::super::HandlerContext, id: i64) -> String {
+        ctx.storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COALESCE(lifecycle_state, 'active') FROM memories WHERE id = ?1",
+                    rusqlite::params![id],
+                    |row| row.get::<_, String>(0),
+                )?)
+            })
+            .expect("query lifecycle state")
+    }
+
+    fn candidate_ids(result: &Value, key: &str) -> Vec<i64> {
+        result[key]
+            .as_array()
+            .expect("candidate array")
+            .iter()
+            .map(|candidate| {
+                candidate["id"]
+                    .as_i64()
+                    .expect("candidate id should be an integer")
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_lifecycle_run_archives_high_importance_high_access_candidate() {
+        let ctx = test_ctx();
+        let id = seed_lifecycle_memory(
+            &ctx,
+            "important abandoned memory",
+            1.0,
+            100,
+            370,
+            LifecycleState::Active,
+        );
+
+        let result = lifecycle_run(
+            &ctx,
+            json!({
+                "dry_run": false,
+                "workspace": "default",
+                "min_importance": 0.0
+            }),
+        );
+
+        assert!(result.get("error").is_none(), "unexpected error: {result}");
+        assert_eq!(result["archived"].as_i64(), Some(1), "{result}");
+        assert_eq!(lifecycle_state(&ctx, id), "archived");
+    }
+
+    #[test]
+    fn test_lifecycle_run_dry_run_apply_parity() {
+        let ctx = test_ctx();
+        let stale_id =
+            seed_lifecycle_memory(&ctx, "stale candidate", 0.0, 0, 35, LifecycleState::Active);
+        let archive_id = seed_lifecycle_memory(
+            &ctx,
+            "archive candidate",
+            0.0,
+            0,
+            95,
+            LifecycleState::Active,
+        );
+
+        let dry = lifecycle_run(
+            &ctx,
+            json!({
+                "dry_run": true,
+                "workspace": "default"
+            }),
+        );
+        assert!(
+            dry.get("error").is_none(),
+            "unexpected dry-run error: {dry}"
+        );
+        assert_eq!(candidate_ids(&dry, "stale_candidates"), vec![stale_id]);
+        assert_eq!(candidate_ids(&dry, "archive_candidates"), vec![archive_id]);
+
+        let applied = lifecycle_run(
+            &ctx,
+            json!({
+                "dry_run": false,
+                "workspace": "default"
+            }),
+        );
+        assert!(
+            applied.get("error").is_none(),
+            "unexpected apply error: {applied}"
+        );
+        assert_eq!(applied["marked_stale"].as_i64(), Some(1), "{applied}");
+        assert_eq!(applied["archived"].as_i64(), Some(1), "{applied}");
+        assert_eq!(lifecycle_state(&ctx, stale_id), "stale");
+        assert_eq!(lifecycle_state(&ctx, archive_id), "archived");
+    }
+
+    #[test]
+    fn test_lifecycle_run_apply_is_idempotent() {
+        let ctx = test_ctx();
+        let id = seed_lifecycle_memory(
+            &ctx,
+            "idempotent archive",
+            0.0,
+            0,
+            95,
+            LifecycleState::Active,
+        );
+
+        let first = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
+        let second = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
+
+        assert!(
+            first.get("error").is_none(),
+            "unexpected first error: {first}"
+        );
+        assert!(
+            second.get("error").is_none(),
+            "unexpected second error: {second}"
+        );
+        assert_eq!(first["archived"].as_i64(), Some(1), "{first}");
+        assert_eq!(second["marked_stale"].as_i64(), Some(0), "{second}");
+        assert_eq!(second["archived"].as_i64(), Some(0), "{second}");
+        assert_eq!(lifecycle_state(&ctx, id), "archived");
+    }
+
+    #[test]
+    fn test_lifecycle_run_allows_direct_active_to_archived_transition() {
+        let ctx = test_ctx();
+        let id = seed_lifecycle_memory(&ctx, "direct archive", 0.0, 0, 90, LifecycleState::Active);
+
+        let result = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
+
+        assert!(result.get("error").is_none(), "unexpected error: {result}");
+        assert_eq!(result["marked_stale"].as_i64(), Some(0), "{result}");
+        assert_eq!(result["archived"].as_i64(), Some(1), "{result}");
+        assert_eq!(lifecycle_state(&ctx, id), "archived");
+    }
+
     #[test]
     fn test_lifecycle_run_emits_enrichment_event() {
         use chrono::{Duration, Utc};
@@ -487,7 +799,7 @@ mod lifecycle_tests {
                 conn.execute(
                     "INSERT INTO memories (content, memory_type, workspace, importance,
                              access_count, lifecycle_state, created_at)
-                     VALUES ('old memory content', 'general', 'default', 0.1, 0, 'active', ?1)",
+                     VALUES ('old memory content', 'note', 'default', 0.1, 0, 'active', ?1)",
                     rusqlite::params![old_ts],
                 )?;
                 Ok(conn.last_insert_rowid())
@@ -566,6 +878,136 @@ mod lifecycle_tests {
         assert_eq!(
             version_count, 1,
             "expected lifecycle transition to create a memory version"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_run_dry_run_counts_are_uncapped() {
+        // Seed more than the preview cap (10) of archive candidates so that the
+        // reported count must come from the full transition set, not the capped
+        // preview array.
+        let ctx = test_ctx();
+        let total = 12;
+        for i in 0..total {
+            seed_lifecycle_memory(
+                &ctx,
+                &format!("archive candidate {i}"),
+                0.0,
+                0,
+                95,
+                LifecycleState::Active,
+            );
+        }
+
+        let dry = lifecycle_run(&ctx, json!({"dry_run": true, "workspace": "default"}));
+        assert!(
+            dry.get("error").is_none(),
+            "unexpected dry-run error: {dry}"
+        );
+
+        // The count must reflect every memory that would transition, not the
+        // preview cap of 10.
+        assert_eq!(
+            dry["would_archive"].as_i64(),
+            Some(total),
+            "would_archive must count all transitions, not the capped preview: {dry}"
+        );
+        // Preview array stays bounded.
+        assert!(
+            dry["archive_candidates"].as_array().expect("array").len() <= 10,
+            "preview array should stay capped at 10: {dry}"
+        );
+
+        // dry_run count must equal what apply actually does.
+        let applied = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
+        assert_eq!(
+            applied["archived"].as_i64(),
+            dry["would_archive"].as_i64(),
+            "dry_run would_archive must match apply archived count"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_run_rejects_importance_mult_below_one() {
+        let ctx = test_ctx();
+        let id = seed_lifecycle_memory(&ctx, "fresh important", 1.0, 0, 1, LifecycleState::Active);
+
+        let result = lifecycle_run(
+            &ctx,
+            json!({"dry_run": false, "workspace": "default", "max_importance_mult": 0.5}),
+        );
+
+        assert!(
+            result.get("error").is_some(),
+            "max_importance_mult < 1.0 must be rejected, got: {result}"
+        );
+        // The fresh memory must NOT have been archived.
+        assert_eq!(lifecycle_state(&ctx, id), "active", "{result}");
+    }
+
+    #[test]
+    fn test_lifecycle_run_rejects_negative_days() {
+        let ctx = test_ctx();
+        let id = seed_lifecycle_memory(&ctx, "fresh memory", 0.0, 0, 1, LifecycleState::Active);
+
+        let result = lifecycle_run(
+            &ctx,
+            json!({"dry_run": false, "workspace": "default", "archive_days": -1}),
+        );
+
+        assert!(
+            result.get("error").is_some(),
+            "negative archive_days must be rejected, got: {result}"
+        );
+        assert_eq!(lifecycle_state(&ctx, id), "active", "{result}");
+    }
+
+    #[test]
+    fn test_lifecycle_run_rejects_wrong_type_param() {
+        let ctx = test_ctx();
+        let _id = seed_lifecycle_memory(&ctx, "fresh memory", 0.0, 0, 1, LifecycleState::Active);
+
+        // stale_days as a string is a wrong-type input: it must be rejected,
+        // not silently defaulted to 30.
+        let result = lifecycle_run(
+            &ctx,
+            json!({"dry_run": false, "workspace": "default", "stale_days": "30"}),
+        );
+
+        assert!(
+            result.get("error").is_some(),
+            "wrong-typed stale_days must be rejected, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_run_rejects_stale_exceeding_archive() {
+        let ctx = test_ctx();
+        let _id = seed_lifecycle_memory(&ctx, "fresh memory", 0.0, 0, 1, LifecycleState::Active);
+
+        let result = lifecycle_run(
+            &ctx,
+            json!({
+                "dry_run": false,
+                "workspace": "default",
+                "stale_days": 120,
+                "archive_days": 90
+            }),
+        );
+
+        assert!(
+            result.get("error").is_some(),
+            "stale_days > archive_days must be rejected, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_config_rejects_invalid_params() {
+        let ctx = test_ctx();
+        let result = lifecycle_config(&ctx, json!({"max_importance_mult": 0.0}));
+        assert!(
+            result.get("error").is_some(),
+            "lifecycle_config must reject invalid params, got: {result}"
         );
     }
 }
