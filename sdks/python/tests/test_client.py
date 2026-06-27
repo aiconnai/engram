@@ -389,6 +389,21 @@ class TestClose:
         await client.close()
 
     @pytest.mark.asyncio
+    async def test_mcp_call_raises_after_close(self):
+        """Regression: _mcp_call must raise EngramError immediately after close(), not AttributeError."""
+        client = EngramClient("https://example.com", "key", "tenant")
+        mock_http_client = AsyncMock()
+        client._client = mock_http_client
+
+        await client.close()
+        assert client._client is None
+
+        with pytest.raises(EngramError, match="EngramClient is closed"):
+            await client._mcp_call("memory_get", {"id": 1})
+
+        mock_http_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("method_name", "args"),
         [
