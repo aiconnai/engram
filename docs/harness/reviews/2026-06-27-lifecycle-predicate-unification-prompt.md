@@ -1,103 +1,179 @@
-# Cross-Model Review Prompt — Lifecycle Predicate Unification Spec
+# Cross-Model Re-Review Prompt — Lifecycle Predicate Unification Spec
 
-> Paste this into Codex (GPT/o-series) and Fugu (Sakana) independently.
+> Paste this into Codex (GPT/o-series) and Fugu/Sakana independently.
 > Reviewer must read the spec file AND verify claims against the actual code.
-> This is a SPEC design review, not a code-diff review — there is no
-> implementation yet. The spec's central discovery changed after the first
-> internal review (from "two writers" to "three decay engines + domain writers"),
-> so the enumeration is the highest-priority thing to validate.
+> This is a SPEC design re-review, not a code-diff review — there is no
+> implementation yet. The prior councils returned FAIL because the writer
+> enumeration repeatedly missed lifecycle-state writers/entry points. Validate
+> that the latest draft actually fixes the re-review v2 blocker.
 
 ## Spec under review
 
-`docs/superpowers/specs/2026-06-27-lifecycle-predicate-unification-design.md`
-(334 lines). Read it fully before judging.
+`docs/superpowers/specs/2026-06-27-lifecycle-predicate-unification-design.md`.
+Read it fully before judging.
 
-## Context (why this spec exists)
+## Context (why this re-review exists)
 
-Engram's memory lifecycle (`active → stale → archived`) has never transitioned
-anything in production (1,179 memories: `archived=0`, `stale=0`). Investigation
-found multiple concurrent writers of `lifecycle_state` with divergent predicates,
-none scheduled. This spec unifies the *decay-policy* writers into one canonical
-predicate (`decide_lifecycle_state`), hybrid temporal model (recency primary +
-absolute-idle terminal cap), importance as continuous modulator. Execution stays
-manual (no scheduler — that's a deferred follow-up). The old stability spec
-(`2026-06-26-stability-spacing-effect-design.md`) is superseded.
+Earlier review found that the spec missed `memory_archive_old`, conflict-resolution
+writers, retention compression, retention auto-delete semantics, importance
+normalization, and the `memory_decay` lifecycle transition. Those were fixed in the
+previous draft. Re-review v2 then found a remaining BLOCKER: the spec listed
+`compress_old_memories` / `retention.rs:312`, but classified it only as explicit
+retention compression and missed the **optional automatic server scheduler**:
 
-## What to validate (verify each against the code, do not take the spec's word)
+- `src/bin/server.rs:122-136` configures `ENGRAM_COMPRESSION_INTERVAL` and related
+  age/importance/access parameters;
+- `src/bin/server.rs:726-749` starts the scheduler when the interval is enabled;
+- the scheduler calls `engram::storage::queries::compress_old_memories`;
+- `src/storage/queries/retention.rs:237` selects active old/low-importance/low-access rows;
+- `src/storage/queries/retention.rs:312` sets `lifecycle_state='archived'`.
 
-### 1. The writer enumeration (HIGHEST PRIORITY)
+The latest draft now claims:
 
-The spec claims exactly **three decay-policy engines** that must converge:
-- `lifecycle_run` (`src/mcp/handlers/lifecycle.rs:178,184`) — day-count predicate
-- `run_salience_decay` (`src/intelligence/salience.rs:439-460`) — score predicate
-- `memory_decay`/policy (`src/mcp/handlers/memory_policy.rs:352-354`) — retention-score predicate
+- there are **four MCP-facing decay/compression tools plus one optional server
+  compression scheduler / retention compression path** that must converge;
+- `compress_old_memories` is in scope and must be disarmed of lifecycle
+  transitions for both callers: `retention_policy_apply(compress_after_days)` and
+  `ENGRAM_COMPRESSION_INTERVAL` scheduler;
+- after the spec, `compress_old_memories` may only summarize/compress rows already
+  `Archived`, or a follow-up must redesign/split the compression surface;
+- there is still **no new lifecycle scheduler** in this spec;
+- public MCP contracts/metadata must be updated for changed tool behavior:
+  `memory_decay`, `memory_archive_old`, `lifecycle_run.min_importance`, and
+  `salience_decay_run`.
 
-and **four domain writers** that legitimately coexist (consolidation, retention
-policy, dream-approved, manual). **Grep the codebase yourself** for every write to
-`lifecycle_state`. Is the enumeration complete? Is any "domain writer" actually a
-disguised decay engine (or vice-versa)? Is there a writer the spec missed?
+## What to validate (verify each against code; do not take the spec's word)
 
-Do not answer this from memory or from the spec alone. At minimum, run an
-equivalent of:
+### 1. Writer enumeration and classification (HIGHEST PRIORITY)
+
+Grep the codebase yourself for every lifecycle-state write and related visibility
+write. At minimum, run an equivalent of:
 
 ```bash
-rg -n "SET lifecycle_state|UPDATE memories SET lifecycle_state|update_memory_lifecycle_state\\(|auto_delete_after_days|valid_to = .*archived" src
+rg -n "SET lifecycle_state|UPDATE memories SET lifecycle_state|update_memory_lifecycle_state\(|compress_old_memories\(|auto_delete_after_days|valid_to = .*archived" src
 ```
 
-Then include in your review a compact inventory of every write site you found:
-`file:line → decay-engine/domain/helper/irrelevant → agree/disagree with spec`.
-If you cannot inspect the repository/code, return `REVIEW_VERDICT: FAIL`.
+Then include in your review a compact inventory of every write site / entry point
+you found: `file:line → decay-engine/domain/helper/irrelevant → agree/disagree
+with spec`.
 
-### 2. The `memory_decay` decision (MOST CONTESTED)
+The spec should now classify:
 
-The spec **disarms** `memory_decay`'s lifecycle transition
-(`memory_policy.rs:352-357` returns `None`), keeping its score/policy writes but
-removing the `Active → Stale` transition. Owner's stated preference: disarm now;
-if retention-score should influence decay, make it a follow-up that feeds the
-canonical predicate as an *input*, not a parallel writer. **Is disarming correct,
-or should `memory_decay`'s retention signal feed `decide_lifecycle_state` in this
-spec rather than being silenced?** Argue the strongest case against the owner's
-choice.
+- converging decay/compression lifecycle paths:
+  - `lifecycle_run`
+  - `run_salience_decay`
+  - `memory_decay`
+  - `memory_archive_old`
+  - `compress_old_memories` via both `retention_policy_apply` and optional server
+    compression scheduler (`ENGRAM_COMPRESSION_INTERVAL`)
+- preserved domain writers:
+  - consolidation
+  - retention max-count
+  - retention auto-delete (`valid_to`, creation-age semantics)
+  - context-quality conflict resolution
+  - dream-approved actions
+  - manual lifecycle
+- helpers/initializers/tests/bench fixtures as non-engines.
 
-### 3. The `suggested_state` requirement
+If this inventory is still incomplete, return FAIL.
 
-`SalienceScore.suggested_state` (`src/intelligence/salience.rs:80,211,220`,
-exposed via `salience_get`) currently calls the legacy `suggest_lifecycle_state`.
-The spec requires removing it OR recomputing it via `decide_lifecycle_state`
-(recommends the latter). **Is leaving it as-is a real divergence risk? Is the
-recommendation (delegate to canonical predicate) right, or should it be removed
-entirely?**
+### 2. `compress_old_memories` and compression scheduler decision
 
-### 4. The boundary with `retention_policy_apply` auto-delete
+The latest draft chooses the conservative fix: `compress_old_memories` must stop
+changing lifecycle state for **all callers**. It may only create summaries for rows
+already `Archived`, or be replaced/split in a follow-up. This removes the optional
+compression scheduler as a hidden lifecycle writer while preserving zero-migration
+and the single-writer invariant.
 
-The spec scopes "cap archives, never deletes" to *this predicate only*, and
-acknowledges `retention_policy_apply` (`src/storage/queries/retention.rs:182,204`)
-already soft-deletes archived rows via `auto_delete_after_days` as a separate
-domain. **Is this boundary clean, or does the cap (which produces more `Archived`
-rows) interact with retention auto-delete in a way the spec doesn't address?**
-E.g. does archiving via the cap now feed rows into an auto-delete path that the
-owner may not intend?
+Validate the strongest counter-case: should explicit retention compression or the
+optional scheduler be allowed to call `decide_lifecycle_state` and still archive?
+Would that preserve or violate the spec's single-writer invariant? Is the chosen
+"already Archived only" rule precise enough to plan implementation?
+
+### 3. Public MCP contract cleanup
+
+Validate the spec now explicitly requires implementation-plan updates for all
+public surfaces whose advertised behavior changes:
+
+- `docs/MCP_TOOLS.md`
+- `src/mcp/tools/registry.rs`
+- `src/mcp/tools/memory.rs`
+
+Focus on:
+
+- `memory_decay` no longer performs active lifecycle transitions;
+- `memory_archive_old` no longer moves originals to archived state;
+- `salience_decay_run` no longer updates lifecycle states;
+- `lifecycle_run.min_importance` is no longer a candidate-selection filter and
+  must not exclude memories from the canonical predicate (remove from metadata or
+  accept as deprecated/no-op only).
+
+If the public contract cleanup remains under-specified, return FAIL only if it is
+unsafe to turn into an implementation plan; otherwise mark HIGH/MED.
+
+### 4. `memory_archive_old` convergence decision
+
+The spec treats `memory_archive_old` as a decay/compression engine and disarms
+lifecycle transitions from its age/importance/access-count predicate. It may only
+compress rows already `Archived`, or a follow-up must introduce a replacement
+compression surface.
+
+Is this the right convergence, or should it keep writing lifecycle if it delegates
+to `decide_lifecycle_state`? Explain whether that would create a second lifecycle
+writer.
+
+### 5. `memory_decay` decision
+
+The spec disarms `memory_decay`'s lifecycle transition while preserving policy-score
+updates, and makes retention-score-as-lifecycle-input a mandatory follow-up if the
+product wants reinforcement/durability/centrality to affect lifecycle.
+
+Is this sufficient, or should retention score feed `decide_lifecycle_state` in this
+spec rather than being deferred?
+
+### 6. Retention auto-delete boundary
+
+The spec explicitly accepts the preexisting `retention_policy_apply` behavior:
+`auto_delete_after_days` soft-deletes archived rows by `created_at`, not time since
+archived. This preserves zero-migration; changing semantics requires a follow-up
+with `lifecycle_changed_at` or equivalent.
+
+Is documenting/accepting this boundary safe, or is it a blocker because canonical
+lifecycle will produce more `Archived` rows that can be immediately soft-deleted
+under existing retention policies?
+
+### 7. Public/advisory state and importance normalization
+
+Validate both:
+
+- `SalienceScore.suggested_state` must not keep using legacy `suggest_lifecycle_state`;
+  the spec chooses compatibility by keeping the field but delegating to the canonical
+  predicate.
+- `importance` must be normalized inside the predicate before the multiplier because
+  storage paths can carry raw `f32` values.
+
+Are these requirements sufficient and testable?
 
 ### Also check (lower priority)
 
-- The hybrid predicate arithmetic (spec lines 139-189): does importance-as-multiplier
-  + terminal cap actually close the "high-importance abandoned" hole? Is the cap
-  genuinely dormant under defaults (archive_base 90 × max_mult 4.0 = 360 < cap 365)?
-- The monotonicity + idempotence invariant (lines 218-240): is "direct
-  active→archived allowed, no two-step required" sound without a `lifecycle_changed_at`
-  column?
-- Zero-migration claim: does the predicate truly need no new column?
+- The hybrid predicate arithmetic: does importance-as-multiplier + terminal cap
+  close the high-importance-abandoned hole? Is the cap dormant under defaults
+  (`archive_base 90 × max_mult 4.0 = 360 < cap 365`)?
+- Monotonicity/idempotence: is direct `active→archived` sound without
+  `lifecycle_changed_at`?
+- Zero-migration claim: after accepting creation-age retention auto-delete and
+  normalizing importance in code, does the spec truly need no new column?
 
-## Output format (REQUIRED — parsed by review-gate.sh)
+## Output format (REQUIRED)
 
 First line of your verdict MUST be exactly one of:
 
-```
+```text
 REVIEW_VERDICT: PASS <one-line summary>
 REVIEW_VERDICT: FAIL <one-line summary>
 ```
 
 Then a bullet list of findings, each prefixed `[BLOCKER]` / `[HIGH]` / `[MED]` /
-`[LOW]`. For each finding cite the spec line and/or the code file:line you
-verified against. Do not reward the spec; report only real issues introduced or
-unaddressed. PASS means "this spec is safe to turn into an implementation plan".
+`[LOW]`. For each finding cite the spec line and/or the code file:line you verified
+against. Do not reward the spec; report only real issues introduced or unaddressed.
+PASS means "this spec is safe to turn into an implementation plan".
