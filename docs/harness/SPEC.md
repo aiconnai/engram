@@ -3,13 +3,13 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Harness Engineering v0 — bootstrap & core gates` |
-| Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
-| Started | `2026-05-30` |
+| Active sprint | `Harness maintenance — live-state closeout` |
+| Active task | `harness-live-state-closeout — close completed bootstrap sprint metadata` |
+| Started | `2026-06-27` |
 | Owner | `Ronaldo + agents (Claude Code + Claude Code Sonnet reviewer)` |
 | Active spec | `docs/harness/SPEC.md` |
-| Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
-| Tracker | RFC 0001 + this harness adoption (ENGRA-22 area) |
+| Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
+| Tracker | Harness housekeeping after PR #108 / current main `1aa14e5` |
 
 ## Escopo da sprint ativa
 
@@ -19,11 +19,44 @@
 > - Standards gerais: [`../../STANDARDS.md`](../../STANDARDS.md)
 > - Erros & lições: [`../../ERRORS_AND_LESSONS.md`](../../ERRORS_AND_LESSONS.md)
 
-## Sprint ativa: Harness Engineering v0 — bootstrap & core gates
+## Tarefa ativa: Harness maintenance — live-state closeout
+
+- **Branch**: `chore/harness-live-state`
+- **Progress log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)
+- **Status**: active — close stale live metadata now that the bootstrap sprint
+  work is on `main`, `HEAD`/`origin/main` are at `1aa14e5`, and PR #108 commit
+  `e156810` is already contained in that history.
+
+### Em escopo
+
+- Atualizar `docs/harness/progress.md` para deixar de apresentar
+  `harness-bootstrap` como tarefa ativa.
+- Atualizar este `SPEC.md` para manter o contrato `SPEC.md` ↔ `progress.md`
+  exigido pelo `doctor.sh`.
+- Registrar um novo log de progresso curto para esta tarefa de housekeeping.
+- Atualizar o metadata de último commit/review/sensores com evidência atual.
+
+### Fora de escopo
+
+- Mudanças em scripts do harness, gates, invariants, policy, workflows, MCP,
+  storage, SDKs ou código Rust.
+- Escolher ou iniciar um follow-up de produto; este closeout só deixa o estado
+  canônico pronto para a próxima branch real.
+
+### Gates esperados
+
+- `bash docs/harness/bin/bootstrap.sh`
+- `bash docs/harness/bin/doctor.sh`
+- `bash docs/harness/bin/sensors.sh quick`
+- `bash docs/harness/bin/review-gate.sh post harness-live-state-closeout`
+
+## Sprint encerrada: Harness Engineering v0 — bootstrap & core gates
 
 - **Branch**: (branch atual do trabalho)
 - **Progress log**: [`progress/2026-05-30-harness-bootstrap.md`](./progress/2026-05-30-harness-bootstrap.md)
-- **Status**: active — implementação inicial do harness operacional inspirado no modelo mbras-backend, adaptado para Rust + MCP + multi-SDK + dual CLI (Claude Code + Claude Code Sonnet).
+- **Status**: completed — implementação inicial do harness operacional
+  inspirado no modelo mbras-backend, adaptado para Rust + MCP + multi-SDK +
+  dual CLI (Claude Code + Claude Code Sonnet), já integrada em `main`.
 
 ### Em escopo (v0)
 

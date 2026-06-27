@@ -1,0 +1,180 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: harness-live-state-closeout
+**Mode**: post
+**Date (UTC)**: 2026-06-27
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index ade9859..f35a059 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -5,2 +5,3 @@ mode=full
+-timestamp=2026-06-27T13:41:00Z
+-ci=make ci + pr-title-policy + harness doctor
++timestamp=2026-06-27T15:04:27Z
++duration_sec=151
++ci=fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor
+diff --git a/docs/harness/.sensors-log b/docs/harness/.sensors-log
+index c29642d..c028743 100644
+--- a/docs/harness/.sensors-log
++++ b/docs/harness/.sensors-log
+@@ -27,0 +28 @@
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-27T15:04:27Z","tool":"sensors","mode":"full","status":"pass","duration_sec":151,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
+diff --git a/docs/harness/SPEC.md b/docs/harness/SPEC.md
+index f2a0c5d..7e05564 100644
+--- a/docs/harness/SPEC.md
++++ b/docs/harness/SPEC.md
+@@ -6,3 +6,3 @@
+-| Active sprint | `Harness Engineering v0 — bootstrap & core gates` |
+-| Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
+-| Started | `2026-05-30` |
++| Active sprint | `Harness maintenance — live-state closeout` |
++| Active task | `harness-live-state-closeout — close completed bootstrap sprint metadata` |
++| Started | `2026-06-27` |
+@@ -11,2 +11,2 @@
+-| Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
+-| Tracker | RFC 0001 + this harness adoption (ENGRA-22 area) |
++| Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
++| Tracker | Harness housekeeping after PR #108 / current main `1aa14e5` |
+@@ -22 +22,32 @@
+-## Sprint ativa: Harness Engineering v0 — bootstrap & core gates
++## Tarefa ativa: Harness maintenance — live-state closeout
++
++- **Branch**: `chore/harness-live-state`
++- **Progress log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)
++- **Status**: active — close stale live metadata now that the bootstrap sprint
++  work is on `main`, `HEAD`/`origin/main` are at `1aa14e5`, and PR #108 commit
++  `e156810` is already contained in that history.
++
++### Em escopo
++
++- Atualizar `docs/harness/progress.md` para deixar de apresentar
++  `harness-bootstrap` como tarefa ativa.
++- Atualizar este `SPEC.md` para manter o contrato `SPEC.md` ↔ `progress.md`
++  exigido pelo `doctor.sh`.
++- Registrar um novo log de progresso curto para esta tarefa de housekeeping.
++- Atualizar o metadata de último commit/review/sensores com evidência atual.
++
++### Fora de escopo
++
++- Mudanças em scripts do harness, gates, invariants, policy, workflows, MCP,
++  storage, SDKs ou código Rust.
++- Escolher ou iniciar um follow-up de produto; este closeout só deixa o estado
++  canônico pronto para a próxima branch real.
++
++### Gates esperados
++
++- `bash docs/harness/bin/bootstrap.sh`
++- `bash docs/harness/bin/doctor.sh`
++- `bash docs/harness/bin/sensors.sh quick`
++- `bash docs/harness/bin/review-gate.sh post harness-live-state-closeout`
++
++## Sprint encerrada: Harness Engineering v0 — bootstrap & core gates
+@@ -26 +57,3 @@
+-- **Status**: active — implementação inicial do harness operacional inspirado no modelo mbras-backend, adaptado para Rust + MCP + multi-SDK + dual CLI (Claude Code + Claude Code Sonnet).
++- **Status**: completed — implementação inicial do harness operacional
++  inspirado no modelo mbras-backend, adaptado para Rust + MCP + multi-SDK +
++  dual CLI (Claude Code + Claude Code Sonnet), já integrada em `main`.
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 468b81e..2d32719 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -6,6 +6,6 @@
+-| Active sprint | `Harness Engineering v0 — bootstrap & core gates` |
+-| Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
+-| Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
+-| Last review | `2026-06-27 — pass: docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` |
+-| Last sensors | `2026-06-27 — status=pass (full lane after reference-intake checklist fix; timestamp 2026-06-27T09:10:45Z)` |
+-| Last commit | `aeacb93` |
++| Active sprint | `Harness maintenance — live-state closeout` |
++| Active task | `harness-live-state-closeout — close completed bootstrap sprint metadata` |
++| Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
++| Last review | `2026-06-27 — pass: docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-v4-post.md` |
++| Last sensors | `2026-06-27 — status=pass (full lane after live-state closeout; timestamp 2026-06-27T15:04:27Z)` |
++| Last commit | `1aa14e5` |
+@@ -16,0 +17,8 @@
++- **Harness maintenance — live-state closeout**
++- **Log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)
++- **Status**: active — close stale live metadata after the completed bootstrap
++  sprint and the merged lifecycle predicate follow-up. Current `main` is
++  `1aa14e5`, and merged PR #108 commit `e156810` is contained in that history.
++
++## Sprint encerrada
++
+@@ -19 +27,4 @@
+-- **Status**: active — scaffolding + implementation of the terminal-native agent harness discipline, adapted from the mbras-backend reference model, for the engram Rust + MCP + multi-SDK codebase.
++- **Status**: completed — the operational harness bootstrap, core gates,
++  reviewer path hardening, and follow-up harness policy work have landed on
++  `main`. Future work should start from a fresh task branch and update this
++  live-state block instead of continuing to present v0 as active.
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.
