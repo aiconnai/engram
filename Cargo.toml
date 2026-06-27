@@ -239,7 +239,7 @@ tiktoken-rs = "0.5"
 
 # Document ingestion (RML-928)
 pulldown-cmark = "0.10"
-pdf-extract = { version = "0.7", optional = true }
+pdf-extract = { version = "0.12", optional = true }
 
 # Async channels for embedding queue
 async-channel = "2.1"
