@@ -213,6 +213,40 @@ O review-gate deve marcar como `[HIGH]` ou `[BLOCKER]` qualquer mudança que:
 - Remova código, dependências, docs ou scripts baseado só em evidência estática.
 - Use exclusões de sensor para mascarar falha de produção.
 
+### 12207-Inspired Tailoring Checklist
+
+Uma cópia local não versionada, por exemplo `docs/ieee-12207.md`, pode ser
+usada como referência privada de padrões de processo de ciclo de vida. Esse
+arquivo é ignorado pelo Git, não deve ser distribuído no repositório, e o Engram
+não reivindica conformidade com a norma nem copia texto, prompts ou checklists
+dela para o harness. A adoção é sempre tailoring local: transformar conceitos
+em critérios verificáveis do Engram.
+
+Quando uma mudança de harness, codificação ou review citar essa referência ou
+alterar processo de engenharia, registre em `progress.md`, no plano ativo ou no
+Review Canvas aplicável:
+
+- **Escopo e circunstâncias** — qual lacuna local está sendo tratada, quais
+  stakeholders/paths são afetados e o que fica explicitamente fora de escopo.
+- **Área de ciclo de vida** — planejamento/controle, decisão, risco,
+  configuração/informação, medição, QA, verificação, validação, operação ou
+  manutenção.
+- **Racional de decisão** — alternativas consideradas, opção escolhida,
+  premissas e motivo para não adotar a referência como pipeline ou conformidade.
+- **Risco e threshold** — risco mitigado, sinal que indicaria regressão e ação
+  esperada se o sinal piorar.
+- **Medição** — necessidade de informação, medida ou artefato observado,
+  frequência/custo e onde a evidência fica armazenada.
+- **Evidência separada** — verificação objetiva (`doctor.sh`, sensores, testes,
+  diff checks) separada de validação de fitness para o usuário/stakeholder
+  quando aplicável.
+- **Traceability** — links entre requisito/intenção, arquivo alterado, canvas,
+  review e progresso, com plano de rollback se algum gate for enfraquecido.
+
+O review-gate deve marcar como `[HIGH]` uma adoção 12207 sem esse registro e
+como `[BLOCKER]` quando a mudança também tocar gates, invariants ou scripts
+process-critical sem evidência de segurança e reversibilidade.
+
 ### Reference Intake Checklist
 
 `docs/harness/REFERENCE_INTAKE.md` defines the intake contract for external
@@ -266,6 +300,23 @@ Modos opcionais:
 - `baseline` — `baseline.sh` e doctor.
 
 Essas lanes opcionais não substituem o gate completo para merge, handoff ou completion claims.
+
+### Required checks no GitHub (merge em `main`)
+
+Os sensores locais confirmam o trabalho cedo; o GitHub re-confirma os mesmos
+contratos como **required status checks** antes do merge. Bloqueiam o merge:
+
+- `Format`, `Clippy`, `Test (ubuntu-latest)`, `Documentation` (os quatro jobs de
+  CI baratos e determinísticos);
+- `Harness Contract` — gate leve (`bootstrap.sh` + política de título de PR). A
+  política só rejeita o marcador literal `[codex]`; não é validação ampla de
+  título. O `doctor.sh` **não** entra neste gate required (fica local/advisory).
+
+`Security Audit` e `Cargo Deny` rodam nos PRs como **advisory** e não bloqueiam
+merge enquanto o baseline tiver advisories abertas (atualmente
+`RUSTSEC-2026-0187` em `lopdf` e `RUSTSEC-2026-0185` em `quinn-proto`). Promover
+qualquer um a required exige antes resolver/ignorar essas advisories com
+rationale datado. Code review automático é sinal extra, nunca o único bloqueador.
 
 ### Baseline Snapshot
 

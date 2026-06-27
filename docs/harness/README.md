@@ -60,6 +60,36 @@ Quando automação precisar de output parseável, use o contrato em
 flags JSON devem ser opt-in e nunca devem emitir segredos, tokens, headers,
 cookies ou dumps de ambiente.
 
+## Fluxo de PR protegido
+
+O loop local e os gates do GitHub são camadas complementares: o local pega cedo,
+o GitHub confirma os mesmos contratos antes do merge — sem surpresas tardias.
+
+Loop local (rode antes de abrir o PR):
+
+```bash
+bash docs/harness/bin/bootstrap.sh        # início de sessão (read-only)
+bash docs/harness/bin/sensors.sh quick    # durante o desenvolvimento
+bash docs/harness/bin/sensors.sh          # full, antes de abrir o PR
+```
+
+No GitHub, o merge em `main` exige estes **required status checks**:
+
+- `Format`
+- `Clippy`
+- `Test (ubuntu-latest)`
+- `Documentation`
+- `Harness Contract` — gate leve que roda `bootstrap.sh` mais a política de
+  título de PR. Hoje a política só bloqueia o marcador literal `[codex]`; **não**
+  é um validador amplo de qualidade de título (ex.: não exige Conventional
+  Commits). O `doctor.sh` **não** faz parte deste gate required — ele permanece
+  local/advisory.
+
+`Security Audit` e `Cargo Deny` rodam nos PRs como sinais **advisory** (ainda não
+bloqueiam merge; ver baseline em [`GATES.md`](./GATES.md)). Code review automático
+(Copilot / terceiros) é **sinal extra, não autoritativo**: por si só não bloqueia
+o merge enquanto não expuser um status check confiável.
+
 ## Estrutura
 
 | Caminho                        | Papel |
