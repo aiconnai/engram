@@ -1,0 +1,42 @@
+# CODEOWNERS — required reviewers for protected surfaces
+#
+# GitHub semantics: the LAST matching pattern for a given path wins. There is no
+# default owner here on purpose — we do NOT own every source file. Only the
+# governance / CI / supply-chain / harness surfaces below require @aiconnai/core
+# review, so day-to-day product changes are not gated on a single team.
+#
+# For these rules to actually REQUIRE review (not just request it), the `main`
+# ruleset must enable "Require review from Code Owners" (see
+# github-harness-protection Todo 6).
+
+# --- CI / GitHub automation (all workflows + actions config) ---
+/.github/**                     @aiconnai/core
+/.github/workflows/**           @aiconnai/core
+
+# The CODEOWNERS file itself must be owner-gated so ownership cannot be changed
+# without review.
+/.github/CODEOWNERS             @aiconnai/core
+
+# --- Operational harness (process rules, gates, bin scripts) ---
+/docs/harness/**                @aiconnai/core
+
+# --- Repo-level agent + governance instructions ---
+/AGENTS.md                      @aiconnai/core
+/CLAUDE.md                      @aiconnai/core
+/INVARIANTS.md                  @aiconnai/core
+/STANDARDS.md                   @aiconnai/core
+/ERRORS_AND_LESSONS.md          @aiconnai/core
+
+# --- Dependency / supply-chain / security policy ---
+/Cargo.toml                     @aiconnai/core
+/Cargo.lock                     @aiconnai/core
+/deny.toml                      @aiconnai/core
+/.cargo/audit.toml              @aiconnai/core
+
+# --- Release / security / CI scripts ---
+/scripts/run-agentshield-loop.sh   @aiconnai/core
+/scripts/ci.sh                     @aiconnai/core
+/scripts/ci-parity-check.sh        @aiconnai/core
+/scripts/ci-features.env           @aiconnai/core
+/scripts/ci-required-features.env  @aiconnai/core
+/scripts/generate-mcp-reference.sh @aiconnai/core
