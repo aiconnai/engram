@@ -1,0 +1,6 @@
+REVIEW_VERDICT: FAIL implementation checks passed, but required evidence artifacts are missing and public docs still contradict lifecycle ownership
+
+- [BLOCKER] Missing required Review Canvas/evidence artifacts. This diff touches >200 lines plus MCP surface, intelligence, and storage, triggering `docs/harness/GATES.md:162-174`; `docs/harness/CODE_REVIEW_POLICY.md:160-162` makes missing canvas evidence blocking for MCP/storage changes. No matching `docs/harness/canvas/*lifecycle-predicate*` exists, and `docs/harness/progress/2026-05-30-harness-bootstrap.md:1491-1492` references missing `docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md`.
+- [MED] Public docs remain stale: `README.md:360` still says salience decay transitions lifecycle states, and `docs/ROADMAP.md:74` still describes `memory_archive_old` as batch archival. That contradicts the new contract that `lifecycle_run` owns decay-derived lifecycle transitions and archive-old only compresses already-Archived rows.
+
+Direct verification run by reviewer: targeted lifecycle/salience/memory_policy/summarize/retention tests passed, `mcp_protocol_tests` passed, MCP reference check passed, `cargo check` passed, schema version remains 44, and code inspection found no remaining lifecycle writes in `salience_decay_run` or `memory_decay`.
