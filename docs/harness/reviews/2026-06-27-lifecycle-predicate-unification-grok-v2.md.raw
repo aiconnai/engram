@@ -1,0 +1,1 @@
+[2m2026-06-27T08:27:06.501858Z[0m [31mERROR[0m Skipping MCP tool: qualified name contains '__' more than once (server, tool, or their boundary collides with the reserved delimiter) [3mserver[0m[2m=[0mmcp-search [3mtool[0m[2m=[0m__IMPORTANT [3mqualified[0m[2m=[0mmcp-search____IMPORTANT

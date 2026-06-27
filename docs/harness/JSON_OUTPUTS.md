@@ -167,17 +167,20 @@ Artifact rules:
 ## `.sensors-last` Relationship
 
 `docs/harness/.sensors-last` is the current lightweight parseable state file for
-the full harness gate. It remains supported for compatibility, but it is not the
-general JSON contract.
+the full harness gate. `docs/harness/.sensors-log` is the append-only historical
+measurement log. `.sensors-last` remains supported for compatibility, but it is
+not the general JSON contract.
 
 Migration path:
 
 1. Keep writing `.sensors-last` exactly as existing users expect.
-2. Add a JSON status surface that translates `.sensors-last` into the common
+2. Append each completed run to `.sensors-log` using JSON Lines with
+   `schema_version="sensors-log-v1"`.
+3. Add a JSON status surface that translates `.sensors-last` into the common
    envelope without running the full gate, for example `sensors.sh status --json`.
-3. For full gate runs, either support `sensors.sh --json` directly or emit a JSON
+4. For full gate runs, either support `sensors.sh --json` directly or emit a JSON
    envelope that points to `.sensors-last` through `artifacts`.
-4. Do not require automation to scrape human `sensors.sh` output once a JSON
+5. Do not require automation to scrape human `sensors.sh` output once a JSON
    status surface exists.
 
 Suggested `sensors` fields:
@@ -191,6 +194,51 @@ Suggested `sensors` fields:
 - `excluded_sensor`: excluded sensor name when an exclusion is active
 - `artifacts`: include `docs/harness/.sensors-last` when it is the source of
   truth for the reported state
+
+Suggested `.sensors-log` fields:
+
+- `schema_version`: `sensors-log-v1`
+- `timestamp`: UTC RFC3339 timestamp at the end of the run
+- `tool`: `sensors`
+- `mode`: selected lane
+- `status`: `pass`, `pass_with_exclusion`, or `fail`
+- `duration_sec`: non-negative integer duration
+- `ci_status` and `doctor_status`: status of the two main gate layers
+- `ci_command`: short command label, not raw output
+- `ci_steps`: granular CI step status map (ex.: `fmt`, `clippy`, `test_lib`,
+  `test_integration`, `test_integration_watch`, `wasm_target`,
+  `wasm_all_targets`, `wasm_wasm_target`, `doc`, `ref_check`)
+- `exclusion`: `null` or a short `{sensor, known_issue, reason}` object
+- `artifacts`: repo-relative artifact pointers
+
+Rotation is part of the log contract. `sensors.sh` rotates `.sensors-log` before
+append when it reaches `SENSORS_LOG_MAX_BYTES` (default `1048576`) and keeps
+`SENSORS_LOG_ROTATIONS` generations (default `5`).
+
+## `harness-stats.sh --json`
+
+`harness-stats.sh --json` is a read-only analytics command over
+`docs/harness/.sensors-log` and must return one JSON object with the common
+envelope plus a `metrics` object.
+
+Required additional field:
+
+- `metrics`: object with at least:
+  - `window`
+  - `total_entries`
+  - `window_runs`
+  - `status_counts`
+  - `pass_like_rate`
+  - `ci_status_counts`
+  - `doctor_status_counts`
+  - `mode_stats`
+  - `flaky_modes`
+  - `last_entry`
+
+Suggested `checks` for analytics:
+
+- `sensors_log:exists`
+- `sensors_log:parse`
 
 ## Compatibility Rules
 

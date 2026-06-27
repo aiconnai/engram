@@ -1,0 +1,316 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: pending-worktree-fixes
+**Mode**: post
+**Date (UTC)**: 2026-06-26
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+Harness script changes detected:
+- docs/harness/bin/bootstrap.sh
+- docs/harness/bin/lib.sh
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/.gitignore b/.gitignore
+index e369749..fe6b02c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -163,0 +164,3 @@ vendor/
++# Licensed local references (pattern sources only; do not distribute)
++/docs/ieee-12207.md
++
+diff --git a/README.md b/README.md
+index cd273a4..256c884 100644
+--- a/README.md
++++ b/README.md
+@@ -59,0 +60 @@ than first-party adapters in this repository.
++- [User guide](docs/USER_GUIDE.md)
+diff --git a/docs/README.md b/docs/README.md
+index 5e760d1..0fa4b25 100644
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -9,0 +10 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
++- `USER_GUIDE.md`: User-facing instructions for installing, connecting, and using Engram.
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index bec6a4e..0592a8e 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -5,3 +5,3 @@ mode=full
+-timestamp=2026-06-26T11:46:55Z
+-duration_sec=32
+-ci=fmt + clippy + test_lib + test_integration + test_integration_watch + doc + ref_check + pr-title-policy + harness doctor
++timestamp=2026-06-26T14:39:18Z
++duration_sec=49
++ci=fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor
+diff --git a/docs/harness/.sensors-log b/docs/harness/.sensors-log
+index 7a65ea8..6dc40c0 100644
+--- a/docs/harness/.sensors-log
++++ b/docs/harness/.sensors-log
+@@ -8,0 +9,4 @@
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T13:06:27Z","tool":"sensors","mode":"quick","status":"pass","duration_sec":2,"ci_status":"pass","doctor_status":"pass","ci_command":"cargo fmt + cargo check + pr-title-policy + harness doctor","ci_steps":{},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T13:06:56Z","tool":"sensors","mode":"full","status":"pass","duration_sec":27,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:30:03Z","tool":"sensors","mode":"full","status":"pass","duration_sec":52,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:39:18Z","tool":"sensors","mode":"full","status":"pass","duration_sec":49,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
+diff --git a/docs/harness/CODE_REVIEW_POLICY.md b/docs/harness/CODE_REVIEW_POLICY.md
+index e26bc00..e434f13 100644
+--- a/docs/harness/CODE_REVIEW_POLICY.md
++++ b/docs/harness/CODE_REVIEW_POLICY.md
+@@ -41,0 +42,37 @@ Antes de julgar, leia (o prompt do review-gate injeta ou referencia):
++## Perspectivas de Review
++
++Use estas perspectivas como lentes locais do Engram para evitar review
++unidimensional. Elas não aumentam o limite de findings; cada problema reportado
++continua exigindo evidência concreta no diff.
++
++1. **Bug e edge cases** — entradas adversas, estados vazios, concorrência,
++   ordering, timeouts, retries e caminhos de erro.
++2. **Segurança e privacidade** — vazamento de conteúdo proprietário, segredos,
++   credenciais, egress, prompts não confiáveis, hooks e multimodal.
++3. **Contrato e compatibilidade** — MCP wire format, tool signatures, storage
++   invariants, SDKs Python/TypeScript, CLI/API pública e compatibilidade
++   retroativa.
++4. **Testes e verificabilidade** — cobertura do comportamento alterado,
++   sensores corretos, golden/reference updates e ausência de falso verde.
++5. **Manutenibilidade e operação** — complexidade de hot path, ownership,
++   observabilidade, mensagens de erro, documentação operacional e rollback.
++6. **Drift histórico e memória canônica** — alinhamento com `progress.md`,
++   active plan, decisões anteriores, `ERRORS_AND_LESSONS.md` e padrões já
++   adotados no código.
++
++Para diffs em `docs/harness/**`, priorize especialmente segurança/processo,
++escopo negativo, verificabilidade, drift histórico e risco de enfraquecer gates.
++
++## Fontes Externas e Boundary de Licença
++
++Kits externos de workflow de agentes podem ser consultados apenas como fontes de
++padrões de alto nível. O `NeoLabHQ/context-engineering-kit` é tratado pelo
++Engram como referência externa, não como dependência, vendor, marketplace ou
++substituto do harness local.
++
++Como boundary conservador: se uma fonte externa estiver sob GPL-3.0 ou outra
++licença copyleft, não copie prompts, comandos, checklists, scripts, docs ou
++texto para o Engram sem revisão explícita de licença. Adaptações aceitas devem
++usar wording próprio do Engram, preservar os gates locais e registrar a decisão
++quando afetar processo do harness.
++
+@@ -163,0 +201,16 @@ The canvas should include approaches considered, hot-path complexity, at least t
++### 12207 lifecycle tailoring
++
++Read the 12207-inspired tailoring checklist in `docs/harness/GATES.md` when a
++change cites `docs/ieee-12207.md`, lifecycle-process standards, or changes how
++Engram plans, verifies, validates, measures, reviews, releases, or maintains
++work.
++
++Flag as `[HIGH]` when the change uses 12207 concepts without local tailoring
++evidence: scope/circumstances, lifecycle area, rationale, risk threshold,
++measurement need, verification-vs-validation evidence, and traceability.
++
++Flag as `[BLOCKER]` when the same gap appears in changes to gates, invariants,
++or process-critical scripts, or when the diff implies ISO/IEC/IEEE 12207
++conformance, imports a standards process as a drop-in pipeline, or copies
++licensed reference wording instead of using Engram-local language.
++
+diff --git a/docs/harness/GATES.md b/docs/harness/GATES.md
+index 0a75d5c..512e3f0 100644
+--- a/docs/harness/GATES.md
++++ b/docs/harness/GATES.md
+@@ -215,0 +216,34 @@ O review-gate deve marcar como `[HIGH]` ou `[BLOCKER]` qualquer mudança que:
++### 12207-Inspired Tailoring Checklist
++
++Uma cópia local não versionada, por exemplo `docs/ieee-12207.md`, pode ser
++usada como referência privada de padrões de processo de ciclo de vida. Esse
++arquivo é ignorado pelo Git, não deve ser distribuído no repositório, e o Engram
++não reivindica conformidade com a norma nem copia texto, prompts ou checklists
++dela para o harness. A adoção é sempre tailoring local: transformar conceitos
++em critérios verificáveis do Engram.
++
++Quando uma mudança de harness, codificação ou review citar essa referência ou
++alterar processo de engenharia, registre em `progress.md`, no plano ativo ou no
++Review Canvas aplicável:
++
++- **Escopo e circunstâncias** — qual lacuna local está sendo tratada, quais
++  stakeholders/paths são afetados e o que fica explicitamente fora de escopo.
++- **Área de ciclo de vida** — planejamento/controle, decisão, risco,
++  configuração/informação, medição, QA, verificação, validação, operação ou
++  manutenção.
++- **Racional de decisão** — alternativas consideradas, opção escolhida,
++  premissas e motivo para não adotar a referência como pipeline ou conformidade.
++- **Risco e threshold** — risco mitigado, sinal que indicaria regressão e ação
++  esperada se o sinal piorar.
++- **Medição** — necessidade de informação, medida ou artefato observado,
++  frequência/custo e onde a evidência fica armazenada.
++- **Evidência separada** — verificação objetiva (`doctor.sh`, sensores, testes,
++  diff checks) separada de validação de fitness para o usuário/stakeholder
++  quando aplicável.
++- **Traceability** — links entre requisito/intenção, arquivo alterado, canvas,
++  review e progresso, com plano de rollback se algum gate for enfraquecido.
++
++O review-gate deve marcar como `[HIGH]` uma adoção 12207 sem esse registro e
++como `[BLOCKER]` quando a mudança também tocar gates, invariants ou scripts
++process-critical sem evidência de segurança e reversibilidade.
++
+diff --git a/docs/harness/bin/bootstrap.sh b/docs/harness/bin/bootstrap.sh
+index b5fd535..8734752 100755
+--- a/docs/harness/bin/bootstrap.sh
++++ b/docs/harness/bin/bootstrap.sh
+@@ -16 +16 @@
+-set -uo pipefail
++set -euo pipefail
+@@ -21 +21,8 @@ cd "$REPO_ROOT" 2>/dev/null || true
+-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
++BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo docs/harness/bin)"
++if [ -f "$BIN_DIR/lib.sh" ]; then
++  source "$BIN_DIR/lib.sh"
++else
++  field_value() {
++    printf ''
++  }
++fi
+diff --git a/docs/harness/bin/lib.sh b/docs/harness/bin/lib.sh
+index 00007d8..1e9cc81 100755
+--- a/docs/harness/bin/lib.sh
++++ b/docs/harness/bin/lib.sh
+@@ -2,0 +3,2 @@
++set -euo pipefail
++
+@@ -15 +16,0 @@ field_value() {
+-
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 73986a9..3866bcd 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -9,3 +9,3 @@
+-| Last review | `2026-06-22 — pass: docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md` |
+-| Last sensors | `2026-06-22 — status=pass (full gate)` |
+-| Last commit | `913917b` |
++| Last review | `2026-06-26 — pass: docs/harness/reviews/2026-06-26-harness-12207-tailoring-post.md` |
++| Last sensors | `2026-06-26 — status=pass (full gate after pending worktree fixes)` |
++| Last commit | `2ba4f96` |
+@@ -64,0 +65,9 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
++- 2026-06-26: `NeoLabHQ/context-engineering-kit` fica como referência externa
++  seletiva para padrões de workflow, não como dependência ou fonte copiável; a
++  primeira adoção foi uma taxonomia local de perspectivas em
++  `CODE_REVIEW_POLICY.md`.
++- 2026-06-26: `docs/ieee-12207.md` fica como referência local de padrões de
++  ciclo de vida sem reivindicação de conformidade; adoções futuras devem
++  registrar tailoring, risco, medição, evidência e traceability no harness.
++- 2026-06-26: a cópia integral da 12207 é local-only e ignorada pelo Git; o
++  repositório deve versionar apenas resumos/checklists próprios do Engram.
+@@ -968,0 +978,49 @@ Verification:
++
++## Harness 12207 Wave 0 measurement hardening — 2026-06-25
++
++- Applied the first ISO/IEC/IEEE 12207 follow-up slice to the operational
++  harness: strict shell failure mode for `bootstrap.sh` and `lib.sh`, plus
++  historical sensor measurement.
++- Preserved `.sensors-last` as the compatibility state file and added
++  `.sensors-log` as JSON Lines history with `schema_version=sensors-log-v1`,
++  `duration_sec`, per-layer statuses, artifact pointers, exclusion metadata, and
++  bounded rotation via `SENSORS_LOG_MAX_BYTES` / `SENSORS_LOG_ROTATIONS`.
++- `doctor.sh` now validates `.sensors-log` when present, runs `bash -n` over
++  harness scripts, and runs optional non-blocking `shellcheck -x` when
++  installed.
++- Documented the new measurement contract in `docs/harness/GATES.md` and
++  `docs/harness/JSON_OUTPUTS.md`.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-06-25-harness-12207-wave0.md`.
++
++Verification:
++
++- `bash docs/harness/bin/bootstrap.sh` — PASS, 41 lines.
++- `bash docs/harness/bin/doctor.sh` — PASS.
++- `bash docs/harness/bin/doctor.sh --json | python3 -m json.tool` — PASS,
++  includes `bash_syntax:*`, optional `shellcheck:*`, and `sensors_log:format`
++  checks.
++- `bash docs/harness/bin/sensors.sh status --json | python3 -m json.tool` —
++  PASS, exposes `.sensors-log`.
++- `SENSORS_LOG_MAX_BYTES=1 SENSORS_LOG_ROTATIONS=2 bash docs/harness/bin/sensors.sh baseline`
++  run twice — PASS, proved rotation boundaries; generated rotated artifacts were
++  removed after verification.
++- `bash docs/harness/bin/sensors.sh quick` — PASS.
++- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci` +
++  PR-title policy + harness doctor), recorded in `.sensors-log` with
++  `mode=full`, `status=pass`, `duration_sec=26`.
++- Codex review attempt
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v2-post.md` —
++  `REVIEW_VERDICT: FAIL`; fixed by making optional ShellCheck non-blocking and
++  preparing a scoped Codex-only final review.
++- Codex review attempt
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v3-post.md` —
++  `REVIEW_VERDICT: FAIL`; fixed by removing Python heredocs from
++  `doctor.sh`/`sensors.sh` JSON paths for strict read-only sandbox
++  compatibility.
++- Codex final review
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md` —
++  `REVIEW_VERDICT: PASS scoped harness-12207-wave0 review passed with no
++  findings`.
++- `bash docs/harness/bin/review-gate.sh post harness-12207-wave0 --review-file docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md`
++  — PASS.
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

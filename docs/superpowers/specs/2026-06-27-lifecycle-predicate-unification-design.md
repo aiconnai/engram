@@ -2,13 +2,14 @@
 
 Date: 2026-06-27
 Owner: Ronaldo (decisions) + agent (drafting)
-Status: Codex re-review v3 PASS — Grok artifact invalid; pending real second-reviewer decision
+Status: Codex + Claude Sonnet re-review v3 PASS — Grok artifact invalid
 Supersedes: `docs/superpowers/specs/2026-06-26-stability-spacing-effect-design.md`
 
 ## Summary
 
-Engram has **multiple writers** of `memories.lifecycle_state`. Review found
-**four MCP-facing decay-policy/compression tools plus one optional server
+Engram has **multiple writers** of `memories.lifecycle_state`. Codex and
+Claude Sonnet review found **four MCP-facing decay-policy/compression tools plus
+one optional server
 compression scheduler path**, each currently capable of applying a divergent
 lifecycle transition. In production, lifecycle-derived state has not transitioned
 (1,179 memories: `archived=0`, `stale=0`) because the lifecycle tool is manual and
@@ -404,8 +405,10 @@ predicate never forced to fire can be dead without signal.
 
 - The `lifecycle_state` write block in `run_salience_decay` (`salience.rs:~439-460`).
 - The divergent SQL predicate in `lifecycle_run`
-  (`importance < X AND access_count < 5 AND created_at`), replaced by a permissive
-  pre-filter + `decide_lifecycle_state`.
+  (`importance < X AND access_count < 5 AND created_at`), including the current
+  `created_at`-based stale/archive selection (`lifecycle.rs:94-113`), replaced by
+  a permissive pre-filter + `decide_lifecycle_state`. The final idle calculation
+  must use `last_accessed_at.unwrap_or(created_at)`, not creation age.
 - The `memory_decay` lifecycle transition (`memory_policy.rs:352-357`): keeps
   writing policy scores, stops transitioning `lifecycle_state`.
 - The `memory_archive_old` lifecycle transition (`summarize.rs:231-269,329`):

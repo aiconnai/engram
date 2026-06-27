@@ -4042,13 +4042,14 @@
     // ── Meta / Discovery ─────────────────────────────────────────────────────
     ToolDef {
         name: "discover_tools",
-        description: "List available Engram tools by tier and category. Use this to progressively discover capabilities beyond the essential tool set. Returns tool names, descriptions, and tiers.",
+        description: "List available Engram tools by tier and category. Use this to progressively discover capabilities beyond the essential tool set. The `detail` parameter controls how much per-tool information is returned, from names only up to full input schemas.",
         schema: r#"{
             "type": "object",
             "properties": {
                 "tier": {"type": "string", "enum": ["essential", "standard", "advanced", "all"], "default": "all", "description": "Filter by tier: essential (~20 core tools), standard (~57 common tools), advanced (~104 specialized tools), all (everything)"},
                 "category": {"type": "string", "description": "Filter by category keyword (e.g., 'search', 'graph', 'session', 'identity', 'quality')"},
-                "search": {"type": "string", "description": "Search tool names and descriptions"}
+                "search": {"type": "string", "description": "Search tool names and descriptions"},
+                "detail": {"type": "string", "enum": ["names", "summary", "schema"], "default": "summary", "description": "Per-tool detail level: 'names' (name only, cheapest), 'summary' (name + description + tier, the default), or 'schema' (summary plus the full input schema as a JSON object, so the tool can be called without a separate tools/list round-trip)."}
             }
         }"#,
         tier: ToolTier::Essential,

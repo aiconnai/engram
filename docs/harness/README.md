@@ -2,7 +2,7 @@
 
 Disciplina operacional do repositório `aiconnai/engram`.
 
-O harness existe para manter o trabalho retomável, auditável e de alta qualidade entre sessões de agentes (Claude Code CLI, Zed Gemini CLI, Codex, Cursor, etc.) e entre humanos + agentes. Ele fornece spec feed-forward, invariants duros, gates mensuráveis (locais + cross-model review), reviews persistidos como artefatos, e progresso registrado de forma canônica.
+O harness existe para manter o trabalho retomável, auditável e de alta qualidade entre sessões de agentes (Claude Code CLI, Claude Code Sonnet reviewer, Codex, Cursor, etc.) e entre humanos + agentes. Ele fornece spec feed-forward, invariants duros, gates mensuráveis (locais + cross-model review), reviews persistidos como artefatos, e progresso registrado de forma canônica.
 
 Se um agente futuro (ou você em outra sessão) não consegue responder rapidamente:
 
@@ -17,7 +17,7 @@ Se um agente futuro (ou você em outra sessão) não consegue responder rapidame
 
 > **The terminal is the product.**
 
-Este harness foi desenhado para agentes que *vivem* no terminal ou no editor com CLI agent embutido (Zed Gemini CLI, Claude Code CLI, etc.), não para UIs bonitas com chat embutido. O CLI é a interface de mais alto leverage: já instalada, profundamente treinada nos modelos, self-documenting, infinitamente composable, baixa latência, zero chrome.
+Este harness foi desenhado para agentes que *vivem* no terminal ou no editor com CLI agent embutido (Claude Code CLI, Claude Code Sonnet reviewer, Codex, etc.), não para UIs bonitas com chat embutido. O CLI é a interface de mais alto leverage: já instalada, profundamente treinada nos modelos, self-documenting, infinitamente composable, baixa latência, zero chrome.
 
 O harness não é "outra interface de chat". É o conjunto de camadas (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) que vive *dentro* do repo, onde o trabalho real acontece.
 
@@ -60,6 +60,36 @@ Quando automação precisar de output parseável, use o contrato em
 flags JSON devem ser opt-in e nunca devem emitir segredos, tokens, headers,
 cookies ou dumps de ambiente.
 
+## Fluxo de PR protegido
+
+O loop local e os gates do GitHub são camadas complementares: o local pega cedo,
+o GitHub confirma os mesmos contratos antes do merge — sem surpresas tardias.
+
+Loop local (rode antes de abrir o PR):
+
+```bash
+bash docs/harness/bin/bootstrap.sh        # início de sessão (read-only)
+bash docs/harness/bin/sensors.sh quick    # durante o desenvolvimento
+bash docs/harness/bin/sensors.sh          # full, antes de abrir o PR
+```
+
+No GitHub, o merge em `main` exige estes **required status checks**:
+
+- `Format`
+- `Clippy`
+- `Test (ubuntu-latest)`
+- `Documentation`
+- `Harness Contract` — gate leve que roda `bootstrap.sh` mais a política de
+  título de PR. Hoje a política só bloqueia o marcador literal `[codex]`; **não**
+  é um validador amplo de qualidade de título (ex.: não exige Conventional
+  Commits). O `doctor.sh` **não** faz parte deste gate required — ele permanece
+  local/advisory.
+
+`Security Audit` e `Cargo Deny` rodam nos PRs como sinais **advisory** (ainda não
+bloqueiam merge; ver baseline em [`GATES.md`](./GATES.md)). Code review automático
+(Copilot / terceiros) é **sinal extra, não autoritativo**: por si só não bloqueia
+o merge enquanto não expuser um status check confiável.
+
 ## Estrutura
 
 | Caminho                        | Papel |
@@ -81,9 +111,14 @@ cookies ou dumps de ambiente.
 | `progress/*.md`                | Logs permanentes por sprint/tarefa (detalhados) |
 | `known-issues/*.md`            | Incidentes externos que justificam exclusão auditável de sensor |
 | `reviews/*.md`                 | Artefatos permanentes de pre/post review (versionados por iteração) |
+| `decisions/harness-decision-log.yaml` | Registro estruturado de decisões do harness (DEC-XXXX) |
+| `risk-register.yaml`            | Registro estruturado de riscos do harness (RISK-XXXX) |
 | `bin/bootstrap.sh`             | Orientação rápida da sessão (obrigatório no início) |
 | `bin/doctor.sh`                | Consistência read-only do harness |
-| `bin/sensors.sh`               | Gate determinístico principal (wrapping `just ci` ou `make ci` + harness checks) |
+| `bin/sensors.sh`               | Gate determinístico principal (granular CI local + pr-title policy + harness checks) |
+| `bin/harness-stats.sh`         | Análise histórica de `.sensors-log` (média por modo, tendência, flaky hints) |
+| `bin/harness-decision-log.sh`  | Registro de decisões com IDs estáveis e justificativas |
+| `bin/harness-risk-register.sh` | Registro de riscos com score, status, owner e monitoramento |
 | `bin/review-gate.sh`           | Gate de review cross-CLI / cross-model (generalizado) |
 | `bin/baseline.sh`              | Snapshot estático barato em `.baseline-last` para drift review |
 | `bin/quarterly-audit.sh`       | Auditoria evidence-only; nunca apaga, arquiva ou reescreve |
@@ -124,7 +159,7 @@ bash docs/harness/bin/vc-gate.sh start <task-id>
 
 # 4. Implementar a menor mudança correta
 #    Rust: TDD onde aplicável, clippy limpo, cobertura de comportamentos alterados.
-#    Use `just ci` localmente para paridade com GitHub (ou `make ci` onde `just` não estiver disponível).
+#    Use `bash docs/harness/bin/sensors.sh` para paridade CI/local (equivalente à política de `just ci`/`make ci`).
 
 # 5. Rodar sensores determinísticos (hard gate)
 bash docs/harness/bin/sensors.sh
@@ -219,11 +254,20 @@ Regras:
 
 ## Sensores (Camada Determinística)
 
-`sensors.sh` é o gate local principal. Ele invoca:
+`sensors.sh` é o gate local principal. O modo `full` executa com granularidade:
 
-- `just ci` (preferencial) ou `make ci` (fallback): fmt + clippy -D warnings + testes com paridade Linux + docs + MCP reference
-- Verificação de harness doctor
-- Outros checks específicos de engram (ex.: snapshot tests, property tests, embedding cache bounds, etc.)
+- `fmt`
+- `clippy`
+- `test_lib`
+- `test_integration` (`engram-server`)
+- `test_integration_watch` (`engram-watcher`)
+- `doc`
+- `ref_check` (`./scripts/generate-mcp-reference.sh --check`)
+- `pr-title-policy` (`[codex]` forbidden)
+- `harness doctor`
+
+Outros checks específicos de engram (ex.: snapshot tests, property tests, embedding
+cache bounds, etc.) continuam opcionais (`docs`, `mcp`, `baseline`, etc).
 
 Resultado mais recente fica em `docs/harness/.sensors-last`.
 
@@ -254,7 +298,7 @@ Essas lanes opcionais não substituem o gate completo para merge, handoff ou cla
 `review-gate.sh` implementa o princípio de **Single-Process Judgment**:
 
 - O agente que *escreve* o código não deve ser o juiz final da sua própria saída.
-- Usa outro CLI/modelo (Claude Code, Zed Gemini CLI, Codex, local via Ollama, etc.) como reviewer independente.
+- Usa outro CLI/modelo (Claude Code Sonnet, Codex, local via Ollama, etc.) como reviewer independente.
 
 Modos:
 
@@ -310,7 +354,7 @@ Uma tarefa só está pronta quando:
 - [ ] Bootstrap lido + SPEC/INVARIANTS/GATES/POLICY lidos
 - [ ] Pre-gate rodado (ou skip registrado)
 - [ ] Menor mudança correta implementada + TDD/verificações apropriadas
-- [ ] `just ci` / `sensors.sh` passou limpo (ou exclusão documentada válida)
+- [ ] `sensors.sh` full passou limpo (ou exclusão documentada válida)
 - [ ] Post-gate retornou `PASS ...`
 - [ ] `progress.md` + log da sprint atualizados
 - [ ] Review artifacts relevantes preservados
@@ -327,7 +371,7 @@ Uma tarefa só está pronta quando:
 - **Harness em si**: Mudança em `docs/harness/bin/`, INVARIANTS, GATES ou CODE_REVIEW_POLICY exige rodar doctor + sensors + post-gate.
 - **Cross-SDK**: Mudança em Python ou TypeScript SDKs que quebra contrato com o core Rust exige testes de integração e possivelmente versão de crate.
 
-## Integração com Agentes Atuais (Claude Code + Zed Gemini CLI)
+## Integração com Agentes Atuais (Claude Code + Claude Code Sonnet)
 
 O harness é agnóstico a CLI. O bootstrap funciona em qualquer um.
 
@@ -338,10 +382,12 @@ Para review cross-CLI (o cenário atual do usuário):
 - Salve a resposta completa em `reviews/YYYY-MM-DD-<task>-vN-post.md`.
 - O parser extrai o `PASS`/`FAIL` do artefato.
 
-Para o reviewer Gemini, use o agente **Gemini CLI** no seletor de agentes do
-Zed. Abra o `.raw` gerado pelo `review-gate.sh`, cole o prompt no agente Gemini
-CLI do Zed, e salve a resposta completa no artefato indicado pelo script. Não
-trate o binário terminal `gemini` como o caminho canônico deste harness.
+Para o reviewer Claude Sonnet, use uma sessão/processo separado do Claude Code
+com `--model sonnet`. Abra o `.raw` gerado pelo `review-gate.sh`, cole ou passe
+o prompt para essa sessão Sonnet, e salve a resposta completa no artefato indicado
+pelo script. Não trate outro backend como caminho canônico deste harness sem
+override explícito do owner e verificação de assinatura/autenticação no momento
+do review.
 
 ## Dogfooding com o Próprio Engram
 
@@ -358,7 +404,7 @@ Trabalho futuro (ENGRA-22+): ingestão automática de eventos de harness (commit
 - RFC 0001: Harness Memory Product Boundary (`docs/rfcs/0001-harness-memory-product-boundary.md`)
 - Root `INVARIANTS.md` (data invariants do sistema)
 - `STANDARDS.md`, `ERRORS_AND_LESSONS.md`, `AGENTS.md`, `Claude.md`
-- `just ci` / `scripts/ci.sh` — gates obrigatórios de CI
+- `bash docs/harness/bin/sensors.sh` (full) — gate obrigatório de CI local
 - `docs/MCP_TOOLS.md` — superfície completa de tools expostas via MCP
 
 ---

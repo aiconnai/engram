@@ -238,6 +238,51 @@ fn call_tool_json(handler: &TestHandler, id: i64, name: &str, arguments: Value) 
     serde_json::from_str(text).expect("Tool result should contain JSON")
 }
 
+#[test]
+fn test_tools_list_uses_unique_tool_names_from_registry() {
+    use std::collections::BTreeSet;
+
+    let handler = TestHandler::new();
+    let resp = handler.handle_request(make_request(1, methods::LIST_TOOLS, json!({})));
+    assert!(resp.error.is_none(), "tools/list should succeed");
+
+    let result = resp.result.expect("tools/list result");
+    let tools = result["tools"].as_array().expect("tools must be an array");
+    let mut seen = BTreeSet::new();
+    let mut discover_tools_count = 0;
+
+    for tool in tools {
+        let name = tool["name"].as_str().expect("listed tool must have a name");
+        if name == "discover_tools" {
+            discover_tools_count += 1;
+        }
+        assert!(
+            seen.insert(name.to_string()),
+            "tools/list must not contain duplicate tool name: {name}"
+        );
+    }
+
+    assert_eq!(
+        discover_tools_count, 1,
+        "discover_tools must come from the canonical registry exactly once"
+    );
+}
+
+#[test]
+fn test_tool_registry_has_no_orphan_discovery_definition_file() {
+    let orphan = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("mcp")
+        .join("tools")
+        .join("discovery.rs");
+
+    assert!(
+        !orphan.exists(),
+        "tool definitions must live in src/mcp/tools/registry.rs; remove orphan file: {}",
+        orphan.display()
+    );
+}
+
 fn create_memory_for_search(handler: &TestHandler, id: i64, content: &str) -> i64 {
     let created = call_tool_json(
         handler,
@@ -1679,6 +1724,165 @@ fn test_recent_activity_limit_enforced() {
         activities.len() <= 2,
         "Should return at most 2 activities, got {}",
         activities.len()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// discover_tools detail levels (progressive disclosure)
+// ---------------------------------------------------------------------------
+
+/// Helper: invoke discover_tools and return the parsed JSON payload.
+fn call_discover_tools(handler: &TestHandler, arguments: Value) -> Value {
+    let req = make_request(
+        200,
+        "tools/call",
+        json!({ "name": "discover_tools", "arguments": arguments }),
+    );
+    let resp = handler.handle_request(req);
+    assert!(
+        resp.error.is_none(),
+        "discover_tools returned error: {:?}",
+        resp.error
+    );
+    let result = resp.result.expect("Expected result");
+    let content = result["content"]
+        .as_array()
+        .expect("Expected content array");
+    let text = content[0]["text"].as_str().expect("Expected text content");
+    serde_json::from_str(text).expect("discover_tools should return valid JSON")
+}
+
+#[test]
+fn test_discover_tools_default_detail_is_summary() {
+    // Omitting `detail` must preserve the existing contract: name + description
+    // + tier, but NOT the full schema. This is backward-compatible behavior.
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "search": "discover_tools" }));
+
+    let tools = data["tools"].as_array().expect("tools must be an array");
+    let tool = tools
+        .iter()
+        .find(|t| t["name"].as_str() == Some("discover_tools"))
+        .expect("discover_tools must be discoverable by itself");
+
+    assert!(tool["name"].is_string(), "summary detail must include name");
+    assert!(
+        tool["description"].is_string(),
+        "summary detail must include description"
+    );
+    assert!(tool["tier"].is_string(), "summary detail must include tier");
+    assert!(
+        tool.get("schema").is_none(),
+        "summary detail must NOT include schema, got: {}",
+        tool
+    );
+}
+
+#[test]
+fn test_discover_tools_detail_names_only() {
+    // `detail: "names"` returns just the name field — cheapest discovery.
+    let handler = TestHandler::new();
+    let data = call_discover_tools(
+        &handler,
+        json!({ "detail": "names", "search": "discover_tools" }),
+    );
+
+    let tools = data["tools"].as_array().expect("tools must be an array");
+    let tool = tools
+        .iter()
+        .find(|t| t["name"].as_str() == Some("discover_tools"))
+        .expect("discover_tools must be present");
+
+    assert!(tool["name"].is_string(), "names detail must include name");
+    assert!(
+        tool.get("description").is_none(),
+        "names detail must NOT include description, got: {}",
+        tool
+    );
+    assert!(
+        tool.get("tier").is_none(),
+        "names detail must NOT include tier, got: {}",
+        tool
+    );
+    assert!(
+        tool.get("schema").is_none(),
+        "names detail must NOT include schema, got: {}",
+        tool
+    );
+}
+
+#[test]
+fn test_discover_tools_detail_schema_includes_input_schema() {
+    // `detail: "schema"` returns the full input schema as a JSON object (not a
+    // string), so an agent can call the tool without a second tools/list round.
+    let handler = TestHandler::new();
+    let data = call_discover_tools(
+        &handler,
+        json!({ "detail": "schema", "search": "discover_tools" }),
+    );
+
+    let tools = data["tools"].as_array().expect("tools must be an array");
+    let tool = tools
+        .iter()
+        .find(|t| t["name"].as_str() == Some("discover_tools"))
+        .expect("discover_tools must be present");
+
+    assert!(tool["name"].is_string(), "schema detail must include name");
+    assert!(
+        tool["description"].is_string(),
+        "schema detail must include description"
+    );
+    assert!(tool["tier"].is_string(), "schema detail must include tier");
+    assert!(
+        tool["schema"].is_object(),
+        "schema detail must include schema as a JSON object, got: {}",
+        tool
+    );
+    assert_eq!(
+        tool["schema"]["type"].as_str(),
+        Some("object"),
+        "discover_tools schema must describe an object"
+    );
+    assert!(
+        tool["schema"]["properties"]["detail"].is_object(),
+        "discover_tools schema must document the new 'detail' property"
+    );
+}
+
+#[test]
+fn test_discover_tools_invalid_detail_is_rejected() {
+    // Invalid detail must fail loudly at the boundary, not silently default.
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "detail": "everything" }));
+
+    assert!(
+        data["error"].is_string(),
+        "invalid detail must return an error field, got: {}",
+        data
+    );
+    let err = data["error"].as_str().unwrap();
+    assert!(
+        err.contains("detail"),
+        "error message must mention 'detail', got: {}",
+        err
+    );
+}
+
+#[test]
+fn test_discover_tools_non_string_detail_is_rejected() {
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "detail": 123 }));
+
+    assert!(
+        data["error"].is_string(),
+        "non-string detail must return an error field, got: {}",
+        data
+    );
+    let err = data["error"].as_str().unwrap();
+    assert!(
+        err.contains("detail") && err.contains("string"),
+        "error message must mention detail string type, got: {}",
+        err
     );
 }
 

@@ -6,9 +6,9 @@
 | Active sprint | `Harness Engineering v0 — bootstrap & core gates` |
 | Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
 | Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
-| Last review | `2026-06-22 — pass: docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md` |
-| Last sensors | `2026-06-22 — status=pass (full gate)` |
-| Last commit | `913917b` |
+| Last review | `2026-06-27 — pass: docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` |
+| Last sensors | `2026-06-27 — status=pass (full lane after reference-intake checklist fix; timestamp 2026-06-27T09:10:45Z)` |
+| Last commit | `aeacb93` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
@@ -20,7 +20,7 @@
 
 ## Contexto e Motivação
 
-O usuário está usando Claude Code CLI e o agente Gemini CLI no Zed side-by-side para comparar workflows agentic em terminal/editor. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI/editor.
+O usuário está usando Claude Code CLI e Claude Code Sonnet em sessão/processo separado como reviewer cross-model para comparar workflows agentic em terminal/editor. A visão é que "the terminal is the product" e que harnesses reais (Context Engine, Planner, Memory Manager, Verifier, Tool Registry, Harness Config) devem viver onde o trabalho de engenharia de mais alto sinal já acontece: o repositório + CLI/editor.
 
 Engram é posicionado de forma única porque ele *é* o Memory Manager para agentes e para times que acumulam contexto proprietário mais rápido do que conseguem organizá-lo manualmente. O harness de desenvolvimento do próprio engram pode dogfood o produto (futuro).
 
@@ -40,7 +40,7 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 - [x] `bin/bootstrap.sh` — script de orientação (read-only, rápido, determinístico)
 - [x] `bin/doctor.sh` — consistência do harness
 - [x] `bin/sensors.sh` — wrapper sobre `just ci` + doctor + engram-specific
-- [x] `bin/review-gate.sh` — generalizado para claude/gemini/etc, com prompt engineering, continuity, versioning, timeout
+- [x] `bin/review-gate.sh` — generalizado para claude-sonnet/codex/etc, com prompt engineering, continuity, versioning, timeout
 - [x] `bin/check-commit-msg.sh` — validador de commits
 - [x] `bin/check-pr-title.sh` — validador de títulos de PR sem o marcador `[codex]`
 - [x] `docs/harness/known-issues/2026-05-31-grpc-transport-port-bind.md` — limitação formal para sensor `grpc-transport`
@@ -57,11 +57,24 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
 ## Últimas decisões registradas
 
 - Harness é **complementar** aos gates existentes (`just ci`, pre-commit, GitHub Actions). Não substitui — adiciona memória persistida, review cross-CLI, e disciplina de processo.
-- Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque o agente Gemini CLI no Zed e Claude Code CLI estão sendo usados side-by-side.
+- Review-gate será flexível para o cenário atual (prompt files + paste no outro CLI) porque Claude Code CLI e Claude Code Sonnet reviewer são usados em processos/sessões separados.
 - Dogfooding com o próprio engram (via MCP + hooks) é objetivo explícito de longo prazo, guiado por RFC 0001, mas fora do escopo de v0 bootstrap.
 - Invariants do harness são separados dos data invariants (`INVARIANTS.md` na raiz) para manter clareza.
 - 2026-06-08: `ENGRA-103` aberto no Huly para `memory_digest`; RFC 0008 define a ferramenta como digest read-only, determinístico, sem schema novo e com provenance explícita.
 - 2026-06-20: títulos de PR criados ou editados por automação não podem conter o marcador `[codex]`; `check-pr-title.sh` e `doctor.sh` agora guardam essa regra.
+- 2026-06-26: `NeoLabHQ/context-engineering-kit` fica como referência externa
+  seletiva para padrões de workflow, não como dependência ou fonte copiável; a
+  primeira adoção foi uma taxonomia local de perspectivas em
+  `CODE_REVIEW_POLICY.md`.
+- 2026-06-26: `docs/ieee-12207.md` fica como referência local de padrões de
+  ciclo de vida sem reivindicação de conformidade; adoções futuras devem
+  registrar tailoring, risco, medição, evidência e traceability no harness.
+- 2026-06-26: a cópia integral da 12207 é local-only e ignorada pelo Git; o
+  repositório deve versionar apenas resumos/checklists próprios do Engram.
+- 2026-06-27: Claude Code Sonnet (`claude --model sonnet`) é o reviewer
+  cross-model padrão permanente. Backends anteriores ficam apenas como histórico
+  em logs/canvas/audits; outro backend requer override explícito do owner e
+  verificação de assinatura/autenticação no momento do review.
 
 ## PR title guard — 2026-06-20
 
@@ -248,6 +261,17 @@ Verification:
 
 - `rtk bash docs/harness/bin/doctor.sh` — PASS.
 - `rtk git diff --check` — PASS.
+
+## Claude Sonnet reviewer path — 2026-06-27
+
+- Claude Code Sonnet (`claude --model sonnet`) is now the permanent default
+  cross-model reviewer in a separate process/session.
+- `review-gate.sh`, `README.md`, `GATES.md`, `SPEC.md`, `INVARIANTS.md`,
+  `CODE_REVIEW_POLICY.md`, `AGENTS.md`, and `CLAUDE.md` point future agents at
+  Sonnet as the canonical reviewer path.
+- Older reviewer-path sections below are historical only. Another backend
+  requires explicit owner override plus authentication/subscription verification
+  at review time.
 
 ## Reviewer CLI substitution — 2026-06-22
 
@@ -1015,3 +1039,204 @@ Verification:
 - `bash docs/harness/bin/doctor.sh` — PASS.
 - `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci`
   + PR-title policy + harness doctor).
+
+## Harness 12207 Wave 0 measurement hardening — 2026-06-25
+
+- Applied the first ISO/IEC/IEEE 12207 follow-up slice to the operational
+  harness: strict shell failure mode for `bootstrap.sh` and `lib.sh`, plus
+  historical sensor measurement.
+- Preserved `.sensors-last` as the compatibility state file and added
+  `.sensors-log` as JSON Lines history with `schema_version=sensors-log-v1`,
+  `duration_sec`, per-layer statuses, artifact pointers, exclusion metadata, and
+  bounded rotation via `SENSORS_LOG_MAX_BYTES` / `SENSORS_LOG_ROTATIONS`.
+- `doctor.sh` now validates `.sensors-log` when present, runs `bash -n` over
+  harness scripts, and runs optional non-blocking `shellcheck -x` when
+  installed.
+- Documented the new measurement contract in `docs/harness/GATES.md` and
+  `docs/harness/JSON_OUTPUTS.md`.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-25-harness-12207-wave0.md`.
+
+Verification:
+
+- `bash docs/harness/bin/bootstrap.sh` — PASS, 41 lines.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `bash docs/harness/bin/doctor.sh --json | python3 -m json.tool` — PASS,
+  includes `bash_syntax:*`, optional `shellcheck:*`, and `sensors_log:format`
+  checks.
+- `bash docs/harness/bin/sensors.sh status --json | python3 -m json.tool` —
+  PASS, exposes `.sensors-log`.
+- `SENSORS_LOG_MAX_BYTES=1 SENSORS_LOG_ROTATIONS=2 bash docs/harness/bin/sensors.sh baseline`
+  run twice — PASS, proved rotation boundaries; generated rotated artifacts were
+  removed after verification.
+- `bash docs/harness/bin/sensors.sh quick` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci` +
+  PR-title policy + harness doctor), recorded in `.sensors-log` with
+  `mode=full`, `status=pass`, `duration_sec=26`.
+- Codex review attempt
+  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v2-post.md` —
+  `REVIEW_VERDICT: FAIL`; fixed by making optional ShellCheck non-blocking and
+  preparing a scoped Codex-only final review.
+- Codex review attempt
+  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v3-post.md` —
+  `REVIEW_VERDICT: FAIL`; fixed by removing Python heredocs from
+  `doctor.sh`/`sensors.sh` JSON paths for strict read-only sandbox
+  compatibility.
+- Codex final review
+  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md` —
+  `REVIEW_VERDICT: PASS scoped harness-12207-wave0 review passed with no
+  findings`.
+- `bash docs/harness/bin/review-gate.sh post harness-12207-wave0 --review-file docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md`
+  — PASS.
+
+
+## discover_tools detail levels — 2026-06-26
+
+- Extended the existing `discover_tools` MCP tool with `detail` levels instead
+  of introducing a redundant discovery tool.
+- `detail: "names"` returns only tool names for cheapest discovery.
+- Omitted `detail` or `detail: "summary"` preserves the existing response shape:
+  name, description and tier.
+- `detail: "schema"` adds the parsed input schema object so agents can call a
+  discovered tool without a second full `tools/list` round-trip.
+- Invalid `detail` values now return an explicit boundary error.
+
+Verification:
+
+- `cargo test --test mcp_protocol_tests discover_tools --locked` — PASS, 5
+  tests passed.
+- `./scripts/generate-mcp-reference.sh --check` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- `git diff --check` — PASS.
+- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate).
+- LSP diagnostics could not be collected because the local LSP transport closed;
+  Rust compiler/test gates are the verification fallback for this session.
+- Codex post-review `docs/harness/reviews/2026-06-26-discover-tools-detail-post.md` — PASS.
+
+## Reference intake checklist — 2026-06-27
+
+- Added `docs/harness/REFERENCE_INTAKE.md` as the canonical intake checklist for
+  external harness references, standards, articles, repos, benchmarks, tool
+  catalogs, awesome lists, prompt/workflow kits, and local-only reference
+  artifacts.
+- The checklist captures source identity, source type, license boundary, local
+  harness relevance, placement, adaptation, exclusions, and verification
+  evidence.
+- `docs/harness/GATES.md` now requires reference-intake evidence when external
+  sources shape harness policy, gates, taxonomy, skills, reviewer prompts, or
+  exception handling.
+- `docs/harness/CODE_REVIEW_POLICY.md` now instructs reviewers to flag missing
+  intake evidence and block copied licensed material, gate weakening, autonomous
+  execution imports, or external sources overriding local invariants.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-27-reference-intake-checklist.md`.
+
+Verification:
+
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- Markdown hygiene check for `REFERENCE_INTAKE.md`, `GATES.md`,
+  `CODE_REVIEW_POLICY.md`, and the canvas — PASS.
+- `rtk bash docs/harness/bin/sensors.sh quick` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-27T09:10:45Z`, `duration_sec=28`).
+
+Scope notes:
+
+- No script, Rust, MCP, SDK, storage, runtime, or autonomous execution changes.
+- Automation for duplicate URL checks, markdown entry-shape checks, or exception
+  allowlist validation is intentionally deferred to a separate task.
+- The worktree contained unrelated pre-existing dirty changes before this slice;
+  closure must stage only separable reference-intake hunks/files.
+
+Post-review fix:
+
+- Independent Codex post-review `docs/harness/reviews/2026-06-27-reference-intake-checklist-post.md` returned `REVIEW_VERDICT: FAIL` because the canvas cited `walkinglabs/awesome-harness-engineering` without dogfooding the new intake evidence.
+- Fixed by adding an `External Reference Intake` table to `docs/harness/canvas/2026-06-27-reference-intake-checklist.md` with source identity, source type, license boundary, relevance, placement, adaptation, exclusions, and verification.
+- The FAIL is superseded by this fix and requires a new post-review artifact before closure.
+
+Final verification after post-review fix:
+
+- `rtk git diff --check` — PASS.
+- Markdown hygiene check for reference-intake files and progress ledgers — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-27T09:10:45Z`, `duration_sec=28`).
+
+Post-review closure:
+
+- Independent Codex rerun `docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` returned `REVIEW_VERDICT: PASS reference-intake checklist slice meets acceptance criteria`.
+- `rtk bash docs/harness/bin/review-gate.sh post reference-intake-checklist --review-file docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` — PASS; parser accepted the v2 artifact.
+
+## Lifecycle predicate implementation plan — 2026-06-27
+
+- Lifecycle predicate unification spec is committed and cross-model reviewed:
+  - `1f9f25b` — initial lifecycle predicate design.
+  - `a085c0f` — finalized lifecycle predicate spec after v3 re-review PASS.
+- Added the implementation plan at
+  `docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md`.
+- Plan scope: implement `decide_lifecycle_state`, route `lifecycle_run` through
+  the canonical predicate, disarm salience/policy/compression lifecycle writers,
+  preserve domain writers, keep `SCHEMA_VERSION=44`, update MCP metadata,
+  regenerate `docs/MCP_TOOLS.md`, and verify single-writer behavior.
+- Plan review fix: removed `expires_at` from the Step 2.3 `lifecycle_run` SQL
+  pre-filter. The pre-filter now selects only `valid_to IS NULL` and non-Archived
+  rows, with optional workspace filtering.
+- Lesson recorded: lifecycle pre-filters must not filter on fields the canonical
+  predicate does not model. `expires_at` now appears only in the explicit
+  prohibition line.
+- Implementation is intentionally deferred to a dedicated TDD session using this
+  plan as the contract.
+
+Verification:
+
+- `rtk grep -nE "expires_at" docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md` — PASS; single occurrence in the prohibition line.
+- Step 2.3 SQL readback — PASS; only `valid_to IS NULL`, non-Archived, and optional workspace clause remain.
+- `rtk git diff --check -- docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md` — PASS.
+
+## GitHub harness protection — Wave 1 — 2026-06-27
+
+Plan: `.omo/plans/github-harness-protection.md` (reviewed + corrected;
+approved-for-execution). Staged GitHub protection: objective checks block,
+AI review advisory, stricter enforcement only after observation. Wave 1
+(repo-owned, reversible) implemented; GitHub settings (Wave 2) deferred.
+
+Done this wave:
+
+- **Todo 1 — CODEOWNERS**: `.github/CODEOWNERS` with `@aiconnai/core` over
+  protected surfaces only (CI/workflows, harness, agent/governance docs,
+  Cargo/deny/audit policy, release/CI scripts, CODEOWNERS self-gate). No
+  catch-all owner. Owner handle confirmed by user; no placeholder/guess.
+- **Todo 2 — Harness Contract workflow**: `.github/workflows/harness-contract.yml`.
+  Required job runs only `bootstrap.sh` + `pr-title-policy.sh`; advisory
+  `Harness Doctor Advisory` job (`continue-on-error`) runs the self-diagnostic.
+  `PR_TITLE` falls back to a non-empty placeholder on `merge_group`/manual to
+  avoid the empty-title usage-error footgun.
+- **Todo 3 — PR security (advisory)**: added `pull_request` to existing
+  `Security Audit` + `Cargo Deny` jobs in `ci.yml` (reuse, not new workflow).
+  Kept advisory — local baseline FAILS (`RUSTSEC-2026-0187` lopdf,
+  `RUSTSEC-2026-0185` quinn-proto 7.5 high), so promotion to required is blocked
+  until resolved/ignored. Tracked for a dedicated issue.
+- **Todo 4 — Supply-chain pin**: AgentShield install pinned `--tag v0.8.7` →
+  `--rev a1a571197211793422d31811be3d7735dae0a30a` (peeled commit of the
+  annotated tag). Confirmed `nightly.yml` stays schedule/manual/advisory.
+- **Todo 5 — Docs/PR template**: PR template + `README.md` + `GATES.md` document
+  the local loop (`bootstrap` → `sensors.sh quick` → full `sensors.sh`) and the
+  required check names; AI review framed as advisory, `pr-title-policy.sh`
+  framed as `[codex]`-only.
+
+Deferred: Todos 6–8 (ruleset, security features, observation/promotion) require
+GitHub admin settings (Wave 2/3). Evidence in `.omo/evidence/task-{1..5}-*.md`.
+
+Verification:
+
+- Todo 1 AC (CODEOWNERS has `docs/harness/**` + `.github/workflows/**`, all
+  surfaces owned, no placeholder) — PASS.
+- Todo 2 AC (required block = bootstrap + pr-title, excludes doctor; `[codex]`
+  title → exit 4; merge_group fallback non-empty) — PASS.
+- Todo 3 AC (both jobs present, both trigger on PR) — PASS; baseline FAIL
+  recorded as the reason they stay advisory.
+- Todo 4 AC (AgentShield pinned by `--rev`, no `--tag`; nightly not on PRs) — PASS.
+- Todo 5 AC (`Harness Contract` in 3 docs, `sensors.sh quick` in 2; no
+  "AI review is authoritative") — PASS.
+- `rtk git diff --check` — PASS (no whitespace/conflict markers).

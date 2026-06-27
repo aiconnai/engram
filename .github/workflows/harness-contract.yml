@@ -1,0 +1,66 @@
+name: Harness Contract
+
+# Lightweight, deterministic harness gate intended to be a REQUIRED status check.
+#
+# It deliberately does NOT run the full local sensors gate or the heavy harness
+# self-diagnostic:
+#   - fmt/clippy/test/doc are already covered by the four required CI jobs.
+#   - the harness self-diagnostic is broad and noisy; it stays a LOCAL / advisory
+#     gate until it has proven clean in CI. See the advisory job below, which runs
+#     non-blocking and must NOT be marked as a required status check.
+#
+# The required `Harness Contract` job runs only:
+#   - bootstrap.sh        (read-only sanity, <800ms, exits 0 even if files miss)
+#   - pr-title-policy.sh  (today this ONLY blocks the literal `[codex]` marker;
+#                          it is not a broad Conventional-Commits title checker)
+
+on:
+  pull_request:
+    branches: [main]
+    # Do NOT path-filter PR events: required checks must report on every PR,
+    # otherwise docs-only PRs wait forever for a check that never runs.
+  merge_group:
+  workflow_dispatch:
+
+# Least-privilege: this gate only reads the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harness-contract:
+    name: Harness Contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Harness bootstrap sanity (read-only)
+        run: bash docs/harness/bin/bootstrap.sh
+
+      - name: PR title policy ([codex] marker block)
+        env:
+          # On pull_request, use the PR title. On merge_group / workflow_dispatch
+          # there is no PR title, so fall back to a safe non-empty placeholder —
+          # pr-title-policy.sh exits 2 (usage error) on an EMPTY title, which
+          # would otherwise break this required job on the merge queue.
+          PR_TITLE: ${{ github.event.pull_request.title || 'merge-group: no PR title' }}
+        run: bash docs/harness/bin/pr-title-policy.sh --title "$PR_TITLE"
+
+  # ---------------------------------------------------------------------------
+  # ADVISORY ONLY — never mark this job as a required status check until it has
+  # demonstrably stayed green on CI checkouts. The self-diagnostic assumes
+  # harness state that may not exist cleanly in a fresh CI clone.
+  # ---------------------------------------------------------------------------
+  harness-doctor-advisory:
+    name: Harness Doctor Advisory
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Harness doctor (advisory, non-blocking)
+        continue-on-error: true
+        run: bash docs/harness/bin/doctor.sh

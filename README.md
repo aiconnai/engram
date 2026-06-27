@@ -57,6 +57,7 @@ than first-party adapters in this repository.
 
 ## Searchable Guides
 
+- [User guide](docs/USER_GUIDE.md)
 - [MCP memory server guide](docs/integrations/mcp-memory-server.md)
 - [Claude Code MCP memory guide](docs/integrations/claude-code-mcp-memory.md)
 - [Cursor MCP memory guide](docs/integrations/cursor-mcp-memory.md)
@@ -161,7 +162,7 @@ git clone https://github.com/aiconnai/engram.git
 cd engram && cargo install --path .
 
 # Run as MCP server (Claude Code, Cursor, VS Code MCP clients, etc.)
-engram-server --mcp
+engram-server --transport stdio
 
 # Or run as HTTP MCP transport
 engram-server --transport http --http-port 8080
@@ -282,14 +283,24 @@ engram-cli search "asynch awiat rust"
 
 ### Multi-Workspace Support
 
-Isolate memories by project or context:
+Isolate memories by project or context through the MCP tools:
 
-```bash
-# Create memory in a specific workspace
-engram-cli create "API keys stored in Vault" --workspace my-project
+```json
+{
+  "name": "memory_create",
+  "arguments": {
+    "content": "API keys are stored in Vault",
+    "workspace": "my-project",
+    "memory_type": "decision"
+  }
+}
+```
 
-# List workspaces
-engram-cli workspace list
+```json
+{
+  "name": "workspace_list",
+  "arguments": {}
+}
 ```
 
 ### Memory Tiering
@@ -299,30 +310,59 @@ Two tiers for different retention needs:
 - **Permanent**: Important knowledge, decisions (never expires)
 - **Daily**: Session context, scratch notes (auto-expire after 24h)
 
-```bash
-# Create a daily memory (expires in 24h)
-engram-cli create "Current debugging task" --tier daily
+```json
+{
+  "name": "memory_create_daily",
+  "arguments": {
+    "content": "Current debugging task",
+    "workspace": "my-project"
+  }
+}
 ```
 
 ### Session Transcript Indexing
 
-Store and search conversation transcripts:
+Store and search conversation transcripts through MCP:
 
-```bash
-# Index a conversation session
-engram-cli session index --session-id chat-123 --messages messages.json
+```json
+{
+  "name": "session_index",
+  "arguments": {
+    "session_id": "chat-123",
+    "workspace": "my-project",
+    "messages": [
+      { "role": "user", "content": "How should we handle errors?" },
+      { "role": "assistant", "content": "Use Result with contextual errors." }
+    ]
+  }
+}
+```
 
-# Search within transcripts
-engram-cli session search "error handling"
+```json
+{
+  "name": "memory_search",
+  "arguments": {
+    "query": "error handling",
+    "workspace": "my-project",
+    "include_transcripts": true
+  }
+}
 ```
 
 ### Identity Links (Entity Unification)
 
 Link different mentions to canonical identities:
 
-```bash
-# Create identity with aliases
-engram-cli identity create user:ronaldo --alias "Ronaldo" --alias "@ronaldo"
+```json
+{
+  "name": "identity_create",
+  "arguments": {
+    "canonical_id": "user:ronaldo",
+    "display_name": "Ronaldo",
+    "entity_type": "person",
+    "aliases": ["Ronaldo", "@ronaldo"]
+  }
+}
 ```
 
 ### Knowledge Graph
@@ -349,12 +389,25 @@ Multi-hop traversal and shortest-path are available via MCP tools:
 
 Dynamic memory prioritization based on recency, frequency, importance, and feedback:
 
-```bash
-# Get top memories by salience
-engram-cli salience top --limit 10
+```json
+{
+  "name": "salience_top",
+  "arguments": {
+    "limit": 10,
+    "workspace": "my-project"
+  }
+}
+```
 
-# Boost a memory's salience
-engram-cli salience boost 42
+```json
+{
+  "name": "salience_boost",
+  "arguments": {
+    "id": 42,
+    "boost_amount": 0.2,
+    "reason": "Relevant to the current debugging task"
+  }
+}
 ```
 
 Salience decays over time for scoring and history. Lifecycle transitions
@@ -364,12 +417,23 @@ Salience decays over time for scoring and history. Lifecycle transitions
 
 5-component quality assessment (clarity, completeness, freshness, consistency, source trust):
 
-```bash
-# Quality report for a workspace
-engram-cli quality report --workspace my-project
+```json
+{
+  "name": "quality_report",
+  "arguments": {
+    "workspace": "my-project"
+  }
+}
+```
 
-# Find near-duplicate memories
-engram-cli quality duplicates
+```json
+{
+  "name": "quality_find_duplicates",
+  "arguments": {
+    "threshold": 0.85,
+    "limit": 100
+  }
+}
 ```
 
 Includes conflict detection for contradictions between memories and resolution workflows.

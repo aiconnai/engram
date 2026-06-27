@@ -22,6 +22,21 @@ Fixes #(issue number)
 - Change 2
 - Change 3
 
+## Local harness loop (run before opening this PR)
+
+- [ ] Session start: `bash docs/harness/bin/bootstrap.sh`
+- [ ] During development: `bash docs/harness/bin/sensors.sh quick`
+- [ ] Before opening the PR: full `bash docs/harness/bin/sensors.sh`
+
+GitHub then confirms the same contracts via **required status checks**:
+`Format`, `Clippy`, `Test (ubuntu-latest)`, `Documentation`, and `Harness Contract`.
+`Harness Contract` runs `bootstrap.sh` plus the PR-title policy, which today only
+blocks the literal `[codex]` marker — it is not a broad title-quality gate.
+
+`Security Audit` and `Cargo Deny` run on PRs as **advisory** signals (not merge
+blockers yet). Automated code review (Copilot / third-party) is **extra signal,
+not authoritative** and does not block merge on its own.
+
 ## Testing
 
 - [ ] I have added tests that prove my fix/feature works

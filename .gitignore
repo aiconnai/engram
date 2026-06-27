@@ -161,6 +161,9 @@ vendor/
 # Private docs (do not commit)
 /docs/private/
 
+# Licensed local references (pattern sources only; do not distribute)
+/docs/ieee-12207.md
+
 # Internal development docs (not for distribution)
 .internal/
 

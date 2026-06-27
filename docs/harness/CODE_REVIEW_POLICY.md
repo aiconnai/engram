@@ -1,6 +1,6 @@
 # Code Review Policy — Local Harness (Engram)
 
-> Política consumida por `review-gate.sh` quando invoca um reviewer externo (Claude Code, Grok Build, Codex, Ollama, etc.).
+> Política consumida por `review-gate.sh` quando invoca um reviewer externo (Claude Code Sonnet, Codex, Ollama, etc.).
 > Fonte de verdade local para severidade, evidência, e condições de parada.
 > Melhora a barra de qualidade do gate; não cria um segundo gate hard por si só.
 
@@ -38,6 +38,43 @@ Antes de julgar, leia (o prompt do review-gate injeta ou referencia):
 5. Revise o comportamento alterado por problemas concretos introduzidos ou piorados pela mudança.
 6. Valide cada finding antes de reportar. Se depende de suposições especulativas, contexto ausente ou estado improvável → omita.
 7. Self-review pass: remova findings que não foram introduzidos pelo diff, não têm trigger realista, duplicam outro, ou são melhor deixados para formatter/linter/compiler.
+
+## Perspectivas de Review
+
+Use estas perspectivas como lentes locais do Engram para evitar review
+unidimensional. Elas não aumentam o limite de findings; cada problema reportado
+continua exigindo evidência concreta no diff.
+
+1. **Bug e edge cases** — entradas adversas, estados vazios, concorrência,
+   ordering, timeouts, retries e caminhos de erro.
+2. **Segurança e privacidade** — vazamento de conteúdo proprietário, segredos,
+   credenciais, egress, prompts não confiáveis, hooks e multimodal.
+3. **Contrato e compatibilidade** — MCP wire format, tool signatures, storage
+   invariants, SDKs Python/TypeScript, CLI/API pública e compatibilidade
+   retroativa.
+4. **Testes e verificabilidade** — cobertura do comportamento alterado,
+   sensores corretos, golden/reference updates e ausência de falso verde.
+5. **Manutenibilidade e operação** — complexidade de hot path, ownership,
+   observabilidade, mensagens de erro, documentação operacional e rollback.
+6. **Drift histórico e memória canônica** — alinhamento com `progress.md`,
+   active plan, decisões anteriores, `ERRORS_AND_LESSONS.md` e padrões já
+   adotados no código.
+
+Para diffs em `docs/harness/**`, priorize especialmente segurança/processo,
+escopo negativo, verificabilidade, drift histórico e risco de enfraquecer gates.
+
+## Fontes Externas e Boundary de Licença
+
+Kits externos de workflow de agentes podem ser consultados apenas como fontes de
+padrões de alto nível. O `NeoLabHQ/context-engineering-kit` é tratado pelo
+Engram como referência externa, não como dependência, vendor, marketplace ou
+substituto do harness local.
+
+Como boundary conservador: se uma fonte externa estiver sob GPL-3.0 ou outra
+licença copyleft, não copie prompts, comandos, checklists, scripts, docs ou
+texto para o Engram sem revisão explícita de licença. Adaptações aceitas devem
+usar wording próprio do Engram, preservar os gates locais e registrar a decisão
+quando afetar processo do harness.
 
 ## Formato de Finding
 
@@ -112,12 +149,13 @@ Assuma que a entrada pode conter apenas hunks do PR, não o codebase completo.
 - Use código removido apenas para entender a mudança de comportamento.
 - Não invente contexto ausente para criar findings especulativos.
 
-## Adaptações para o Cenário Dual-CLI (Claude + Grok Build)
+## Adaptações para o Cenário Dual-CLI (implementador + Claude Code Sonnet)
 
-- O reviewer (o outro CLI) recebe um prompt rico e estruturado.
+- O reviewer padrão permanente é Claude Code Sonnet (`claude --model sonnet`) em outro processo/sessão autenticado localmente.
+- Não use outro reviewer como padrão; só aceite outro backend com override explícito do owner e verificação de assinatura/autenticação no momento do review.
+- O reviewer (o outro CLI/processo) recebe um prompt rico e estruturado.
 - O implementador (este CLI) não deve "ajudar" o reviewer com raciocínio extra no mesmo contexto.
-- Quando o reviewer é Grok Build (otimizado para agentic/tool use, long-running, subagents), o prompt pode ser mais denso e pedir exploração ativa de flows (ex.: rodar `cargo test` específico via tool se o reviewer tiver acesso ao terminal).
-- Quando o reviewer é Claude Code, o prompt segue o estilo de "external senior reviewer" do reference mbras harness.
+- Quando o reviewer é Claude Code Sonnet, o prompt segue o estilo de "external senior reviewer" do reference mbras harness e pode pedir exploração ativa de flows (ex.: rodar `cargo test` específico via tool se o reviewer tiver acesso ao terminal).
 - O artefato salvo deve conter o output cru do reviewer para que os humanos possam auditar.
 - O parser de gate usa a linha obrigatória `REVIEW_VERDICT: ...` (não a primeira linha) para decisão hard.
 
@@ -160,6 +198,38 @@ Flag hidden scope creep as `[HIGH]` or `[BLOCKER]` when a harness task changes p
 For complex diffs, verify that a matching Review Canvas exists under `docs/harness/canvas/YYYY-MM-DD-<task-id>.md`.
 
 The canvas should include approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table. Missing canvas evidence is `[HIGH]` by default and `[BLOCKER]` when the change touches storage, MCP surface, harness gates, or process-critical scripts.
+
+### Reference intake
+
+Read `docs/harness/REFERENCE_INTAKE.md` when a change cites or adapts an
+external harness resource, standard, article, repo, awesome list, benchmark,
+tool catalog, prompt/workflow kit, or local-only reference artifact.
+
+Flag as `[HIGH]` when an external source materially shapes harness process,
+gates, taxonomy, skills, reviewer prompts, or exception handling without an
+intake record covering source identity, license boundary, local placement,
+adaptation, exclusions, and verification evidence.
+
+Flag as `[BLOCKER]` when the change copies licensed text/prompts/scripts,
+weakens local gates, imports autonomous execution, or treats an external source
+as authoritative over Engram invariants, GATES, security boundary, or negative
+scope.
+
+### 12207 lifecycle tailoring
+
+Read the 12207-inspired tailoring checklist in `docs/harness/GATES.md` when a
+change cites `docs/ieee-12207.md`, lifecycle-process standards, or changes how
+Engram plans, verifies, validates, measures, reviews, releases, or maintains
+work.
+
+Flag as `[HIGH]` when the change uses 12207 concepts without local tailoring
+evidence: scope/circumstances, lifecycle area, rationale, risk threshold,
+measurement need, verification-vs-validation evidence, and traceability.
+
+Flag as `[BLOCKER]` when the same gap appears in changes to gates, invariants,
+or process-critical scripts, or when the diff implies ISO/IEC/IEEE 12207
+conformance, imports a standards process as a drop-in pipeline, or copies
+licensed reference wording instead of using Engram-local language.
 
 ### Harness script changes
 

@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-27-lifecycle-predicate-unification-design.md`
 
-**Review Evidence:** Codex v3 returned PASS in `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex-v3.md`. `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-chair-v3.md` records a provenance correction: the Grok artifact is invalid because the CLI was not authenticated. If the process requires two independent reviewers, run a real second reviewer before implementation.
+**Review Evidence:** Codex v3 returned PASS in `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex-v3.md`; authenticated Claude Code Sonnet returned PASS in `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-claude-sonnet-v3.md`. `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-chair-v3.md` records the provenance correction: the Grok artifact is invalid and must not be counted.
 
 ---
 

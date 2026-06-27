@@ -16,7 +16,7 @@ Install and run the MCP server:
 
 ```bash
 cargo install engram-core
-ENGRAM_DB_PATH="$HOME/.local/share/engram/claude-code.db" engram-server --mcp
+ENGRAM_DB_PATH="$HOME/.local/share/engram/claude-code.db" engram-server --transport stdio
 ```
 
 Add Engram to your Claude Code MCP config:
@@ -26,7 +26,7 @@ Add Engram to your Claude Code MCP config:
   "mcpServers": {
     "engram": {
       "command": "engram-server",
-      "args": ["--mcp"],
+      "args": ["--transport", "stdio"],
       "env": {
         "ENGRAM_DB_PATH": "/absolute/path/to/.engram/memories.db",
         "ENGRAM_EMBEDDING_MODEL": "tfidf"

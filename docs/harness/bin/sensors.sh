@@ -2,8 +2,6 @@
 # docs/harness/bin/sensors.sh
 #
 # Deterministic local gate for engram harness.
-# Primary delegation: `just ci` (preferred) ou `make ci` (fallback), ou scripts/ci.sh.
-# Também executa harness doctor.
 #
 # Suporte a exclusão documentada para falhas externas temporárias.
 
@@ -48,7 +46,8 @@ Usage:
   docs/harness/bin/sensors.sh status --json
   docs/harness/bin/sensors.sh [--exclude-sensor <name> --known-issue docs/harness/known-issues/YYYY-MM-DD-slug.md --reason "short reason"]
 
-Default/full: clean run of `just ci` (or `make ci` fallback) + harness doctor.
+Default/full: clean granular run of fmt -> clippy -> test (lib/integration) -> wasm -> doc -> MCP reference
+check, then PR title policy and harness doctor.
 Optional lanes are developer aids and do not replace the full gate.
 Status JSON is a read-only snapshot of docs/harness/.sensors-last and does not run the gate.
 Exclusion mode is reserved for documented external-dependency outages (ex.: API embedding, watcher GUI, socket/grpc transport)
@@ -62,6 +61,81 @@ EXCLUDE_SENSOR=""
 KNOWN_ISSUE=""
 EXCLUSION_REASON=""
 CI_OUTPUT=""
+SENSORS_LAST_PATH="docs/harness/.sensors-last"
+SENSORS_LOG_PATH="docs/harness/.sensors-log"
+SENSORS_LOG_MAX_BYTES="${SENSORS_LOG_MAX_BYTES:-1048576}"
+SENSORS_LOG_ROTATIONS="${SENSORS_LOG_ROTATIONS:-5}"
+SENSORS_STARTED_AT="$SECONDS"
+CI_STEP_NAMES=()
+CI_STEP_STATUSES=()
+CI_STEP_ORDER=()
+CI_STEP_STATUSES_JSON=""
+CI_REQUIRED_FEATURES_VALUE=""
+CI_FEATURES_SOURCE="default"
+
+set_ci_step_status() {
+  local step="$1"
+  local status="$2"
+  local idx=""
+  idx=0
+  while [ "$idx" -lt "${#CI_STEP_NAMES[@]}" ]; do
+    if [ "${CI_STEP_NAMES[$idx]}" = "$step" ]; then
+      CI_STEP_STATUSES[$idx]="$status"
+      return 0
+    fi
+    idx=$((idx + 1))
+  done
+  CI_STEP_NAMES+=("$step")
+  CI_STEP_STATUSES+=("$status")
+}
+
+get_ci_step_status() {
+  local step="$1"
+  local idx=""
+  idx=0
+  while [ "$idx" -lt "${#CI_STEP_NAMES[@]}" ]; do
+    if [ "${CI_STEP_NAMES[$idx]}" = "$step" ]; then
+      printf '%s' "${CI_STEP_STATUSES[$idx]}"
+      return 0
+    fi
+    idx=$((idx + 1))
+  done
+  printf '%s' "not_run"
+}
+
+resolve_ci_required_features() {
+  if [ -n "${CI_REQUIRED_FEATURES:-}" ]; then
+    CI_REQUIRED_FEATURES_VALUE="$CI_REQUIRED_FEATURES"
+    CI_FEATURES_SOURCE="env"
+    return 0
+  fi
+  if [ -f scripts/ci-required-features.env ]; then
+    source scripts/ci-required-features.env
+    if [ -n "${CI_REQUIRED_FEATURES:-}" ]; then
+      CI_REQUIRED_FEATURES_VALUE="$CI_REQUIRED_FEATURES"
+      CI_FEATURES_SOURCE="scripts/ci-required-features.env"
+      return 0
+    fi
+  fi
+  CI_REQUIRED_FEATURES_VALUE=""
+  CI_FEATURES_SOURCE="fallback-empty"
+}
+
+ci_step_status_json() {
+  local step
+  local status
+  local output="{"
+
+  for step in ${CI_STEP_ORDER[@]+"${CI_STEP_ORDER[@]}"}; do
+    status="$(get_ci_step_status "$step")"
+    output="${output}\"${step}\":\"$(json_escape "$status")\","
+  done
+  if [ "$output" = "{" ]; then
+    echo "{}"
+    return
+  fi
+  echo "${output%,}}"
+}
 
 emit_status_json() {
   if ! command -v python3 >/dev/null 2>&1; then
@@ -69,8 +143,7 @@ emit_status_json() {
     exit 2
   fi
 
-  python3 - "$REPO_ROOT" <<'PY'
-import json
+  python3 -c 'import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -78,6 +151,8 @@ from pathlib import Path
 repo_root = Path(sys.argv[1])
 snapshot_path = repo_root / "docs/harness/.sensors-last"
 repo_snapshot_path = "docs/harness/.sensors-last"
+log_path = repo_root / "docs/harness/.sensors-log"
+repo_log_path = "docs/harness/.sensors-log"
 
 fields = {}
 warnings = []
@@ -108,6 +183,14 @@ if snapshot_path.exists():
 else:
     warnings.append(".sensors-last missing; run sensors.sh at least once")
     add_check("sensors_last:file", "warn", ".sensors-last missing", repo_snapshot_path)
+
+if log_path.exists():
+    artifacts.append({
+        "path": repo_log_path,
+        "kind": "sensors_log",
+        "format": "jsonl"
+    })
+    add_check("sensors_log:file", "pass", ".sensors-log exists", repo_log_path)
 
 last_status = fields.get("status", "")
 ci_status = fields.get("ci_status", "")
@@ -170,6 +253,7 @@ payload = {
     "checks": checks,
     "artifacts": artifacts,
     "repo_root": str(repo_root),
+    "log_path": repo_log_path if log_path.exists() else "",
     "last_mode": last_mode,
     "last_timestamp": last_timestamp,
     "ci_status": ci_status,
@@ -180,8 +264,85 @@ payload = {
 }
 
 print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
-sys.exit(exit_code)
-PY
+sys.exit(exit_code)' "$REPO_ROOT"
+}
+
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
+sensors_duration_sec() {
+  printf '%s' "$((SECONDS - SENSORS_STARTED_AT))"
+}
+
+rotate_sensors_log() {
+  local max_bytes="$SENSORS_LOG_MAX_BYTES"
+  local rotations="$SENSORS_LOG_ROTATIONS"
+  local size=""
+  local i=""
+
+  case "$max_bytes" in
+    ''|*[!0-9]*) max_bytes=1048576 ;;
+  esac
+  case "$rotations" in
+    ''|*[!0-9]*) rotations=5 ;;
+  esac
+  if [ "$rotations" -lt 1 ]; then
+    rotations=1
+  fi
+  if [ ! -f "$SENSORS_LOG_PATH" ]; then
+    return 0
+  fi
+
+  size="$(wc -c < "$SENSORS_LOG_PATH" | tr -d ' ')"
+  if [ "${size:-0}" -lt "$max_bytes" ]; then
+    return 0
+  fi
+
+  i=$((rotations - 1))
+  while [ "$i" -ge 1 ]; do
+    if [ -f "${SENSORS_LOG_PATH}.${i}" ]; then
+      mv "${SENSORS_LOG_PATH}.${i}" "${SENSORS_LOG_PATH}.$((i + 1))"
+    fi
+    i=$((i - 1))
+  done
+  mv "$SENSORS_LOG_PATH" "${SENSORS_LOG_PATH}.1"
+  rm -f "${SENSORS_LOG_PATH}.$((rotations + 1))"
+}
+
+append_sensors_log() {
+  local status="$1"
+  local ci_status="$2"
+  local doctor_status="$3"
+  local mode="$4"
+  local ci_label="$5"
+  local timestamp="$6"
+  local duration_sec="$7"
+  local exclusion_json="null"
+
+  rotate_sensors_log
+
+  if [ -n "$EXCLUDE_SENSOR" ] || [ -n "$KNOWN_ISSUE" ] || [ -n "$EXCLUSION_REASON" ]; then
+    exclusion_json="{\"sensor\":\"$(json_escape "$EXCLUDE_SENSOR")\",\"known_issue\":\"$(json_escape "$KNOWN_ISSUE")\",\"reason\":\"$(json_escape "$EXCLUSION_REASON")\"}"
+  fi
+
+  printf '{"schema_version":"sensors-log-v1","timestamp":"%s","tool":"sensors","mode":"%s","status":"%s","duration_sec":%s,"ci_status":"%s","doctor_status":"%s","ci_command":"%s","ci_steps":%s,"exclusion":%s,"artifacts":[{"path":"%s","kind":"sensors_last","format":"key_value"}]}\n' \
+    "$(json_escape "$timestamp")" \
+    "$(json_escape "$mode")" \
+    "$(json_escape "$status")" \
+    "$duration_sec" \
+    "$(json_escape "$ci_status")" \
+    "$(json_escape "$doctor_status")" \
+    "$(json_escape "$ci_label")" \
+    "$(ci_step_status_json)" \
+    "$exclusion_json" \
+    "$SENSORS_LAST_PATH" >> "$SENSORS_LOG_PATH"
 }
 
 write_sensors_last() {
@@ -190,19 +351,27 @@ write_sensors_last() {
   local doctor_status="$3"
   local mode="$4"
   local ci_label="$5"
+  local timestamp=""
+  local duration_sec=""
+
+  timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  duration_sec="$(sensors_duration_sec)"
 
   {
     echo "status=$status"
     echo "ci_status=$ci_status"
     echo "doctor_status=$doctor_status"
     echo "mode=$mode"
-    echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "timestamp=$timestamp"
+    echo "duration_sec=$duration_sec"
     [ -n "${EXCLUSION_NOTE:-}" ] && echo "$EXCLUSION_NOTE"
     [ -n "$EXCLUDE_SENSOR" ] && echo "excluded_sensor=$EXCLUDE_SENSOR"
     [ -n "$KNOWN_ISSUE" ] && echo "excluded_known_issue=$KNOWN_ISSUE"
     [ -n "$EXCLUSION_REASON" ] && echo "excluded_reason=$EXCLUSION_REASON"
     echo "ci=$ci_label + harness doctor"
-  } > docs/harness/.sensors-last
+  } > "$SENSORS_LAST_PATH"
+
+  append_sensors_log "$status" "$ci_status" "$doctor_status" "$mode" "$ci_label + harness doctor" "$timestamp" "$duration_sec"
 }
 
 run_step() {
@@ -210,6 +379,48 @@ run_step() {
   shift
   echo "==> [harness] $label"
   "$@"
+}
+
+run_ci_step() {
+  local label="$1"
+  local step_key="$2"
+  shift 2
+  local rc=0
+  local step_start_at="$SECONDS"
+
+  CI_STEP_ORDER+=("$step_key")
+  echo "==> [harness] $label"
+  set_ci_step_status "$step_key" "pass"
+
+  set +e
+  "$@" >"$CI_OUTPUT" 2>&1
+  rc=$?
+  set -e
+
+  if [ "$rc" -ne 0 ]; then
+    set_ci_step_status "$step_key" "fail"
+  fi
+
+  if [ "$rc" -ne 0 ] && [ -n "$CI_OUTPUT" ]; then
+    echo "FAIL: $label command failed after $((SECONDS - step_start_at))s"
+    if [ -f "$CI_OUTPUT" ]; then
+      cat "$CI_OUTPUT"
+    fi
+  fi
+
+  return "$rc"
+}
+
+ci_feature_args() {
+  if [ -z "$CI_REQUIRED_FEATURES_VALUE" ]; then
+    echo ""
+    return 0
+  fi
+  echo "--features ${CI_REQUIRED_FEATURES_VALUE}"
+}
+
+check_wasm_target_installed() {
+  rustup target list --installed | grep -qx "wasm32-unknown-unknown"
 }
 
 run_expected_exit() {
@@ -491,36 +702,79 @@ case "$MODE" in
     ;;
 esac
 
-# Core delegation: the existing just ci contract (fmt + clippy -D + test parity + docs + MCP ref)
-CI_COMMAND=()
-if command -v just >/dev/null 2>&1; then
-  CI_COMMAND=(just ci)
-elif command -v make >/dev/null 2>&1; then
-  CI_COMMAND=(make ci)
-elif [ -f scripts/ci.sh ] && [ -x scripts/ci.sh ]; then
-  CI_COMMAND=(bash scripts/ci.sh)
+resolve_ci_required_features
+
+echo "==> [harness] CI features source: ${CI_FEATURES_SOURCE}; CI_REQUIRED_FEATURES=${CI_REQUIRED_FEATURES_VALUE:-<empty>}"
+
+CI_REQUIRED_FEATURES_ENV=""
+if [ -n "$CI_REQUIRED_FEATURES_VALUE" ]; then
+  CI_REQUIRED_FEATURES_ENV="CI_REQUIRED_FEATURES=$CI_REQUIRED_FEATURES_VALUE"
 fi
 
-if [ "${#CI_COMMAND[@]}" -eq 0 ]; then
-  echo "FAIL: no local CI command available (need just ci, make ci, or scripts/ci.sh)"
-  CI_STATUS="fail"
-else
-  echo "==> [harness] running CI command: ${CI_COMMAND[*]}"
-  CI_OUTPUT="$(mktemp)"
-  if "${CI_COMMAND[@]}" >"$CI_OUTPUT" 2>&1; then
-    CI_STATUS="pass"
+if [ -z "$CI_REQUIRED_FEATURES_VALUE" ]; then
+  echo "WARN: CI_REQUIRED_FEATURES not available; using cargo defaults"
+fi
+
+echo "==> [harness] running granular CI steps"
+CI_OUTPUT="$(mktemp)"
+CI_STATUS="pass"
+CI_COMMAND_LABEL="fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check"
+CI_FEATURE_ARGS="$(ci_feature_args)"
+
+run_ci_step "fmt" "fmt" cargo fmt --all -- --check && \
+run_ci_step "clippy" "clippy" env $CI_REQUIRED_FEATURES_ENV cargo clippy --all-targets --no-default-features $CI_FEATURE_ARGS -- -D warnings || CI_STATUS="fail"
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "test_lib" "test_lib" \
+    env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
+    cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --lib --tests -- --test-threads=1 || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "test_integration" "test_integration" \
+    env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
+    cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --bin engram-server || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "test_integration_watch" "test_integration_watch" \
+    env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
+    cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --bin engram-watcher || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "wasm_target" "wasm_target" check_wasm_target_installed || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "wasm_all_targets" "wasm_all_targets" cargo check -p engram-wasm --all-targets || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "wasm_wasm_target" "wasm_wasm_target" cargo check -p engram-wasm --target wasm32-unknown-unknown || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "doc" "doc" \
+    env RUSTDOCFLAGS="-D warnings" $CI_REQUIRED_FEATURES_ENV \
+    cargo doc --no-default-features $CI_FEATURE_ARGS --no-deps --document-private-items || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "ref_check" "ref_check" ./scripts/generate-mcp-reference.sh --check || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" != "pass" ]; then
+  CI_EXIT=1
+  if [ -n "$EXCLUDE_SENSOR" ] && is_expected_excluded_failure "$EXCLUDE_SENSOR"; then
+    CI_STATUS="pass_with_exclusion"
+    echo "    mapped failure to pass_with_exclusion via documented exclusion"
   else
-    CI_EXIT=$?
-    echo "FAIL: ${CI_COMMAND[*]} failed (exit=$CI_EXIT)"
-    cat "$CI_OUTPUT"
-    if [ -n "$EXCLUDE_SENSOR" ] && is_expected_excluded_failure "$EXCLUDE_SENSOR"; then
-      CI_STATUS="pass_with_exclusion"
-      echo "    mapped failure to pass_with_exclusion via documented exclusion"
-    else
-      CI_STATUS="fail"
-    fi
+    CI_STATUS="fail"
   fi
 fi
+
+rm -f "$CI_OUTPUT"
 
 if ! run_pr_title_policy; then
   CI_STATUS="fail"
@@ -544,7 +798,7 @@ elif [ "$CI_STATUS" != "pass" ] || [ "$DOCTOR_STATUS" != "pass" ]; then
 fi
 
 # Record result (machine parseable for bootstrap / doctor)
-write_sensors_last "$STATUS" "$CI_STATUS" "$DOCTOR_STATUS" "$MODE" "${CI_COMMAND[*]-missing} + pr-title-policy"
+write_sensors_last "$STATUS" "$CI_STATUS" "$DOCTOR_STATUS" "$MODE" "$CI_COMMAND_LABEL + pr-title-policy"
 
 echo
 if [ "$STATUS" = "pass" ]; then

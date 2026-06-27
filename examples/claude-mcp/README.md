@@ -7,7 +7,7 @@ This example configures Engram as a local MCP memory server for Claude Code.
 ```bash
 cargo install engram-core
 mkdir -p .engram
-ENGRAM_DB_PATH="$PWD/.engram/memories.db" engram-server --mcp
+ENGRAM_DB_PATH="$PWD/.engram/memories.db" engram-server --transport stdio
 ```
 
 For the smoke-test script below, run HTTP transport in another terminal:

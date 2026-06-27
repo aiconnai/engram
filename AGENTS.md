@@ -37,10 +37,10 @@ cd engram
 cargo build --release
 
 # Rode como servidor MCP (para Claude Code, Cursor, etc.)
-./target/release/engram-server --mcp
+./target/release/engram-server --transport stdio
 
 # Ou como API HTTP
-./target/release/engram-server --http --port 8080
+./target/release/engram-server --transport http --http-port 8080
 ```
 
 ## Padrões de Código Importantes
@@ -116,7 +116,7 @@ Em seguida leia (em ordem):
 - `INVARIANTS.md` (raiz)
 - `STANDARDS.md` e `ERRORS_AND_LESSONS.md`
 
-O harness garante que o trabalho seja retomável entre agentes (Claude Code CLI, Grok Build TUI, etc.) e entre sessões. Ele implementa as camadas de Context Engine, Planner, Memory Manager e Verifier diretamente no repositório.
+O harness garante que o trabalho seja retomável entre agentes (Claude Code CLI, Claude Code Sonnet reviewer, etc.) e entre sessões. Ele implementa as camadas de Context Engine, Planner, Memory Manager e Verifier diretamente no repositório.
 
 ## AI Operating Guide (`lazycodex-ai`)
 

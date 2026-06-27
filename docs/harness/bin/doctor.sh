@@ -145,8 +145,7 @@ emit_json() {
   DOCTOR_WARNINGS="$warnings_joined" \
   DOCTOR_FAILURES="$failures_joined" \
   DOCTOR_CHECKS="$checks_joined" \
-  python3 - <<'PY'
-import json
+  python3 -c 'import json
 import os
 
 rs = os.environ["DOCTOR_RS"]
@@ -192,8 +191,7 @@ payload = {
     "artifacts": [],
 }
 
-print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
-PY
+print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))'
 }
 
 if [ -n "$ARG_ERROR" ]; then
@@ -222,6 +220,28 @@ require_exec() {
     add_check "required_exec:$path" "pass" "required script is executable" "$path"
   else
     fail "not executable: $path" "required_exec:$path" "$path"
+  fi
+}
+
+require_bash_syntax() {
+  local path="$1"
+  if bash -n "$path" >/dev/null 2>&1; then
+    add_check "bash_syntax:$path" "pass" "bash syntax is valid" "$path"
+  else
+    fail "bash syntax invalid: $path" "bash_syntax:$path" "$path"
+  fi
+}
+
+check_shellcheck() {
+  local path="$1"
+  if ! command -v shellcheck >/dev/null 2>&1; then
+    add_check "shellcheck:$path" "skipped" "shellcheck is not installed" "$path"
+    return 0
+  fi
+  if shellcheck -x "$path" >/dev/null 2>&1; then
+    add_check "shellcheck:$path" "pass" "shellcheck passed" "$path"
+  else
+    warn "shellcheck failed: $path" "shellcheck:$path" "$path"
   fi
 }
 
@@ -264,6 +284,11 @@ require_file docs/harness/bin/baseline.sh
 require_file docs/harness/bin/quarterly-audit.sh
 require_file docs/harness/bin/check-pr-title.sh
 require_file docs/harness/bin/pr-title-policy.sh
+require_file docs/harness/bin/harness-stats.sh
+require_file docs/harness/bin/harness-decision-log.sh
+require_file docs/harness/bin/harness-risk-register.sh
+require_file docs/harness/risk-register.yaml
+require_file docs/harness/decisions/harness-decision-log.yaml
 require_dir docs/harness/progress
 require_dir docs/harness/reviews
 require_dir docs/harness/known-issues
@@ -280,11 +305,39 @@ require_exec docs/harness/bin/baseline.sh
 require_exec docs/harness/bin/quarterly-audit.sh
 require_exec docs/harness/bin/check-pr-title.sh
 require_exec docs/harness/bin/pr-title-policy.sh
+require_exec docs/harness/bin/harness-stats.sh
+require_exec docs/harness/bin/harness-decision-log.sh
+require_exec docs/harness/bin/harness-risk-register.sh
 
 # If the advanced scripts exist, they should be executable
-[ -f docs/harness/bin/sensors.sh ] && require_exec docs/harness/bin/sensors.sh || true
-[ -f docs/harness/bin/review-gate.sh ] && require_exec docs/harness/bin/review-gate.sh || true
-[ -f docs/harness/bin/check-commit-msg.sh ] && require_exec docs/harness/bin/check-commit-msg.sh || true
+SCRIPT_PATHS=(
+  docs/harness/bin/bootstrap.sh
+  docs/harness/bin/doctor.sh
+  docs/harness/bin/baseline.sh
+  docs/harness/bin/quarterly-audit.sh
+  docs/harness/bin/check-pr-title.sh
+  docs/harness/bin/pr-title-policy.sh
+  docs/harness/bin/harness-stats.sh
+  docs/harness/bin/harness-decision-log.sh
+  docs/harness/bin/harness-risk-register.sh
+)
+OPTIONAL_SCRIPT_PATHS=(
+  docs/harness/bin/sensors.sh
+  docs/harness/bin/review-gate.sh
+  docs/harness/bin/check-commit-msg.sh
+  docs/harness/bin/vc-gate.sh
+  docs/harness/bin/lib.sh
+)
+for script_path in "${OPTIONAL_SCRIPT_PATHS[@]}"; do
+  if [ -f "$script_path" ]; then
+    require_exec "$script_path"
+    SCRIPT_PATHS+=("$script_path")
+  fi
+done
+for script_path in "${SCRIPT_PATHS[@]}"; do
+  require_bash_syntax "$script_path"
+  check_shellcheck "$script_path"
+done
 
 if bash docs/harness/bin/check-pr-title.sh --title "align lifecycle hook contracts" >/dev/null 2>&1; then
   add_check "pr_title_guard:allow_plain" "pass" "plain PR title is accepted" "docs/harness/bin/check-pr-title.sh"
@@ -655,6 +708,61 @@ if [ -f docs/harness/.sensors-last ]; then
   fi
 else
   warn ".sensors-last missing (run sensors.sh at least once)" "sensors_last:format" "docs/harness/.sensors-last"
+fi
+
+if [ -f docs/harness/.sensors-log ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    if SENSORS_LOG_ERROR="$(python3 -c 'import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+required = {
+    "schema_version",
+    "timestamp",
+    "tool",
+    "mode",
+    "status",
+    "duration_sec",
+    "ci_status",
+    "doctor_status",
+    "ci_command",
+    "artifacts",
+}
+allowed_status = {"pass", "pass_with_exclusion", "fail"}
+lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+if not lines:
+    raise SystemExit("empty JSONL log")
+for index, line in enumerate(lines, start=1):
+    try:
+        item = json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"line {index}: invalid JSON: {exc}") from exc
+    missing = sorted(required - item.keys())
+    if missing:
+        raise SystemExit(f"line {index}: missing keys: {", ".join(missing)}")
+    schema_version = item["schema_version"]
+    tool = item["tool"]
+    status = item["status"]
+    if schema_version != "sensors-log-v1":
+        raise SystemExit(f"line {index}: unexpected schema_version={schema_version!r}")
+    if tool != "sensors":
+        raise SystemExit(f"line {index}: unexpected tool={tool!r}")
+    if status not in allowed_status:
+        raise SystemExit(f"line {index}: unexpected status={status!r}")
+    if not isinstance(item["duration_sec"], int) or item["duration_sec"] < 0:
+        raise SystemExit(f"line {index}: duration_sec must be a non-negative integer")
+    if not isinstance(item["artifacts"], list):
+        raise SystemExit(f"line {index}: artifacts must be an array")' docs/harness/.sensors-log 2>&1)"; then
+      add_check "sensors_log:format" "pass" ".sensors-log has parseable sensors-log-v1 JSONL" "docs/harness/.sensors-log"
+    else
+      fail ".sensors-log is not parseable: $SENSORS_LOG_ERROR" "sensors_log:format" "docs/harness/.sensors-log"
+    fi
+  else
+    warn "python3 unavailable; cannot validate .sensors-log JSONL" "sensors_log:format" "docs/harness/.sensors-log"
+  fi
+else
+  warn ".sensors-log missing (run sensors.sh at least once for historical measurements)" "sensors_log:format" "docs/harness/.sensors-log"
 fi
 
 # Bootstrap contract: runs and produces limited output

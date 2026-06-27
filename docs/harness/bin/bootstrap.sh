@@ -8,17 +8,24 @@
 #   - Output contains: "engram harness state", "Branch:", "Active sprint", "Read next"
 #   - No side effects (read-only)
 #   - Security contract remains static/read-only first; see docs/harness/security/anthropic-reference-harness.md
-#   - Safe for any agent CLI: Claude Code, Grok Build TUI, Codex, Cursor, Aider, etc.
+#   - Safe for any agent CLI: Claude Code, Claude Code Sonnet reviewer, Codex, Cursor, Aider, etc.
 #
 # Called manually at session start per AGENTS.md / Claude.md.
 # Later can be wired to session_start hook or MCP tool.
 
-set -uo pipefail
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd 2>/dev/null || echo .)"
 cd "$REPO_ROOT" 2>/dev/null || true
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo docs/harness/bin)"
+if [ -f "$BIN_DIR/lib.sh" ]; then
+  source "$BIN_DIR/lib.sh"
+else
+  field_value() {
+    printf ''
+  }
+fi
 
 echo "=== engram harness state ==="
 
@@ -110,10 +117,41 @@ else
   echo "justfile: missing (run with caution)"
 fi
 
-# Quick MCP surface signal (non-authoritative)
-if [ -f docs/MCP_TOOLS.md ]; then
-  MCP_COUNT="$(grep -c '^### ' docs/MCP_TOOLS.md 2>/dev/null || echo '?')"
-  echo "MCP tools (approx from docs): ~${MCP_COUNT}"
+# Quick MCP surface signal (non-authoritative): derive from the source registry,
+# not generated docs, so the bootstrap does not count markdown headings.
+if [ -f src/mcp/tools/registry.rs ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    if MCP_COUNTS="$(python3 -c '
+from pathlib import Path
+import re
+
+registry = Path("src/mcp/tools/registry.rs").read_text()
+tools_mod = Path("src/mcp/tools/mod.rs").read_text()
+all_names = re.findall(r"\bname:\s*\"([^\"]+)\"", registry)
+feature_gated = set()
+match_body = re.search(
+    r"fn tool_feature_available\(name: &str\) -> bool \{.*?match name \{(.*?)\n\s*_\s*=>\s*true,",
+    tools_mod,
+    re.S,
+)
+if match_body:
+    for arm in re.finditer(r"((?:\s*\"[^\"]+\"\s*\|?)+)\s*=>\s*cfg!\(", match_body.group(1)):
+        feature_gated.update(re.findall(r"\"([^\"]+)\"", arm.group(1)))
+active_count = len([name for name in all_names if name not in feature_gated])
+print(f"{active_count} active / {len(all_names)} total")
+' 2>/dev/null)"; then
+      echo "MCP tools (source): ${MCP_COUNTS}"
+    else
+      MCP_TOTAL="$(grep -c 'ToolDef {' src/mcp/tools/registry.rs 2>/dev/null || echo '?')"
+      echo "MCP tools (source total): ${MCP_TOTAL}"
+    fi
+  else
+    MCP_TOTAL="$(grep -c 'ToolDef {' src/mcp/tools/registry.rs 2>/dev/null || echo '?')"
+    echo "MCP tools (source total): ${MCP_TOTAL}"
+  fi
+elif [ -f docs/MCP_TOOLS.md ]; then
+  MCP_COUNT="$(grep -c '^### `' docs/MCP_TOOLS.md 2>/dev/null || echo '?')"
+  echo "MCP tools (docs fallback): ${MCP_COUNT}"
 fi
 echo
 

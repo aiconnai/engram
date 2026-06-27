@@ -3,7 +3,33 @@
 **Sprint**: Harness Engineering v0 — bootstrap & core gates
 **Task**: harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)
 **Date started**: 2026-05-30
-**Owner**: Ronaldo + agents (Claude Code CLI + Zed Gemini CLI side-by-side)
+**Owner**: Ronaldo + agents (Claude Code CLI + Claude Code Sonnet reviewer)
+
+---
+
+## 2026-06-27 — Claude Sonnet reviewer path
+
+### Contexto
+
+O owner confirmou que o reviewer cross-model permanente deve ser Claude Code
+Sonnet (`claude --model sonnet`) em sessão/processo separado. As orientações
+anteriores de reviewer externo ficam como histórico e não são o caminho ativo.
+
+### Ações realizadas
+
+1. Contratos ativos (`SPEC.md`, `INVARIANTS.md`, `README.md`, `GATES.md`,
+   `CODE_REVIEW_POLICY.md`) agora apontam para Claude Code Sonnet como reviewer
+   padrão.
+2. `docs/harness/bin/review-gate.sh` atualiza comentários e handoff text para
+   Sonnet.
+3. `AGENTS.md` e `CLAUDE.md` descrevem sessões Claude Code Sonnet reviewer em
+   vez de CLIs externos antigos.
+
+### Resultado
+
+Future cross-CLI review handoffs should use Claude Code Sonnet unless the owner
+explicitly overrides the backend and authentication/subscription is verified at
+review time. Older 2026-06-22 reviewer-path sections below are historical only.
 
 ---
 
@@ -1483,6 +1509,484 @@ records memory versions, sync events, and pending sync-state changes.
   `make ci` + PR-title policy + harness doctor).
 - `rtk bash docs/harness/bin/review-gate.sh post ENGRA-150 --range origin/main..HEAD --review-file docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md`
   — PASS (`REVIEW_VERDICT: PASS`).
+
+## 2026-06-25 — Harness 12207 Wave 0 measurement hardening
+
+### Contexto
+
+Follow-up da análise ISO/IEC/IEEE 12207 priorizou Wave 0: tornar falhas shell
+menos silenciosas e adicionar histórico estruturado de sensores sem quebrar o
+contrato existente de `.sensors-last`.
+
+### Ações realizadas
+
+- `docs/harness/bin/lib.sh` passou a usar `set -euo pipefail`.
+- `docs/harness/bin/bootstrap.sh` passou a usar `set -euo pipefail` mantendo
+  fallback explícito para preservar o contrato read-only/graceful.
+- `docs/harness/bin/sensors.sh` agora preserva `.sensors-last` e anexa cada run
+  em `docs/harness/.sensors-log` como JSONL `sensors-log-v1`.
+- O log inclui `duration_sec`, `ci_status`, `doctor_status`, `ci_command`,
+  `exclusion` e ponteiros de artefato.
+- `SENSORS_LOG_MAX_BYTES` e `SENSORS_LOG_ROTATIONS` controlam rotação bounded.
+- `docs/harness/bin/doctor.sh` valida `.sensors-log`, executa `bash -n` nos
+  scripts do harness e roda `shellcheck -x` opcional/non-blocking quando
+  instalado.
+- `docs/harness/GATES.md` e `docs/harness/JSON_OUTPUTS.md` documentam o contrato
+  de medição.
+- Criado Review Canvas:
+  `docs/harness/canvas/2026-06-25-harness-12207-wave0.md`.
+
+### Decisões
+
+- `.sensors-last` continua sendo o arquivo leve de compatibilidade para
+  bootstrap/status.
+- `.sensors-log` é o histórico append-only de medição, com rotação antes do
+  append quando o arquivo atual passa do limite configurado.
+- A validação do JSONL fica no `doctor.sh`, mantendo o full gate canônico
+  inalterado em termos de checks obrigatórios.
+
+### Evidência
+
+- `rtk bash docs/harness/bin/bootstrap.sh` — PASS, 41 linhas.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh --json | rtk python3 -m json.tool` —
+  PASS, incluindo checks `bash_syntax:*`, `shellcheck:*` opcionais e
+  `sensors_log:format`.
+- `rtk bash docs/harness/bin/sensors.sh status --json | rtk python3 -m json.tool`
+  — PASS, com `sensors_log`/`log_path`.
+- `rtk env SENSORS_LOG_MAX_BYTES=1 SENSORS_LOG_ROTATIONS=2 bash docs/harness/bin/sensors.sh baseline`
+  rodado duas vezes — PASS; provou rotação para `.sensors-log`, `.1`, `.2`.
+- `rtk bash docs/harness/bin/sensors.sh quick` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  `make ci` + PR-title policy + harness doctor), registrando
+  `status=pass`, `mode=full`, `duration_sec=26`.
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-harness-12207-wave0-v2-post.md`
+  — FAIL; Codex apontou ShellCheck hard-fail não portátil e prompt scope-mixed.
+  Correção aplicada: ShellCheck opcional passou a ser non-blocking com warning.
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-harness-12207-wave0-v3-post.md`
+  — FAIL; Codex apontou heredoc Python incompatível com sandbox read-only
+  estrito. Correção aplicada: `doctor.sh` e `sensors.sh` passaram a usar
+  `python3 -c` nos caminhos JSON/JSONL.
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md`
+  — PASS; Codex verificou escopo vivo, JSON/status, `.sensors-log`, `git diff
+  --check` e bootstrap de 41 linhas.
+- `rtk bash docs/harness/bin/review-gate.sh post harness-12207-wave0 --review-file docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md`
+  — PASS.
+
+## 2026-06-26 — Harness review perspectives
+
+### Contexto
+
+Avaliação do `NeoLabHQ/context-engineering-kit` indicou valor seletivo como
+fonte de padrões de workflow, especialmente na taxonomia de review, mas com
+boundary explícito de licença e sem adoção do kit como infraestrutura.
+
+### Ações realizadas
+
+- `docs/harness/CODE_REVIEW_POLICY.md` ganhou perspectivas locais de review:
+  bug/edge cases, segurança/privacidade, contratos/MCP/SDK/storage,
+  testes/verificabilidade, manutenibilidade/operação e drift histórico.
+- O mesmo arquivo passou a registrar que kits externos são apenas fontes de
+  padrões de alto nível; não se copia prompts, comandos, checklists, scripts ou
+  docs sob GPL/copyleft sem revisão explícita de licença.
+- Criado Review Canvas:
+  `docs/harness/canvas/2026-06-26-harness-review-perspectives.md`.
+
+### Escopo recusado
+
+- Sem vendorizar ou instalar o kit externo.
+- Sem alterar `review-gate.sh`, sensores, scripts ou gates.
+- Sem importar texto literal, prompts, comandos ou scripts externos.
+
+### Evidência
+
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk proxy python3 -c ... docs/harness/canvas/2026-06-26-harness-review-perspectives.md`
+  — PASS, validando newline final e ausência de trailing whitespace no novo
+  canvas ainda não rastreado.
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-harness-review-perspectives-post.md`
+  — PASS, review independente scoped sem findings substantivos.
+- `rtk bash docs/harness/bin/review-gate.sh post harness-review-perspectives --review-file docs/harness/reviews/2026-06-26-harness-review-perspectives-post.md`
+  — PASS (`REVIEW_VERDICT: PASS`).
+
+## 2026-06-26 — Harness 12207 tailoring checklist
+
+### Contexto
+
+Após Wave 0 de medição, a próxima melhoria de baixo risco extraída de
+`docs/ieee-12207.md` foi capturar disciplina de tailoring: usar padrões de
+ciclo de vida como fonte de critérios locais, sem copiar texto da norma e sem
+reivindicar conformidade ISO/IEC/IEEE 12207.
+
+### Ações realizadas
+
+- `docs/harness/GATES.md` ganhou um checklist de tailoring 12207-inspired para
+  mudanças que citam a referência ou alteram processo de engenharia.
+- O checklist exige escopo/circunstâncias, área de ciclo de vida, racional de
+  decisão, risco/threshold, medição, separação entre verificação e validação, e
+  traceability.
+- `docs/harness/CODE_REVIEW_POLICY.md` passou a orientar reviewers a aplicar o
+  checklist e a flaggear adoção sem evidência ou cópia/licenciamento indevido.
+- Criado Review Canvas:
+  `docs/harness/canvas/2026-06-26-harness-12207-tailoring.md`.
+
+### Escopo recusado
+
+- Sem alterar scripts, sensores ou `review-gate.sh`.
+- Sem criar claim de conformidade com ISO/IEC/IEEE 12207.
+- Sem copiar texto, checklists ou processo da norma como pipeline drop-in.
+
+### Evidência
+
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk proxy python3 -c ... docs/harness/canvas/2026-06-26-harness-12207-tailoring.md`
+  — PASS, validando newline final e ausência de trailing whitespace nos
+  arquivos tocados nesta fatia.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  incluindo `make ci`/ref check/PR-title policy + harness doctor).
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-harness-12207-tailoring-post.md`
+  — PASS, review independente scoped sem findings substantivos.
+- `rtk bash docs/harness/bin/review-gate.sh post harness-12207-tailoring --review-file docs/harness/reviews/2026-06-26-harness-12207-tailoring-post.md`
+  — PASS (`REVIEW_VERDICT: PASS`).
+
+## 2026-06-26 — Pending worktree review fixes
+
+### Contexto
+
+Review manual das mudanças pendentes apontou dois problemas antes de commit:
+risco de versionar a cópia integral licenciada da ISO/IEC/IEEE 12207 e comandos
+inválidos no novo `docs/USER_GUIDE.md`.
+
+### Ações realizadas
+
+- `.gitignore` passou a ignorar `docs/ieee-12207.md` como referência licenciada
+  local-only.
+- `docs/harness/GATES.md` agora descreve a 12207 como cópia privada não
+  versionada, usada somente como fonte de padrões.
+- `docs/harness/canvas/2026-06-26-harness-12207-tailoring.md` registra o risco
+  de commit acidental da referência licenciada.
+- `docs/USER_GUIDE.md` removeu exemplos de CLI inexistentes para workspace,
+  tier diária e promoção; essas operações agora são documentadas via MCP tools.
+- Exemplos documentais antigos de `engram-server --mcp` foram alinhados ao
+  contrato atual do binário: stdio é o default e também pode ser explícito com
+  `--transport stdio`.
+- Exemplo antigo `--http --port` em `AGENTS.md` foi alinhado para
+  `--transport http --http-port`.
+- `docs/integrations/README.md` passou a listar o novo plano de arquitetura de
+  memória compartilhada Hermes/Engram.
+
+### Evidência
+
+- `rtk git check-ignore -v docs/ieee-12207.md` — PASS, a referência local é
+  ignorada por `.gitignore`.
+- `rtk git status --short --untracked-files=all | grep -F docs/ieee-12207.md`
+  — PASS invertido, a cópia licenciada não aparece como candidata a commit.
+- `rtk proxy sh -c '! grep -nE "engram-cli .*--workspace|engram-cli .*--tier|engram-cli promote" docs/USER_GUIDE.md'`
+  — PASS, exemplos inválidos removidos.
+- `rtk cargo run --quiet --bin engram-server -- --help | grep -nE -- "--transport|--mcp|stdio"`
+  — PASS, contrato verificado: `--transport` existe, `stdio` é default e
+  `--mcp` não aparece.
+- `rtk proxy grep -R -n -- '--mcp' README.md docs/USER_GUIDE.md docs/USING_ENGRAM_IN_A_REPO.md docs/integrations AGENTS.md CLAUDE.md`
+  — PASS invertido, não há exemplos restantes com a flag removida.
+- `rtk proxy grep -R -nE -- '--http( |$)|--port ' README.md docs/USER_GUIDE.md docs/USING_ENGRAM_IN_A_REPO.md docs/integrations AGENTS.md CLAUDE.md`
+  — PASS invertido, não há exemplos restantes com as flags HTTP antigas.
+- Validação de links internos em `docs/USER_GUIDE.md`, `docs/harness/GATES.md`
+  e no canvas de tailoring — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  incluindo `make ci`/ref check/PR-title policy + harness doctor).
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-pending-worktree-fixes-post.md`
+  — PASS, review independente scoped sem findings substantivos.
+- `rtk bash docs/harness/bin/review-gate.sh post pending-worktree-fixes --review-file docs/harness/reviews/2026-06-26-pending-worktree-fixes-post.md`
+  — PASS (`REVIEW_VERDICT: PASS`).
+
+## 2026-06-26 — Worktree closeout README and ledger fix
+
+### Contexto
+
+O review independente `docs/harness/reviews/2026-06-26-worktree-closeout-post.md`
+falhou porque o `README.md` ainda mantinha exemplos CLI inválidos para
+workspace, tier diária, session, identity, salience e quality. Esses comandos
+não existem no `engram-cli`; a superfície correta para essas operações é MCP.
+
+Um segundo review independente,
+`docs/harness/reviews/2026-06-26-worktree-closeout-v2-post.md`, confirmou que
+os exemplos de CLI/servidor, JSON, links, ferramentas MCP e ignore da 12207
+estavam corretos, mas falhou porque o ledger ainda não preservava explicitamente
+o FAIL anterior como superseded.
+
+### Ações realizadas
+
+- `README.md` passou a manter exemplos CLI apenas para comandos suportados
+  (`search`, `graph`) e a documentar workspace, daily tier, transcript indexing,
+  identity, salience e quality por chamadas MCP com ferramentas existentes.
+- Confirmadas as ferramentas MCP usadas no README e no `docs/USER_GUIDE.md`:
+  `workspace_list`, `memory_create_daily`, `memory_promote_to_permanent`,
+  `session_index`, `identity_create`, `salience_top`, `salience_boost`,
+  `quality_report` e `quality_find_duplicates`.
+- Este log registra explicitamente a sequência:
+  - `worktree-closeout-post.md` — FAIL por exemplos CLI inválidos no README;
+  - README corrigido para exemplos MCP;
+  - `worktree-closeout-v2-post.md` — FAIL por falta de supersession explícita no ledger;
+  - ledger corrigido nesta seção e em `docs/harness/progress.md`.
+
+### Evidência
+
+- `rtk cargo run --quiet --bin engram-cli -- --help` — PASS, CLI suporta
+  `create`, `get`, `list`, `search`, `delete`, `stats`, `maintenance`, `graph`,
+  `link`, `versions` e `interactive`.
+- `rtk cargo run --quiet --bin engram-cli -- create --help` — PASS, `create`
+  suporta `--type`, `--tags` e `--importance`; não suporta `--workspace` ou
+  `--tier`.
+- `rtk proxy sh -c '! grep -R -nE "engram-cli (workspace|session|quality|identity|salience)|engram-cli .*--workspace|engram-cli .*--tier|engram-cli promote" README.md docs/USER_GUIDE.md docs/USING_ENGRAM_IN_A_REPO.md docs/integrations AGENTS.md CLAUDE.md'`
+  — PASS, exemplos CLI inválidos removidos do escopo user-facing.
+- `rtk proxy sh -c '! grep -R -n -- "--mcp" README.md docs/USER_GUIDE.md docs/USING_ENGRAM_IN_A_REPO.md docs/integrations AGENTS.md CLAUDE.md'`
+  — PASS, exemplos da flag removida não aparecem no escopo user-facing.
+- `rtk python3 - <<'PY' ...` — PASS, JSON fences nos docs tocados parseiam.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-26T15:04:40Z`, `duration_sec=47`).
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-worktree-closeout-post.md`
+  — FAIL; finding único: exemplos CLI inválidos no README.
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-worktree-closeout-v2-post.md`
+  — FAIL; finding único: ledger não registrava a supersession do FAIL anterior.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-26T15:12:13Z`, `duration_sec=29`).
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-worktree-closeout-v3-post.md`
+  — PASS, review independente confirmou exemplos, ferramentas MCP, boundary
+  12207, JSON/links e ledger de supersession.
+- `rtk bash docs/harness/bin/review-gate.sh post worktree-closeout --review-file docs/harness/reviews/2026-06-26-worktree-closeout-v4-post.md`
+  — PASS, após regenerar o artifact com marcador parser-compatible
+  `REVIEW_VERDICT: PASS <summary>`.
+
+### Follow-up global de docs e exemplos
+
+Depois do PASS acima, uma varredura fora do escopo inicial encontrou referências
+obsoletas adicionais em `docs/GETTING_STARTED.md` e `examples/**`.
+
+- `examples/claude-mcp/README.md`, `examples/claude-mcp/claude-code-mcp.json`
+  e `examples/cursor-mcp/README.md` agora usam `--transport stdio` em vez da
+  flag removida `--mcp`.
+- `docs/GETTING_STARTED.md` mantém exemplos CLI apenas para a superfície
+  suportada pelo `engram-cli`; operações de workspace, tier diária e promoção
+  foram reescritas como chamadas MCP (`memory_create`, `workspace_list`,
+  `memory_search`, `memory_create_daily`, `memory_promote_to_permanent`).
+
+Evidência adicionada para esse follow-up:
+
+- `rtk proxy git grep -n -e '--mcp' -- . ':!*.raw' ':!docs/harness/reviews/*' ':!docs/harness/progress*'`
+  — PASS invertido, nenhuma referência versionada viva à flag removida fora
+  dos artefatos de evidência.
+- `rtk proxy git grep -nE -e '--http( |$)|--port ' -- . ':!*.raw' ':!docs/harness/reviews/*' ':!docs/harness/progress*'`
+  — PASS invertido, nenhuma referência viva às flags HTTP antigas.
+- `rtk proxy git grep -nE -e 'engram-cli (workspace|session|quality|identity|salience)|engram-cli .*--workspace|engram-cli .*--tier|engram-cli promote' -- . ':!*.raw' ':!docs/harness/reviews/*' ':!docs/harness/progress*'`
+  — PASS invertido, nenhum exemplo CLI vivo para subcomandos/flags inexistentes.
+- `rtk proxy grep -R ... README.md AGENTS.md CLAUDE.md docs/GETTING_STARTED.md docs/README.md docs/USER_GUIDE.md docs/USING_ENGRAM_IN_A_REPO.md docs/integrations examples`
+  — PASS invertido nos arquivos tracked e untracked relevantes.
+- `rtk python3 - <<'PY' ...` — PASS, JSON fences nos guias e exemplos tocados
+  parseiam.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-26T15:28:12Z`, `duration_sec=52`).
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-worktree-closeout-v5-post.md`
+  — PASS, auditoria independente read-only da limpeza global, ledger,
+  boundary 12207, ferramentas MCP, scripts do harness e sensors.
+- `rtk bash docs/harness/bin/review-gate.sh post worktree-closeout --review-file docs/harness/reviews/2026-06-26-worktree-closeout-v5-post.md`
+  — PASS (`REVIEW_VERDICT: PASS current dirty worktree closeout satisfies the
+  requested acceptance criteria`).
+
+
+## 2026-06-26 — discover_tools detail levels
+
+### Contexto
+
+A avaliação do artigo da Anthropic sobre code execution with MCP indicou que o
+valor real para o Engram não era criar uma nova `mcp_search_tools`, porque o
+Engram já possui `discover_tools`, tiers e artifact handles. O gap mínimo era
+progressive disclosure por nível de detalhe dentro da tool existente.
+
+### Ações realizadas
+
+- `discover_tools` ganhou o parâmetro `detail` com valores `names`, `summary` e
+  `schema`.
+- `summary` é o default e preserva o contrato anterior: `name`, `description` e
+  `tier`.
+- `names` retorna apenas `{ name }` por tool, reduzindo custo para descoberta
+  barata.
+- `schema` retorna o schema de input completo como objeto JSON para permitir que
+  agentes chamem a tool descoberta sem um segundo round-trip de `tools/list`.
+- Valores inválidos de `detail` retornam erro explícito no boundary em vez de
+  fallback silencioso.
+- `docs/MCP_TOOLS.md` foi regenerado a partir da definição MCP canônica.
+
+### Evidência
+
+- `rtk cargo test --test mcp_protocol_tests discover_tools --locked` — PASS, 5
+  tests passed.
+- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate).
+- `rtk bash docs/harness/bin/check-commit-msg.sh --message "feat(mcp): add discover tools detail levels"`
+  — PASS.
+- LSP diagnostics não puderam ser coletados nesta sessão porque o transporte LSP
+  fechou com `Transport closed`; verificação Rust determinística foi usada como
+  fallback.
+
+### Follow-ups separados
+
+- Avaliar cleanup dedicado para o arquivo órfão `src/mcp/tools/discovery.rs`,
+  que não deve ser editado como fonte canônica da tool registry.
+- Criar canvas de decisão separado para `engram mcp export-code-api` antes de
+  qualquer implementação do gerador.
+- Corrigir a contagem aproximada de tools exibida pelo bootstrap em tarefa
+  separada, pois a fonte atual não representa todas as tools por feature/source.
+
+## 2026-06-26 — MCP registry hygiene follow-ups
+
+### Contexto
+
+Após o canvas `docs/harness/canvas/2026-06-26-mcp-export-code-api.md`, restavam
+dois itens de higiene pequenos: corrigir a contagem de tools no bootstrap e
+remover o arquivo órfão `src/mcp/tools/discovery.rs`.
+
+### Ações realizadas
+
+- `docs/harness/bin/bootstrap.sh` deixou de contar headings em
+  `docs/MCP_TOOLS.md` e passou a derivar o sinal rápido do source:
+  `src/mcp/tools/registry.rs` para total e `tool_feature_available` em
+  `src/mcp/tools/mod.rs` para excluir nomes feature-gated no build default.
+- Após review independente, o caminho de contagem foi ajustado para
+  `python3 -c` sem heredoc, preservando compatibilidade com sandboxes
+  read-only que não permitem temporários de heredoc.
+- No checkout atual, o bootstrap agora reporta:
+  `MCP tools (source): 238 active / 278 total`.
+- `tests/mcp_protocol_tests.rs` ganhou regressão para garantir que
+  `tools/list` não contém nomes duplicados e que `discover_tools` vem da
+  registry canônica exatamente uma vez.
+- `tests/mcp_protocol_tests.rs` também ganhou uma regressão de layout que falha
+  se o arquivo órfão `src/mcp/tools/discovery.rs` voltar a existir.
+- `src/mcp/tools/discovery.rs` foi removido. Nenhum arquivo indexado dependia
+  dele; a fonte canônica continua sendo `src/mcp/tools/registry.rs`.
+
+### Evidência
+
+- `rtk cargo test --test mcp_protocol_tests test_tool_registry_has_no_orphan_discovery_definition_file --locked`
+  — FAIL esperado antes da remoção, provando que o teste pegava o órfão.
+- `rtk cargo test --test mcp_protocol_tests test_tool_registry_has_no_orphan_discovery_definition_file --locked`
+  — PASS após remover `src/mcp/tools/discovery.rs`.
+- `rtk cargo test --test mcp_protocol_tests test_tools_list_uses_unique_tool_names_from_registry --locked`
+  — PASS.
+- `rtk cargo test --test mcp_protocol_tests discover_tools --locked` — PASS,
+  5 testes.
+- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
+- `rtk cargo fmt --all -- --check` — PASS.
+- `rtk cargo clippy --test mcp_protocol_tests --locked -- -D warnings` — PASS.
+- `rtk bash -n docs/harness/bin/bootstrap.sh` — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk proxy bash -c 'bash docs/harness/bin/bootstrap.sh | grep -n "MCP tools (source): 238 active / 278 total"'`
+  — PASS.
+- `rtk bash docs/harness/bin/sensors.sh mcp` — PASS, 42 protocol tests,
+  timestamp `2026-06-26T18:06:58Z`.
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-mcp-registry-hygiene-post.md`
+  — FAIL; finding único: o heredoc Python no bootstrap não era compatível com
+  sandbox read-only.
+- `rtk codex exec ... docs/harness/reviews/2026-06-26-mcp-registry-hygiene-post-rereview.md`
+  — PASS após trocar o heredoc por `python3 -c`; review confirmou contagem
+  `238 active / 278 total`, `discover_tools=1`, nomes únicos e sem referências
+  vivas a `src/mcp/tools/discovery.rs`.
+- `rtk bash docs/harness/bin/review-gate.sh post mcp-registry-hygiene --review-file docs/harness/reviews/2026-06-26-mcp-registry-hygiene-post-rereview.md`
+  — PASS (`REVIEW_VERDICT: PASS scoped MCP registry hygiene changes satisfy the
+  requested checks`).
+- LSP diagnostics não puderam ser coletados porque `mcp__lsp.status` retornou
+  `Transport closed`; a verificação determinística Rust/MCP acima foi usada
+  como fallback.
+
+## 2026-06-27 — Reference intake checklist
+
+- Added `docs/harness/REFERENCE_INTAKE.md` as the canonical intake checklist for
+  external harness references, standards, articles, repos, benchmarks, tool
+  catalogs, awesome lists, prompt/workflow kits, and local-only reference
+  artifacts.
+- The checklist captures source identity, source type, license boundary, local
+  harness relevance, placement, adaptation, exclusions, and verification
+  evidence.
+- `docs/harness/GATES.md` now requires reference-intake evidence when external
+  sources shape harness policy, gates, taxonomy, skills, reviewer prompts, or
+  exception handling.
+- `docs/harness/CODE_REVIEW_POLICY.md` now instructs reviewers to flag missing
+  intake evidence and block copied licensed material, gate weakening, autonomous
+  execution imports, or external sources overriding local invariants.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-27-reference-intake-checklist.md`.
+
+Verification:
+
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- Markdown hygiene check for `REFERENCE_INTAKE.md`, `GATES.md`,
+  `CODE_REVIEW_POLICY.md`, and the canvas — PASS.
+- `rtk bash docs/harness/bin/sensors.sh quick` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-27T09:10:45Z`, `duration_sec=28`).
+
+Scope notes:
+
+- No script, Rust, MCP, SDK, storage, runtime, or autonomous execution changes.
+- Automation for duplicate URL checks, markdown entry-shape checks, or exception
+  allowlist validation is intentionally deferred to a separate task.
+- The worktree contained unrelated pre-existing dirty changes before this slice;
+  closure must stage only separable reference-intake hunks/files.
+
+Post-review fix:
+
+- Independent Codex post-review `docs/harness/reviews/2026-06-27-reference-intake-checklist-post.md` returned `REVIEW_VERDICT: FAIL` because the canvas cited `walkinglabs/awesome-harness-engineering` without dogfooding the new intake evidence.
+- Fixed by adding an `External Reference Intake` table to `docs/harness/canvas/2026-06-27-reference-intake-checklist.md` with source identity, source type, license boundary, relevance, placement, adaptation, exclusions, and verification.
+- The FAIL is superseded by this fix and requires a new post-review artifact before closure.
+
+Final verification after post-review fix:
+
+- `rtk git diff --check` — PASS.
+- Markdown hygiene check for reference-intake files and progress ledgers — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-27T09:10:45Z`, `duration_sec=28`).
+
+Post-review closure:
+
+- Independent Codex rerun `docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` returned `REVIEW_VERDICT: PASS reference-intake checklist slice meets acceptance criteria`.
+- `rtk bash docs/harness/bin/review-gate.sh post reference-intake-checklist --review-file docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` — PASS; parser accepted the v2 artifact.
+
+## 2026-06-27 — Lifecycle predicate implementation plan
+
+- Lifecycle predicate unification spec is committed and cross-model reviewed:
+  - `1f9f25b` — initial lifecycle predicate design.
+  - `a085c0f` — finalized lifecycle predicate spec after v3 re-review PASS.
+- Added the implementation plan at
+  `docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md`.
+- Plan scope: implement `decide_lifecycle_state`, route `lifecycle_run` through
+  the canonical predicate, disarm salience/policy/compression lifecycle writers,
+  preserve domain writers, keep `SCHEMA_VERSION=44`, update MCP metadata,
+  regenerate `docs/MCP_TOOLS.md`, and verify single-writer behavior.
+- Plan review fix: removed `expires_at` from the Step 2.3 `lifecycle_run` SQL
+  pre-filter. The pre-filter now selects only `valid_to IS NULL` and non-Archived
+  rows, with optional workspace filtering.
+- Lesson recorded: lifecycle pre-filters must not filter on fields the canonical
+  predicate does not model. `expires_at` now appears only in the explicit
+  prohibition line.
+- Implementation is intentionally deferred to a dedicated TDD session using this
+  plan as the contract.
+
+Verification:
+
+- `rtk grep -nE "expires_at" docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md` — PASS; single occurrence in the prohibition line.
+- Step 2.3 SQL readback — PASS; only `valid_to IS NULL`, non-Archived, and optional workspace clause remain.
+- `rtk git diff --check -- docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md` — PASS.
 
 ## 2026-06-27 — Lifecycle predicate unification
 

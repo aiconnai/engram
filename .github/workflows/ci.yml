@@ -308,7 +308,11 @@ jobs:
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Also runs on PRs as an ADVISORY signal (surfaces advisories early). It is
+    # NOT a required status check until its baseline is clean and stable — see
+    # github-harness-protection Todo 6/8. Keeping it off the required list means
+    # a red advisory does not block merge.
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -322,7 +326,10 @@ jobs:
   deny:
     name: Cargo Deny
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Also runs on PRs as an ADVISORY signal (license/ban/source/advisory drift).
+    # NOT a required status check until baseline is clean and stable — see
+    # github-harness-protection Todo 6/8. Off the required list = does not block.
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v5
       - uses: EmbarkStudios/cargo-deny-action@v2

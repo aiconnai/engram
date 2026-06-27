@@ -32,10 +32,15 @@ jobs:
           key: agentshield-loop-v0.8.7
 
       - name: Install AgentShield
+        # Pinned by commit SHA, not a mutable ref. SHA is the peeled commit of
+        # annotated tag v0.8.7 (resolved 2026-06-27 via
+        # `git ls-remote 'refs/tags/v0.8.7^{}'`). Re-resolve and update this SHA
+        # when bumping AgentShield; do NOT switch back to a tag ref (tags can be
+        # moved upstream, defeating supply-chain pinning).
         run: |
           cargo install \
             --git https://github.com/limaronaldo/agentshield \
-            --tag v0.8.7 \
+            --rev a1a571197211793422d31811be3d7735dae0a30a \
             --features full \
             --locked \
             --force

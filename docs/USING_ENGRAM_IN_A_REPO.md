@@ -80,7 +80,7 @@ Create `.cursor/mcp.json` in your project repo:
   "mcpServers": {
     "engram": {
       "command": "engram-server",
-      "args": ["--mcp"],
+      "args": ["--transport", "stdio"],
       "env": {
         "ENGRAM_DB_PATH": ".engram/memories.db",
         "ENGRAM_EMBEDDING_MODEL": "tfidf"
@@ -99,7 +99,7 @@ Add this server to your Claude Code MCP config:
   "mcpServers": {
     "engram": {
       "command": "engram-server",
-      "args": ["--mcp"],
+      "args": ["--transport", "stdio"],
       "env": {
         "ENGRAM_DB_PATH": "/absolute/path/to/your/repo/.engram/memories.db",
         "ENGRAM_EMBEDDING_MODEL": "tfidf"
@@ -344,7 +344,7 @@ By default, Engram uses TF-IDF embeddings, which require no model download. For 
 ```bash
 cargo install --path /path/to/engram --features local-embeddings
 engram-cli model download minilm-l6-v2
-ENGRAM_EMBEDDING_MODEL=local engram-server --mcp
+ENGRAM_EMBEDDING_MODEL=local engram-server --transport stdio
 ```
 
 If the model lives outside the default cache:

@@ -17,14 +17,68 @@ Ele executa (em ordem):
 | # | Sensor | Comando / Threshold | Action on FAIL |
 |---|--------|---------------------|----------------|
 | 1 | fmt | `cargo fmt --all -- --check` (exit 0) | block; rodar `cargo fmt --all` |
-| 2 | clippy | `cargo clippy --all-targets --all-features -- -D warnings` | block; fix warnings |
-| 3 | test (paridade) | `just ci` (preferencial) ou `make ci` (outra camada equivalente), com lib + integration e CI_FEATURES | block; investigar flakiness ou feature drift |
-| 4 | docs + MCP ref | `./scripts/generate-mcp-reference.sh --check && RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items` | block; atualizar referência ou docs |
-| 5 | harness doctor | `bash docs/harness/bin/doctor.sh` | block; corrigir drift no harness |
-| 6 | PR title policy | `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` rejeita marcador `[codex]` | block; renomear PR/commit de handoff |
-| 7 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
+| 2 | clippy | `cargo clippy --all-targets --no-default-features $CI_REQUIRED_FEATURE_ARGS -- -D warnings` | block; fix warnings |
+| 3 | test_lib | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --lib --tests -- --test-threads=1` | block; investigar flakiness ou feature drift |
+| 4 | test_integration | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --bin engram-server` | block; investigar regressão ou flakiness de integração |
+| 5 | test_integration_watch | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --bin engram-watcher` | block; investigar regressão ou flakiness de integração |
+| 6 | wasm_target | `rustup target list --installed | grep -qx "wasm32-unknown-unknown"` | block; instalar `wasm32-unknown-unknown` |
+| 7 | wasm_all_targets | `cargo check -p engram-wasm --all-targets` | block; corrigir falha no WASM crate |
+| 8 | wasm_wasm_target | `cargo check -p engram-wasm --target wasm32-unknown-unknown` | block; corrigir build WASM |
+| 9 | doc | `RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features $CI_REQUIRED_FEATURE_ARGS --no-deps --document-private-items` | block; atualizar docs |
+| 10 | ref_check | `./scripts/generate-mcp-reference.sh --check` | block; atualizar referência MCP |
+| 11 | harness doctor | `bash docs/harness/bin/doctor.sh` | block; corrigir drift no harness |
+| 12 | PR title policy | `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` rejeita marcador `[codex]` | block; renomear PR/commit de handoff |
+| 13 | shell syntax | `doctor.sh` executa `bash -n` nos scripts do harness | block; corrigir sintaxe shell |
+| 14 | shellcheck opcional | `doctor.sh` executa `shellcheck -x` nos scripts quando o binário está instalado | warn se instalado e falhar; skip explícito se ausente |
+| 15 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
 
-O script `sensors.sh` grava o resultado parseável em `docs/harness/.sensors-last` (status, timestamp, exclusões, etc.).
+O script `sensors.sh` grava o resultado parseável mais recente em
+`docs/harness/.sensors-last` (status, timestamp, `duration_sec`, exclusões,
+etc.) e também anexa cada execução em `docs/harness/.sensors-log` para histórico
+de medição.
+
+### Sensors measurement log
+
+`docs/harness/.sensors-log` é JSON Lines append-only e usa
+`schema_version="sensors-log-v1"`. Cada linha deve conter:
+
+- `timestamp` — UTC RFC3339 do fim da execução.
+- `tool` — sempre `sensors`.
+- `mode` — `full`, `quick`, `docs`, `mcp` ou `baseline`.
+- `status` — `pass`, `pass_with_exclusion` ou `fail`.
+- `duration_sec` — duração inteira não negativa.
+- `ci_status` e `doctor_status` — status das duas camadas principais.
+- `ci_steps` — objeto por etapa (`fmt`, `clippy`, `test_lib`, `test_integration`,
+  `test_integration_watch`, `wasm_target`, `wasm_all_targets`,
+  `wasm_wasm_target`, `doc`, `ref_check`) com `pass|fail|not_run`.
+- `ci_command` — resumo curto do comando executado, sem logs brutos.
+- `exclusion` — `null` ou `{sensor, known_issue, reason}`.
+- `artifacts` — inclui `docs/harness/.sensors-last` como estado leve atual.
+
+Rotação: antes de anexar uma nova linha, `sensors.sh` rotaciona o arquivo quando
+ele atinge `SENSORS_LOG_MAX_BYTES` (padrão: `1048576`) e mantém
+`SENSORS_LOG_ROTATIONS` gerações (padrão: `5`), como
+`.sensors-log.1`, `.sensors-log.2`, etc. `doctor.sh` valida o JSONL quando o
+arquivo existe.
+
+### Métricas de tendência de sensores (`harness-stats.sh`)
+
+`bash docs/harness/bin/harness-stats.sh` analisa `.sensors-log` e calcula métricas de execução:
+
+- janela móvel (`--window N`, padrão `30`, `0=all`),
+- contagens por status e taxa de sucesso,
+- estatísticas por `mode` (executações e duração média),
+- transições recentes que podem indicar flakiness (ex.: `pass`→`fail`),
+- último estado conhecido de `ci_status` e `doctor_status`.
+
+Formato de uso:
+
+```bash
+bash docs/harness/bin/harness-stats.sh               # saída humana
+bash docs/harness/bin/harness-stats.sh --json         # saída JSON (`sensors`/`harness-stats` metrics envelope)
+```
+
+O script de métricas não altera estado do harness (somente leitura de `.sensors-log`).
 
 Saídas JSON opt-in para scripts do harness devem seguir
 [`JSON_OUTPUTS.md`](./JSON_OUTPUTS.md): um único objeto JSON em stdout,
@@ -159,6 +213,62 @@ O review-gate deve marcar como `[HIGH]` ou `[BLOCKER]` qualquer mudança que:
 - Remova código, dependências, docs ou scripts baseado só em evidência estática.
 - Use exclusões de sensor para mascarar falha de produção.
 
+### 12207-Inspired Tailoring Checklist
+
+Uma cópia local não versionada, por exemplo `docs/ieee-12207.md`, pode ser
+usada como referência privada de padrões de processo de ciclo de vida. Esse
+arquivo é ignorado pelo Git, não deve ser distribuído no repositório, e o Engram
+não reivindica conformidade com a norma nem copia texto, prompts ou checklists
+dela para o harness. A adoção é sempre tailoring local: transformar conceitos
+em critérios verificáveis do Engram.
+
+Quando uma mudança de harness, codificação ou review citar essa referência ou
+alterar processo de engenharia, registre em `progress.md`, no plano ativo ou no
+Review Canvas aplicável:
+
+- **Escopo e circunstâncias** — qual lacuna local está sendo tratada, quais
+  stakeholders/paths são afetados e o que fica explicitamente fora de escopo.
+- **Área de ciclo de vida** — planejamento/controle, decisão, risco,
+  configuração/informação, medição, QA, verificação, validação, operação ou
+  manutenção.
+- **Racional de decisão** — alternativas consideradas, opção escolhida,
+  premissas e motivo para não adotar a referência como pipeline ou conformidade.
+- **Risco e threshold** — risco mitigado, sinal que indicaria regressão e ação
+  esperada se o sinal piorar.
+- **Medição** — necessidade de informação, medida ou artefato observado,
+  frequência/custo e onde a evidência fica armazenada.
+- **Evidência separada** — verificação objetiva (`doctor.sh`, sensores, testes,
+  diff checks) separada de validação de fitness para o usuário/stakeholder
+  quando aplicável.
+- **Traceability** — links entre requisito/intenção, arquivo alterado, canvas,
+  review e progresso, com plano de rollback se algum gate for enfraquecido.
+
+O review-gate deve marcar como `[HIGH]` uma adoção 12207 sem esse registro e
+como `[BLOCKER]` quando a mudança também tocar gates, invariants ou scripts
+process-critical sem evidência de segurança e reversibilidade.
+
+### Reference Intake Checklist
+
+`docs/harness/REFERENCE_INTAKE.md` defines the intake contract for external
+harness references, standards, articles, repos, benchmark suites, tool catalogs,
+and awesome lists. Use it whenever an external source shapes Engram harness
+policy, gates, taxonomy, skills, reviewer prompts, or exception handling.
+
+Minimum evidence for process-affecting adoption:
+
+- source identity and date read;
+- source type and license boundary;
+- local harness primitive affected;
+- placement decision and rejected adjacent placements when ambiguous;
+- what is explicitly not imported, vendored, executed, or treated as
+  authoritative;
+- verification evidence or reason executable verification does not apply.
+
+The review-gate should mark missing reference-intake evidence as `[HIGH]` when
+a harness/process change relies on an external source, and `[BLOCKER]` when the
+change copies licensed material, weakens gates, imports autonomous execution, or
+lets an external source override local invariants.
+
 ### Review Canvas Requirement
 
 Mudanças complexas exigem Review Canvas em `docs/harness/canvas/YYYY-MM-DD-<task-id>.md` antes de post-review.
@@ -191,11 +301,28 @@ Modos opcionais:
 
 Essas lanes opcionais não substituem o gate completo para merge, handoff ou completion claims.
 
+### Required checks no GitHub (merge em `main`)
+
+Os sensores locais confirmam o trabalho cedo; o GitHub re-confirma os mesmos
+contratos como **required status checks** antes do merge. Bloqueiam o merge:
+
+- `Format`, `Clippy`, `Test (ubuntu-latest)`, `Documentation` (os quatro jobs de
+  CI baratos e determinísticos);
+- `Harness Contract` — gate leve (`bootstrap.sh` + política de título de PR). A
+  política só rejeita o marcador literal `[codex]`; não é validação ampla de
+  título. O `doctor.sh` **não** entra neste gate required (fica local/advisory).
+
+`Security Audit` e `Cargo Deny` rodam nos PRs como **advisory** e não bloqueiam
+merge enquanto o baseline tiver advisories abertas (atualmente
+`RUSTSEC-2026-0187` em `lopdf` e `RUSTSEC-2026-0185` em `quinn-proto`). Promover
+qualquer um a required exige antes resolver/ignorar essas advisories com
+rationale datado. Code review automático é sinal extra, nunca o único bloqueador.
+
 ### Baseline Snapshot
 
 `baseline.sh` grava fatos estáticos baratos em `docs/harness/.baseline-last`.
 
-Ele é evidência para drift review, não substitui `sensors.sh`, `make ci`, `just ci` ou review independente.
+Ele é evidência para drift review, não substitui `sensors.sh` (full), `sensors.sh` com lanes `docs/mcp/baseline`, ou review independente.
 
 ### Evidence-Only Audit
 
@@ -245,7 +372,7 @@ Características chave:
 - Continuity: após FAIL, reruns injetam `[BLOCKER]`/`[HIGH]` anteriores relevantes (com ids estáveis para dedup).
 - Exclusões automáticas de diff: `docs/harness/reviews/*`, `docs/harness/progress/*`, `target/`, `coverage/`, artefatos de build, etc. (anti self-referential loop).
 - Timeout configurável via `REVIEWER_TIMEOUT_SECS`.
-- Suporte a múltiplos backends via `REVIEWER_CLI` (claude, grok, codex, ollama, ou "manual" que só gera o prompt file).
+- Suporte a múltiplos backends via `REVIEWER_CLI` (claude-sonnet, codex, ollama, ou "manual" que só gera o prompt file). Claude Code Sonnet é o reviewer padrão; outros backends não são canônicos sem override explícito do owner.
 
 Formato de output esperado do reviewer (primeira linha):
 
@@ -304,9 +431,20 @@ Pode pular o review-gate (camada 2) **somente** quando o diff inteiro for:
 
 Em dúvida: rode o review-gate.
 
-## Integração com `just ci` / `make ci`
+## Integração com Paridade CI
 
-O sensor principal delega para `just ci` quando disponível, senão `make ci`. O contrato de paridade com GitHub permanece o mesmo. O harness adiciona:
+O modo `full` do sensor principal `sensors.sh` mantém paridade funcional com o contrato do projeto por meio de etapas equivalentes a `CI_FEATURES`/`just ci`:
+
+- `fmt`
+- `clippy -D warnings`
+- testes de biblioteca (`--lib --tests`)
+- testes de integração (`--bin engram-server`, `--bin engram-watcher`)
+- `cargo doc` com `RUSTDOCFLAGS="-D warnings"`
+- `./scripts/generate-mcp-reference.sh --check`
+
+Essas etapas são registradas granularmente em `.sensors-log` (`ci_steps`) para triagem e análise.
+
+O harness também adiciona:
 
 - Harness doctor como etapa explícita.
 - Review cross-CLI.
