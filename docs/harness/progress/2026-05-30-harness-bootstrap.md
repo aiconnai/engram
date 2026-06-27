@@ -1529,3 +1529,58 @@ progressive disclosure por nível de detalhe dentro da tool existente.
   qualquer implementação do gerador.
 - Corrigir a contagem aproximada de tools exibida pelo bootstrap em tarefa
   separada, pois a fonte atual não representa todas as tools por feature/source.
+
+## 2026-06-27 — Reference intake checklist
+
+- Added `docs/harness/REFERENCE_INTAKE.md` as the canonical intake checklist for
+  external harness references, standards, articles, repos, benchmarks, tool
+  catalogs, awesome lists, prompt/workflow kits, and local-only reference
+  artifacts.
+- The checklist captures source identity, source type, license boundary, local
+  harness relevance, placement, adaptation, exclusions, and verification
+  evidence.
+- `docs/harness/GATES.md` now requires reference-intake evidence when external
+  sources shape harness policy, gates, taxonomy, skills, reviewer prompts, or
+  exception handling.
+- `docs/harness/CODE_REVIEW_POLICY.md` now instructs reviewers to flag missing
+  intake evidence and block copied licensed material, gate weakening, autonomous
+  execution imports, or external sources overriding local invariants.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-27-reference-intake-checklist.md`.
+
+Verification:
+
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk git diff --check` — PASS.
+- Markdown hygiene check for `REFERENCE_INTAKE.md`, `GATES.md`,
+  `CODE_REVIEW_POLICY.md`, and the canvas — PASS.
+- `rtk bash docs/harness/bin/sensors.sh quick` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-27T09:10:45Z`, `duration_sec=28`).
+
+Scope notes:
+
+- No script, Rust, MCP, SDK, storage, runtime, or autonomous execution changes.
+- Automation for duplicate URL checks, markdown entry-shape checks, or exception
+  allowlist validation is intentionally deferred to a separate task.
+- The worktree contained unrelated pre-existing dirty changes before this slice;
+  closure must stage only separable reference-intake hunks/files.
+
+Post-review fix:
+
+- Independent Codex post-review `docs/harness/reviews/2026-06-27-reference-intake-checklist-post.md` returned `REVIEW_VERDICT: FAIL` because the canvas cited `walkinglabs/awesome-harness-engineering` without dogfooding the new intake evidence.
+- Fixed by adding an `External Reference Intake` table to `docs/harness/canvas/2026-06-27-reference-intake-checklist.md` with source identity, source type, license boundary, relevance, placement, adaptation, exclusions, and verification.
+- The FAIL is superseded by this fix and requires a new post-review artifact before closure.
+
+Final verification after post-review fix:
+
+- `rtk git diff --check` — PASS.
+- Markdown hygiene check for reference-intake files and progress ledgers — PASS.
+- `rtk bash docs/harness/bin/doctor.sh` — PASS.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS (full canonical gate,
+  timestamp `2026-06-27T09:10:45Z`, `duration_sec=28`).
+
+Post-review closure:
+
+- Independent Codex rerun `docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` returned `REVIEW_VERDICT: PASS reference-intake checklist slice meets acceptance criteria`.
+- `rtk bash docs/harness/bin/review-gate.sh post reference-intake-checklist --review-file docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` — PASS; parser accepted the v2 artifact.

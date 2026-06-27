@@ -213,6 +213,28 @@ O review-gate deve marcar como `[HIGH]` ou `[BLOCKER]` qualquer mudança que:
 - Remova código, dependências, docs ou scripts baseado só em evidência estática.
 - Use exclusões de sensor para mascarar falha de produção.
 
+### Reference Intake Checklist
+
+`docs/harness/REFERENCE_INTAKE.md` defines the intake contract for external
+harness references, standards, articles, repos, benchmark suites, tool catalogs,
+and awesome lists. Use it whenever an external source shapes Engram harness
+policy, gates, taxonomy, skills, reviewer prompts, or exception handling.
+
+Minimum evidence for process-affecting adoption:
+
+- source identity and date read;
+- source type and license boundary;
+- local harness primitive affected;
+- placement decision and rejected adjacent placements when ambiguous;
+- what is explicitly not imported, vendored, executed, or treated as
+  authoritative;
+- verification evidence or reason executable verification does not apply.
+
+The review-gate should mark missing reference-intake evidence as `[HIGH]` when
+a harness/process change relies on an external source, and `[BLOCKER]` when the
+change copies licensed material, weakens gates, imports autonomous execution, or
+lets an external source override local invariants.
+
 ### Review Canvas Requirement
 
 Mudanças complexas exigem Review Canvas em `docs/harness/canvas/YYYY-MM-DD-<task-id>.md` antes de post-review.

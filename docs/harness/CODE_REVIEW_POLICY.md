@@ -161,6 +161,22 @@ For complex diffs, verify that a matching Review Canvas exists under `docs/harne
 
 The canvas should include approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table. Missing canvas evidence is `[HIGH]` by default and `[BLOCKER]` when the change touches storage, MCP surface, harness gates, or process-critical scripts.
 
+### Reference intake
+
+Read `docs/harness/REFERENCE_INTAKE.md` when a change cites or adapts an
+external harness resource, standard, article, repo, awesome list, benchmark,
+tool catalog, prompt/workflow kit, or local-only reference artifact.
+
+Flag as `[HIGH]` when an external source materially shapes harness process,
+gates, taxonomy, skills, reviewer prompts, or exception handling without an
+intake record covering source identity, license boundary, local placement,
+adaptation, exclusions, and verification evidence.
+
+Flag as `[BLOCKER]` when the change copies licensed text/prompts/scripts,
+weakens local gates, imports autonomous execution, or treats an external source
+as authoritative over Engram invariants, GATES, security boundary, or negative
+scope.
+
 ### Harness script changes
 
 Harness script changes are process-critical. Reviewers must inspect `docs/harness/bin/*` changes directly for shell safety, path handling, parseability, read-only guarantees, and gate weakening.
