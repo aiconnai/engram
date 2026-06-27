@@ -123,7 +123,6 @@ pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
         ctx.storage.with_transaction(|conn| {
             let candidates = decay_candidates(conn, &workspace)?;
             let mut policy_updates = 0usize;
-            let mut lifecycle_updates = 0usize;
 
             for candidate in &candidates {
                 let policy = upsert_policy_record(
@@ -139,18 +138,6 @@ pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
                 )?;
                 emit_policy_event(conn, "memory_decay", &policy, false);
                 policy_updates += 1;
-
-                if let Some(state) = candidate.lifecycle_target {
-                    let changed = conn.execute(
-                        "UPDATE memories
-                         SET lifecycle_state = ?1
-                         WHERE id = ?2
-                           AND valid_to IS NULL
-                           AND COALESCE(lifecycle_state, 'active') = 'active'",
-                        params![state.to_string(), candidate.memory_id],
-                    )?;
-                    lifecycle_updates += changed;
-                }
             }
 
             Ok(json!({
@@ -158,9 +145,9 @@ pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
                 "dry_run": false,
                 "candidate_count": candidates.len(),
                 "policy_updates": policy_updates,
-                "lifecycle_updates": lifecycle_updates,
+                "lifecycle_updates": 0,
                 "candidates": candidates,
-                "concern": "apply is conservative: only memory_policy scores and active lifecycle_state transitions are updated"
+                "concern": "apply is conservative: only memory_policy scores are updated; use lifecycle_run for lifecycle transitions"
             }))
         })
     };
@@ -349,12 +336,7 @@ fn decay_candidates(conn: &rusqlite::Connection, workspace: &str) -> Result<Vec<
         let new_salience = decay_score(current_salience);
         let new_retention = decay_score(current_retention);
         let new_priority = decay_score(current_priority);
-        let lifecycle_target =
-            if memory.lifecycle_state == LifecycleState::Active && new_retention < 0.25 {
-                Some(LifecycleState::Stale)
-            } else {
-                None
-            };
+        let lifecycle_target = None;
 
         candidates.push(DecayCandidate {
             memory_id: id,
@@ -410,5 +392,106 @@ fn bucket(score: f32) -> &'static str {
         "medium"
     } else {
         "low"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_ctx() -> super::HandlerContext {
+        use crate::embedding::{create_embedder, EmbeddingCache};
+        use crate::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
+        use crate::storage::Storage;
+        use crate::types::EmbeddingConfig;
+        use parking_lot::Mutex;
+        use std::sync::Arc;
+
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
+        super::HandlerContext {
+            storage,
+            embedder,
+            fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
+            search_config: SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(EmbeddingCache::default()),
+            search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 60,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+        }
+    }
+
+    #[test]
+    fn memory_decay_updates_policy_scores_without_lifecycle_transition() {
+        use crate::storage::queries::create_memory;
+        use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
+
+        let ctx = test_ctx();
+        let memory_id = ctx
+            .storage
+            .with_transaction(|conn| {
+                let memory = create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "policy decay lifecycle guard".to_string(),
+                        memory_type: MemoryType::Note,
+                        workspace: Some("default".to_string()),
+                        tier: MemoryTier::Permanent,
+                        ..Default::default()
+                    },
+                )?;
+                upsert_policy_record(
+                    conn,
+                    PolicyRecordInput {
+                        memory_id: memory.id,
+                        salience_score: 0.30,
+                        retention_score: 0.20,
+                        retrieval_priority: 0.40,
+                        policy_version: "heuristic-test".to_string(),
+                        policy_reason: "test low retention".to_string(),
+                    },
+                )?;
+                Ok(memory.id)
+            })
+            .expect("seed policy memory");
+
+        let result = memory_decay(
+            &ctx,
+            serde_json::json!({
+                "dry_run": false,
+                "workspace": "default"
+            }),
+        );
+
+        assert!(result.get("error").is_none(), "unexpected error: {result}");
+        assert_eq!(result["policy_updates"].as_u64(), Some(1), "{result}");
+        assert_eq!(result["lifecycle_updates"].as_u64(), Some(0), "{result}");
+
+        let (lifecycle_state, policy) = ctx
+            .storage
+            .with_connection(|conn| {
+                let lifecycle_state: String = conn.query_row(
+                    "SELECT lifecycle_state FROM memories WHERE id = ?1",
+                    params![memory_id],
+                    |row| row.get(0),
+                )?;
+                let policy = get_policy_record(conn, memory_id)?.expect("policy record");
+                Ok((lifecycle_state, policy))
+            })
+            .expect("query policy and lifecycle");
+
+        assert_eq!(lifecycle_state, "active");
+        assert!(
+            policy.retention_score < 0.20,
+            "retention score should decay, got {}",
+            policy.retention_score
+        );
     }
 }

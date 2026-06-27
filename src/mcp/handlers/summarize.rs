@@ -224,9 +224,8 @@ pub fn context_budget_check(ctx: &HandlerContext, params: Value) -> Value {
 
 pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::{create_memory, list_memories};
-    use crate::types::{CreateMemoryInput, ListOptions, MemoryTier, MemoryType};
+    use crate::types::{CreateMemoryInput, LifecycleState, ListOptions, MemoryTier, MemoryType};
     use chrono::{Duration, Utc};
-    use rusqlite::params;
 
     let max_age_days = params
         .get("max_age_days")
@@ -253,21 +252,25 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
             let options = ListOptions {
                 workspace: workspace.map(|s| s.to_string()),
                 limit: Some(1000),
+                include_archived: true,
                 ..Default::default()
             };
 
             let all_memories = list_memories(conn, &options)?;
 
-            let candidates: Vec<_> = all_memories
-                .into_iter()
-                .filter(|m| {
-                    m.created_at < cutoff_date
-                        && m.importance <= max_importance
-                        && m.access_count < min_access_count as i32
-                        && m.memory_type != MemoryType::Summary
-                        && m.memory_type != MemoryType::Checkpoint
-                })
-                .collect();
+            let mut candidates = Vec::new();
+            for memory in all_memories {
+                if memory.created_at < cutoff_date
+                    && memory.importance <= max_importance
+                    && memory.access_count < min_access_count as i32
+                    && memory.lifecycle_state == LifecycleState::Archived
+                    && memory.memory_type != MemoryType::Summary
+                    && memory.memory_type != MemoryType::Checkpoint
+                    && !memory_has_live_summary(conn, memory.id)?
+                {
+                    candidates.push(memory);
+                }
+            }
 
             if dry_run {
                 let summaries: Vec<_> = candidates
@@ -286,12 +289,12 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
 
                 return Ok(json!({
                     "dry_run": true,
-                    "would_archive": candidates.len(),
+                    "would_compress": candidates.len(),
                     "candidates": summaries
                 }));
             }
 
-            let mut archived = 0;
+            let mut compressed = 0;
             let mut errors: Vec<String> = Vec::new();
             let operation_id = uuid::Uuid::new_v4().to_string();
 
@@ -313,7 +316,7 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
                 };
 
                 let input = CreateMemoryInput {
-                    content: format!("[Archived {:?}] {}", memory.memory_type, summary_text),
+                    content: format!("[Compressed {:?}] {}", memory.memory_type, summary_text),
                     memory_type: MemoryType::Summary,
                     importance: Some(memory.importance),
                     tags: memory.tags.clone(),
@@ -325,34 +328,23 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
 
                 match create_memory(conn, &input) {
                     Ok(_) => {
-                        match conn.execute(
-                            "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ? AND valid_to IS NULL",
-                            params![memory.id],
-                        ) {
-                            Ok(_) => {
-                                archived += 1;
-                                emit_best_effort(
-                                    conn,
-                                    &EnrichmentEvent {
-                                        operation_id: &operation_id,
-                                        event_type:   "compression",
-                                        memory_id:    Some(memory.id),
-                                        version_id:   None,
-                                        triggered_by: "memory_archive_old",
-                                        agent_id:     None,
-                                        workspace:    Some(memory.workspace.as_str()),
-                                        params:       json!({}),
-                                        outcome:      json!({"new_state": "archived"}),
-                                        status:       "completed",
-                                        dry_run:      false,
-                                    },
-                                );
-                            }
-                            Err(e) => errors.push(format!(
-                                "Memory {}: summary created but failed to mark archived: {}",
-                                memory.id, e
-                            )),
-                        }
+                        compressed += 1;
+                        emit_best_effort(
+                            conn,
+                            &EnrichmentEvent {
+                                operation_id: &operation_id,
+                                event_type: "compression",
+                                memory_id: Some(memory.id),
+                                version_id: None,
+                                triggered_by: "memory_archive_old",
+                                agent_id: None,
+                                workspace: Some(memory.workspace.as_str()),
+                                params: json!({}),
+                                outcome: json!({"compressed": true, "summary_created": true}),
+                                status: "completed",
+                                dry_run: false,
+                            },
+                        );
                     }
                     Err(e) => errors.push(format!("Memory {}: {}", memory.id, e)),
                 }
@@ -360,11 +352,27 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
 
             Ok(json!({
                 "dry_run": false,
-                "archived": archived,
+                "compressed": compressed,
                 "errors": errors
             }))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+fn memory_has_live_summary(
+    conn: &rusqlite::Connection,
+    memory_id: i64,
+) -> crate::error::Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM memories
+         WHERE summary_of_id = ?1
+           AND memory_type = 'summary'
+           AND valid_to IS NULL",
+        rusqlite::params![memory_id],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
 }
 
 #[cfg(test)]
@@ -420,6 +428,59 @@ mod summarize_tests {
             .id
     }
 
+    fn seed_old_memory(
+        ctx: &super::super::HandlerContext,
+        content: &str,
+        lifecycle_state: &str,
+    ) -> i64 {
+        use chrono::{Duration, Utc};
+
+        let id = seed_memory(ctx, content);
+        let old_ts = (Utc::now() - Duration::days(120)).to_rfc3339();
+        ctx.storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "UPDATE memories
+                     SET created_at = ?1,
+                         updated_at = ?1,
+                         last_accessed_at = ?1,
+                         importance = 0.0,
+                         access_count = 0,
+                         lifecycle_state = ?2
+                     WHERE id = ?3",
+                    rusqlite::params![old_ts, lifecycle_state, id],
+                )?;
+                Ok(())
+            })
+            .expect("age memory");
+        id
+    }
+
+    fn lifecycle_state(ctx: &super::super::HandlerContext, id: i64) -> String {
+        ctx.storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT lifecycle_state FROM memories WHERE id = ?1",
+                    rusqlite::params![id],
+                    |row| row.get::<_, String>(0),
+                )?)
+            })
+            .expect("query lifecycle state")
+    }
+
+    fn summary_count_for(ctx: &super::super::HandlerContext, id: i64) -> i64 {
+        ctx.storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM memories
+                     WHERE summary_of_id = ?1 AND memory_type = 'summary' AND valid_to IS NULL",
+                    rusqlite::params![id],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("query summary count")
+    }
+
     #[test]
     fn test_memory_summarize_emits_enrichment_event() {
         let ctx = test_ctx();
@@ -461,5 +522,78 @@ mod summarize_tests {
             .expect("query failed");
 
         assert_eq!(count, 1, "expected exactly 1 enrichment_events row");
+    }
+
+    #[test]
+    fn test_memory_archive_old_does_not_compress_active_rows() {
+        let ctx = test_ctx();
+        let id = seed_old_memory(&ctx, "old active memory", "active");
+
+        let result = memory_archive_old(
+            &ctx,
+            serde_json::json!({
+                "dry_run": false,
+                "workspace": "default",
+                "max_age_days": 90,
+                "max_importance": 0.5,
+                "min_access_count": 5
+            }),
+        );
+
+        assert!(result.get("error").is_none(), "unexpected error: {result}");
+        assert_eq!(result["compressed"].as_u64(), Some(0), "{result}");
+        assert_eq!(summary_count_for(&ctx, id), 0);
+        assert_eq!(lifecycle_state(&ctx, id), "active");
+    }
+
+    #[test]
+    fn test_memory_archive_old_compresses_already_archived_rows() {
+        let ctx = test_ctx();
+        let id = seed_old_memory(&ctx, "old archived memory", "archived");
+
+        let result = memory_archive_old(
+            &ctx,
+            serde_json::json!({
+                "dry_run": false,
+                "workspace": "default",
+                "max_age_days": 90,
+                "max_importance": 0.5,
+                "min_access_count": 5
+            }),
+        );
+
+        assert!(result.get("error").is_none(), "unexpected error: {result}");
+        assert_eq!(result["compressed"].as_u64(), Some(1), "{result}");
+        assert_eq!(summary_count_for(&ctx, id), 1);
+        assert_eq!(lifecycle_state(&ctx, id), "archived");
+    }
+
+    #[test]
+    fn test_memory_archive_old_is_idempotent_for_archived_rows() {
+        let ctx = test_ctx();
+        let id = seed_old_memory(&ctx, "old archived idempotent memory", "archived");
+
+        let args = serde_json::json!({
+            "dry_run": false,
+            "workspace": "default",
+            "max_age_days": 90,
+            "max_importance": 0.5,
+            "min_access_count": 5
+        });
+        let first = memory_archive_old(&ctx, args.clone());
+        let second = memory_archive_old(&ctx, args);
+
+        assert!(
+            first.get("error").is_none(),
+            "unexpected first error: {first}"
+        );
+        assert!(
+            second.get("error").is_none(),
+            "unexpected second error: {second}"
+        );
+        assert_eq!(first["compressed"].as_u64(), Some(1), "{first}");
+        assert_eq!(second["compressed"].as_u64(), Some(0), "{second}");
+        assert_eq!(summary_count_for(&ctx, id), 1);
+        assert_eq!(lifecycle_state(&ctx, id), "archived");
     }
 }

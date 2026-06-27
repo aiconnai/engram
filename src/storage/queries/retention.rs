@@ -152,7 +152,6 @@ pub fn apply_retention_policies(conn: &Connection) -> Result<i64> {
     let mut total_affected = 0i64;
 
     for policy in &policies {
-        // 1. Auto-compress based on compress_after_days
         if let Some(compress_days) = policy.compress_after_days {
             let compressed = compress_old_memories(
                 conn,
@@ -212,8 +211,8 @@ pub fn apply_retention_policies(conn: &Connection) -> Result<i64> {
     Ok(total_affected)
 }
 
-/// Auto-compress old, rarely-accessed memories by creating summaries and archiving originals.
-/// Returns the number of memories archived.
+/// Compress already-archived memories by creating summary rows.
+/// Returns the number of memories compressed.
 pub fn compress_old_memories(
     conn: &Connection,
     max_age_days: i64,
@@ -224,7 +223,6 @@ pub fn compress_old_memories(
     let cutoff = (Utc::now() - chrono::Duration::days(max_age_days)).to_rfc3339();
     let now = Utc::now().to_rfc3339();
 
-    // Find candidates: old, low-importance, rarely-accessed, not already archived/summary
     let mut stmt = conn.prepare(
         "SELECT id, content, memory_type, importance, tags, workspace
          FROM (
@@ -238,7 +236,14 @@ pub fn compress_old_memories(
               AND m.importance <= ?3
               AND m.access_count < ?4
               AND m.memory_type NOT IN ('summary', 'checkpoint')
-              AND COALESCE(m.lifecycle_state, 'active') = 'active'
+              AND COALESCE(m.lifecycle_state, 'active') = 'archived'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM memories s
+                  WHERE s.summary_of_id = m.id
+                    AND s.memory_type = 'summary'
+                    AND s.valid_to IS NULL
+              )
             ORDER BY m.created_at ASC
             LIMIT ?5
          )",
@@ -268,7 +273,7 @@ pub fn compress_old_memories(
         .filter_map(|r| r.ok())
         .collect();
 
-    let mut archived = 0i64;
+    let mut compressed = 0i64;
 
     for (id, content, memory_type, importance, tags_csv, workspace) in &candidates {
         // Create compressed summary
@@ -296,7 +301,7 @@ pub fn compress_old_memories(
             .collect();
 
         let input = CreateMemoryInput {
-            content: format!("[Archived {}] {}", memory_type, summary_text),
+            content: format!("[Compressed {}] {}", memory_type, summary_text),
             memory_type: MemoryType::Summary,
             importance: Some(*importance),
             tags,
@@ -306,17 +311,175 @@ pub fn compress_old_memories(
             ..Default::default()
         };
 
-        if create_memory(conn, &input).is_ok()
-            && conn
-                .execute(
-                    "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ? AND valid_to IS NULL",
-                    params![id],
-                )
-                .is_ok()
-        {
-            archived += 1;
+        if create_memory(conn, &input).is_ok() {
+            compressed += 1;
         }
     }
 
-    Ok(archived)
+    Ok(compressed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::Storage;
+
+    fn seed_old_memory(conn: &Connection, lifecycle_state: &str) -> Result<i64> {
+        let memory = create_memory(
+            conn,
+            &CreateMemoryInput {
+                content: format!("old {lifecycle_state} retention memory"),
+                memory_type: MemoryType::Note,
+                importance: Some(0.0),
+                workspace: Some("default".to_string()),
+                tier: MemoryTier::Permanent,
+                ..Default::default()
+            },
+        )?;
+        let old_ts = (Utc::now() - chrono::Duration::days(120)).to_rfc3339();
+        conn.execute(
+            "UPDATE memories
+             SET created_at = ?1,
+                 updated_at = ?1,
+                 last_accessed_at = ?1,
+                 access_count = 0,
+                 lifecycle_state = ?2
+             WHERE id = ?3",
+            params![old_ts, lifecycle_state, memory.id],
+        )?;
+        Ok(memory.id)
+    }
+
+    fn summary_count_for(conn: &Connection, memory_id: i64) -> Result<i64> {
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM memories
+             WHERE summary_of_id = ?1 AND memory_type = 'summary' AND valid_to IS NULL",
+            params![memory_id],
+            |row| row.get(0),
+        )?)
+    }
+
+    fn lifecycle_state(conn: &Connection, memory_id: i64) -> Result<String> {
+        Ok(conn.query_row(
+            "SELECT lifecycle_state FROM memories WHERE id = ?1",
+            params![memory_id],
+            |row| row.get(0),
+        )?)
+    }
+
+    #[test]
+    fn compress_old_memories_skips_active_rows() {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        storage
+            .with_transaction(|conn| {
+                let id = seed_old_memory(conn, "active")?;
+
+                let compressed = compress_old_memories(conn, 90, 0.5, 5, 10)?;
+
+                assert_eq!(compressed, 0);
+                assert_eq!(summary_count_for(conn, id)?, 0);
+                assert_eq!(lifecycle_state(conn, id)?, "active");
+                Ok(())
+            })
+            .expect("compression should skip active rows");
+    }
+
+    #[test]
+    fn compress_old_memories_summarizes_archived_rows_without_rewriting_lifecycle() {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        storage
+            .with_transaction(|conn| {
+                let id = seed_old_memory(conn, "archived")?;
+
+                let compressed = compress_old_memories(conn, 90, 0.5, 5, 10)?;
+
+                assert_eq!(compressed, 1);
+                assert_eq!(summary_count_for(conn, id)?, 1);
+                assert_eq!(lifecycle_state(conn, id)?, "archived");
+                Ok(())
+            })
+            .expect("compression should summarize archived rows");
+    }
+
+    #[test]
+    fn compress_old_memories_is_idempotent_for_archived_rows() {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        storage
+            .with_transaction(|conn| {
+                let id = seed_old_memory(conn, "archived")?;
+
+                let first = compress_old_memories(conn, 90, 0.5, 5, 10)?;
+                let second = compress_old_memories(conn, 90, 0.5, 5, 10)?;
+
+                assert_eq!(first, 1);
+                assert_eq!(second, 0);
+                assert_eq!(summary_count_for(conn, id)?, 1);
+                assert_eq!(lifecycle_state(conn, id)?, "archived");
+                Ok(())
+            })
+            .expect("compression should be idempotent");
+    }
+
+    #[test]
+    fn apply_retention_compression_only_summarizes_archived_rows() {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        storage
+            .with_transaction(|conn| {
+                let active_id = seed_old_memory(conn, "active")?;
+                let archived_id = seed_old_memory(conn, "archived")?;
+                set_retention_policy(
+                    conn,
+                    "default",
+                    None,
+                    None,
+                    Some(90),
+                    Some(0.5),
+                    Some(5),
+                    None,
+                    None,
+                )?;
+
+                let affected = apply_retention_policies(conn)?;
+
+                assert_eq!(affected, 1);
+                assert_eq!(summary_count_for(conn, active_id)?, 0);
+                assert_eq!(summary_count_for(conn, archived_id)?, 1);
+                assert_eq!(lifecycle_state(conn, active_id)?, "active");
+                assert_eq!(lifecycle_state(conn, archived_id)?, "archived");
+                Ok(())
+            })
+            .expect("retention compression should be archived-only");
+    }
+
+    #[test]
+    fn retention_auto_delete_still_soft_deletes_archived_rows() {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        storage
+            .with_transaction(|conn| {
+                let id = seed_old_memory(conn, "archived")?;
+                set_retention_policy(
+                    conn,
+                    "default",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(90),
+                    None,
+                )?;
+
+                let affected = apply_retention_policies(conn)?;
+
+                assert_eq!(affected, 1);
+                let valid_to: Option<String> = conn.query_row(
+                    "SELECT valid_to FROM memories WHERE id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                )?;
+                assert!(valid_to.is_some(), "archived row should be soft-deleted");
+                Ok(())
+            })
+            .expect("auto-delete should soft-delete archived rows");
+    }
 }

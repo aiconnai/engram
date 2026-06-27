@@ -9,7 +9,7 @@
 //! Salience is used for:
 //! - Search result reranking
 //! - Priority queue ordering
-//! - Automatic archival decisions
+//! - Canonical lifecycle suggestions
 //! - Context budget allocation
 
 use chrono::{DateTime, Utc};
@@ -17,6 +17,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
+use crate::intelligence::{decide_lifecycle_state, LifecycleConfig};
 use crate::types::{LifecycleState, Memory, MemoryId};
 
 /// Configuration for salience scoring
@@ -76,7 +77,7 @@ pub struct SalienceScore {
     pub feedback: f32,
     /// When the score was calculated
     pub calculated_at: DateTime<Utc>,
-    /// Suggested lifecycle state based on salience
+    /// Suggested lifecycle state from the canonical lifecycle predicate
     pub suggested_state: LifecycleState,
 }
 
@@ -207,8 +208,7 @@ impl SalienceCalculator {
             .max(self.config.min_salience)
             .min(1.0);
 
-        // Suggest lifecycle state based on score and age
-        let suggested_state = self.suggest_lifecycle_state(memory, score, now);
+        let suggested_state = decide_lifecycle_state(memory, now, &LifecycleConfig::default());
 
         SalienceScore {
             score,
@@ -250,34 +250,6 @@ impl SalienceCalculator {
         (log_count / log_max).min(1.0)
     }
 
-    /// Suggest lifecycle state based on salience and age
-    fn suggest_lifecycle_state(
-        &self,
-        memory: &Memory,
-        score: f32,
-        now: DateTime<Utc>,
-    ) -> LifecycleState {
-        let last_access = memory.last_accessed_at.unwrap_or(memory.created_at);
-        let days_inactive = (now - last_access).num_days();
-
-        // Already archived stays archived
-        if memory.lifecycle_state == LifecycleState::Archived {
-            return LifecycleState::Archived;
-        }
-
-        // Low salience + long inactivity = suggest archive
-        if score < 0.2 && days_inactive >= self.config.archive_threshold_days {
-            return LifecycleState::Archived;
-        }
-
-        // Medium-low salience or moderate inactivity = stale
-        if score < 0.4 || days_inactive >= self.config.stale_threshold_days {
-            return LifecycleState::Stale;
-        }
-
-        LifecycleState::Active
-    }
-
     /// Calculate salience for multiple memories
     pub fn calculate_batch(
         &self,
@@ -314,7 +286,7 @@ impl SalienceCalculator {
 
 use std::collections::HashMap;
 
-/// Run decay on all memories and update lifecycle states
+/// Run salience score decay and optionally record salience history.
 pub fn run_salience_decay(
     conn: &Connection,
     config: &SalienceConfig,
@@ -332,8 +304,6 @@ pub fn run_salience_decay_in_workspace(
     let start = std::time::Instant::now();
     let now = Utc::now();
     let now_str = now.to_rfc3339();
-    let _calculator = SalienceCalculator::new(config.clone());
-
     // Get all non-archived memories
     let memories: Vec<(MemoryId, f32, i32, String, String, Option<String>, String)> =
         if let Some(workspace) = workspace {
@@ -386,8 +356,8 @@ pub fn run_salience_decay_in_workspace(
         };
 
     let mut processed = 0i64;
-    let mut marked_stale = 0i64;
-    let mut suggested_archive = 0i64;
+    let marked_stale = 0i64;
+    let suggested_archive = 0i64;
     let mut history_records = 0i64;
 
     for (
@@ -397,7 +367,7 @@ pub fn run_salience_decay_in_workspace(
         created_at_str,
         _updated_at_str,
         last_accessed_str,
-        current_state,
+        _current_state,
     ) in memories
     {
         // Parse dates
@@ -433,30 +403,6 @@ pub fn run_salience_decay_in_workspace(
             + 0.5 * config.feedback_weight)
             .max(config.min_salience)
             .min(1.0);
-
-        // Determine suggested state
-        let days_inactive = (now - last_access).num_days();
-        let new_state = if score < 0.2 && days_inactive >= config.archive_threshold_days {
-            "archived"
-        } else if score < 0.4 || days_inactive >= config.stale_threshold_days {
-            "stale"
-        } else {
-            "active"
-        };
-
-        // Update state if changed
-        if new_state != current_state {
-            conn.execute(
-                "UPDATE memories SET lifecycle_state = ?, updated_at = ? WHERE id = ?",
-                params![new_state, now_str, id],
-            )?;
-
-            if new_state == "stale" {
-                marked_stale += 1;
-            } else if new_state == "archived" {
-                suggested_archive += 1;
-            }
-        }
 
         // Record history if enabled
         if record_history {
@@ -962,23 +908,82 @@ mod tests {
     }
 
     #[test]
-    fn test_lifecycle_suggestion() {
+    fn test_lifecycle_suggestion_matches_canonical_predicate() {
+        use crate::intelligence::{decide_lifecycle_state, LifecycleConfig};
+
         let calculator = SalienceCalculator::default();
+        let memory = create_test_memory(1, 0.1, 0, 100);
 
-        // Recent with good engagement = active
-        let active = create_test_memory(1, 0.8, 20, 5);
-        let score_active = calculator.calculate(&active, 0.5);
-        assert_eq!(score_active.suggested_state, LifecycleState::Active);
+        let score = calculator.calculate(&memory, 0.1);
 
-        // Old with low engagement = stale
-        let stale = create_test_memory(2, 0.3, 2, 45);
-        let score_stale = calculator.calculate(&stale, 0.5);
-        assert_eq!(score_stale.suggested_state, LifecycleState::Stale);
+        assert_eq!(
+            score.suggested_state,
+            decide_lifecycle_state(&memory, score.calculated_at, &LifecycleConfig::default())
+        );
+    }
 
-        // Very old with very low engagement = archived
-        let archived = create_test_memory(3, 0.1, 0, 100);
-        let score_archived = calculator.calculate(&archived, 0.1);
-        assert_eq!(score_archived.suggested_state, LifecycleState::Archived);
+    #[test]
+    fn test_salience_decay_records_history_without_lifecycle_transition() {
+        use crate::storage::queries::create_memory;
+        use crate::storage::Storage;
+        use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
+        use chrono::Duration;
+
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        let old_ts = (Utc::now() - Duration::days(100)).to_rfc3339();
+        let memory_id = storage
+            .with_transaction(|conn| {
+                let memory = create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "old salience memory".to_string(),
+                        memory_type: MemoryType::Note,
+                        importance: Some(0.0),
+                        workspace: Some("default".to_string()),
+                        tier: MemoryTier::Permanent,
+                        ..Default::default()
+                    },
+                )?;
+                conn.execute(
+                    "UPDATE memories
+                     SET created_at = ?1,
+                         updated_at = ?1,
+                         last_accessed_at = ?1,
+                         access_count = 0,
+                         lifecycle_state = 'active'
+                     WHERE id = ?2",
+                    params![old_ts, memory.id],
+                )?;
+                Ok(memory.id)
+            })
+            .expect("seed old memory");
+
+        let result = storage
+            .with_transaction(|conn| {
+                run_salience_decay_in_workspace(
+                    conn,
+                    &SalienceConfig::default(),
+                    true,
+                    Some("default"),
+                )
+            })
+            .expect("run salience decay");
+
+        assert_eq!(result.processed, 1);
+        assert_eq!(result.marked_stale, 0);
+        assert_eq!(result.suggested_archive, 0);
+        assert_eq!(result.history_records, 1);
+
+        let state = storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT lifecycle_state FROM memories WHERE id = ?1",
+                    params![memory_id],
+                    |row| row.get::<_, String>(0),
+                )?)
+            })
+            .expect("query lifecycle state");
+        assert_eq!(state, "active");
     }
 
     #[test]
