@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-27-lifecycle-predicate-unification-design.md`
 
-**Review Evidence:** `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-chair-v3.md` (`REVIEW_VERDICT: PASS`).
+**Review Evidence:** Codex v3 returned PASS in `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex-v3.md`. `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-chair-v3.md` records a provenance correction: the Grok artifact is invalid because the CLI was not authenticated. If the process requires two independent reviewers, run a real second reviewer before implementation.
 
 ---
 
@@ -718,4 +718,4 @@ If implementation causes unacceptable behavior:
 - Public MCP metadata no longer advertises deprecated lifecycle side effects or `min_importance`/`min_access_count` lifecycle thresholds.
 - `docs/MCP_TOOLS.md` is regenerated and `./scripts/generate-mcp-reference.sh --check` passes.
 - No schema migration; `SCHEMA_VERSION` remains 44.
-- Cross-model post-implementation review returns PASS.
+- Post-implementation review returns PASS from the required authenticated reviewer set; do not count unauthenticated Grok output as review evidence.

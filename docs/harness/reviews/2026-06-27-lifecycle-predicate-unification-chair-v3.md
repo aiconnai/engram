@@ -1,21 +1,39 @@
-REVIEW_VERDICT: PASS corrected lifecycle predicate spec is safe to turn into an implementation plan
+REVIEW_VERDICT: PENDING Codex PASS only; Grok artifact invalid because CLI was not authenticated
 
-# Chair synthesis — lifecycle predicate unification re-review v3
+# Chair note — lifecycle predicate unification re-review v3 provenance correction
 
 Date: 2026-06-27
 Artifacts:
 - Codex: `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex-v3.md`
-- Grok substitute: `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-grok-v3.md`
+- Invalid/non-review artifact: `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-grok-v3.md`
 - Prompt: `docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-prompt.md`
 - Spec: `docs/superpowers/specs/2026-06-27-lifecycle-predicate-unification-design.md`
 
-## Council result
+## Provenance correction
 
-- Codex: **PASS** — scheduler/compression blocker fixed; safe for implementation plan with one metadata cleanup gap.
-- Grok substitute: **PASS** — writer inventory complete; convergence/disarm decisions safe to implement.
-- Chair decision: **PASS**. The re-review v2 blocker is fixed: the optional server compression scheduler path (`server.rs` -> `compress_old_memories` -> `retention.rs:312`) is now explicitly modeled and disarmed as a lifecycle writer.
+The earlier version of this Chair artifact incorrectly counted the Grok output as a
+second reviewer. That was wrong: the local `grok` CLI existed on PATH, but it was
+not authenticated/covered by an active subscription in this environment. Therefore
+`docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-grok-v3.md` is an
+invalid review artifact and must not be used as evidence that an independent
+reviewer confirmed the design.
 
-## Load-bearing confirmations
+## Valid evidence retained
+
+- Codex v3 returned **PASS**: the scheduler/compression blocker is fixed and the
+  spec is safe for implementation planning with one metadata cleanup gap.
+- The Codex MED finding about `lifecycle_config` public metadata was incorporated
+  into the spec draft after the Codex review.
+
+## Current gate state
+
+- **Not a completed multi-review council.** Only Codex v3 is valid evidence.
+- The spec is improved and has a valid Codex PASS, but any process requirement for
+  two independent reviewers remains open until a real second reviewer (for example
+  Fugu/Sakana, Gemini, or another authenticated reviewer) runs the prompt.
+- Do not summarize this state as "PASS in three axes" or "Codex + Grok confirmed".
+
+## Load-bearing Codex-confirmed points
 
 1. Writer inventory now includes all converging decay/compression lifecycle paths:
    `lifecycle_run`, `run_salience_decay`, `memory_decay`, `memory_archive_old`, and
@@ -29,7 +47,7 @@ Artifacts:
 4. Retention auto-delete remains an accepted explicit-policy boundary with
    creation-age semantics and no zero-migration break.
 
-## Minor findings incorporated after PASS
+## Minor findings incorporated after Codex PASS
 
 - Added `lifecycle_config` public metadata cleanup for `min_importance` and
   `min_access_count` alongside `lifecycle_run.min_importance`.
@@ -38,13 +56,6 @@ Artifacts:
   the final lifecycle UPDATE is insufficient.
 - Added rollout-note requirement for the retention auto-delete interaction.
 
-## Residual implementation-plan cautions
-
-- Public docs/registry metadata cleanup is high priority during implementation.
-- `memory_archive_old` and `compress_old_memories` will shrink in behavior until a
-  follow-up compression surface exists; this is accepted by the spec to preserve
-  single-writer lifecycle semantics.
-- Fugu/Sakana CLI was unavailable in this environment; Grok was used as the second
-  local model-family reviewer, with Codex as the cross-model reviewer.
-
-Next step: owner review/commit of the docs-only spec, then invoke `writing-plans`.
+Next step: run a real second reviewer if the process still requires cross-model
+council parity; otherwise treat the current evidence as Codex-only PASS plus owner
+approval.

@@ -2,13 +2,13 @@
 
 Date: 2026-06-27
 Owner: Ronaldo (decisions) + agent (drafting)
-Status: Cross-model re-review v3 PASS — minor findings incorporated, ready for implementation plan
+Status: Codex re-review v3 PASS — Grok artifact invalid; pending real second-reviewer decision
 Supersedes: `docs/superpowers/specs/2026-06-26-stability-spacing-effect-design.md`
 
 ## Summary
 
-Engram has **multiple writers** of `memories.lifecycle_state`. Cross-model review
-found **four MCP-facing decay-policy/compression tools plus one optional server
+Engram has **multiple writers** of `memories.lifecycle_state`. Review found
+**four MCP-facing decay-policy/compression tools plus one optional server
 compression scheduler path**, each currently capable of applying a divergent
 lifecycle transition. In production, lifecycle-derived state has not transitioned
 (1,179 memories: `archived=0`, `stale=0`) because the lifecycle tool is manual and
