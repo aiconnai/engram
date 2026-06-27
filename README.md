@@ -357,7 +357,8 @@ engram-cli salience top --limit 10
 engram-cli salience boost 42
 ```
 
-Salience decays over time, transitioning memories through lifecycle states: Active -> Stale -> Archived.
+Salience decays over time for scoring and history. Lifecycle transitions
+(`Active -> Stale -> Archived`) are decided by `lifecycle_run`.
 
 ### Context Quality
 

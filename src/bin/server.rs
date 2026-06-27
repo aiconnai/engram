@@ -748,9 +748,12 @@ fn main() -> Result<()> {
                         conn, max_age, max_imp, min_acc, 100, // batch limit per cycle
                     )
                 }) {
-                    Ok(archived) => {
-                        if archived > 0 {
-                            tracing::info!("Compression scheduler archived {} memories", archived);
+                    Ok(compressed) => {
+                        if compressed > 0 {
+                            tracing::info!(
+                                "Compression scheduler compressed {} archived memories",
+                                compressed
+                            );
                         }
                     }
                     Err(e) => {

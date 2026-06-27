@@ -83,7 +83,7 @@ Total tools: **278**
 | `context_budget_check` | advanced | readOnlyHint | `budget`, `memory_ids`, `model` |
 | `pending_injections_count` | advanced | readOnlyHint | none |
 | `pending_injections_cleanup` | advanced | destructiveHint | none |
-| `memory_archive_old` | advanced | destructiveHint | none |
+| `memory_archive_old` | advanced | mutating (no MCP hints) | none |
 | `memory_from_trace` | advanced | mutating (no MCP hints) | `trace_id` |
 | `lifecycle_status` | standard | readOnlyHint | none |
 | `lifecycle_run` | standard | idempotentHint | none |
@@ -98,7 +98,7 @@ Total tools: **278**
 | `salience_set_importance` | advanced | mutating (no MCP hints) | `id`, `importance` |
 | `salience_boost` | advanced | mutating (no MCP hints) | `id` |
 | `salience_demote` | advanced | mutating (no MCP hints) | `id` |
-| `salience_decay_run` | advanced | destructiveHint | none |
+| `salience_decay_run` | advanced | mutating (no MCP hints) | none |
 | `salience_stats` | advanced | readOnlyHint | none |
 | `salience_history` | advanced | readOnlyHint | `id` |
 | `salience_top` | advanced | readOnlyHint | none |
@@ -822,7 +822,7 @@ Reinforce a memory's policy record, optionally promoting a Daily-tier memory to 
 
 ### `memory_decay`
 
-Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply only updates memory_policy scores and active lifecycle transitions.
+Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply updates memory_policy scores only. Use lifecycle_run for lifecycle_state transitions.
 
 - Tier: `standard`
 - Annotations: mutating (no MCP hints)
@@ -1281,19 +1281,19 @@ Drop every pending_injections row whose expires_at has passed. Idempotent. Retur
 
 ### `memory_archive_old`
 
-Archive old, low-importance memories by creating summaries. Moves originals to archived state.
+Compress already-Archived memories by creating summary rows. Does not move originals to archived state; use lifecycle_run for lifecycle transitions.
 
 - Tier: `advanced`
-- Annotations: destructiveHint
+- Annotations: mutating (no MCP hints)
 - Required inputs: none
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| `max_age_days` | `integer` | no | Archive memories older than this many days Default: `90`. |
-| `max_importance` | `number` | no | Only archive memories with importance below this Default: `0.5`. |
-| `min_access_count` | `integer` | no | Skip memories accessed more than this many times Default: `5`. |
+| `max_age_days` | `integer` | no | Compress archived memories older than this many days Default: `90`. |
+| `max_importance` | `number` | no | Only compress already-Archived memories with importance below this Default: `0.5`. |
+| `min_access_count` | `integer` | no | Skip already-Archived memories accessed more than this many times Default: `5`. |
 | `workspace` | `string` | no | Limit to specific workspace |
-| `dry_run` | `boolean` | no | If true, only report what would be archived Default: `true`. |
+| `dry_run` | `boolean` | no | If true, only report what would be compressed Default: `true`. |
 
 ### `memory_from_trace`
 
@@ -1324,7 +1324,7 @@ Get lifecycle statistics (active/stale/archived counts by workspace).
 
 ### `lifecycle_run`
 
-Manually trigger a lifecycle cycle (mark stale, archive old). Dry run by default.
+Run the canonical lifecycle predicate to mark stale and archive idle memories. Dry run by default; this is the only decay-derived lifecycle writer.
 
 - Tier: `standard`
 - Annotations: idempotentHint
@@ -1334,9 +1334,10 @@ Manually trigger a lifecycle cycle (mark stale, archive old). Dry run by default
 |-------|------|----------|---------|
 | `dry_run` | `boolean` | no | Preview changes without applying Default: `true`. |
 | `workspace` | `string` | no | Limit to specific workspace |
-| `stale_days` | `integer` | no | Mark memories older than this as stale Default: `30`. |
-| `archive_days` | `integer` | no | Archive memories older than this Default: `90`. |
-| `min_importance` | `number` | no | Only process memories below this importance Default: `0.5`. |
+| `stale_days` | `integer` | no | Base idle days before marking as stale Default: `30`. |
+| `archive_days` | `integer` | no | Base idle days before archiving Default: `90`. |
+| `hard_idle_cap_days` | `integer` | no | Absolute idle-day cap before archiving Default: `365`. |
+| `max_importance_mult` | `number` | no | Maximum multiplier by which importance extends stale/archive windows Default: `4.0`. |
 
 ### `memory_set_lifecycle`
 
@@ -1353,7 +1354,7 @@ Manually set the lifecycle state of a memory.
 
 ### `lifecycle_config`
 
-Get or set lifecycle configuration (intervals, thresholds).
+Get lifecycle predicate configuration defaults and optional overrides.
 
 - Tier: `advanced`
 - Annotations: readOnlyHint
@@ -1361,14 +1362,14 @@ Get or set lifecycle configuration (intervals, thresholds).
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| `stale_days` | `integer` | no | Days before marking as stale |
-| `archive_days` | `integer` | no | Days before auto-archiving |
-| `min_importance` | `number` | no | Importance threshold for lifecycle |
-| `min_access_count` | `integer` | no | Access count threshold |
+| `stale_days` | `integer` | no | Base idle days before marking as stale |
+| `archive_days` | `integer` | no | Base idle days before archiving |
+| `hard_idle_cap_days` | `integer` | no | Absolute idle-day cap before archiving |
+| `max_importance_mult` | `number` | no | Maximum multiplier by which importance extends stale/archive windows |
 
 ### `retention_policy_set`
 
-Set a retention policy for a workspace. Controls auto-compression, max memory count, and auto-deletion.
+Set a retention policy for a workspace. Controls compression of already-Archived memories, max memory count, and auto-deletion.
 
 - Tier: `standard`
 - Annotations: mutating (no MCP hints)
@@ -1379,8 +1380,8 @@ Set a retention policy for a workspace. Controls auto-compression, max memory co
 | `workspace` | `string` | yes | Workspace name |
 | `max_age_days` | `integer` | no | Hard age limit — auto-delete after this many days |
 | `max_memories` | `integer` | no | Maximum active memories in this workspace |
-| `compress_after_days` | `integer` | no | Auto-compress memories older than this |
-| `compress_max_importance` | `number` | no | Only compress memories with importance <= this (default 0.3) |
+| `compress_after_days` | `integer` | no | Compress already-Archived memories older than this |
+| `compress_max_importance` | `number` | no | Only compress already-Archived memories with importance <= this (default 0.3) |
 | `compress_min_access` | `integer` | no | Skip compression if access_count >= this (default 3) |
 | `auto_delete_after_days` | `integer` | no | Auto-delete archived memories older than this |
 | `exclude_types` | `array` | no | Memory types exempt from policy (e.g. ["decision", "checkpoint"]) Items: `string`. |
@@ -1489,19 +1490,17 @@ Demote a memory's salience score. Useful for marking memories as less relevant.
 
 ### `salience_decay_run`
 
-Run temporal decay on all memories. Updates lifecycle states (Active → Stale → Archived) based on salience scores.
+Run salience score decay and optionally record salience history. Does not update lifecycle_state; use lifecycle_run for lifecycle transitions.
 
 - Tier: `advanced`
-- Annotations: destructiveHint
+- Annotations: mutating (no MCP hints)
 - Required inputs: none
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| `dry_run` | `boolean` | no | If true, compute changes without persisting updates Default: `false`. |
+| `dry_run` | `boolean` | no | If true, compute score/history changes without persisting updates Default: `false`. |
 | `record_history` | `boolean` | no | Record salience history entries while updating Default: `true`. |
 | `workspace` | `string` | no | Limit to specific workspace |
-| `stale_threshold_days` | `integer` | no | Days of inactivity before marking stale Minimum: `1`. |
-| `archive_threshold_days` | `integer` | no | Days of inactivity before suggesting archive Minimum: `1`. |
 
 ### `salience_stats`
 

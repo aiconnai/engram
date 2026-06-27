@@ -71,7 +71,7 @@ Keep context windows manageable without losing important information.
 - `memory_summarize`: create summary from multiple memories
 - `memory_soft_trim`: preserve head (60%) + tail (30%) with ellipsis
 - `context_budget_check`: token counting via tiktoken-rs
-- `memory_archive_old`: batch archive low-importance memories
+- `memory_archive_old`: compress already-archived low-importance memories
 
 ### Phase 3: Langfuse Integration (v0.3.0)
 
@@ -120,7 +120,7 @@ Offload search to Meilisearch for larger deployments.
 Dynamic memory prioritization based on multiple signals.
 
 - Formula: `Salience = (Recency * 0.3) + (Frequency * 0.2) + (Importance * 0.3) + (Feedback * 0.2)`
-- Temporal decay transitions memories through lifecycle states
+- Salience decay updates score/history signals; `lifecycle_run` owns lifecycle transitions
 - Session context: conversation-scoped memory tracking with relevance scoring
 - 17 new MCP tools
 - Schema v14: `salience_history`, `session_memories` tables

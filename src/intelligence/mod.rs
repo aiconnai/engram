@@ -37,6 +37,7 @@ pub mod entities;
 pub mod entity_extraction;
 pub mod fact_extraction;
 pub mod gardening;
+pub mod lifecycle;
 pub mod memory_policy;
 pub mod memory_update;
 pub mod natural_language;
@@ -114,6 +115,8 @@ pub use fact_extraction::{
     create_fact, delete_facts_for_memory, get_fact_graph, list_facts, ConversationProcessor,
     ExtractedFact, Fact, FactExtractor, RuleBasedExtractor, CREATE_FACTS_TABLE,
 };
+
+pub use lifecycle::{decide_lifecycle_state, normalized_importance, LifecycleConfig};
 
 // Phase 9: Context Quality (ENG-48 to ENG-66)
 pub use context_quality::{
