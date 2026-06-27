@@ -140,7 +140,7 @@ async with EngramClient(base_url="...", api_key="...", tenant="...") as client:
 | Method | Description |
 |--------|-------------|
 | `related(memory_id)` | Get related memories via knowledge graph |
-| `link(from_id, to_id, edge_type)` | Create a link between two memories |
+| `link(from_id, to_id, edge_type="related_to")` | Create a link between two memories |
 | `detect_conflicts(**kwargs)` | Detect conflicting or contradictory memories |
 | `resolve_conflict(conflict_id, resolution)` | Resolve a detected memory conflict |
 | `coactivation_report(**kwargs)` | Report frequently co-accessed memories |
