@@ -13,12 +13,19 @@
 # Called manually at session start per AGENTS.md / Claude.md.
 # Later can be wired to session_start hook or MCP tool.
 
-set -uo pipefail
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd 2>/dev/null || echo .)"
 cd "$REPO_ROOT" 2>/dev/null || true
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo docs/harness/bin)"
+if [ -f "$BIN_DIR/lib.sh" ]; then
+  source "$BIN_DIR/lib.sh"
+else
+  field_value() {
+    printf ''
+  }
+fi
 
 echo "=== engram harness state ==="
 

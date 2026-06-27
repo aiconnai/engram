@@ -1,0 +1,476 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: harness-12207-wave0
+**Mode**: post
+**Date (UTC)**: 2026-06-26
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+Harness script changes detected:
+- docs/harness/bin/bootstrap.sh
+- docs/harness/bin/doctor.sh
+- docs/harness/bin/lib.sh
+- docs/harness/bin/sensors.sh
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/README.md b/README.md
+index cd273a4..256c884 100644
+--- a/README.md
++++ b/README.md
+@@ -59,0 +60 @@ than first-party adapters in this repository.
++- [User guide](docs/USER_GUIDE.md)
+diff --git a/docs/README.md b/docs/README.md
+index 5e760d1..0fa4b25 100644
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -9,0 +10 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
++- `USER_GUIDE.md`: User-facing instructions for installing, connecting, and using Engram.
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index 59b508c..d2196c9 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -5 +5,2 @@ mode=full
+-timestamp=2026-06-22T03:15:08Z
++timestamp=2026-06-26T00:12:05Z
++duration_sec=26
+diff --git a/docs/harness/GATES.md b/docs/harness/GATES.md
+index 0c95f48..46645d3 100644
+--- a/docs/harness/GATES.md
++++ b/docs/harness/GATES.md
+@@ -25 +25,3 @@ Ele executa (em ordem):
+-| 7 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
++| 7 | shell syntax | `doctor.sh` executa `bash -n` nos scripts do harness | block; corrigir sintaxe shell |
++| 8 | shellcheck opcional | `doctor.sh` executa `shellcheck` nos scripts quando o binário está instalado | block se instalado e falhar; skip explícito se ausente |
++| 9 | (opcional/extensível) | snapshot tests, property tests, embedding cache bounds, etc. | block conforme threshold |
+@@ -27 +29,25 @@ Ele executa (em ordem):
+-O script `sensors.sh` grava o resultado parseável em `docs/harness/.sensors-last` (status, timestamp, exclusões, etc.).
++O script `sensors.sh` grava o resultado parseável mais recente em
++`docs/harness/.sensors-last` (status, timestamp, `duration_sec`, exclusões,
++etc.) e também anexa cada execução em `docs/harness/.sensors-log` para histórico
++de medição.
++
++### Sensors measurement log
++
++`docs/harness/.sensors-log` é JSON Lines append-only e usa
++`schema_version="sensors-log-v1"`. Cada linha deve conter:
++
++- `timestamp` — UTC RFC3339 do fim da execução.
++- `tool` — sempre `sensors`.
++- `mode` — `full`, `quick`, `docs`, `mcp` ou `baseline`.
++- `status` — `pass`, `pass_with_exclusion` ou `fail`.
++- `duration_sec` — duração inteira não negativa.
++- `ci_status` e `doctor_status` — status das duas camadas principais.
++- `ci_command` — resumo curto do comando executado, sem logs brutos.
++- `exclusion` — `null` ou `{sensor, known_issue, reason}`.
++- `artifacts` — inclui `docs/harness/.sensors-last` como estado leve atual.
++
++Rotação: antes de anexar uma nova linha, `sensors.sh` rotaciona o arquivo quando
++ele atinge `SENSORS_LOG_MAX_BYTES` (padrão: `1048576`) e mantém
++`SENSORS_LOG_ROTATIONS` gerações (padrão: `5`), como
++`.sensors-log.1`, `.sensors-log.2`, etc. `doctor.sh` valida o JSONL quando o
++arquivo existe.
+diff --git a/docs/harness/JSON_OUTPUTS.md b/docs/harness/JSON_OUTPUTS.md
+index 5d1050d..40e6187 100644
+--- a/docs/harness/JSON_OUTPUTS.md
++++ b/docs/harness/JSON_OUTPUTS.md
+@@ -170,2 +170,3 @@ Artifact rules:
+-the full harness gate. It remains supported for compatibility, but it is not the
+-general JSON contract.
++the full harness gate. `docs/harness/.sensors-log` is the append-only historical
++measurement log. `.sensors-last` remains supported for compatibility, but it is
++not the general JSON contract.
+@@ -176 +177,3 @@ Migration path:
+-2. Add a JSON status surface that translates `.sensors-last` into the common
++2. Append each completed run to `.sensors-log` using JSON Lines with
++   `schema_version="sensors-log-v1"`.
++3. Add a JSON status surface that translates `.sensors-last` into the common
+@@ -178 +181 @@ Migration path:
+-3. For full gate runs, either support `sensors.sh --json` directly or emit a JSON
++4. For full gate runs, either support `sensors.sh --json` directly or emit a JSON
+@@ -180 +183 @@ Migration path:
+-4. Do not require automation to scrape human `sensors.sh` output once a JSON
++5. Do not require automation to scrape human `sensors.sh` output once a JSON
+@@ -194,0 +198,17 @@ Suggested `sensors` fields:
++Suggested `.sensors-log` fields:
++
++- `schema_version`: `sensors-log-v1`
++- `timestamp`: UTC RFC3339 timestamp at the end of the run
++- `tool`: `sensors`
++- `mode`: selected lane
++- `status`: `pass`, `pass_with_exclusion`, or `fail`
++- `duration_sec`: non-negative integer duration
++- `ci_status` and `doctor_status`: status of the two main gate layers
++- `ci_command`: short command label, not raw output
++- `exclusion`: `null` or a short `{sensor, known_issue, reason}` object
++- `artifacts`: repo-relative artifact pointers
++
++Rotation is part of the log contract. `sensors.sh` rotates `.sensors-log` before
++append when it reaches `SENSORS_LOG_MAX_BYTES` (default `1048576`) and keeps
++`SENSORS_LOG_ROTATIONS` generations (default `5`).
++
+diff --git a/docs/harness/bin/bootstrap.sh b/docs/harness/bin/bootstrap.sh
+index b5fd535..8734752 100755
+--- a/docs/harness/bin/bootstrap.sh
++++ b/docs/harness/bin/bootstrap.sh
+@@ -16 +16 @@
+-set -uo pipefail
++set -euo pipefail
+@@ -21 +21,8 @@ cd "$REPO_ROOT" 2>/dev/null || true
+-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
++BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo docs/harness/bin)"
++if [ -f "$BIN_DIR/lib.sh" ]; then
++  source "$BIN_DIR/lib.sh"
++else
++  field_value() {
++    printf ''
++  }
++fi
+diff --git a/docs/harness/bin/doctor.sh b/docs/harness/bin/doctor.sh
+index afbda56..e45b6a0 100755
+--- a/docs/harness/bin/doctor.sh
++++ b/docs/harness/bin/doctor.sh
+@@ -227,0 +228,22 @@ require_exec() {
++require_bash_syntax() {
++  local path="$1"
++  if bash -n "$path" >/dev/null 2>&1; then
++    add_check "bash_syntax:$path" "pass" "bash syntax is valid" "$path"
++  else
++    fail "bash syntax invalid: $path" "bash_syntax:$path" "$path"
++  fi
++}
++
++check_shellcheck() {
++  local path="$1"
++  if ! command -v shellcheck >/dev/null 2>&1; then
++    add_check "shellcheck:$path" "skipped" "shellcheck is not installed" "$path"
++    return 0
++  fi
++  if shellcheck "$path" >/dev/null 2>&1; then
++    add_check "shellcheck:$path" "pass" "shellcheck passed" "$path"
++  else
++    fail "shellcheck failed: $path" "shellcheck:$path" "$path"
++  fi
++}
++
+@@ -285,3 +307,25 @@ require_exec docs/harness/bin/pr-title-policy.sh
+-[ -f docs/harness/bin/sensors.sh ] && require_exec docs/harness/bin/sensors.sh || true
+-[ -f docs/harness/bin/review-gate.sh ] && require_exec docs/harness/bin/review-gate.sh || true
+-[ -f docs/harness/bin/check-commit-msg.sh ] && require_exec docs/harness/bin/check-commit-msg.sh || true
++SCRIPT_PATHS=(
++  docs/harness/bin/bootstrap.sh
++  docs/harness/bin/doctor.sh
++  docs/harness/bin/baseline.sh
++  docs/harness/bin/quarterly-audit.sh
++  docs/harness/bin/check-pr-title.sh
++  docs/harness/bin/pr-title-policy.sh
++)
++OPTIONAL_SCRIPT_PATHS=(
++  docs/harness/bin/sensors.sh
++  docs/harness/bin/review-gate.sh
++  docs/harness/bin/check-commit-msg.sh
++  docs/harness/bin/vc-gate.sh
++  docs/harness/bin/lib.sh
++)
++for script_path in "${OPTIONAL_SCRIPT_PATHS[@]}"; do
++  if [ -f "$script_path" ]; then
++    require_exec "$script_path"
++    SCRIPT_PATHS+=("$script_path")
++  fi
++done
++for script_path in "${SCRIPT_PATHS[@]}"; do
++  require_bash_syntax "$script_path"
++  check_shellcheck "$script_path"
++done
+@@ -659,0 +704,55 @@ fi
++if [ -f docs/harness/.sensors-log ]; then
++  if command -v python3 >/dev/null 2>&1; then
++    if SENSORS_LOG_ERROR="$(python3 - docs/harness/.sensors-log 2>&1 <<'PY'
++import json
++import sys
++from pathlib import Path
++
++path = Path(sys.argv[1])
++required = {
++    "schema_version",
++    "timestamp",
++    "tool",
++    "mode",
++    "status",
++    "duration_sec",
++    "ci_status",
++    "doctor_status",
++    "ci_command",
++    "artifacts",
++}
++allowed_status = {"pass", "pass_with_exclusion", "fail"}
++lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
++if not lines:
++    raise SystemExit("empty JSONL log")
++for index, line in enumerate(lines, start=1):
++    try:
++        item = json.loads(line)
++    except json.JSONDecodeError as exc:
++        raise SystemExit(f"line {index}: invalid JSON: {exc}") from exc
++    missing = sorted(required - item.keys())
++    if missing:
++        raise SystemExit(f"line {index}: missing keys: {', '.join(missing)}")
++    if item["schema_version"] != "sensors-log-v1":
++        raise SystemExit(f"line {index}: unexpected schema_version={item['schema_version']!r}")
++    if item["tool"] != "sensors":
++        raise SystemExit(f"line {index}: unexpected tool={item['tool']!r}")
++    if item["status"] not in allowed_status:
++        raise SystemExit(f"line {index}: unexpected status={item['status']!r}")
++    if not isinstance(item["duration_sec"], int) or item["duration_sec"] < 0:
++        raise SystemExit(f"line {index}: duration_sec must be a non-negative integer")
++    if not isinstance(item["artifacts"], list):
++        raise SystemExit(f"line {index}: artifacts must be an array")
++PY
++)"; then
++      add_check "sensors_log:format" "pass" ".sensors-log has parseable sensors-log-v1 JSONL" "docs/harness/.sensors-log"
++    else
++      fail ".sensors-log is not parseable: $SENSORS_LOG_ERROR" "sensors_log:format" "docs/harness/.sensors-log"
++    fi
++  else
++    warn "python3 unavailable; cannot validate .sensors-log JSONL" "sensors_log:format" "docs/harness/.sensors-log"
++  fi
++else
++  warn ".sensors-log missing (run sensors.sh at least once for historical measurements)" "sensors_log:format" "docs/harness/.sensors-log"
++fi
++
+diff --git a/docs/harness/bin/lib.sh b/docs/harness/bin/lib.sh
+index 00007d8..1e9cc81 100755
+--- a/docs/harness/bin/lib.sh
++++ b/docs/harness/bin/lib.sh
+@@ -2,0 +3,2 @@
++set -euo pipefail
++
+@@ -15 +16,0 @@ field_value() {
+-
+diff --git a/docs/harness/bin/sensors.sh b/docs/harness/bin/sensors.sh
+index dd72ed2..f1ce28a 100755
+--- a/docs/harness/bin/sensors.sh
++++ b/docs/harness/bin/sensors.sh
+@@ -64,0 +65,5 @@ CI_OUTPUT=""
++SENSORS_LAST_PATH="docs/harness/.sensors-last"
++SENSORS_LOG_PATH="docs/harness/.sensors-log"
++SENSORS_LOG_MAX_BYTES="${SENSORS_LOG_MAX_BYTES:-1048576}"
++SENSORS_LOG_ROTATIONS="${SENSORS_LOG_ROTATIONS:-5}"
++SENSORS_STARTED_AT="$SECONDS"
+@@ -80,0 +86,2 @@ repo_snapshot_path = "docs/harness/.sensors-last"
++log_path = repo_root / "docs/harness/.sensors-log"
++repo_log_path = "docs/harness/.sensors-log"
+@@ -111,0 +119,8 @@ else:
++if log_path.exists():
++    artifacts.append({
++        "path": repo_log_path,
++        "kind": "sensors_log",
++        "format": "jsonl"
++    })
++    add_check("sensors_log:file", "pass", ".sensors-log exists", repo_log_path)
++
+@@ -172,0 +188 @@ payload = {
++    "log_path": repo_log_path if log_path.exists() else "",
+@@ -186,0 +203,77 @@ PY
++json_escape() {
++  local value="$1"
++  value="${value//\\/\\\\}"
++  value="${value//\"/\\\"}"
++  value="${value//$'\n'/\\n}"
++  value="${value//$'\r'/\\r}"
++  value="${value//$'\t'/\\t}"
++  printf '%s' "$value"
++}
++
++sensors_duration_sec() {
++  printf '%s' "$((SECONDS - SENSORS_STARTED_AT))"
++}
++
++rotate_sensors_log() {
++  local max_bytes="$SENSORS_LOG_MAX_BYTES"
++  local rotations="$SENSORS_LOG_ROTATIONS"
++  local size=""
++  local i=""
++
++  case "$max_bytes" in
++    ''|*[!0-9]*) max_bytes=1048576 ;;
++  esac
++  case "$rotations" in
++    ''|*[!0-9]*) rotations=5 ;;
++  esac
++  if [ "$rotations" -lt 1 ]; then
++    rotations=1
++  fi
++  if [ ! -f "$SENSORS_LOG_PATH" ]; then
++    return 0
++  fi
++
++  size="$(wc -c < "$SENSORS_LOG_PATH" | tr -d ' ')"
++  if [ "${size:-0}" -lt "$max_bytes" ]; then
++    return 0
++  fi
++
++  i=$((rotations - 1))
++  while [ "$i" -ge 1 ]; do
++    if [ -f "${SENSORS_LOG_PATH}.${i}" ]; then
++      mv "${SENSORS_LOG_PATH}.${i}" "${SENSORS_LOG_PATH}.$((i + 1))"
++    fi
++    i=$((i - 1))
++  done
++  mv "$SENSORS_LOG_PATH" "${SENSORS_LOG_PATH}.1"
++  rm -f "${SENSORS_LOG_PATH}.$((rotations + 1))"
++}
++
++append_sensors_log() {
++  local status="$1"
++  local ci_status="$2"
++  local doctor_status="$3"
++  local mode="$4"
++  local ci_label="$5"
++  local timestamp="$6"
++  local duration_sec="$7"
++  local exclusion_json="null"
++
++  rotate_sensors_log
++
++  if [ -n "$EXCLUDE_SENSOR" ] || [ -n "$KNOWN_ISSUE" ] || [ -n "$EXCLUSION_REASON" ]; then
++    exclusion_json="{\"sensor\":\"$(json_escape "$EXCLUDE_SENSOR")\",\"known_issue\":\"$(json_escape "$KNOWN_ISSUE")\",\"reason\":\"$(json_escape "$EXCLUSION_REASON")\"}"
++  fi
++
++  printf '{"schema_version":"sensors-log-v1","timestamp":"%s","tool":"sensors","mode":"%s","status":"%s","duration_sec":%s,"ci_status":"%s","doctor_status":"%s","ci_command":"%s","exclusion":%s,"artifacts":[{"path":"%s","kind":"sensors_last","format":"key_value"}]}\n' \
++    "$(json_escape "$timestamp")" \
++    "$(json_escape "$mode")" \
++    "$(json_escape "$status")" \
++    "$duration_sec" \
++    "$(json_escape "$ci_status")" \
++    "$(json_escape "$doctor_status")" \
++    "$(json_escape "$ci_label")" \
++    "$exclusion_json" \
++    "$SENSORS_LAST_PATH" >> "$SENSORS_LOG_PATH"
++}
++
+@@ -192,0 +286,5 @@ write_sensors_last() {
++  local timestamp=""
++  local duration_sec=""
++
++  timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
++  duration_sec="$(sensors_duration_sec)"
+@@ -199 +297,2 @@ write_sensors_last() {
+-    echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
++    echo "timestamp=$timestamp"
++    echo "duration_sec=$duration_sec"
+@@ -205 +304,3 @@ write_sensors_last() {
+-  } > docs/harness/.sensors-last
++  } > "$SENSORS_LAST_PATH"
++
++  append_sensors_log "$status" "$ci_status" "$doctor_status" "$mode" "$ci_label + harness doctor" "$timestamp" "$duration_sec"
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 73986a9..59a9f78 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -968,0 +969,38 @@ Verification:
++
++## Harness 12207 Wave 0 measurement hardening — 2026-06-25
++
++- Applied the first ISO/IEC/IEEE 12207 follow-up slice to the operational
++  harness: strict shell failure mode for `bootstrap.sh` and `lib.sh`, plus
++  historical sensor measurement.
++- Preserved `.sensors-last` as the compatibility state file and added
++  `.sensors-log` as JSON Lines history with `schema_version=sensors-log-v1`,
++  `duration_sec`, per-layer statuses, artifact pointers, exclusion metadata, and
++  bounded rotation via `SENSORS_LOG_MAX_BYTES` / `SENSORS_LOG_ROTATIONS`.
++- `doctor.sh` now validates `.sensors-log` when present, runs `bash -n` over
++  harness scripts, and runs optional `shellcheck` when installed.
++- Documented the new measurement contract in `docs/harness/GATES.md` and
++  `docs/harness/JSON_OUTPUTS.md`.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-06-25-harness-12207-wave0.md`.
++
++Verification:
++
++- `bash docs/harness/bin/bootstrap.sh` — PASS, 41 lines.
++- `bash docs/harness/bin/doctor.sh` — PASS.
++- `bash docs/harness/bin/doctor.sh --json | python3 -m json.tool` — PASS,
++  includes `bash_syntax:*`, optional `shellcheck:*`, and `sensors_log:format`
++  checks.
++- `bash docs/harness/bin/sensors.sh status --json | python3 -m json.tool` —
++  PASS, exposes `.sensors-log`.
++- `SENSORS_LOG_MAX_BYTES=1 SENSORS_LOG_ROTATIONS=2 bash docs/harness/bin/sensors.sh baseline`
++  run twice — PASS, proved rotation boundaries; generated rotated artifacts were
++  removed after verification.
++- `bash docs/harness/bin/sensors.sh quick` — PASS.
++- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci` +
++  PR-title policy + harness doctor), recorded in `.sensors-log` with
++  `mode=full`, `status=pass`, `duration_sec=26`.
++- `gemini` external reviewer saved
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-post.md` —
++  `REVIEW_VERDICT: PASS`.
++- `bash docs/harness/bin/review-gate.sh post harness-12207-wave0 --review-file docs/harness/reviews/2026-06-26-harness-12207-wave0-post.md`
++  — PASS.
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

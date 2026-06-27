@@ -39,6 +39,43 @@ Antes de julgar, leia (o prompt do review-gate injeta ou referencia):
 6. Valide cada finding antes de reportar. Se depende de suposições especulativas, contexto ausente ou estado improvável → omita.
 7. Self-review pass: remova findings que não foram introduzidos pelo diff, não têm trigger realista, duplicam outro, ou são melhor deixados para formatter/linter/compiler.
 
+## Perspectivas de Review
+
+Use estas perspectivas como lentes locais do Engram para evitar review
+unidimensional. Elas não aumentam o limite de findings; cada problema reportado
+continua exigindo evidência concreta no diff.
+
+1. **Bug e edge cases** — entradas adversas, estados vazios, concorrência,
+   ordering, timeouts, retries e caminhos de erro.
+2. **Segurança e privacidade** — vazamento de conteúdo proprietário, segredos,
+   credenciais, egress, prompts não confiáveis, hooks e multimodal.
+3. **Contrato e compatibilidade** — MCP wire format, tool signatures, storage
+   invariants, SDKs Python/TypeScript, CLI/API pública e compatibilidade
+   retroativa.
+4. **Testes e verificabilidade** — cobertura do comportamento alterado,
+   sensores corretos, golden/reference updates e ausência de falso verde.
+5. **Manutenibilidade e operação** — complexidade de hot path, ownership,
+   observabilidade, mensagens de erro, documentação operacional e rollback.
+6. **Drift histórico e memória canônica** — alinhamento com `progress.md`,
+   active plan, decisões anteriores, `ERRORS_AND_LESSONS.md` e padrões já
+   adotados no código.
+
+Para diffs em `docs/harness/**`, priorize especialmente segurança/processo,
+escopo negativo, verificabilidade, drift histórico e risco de enfraquecer gates.
+
+## Fontes Externas e Boundary de Licença
+
+Kits externos de workflow de agentes podem ser consultados apenas como fontes de
+padrões de alto nível. O `NeoLabHQ/context-engineering-kit` é tratado pelo
+Engram como referência externa, não como dependência, vendor, marketplace ou
+substituto do harness local.
+
+Como boundary conservador: se uma fonte externa estiver sob GPL-3.0 ou outra
+licença copyleft, não copie prompts, comandos, checklists, scripts, docs ou
+texto para o Engram sem revisão explícita de licença. Adaptações aceitas devem
+usar wording próprio do Engram, preservar os gates locais e registrar a decisão
+quando afetar processo do harness.
+
 ## Formato de Finding
 
 Todo finding substantivo deve incluir:
@@ -177,6 +214,22 @@ Flag as `[BLOCKER]` when the change copies licensed text/prompts/scripts,
 weakens local gates, imports autonomous execution, or treats an external source
 as authoritative over Engram invariants, GATES, security boundary, or negative
 scope.
+
+### 12207 lifecycle tailoring
+
+Read the 12207-inspired tailoring checklist in `docs/harness/GATES.md` when a
+change cites `docs/ieee-12207.md`, lifecycle-process standards, or changes how
+Engram plans, verifies, validates, measures, reviews, releases, or maintains
+work.
+
+Flag as `[HIGH]` when the change uses 12207 concepts without local tailoring
+evidence: scope/circumstances, lifecycle area, rationale, risk threshold,
+measurement need, verification-vs-validation evidence, and traceability.
+
+Flag as `[BLOCKER]` when the same gap appears in changes to gates, invariants,
+or process-critical scripts, or when the diff implies ISO/IEC/IEEE 12207
+conformance, imports a standards process as a drop-in pipeline, or copies
+licensed reference wording instead of using Engram-local language.
 
 ### Harness script changes
 

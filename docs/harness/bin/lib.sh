@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 field_value() {
   local file="$1"
   local key="$2"
@@ -12,4 +14,3 @@ field_value() {
     }
   ' "$file" 2>/dev/null || true
 }
-

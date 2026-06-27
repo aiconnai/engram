@@ -1,0 +1,1178 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: mcp-registry-hygiene
+**Mode**: post
+**Date (UTC)**: 2026-06-26
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+Harness script changes detected:
+- docs/harness/bin/bootstrap.sh
+- docs/harness/bin/lib.sh
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/.gitignore b/.gitignore
+index e369749..fe6b02c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -163,0 +164,3 @@ vendor/
++# Licensed local references (pattern sources only; do not distribute)
++/docs/ieee-12207.md
++
+diff --git a/AGENTS.md b/AGENTS.md
+index a809e92..c5e404a 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -40 +40 @@ cargo build --release
+-./target/release/engram-server --mcp
++./target/release/engram-server --transport stdio
+@@ -43 +43 @@ cargo build --release
+-./target/release/engram-server --http --port 8080
++./target/release/engram-server --transport http --http-port 8080
+diff --git a/README.md b/README.md
+index cd273a4..fcbae4f 100644
+--- a/README.md
++++ b/README.md
+@@ -59,0 +60 @@ than first-party adapters in this repository.
++- [User guide](docs/USER_GUIDE.md)
+@@ -164 +165 @@ cd engram && cargo install --path .
+-engram-server --mcp
++engram-server --transport stdio
+@@ -285,5 +286,12 @@ engram-cli search "asynch awiat rust"
+-Isolate memories by project or context:
+-
+-```bash
+-# Create memory in a specific workspace
+-engram-cli create "API keys stored in Vault" --workspace my-project
++Isolate memories by project or context through the MCP tools:
++
++```json
++{
++  "name": "memory_create",
++  "arguments": {
++    "content": "API keys are stored in Vault",
++    "workspace": "my-project",
++    "memory_type": "decision"
++  }
++}
++```
+@@ -291,2 +299,5 @@ engram-cli create "API keys stored in Vault" --workspace my-project
+-# List workspaces
+-engram-cli workspace list
++```json
++{
++  "name": "workspace_list",
++  "arguments": {}
++}
+@@ -302,3 +313,8 @@ Two tiers for different retention needs:
+-```bash
+-# Create a daily memory (expires in 24h)
+-engram-cli create "Current debugging task" --tier daily
++```json
++{
++  "name": "memory_create_daily",
++  "arguments": {
++    "content": "Current debugging task",
++    "workspace": "my-project"
++  }
++}
+@@ -309,5 +325,15 @@ engram-cli create "Current debugging task" --tier daily
+-Store and search conversation transcripts:
+-
+-```bash
+-# Index a conversation session
+-engram-cli session index --session-id chat-123 --messages messages.json
++Store and search conversation transcripts through MCP:
++
++```json
++{
++  "name": "session_index",
++  "arguments": {
++    "session_id": "chat-123",
++    "workspace": "my-project",
++    "messages": [
++      { "role": "user", "content": "How should we handle errors?" },
++      { "role": "assistant", "content": "Use Result with contextual errors." }
++    ]
++  }
++}
++```
+@@ -315,2 +341,9 @@ engram-cli session index --session-id chat-123 --messages messages.json
+-# Search within transcripts
+-engram-cli session search "error handling"
++```json
++{
++  "name": "memory_search",
++  "arguments": {
++    "query": "error handling",
++    "workspace": "my-project",
++    "include_transcripts": true
++  }
++}
+@@ -323,3 +356,10 @@ Link different mentions to canonical identities:
+-```bash
+-# Create identity with aliases
+-engram-cli identity create user:ronaldo --alias "Ronaldo" --alias "@ronaldo"
++```json
++{
++  "name": "identity_create",
++  "arguments": {
++    "canonical_id": "user:ronaldo",
++    "display_name": "Ronaldo",
++    "entity_type": "person",
++    "aliases": ["Ronaldo", "@ronaldo"]
++  }
++}
+@@ -352,3 +392,9 @@ Dynamic memory prioritization based on recency, frequency, importance, and feedb
+-```bash
+-# Get top memories by salience
+-engram-cli salience top --limit 10
++```json
++{
++  "name": "salience_top",
++  "arguments": {
++    "limit": 10,
++    "workspace": "my-project"
++  }
++}
++```
+@@ -356,2 +402,9 @@ engram-cli salience top --limit 10
+-# Boost a memory's salience
+-engram-cli salience boost 42
++```json
++{
++  "name": "salience_boost",
++  "arguments": {
++    "id": 42,
++    "boost_amount": 0.2,
++    "reason": "Relevant to the current debugging task"
++  }
++}
+@@ -366,3 +419,8 @@ Salience decays over time, transitioning memories through lifecycle states: Acti
+-```bash
+-# Quality report for a workspace
+-engram-cli quality report --workspace my-project
++```json
++{
++  "name": "quality_report",
++  "arguments": {
++    "workspace": "my-project"
++  }
++}
++```
+@@ -370,2 +428,8 @@ engram-cli quality report --workspace my-project
+-# Find near-duplicate memories
+-engram-cli quality duplicates
++```json
++{
++  "name": "quality_find_duplicates",
++  "arguments": {
++    "threshold": 0.85,
++    "limit": 100
++  }
++}
+diff --git a/docs/GETTING_STARTED.md b/docs/GETTING_STARTED.md
+index 54927ed..91f5012 100644
+--- a/docs/GETTING_STARTED.md
++++ b/docs/GETTING_STARTED.md
+@@ -116,2 +116,2 @@ engram-cli create "Deploy to staging before production" --type decision --tags "
+-# Create in a specific workspace
+-engram-cli create "User auth flow uses OAuth2" --workspace my-project
++# The CLI writes to the default workspace. Use MCP/HTTP examples below when
++# you need an explicit workspace.
+@@ -171,2 +171,2 @@ engram-cli search "authentcation"
+-# Search in a specific workspace
+-engram-cli search "deploy" --workspace my-project
++# The CLI searches the default workspace. Use MCP/HTTP examples below when
++# you need an explicit workspace.
+@@ -204 +204,2 @@ curl -X POST http://localhost:8080/mcp \
+-Workspaces isolate memories by project or context:
++Workspaces isolate memories by project or context. The CLI uses the default
++workspace; for explicit workspace control, call MCP tools:
+@@ -206,4 +207,10 @@ Workspaces isolate memories by project or context:
+-```bash
+-# Create memories in different workspaces
+-engram-cli create "Use PostgreSQL for this project" --workspace backend-api
+-engram-cli create "React with TypeScript" --workspace frontend-app
++```json
++{
++  "name": "memory_create",
++  "arguments": {
++    "content": "Use PostgreSQL for this project",
++    "workspace": "backend-api",
++    "memory_type": "decision"
++  }
++}
++```
+@@ -211,2 +218,10 @@ engram-cli create "React with TypeScript" --workspace frontend-app
+-# List all workspaces
+-engram-cli workspace list
++```json
++{
++  "name": "memory_create",
++  "arguments": {
++    "content": "React with TypeScript",
++    "workspace": "frontend-app",
++    "memory_type": "context"
++  }
++}
++```
+@@ -214,2 +229,15 @@ engram-cli workspace list
+-# Search within a workspace
+-engram-cli search "database" --workspace backend-api
++```json
++{
++  "name": "workspace_list",
++  "arguments": {}
++}
++```
++
++```json
++{
++  "name": "memory_search",
++  "arguments": {
++    "query": "database",
++    "workspace": "backend-api"
++  }
++}
+@@ -228 +256 @@ Use tiers to control memory lifetime:
+-# Permanent memory (default)
++# Permanent memory in the default workspace
+@@ -229,0 +258 @@ engram-cli create "Architecture: microservices with event sourcing"
++```
+@@ -231,2 +260 @@ engram-cli create "Architecture: microservices with event sourcing"
+-# Daily memory (auto-expires)
+-engram-cli create "Currently debugging the auth flow" --tier daily
++Daily tier and promotion are MCP operations:
+@@ -234,2 +262,16 @@ engram-cli create "Currently debugging the auth flow" --tier daily
+-# Promote a daily memory to permanent before it expires
+-engram-cli promote 42
++```json
++{
++  "name": "memory_create_daily",
++  "arguments": {
++    "content": "Currently debugging the auth flow"
++  }
++}
++```
++
++```json
++{
++  "name": "memory_promote_to_permanent",
++  "arguments": {
++    "id": 42
++  }
++}
+diff --git a/docs/README.md b/docs/README.md
+index 5e760d1..0fa4b25 100644
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -9,0 +10 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
++- `USER_GUIDE.md`: User-facing instructions for installing, connecting, and using Engram.
+diff --git a/docs/USING_ENGRAM_IN_A_REPO.md b/docs/USING_ENGRAM_IN_A_REPO.md
+index 75af81f..efcae20 100644
+--- a/docs/USING_ENGRAM_IN_A_REPO.md
++++ b/docs/USING_ENGRAM_IN_A_REPO.md
+@@ -83 +83 @@ Create `.cursor/mcp.json` in your project repo:
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+@@ -102 +102 @@ Add this server to your Claude Code MCP config:
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+@@ -347 +347 @@ engram-cli model download minilm-l6-v2
+-ENGRAM_EMBEDDING_MODEL=local engram-server --mcp
++ENGRAM_EMBEDDING_MODEL=local engram-server --transport stdio
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index bec6a4e..4b1cc97 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -4,4 +4,4 @@ doctor_status=pass
+-mode=full
+-timestamp=2026-06-26T11:46:55Z
+-duration_sec=32
+-ci=fmt + clippy + test_lib + test_integration + test_integration_watch + doc + ref_check + pr-title-policy + harness doctor
++mode=mcp
++timestamp=2026-06-26T17:58:48Z
++duration_sec=3
++ci=mcp reference + protocol tests + pr-title-policy + harness doctor
+diff --git a/docs/harness/.sensors-log b/docs/harness/.sensors-log
+index 7a65ea8..c320b14 100644
+--- a/docs/harness/.sensors-log
++++ b/docs/harness/.sensors-log
+@@ -8,0 +9,14 @@
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T13:06:27Z","tool":"sensors","mode":"quick","status":"pass","duration_sec":2,"ci_status":"pass","doctor_status":"pass","ci_command":"cargo fmt + cargo check + pr-title-policy + harness doctor","ci_steps":{},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T13:06:56Z","tool":"sensors","mode":"full","status":"pass","duration_sec":27,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:30:03Z","tool":"sensors","mode":"full","status":"pass","duration_sec":52,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:39:18Z","tool":"sensors","mode":"full","status":"pass","duration_sec":49,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:44:25Z","tool":"sensors","mode":"full","status":"pass","duration_sec":29,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:52:36Z","tool":"sensors","mode":"full","status":"pass","duration_sec":51,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T15:04:40Z","tool":"sensors","mode":"full","status":"pass","duration_sec":47,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T15:12:13Z","tool":"sensors","mode":"full","status":"pass","duration_sec":29,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T15:28:12Z","tool":"sensors","mode":"full","status":"pass","duration_sec":52,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T15:48:36Z","tool":"sensors","mode":"full","status":"fail","duration_sec":124,"ci_status":"fail","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"fail"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T15:49:48Z","tool":"sensors","mode":"full","status":"pass","duration_sec":52,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T16:00:00Z","tool":"sensors","mode":"full","status":"pass","duration_sec":31,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T16:13:27Z","tool":"sensors","mode":"full","status":"pass","duration_sec":109,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T17:58:48Z","tool":"sensors","mode":"mcp","status":"pass","duration_sec":3,"ci_status":"pass","doctor_status":"pass","ci_command":"mcp reference + protocol tests + pr-title-policy + harness doctor","ci_steps":{},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
+diff --git a/docs/harness/CODE_REVIEW_POLICY.md b/docs/harness/CODE_REVIEW_POLICY.md
+index e26bc00..e434f13 100644
+--- a/docs/harness/CODE_REVIEW_POLICY.md
++++ b/docs/harness/CODE_REVIEW_POLICY.md
+@@ -41,0 +42,37 @@ Antes de julgar, leia (o prompt do review-gate injeta ou referencia):
++## Perspectivas de Review
++
++Use estas perspectivas como lentes locais do Engram para evitar review
++unidimensional. Elas não aumentam o limite de findings; cada problema reportado
++continua exigindo evidência concreta no diff.
++
++1. **Bug e edge cases** — entradas adversas, estados vazios, concorrência,
++   ordering, timeouts, retries e caminhos de erro.
++2. **Segurança e privacidade** — vazamento de conteúdo proprietário, segredos,
++   credenciais, egress, prompts não confiáveis, hooks e multimodal.
++3. **Contrato e compatibilidade** — MCP wire format, tool signatures, storage
++   invariants, SDKs Python/TypeScript, CLI/API pública e compatibilidade
++   retroativa.
++4. **Testes e verificabilidade** — cobertura do comportamento alterado,
++   sensores corretos, golden/reference updates e ausência de falso verde.
++5. **Manutenibilidade e operação** — complexidade de hot path, ownership,
++   observabilidade, mensagens de erro, documentação operacional e rollback.
++6. **Drift histórico e memória canônica** — alinhamento com `progress.md`,
++   active plan, decisões anteriores, `ERRORS_AND_LESSONS.md` e padrões já
++   adotados no código.
++
++Para diffs em `docs/harness/**`, priorize especialmente segurança/processo,
++escopo negativo, verificabilidade, drift histórico e risco de enfraquecer gates.
++
++## Fontes Externas e Boundary de Licença
++
++Kits externos de workflow de agentes podem ser consultados apenas como fontes de
++padrões de alto nível. O `NeoLabHQ/context-engineering-kit` é tratado pelo
++Engram como referência externa, não como dependência, vendor, marketplace ou
++substituto do harness local.
++
++Como boundary conservador: se uma fonte externa estiver sob GPL-3.0 ou outra
++licença copyleft, não copie prompts, comandos, checklists, scripts, docs ou
++texto para o Engram sem revisão explícita de licença. Adaptações aceitas devem
++usar wording próprio do Engram, preservar os gates locais e registrar a decisão
++quando afetar processo do harness.
++
+@@ -163,0 +201,16 @@ The canvas should include approaches considered, hot-path complexity, at least t
++### 12207 lifecycle tailoring
++
++Read the 12207-inspired tailoring checklist in `docs/harness/GATES.md` when a
++change cites `docs/ieee-12207.md`, lifecycle-process standards, or changes how
++Engram plans, verifies, validates, measures, reviews, releases, or maintains
++work.
++
++Flag as `[HIGH]` when the change uses 12207 concepts without local tailoring
++evidence: scope/circumstances, lifecycle area, rationale, risk threshold,
++measurement need, verification-vs-validation evidence, and traceability.
++
++Flag as `[BLOCKER]` when the same gap appears in changes to gates, invariants,
++or process-critical scripts, or when the diff implies ISO/IEC/IEEE 12207
++conformance, imports a standards process as a drop-in pipeline, or copies
++licensed reference wording instead of using Engram-local language.
++
+diff --git a/docs/harness/GATES.md b/docs/harness/GATES.md
+index 0a75d5c..512e3f0 100644
+--- a/docs/harness/GATES.md
++++ b/docs/harness/GATES.md
+@@ -215,0 +216,34 @@ O review-gate deve marcar como `[HIGH]` ou `[BLOCKER]` qualquer mudança que:
++### 12207-Inspired Tailoring Checklist
++
++Uma cópia local não versionada, por exemplo `docs/ieee-12207.md`, pode ser
++usada como referência privada de padrões de processo de ciclo de vida. Esse
++arquivo é ignorado pelo Git, não deve ser distribuído no repositório, e o Engram
++não reivindica conformidade com a norma nem copia texto, prompts ou checklists
++dela para o harness. A adoção é sempre tailoring local: transformar conceitos
++em critérios verificáveis do Engram.
++
++Quando uma mudança de harness, codificação ou review citar essa referência ou
++alterar processo de engenharia, registre em `progress.md`, no plano ativo ou no
++Review Canvas aplicável:
++
++- **Escopo e circunstâncias** — qual lacuna local está sendo tratada, quais
++  stakeholders/paths são afetados e o que fica explicitamente fora de escopo.
++- **Área de ciclo de vida** — planejamento/controle, decisão, risco,
++  configuração/informação, medição, QA, verificação, validação, operação ou
++  manutenção.
++- **Racional de decisão** — alternativas consideradas, opção escolhida,
++  premissas e motivo para não adotar a referência como pipeline ou conformidade.
++- **Risco e threshold** — risco mitigado, sinal que indicaria regressão e ação
++  esperada se o sinal piorar.
++- **Medição** — necessidade de informação, medida ou artefato observado,
++  frequência/custo e onde a evidência fica armazenada.
++- **Evidência separada** — verificação objetiva (`doctor.sh`, sensores, testes,
++  diff checks) separada de validação de fitness para o usuário/stakeholder
++  quando aplicável.
++- **Traceability** — links entre requisito/intenção, arquivo alterado, canvas,
++  review e progresso, com plano de rollback se algum gate for enfraquecido.
++
++O review-gate deve marcar como `[HIGH]` uma adoção 12207 sem esse registro e
++como `[BLOCKER]` quando a mudança também tocar gates, invariants ou scripts
++process-critical sem evidência de segurança e reversibilidade.
++
+diff --git a/docs/harness/bin/bootstrap.sh b/docs/harness/bin/bootstrap.sh
+index b5fd535..d828f0d 100755
+--- a/docs/harness/bin/bootstrap.sh
++++ b/docs/harness/bin/bootstrap.sh
+@@ -16 +16 @@
+-set -uo pipefail
++set -euo pipefail
+@@ -21 +21,8 @@ cd "$REPO_ROOT" 2>/dev/null || true
+-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
++BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo docs/harness/bin)"
++if [ -f "$BIN_DIR/lib.sh" ]; then
++  source "$BIN_DIR/lib.sh"
++else
++  field_value() {
++    printf ''
++  }
++fi
+@@ -113,4 +120,35 @@ fi
+-# Quick MCP surface signal (non-authoritative)
+-if [ -f docs/MCP_TOOLS.md ]; then
+-  MCP_COUNT="$(grep -c '^### ' docs/MCP_TOOLS.md 2>/dev/null || echo '?')"
+-  echo "MCP tools (approx from docs): ~${MCP_COUNT}"
++# Quick MCP surface signal (non-authoritative): derive from the source registry,
++# not generated docs, so the bootstrap does not count markdown headings.
++if [ -f src/mcp/tools/registry.rs ]; then
++  if command -v python3 >/dev/null 2>&1; then
++    if MCP_COUNTS="$(python3 -c '
++from pathlib import Path
++import re
++
++registry = Path("src/mcp/tools/registry.rs").read_text()
++tools_mod = Path("src/mcp/tools/mod.rs").read_text()
++all_names = re.findall(r"\bname:\s*\"([^\"]+)\"", registry)
++feature_gated = set()
++match_body = re.search(
++    r"fn tool_feature_available\(name: &str\) -> bool \{.*?match name \{(.*?)\n\s*_\s*=>\s*true,",
++    tools_mod,
++    re.S,
++)
++if match_body:
++    for arm in re.finditer(r"((?:\s*\"[^\"]+\"\s*\|?)+)\s*=>\s*cfg!\(", match_body.group(1)):
++        feature_gated.update(re.findall(r"\"([^\"]+)\"", arm.group(1)))
++active_count = len([name for name in all_names if name not in feature_gated])
++print(f"{active_count} active / {len(all_names)} total")
++' 2>/dev/null)"; then
++      echo "MCP tools (source): ${MCP_COUNTS}"
++    else
++      MCP_TOTAL="$(grep -c 'ToolDef {' src/mcp/tools/registry.rs 2>/dev/null || echo '?')"
++      echo "MCP tools (source total): ${MCP_TOTAL}"
++    fi
++  else
++    MCP_TOTAL="$(grep -c 'ToolDef {' src/mcp/tools/registry.rs 2>/dev/null || echo '?')"
++    echo "MCP tools (source total): ${MCP_TOTAL}"
++  fi
++elif [ -f docs/MCP_TOOLS.md ]; then
++  MCP_COUNT="$(grep -c '^### `' docs/MCP_TOOLS.md 2>/dev/null || echo '?')"
++  echo "MCP tools (docs fallback): ${MCP_COUNT}"
+diff --git a/docs/harness/bin/lib.sh b/docs/harness/bin/lib.sh
+index 00007d8..1e9cc81 100755
+--- a/docs/harness/bin/lib.sh
++++ b/docs/harness/bin/lib.sh
+@@ -2,0 +3,2 @@
++set -euo pipefail
++
+@@ -15 +16,0 @@ field_value() {
+-
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 6be8901..7f7c989 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -9,3 +9,3 @@
+-| Last review | `2026-06-22 — pass: docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md` |
+-| Last sensors | `2026-06-22 — status=pass (full gate)` |
+-| Last commit | `913917b` |
++| Last review | `2026-06-26 — pass: docs/harness/reviews/2026-06-26-worktree-closeout-v5-post.md` |
++| Last sensors | `2026-06-26 — status=pass (mcp lane after bootstrap tool-count + registry hygiene; timestamp 2026-06-26T17:58:48Z)` |
++| Last commit | `2ba4f96` |
+@@ -64,0 +65,9 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
++- 2026-06-26: `NeoLabHQ/context-engineering-kit` fica como referência externa
++  seletiva para padrões de workflow, não como dependência ou fonte copiável; a
++  primeira adoção foi uma taxonomia local de perspectivas em
++  `CODE_REVIEW_POLICY.md`.
++- 2026-06-26: `docs/ieee-12207.md` fica como referência local de padrões de
++  ciclo de vida sem reivindicação de conformidade; adoções futuras devem
++  registrar tailoring, risco, medição, evidência e traceability no harness.
++- 2026-06-26: a cópia integral da 12207 é local-only e ignorada pelo Git; o
++  repositório deve versionar apenas resumos/checklists próprios do Engram.
+@@ -969,0 +979,50 @@ Verification:
++## Harness 12207 Wave 0 measurement hardening — 2026-06-25
++
++- Applied the first ISO/IEC/IEEE 12207 follow-up slice to the operational
++  harness: strict shell failure mode for `bootstrap.sh` and `lib.sh`, plus
++  historical sensor measurement.
++- Preserved `.sensors-last` as the compatibility state file and added
++  `.sensors-log` as JSON Lines history with `schema_version=sensors-log-v1`,
++  `duration_sec`, per-layer statuses, artifact pointers, exclusion metadata, and
++  bounded rotation via `SENSORS_LOG_MAX_BYTES` / `SENSORS_LOG_ROTATIONS`.
++- `doctor.sh` now validates `.sensors-log` when present, runs `bash -n` over
++  harness scripts, and runs optional non-blocking `shellcheck -x` when
++  installed.
++- Documented the new measurement contract in `docs/harness/GATES.md` and
++  `docs/harness/JSON_OUTPUTS.md`.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-06-25-harness-12207-wave0.md`.
++
++Verification:
++
++- `bash docs/harness/bin/bootstrap.sh` — PASS, 41 lines.
++- `bash docs/harness/bin/doctor.sh` — PASS.
++- `bash docs/harness/bin/doctor.sh --json | python3 -m json.tool` — PASS,
++  includes `bash_syntax:*`, optional `shellcheck:*`, and `sensors_log:format`
++  checks.
++- `bash docs/harness/bin/sensors.sh status --json | python3 -m json.tool` —
++  PASS, exposes `.sensors-log`.
++- `SENSORS_LOG_MAX_BYTES=1 SENSORS_LOG_ROTATIONS=2 bash docs/harness/bin/sensors.sh baseline`
++  run twice — PASS, proved rotation boundaries; generated rotated artifacts were
++  removed after verification.
++- `bash docs/harness/bin/sensors.sh quick` — PASS.
++- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci` +
++  PR-title policy + harness doctor), recorded in `.sensors-log` with
++  `mode=full`, `status=pass`, `duration_sec=26`.
++- Codex review attempt
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v2-post.md` —
++  `REVIEW_VERDICT: FAIL`; fixed by making optional ShellCheck non-blocking and
++  preparing a scoped Codex-only final review.
++- Codex review attempt
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v3-post.md` —
++  `REVIEW_VERDICT: FAIL`; fixed by removing Python heredocs from
++  `doctor.sh`/`sensors.sh` JSON paths for strict read-only sandbox
++  compatibility.
++- Codex final review
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md` —
++  `REVIEW_VERDICT: PASS scoped harness-12207-wave0 review passed with no
++  findings`.
++- `bash docs/harness/bin/review-gate.sh post harness-12207-wave0 --review-file docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md`
++  — PASS.
++
++
+diff --git a/docs/integrations/README.md b/docs/integrations/README.md
+index ad93709..021cab4 100644
+--- a/docs/integrations/README.md
++++ b/docs/integrations/README.md
+@@ -8,0 +9 @@ These guides show how to connect Engram to MCP clients and agent workflows.
++- [`engram_shared_memory_architecture.md`](engram_shared_memory_architecture.md): Proposed shared-memory architecture for Hermes Local and Hermes VPS.
+diff --git a/docs/integrations/claude-code-mcp-memory.md b/docs/integrations/claude-code-mcp-memory.md
+index 3855982..72a2fda 100644
+--- a/docs/integrations/claude-code-mcp-memory.md
++++ b/docs/integrations/claude-code-mcp-memory.md
+@@ -19 +19 @@ cargo install engram-core
+-ENGRAM_DB_PATH="$HOME/.local/share/engram/claude-code.db" engram-server --mcp
++ENGRAM_DB_PATH="$HOME/.local/share/engram/claude-code.db" engram-server --transport stdio
+@@ -29 +29 @@ Add Engram to your Claude Code MCP config:
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+diff --git a/docs/integrations/cursor-mcp-memory.md b/docs/integrations/cursor-mcp-memory.md
+index 9115a2b..a17d0af 100644
+--- a/docs/integrations/cursor-mcp-memory.md
++++ b/docs/integrations/cursor-mcp-memory.md
+@@ -27 +27 @@ Create `.cursor/mcp.json` in the repository:
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+diff --git a/docs/integrations/mcp-memory-server.md b/docs/integrations/mcp-memory-server.md
+index 4aaa6f5..79d60c2 100644
+--- a/docs/integrations/mcp-memory-server.md
++++ b/docs/integrations/mcp-memory-server.md
+@@ -18 +18 @@ cargo install engram-core
+-ENGRAM_DB_PATH="$HOME/.local/share/engram/memories.db" engram-server --mcp
++ENGRAM_DB_PATH="$HOME/.local/share/engram/memories.db" engram-server --transport stdio
+diff --git a/examples/claude-mcp/README.md b/examples/claude-mcp/README.md
+index 8335bb4..b71846e 100644
+--- a/examples/claude-mcp/README.md
++++ b/examples/claude-mcp/README.md
+@@ -10 +10 @@ mkdir -p .engram
+-ENGRAM_DB_PATH="$PWD/.engram/memories.db" engram-server --mcp
++ENGRAM_DB_PATH="$PWD/.engram/memories.db" engram-server --transport stdio
+diff --git a/examples/claude-mcp/claude-code-mcp.json b/examples/claude-mcp/claude-code-mcp.json
+index d324339..f5ec571 100644
+--- a/examples/claude-mcp/claude-code-mcp.json
++++ b/examples/claude-mcp/claude-code-mcp.json
+@@ -5 +5 @@
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+diff --git a/examples/cursor-mcp/README.md b/examples/cursor-mcp/README.md
+index 4e20d84..be34653 100644
+--- a/examples/cursor-mcp/README.md
++++ b/examples/cursor-mcp/README.md
+@@ -13 +13 @@ Cursor.
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+diff --git a/src/mcp/tools/discovery.rs b/src/mcp/tools/discovery.rs
+deleted file mode 100644
+index c75b9b5..0000000
+--- a/src/mcp/tools/discovery.rs
++++ /dev/null
+@@ -1,451 +0,0 @@
+-// MCP tool definitions by domain.
+-
+-    // Auto-Tagging
+-    ToolDef {
+-        name: "memory_suggest_tags",
+-        description: "Suggest tags for a memory based on AI content analysis. Uses pattern matching, keyword extraction, and structure detection to suggest relevant tags with confidence scores.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "id": {"type": "integer", "description": "Memory ID to analyze (alternative to content)"},
+-                "memory_id": {"type": "integer", "description": "Memory ID to analyze (alias for id)"},
+-                "content": {"type": "string", "description": "Content to analyze (alternative to id/memory_id)"},
+-                "type": {"type": "string", "enum": ["note", "todo", "issue", "decision", "preference", "learning", "context", "credential"], "description": "Memory type (used when providing content directly)"},
+-                "existing_tags": {"type": "array", "items": {"type": "string"}, "description": "Tags already on the memory (excluded from suggestions)"},
+-                "min_confidence": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5, "description": "Minimum confidence threshold for suggestions"},
+-                "max_tags": {"type": "integer", "default": 5, "description": "Maximum number of tags to suggest"},
+-                "enable_patterns": {"type": "boolean", "default": true, "description": "Use pattern-based tagging"},
+-                "enable_keywords": {"type": "boolean", "default": true, "description": "Use keyword-based tagging"},
+-                "enable_entities": {"type": "boolean", "default": true, "description": "Use entity-based tagging"},
+-                "enable_type_tags": {"type": "boolean", "default": true, "description": "Add tags based on memory type"},
+-                "keyword_mappings": {"type": "object", "description": "Custom keyword-to-tag mappings (e.g., {\"ibvi\": \"project/ibvi\"})"}
+-            }
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Advanced,
+-    },
+-    ToolDef {
+-        name: "memory_auto_tag",
+-        description: "Automatically suggest and optionally apply tags to a memory. Analyzes content using AI heuristics and can merge suggested tags with existing ones.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "id": {"type": "integer", "description": "Memory ID to auto-tag"},
+-                "memory_id": {"type": "integer", "description": "Memory ID (alias for id)"},
+-                "apply": {"type": "boolean", "default": false, "description": "If true, apply the suggested tags to the memory. If false, only return suggestions."},
+-                "merge": {"type": "boolean", "default": true, "description": "If true and apply=true, merge with existing tags. If false, replace existing tags."},
+-                "min_confidence": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5, "description": "Minimum confidence threshold"},
+-                "max_tags": {"type": "integer", "default": 5, "description": "Maximum tags to suggest/apply"},
+-                "keyword_mappings": {"type": "object", "description": "Custom keyword-to-tag mappings"}
+-            },
+-            "required": ["id"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Advanced,
+-    },
+-    // Session Context Tools (ENG-70, ENG-71)
+-    ToolDef {
+-        name: "session_context_create",
+-        description: "Create a new session context for tracking related memories during a conversation or task.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "name": {"type": "string", "description": "Session name"},
+-                "description": {"type": "string", "description": "Session description"},
+-                "workspace": {"type": "string", "description": "Workspace for the session"},
+-                "metadata": {"type": "object", "description": "Additional session metadata"}
+-            },
+-            "required": ["name"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "session_context_add_memory",
+-        description: "Add a memory to a session context with relevance score and role.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session ID"},
+-                "memory_id": {"type": "integer", "description": "Memory ID to add"},
+-                "relevance_score": {"type": "number", "minimum": 0, "maximum": 1, "default": 1.0, "description": "How relevant this memory is to the session"},
+-                "context_role": {"type": "string", "enum": ["referenced", "created", "updated", "pinned"], "default": "referenced", "description": "Role of the memory in the session"}
+-            },
+-            "required": ["session_id", "memory_id"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Advanced,
+-    },
+-    ToolDef {
+-        name: "session_context_remove_memory",
+-        description: "Remove a memory from a session context.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session ID"},
+-                "memory_id": {"type": "integer", "description": "Memory ID to remove"}
+-            },
+-            "required": ["session_id", "memory_id"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Advanced,
+-    },
+-    ToolDef {
+-        name: "session_context_get",
+-        description: "Get a session context with its linked memories.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session ID"}
+-            },
+-            "required": ["session_id"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "session_context_list",
+-        description: "List all session contexts with optional filtering.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "workspace": {"type": "string", "description": "Filter by workspace"},
+-                "active_only": {"type": "boolean", "default": false, "description": "Only return active sessions"},
+-                "limit": {"type": "integer", "default": 50, "description": "Maximum sessions to return"},
+-                "offset": {"type": "integer", "default": 0, "description": "Offset for pagination"}
+-            }
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "session_context_search",
+-        description: "Search memories within a specific session context.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session ID to search within"},
+-                "query": {"type": "string", "description": "Search query"},
+-                "limit": {"type": "integer", "default": 20, "description": "Maximum results"}
+-            },
+-            "required": ["session_id", "query"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "session_context_update_summary",
+-        description: "Update the summary of a session context.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session ID"},
+-                "summary": {"type": "string", "description": "New session summary"}
+-            },
+-            "required": ["session_id", "summary"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Advanced,
+-    },
+-    ToolDef {
+-        name: "session_context_end",
+-        description: "End a session context, marking it as inactive.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session ID to end"},
+-                "summary": {"type": "string", "description": "Optional final summary"}
+-            },
+-            "required": ["session_id"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Advanced,
+-    },
+-    ToolDef {
+-        name: "session_context_export",
+-        description: "Export a session context with all its memories for archival or sharing.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session ID to export"},
+-                "include_content": {"type": "boolean", "default": true, "description": "Include full memory content"},
+-                "format": {"type": "string", "enum": ["json", "markdown"], "default": "json", "description": "Export format"}
+-            },
+-            "required": ["session_id"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Advanced,
+-    },
+-    // ── Claude-Mem Parity (v0.14.0) ──────────────────────────────────────────
+-    ToolDef {
+-        name: "memory_get_public",
+-        description: "Get a memory with all <private>...</private> tagged sections removed. Safe for sharing in multi-agent contexts.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "id": {"type": "integer", "description": "Memory ID"}
+-            },
+-            "required": ["id"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Advanced,
+-    },
+-    ToolDef {
+-        name: "memory_get_injection_prompt",
+-        description: "Assembles the most relevant memories into a ready-to-inject system prompt block. Uses hybrid search to find relevant memories and formats them as markdown, respecting a token budget.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "query": {"type": "string", "description": "Search query to find relevant memories"},
+-                "token_budget": {"type": "integer", "description": "Max tokens for output (default: 2000)"},
+-                "workspace": {"type": "string", "description": "Filter to specific workspace"},
+-                "include_types": {"type": "array", "items": {"type": "string"}, "description": "Filter by memory types"}
+-            },
+-            "required": ["query"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Essential,
+-    },
+-    ToolDef {
+-        name: "memory_observe_tool_use",
+-        description: "Store a tool observation as an episodic memory for session continuity. Automatically compresses large inputs/outputs.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "tool_name": {"type": "string", "description": "Name of the tool that was used"},
+-                "tool_input": {"type": "object", "description": "Tool input parameters"},
+-                "tool_output": {"type": "string", "description": "Tool output/result"},
+-                "session_id": {"type": "string", "description": "Session identifier for grouping observations"},
+-                "compress": {"type": "boolean", "description": "Compress to 200-char previews (default: true)"}
+-            },
+-            "required": ["tool_name", "tool_input", "tool_output"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Standard,
+-    },
+-    // ── Endless Mode (O(N) context management) ───────────────────────────────
+-    ToolDef {
+-        name: "memory_archive_tool_output",
+-        description: "Archives a tool's full raw output to memory and returns a compressed summary (~500 tokens) for use in the active context. Transforms O(N²) context growth to O(N) by keeping only summaries in the working context while preserving full outputs for on-demand retrieval.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "tool_name": {"type": "string", "description": "Name of the tool whose output is being archived"},
+-                "raw_output": {"type": "string", "description": "Full raw output to archive"},
+-                "session_id": {"type": "string", "description": "Session identifier for grouping archived outputs (default: 'unknown')"},
+-                "compress_summary": {"type": "boolean", "description": "Whether to generate a compressed summary (default: true)"},
+-                "summary_tokens": {"type": "integer", "description": "Max tokens for the compressed summary (default: 500)"}
+-            },
+-            "required": ["tool_name", "raw_output"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "memory_get_archived_output",
+-        description: "Retrieves the full raw output for an archived tool observation by its archive ID. Use when you need the complete output that was previously compressed for context efficiency.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "archive_id": {"type": "integer", "description": "Archive ID returned by memory_archive_tool_output"}
+-            },
+-            "required": ["archive_id"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "memory_get_working_memory",
+-        description: "Assembles all compressed tool observations for a session into a token-budgeted working memory block. Includes archive references for retrieving full outputs on demand. This is the core of the Endless Mode context management system.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session identifier to retrieve observations for"},
+-                "token_budget": {"type": "integer", "description": "Max tokens for the working memory block (default: 4000)"},
+-                "include_tool_names": {"type": "array", "items": {"type": "string"}, "description": "Whitelist of tool names to include (default: all)"},
+-                "since_minutes": {"type": "integer", "description": "Only include observations from the last N minutes (default: all time)"}
+-            },
+-            "required": ["session_id"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    // ── Session Handoff ────────────────────────────────────────────────
+-    ToolDef {
+-        name: "session_land",
+-        description: "Generate a structured session handoff ('land the plane'). Creates a checkpoint memory with session summary, open items, recent decisions, and a bootstrap prompt for the next session. Call this at the end of every work session for seamless continuity.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "session_id": {"type": "string", "description": "Session identifier to hand off"},
+-                "workspace": {"type": "string", "description": "Workspace scope (default: 'default')"},
+-                "summary": {"type": "string", "description": "Summary of what was accomplished this session"},
+-                "next_session_hints": {"type": "array", "items": {"type": "string"}, "description": "Hints for what should be done next session"}
+-            },
+-            "required": ["session_id"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Essential,
+-    },
+-    ToolDef {
+-        name: "memory_build_context",
+-        description: "Build a structured prompt context from relevant memories using hybrid search, with optional graph traversal depth, timeframe filtering, type filtering, and relationship graph inclusion. Inspired by Basic Memory's build_context.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "query": {"type": "string", "description": "Search query to retrieve relevant memories"},
+-                "total_budget": {"type": "integer", "description": "Max tokens for the entire prompt (default: 4096)"},
+-                "strategy": {"type": "string", "enum": ["greedy", "balanced", "recency"], "default": "greedy", "description": "Context assembly strategy"},
+-                "workspace": {"type": "string", "description": "Workspace to search in"},
+-                "limit": {"type": "integer", "description": "Max memories to retrieve (default: 20)"},
+-                "depth": {"type": "integer", "minimum": 1, "maximum": 3, "default": 1, "description": "Graph traversal depth: 1=search only, 2=search+1 hop of related memories, 3=search+2 hops"},
+-                "timeframe": {"type": "string", "enum": ["1h", "24h", "7d", "30d", "all"], "default": "all", "description": "Time window for memory filtering"},
+-                "include_types": {"type": "array", "items": {"type": "string"}, "description": "Only include these memory types (e.g., ['note', 'decision'])"},
+-                "include_graph": {"type": "boolean", "default": false, "description": "Include entity relationship graph in response"}
+-            },
+-            "required": ["query"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "recent_activity",
+-        description: "Discover recently created or updated memories. Returns compact previews sorted by most recent activity. Useful for understanding what has changed recently.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "workspace": {"type": "string", "description": "Filter by workspace (omit for all workspaces)"},
+-                "timeframe": {"type": "string", "enum": ["1h", "24h", "7d", "30d"], "default": "24h", "description": "Time window for activity"},
+-                "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20, "description": "Max results to return"},
+-                "include_types": {"type": "array", "items": {"type": "string"}, "description": "Only include these memory types"}
+-            }
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Essential,
+-    },
+-    // ── Meta / Discovery ─────────────────────────────────────────────────────
+-    ToolDef {
+-        name: "discover_tools",
+-        description: "List available Engram tools by tier and category. Use this to progressively discover capabilities beyond the essential tool set. Returns tool names, descriptions, and tiers.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "tier": {"type": "string", "enum": ["essential", "standard", "advanced", "all"], "default": "all", "description": "Filter by tier: essential (~20 core tools), standard (~57 common tools), advanced (~104 specialized tools), all (everything)"},
+-                "category": {"type": "string", "description": "Filter by category keyword (e.g., 'search', 'graph', 'session', 'identity', 'quality')"},
+-                "search": {"type": "string", "description": "Search tool names and descriptions"}
+-            }
+-        }"#,
+-        tier: ToolTier::Essential,
+-        annotations: ToolAnnotations::read_only(),
+-    },
+-    // RTK-Inspired Context Preparation
+-    ToolDef {
+-        name: "memory_prepare_context",
+-        description: "Prepare optimized context for LLM using RTK-inspired pipeline (filter, group, truncate). Reduces token usage by 70-95% through intelligent context preparation.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "query": {"type": "string", "description": "Query to prepare context for"},
+-                "budget": {"type": "integer", "default": 4000, "description": "Token budget for prepared context"},
+-                "workspace": {"type": "string", "description": "Optional workspace filter"}
+-            },
+-            "required": ["query"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Advanced,
+-    },
+-    ToolDef {
+-        name: "memory_extract_facts",
+-        description: "Extract subject-predicate-object facts from a memory's content using rule-based NLP and persist them to the facts table.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "memory_id": {
+-                    "type": "integer",
+-                    "description": "ID of the memory from which to extract and store facts."
+-                }
+-            },
+-            "required": ["memory_id"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Standard,
+-    },
+-    // ── temporal.rs — scope handlers ─────────────────────────────────────────
+-    ToolDef {
+-        name: "scope_get",
+-        description: "Return the current scope path and level for a given memory.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "memory_id": {
+-                    "type": "integer",
+-                    "description": "ID of the memory whose scope to retrieve."
+-                }
+-            },
+-            "required": ["memory_id"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "scope_list",
+-        description: "List all distinct scope paths currently present in the database.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {},
+-            "required": []
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "scope_search",
+-        description: "Search for memories whose content matches a query within a given scope, including ancestor scopes.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "query": {
+-                    "type": "string",
+-                    "description": "Substring to search for within scoped memories."
+-                },
+-                "scope_path": {
+-                    "type": "string",
+-                    "description": "Hierarchical scope path to search within (e.g. \"global/org:acme/user:alice\")."
+-                }
+-            },
+-            "required": ["query", "scope_path"]
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "scope_set",
+-        description: "Assign or update the hierarchical scope of a memory.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {
+-                "memory_id": {
+-                    "type": "integer",
+-                    "description": "ID of the memory to re-scope."
+-                },
+-                "scope_path": {
+-                    "type": "string",
+-                    "description": "Target scope path (e.g. \"global/org:acme/user:alice\")."
+-                }
+-            },
+-            "required": ["memory_id", "scope_path"]
+-        }"#,
+-        annotations: ToolAnnotations::mutating(),
+-        tier: ToolTier::Standard,
+-    },
+-    ToolDef {
+-        name: "scope_tree",
+-        description: "Return a hierarchical tree of all scopes in the database.",
+-        schema: r#"{
+-            "type": "object",
+-            "properties": {},
+-            "required": []
+-        }"#,
+-        annotations: ToolAnnotations::read_only(),
+-        tier: ToolTier::Standard,
+-    },
+diff --git a/tests/mcp_protocol_tests.rs b/tests/mcp_protocol_tests.rs
+index d56c3a5..d4fa59b 100644
+--- a/tests/mcp_protocol_tests.rs
++++ b/tests/mcp_protocol_tests.rs
+@@ -240,0 +241,45 @@ fn call_tool_json(handler: &TestHandler, id: i64, name: &str, arguments: Value)
++#[test]
++fn test_tools_list_uses_unique_tool_names_from_registry() {
++    use std::collections::BTreeSet;
++
++    let handler = TestHandler::new();
++    let resp = handler.handle_request(make_request(1, methods::LIST_TOOLS, json!({})));
++    assert!(resp.error.is_none(), "tools/list should succeed");
++
++    let result = resp.result.expect("tools/list result");
++    let tools = result["tools"].as_array().expect("tools must be an array");
++    let mut seen = BTreeSet::new();
++    let mut discover_tools_count = 0;
++
++    for tool in tools {
++        let name = tool["name"].as_str().expect("listed tool must have a name");
++        if name == "discover_tools" {
++            discover_tools_count += 1;
++        }
++        assert!(
++            seen.insert(name.to_string()),
++            "tools/list must not contain duplicate tool name: {name}"
++        );
++    }
++
++    assert_eq!(
++        discover_tools_count, 1,
++        "discover_tools must come from the canonical registry exactly once"
++    );
++}
++
++#[test]
++fn test_tool_registry_has_no_orphan_discovery_definition_file() {
++    let orphan = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("src")
++        .join("mcp")
++        .join("tools")
++        .join("discovery.rs");
++
++    assert!(
++        !orphan.exists(),
++        "tool definitions must live in src/mcp/tools/registry.rs; remove orphan file: {}",
++        orphan.display()
++    );
++}
++
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

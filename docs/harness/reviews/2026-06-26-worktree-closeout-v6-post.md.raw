@@ -1,0 +1,623 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: worktree-closeout
+**Mode**: post
+**Date (UTC)**: 2026-06-26
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+Harness script changes detected:
+- docs/harness/bin/bootstrap.sh
+- docs/harness/bin/lib.sh
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/.gitignore b/.gitignore
+index e369749..fe6b02c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -163,0 +164,3 @@ vendor/
++# Licensed local references (pattern sources only; do not distribute)
++/docs/ieee-12207.md
++
+diff --git a/AGENTS.md b/AGENTS.md
+index a809e92..c5e404a 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -40 +40 @@ cargo build --release
+-./target/release/engram-server --mcp
++./target/release/engram-server --transport stdio
+@@ -43 +43 @@ cargo build --release
+-./target/release/engram-server --http --port 8080
++./target/release/engram-server --transport http --http-port 8080
+diff --git a/README.md b/README.md
+index cd273a4..fcbae4f 100644
+--- a/README.md
++++ b/README.md
+@@ -59,0 +60 @@ than first-party adapters in this repository.
++- [User guide](docs/USER_GUIDE.md)
+@@ -164 +165 @@ cd engram && cargo install --path .
+-engram-server --mcp
++engram-server --transport stdio
+@@ -285,5 +286,12 @@ engram-cli search "asynch awiat rust"
+-Isolate memories by project or context:
+-
+-```bash
+-# Create memory in a specific workspace
+-engram-cli create "API keys stored in Vault" --workspace my-project
++Isolate memories by project or context through the MCP tools:
++
++```json
++{
++  "name": "memory_create",
++  "arguments": {
++    "content": "API keys are stored in Vault",
++    "workspace": "my-project",
++    "memory_type": "decision"
++  }
++}
++```
+@@ -291,2 +299,5 @@ engram-cli create "API keys stored in Vault" --workspace my-project
+-# List workspaces
+-engram-cli workspace list
++```json
++{
++  "name": "workspace_list",
++  "arguments": {}
++}
+@@ -302,3 +313,8 @@ Two tiers for different retention needs:
+-```bash
+-# Create a daily memory (expires in 24h)
+-engram-cli create "Current debugging task" --tier daily
++```json
++{
++  "name": "memory_create_daily",
++  "arguments": {
++    "content": "Current debugging task",
++    "workspace": "my-project"
++  }
++}
+@@ -309,5 +325,15 @@ engram-cli create "Current debugging task" --tier daily
+-Store and search conversation transcripts:
+-
+-```bash
+-# Index a conversation session
+-engram-cli session index --session-id chat-123 --messages messages.json
++Store and search conversation transcripts through MCP:
++
++```json
++{
++  "name": "session_index",
++  "arguments": {
++    "session_id": "chat-123",
++    "workspace": "my-project",
++    "messages": [
++      { "role": "user", "content": "How should we handle errors?" },
++      { "role": "assistant", "content": "Use Result with contextual errors." }
++    ]
++  }
++}
++```
+@@ -315,2 +341,9 @@ engram-cli session index --session-id chat-123 --messages messages.json
+-# Search within transcripts
+-engram-cli session search "error handling"
++```json
++{
++  "name": "memory_search",
++  "arguments": {
++    "query": "error handling",
++    "workspace": "my-project",
++    "include_transcripts": true
++  }
++}
+@@ -323,3 +356,10 @@ Link different mentions to canonical identities:
+-```bash
+-# Create identity with aliases
+-engram-cli identity create user:ronaldo --alias "Ronaldo" --alias "@ronaldo"
++```json
++{
++  "name": "identity_create",
++  "arguments": {
++    "canonical_id": "user:ronaldo",
++    "display_name": "Ronaldo",
++    "entity_type": "person",
++    "aliases": ["Ronaldo", "@ronaldo"]
++  }
++}
+@@ -352,3 +392,9 @@ Dynamic memory prioritization based on recency, frequency, importance, and feedb
+-```bash
+-# Get top memories by salience
+-engram-cli salience top --limit 10
++```json
++{
++  "name": "salience_top",
++  "arguments": {
++    "limit": 10,
++    "workspace": "my-project"
++  }
++}
++```
+@@ -356,2 +402,9 @@ engram-cli salience top --limit 10
+-# Boost a memory's salience
+-engram-cli salience boost 42
++```json
++{
++  "name": "salience_boost",
++  "arguments": {
++    "id": 42,
++    "boost_amount": 0.2,
++    "reason": "Relevant to the current debugging task"
++  }
++}
+@@ -366,3 +419,8 @@ Salience decays over time, transitioning memories through lifecycle states: Acti
+-```bash
+-# Quality report for a workspace
+-engram-cli quality report --workspace my-project
++```json
++{
++  "name": "quality_report",
++  "arguments": {
++    "workspace": "my-project"
++  }
++}
++```
+@@ -370,2 +428,8 @@ engram-cli quality report --workspace my-project
+-# Find near-duplicate memories
+-engram-cli quality duplicates
++```json
++{
++  "name": "quality_find_duplicates",
++  "arguments": {
++    "threshold": 0.85,
++    "limit": 100
++  }
++}
+diff --git a/docs/GETTING_STARTED.md b/docs/GETTING_STARTED.md
+index 54927ed..91f5012 100644
+--- a/docs/GETTING_STARTED.md
++++ b/docs/GETTING_STARTED.md
+@@ -116,2 +116,2 @@ engram-cli create "Deploy to staging before production" --type decision --tags "
+-# Create in a specific workspace
+-engram-cli create "User auth flow uses OAuth2" --workspace my-project
++# The CLI writes to the default workspace. Use MCP/HTTP examples below when
++# you need an explicit workspace.
+@@ -171,2 +171,2 @@ engram-cli search "authentcation"
+-# Search in a specific workspace
+-engram-cli search "deploy" --workspace my-project
++# The CLI searches the default workspace. Use MCP/HTTP examples below when
++# you need an explicit workspace.
+@@ -204 +204,2 @@ curl -X POST http://localhost:8080/mcp \
+-Workspaces isolate memories by project or context:
++Workspaces isolate memories by project or context. The CLI uses the default
++workspace; for explicit workspace control, call MCP tools:
+@@ -206,4 +207,10 @@ Workspaces isolate memories by project or context:
+-```bash
+-# Create memories in different workspaces
+-engram-cli create "Use PostgreSQL for this project" --workspace backend-api
+-engram-cli create "React with TypeScript" --workspace frontend-app
++```json
++{
++  "name": "memory_create",
++  "arguments": {
++    "content": "Use PostgreSQL for this project",
++    "workspace": "backend-api",
++    "memory_type": "decision"
++  }
++}
++```
+@@ -211,2 +218,10 @@ engram-cli create "React with TypeScript" --workspace frontend-app
+-# List all workspaces
+-engram-cli workspace list
++```json
++{
++  "name": "memory_create",
++  "arguments": {
++    "content": "React with TypeScript",
++    "workspace": "frontend-app",
++    "memory_type": "context"
++  }
++}
++```
+@@ -214,2 +229,15 @@ engram-cli workspace list
+-# Search within a workspace
+-engram-cli search "database" --workspace backend-api
++```json
++{
++  "name": "workspace_list",
++  "arguments": {}
++}
++```
++
++```json
++{
++  "name": "memory_search",
++  "arguments": {
++    "query": "database",
++    "workspace": "backend-api"
++  }
++}
+@@ -228 +256 @@ Use tiers to control memory lifetime:
+-# Permanent memory (default)
++# Permanent memory in the default workspace
+@@ -229,0 +258 @@ engram-cli create "Architecture: microservices with event sourcing"
++```
+@@ -231,2 +260 @@ engram-cli create "Architecture: microservices with event sourcing"
+-# Daily memory (auto-expires)
+-engram-cli create "Currently debugging the auth flow" --tier daily
++Daily tier and promotion are MCP operations:
+@@ -234,2 +262,16 @@ engram-cli create "Currently debugging the auth flow" --tier daily
+-# Promote a daily memory to permanent before it expires
+-engram-cli promote 42
++```json
++{
++  "name": "memory_create_daily",
++  "arguments": {
++    "content": "Currently debugging the auth flow"
++  }
++}
++```
++
++```json
++{
++  "name": "memory_promote_to_permanent",
++  "arguments": {
++    "id": 42
++  }
++}
+diff --git a/docs/README.md b/docs/README.md
+index 5e760d1..0fa4b25 100644
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -9,0 +10 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
++- `USER_GUIDE.md`: User-facing instructions for installing, connecting, and using Engram.
+diff --git a/docs/USING_ENGRAM_IN_A_REPO.md b/docs/USING_ENGRAM_IN_A_REPO.md
+index 75af81f..efcae20 100644
+--- a/docs/USING_ENGRAM_IN_A_REPO.md
++++ b/docs/USING_ENGRAM_IN_A_REPO.md
+@@ -83 +83 @@ Create `.cursor/mcp.json` in your project repo:
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+@@ -102 +102 @@ Add this server to your Claude Code MCP config:
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+@@ -347 +347 @@ engram-cli model download minilm-l6-v2
+-ENGRAM_EMBEDDING_MODEL=local engram-server --mcp
++ENGRAM_EMBEDDING_MODEL=local engram-server --transport stdio
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index bec6a4e..8394ef0 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -5,3 +5,3 @@ mode=full
+-timestamp=2026-06-26T11:46:55Z
+-duration_sec=32
+-ci=fmt + clippy + test_lib + test_integration + test_integration_watch + doc + ref_check + pr-title-policy + harness doctor
++timestamp=2026-06-26T15:28:12Z
++duration_sec=52
++ci=fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor
+diff --git a/docs/harness/.sensors-log b/docs/harness/.sensors-log
+index 7a65ea8..0221953 100644
+--- a/docs/harness/.sensors-log
++++ b/docs/harness/.sensors-log
+@@ -8,0 +9,9 @@
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T13:06:27Z","tool":"sensors","mode":"quick","status":"pass","duration_sec":2,"ci_status":"pass","doctor_status":"pass","ci_command":"cargo fmt + cargo check + pr-title-policy + harness doctor","ci_steps":{},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T13:06:56Z","tool":"sensors","mode":"full","status":"pass","duration_sec":27,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:30:03Z","tool":"sensors","mode":"full","status":"pass","duration_sec":52,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:39:18Z","tool":"sensors","mode":"full","status":"pass","duration_sec":49,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:44:25Z","tool":"sensors","mode":"full","status":"pass","duration_sec":29,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T14:52:36Z","tool":"sensors","mode":"full","status":"pass","duration_sec":51,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T15:04:40Z","tool":"sensors","mode":"full","status":"pass","duration_sec":47,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T15:12:13Z","tool":"sensors","mode":"full","status":"pass","duration_sec":29,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
++{"schema_version":"sensors-log-v1","timestamp":"2026-06-26T15:28:12Z","tool":"sensors","mode":"full","status":"pass","duration_sec":52,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
+diff --git a/docs/harness/CODE_REVIEW_POLICY.md b/docs/harness/CODE_REVIEW_POLICY.md
+index e26bc00..e434f13 100644
+--- a/docs/harness/CODE_REVIEW_POLICY.md
++++ b/docs/harness/CODE_REVIEW_POLICY.md
+@@ -41,0 +42,37 @@ Antes de julgar, leia (o prompt do review-gate injeta ou referencia):
++## Perspectivas de Review
++
++Use estas perspectivas como lentes locais do Engram para evitar review
++unidimensional. Elas não aumentam o limite de findings; cada problema reportado
++continua exigindo evidência concreta no diff.
++
++1. **Bug e edge cases** — entradas adversas, estados vazios, concorrência,
++   ordering, timeouts, retries e caminhos de erro.
++2. **Segurança e privacidade** — vazamento de conteúdo proprietário, segredos,
++   credenciais, egress, prompts não confiáveis, hooks e multimodal.
++3. **Contrato e compatibilidade** — MCP wire format, tool signatures, storage
++   invariants, SDKs Python/TypeScript, CLI/API pública e compatibilidade
++   retroativa.
++4. **Testes e verificabilidade** — cobertura do comportamento alterado,
++   sensores corretos, golden/reference updates e ausência de falso verde.
++5. **Manutenibilidade e operação** — complexidade de hot path, ownership,
++   observabilidade, mensagens de erro, documentação operacional e rollback.
++6. **Drift histórico e memória canônica** — alinhamento com `progress.md`,
++   active plan, decisões anteriores, `ERRORS_AND_LESSONS.md` e padrões já
++   adotados no código.
++
++Para diffs em `docs/harness/**`, priorize especialmente segurança/processo,
++escopo negativo, verificabilidade, drift histórico e risco de enfraquecer gates.
++
++## Fontes Externas e Boundary de Licença
++
++Kits externos de workflow de agentes podem ser consultados apenas como fontes de
++padrões de alto nível. O `NeoLabHQ/context-engineering-kit` é tratado pelo
++Engram como referência externa, não como dependência, vendor, marketplace ou
++substituto do harness local.
++
++Como boundary conservador: se uma fonte externa estiver sob GPL-3.0 ou outra
++licença copyleft, não copie prompts, comandos, checklists, scripts, docs ou
++texto para o Engram sem revisão explícita de licença. Adaptações aceitas devem
++usar wording próprio do Engram, preservar os gates locais e registrar a decisão
++quando afetar processo do harness.
++
+@@ -163,0 +201,16 @@ The canvas should include approaches considered, hot-path complexity, at least t
++### 12207 lifecycle tailoring
++
++Read the 12207-inspired tailoring checklist in `docs/harness/GATES.md` when a
++change cites `docs/ieee-12207.md`, lifecycle-process standards, or changes how
++Engram plans, verifies, validates, measures, reviews, releases, or maintains
++work.
++
++Flag as `[HIGH]` when the change uses 12207 concepts without local tailoring
++evidence: scope/circumstances, lifecycle area, rationale, risk threshold,
++measurement need, verification-vs-validation evidence, and traceability.
++
++Flag as `[BLOCKER]` when the same gap appears in changes to gates, invariants,
++or process-critical scripts, or when the diff implies ISO/IEC/IEEE 12207
++conformance, imports a standards process as a drop-in pipeline, or copies
++licensed reference wording instead of using Engram-local language.
++
+diff --git a/docs/harness/GATES.md b/docs/harness/GATES.md
+index 0a75d5c..512e3f0 100644
+--- a/docs/harness/GATES.md
++++ b/docs/harness/GATES.md
+@@ -215,0 +216,34 @@ O review-gate deve marcar como `[HIGH]` ou `[BLOCKER]` qualquer mudança que:
++### 12207-Inspired Tailoring Checklist
++
++Uma cópia local não versionada, por exemplo `docs/ieee-12207.md`, pode ser
++usada como referência privada de padrões de processo de ciclo de vida. Esse
++arquivo é ignorado pelo Git, não deve ser distribuído no repositório, e o Engram
++não reivindica conformidade com a norma nem copia texto, prompts ou checklists
++dela para o harness. A adoção é sempre tailoring local: transformar conceitos
++em critérios verificáveis do Engram.
++
++Quando uma mudança de harness, codificação ou review citar essa referência ou
++alterar processo de engenharia, registre em `progress.md`, no plano ativo ou no
++Review Canvas aplicável:
++
++- **Escopo e circunstâncias** — qual lacuna local está sendo tratada, quais
++  stakeholders/paths são afetados e o que fica explicitamente fora de escopo.
++- **Área de ciclo de vida** — planejamento/controle, decisão, risco,
++  configuração/informação, medição, QA, verificação, validação, operação ou
++  manutenção.
++- **Racional de decisão** — alternativas consideradas, opção escolhida,
++  premissas e motivo para não adotar a referência como pipeline ou conformidade.
++- **Risco e threshold** — risco mitigado, sinal que indicaria regressão e ação
++  esperada se o sinal piorar.
++- **Medição** — necessidade de informação, medida ou artefato observado,
++  frequência/custo e onde a evidência fica armazenada.
++- **Evidência separada** — verificação objetiva (`doctor.sh`, sensores, testes,
++  diff checks) separada de validação de fitness para o usuário/stakeholder
++  quando aplicável.
++- **Traceability** — links entre requisito/intenção, arquivo alterado, canvas,
++  review e progresso, com plano de rollback se algum gate for enfraquecido.
++
++O review-gate deve marcar como `[HIGH]` uma adoção 12207 sem esse registro e
++como `[BLOCKER]` quando a mudança também tocar gates, invariants ou scripts
++process-critical sem evidência de segurança e reversibilidade.
++
+diff --git a/docs/harness/bin/bootstrap.sh b/docs/harness/bin/bootstrap.sh
+index b5fd535..8734752 100755
+--- a/docs/harness/bin/bootstrap.sh
++++ b/docs/harness/bin/bootstrap.sh
+@@ -16 +16 @@
+-set -uo pipefail
++set -euo pipefail
+@@ -21 +21,8 @@ cd "$REPO_ROOT" 2>/dev/null || true
+-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
++BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo docs/harness/bin)"
++if [ -f "$BIN_DIR/lib.sh" ]; then
++  source "$BIN_DIR/lib.sh"
++else
++  field_value() {
++    printf ''
++  }
++fi
+diff --git a/docs/harness/bin/lib.sh b/docs/harness/bin/lib.sh
+index 00007d8..1e9cc81 100755
+--- a/docs/harness/bin/lib.sh
++++ b/docs/harness/bin/lib.sh
+@@ -2,0 +3,2 @@
++set -euo pipefail
++
+@@ -15 +16,0 @@ field_value() {
+-
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 73986a9..9404e55 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -9,3 +9,3 @@
+-| Last review | `2026-06-22 — pass: docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md` |
+-| Last sensors | `2026-06-22 — status=pass (full gate)` |
+-| Last commit | `913917b` |
++| Last review | `2026-06-26 — pass: docs/harness/reviews/2026-06-26-worktree-closeout-v3-post.md` |
++| Last sensors | `2026-06-26 — status=pass (full gate after README+ledger closeout fixes)` |
++| Last commit | `2ba4f96` |
+@@ -64,0 +65,9 @@ Esta sprint implementa a **camada operacional** (o "harness engineering" process
++- 2026-06-26: `NeoLabHQ/context-engineering-kit` fica como referência externa
++  seletiva para padrões de workflow, não como dependência ou fonte copiável; a
++  primeira adoção foi uma taxonomia local de perspectivas em
++  `CODE_REVIEW_POLICY.md`.
++- 2026-06-26: `docs/ieee-12207.md` fica como referência local de padrões de
++  ciclo de vida sem reivindicação de conformidade; adoções futuras devem
++  registrar tailoring, risco, medição, evidência e traceability no harness.
++- 2026-06-26: a cópia integral da 12207 é local-only e ignorada pelo Git; o
++  repositório deve versionar apenas resumos/checklists próprios do Engram.
+@@ -968,0 +978,49 @@ Verification:
++
++## Harness 12207 Wave 0 measurement hardening — 2026-06-25
++
++- Applied the first ISO/IEC/IEEE 12207 follow-up slice to the operational
++  harness: strict shell failure mode for `bootstrap.sh` and `lib.sh`, plus
++  historical sensor measurement.
++- Preserved `.sensors-last` as the compatibility state file and added
++  `.sensors-log` as JSON Lines history with `schema_version=sensors-log-v1`,
++  `duration_sec`, per-layer statuses, artifact pointers, exclusion metadata, and
++  bounded rotation via `SENSORS_LOG_MAX_BYTES` / `SENSORS_LOG_ROTATIONS`.
++- `doctor.sh` now validates `.sensors-log` when present, runs `bash -n` over
++  harness scripts, and runs optional non-blocking `shellcheck -x` when
++  installed.
++- Documented the new measurement contract in `docs/harness/GATES.md` and
++  `docs/harness/JSON_OUTPUTS.md`.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-06-25-harness-12207-wave0.md`.
++
++Verification:
++
++- `bash docs/harness/bin/bootstrap.sh` — PASS, 41 lines.
++- `bash docs/harness/bin/doctor.sh` — PASS.
++- `bash docs/harness/bin/doctor.sh --json | python3 -m json.tool` — PASS,
++  includes `bash_syntax:*`, optional `shellcheck:*`, and `sensors_log:format`
++  checks.
++- `bash docs/harness/bin/sensors.sh status --json | python3 -m json.tool` —
++  PASS, exposes `.sensors-log`.
++- `SENSORS_LOG_MAX_BYTES=1 SENSORS_LOG_ROTATIONS=2 bash docs/harness/bin/sensors.sh baseline`
++  run twice — PASS, proved rotation boundaries; generated rotated artifacts were
++  removed after verification.
++- `bash docs/harness/bin/sensors.sh quick` — PASS.
++- `bash docs/harness/bin/sensors.sh` — PASS (full canonical gate, `make ci` +
++  PR-title policy + harness doctor), recorded in `.sensors-log` with
++  `mode=full`, `status=pass`, `duration_sec=26`.
++- Codex review attempt
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v2-post.md` —
++  `REVIEW_VERDICT: FAIL`; fixed by making optional ShellCheck non-blocking and
++  preparing a scoped Codex-only final review.
++- Codex review attempt
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v3-post.md` —
++  `REVIEW_VERDICT: FAIL`; fixed by removing Python heredocs from
++  `doctor.sh`/`sensors.sh` JSON paths for strict read-only sandbox
++  compatibility.
++- Codex final review
++  `docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md` —
++  `REVIEW_VERDICT: PASS scoped harness-12207-wave0 review passed with no
++  findings`.
++- `bash docs/harness/bin/review-gate.sh post harness-12207-wave0 --review-file docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md`
++  — PASS.
+diff --git a/docs/integrations/README.md b/docs/integrations/README.md
+index ad93709..021cab4 100644
+--- a/docs/integrations/README.md
++++ b/docs/integrations/README.md
+@@ -8,0 +9 @@ These guides show how to connect Engram to MCP clients and agent workflows.
++- [`engram_shared_memory_architecture.md`](engram_shared_memory_architecture.md): Proposed shared-memory architecture for Hermes Local and Hermes VPS.
+diff --git a/docs/integrations/claude-code-mcp-memory.md b/docs/integrations/claude-code-mcp-memory.md
+index 3855982..72a2fda 100644
+--- a/docs/integrations/claude-code-mcp-memory.md
++++ b/docs/integrations/claude-code-mcp-memory.md
+@@ -19 +19 @@ cargo install engram-core
+-ENGRAM_DB_PATH="$HOME/.local/share/engram/claude-code.db" engram-server --mcp
++ENGRAM_DB_PATH="$HOME/.local/share/engram/claude-code.db" engram-server --transport stdio
+@@ -29 +29 @@ Add Engram to your Claude Code MCP config:
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+diff --git a/docs/integrations/cursor-mcp-memory.md b/docs/integrations/cursor-mcp-memory.md
+index 9115a2b..a17d0af 100644
+--- a/docs/integrations/cursor-mcp-memory.md
++++ b/docs/integrations/cursor-mcp-memory.md
+@@ -27 +27 @@ Create `.cursor/mcp.json` in the repository:
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+diff --git a/docs/integrations/mcp-memory-server.md b/docs/integrations/mcp-memory-server.md
+index 4aaa6f5..79d60c2 100644
+--- a/docs/integrations/mcp-memory-server.md
++++ b/docs/integrations/mcp-memory-server.md
+@@ -18 +18 @@ cargo install engram-core
+-ENGRAM_DB_PATH="$HOME/.local/share/engram/memories.db" engram-server --mcp
++ENGRAM_DB_PATH="$HOME/.local/share/engram/memories.db" engram-server --transport stdio
+diff --git a/examples/claude-mcp/README.md b/examples/claude-mcp/README.md
+index 8335bb4..b71846e 100644
+--- a/examples/claude-mcp/README.md
++++ b/examples/claude-mcp/README.md
+@@ -10 +10 @@ mkdir -p .engram
+-ENGRAM_DB_PATH="$PWD/.engram/memories.db" engram-server --mcp
++ENGRAM_DB_PATH="$PWD/.engram/memories.db" engram-server --transport stdio
+diff --git a/examples/claude-mcp/claude-code-mcp.json b/examples/claude-mcp/claude-code-mcp.json
+index d324339..f5ec571 100644
+--- a/examples/claude-mcp/claude-code-mcp.json
++++ b/examples/claude-mcp/claude-code-mcp.json
+@@ -5 +5 @@
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+diff --git a/examples/cursor-mcp/README.md b/examples/cursor-mcp/README.md
+index 4e20d84..be34653 100644
+--- a/examples/cursor-mcp/README.md
++++ b/examples/cursor-mcp/README.md
+@@ -13 +13 @@ Cursor.
+-      "args": ["--mcp"],
++      "args": ["--transport", "stdio"],
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.
