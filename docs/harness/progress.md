@@ -3,20 +3,31 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Harness Engineering v0 — bootstrap & core gates` |
-| Active task | `harness-bootstrap — implement operational harness (bootstrap, doctor, sensors, review-gate)` |
-| Active plan | `docs/harness/progress/2026-05-30-harness-bootstrap.md` |
-| Last review | `2026-06-27 — pass: docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md` |
-| Last sensors | `2026-06-27 — status=pass (full lane after reference-intake checklist fix; timestamp 2026-06-27T09:10:45Z)` |
-| Last commit | `aeacb93` |
+| Active sprint | `Harness maintenance — live-state closeout` |
+| Active task | `harness-live-state-closeout — close completed bootstrap sprint metadata` |
+| Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
+| Last review | `2026-06-27 — pass: docs/harness/reviews/2026-06-27-harness-live-state-closeout-v2-post.md` |
+| Last sensors | `2026-06-27 — status=pass (full lane after live-state closeout; timestamp 2026-06-27T15:07:07Z)` |
+| Last commit | `1aa14e5` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
 ## Sprint ativa
 
+- **Harness maintenance — live-state closeout**
+- **Log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)
+- **Status**: active — close stale live metadata after the completed bootstrap
+  sprint and the merged lifecycle predicate follow-up. Current `main` is
+  `1aa14e5`, and merged PR #108 commit `e156810` is contained in that history.
+
+## Sprint encerrada
+
 - **Harness Engineering v0 — bootstrap & core gates**
 - **Log**: [`progress/2026-05-30-harness-bootstrap.md`](./progress/2026-05-30-harness-bootstrap.md)
-- **Status**: active — scaffolding + implementation of the terminal-native agent harness discipline, adapted from the mbras-backend reference model, for the engram Rust + MCP + multi-SDK codebase.
+- **Status**: completed — the operational harness bootstrap, core gates,
+  reviewer path hardening, and follow-up harness policy work have landed on
+  `main`. Future work should start from a fresh task branch and update this
+  live-state block instead of continuing to present v0 as active.
 
 ## Contexto e Motivação
 
