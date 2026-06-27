@@ -1,6 +1,15 @@
 # Design: Spacing-Effect Stability for Memory Retention
 
-**Status:** Approved (design) — rewritten after full-spec cross-model review
+> **⚠️ SUPERSEDED (2026-06-27)** by
+> [`2026-06-27-lifecycle-predicate-unification-design.md`](./2026-06-27-lifecycle-predicate-unification-design.md).
+> This design was built on the `suggest_lifecycle_state` predicate, later found to
+> be inert and not the writer that actually archives. Its review-round *findings*
+> (importance floor, AND/OR asymmetry, terminal-cap requirement) are carried
+> forward into the successor; its *design* (modulating recency via a standalone
+> stability feature) does not survive. `stability` returns as a follow-up on the
+> corrected foundation. Kept for history; do not implement from this file.
+
+**Status:** Superseded — was: Approved (design), rewritten after full-spec cross-model review
 **Date:** 2026-06-26
 **Author:** Ronaldo Lima (with Claude)
 **Cross-model review:** Codex/GPT (gpt-5.5) + Fugu/Sakana
