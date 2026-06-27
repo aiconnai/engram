@@ -78,7 +78,10 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
     let workspace = params.get("workspace").and_then(|v| v.as_str());
-    let config = lifecycle_config_from_params(&params);
+    let config = match lifecycle_config_from_params(&params) {
+        Ok(config) => config,
+        Err(message) => return json!({"error": message}),
+    };
     let now = Utc::now();
 
     ctx.storage
@@ -132,10 +135,14 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
             let archive_candidates = transition_previews(&transitions, LifecycleState::Archived);
 
             if dry_run {
+                // Counts must reflect every transition, not the capped preview
+                // arrays (which are limited to 10 for response size). Reading
+                // `.len()` of the previews would undercount whenever more than
+                // 10 memories transition, making dry_run disagree with apply.
                 return Ok(json!({
                     "dry_run": true,
-                    "would_mark_stale": stale_candidates.len(),
-                    "would_archive": archive_candidates.len(),
+                    "would_mark_stale": count_transitions(&transitions, LifecycleState::Stale),
+                    "would_archive": count_transitions(&transitions, LifecycleState::Archived),
                     "stale_candidates": stale_candidates,
                     "archive_candidates": archive_candidates
                 }));
@@ -192,25 +199,74 @@ struct LifecycleTransition {
     next: LifecycleState,
 }
 
-fn lifecycle_config_from_params(params: &Value) -> LifecycleConfig {
-    LifecycleConfig {
-        stale_days_base: params
-            .get("stale_days")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(30),
-        archive_days_base: params
-            .get("archive_days")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(90),
-        hard_idle_cap_days: params
-            .get("hard_idle_cap_days")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(365),
-        max_importance_mult: params
-            .get("max_importance_mult")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(4.0) as f32,
+/// Read an optional integer param, distinguishing "absent" (Ok(None)) from
+/// "present but wrong type" (Err). A wrong-typed value must not silently fall
+/// back to a default — these params drive irreversible bulk lifecycle writes.
+fn optional_i64(params: &Value, key: &str) -> Result<Option<i64>, String> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_i64()
+            .map(Some)
+            .ok_or_else(|| format!("{key} must be an integer")),
     }
+}
+
+/// Read an optional float param, distinguishing "absent" from "wrong type".
+fn optional_f64(params: &Value, key: &str) -> Result<Option<f64>, String> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_f64()
+            .map(Some)
+            .ok_or_else(|| format!("{key} must be a number")),
+    }
+}
+
+/// Build a [`LifecycleConfig`] from MCP params, validating types and ranges.
+///
+/// `lifecycle_run` / `lifecycle_config` are external-input boundaries: a single
+/// malformed call (`max_importance_mult < 1.0`, negative windows, or an inverted
+/// `stale_days > archive_days`) could otherwise drive `decide_lifecycle_state`
+/// to archive the entire active corpus. Reject rather than clamp so the caller
+/// learns their input was wrong.
+fn lifecycle_config_from_params(params: &Value) -> Result<LifecycleConfig, String> {
+    let defaults = LifecycleConfig::default();
+
+    let stale_days_base = optional_i64(params, "stale_days")?.unwrap_or(defaults.stale_days_base);
+    let archive_days_base =
+        optional_i64(params, "archive_days")?.unwrap_or(defaults.archive_days_base);
+    let hard_idle_cap_days =
+        optional_i64(params, "hard_idle_cap_days")?.unwrap_or(defaults.hard_idle_cap_days);
+    let max_importance_mult = optional_f64(params, "max_importance_mult")?
+        .map(|v| v as f32)
+        .unwrap_or(defaults.max_importance_mult);
+
+    if stale_days_base < 0 {
+        return Err("stale_days must be >= 0".to_string());
+    }
+    if archive_days_base < 0 {
+        return Err("archive_days must be >= 0".to_string());
+    }
+    if hard_idle_cap_days < 0 {
+        return Err("hard_idle_cap_days must be >= 0".to_string());
+    }
+    if archive_days_base < stale_days_base {
+        return Err("archive_days must be >= stale_days".to_string());
+    }
+    // A multiplier < 1.0 shrinks the decay windows below the configured base,
+    // inverting "importance protects" into immediate archival; NaN (which fails
+    // every comparison) is rejected here too.
+    if max_importance_mult.is_nan() || max_importance_mult < 1.0 {
+        return Err("max_importance_mult must be >= 1.0".to_string());
+    }
+
+    Ok(LifecycleConfig {
+        stale_days_base,
+        archive_days_base,
+        hard_idle_cap_days,
+        max_importance_mult,
+    })
 }
 
 fn lifecycle_memory_from_row(
@@ -272,6 +328,17 @@ fn parse_rfc3339_or_now(value: String, now: DateTime<Utc>) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(&value)
         .map(|dt| dt.with_timezone(&Utc))
         .unwrap_or(now)
+}
+
+/// Total number of transitions targeting `state`, uncapped. Used for the
+/// dry_run counts so they match what apply will actually do; the preview arrays
+/// (see [`transition_previews`]) are intentionally capped and must not be used
+/// as a count source.
+fn count_transitions(transitions: &[LifecycleTransition], state: LifecycleState) -> usize {
+    transitions
+        .iter()
+        .filter(|transition| transition.next == state)
+        .count()
 }
 
 fn transition_previews(transitions: &[LifecycleTransition], state: LifecycleState) -> Vec<Value> {
@@ -342,7 +409,10 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn lifecycle_config(_ctx: &HandlerContext, params: Value) -> Value {
-    let config = lifecycle_config_from_params(&params);
+    let config = match lifecycle_config_from_params(&params) {
+        Ok(config) => config,
+        Err(message) => return json!({"error": message}),
+    };
 
     json!({
         "stale_days": config.stale_days_base,
@@ -808,6 +878,136 @@ mod lifecycle_tests {
         assert_eq!(
             version_count, 1,
             "expected lifecycle transition to create a memory version"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_run_dry_run_counts_are_uncapped() {
+        // Seed more than the preview cap (10) of archive candidates so that the
+        // reported count must come from the full transition set, not the capped
+        // preview array.
+        let ctx = test_ctx();
+        let total = 12;
+        for i in 0..total {
+            seed_lifecycle_memory(
+                &ctx,
+                &format!("archive candidate {i}"),
+                0.0,
+                0,
+                95,
+                LifecycleState::Active,
+            );
+        }
+
+        let dry = lifecycle_run(&ctx, json!({"dry_run": true, "workspace": "default"}));
+        assert!(
+            dry.get("error").is_none(),
+            "unexpected dry-run error: {dry}"
+        );
+
+        // The count must reflect every memory that would transition, not the
+        // preview cap of 10.
+        assert_eq!(
+            dry["would_archive"].as_i64(),
+            Some(total),
+            "would_archive must count all transitions, not the capped preview: {dry}"
+        );
+        // Preview array stays bounded.
+        assert!(
+            dry["archive_candidates"].as_array().expect("array").len() <= 10,
+            "preview array should stay capped at 10: {dry}"
+        );
+
+        // dry_run count must equal what apply actually does.
+        let applied = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
+        assert_eq!(
+            applied["archived"].as_i64(),
+            dry["would_archive"].as_i64(),
+            "dry_run would_archive must match apply archived count"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_run_rejects_importance_mult_below_one() {
+        let ctx = test_ctx();
+        let id = seed_lifecycle_memory(&ctx, "fresh important", 1.0, 0, 1, LifecycleState::Active);
+
+        let result = lifecycle_run(
+            &ctx,
+            json!({"dry_run": false, "workspace": "default", "max_importance_mult": 0.5}),
+        );
+
+        assert!(
+            result.get("error").is_some(),
+            "max_importance_mult < 1.0 must be rejected, got: {result}"
+        );
+        // The fresh memory must NOT have been archived.
+        assert_eq!(lifecycle_state(&ctx, id), "active", "{result}");
+    }
+
+    #[test]
+    fn test_lifecycle_run_rejects_negative_days() {
+        let ctx = test_ctx();
+        let id = seed_lifecycle_memory(&ctx, "fresh memory", 0.0, 0, 1, LifecycleState::Active);
+
+        let result = lifecycle_run(
+            &ctx,
+            json!({"dry_run": false, "workspace": "default", "archive_days": -1}),
+        );
+
+        assert!(
+            result.get("error").is_some(),
+            "negative archive_days must be rejected, got: {result}"
+        );
+        assert_eq!(lifecycle_state(&ctx, id), "active", "{result}");
+    }
+
+    #[test]
+    fn test_lifecycle_run_rejects_wrong_type_param() {
+        let ctx = test_ctx();
+        let _id = seed_lifecycle_memory(&ctx, "fresh memory", 0.0, 0, 1, LifecycleState::Active);
+
+        // stale_days as a string is a wrong-type input: it must be rejected,
+        // not silently defaulted to 30.
+        let result = lifecycle_run(
+            &ctx,
+            json!({"dry_run": false, "workspace": "default", "stale_days": "30"}),
+        );
+
+        assert!(
+            result.get("error").is_some(),
+            "wrong-typed stale_days must be rejected, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_run_rejects_stale_exceeding_archive() {
+        let ctx = test_ctx();
+        let _id = seed_lifecycle_memory(&ctx, "fresh memory", 0.0, 0, 1, LifecycleState::Active);
+
+        let result = lifecycle_run(
+            &ctx,
+            json!({
+                "dry_run": false,
+                "workspace": "default",
+                "stale_days": 120,
+                "archive_days": 90
+            }),
+        );
+
+        assert!(
+            result.get("error").is_some(),
+            "stale_days > archive_days must be rejected, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_config_rejects_invalid_params() {
+        let ctx = test_ctx();
+        let result = lifecycle_config(&ctx, json!({"max_importance_mult": 0.0}));
+        assert!(
+            result.get("error").is_some(),
+            "lifecycle_config must reject invalid params, got: {result}"
         );
     }
 }
