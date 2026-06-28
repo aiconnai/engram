@@ -186,14 +186,18 @@ impl EmbeddingWorker {
 
                     // Process if batch is full
                     if batch.len() >= self.batch_size {
-                        self.process_batch(&mut batch).await;
+                        if let Err(e) = self.process_batch(&mut batch).await {
+                            tracing::error!("Embedding batch processing failed: {}", e);
+                        }
                     }
                 }
 
                 // Process on timeout even if batch isn't full
                 _ = batch_timer.tick() => {
                     if !batch.is_empty() {
-                        self.process_batch(&mut batch).await;
+                        if let Err(e) = self.process_batch(&mut batch).await {
+                            tracing::error!("Embedding batch processing failed: {}", e);
+                        }
                     }
                 }
             }
@@ -201,80 +205,123 @@ impl EmbeddingWorker {
     }
 
     /// Process a batch of embedding requests
-    async fn process_batch(&self, batch: &mut Vec<EmbeddingRequest>) {
+    async fn process_batch(&self, batch: &mut Vec<EmbeddingRequest>) -> Result<()> {
         if batch.is_empty() {
-            return;
+            return Ok(());
         }
 
         let memory_ids: Vec<MemoryId> = batch.iter().map(|r| r.memory_id).collect();
         let contents: Vec<&str> = batch.iter().map(|r| r.content.as_str()).collect();
 
-        // Mark as processing
-        {
-            let conn = self.conn.lock();
-            let now = Utc::now().to_rfc3339();
-            for &id in &memory_ids {
-                let _ = conn.execute(
-                    "UPDATE embedding_queue SET status = 'processing', started_at = ? WHERE memory_id = ?",
-                    params![now, id],
-                );
-            }
-        }
-
-        // Generate embeddings
-        match self.embedder.embed_batch(&contents) {
-            Ok(embeddings) => {
+        let result = (|| -> Result<()> {
+            // Mark as processing
+            {
                 let conn = self.conn.lock();
                 let now = Utc::now().to_rfc3339();
-                let model = self.embedder.model_name();
-                let dimensions = self.embedder.dimensions();
-
-                for (id, embedding) in memory_ids.iter().zip(embeddings.iter()) {
-                    // Serialize embedding to bytes
-                    let embedding_bytes: Vec<u8> =
-                        embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
-
-                    // Store embedding
-                    let _ = conn.execute(
-                        "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
-                         VALUES (?, ?, ?, ?, ?)",
-                        params![id, embedding_bytes, model, dimensions, now],
-                    );
-
-                    // Update memory
-                    let _ = conn.execute(
-                        "UPDATE memories SET has_embedding = 1 WHERE id = ?",
-                        params![id],
-                    );
-
-                    // Mark as complete
-                    let _ = conn.execute(
-                        "UPDATE embedding_queue SET status = 'complete', completed_at = ? WHERE memory_id = ?",
-                        params![now, id],
-                    );
-                }
-
-                tracing::info!("Processed {} embeddings", memory_ids.len());
-            }
-            Err(e) => {
-                let conn = self.conn.lock();
-                let error_time = Utc::now().to_rfc3339();
-                let error_msg = e.to_string();
-                let _ = error_time; // suppress unused warning
-
                 for &id in &memory_ids {
-                    let _ = conn.execute(
-                        "UPDATE embedding_queue SET status = 'failed', error = ?, retry_count = retry_count + 1 WHERE memory_id = ?",
-                        params![error_msg, id],
-                    );
+                    conn.execute(
+                        "UPDATE embedding_queue SET status = 'processing', started_at = ? WHERE memory_id = ?",
+                        params![now, id],
+                    )
+                    .map_err(|e| {
+                        embedding_queue_db_write_error(
+                            "mark embedding queue row as processing",
+                            id,
+                            e,
+                        )
+                    })?;
                 }
-
-                tracing::error!("Embedding batch failed: {}", e);
             }
-        }
+
+            // Generate embeddings
+            match self.embedder.embed_batch(&contents) {
+                Ok(embeddings) => {
+                    let conn = self.conn.lock();
+                    let now = Utc::now().to_rfc3339();
+                    let model = self.embedder.model_name();
+                    let dimensions = self.embedder.dimensions();
+
+                    for (id, embedding) in memory_ids.iter().zip(embeddings.iter()) {
+                        // Serialize embedding to bytes
+                        let embedding_bytes: Vec<u8> =
+                            embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
+
+                        // Store embedding
+                        conn.execute(
+                            "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
+                         VALUES (?, ?, ?, ?, ?)",
+                            params![id, embedding_bytes, model, dimensions, now],
+                        )
+                        .map_err(|e| embedding_queue_db_write_error("store embedding row", *id, e))?;
+
+                        // Update memory
+                        conn.execute(
+                            "UPDATE memories SET has_embedding = 1 WHERE id = ?",
+                            params![id],
+                        )
+                        .map_err(|e| {
+                            embedding_queue_db_write_error(
+                                "mark memory as having embedding",
+                                *id,
+                                e,
+                            )
+                        })?;
+
+                        // Mark as complete
+                        conn.execute(
+                            "UPDATE embedding_queue SET status = 'complete', completed_at = ? WHERE memory_id = ?",
+                            params![now, id],
+                        )
+                        .map_err(|e| {
+                            embedding_queue_db_write_error(
+                                "mark embedding queue row as complete",
+                                *id,
+                                e,
+                            )
+                        })?;
+                    }
+
+                    tracing::info!("Processed {} embeddings", memory_ids.len());
+                    Ok(())
+                }
+                Err(e) => {
+                    tracing::error!("Embedding batch failed: {}", e);
+
+                    let conn = self.conn.lock();
+                    let error_msg = e.to_string();
+
+                    for &id in &memory_ids {
+                        conn.execute(
+                            "UPDATE embedding_queue SET status = 'failed', error = ?, retry_count = retry_count + 1 WHERE memory_id = ?",
+                            params![error_msg, id],
+                        )
+                        .map_err(|db_error| {
+                            embedding_queue_db_write_error(
+                                "mark embedding queue row as failed",
+                                id,
+                                db_error,
+                            )
+                        })?;
+                    }
+
+                    Err(EngramError::Embedding(error_msg))
+                }
+            }
+        })();
 
         batch.clear();
+        result
     }
+}
+
+fn embedding_queue_db_write_error(
+    operation: &str,
+    memory_id: MemoryId,
+    error: rusqlite::Error,
+) -> EngramError {
+    EngramError::Embedding(format!(
+        "database write failed while {operation} for memory_id={memory_id}: {error}"
+    ))
 }
 
 /// Get embedding status for a memory
@@ -871,6 +918,90 @@ mod tests {
         assert_eq!(queue.len(), 2);
     }
 
+    #[tokio::test]
+    async fn test_embedding_worker_process_batch_surfaces_db_write_errors() {
+        // Given: an embedding worker connected to a database that lacks the queue table.
+        let worker = EmbeddingWorker {
+            embedder: Arc::new(crate::embedding::TfIdfEmbedder::new(8)),
+            queue: EmbeddingQueue::new(1),
+            conn: Arc::new(Mutex::new(Connection::open_in_memory().unwrap())),
+            batch_size: 1,
+            batch_timeout: Duration::from_secs(1),
+        };
+        let mut batch = vec![EmbeddingRequest {
+            memory_id: 1,
+            content: "db write failure should be visible".to_string(),
+        }];
+
+        // When: processing attempts the first durable queue write.
+        let result = worker.process_batch(&mut batch).await;
+
+        // Then: the database error is surfaced and the attempted batch is cleared.
+        assert!(
+            matches!(
+                result,
+                Err(EngramError::Embedding(ref message))
+                    if message.contains("mark embedding queue row as processing")
+                        && message.contains("memory_id=1")
+            ),
+            "expected contextual processing-mark database error, got {result:?}"
+        );
+        assert!(batch.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_embedding_worker_process_batch_surfaces_embedder_failures() {
+        // Given: a valid queue row and an embedder that fails before persistence.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE embedding_queue (
+                memory_id INTEGER PRIMARY KEY,
+                status TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT,
+                error TEXT,
+                retry_count INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO embedding_queue (memory_id, status, retry_count)
+             VALUES (1, 'pending', 0)",
+            [],
+        )
+        .unwrap();
+        let worker = EmbeddingWorker {
+            embedder: Arc::new(FailingEmbedder),
+            queue: EmbeddingQueue::new(1),
+            conn: Arc::new(Mutex::new(conn)),
+            batch_size: 1,
+            batch_timeout: Duration::from_secs(1),
+        };
+        let mut batch = vec![EmbeddingRequest {
+            memory_id: 1,
+            content: "embedder failure should mark failed".to_string(),
+        }];
+
+        // When: the embedder fails after the processing mark succeeds.
+        let result = worker.process_batch(&mut batch).await;
+
+        // Then: the embedder error is surfaced and the queue row records failure.
+        assert!(
+            matches!(
+                result,
+                Err(EngramError::Embedding(ref message))
+                    if message.contains("forced embed failure")
+            ),
+            "expected embedder failure, got {result:?}"
+        );
+        assert!(batch.is_empty());
+
+        let conn = worker.conn.lock();
+        let state = queue_state(&conn, 1).unwrap();
+        assert_eq!(state, ("failed".to_string(), 1));
+    }
+
     #[test]
     fn test_get_embedding_length_mismatch() {
         let storage = Storage::open_in_memory().unwrap();
@@ -1239,6 +1370,22 @@ mod tests {
             params![memory_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?)
+    }
+
+    struct FailingEmbedder;
+
+    impl crate::embedding::Embedder for FailingEmbedder {
+        fn embed(&self, _text: &str) -> Result<Vec<f32>> {
+            Err(EngramError::Embedding("forced embed failure".to_string()))
+        }
+
+        fn dimensions(&self) -> usize {
+            8
+        }
+
+        fn model_name(&self) -> &str {
+            "failing-test"
+        }
     }
 
     fn test_memory_input(content: &str) -> CreateMemoryInput {

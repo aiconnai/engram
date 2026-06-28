@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use tokio::sync::mpsc;
@@ -95,10 +95,11 @@ impl SyncWorker {
     ) {
         let started_at = Utc::now();
 
-        // Update sync state to syncing
-        {
+        if let Err(e) = {
             let conn = conn.lock();
-            let _ = conn.execute("UPDATE sync_state SET is_syncing = 1 WHERE id = 1", []);
+            mark_sync_started(&conn)
+        } {
+            warn_sync_state_write_failed("start", direction, &e);
         }
 
         let result = match direction {
@@ -124,29 +125,22 @@ impl SyncWorker {
 
         let completed_at = Utc::now();
 
-        // Update sync state
-        {
-            let conn = conn.lock();
-            match &result {
-                Ok(_) => {
-                    let _ = conn.execute(
-                        "UPDATE sync_state SET
-                            is_syncing = 0,
-                            last_sync = ?,
-                            pending_changes = 0,
-                            last_error = NULL
-                         WHERE id = 1",
-                        params![completed_at.to_rfc3339()],
-                    );
+        match &result {
+            Ok(_) => {
+                if let Err(e) = {
+                    let conn = conn.lock();
+                    record_sync_success(&conn, &completed_at)
+                } {
+                    warn_sync_state_write_failed("success", direction, &e);
                 }
-                Err(e) => {
-                    let _ = conn.execute(
-                        "UPDATE sync_state SET
-                            is_syncing = 0,
-                            last_error = ?
-                         WHERE id = 1",
-                        params![e.to_string()],
-                    );
+            }
+            Err(e) => {
+                let error_message = e.to_string();
+                if let Err(write_error) = {
+                    let conn = conn.lock();
+                    record_sync_failure(&conn, &error_message)
+                } {
+                    warn_sync_state_write_failed("failure", direction, &write_error);
                 }
             }
         }
@@ -194,6 +188,48 @@ impl SyncWorker {
     }
 }
 
+fn mark_sync_started(conn: &Connection) -> Result<()> {
+    conn.execute("UPDATE sync_state SET is_syncing = 1 WHERE id = 1", [])?;
+    Ok(())
+}
+
+fn record_sync_success(conn: &Connection, completed_at: &DateTime<Utc>) -> Result<()> {
+    conn.execute(
+        "UPDATE sync_state SET
+            is_syncing = 0,
+            last_sync = ?,
+            pending_changes = 0,
+            last_error = NULL
+         WHERE id = 1",
+        params![completed_at.to_rfc3339()],
+    )?;
+    Ok(())
+}
+
+fn record_sync_failure(conn: &Connection, error_message: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE sync_state SET
+            is_syncing = 0,
+            last_error = ?
+         WHERE id = 1",
+        params![error_message],
+    )?;
+    Ok(())
+}
+
+fn warn_sync_state_write_failed(
+    phase: &'static str,
+    direction: SyncDirection,
+    error: &EngramError,
+) {
+    tracing::warn!(
+        phase = phase,
+        direction = ?direction,
+        error = %error,
+        "sync_state bookkeeping write failed"
+    );
+}
+
 /// Get current sync status from database
 pub fn get_sync_status(conn: &Connection) -> Result<SyncStatus> {
     let row = conn.query_row(
@@ -229,4 +265,44 @@ pub fn increment_pending_changes(conn: &Connection) -> Result<()> {
         [],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sync_state_helpers_return_errors_when_table_is_missing() {
+        // Given: an empty database with no sync_state table.
+        let conn = Connection::open_in_memory().expect("test opens in-memory database");
+
+        // When/Then: every bookkeeping write returns the database error.
+        assert_bookkeeping_writes_fail(&conn);
+    }
+
+    #[test]
+    fn sync_state_helpers_return_errors_when_table_is_broken() {
+        // Given: a malformed sync_state table missing the columns workers update.
+        let conn = Connection::open_in_memory().expect("test opens in-memory database");
+        conn.execute("CREATE TABLE sync_state (id INTEGER PRIMARY KEY)", [])
+            .expect("test setup creates malformed sync_state");
+        conn.execute("INSERT INTO sync_state (id) VALUES (1)", [])
+            .expect("test setup inserts malformed sync_state row");
+
+        // When/Then: missing columns make each bookkeeping helper fail visibly.
+        assert_bookkeeping_writes_fail(&conn);
+    }
+
+    fn assert_bookkeeping_writes_fail(conn: &Connection) {
+        let completed_at = Utc::now();
+        let results = [
+            mark_sync_started(conn),
+            record_sync_success(conn, &completed_at),
+            record_sync_failure(conn, "network failure"),
+        ];
+
+        for result in results {
+            assert!(matches!(result, Err(EngramError::Database(_))));
+        }
+    }
 }
