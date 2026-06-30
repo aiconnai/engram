@@ -1,0 +1,13 @@
+name: "Engram CodeQL config"
+
+queries:
+  - uses: security-and-quality
+
+query-filters:
+  - exclude:
+      id: js/insecure-temporary-file
+
+paths-ignore:
+  - "target/**"
+  - "docs/**"
+  - "**/fixtures/**"
