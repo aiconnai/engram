@@ -24,7 +24,7 @@ pub const REGISTRY: &[ModelEntry] = &[ModelEntry {
     model_sha256: "6fd5d72fe4589f189f8ebc006442dbb529bb7ce38f8082112682524616046452",
     tokenizer_url:
         "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
-    tokenizer_sha256: "ed6e5972a684127fafc9d77ef37a4d2a051ea9e01aabfcf9979c41d344e000d7", // gitleaks:allow,
+    tokenizer_sha256: "ed6e5972a684127fafc9d77ef37a4d2a051ea9e01aabfcf9979c41d344e000d7", // gitleaks:allow
     dimensions: 384,
     max_seq_len: 256,
 }];
