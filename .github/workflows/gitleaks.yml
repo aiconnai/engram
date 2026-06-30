@@ -26,6 +26,7 @@ jobs:
             zricethezav/gitleaks:v8.23.3 \
             detect \
               --source /src \
+              --no-git \
               --verbose \
               --redact \
               --report-format sarif \
