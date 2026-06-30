@@ -611,7 +611,7 @@ mod tests {
             "postgres://user:secret@db.example/app\n",
             "Cookie: sid=secret-cookie-value\n",
             "AKIAIOSFODNN7EXAMPLE\n",
-            "-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----"
+            "-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----" // gitleaks:allow
         );
 
         let redacted = policy.redact_text(input).expect("redact");
