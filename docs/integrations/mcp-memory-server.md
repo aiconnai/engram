@@ -28,7 +28,7 @@ Then call JSON-RPC at `POST /mcp`:
 
 ```bash
 curl -X POST http://localhost:8080/mcp \
-  -H "Authorization: Bearer change-me" \
+  -H "Authorization: Bearer $ENGRAM_HTTP_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"memory_search","arguments":{"query":"architecture decisions"}}}'
 ```

@@ -25,7 +25,7 @@ Create a memory from an agent tool or hook:
 
 ```bash
 curl -X POST http://localhost:8080/mcp \
-  -H "Authorization: Bearer change-me" \
+  -H "Authorization: Bearer $ENGRAM_HTTP_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"memory_create","arguments":{"content":"User prefers concise status updates","memory_type":"preference","workspace":"openai-agents"}}}'
 ```
@@ -34,7 +34,7 @@ Search before a run:
 
 ```bash
 curl -X POST http://localhost:8080/mcp \
-  -H "Authorization: Bearer change-me" \
+  -H "Authorization: Bearer $ENGRAM_HTTP_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory_search","arguments":{"query":"status update preferences","workspace":"openai-agents"}}}'
 ```

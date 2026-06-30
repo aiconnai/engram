@@ -607,11 +607,11 @@ mod tests {
         let input = concat!(
             "OPENAI_API_KEY=sk-testkeyvalue1234567890\n",
             "Authorization: Bearer abcdefghijklmnopqrstuvwxyz\n",
-            "jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.sflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c\n",
+            "jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.sflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c\n", // gitleaks:allow
             "postgres://user:secret@db.example/app\n",
             "Cookie: sid=secret-cookie-value\n",
             "AKIAIOSFODNN7EXAMPLE\n",
-            "-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----"
+            "-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----" // gitleaks:allow
         );
 
         let redacted = policy.redact_text(input).expect("redact");
