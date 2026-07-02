@@ -284,9 +284,8 @@ migration.
 
 **Public contract migration (docs/registry, not schema):** every public surface
 whose advertised behavior changes must be updated in the implementation plan:
-`docs/MCP_TOOLS.md`, `src/mcp/tools/registry.rs`, and the mirrored tool metadata in
-`src/mcp/tools/memory.rs` must stop claiming that `salience_decay_run`,
-`memory_decay`, or `memory_archive_old` perform lifecycle transitions. The
+`docs/MCP_TOOLS.md` and `src/mcp/tools/registry.rs` must stop claiming that
+`salience_decay_run`, `memory_decay`, or `memory_archive_old` perform lifecycle transitions. The
 `lifecycle_run.min_importance` parameter must stop being advertised as a selection
 filter; for backward compatibility the handler may accept it as a deprecated/no-op
 or translate it only into reporting, but it must not exclude candidates from the
@@ -432,8 +431,7 @@ predicate never forced to fire can be dead without signal.
   predicate behind every surface. The `suggest_lifecycle_state` fn and its tests
   (`salience.rs:254-278,971-981`) are removed or rewritten accordingly.
 - Public MCP contract metadata that advertises old lifecycle side effects:
-  `docs/MCP_TOOLS.md`, `src/mcp/tools/registry.rs`, and
-  `src/mcp/tools/memory.rs` must be updated for `memory_decay`,
+  `docs/MCP_TOOLS.md` and `src/mcp/tools/registry.rs` must be updated for `memory_decay`,
   `memory_archive_old`, `lifecycle_run.min_importance`, `lifecycle_config`
   `min_importance`/`min_access_count`, and `salience_decay_run`.
 - The old stability spec is marked **superseded** with a pointer to this one.

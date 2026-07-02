@@ -76,7 +76,7 @@ Current behavior:
 Primary code:
 
 - `src/mcp/handlers/council.rs`
-- `src/mcp/tools/search.rs`
+- `src/mcp/tools/registry.rs`
 - `tests/mcp_protocol_tests.rs`
 
 Current behavior:
