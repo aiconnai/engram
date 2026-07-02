@@ -1706,7 +1706,10 @@ ENGRAM_TOOL_TIER=essential cargo run --bin engram-server
 # Essential + standard — default and recommended for most agents
 ENGRAM_TOOL_TIER=standard cargo run --bin engram-server
 
-# All tools — opt in when an agent needs specialized capabilities
+# Advanced/specialized tools — opt in when an agent needs specialized capabilities
+ENGRAM_TOOL_TIER=advanced cargo run --bin engram-server
+
+# All tools — alias for advanced
 ENGRAM_TOOL_TIER=all cargo run --bin engram-server
 ```
 

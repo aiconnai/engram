@@ -115,12 +115,20 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
 /// - `Some("essential")` → only Essential tools + discover_tools
 /// - `Some("standard")` → Essential + Standard tools + discover_tools
 /// - `None` → Essential + Standard tools + discover_tools
-/// - `Some("all")` → all tools
+/// - `Some("advanced")` or `Some("all")` → all tools
 pub fn get_tool_definitions_tiered(max_tier: Option<&str>) -> Vec<ToolDefinition> {
     let max = match max_tier {
         Some("essential") => ToolTier::Essential,
-        Some("all") => ToolTier::Advanced,
-        _ => ToolTier::Standard,
+        Some("standard") | None => ToolTier::Standard,
+        Some("advanced") | Some("all") => ToolTier::Advanced,
+        Some(unknown) => {
+            tracing::warn!(
+                target: "engram::mcp::tools",
+                tool_tier = %unknown,
+                "unknown ENGRAM_TOOL_TIER; falling back to standard tool tier"
+            );
+            ToolTier::Standard
+        }
     };
 
     iter_tool_definitions()
@@ -275,32 +283,36 @@ mod tests {
 
     #[test]
     fn test_default_tier_excludes_advanced_tools() {
-        let default_tools = get_tool_definitions_tiered(None);
-        assert!(
-            default_tools.iter().any(|t| t.name == "memory_search"),
-            "default tools/list should include essential tools"
-        );
-        assert!(
-            default_tools.iter().any(|t| t.name == "quality_report"),
-            "default tools/list should include standard tools"
-        );
-        assert!(
-            default_tools.iter().any(|t| t.name == "discover_tools"),
-            "default tools/list should always include discover_tools"
-        );
-        assert!(
-            default_tools.iter().all(|t| t.name != "memory_archive_old"),
-            "default tools/list should not expose advanced tools"
-        );
+        for tier in [None, Some("advnaced")] {
+            let tools = get_tool_definitions_tiered(tier);
+            assert!(
+                tools.iter().any(|t| t.name == "memory_search"),
+                "default tools/list should include essential tools"
+            );
+            assert!(
+                tools.iter().any(|t| t.name == "quality_report"),
+                "default tools/list should include standard tools"
+            );
+            assert!(
+                tools.iter().any(|t| t.name == "discover_tools"),
+                "default tools/list should always include discover_tools"
+            );
+            assert!(
+                tools.iter().all(|t| t.name != "memory_archive_old"),
+                "default tools/list should not expose advanced tools"
+            );
+        }
     }
 
     #[test]
-    fn test_all_tier_includes_advanced_tools() {
-        let all_tools = get_tool_definitions_tiered(Some("all"));
-        assert!(
-            all_tools.iter().any(|t| t.name == "memory_archive_old"),
-            "ENGRAM_TOOL_TIER=all should expose advanced tools"
-        );
+    fn test_advanced_tiers_include_advanced_tools() {
+        for tier in ["all", "advanced"] {
+            let tools = get_tool_definitions_tiered(Some(tier));
+            assert!(
+                tools.iter().any(|t| t.name == "memory_archive_old"),
+                "ENGRAM_TOOL_TIER={tier} should expose advanced tools"
+            );
+        }
     }
 
     /// Guard against the dispatch/registry drift bug class: every tool routed
