@@ -1725,6 +1725,21 @@ The `discover_tools` tool is always available regardless of tier setting:
 
 Response includes tool names, descriptions, tiers, and summary counts. Agents can progressively discover capabilities as needed.
 
+### Agent Memory Contract
+
+Before building writeback automation or treating generated memory as reusable
+context, call the read-only `memory_agent_contract` tool. It returns the current
+governance contract for:
+
+- recall paths (`memory_smart_retrieve`, `memory_digest`, `memory_get_public`);
+- canonical write paths (`memory_create`, `memory_create_batch`, `context_seed`);
+- pending review boundaries for future `agent_writeback` dream candidates;
+- provenance surfaces (`enrichment_events`, operational context artifacts);
+- rules that generated memory is pending/evidence-only until reviewed.
+
+The first C1 slice is MCP-only and requires no schema migration. CLI wrappers or
+writeback automation should be thin layers over the same contract.
+
 ---
 
 ## 26. Session Handoff Protocol
