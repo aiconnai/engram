@@ -928,6 +928,51 @@ fn memory_agent_contract_tool_is_read_only_standard_tier() {
     );
 }
 
+#[cfg(feature = "dream-phase")]
+#[test]
+fn memory_agent_writeback_tool_is_advanced_dry_run_mutating_surface() {
+    let standard_tools = get_tool_definitions_tiered(Some("standard"));
+    assert!(
+        standard_tools
+            .iter()
+            .all(|tool| tool.name != "memory_agent_writeback"),
+        "memory_agent_writeback should require Advanced tier"
+    );
+
+    let advanced_tools = get_tool_definitions_tiered(Some("advanced"));
+    let writeback_tool = advanced_tools
+        .iter()
+        .find(|tool| tool.name == "memory_agent_writeback")
+        .expect("advanced tier should include memory_agent_writeback");
+
+    let annotations = writeback_tool
+        .annotations
+        .as_ref()
+        .expect("memory_agent_writeback should expose annotations");
+    assert_eq!(
+        annotations.read_only_hint, None,
+        "memory_agent_writeback mutates dream_candidates, not canonical memories"
+    );
+    assert_eq!(
+        writeback_tool.input_schema["properties"]["dry_run"]["default"].as_bool(),
+        Some(true),
+        "memory_agent_writeback should default to dry-run"
+    );
+    assert_eq!(
+        writeback_tool.input_schema["properties"]["confirm"]["default"].as_bool(),
+        Some(false),
+        "memory_agent_writeback should require explicit confirm for pending candidate creation"
+    );
+    assert!(
+        writeback_tool.input_schema["required"]
+            .as_array()
+            .expect("required fields")
+            .iter()
+            .any(|field| field.as_str() == Some("proposed_content")),
+        "memory_agent_writeback should require proposed_content"
+    );
+}
+
 #[test]
 fn memory_agent_contract_dispatches_governance_contract() {
     let handler = TestHandler::new();
@@ -936,13 +981,28 @@ fn memory_agent_contract_dispatches_governance_contract() {
 
     assert_eq!(
         contract["contract_version"].as_str(),
-        Some("agent-memory-contract-v0")
+        Some("agent-memory-contract-v1")
+    );
+    let baseline = contract["baseline"]
+        .as_object()
+        .expect("baseline should be an object");
+    assert_eq!(
+        baseline
+            .get("schema_migration_required")
+            .and_then(|value| value.as_bool()),
+        None,
+        "contract should avoid an ambiguous forever-true migration flag"
     );
     assert_eq!(
-        contract["baseline"]["schema_migration_required"].as_bool(),
-        Some(false),
-        "C1.0 contract must not require a schema migration"
+        contract["baseline"]["schema_migration"]["introduced_schema_version"].as_i64(),
+        Some(45)
     );
+    assert_eq!(
+        contract["baseline"]["schema_migration"]["runtime_action_required_after_migration"]
+            .as_bool(),
+        Some(false)
+    );
+    assert_eq!(contract["baseline"]["schema_version"].as_i64(), Some(45));
     assert_eq!(
         contract["recall"]["primary_tools"][0].as_str(),
         Some("memory_smart_retrieve")
@@ -955,6 +1015,10 @@ fn memory_agent_contract_dispatches_governance_contract() {
         contract["writeback"]["pending_review"]["required_tool_tier"].as_str(),
         Some("advanced"),
         "dream candidate review/apply tools are Advanced-tier"
+    );
+    assert_eq!(
+        contract["writeback"]["pending_review"]["creation_tool"].as_str(),
+        Some("memory_agent_writeback")
     );
     assert_eq!(
         contract["writeback"]["generated_memory_default"].as_str(),
@@ -970,6 +1034,21 @@ fn memory_agent_contract_dispatches_governance_contract() {
             .any(|tool| tool.as_str() == Some("dream_candidate_get")),
         "contract should require inspecting candidates before review/apply: {contract}"
     );
+    let validation_rules = contract["writeback"]["pending_review"]["validation_rules"]
+        .as_array()
+        .expect("contract should list writeback validation rules");
+    for expected in [
+        "confidence must be between 0.0 and 1.0",
+        "source_memory_ids must contain positive, unique ids",
+        "metadata cannot set reserved governance keys",
+    ] {
+        assert!(
+            validation_rules
+                .iter()
+                .any(|rule| rule.as_str().is_some_and(|text| text.contains(expected))),
+            "contract should document validation rule `{expected}`: {contract}"
+        );
+    }
 
     let must_not = contract["must_not"]
         .as_array()

@@ -484,6 +484,7 @@ fn memory_type_for_candidate(candidate: &DreamCandidate) -> MemoryType {
         "preference" => MemoryType::Preference,
         "constraint" => MemoryType::Decision,
         "project_state" => MemoryType::Context,
+        "agent_writeback" => MemoryType::Learning,
         _ => MemoryType::Note,
     }
 }

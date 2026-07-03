@@ -109,6 +109,7 @@ pub use lock::{LockInfo, StorageLock};
 pub use meilisearch_backend::MeilisearchBackend;
 #[cfg(feature = "meilisearch")]
 pub use meilisearch_indexer::MeilisearchIndexer;
+pub(crate) use migrations::SCHEMA_VERSION;
 pub use operational_context::{
     create_context_artifact, create_context_event, create_context_summary, get_context_artifact,
     get_context_event, get_context_summary, list_context_artifacts_for_event,
