@@ -1,6 +1,6 @@
 # Engram — Complete AI Agent Guide
 
-> **Version:** 0.22.0 | **Protocol:** MCP 2025-11-25 | **Tools:** [generated reference](MCP_TOOLS.md) | **Schema:** v44
+> **Version:** 0.22.0 | **Protocol:** MCP 2025-11-25 | **Tools:** [generated reference](MCP_TOOLS.md) | **Schema:** v45
 
 This guide shows agents how to turn scattered meetings, docs, transcripts, and project decisions into a shared source of truth that can be queried through MCP.
 
@@ -1743,6 +1743,23 @@ defaults to `dry_run=true`, requires at least one `source_memory_ids` or
 `evidence` source, and requires `confirm=true` when `dry_run=false`. A confirmed
 call creates only a pending `dream_candidates` row with kind `agent_writeback`;
 it does not mutate canonical memory.
+
+Validation is part of the contract: `confidence` must be between `0.0` and
+`1.0`, `source_memory_ids` must be positive and unique, structured evidence
+must provide non-empty `source_type` and `source_id`, and caller metadata cannot
+set reserved governance keys such as `origin`, `status`, `generated_by_ai`, or
+`review_required` (including casing variants). Dry-run and confirmed responses
+use the same candidate wrapper shape (`candidate.candidate` plus
+`candidate.sources`) so clients can preview and then confirm without special
+parsing.
+
+Confirmed writebacks create a synthetic dream job only for provenance. That job
+is completed after the pending candidate and its sources are written, and a
+caller-provided `job_id` may be reused only when it already belongs to a pending
+`memory_agent_writeback` job in the same workspace. Ordinary `dream_create`
+jobs and terminal writeback jobs are rejected. If a pending `agent_writeback`
+candidate is later accepted and applied, it becomes a canonical `learning`
+memory via the existing `dream_candidate_apply` path.
 
 The review/apply tools (`dream_candidates_list`, `dream_candidate_get`,
 `dream_candidate_review`, `dream_candidate_apply`) are also Advanced-tier and

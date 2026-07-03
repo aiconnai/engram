@@ -12,9 +12,14 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
         "scope": "mcp",
         "status": "active",
         "baseline": {
-            "schema_migration_required": true,
             "schema_version": SCHEMA_VERSION,
-            "current_slice": "pending_agent_writeback_candidates"
+            "current_slice": "pending_agent_writeback_candidates",
+            "schema_migration": {
+                "introduced_schema_version": 45,
+                "required_to_upgrade_from_v44": true,
+                "runtime_action_required_after_migration": false,
+                "reason": "v45 extends the existing dream_candidates.kind CHECK with agent_writeback"
+            }
         },
         "recall": {
             "primary_tools": [
@@ -51,6 +56,12 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
                     "memory_agent_writeback requires confirm=true when dry_run=false.",
                     "memory_agent_writeback requires at least one source_memory_ids entry or evidence source.",
                     "Pending candidate creation does not mutate canonical memory."
+                ],
+                "validation_rules": [
+                    "confidence must be between 0.0 and 1.0.",
+                    "source_memory_ids must contain positive, unique ids.",
+                    "structured evidence requires non-empty source_type and source_id.",
+                    "metadata cannot set reserved governance keys, including casing variants."
                 ],
                 "review_tools": [
                     "dream_candidates_list",

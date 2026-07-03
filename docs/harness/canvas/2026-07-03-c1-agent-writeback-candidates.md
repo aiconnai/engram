@@ -36,6 +36,11 @@ Scope: Add pending agent writebacks as `agent_writeback` dream candidates withou
 | No evidence sources | Integration test expects an error before candidate creation. |
 | Pending candidate applied before review | Integration test expects `dream_candidate_apply` to reject pending state. |
 | Schema CHECK rejects new kind | Migration test inserts `agent_writeback` candidate after v45. |
+| Dry-run/live response drift | Integration test asserts both responses use `candidate.candidate` plus `candidate.sources`. |
+| Candidate id collision | Integration test expects a domain-level conflict without raw SQLite text. |
+| Reused or terminal dream job | Integration test rejects ordinary `dream_create` jobs and completed writeback jobs. |
+| Metadata casing spoof | Integration test rejects reserved governance keys case-insensitively. |
+| Applied `agent_writeback` memory type | Integration test asserts accepted/applied writebacks become `learning`, not generic `note`. |
 
 ## Breakage Risk
 
@@ -44,6 +49,8 @@ Scope: Add pending agent writebacks as `agent_writeback` dream candidates withou
 | MCP tools/list advertises unavailable feature-gated tool | Agents call unknown tools | Add `memory_agent_writeback` to dream-phase feature filter. | Protocol test with `dream-phase`; MCP reference check. |
 | v45 table rebuild drops existing candidates | Data loss | Copy all `dream_candidates` columns and keep sources table intact. | Migration tests plus review of SQL column list. |
 | Agent-created candidate mutates canonical memory too early | Trusted generated memory bypasses governance | Handler writes only `dream_candidates` and sources; canonical apply remains existing review/apply path. | Integration test compares memory count before and after pending creation. |
+| Synthetic writeback jobs remain indefinitely pending | Operational noise and unsafe `job_id` reuse | Complete the provenance job after the pending candidate and sources are written; require pending status on any caller-provided job. | Integration test checks job status and rejects terminal reuse. |
+| Caller spoofs governance metadata | Generated memory could look reviewed/trusted before review | Reject reserved metadata keys case-insensitively and let the handler stamp canonical governance metadata. | Integration test with `Origin`/`review_required` spoof. |
 
 ## Decision
 

@@ -593,7 +593,7 @@ fn parse_optional_rfc3339(value: Option<String>) -> Option<DateTime<Utc>> {
         .map(|dt| dt.with_timezone(&Utc))
 }
 
-fn preview(content: &str, limit: usize) -> String {
+pub(crate) fn preview(content: &str, limit: usize) -> String {
     let mut out = String::new();
     for ch in content
         .split_whitespace()

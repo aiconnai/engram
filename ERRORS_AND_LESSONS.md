@@ -45,6 +45,18 @@ Tech Debt, Security, Performance, Fragile Areas
 **Right:** Update storage validation and add a schema migration that rebuilds the constrained table, then cover the new kind with a migration test.
 **Date:** 2026-07-03
 
+### [Logic] New dream candidate kinds need explicit apply semantics
+**Context:** Adding a generated-memory candidate kind such as `agent_writeback`.
+**Wrong:** Letting unknown candidate kinds fall through to the generic `note` memory type, or returning different dry-run/live response shapes.
+**Right:** Add an explicit `memory_type_for_candidate` case and keep dry-run/live JSON wrappers isomorphic so clients can preview and confirm safely.
+**Date:** 2026-07-03
+
+### [Security] Generated-memory writebacks need provenance guards
+**Context:** MCP handlers that reuse `dream_jobs` for pending generated memory.
+**Wrong:** Reusing arbitrary or terminal `job_id` values, allowing caller metadata to spoof governance keys by casing, or leaking raw SQLite constraint errors.
+**Right:** Validate job workspace, origin, model profile, and pending status; reject reserved metadata keys case-insensitively; map candidate collisions to domain-level conflicts.
+**Date:** 2026-07-03
+
 > **Note:** Replace these examples with real entries as errors are discovered.
 > Delete the examples once you have real entries.
 

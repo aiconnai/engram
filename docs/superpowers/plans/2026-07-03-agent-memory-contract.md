@@ -108,6 +108,13 @@ Future work must remain separate from C1.0:
 - [x] Reuse `dream_candidate_get`, `dream_candidate_review`, and
   `dream_candidate_apply` for inspection, review, dry-run apply, and final
   canonical mutation.
+- [x] Post-review hardening: dry-run/live response shapes are isomorphic,
+  `agent_writeback` applies as `learning`, duplicate candidate ids return clean
+  conflicts, synthetic writeback jobs complete after candidate creation,
+  caller-provided jobs require writeback provenance plus pending status, and
+  reserved governance metadata keys are rejected case-insensitively.
+- [x] Contract payload now documents concrete validation rules and replaces the
+  ambiguous forever-true migration flag with a structured v45 migration object.
 
 **QA:**
 
@@ -115,6 +122,7 @@ Future work must remain separate from C1.0:
 rtk cargo test --lib storage::migrations::tests::test_dream_candidates_allow_agent_writeback_kind
 rtk cargo test --features dream-phase --test mcp_protocol_tests memory_agent_writeback_tool_is_advanced_dry_run_mutating_surface
 rtk cargo test --features dream-phase --test dream_integration test_mcp_memory_agent_writeback_requires_review_before_canonical_apply
+rtk cargo test --features dream-phase --test dream_integration test_mcp_memory_agent_writeback_rejects_reuse_and_spoofing
 ```
 
 Targeted QA status on 2026-07-03: all three commands above passed after the

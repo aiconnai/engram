@@ -983,10 +983,24 @@ fn memory_agent_contract_dispatches_governance_contract() {
         contract["contract_version"].as_str(),
         Some("agent-memory-contract-v1")
     );
+    let baseline = contract["baseline"]
+        .as_object()
+        .expect("baseline should be an object");
     assert_eq!(
-        contract["baseline"]["schema_migration_required"].as_bool(),
-        Some(true),
-        "C1.1 contract adds the agent_writeback dream candidate kind"
+        baseline
+            .get("schema_migration_required")
+            .and_then(|value| value.as_bool()),
+        None,
+        "contract should avoid an ambiguous forever-true migration flag"
+    );
+    assert_eq!(
+        contract["baseline"]["schema_migration"]["introduced_schema_version"].as_i64(),
+        Some(45)
+    );
+    assert_eq!(
+        contract["baseline"]["schema_migration"]["runtime_action_required_after_migration"]
+            .as_bool(),
+        Some(false)
     );
     assert_eq!(contract["baseline"]["schema_version"].as_i64(), Some(45));
     assert_eq!(
@@ -1020,6 +1034,21 @@ fn memory_agent_contract_dispatches_governance_contract() {
             .any(|tool| tool.as_str() == Some("dream_candidate_get")),
         "contract should require inspecting candidates before review/apply: {contract}"
     );
+    let validation_rules = contract["writeback"]["pending_review"]["validation_rules"]
+        .as_array()
+        .expect("contract should list writeback validation rules");
+    for expected in [
+        "confidence must be between 0.0 and 1.0",
+        "source_memory_ids must contain positive, unique ids",
+        "metadata cannot set reserved governance keys",
+    ] {
+        assert!(
+            validation_rules
+                .iter()
+                .any(|rule| rule.as_str().is_some_and(|text| text.contains(expected))),
+            "contract should document validation rule `{expected}`: {contract}"
+        );
+    }
 
     let must_not = contract["must_not"]
         .as_array()

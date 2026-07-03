@@ -1271,8 +1271,14 @@ Done in this slice:
 - Confirmed calls create only `dream_candidates` and `dream_candidate_sources`;
   canonical memory still changes only through the existing
   `dream_candidate_review` + `dream_candidate_apply` path.
+- Post-review hardening maps applied `agent_writeback` candidates to
+  `learning`, keeps dry-run/live response shapes isomorphic, cleans duplicate
+  candidate conflicts, validates reused job provenance/status, completes
+  synthetic jobs after candidate creation, and rejects reserved metadata
+  spoofing by casing.
 - Updated `memory_agent_contract` to version `agent-memory-contract-v1` with
-  the new creation tool, schema version, and creation rules.
+  the new creation tool, schema version, creation/validation rules, and a
+  structured v45 migration object instead of a forever-true migration flag.
 - Regenerated `docs/MCP_TOOLS.md` and updated `docs/AI_GUIDE.md`.
 - Added Review Canvas:
   `docs/harness/canvas/2026-07-03-c1-agent-writeback-candidates.md`.
@@ -1282,15 +1288,17 @@ Verification so far:
 - `rtk cargo test --lib storage::migrations::tests::test_dream_candidates_allow_agent_writeback_kind` — PASS.
 - `rtk cargo test --features dream-phase --test mcp_protocol_tests memory_agent_writeback_tool_is_advanced_dry_run_mutating_surface` — PASS.
 - `rtk cargo test --features dream-phase --test dream_integration test_mcp_memory_agent_writeback_requires_review_before_canonical_apply` — PASS.
+- `rtk cargo test --features dream-phase --test dream_integration test_mcp_memory_agent_writeback_rejects_reuse_and_spoofing --locked` — PASS.
 - `rtk cargo test --test mcp_protocol_tests memory_agent_contract_dispatches_governance_contract` — PASS.
+- `rtk cargo test --lib storage::migrations::tests::test_v45_preserves_existing_dream_candidate_data --locked` — PASS.
 - `rtk cargo fmt --all -- --check` — PASS.
 - `rtk git diff --check` — PASS.
 - `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
 - `rtk cargo check --workspace --all-targets --locked` — PASS.
 - `rtk cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` — PASS.
-- `rtk cargo test --workspace --all-targets --locked` — PASS, 1249 tests.
+- `rtk cargo test --workspace --all-targets --locked` — PASS, 1250 tests.
 - `rtk bash docs/harness/bin/sensors.sh` — PASS, full lane, timestamp
-  `2026-07-03T10:18:59Z`, duration 89s.
+  `2026-07-03T11:44:01Z`, duration 35s.
 - MCP stdio smoke with `--features dream-phase` and isolated `ENGRAM_DB_PATH`:
   `memory_agent_writeback` returned `status=dry_run` and
   `canonical_memory_mutated=false` by default.
