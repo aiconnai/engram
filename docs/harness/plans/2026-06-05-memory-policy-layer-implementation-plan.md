@@ -102,10 +102,9 @@ Modify these files:
 - `src/storage/queries/mod.rs`: export `memory_policy` query functions.
 - `src/storage/queries/core.rs`: initialize or refresh policy state when memories are created, promoted, expired, or lifecycle-mutated.
 - `src/mcp/handlers/mod.rs`: route new policy tool names.
-- `src/mcp/tools/memory.rs`: add public MCP schemas for policy tools.
-- `src/mcp/tools/registry.rs`: update generated registry if this repository still checks it in.
+- `src/mcp/tools/registry.rs`: add public MCP schemas for policy tools.
 - `src/mcp/handlers/search.rs`: optionally apply policy reranking after hybrid search and before response assembly.
-- `src/mcp/tools/search.rs`: add `policy_rerank` and `policy_explain` request parameters to `memory_search`.
+- `src/mcp/tools/registry.rs`: add `policy_rerank` and `policy_explain` request parameters to `memory_search`.
 - `src/hooks/post_tool_use.rs`: convert successful memory/search/user-action hook metadata into policy events.
 - `src/hooks/session_end.rs`: emit a policy event summary for session-end payloads without writing hidden facts.
 - `tests/mcp_protocol_tests.rs`: cover policy tools via `tools/list` and `tools/call`.
@@ -697,7 +696,7 @@ Expected: hook and promotion tests pass.
 **Files:**
 
 - Modify: `src/mcp/handlers/search.rs`
-- Modify: `src/mcp/tools/search.rs`
+- Modify: `src/mcp/tools/registry.rs`
 - Add unit tests or protocol tests covering response shape.
 
 - [ ] **Step 1: Add opt-in search parameters**
@@ -764,7 +763,7 @@ Expected: existing search protocol tests pass plus policy-rerank shape test.
 
 - Create: `src/mcp/handlers/memory_policy.rs`
 - Modify: `src/mcp/handlers/mod.rs`
-- Modify: `src/mcp/tools/memory.rs`
+- Modify: `src/mcp/tools/registry.rs`
 - Modify: `tests/mcp_protocol_tests.rs`
 
 - [ ] **Step 1: Add MCP protocol tests first**
@@ -877,7 +876,7 @@ Add dispatch arms:
 
 - [ ] **Step 8: Add MCP tool definitions**
 
-Add `ToolDef` entries in `src/mcp/tools/memory.rs`. Mark `memory_score` as mutating only when `persist=true` is semantically possible; because MCP annotations are static, use mutating for `memory_score`. Mark `memory_explain` read-only. Mark `memory_decay` mutating because apply mode exists.
+Add `ToolDef` entries in `src/mcp/tools/registry.rs`. Mark `memory_score` as mutating only when `persist=true` is semantically possible; because MCP annotations are static, use mutating for `memory_score`. Mark `memory_explain` read-only. Mark `memory_decay` mutating because apply mode exists.
 
 - [ ] **Step 9: Run MCP protocol tests**
 

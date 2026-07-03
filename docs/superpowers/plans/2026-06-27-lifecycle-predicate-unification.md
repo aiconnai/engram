@@ -39,7 +39,6 @@
 | Modify | `src/storage/queries/retention.rs` | Make `compress_old_memories` compress only already-Archived rows; remove lifecycle update; keep retention max-count and auto-delete unchanged |
 | Modify | `src/bin/server.rs` | Rename compression scheduler result/log wording from archived to compressed |
 | Modify | `src/mcp/tools/registry.rs` | Update public tool descriptions/schemas for changed behavior |
-| Modify | `src/mcp/tools/memory.rs` | Mirror public tool descriptions/schemas for changed behavior |
 | Regenerate | `docs/MCP_TOOLS.md` | Generated MCP reference after registry/source metadata changes |
 | Modify | `tests/mcp_protocol_tests.rs` | Update any protocol expectations for changed tool schemas/metadata |
 
@@ -498,7 +497,6 @@ Expected: retention tests pass; no compression path archives Active/Stale rows.
 
 **Files:**
 - Modify: `src/mcp/tools/registry.rs`
-- Modify: `src/mcp/tools/memory.rs`
 - Modify: `tests/mcp_protocol_tests.rs`
 - Regenerate: `docs/MCP_TOOLS.md`
 

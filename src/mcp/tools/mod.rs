@@ -7,11 +7,11 @@ use super::protocol::{ToolAnnotations, ToolDefinition};
 /// Tool exposure tier for progressive discovery.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolTier {
-    /// ~20 core tools every agent needs. Always exposed.
+    /// Core tools every agent needs. Always exposed.
     Essential,
-    /// ~50 common tools for standard workflows.
+    /// Common tools for standard workflows.
     Standard,
-    /// ~110 advanced/specialized tools.
+    /// Advanced/specialized tools.
     Advanced,
 }
 
@@ -114,12 +114,21 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
 ///
 /// - `Some("essential")` → only Essential tools + discover_tools
 /// - `Some("standard")` → Essential + Standard tools + discover_tools
-/// - `Some("all")` or `None` → all tools (backward compatible)
+/// - `None` → Essential + Standard tools + discover_tools
+/// - `Some("advanced")` or `Some("all")` → all tools
 pub fn get_tool_definitions_tiered(max_tier: Option<&str>) -> Vec<ToolDefinition> {
     let max = match max_tier {
         Some("essential") => ToolTier::Essential,
-        Some("standard") => ToolTier::Standard,
-        _ => ToolTier::Advanced, // "all" or None = everything
+        Some("standard") | None => ToolTier::Standard,
+        Some("advanced") | Some("all") => ToolTier::Advanced,
+        Some(unknown) => {
+            tracing::warn!(
+                target: "engram::mcp::tools",
+                tool_tier = %unknown,
+                "unknown ENGRAM_TOOL_TIER; falling back to standard tool tier"
+            );
+            ToolTier::Standard
+        }
     };
 
     iter_tool_definitions()
@@ -270,6 +279,40 @@ mod tests {
         // Advanced count depends on feature flags (feature-gated tools are Advanced)
         assert!(advanced >= 80, "advanced: {}", advanced);
         assert_eq!(essential + standard + advanced, TOOL_DEFINITIONS.len());
+    }
+
+    #[test]
+    fn test_default_tier_excludes_advanced_tools() {
+        for tier in [None, Some("advnaced")] {
+            let tools = get_tool_definitions_tiered(tier);
+            assert!(
+                tools.iter().any(|t| t.name == "memory_search"),
+                "default tools/list should include essential tools"
+            );
+            assert!(
+                tools.iter().any(|t| t.name == "quality_report"),
+                "default tools/list should include standard tools"
+            );
+            assert!(
+                tools.iter().any(|t| t.name == "discover_tools"),
+                "default tools/list should always include discover_tools"
+            );
+            assert!(
+                tools.iter().all(|t| t.name != "memory_archive_old"),
+                "default tools/list should not expose advanced tools"
+            );
+        }
+    }
+
+    #[test]
+    fn test_advanced_tiers_include_advanced_tools() {
+        for tier in ["all", "advanced"] {
+            let tools = get_tool_definitions_tiered(Some(tier));
+            assert!(
+                tools.iter().any(|t| t.name == "memory_archive_old"),
+                "ENGRAM_TOOL_TIER={tier} should expose advanced tools"
+            );
+        }
     }
 
     /// Guard against the dispatch/registry drift bug class: every tool routed

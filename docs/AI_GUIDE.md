@@ -1695,16 +1695,21 @@ Engram exposes the generated tool set shown in the MCP reference. To avoid overw
 
 ### Controlling Exposure
 
-Set `ENGRAM_TOOL_TIER` to control which tools are listed:
+By default, `tools/list` exposes the standard tier: Essential + Standard tools
+and `discover_tools`. Set `ENGRAM_TOOL_TIER` to narrow or widen the listed
+surface:
 
 ```bash
 # Only essential tools — great for simple agents
 ENGRAM_TOOL_TIER=essential cargo run --bin engram-server
 
-# Essential + standard — recommended for most agents
+# Essential + standard — default and recommended for most agents
 ENGRAM_TOOL_TIER=standard cargo run --bin engram-server
 
-# All tools (default, backward compatible)
+# Advanced/specialized tools — opt in when an agent needs specialized capabilities
+ENGRAM_TOOL_TIER=advanced cargo run --bin engram-server
+
+# All tools — alias for advanced
 ENGRAM_TOOL_TIER=all cargo run --bin engram-server
 ```
 

@@ -269,18 +269,25 @@ fn test_tools_list_uses_unique_tool_names_from_registry() {
 }
 
 #[test]
-fn test_tool_registry_has_no_orphan_discovery_definition_file() {
-    let orphan = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+fn test_tool_registry_has_no_orphan_definition_files() {
+    let tools_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("mcp")
-        .join("tools")
-        .join("discovery.rs");
+        .join("tools");
 
-    assert!(
-        !orphan.exists(),
-        "tool definitions must live in src/mcp/tools/registry.rs; remove orphan file: {}",
-        orphan.display()
-    );
+    let allowed = ["mod.rs", "registry.rs"];
+    for entry in std::fs::read_dir(&tools_dir).expect("read src/mcp/tools") {
+        let path = entry.expect("read tool definition dir entry").path();
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("tool definition file name must be UTF-8");
+        assert!(
+            allowed.contains(&file_name),
+            "tool definitions must live in src/mcp/tools/registry.rs; remove orphan file: {}",
+            path.display()
+        );
+    }
 }
 
 fn create_memory_for_search(handler: &TestHandler, id: i64, content: &str) -> i64 {
