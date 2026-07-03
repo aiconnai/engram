@@ -80,6 +80,7 @@ fn tool_feature_available(name: &str) -> bool {
         | "dream_candidate_get"
         | "dream_candidate_review"
         | "dream_candidate_apply"
+        | "memory_agent_writeback"
         | "dream_eval_run" => cfg!(feature = "dream-phase"),
 
         // agent-portability feature

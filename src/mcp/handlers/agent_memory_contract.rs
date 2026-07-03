@@ -1,8 +1,10 @@
 use serde_json::{json, Value};
 
+use crate::storage::SCHEMA_VERSION;
+
 use super::HandlerContext;
 
-const CONTRACT_VERSION: &str = "agent-memory-contract-v0";
+const CONTRACT_VERSION: &str = "agent-memory-contract-v1";
 
 pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
     json!({
@@ -10,8 +12,9 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
         "scope": "mcp",
         "status": "active",
         "baseline": {
-            "schema_migration_required": false,
-            "first_slice": "mcp_read_only"
+            "schema_migration_required": true,
+            "schema_version": SCHEMA_VERSION,
+            "current_slice": "pending_agent_writeback_candidates"
         },
         "recall": {
             "primary_tools": [
@@ -39,9 +42,16 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
             "pending_review": {
                 "storage": "dream_candidates",
                 "candidate_kind": "agent_writeback",
+                "creation_tool": "memory_agent_writeback",
                 "feature_gate": "dream-phase",
                 "required_tool_tier": "advanced",
                 "visibility": "Set ENGRAM_TOOL_TIER=advanced or ENGRAM_TOOL_TIER=all to expose dream candidate review/apply tools.",
+                "creation_rules": [
+                    "memory_agent_writeback defaults to dry_run=true.",
+                    "memory_agent_writeback requires confirm=true when dry_run=false.",
+                    "memory_agent_writeback requires at least one source_memory_ids entry or evidence source.",
+                    "Pending candidate creation does not mutate canonical memory."
+                ],
                 "review_tools": [
                     "dream_candidates_list",
                     "dream_candidate_get",

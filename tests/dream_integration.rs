@@ -262,6 +262,166 @@ fn test_mcp_dream_candidate_review_and_apply() {
 
 #[cfg(feature = "dream-phase")]
 #[test]
+fn test_mcp_memory_agent_writeback_requires_review_before_canonical_apply() {
+    use engram::mcp::handlers::dispatch;
+    use engram::storage::Storage;
+    use serde_json::json;
+
+    let storage = Storage::open_in_memory().unwrap();
+    let source_id: i64 = storage
+        .with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO memories (content, workspace, importance, created_at, updated_at)
+                 VALUES ('Source fact for agent writeback.', 'default', 0.8, datetime('now'), datetime('now'))",
+                [],
+            )?;
+            Ok(conn.last_insert_rowid())
+        })
+        .unwrap();
+    let ctx = test_handler_context(storage.clone());
+
+    let missing_evidence = dispatch(
+        &ctx,
+        "memory_agent_writeback",
+        json!({"proposed_content": "Agent-generated fact without evidence."}),
+    );
+    assert!(
+        missing_evidence.get("error").is_some(),
+        "agent writeback should require evidence, got {missing_evidence:?}"
+    );
+
+    let dry_run = dispatch(
+        &ctx,
+        "memory_agent_writeback",
+        json!({
+            "proposed_content": "Agent-generated summary pending review.",
+            "source_memory_ids": [source_id]
+        }),
+    );
+    assert_eq!(dry_run.get("status").unwrap(), "dry_run");
+    assert_eq!(dry_run["canonical_memory_mutated"], json!(false));
+    assert_eq!(dry_run["candidate"]["kind"], "agent_writeback");
+    assert_eq!(dry_run["candidate"]["review_state"], "pending");
+
+    let unconfirmed = dispatch(
+        &ctx,
+        "memory_agent_writeback",
+        json!({
+            "proposed_content": "Agent-generated summary pending review.",
+            "source_memory_ids": [source_id],
+            "dry_run": false
+        }),
+    );
+    assert!(
+        unconfirmed.get("error").is_some(),
+        "live agent writeback should require confirm=true, got {unconfirmed:?}"
+    );
+
+    let before_count: i64 = storage
+        .with_connection(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
+                .map_err(Into::into)
+        })
+        .unwrap();
+    let created = dispatch(
+        &ctx,
+        "memory_agent_writeback",
+        json!({
+            "candidate_id": "agent-writeback-candidate-1",
+            "job_id": "agent-writeback-job-1",
+            "workspace": "default",
+            "proposed_content": "Agent-generated summary pending review.",
+            "source_memory_ids": [source_id],
+            "evidence": [{
+                "source_type": "session",
+                "source_id": "session-1",
+                "source_ref": "session:1",
+                "evidence": {"excerpt": "Agent observed the source fact."}
+            }],
+            "dry_run": false,
+            "confirm": true
+        }),
+    );
+    assert_eq!(created.get("status").unwrap(), "success");
+    assert_eq!(created["canonical_memory_mutated"], json!(false));
+    assert_eq!(created["candidate"]["candidate"]["kind"], "agent_writeback");
+    assert_eq!(created["candidate"]["candidate"]["review_state"], "pending");
+    assert_eq!(
+        created["candidate"]["sources"]
+            .as_array()
+            .expect("candidate sources")
+            .len(),
+        2
+    );
+    let after_create_count: i64 = storage
+        .with_connection(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
+                .map_err(Into::into)
+        })
+        .unwrap();
+    assert_eq!(
+        after_create_count, before_count,
+        "pending writeback creation must not mutate canonical memory"
+    );
+
+    let fetched = dispatch(
+        &ctx,
+        "dream_candidate_get",
+        json!({"id": "agent-writeback-candidate-1"}),
+    );
+    assert_eq!(
+        fetched["candidate"]["sources"]
+            .as_array()
+            .expect("fetched candidate sources")
+            .len(),
+        2
+    );
+
+    let premature_apply = dispatch(
+        &ctx,
+        "dream_candidate_apply",
+        json!({"id": "agent-writeback-candidate-1", "confirm": true}),
+    );
+    assert!(
+        premature_apply.get("error").is_some(),
+        "pending agent writeback must be reviewed before apply, got {premature_apply:?}"
+    );
+
+    let reviewed = dispatch(
+        &ctx,
+        "dream_candidate_review",
+        json!({"id": "agent-writeback-candidate-1", "review_state": "accepted"}),
+    );
+    assert_eq!(reviewed.get("status").unwrap(), "success");
+
+    let apply_dry_run = dispatch(
+        &ctx,
+        "dream_candidate_apply",
+        json!({"id": "agent-writeback-candidate-1", "dry_run": true}),
+    );
+    assert_eq!(apply_dry_run.get("status").unwrap(), "dry_run");
+    assert_eq!(
+        apply_dry_run["planned"]["kind"].as_str(),
+        Some("agent_writeback")
+    );
+
+    let applied = dispatch(
+        &ctx,
+        "dream_candidate_apply",
+        json!({"id": "agent-writeback-candidate-1", "confirm": true}),
+    );
+    assert_eq!(applied.get("status").unwrap(), "completed");
+    let after_apply_count: i64 = storage
+        .with_connection(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
+                .map_err(Into::into)
+        })
+        .unwrap();
+    assert_eq!(after_apply_count, before_count + 1);
+}
+
+#[cfg(feature = "dream-phase")]
+#[test]
 fn test_mcp_apply_create_and_ignore_candidates_without_targets() {
     use engram::mcp::handlers::dispatch;
     use engram::storage::{

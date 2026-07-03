@@ -521,6 +521,46 @@
         tier: ToolTier::Advanced,
     },
     ToolDef {
+        name: "memory_agent_writeback",
+        description: "Create a pending agent-generated memory proposal as an agent_writeback dream candidate. Defaults to dry_run=true and never mutates canonical memory; review/apply still happens through dream_candidate_get/review/apply.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "proposed_content": {"type": "string", "minLength": 1, "description": "Agent-generated memory content to propose for human/agent review."},
+                "workspace": {"type": "string", "default": "default", "description": "Workspace for the pending candidate."},
+                "job_id": {"type": "string", "description": "Optional dream job id to group writeback candidates. Omit to generate one."},
+                "candidate_id": {"type": "string", "description": "Optional stable candidate id. Omit to generate one."},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5, "description": "Confidence in the proposed writeback."},
+                "reason_codes": {"type": "array", "items": {"type": "string"}, "description": "Reason codes for the pending candidate. Defaults to agent_writeback."},
+                "metadata": {"type": "object", "description": "Additional candidate metadata. Governance markers are added by Engram."},
+                "source_memory_ids": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "description": "Canonical memory ids that support this proposal."
+                },
+                "evidence": {
+                    "type": "array",
+                    "description": "Additional non-memory evidence sources. At least one source_memory_ids entry or evidence item is required.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "source_type": {"type": "string", "minLength": 1},
+                            "source_id": {"type": "string", "minLength": 1},
+                            "source_ref": {"type": "string"},
+                            "evidence": {"type": "object"}
+                        },
+                        "required": ["source_type", "source_id"]
+                    }
+                },
+                "dry_run": {"type": "boolean", "default": true, "description": "Preview the pending candidate without writing dream_candidates."},
+                "confirm": {"type": "boolean", "default": false, "description": "Required with dry_run=false to create the pending candidate."}
+            },
+            "required": ["proposed_content"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Advanced,
+    },
+    ToolDef {
         name: "dream_eval_run",
         description: "Run deterministic local dream snapshot evaluation fixtures and return parseable CI-safe metrics. Does not require network, credentials, or model access.",
         schema: r#"{

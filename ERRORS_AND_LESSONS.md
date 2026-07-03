@@ -39,6 +39,12 @@ Tech Debt, Security, Performance, Fragile Areas
 **Right:** Standardize on 0-based indexing internally, convert at boundaries
 **Date:** (template)
 
+### [Data Processing] Dream candidate kind changes need schema and storage updates
+**Context:** Adding a new `dream_candidates.kind` value such as `agent_writeback`.
+**Wrong:** Updating only Rust allowlists or metadata while SQLite still has a CHECK constraint that rejects the new kind.
+**Right:** Update storage validation and add a schema migration that rebuilds the constrained table, then cover the new kind with a migration test.
+**Date:** 2026-07-03
+
 > **Note:** Replace these examples with real entries as errors are discovered.
 > Delete the examples once you have real entries.
 
@@ -72,4 +78,3 @@ After fixing any bug, validate at every layer the data passes through:
 4. **Output verification** — does the final output match expectations?
 
 Don't stop at the first layer that looks correct. Bugs hide behind other bugs.
-

@@ -30,6 +30,7 @@ const CANDIDATE_KINDS: &[&str] = &[
     "promotion",
     "decay",
     "temporal_update",
+    "agent_writeback",
 ];
 const PROPOSED_ACTIONS: &[&str] = &[
     "create",

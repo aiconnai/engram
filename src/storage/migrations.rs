@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::{EngramError, Result};
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 44;
+pub const SCHEMA_VERSION: i32 = 45;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -207,6 +207,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 44 {
         migrate_v44(conn)?;
+    }
+
+    if current_version < 45 {
+        migrate_v45(conn)?;
     }
 
     Ok(())
@@ -2408,6 +2412,111 @@ fn migrate_v44(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_v45(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v45: Allowing agent writeback dream candidates...");
+
+    conn.execute_batch(
+        r#"
+        PRAGMA foreign_keys = OFF;
+
+        CREATE TABLE dream_candidates_new (
+            id TEXT PRIMARY KEY CHECK (length(id) > 0),
+            job_id TEXT NOT NULL
+                REFERENCES dream_jobs(id) ON DELETE CASCADE,
+            workspace TEXT NOT NULL CHECK (length(workspace) > 0),
+            kind TEXT NOT NULL
+                CHECK (kind IN (
+                    'summary',
+                    'preference',
+                    'constraint',
+                    'project_state',
+                    'stale_fact',
+                    'contradiction',
+                    'merge',
+                    'promotion',
+                    'decay',
+                    'temporal_update',
+                    'agent_writeback'
+                )),
+            proposed_action TEXT NOT NULL
+                CHECK (proposed_action IN (
+                    'create',
+                    'update',
+                    'merge',
+                    'supersede',
+                    'expire',
+                    'promote',
+                    'demote',
+                    'ignore'
+                )),
+            review_state TEXT NOT NULL DEFAULT 'pending'
+                CHECK (review_state IN (
+                    'pending',
+                    'accepted',
+                    'edited',
+                    'rejected',
+                    'applied',
+                    'archived'
+                )),
+            confidence REAL NOT NULL
+                CHECK (confidence >= 0.0 AND confidence <= 1.0),
+            freshness_state TEXT NOT NULL DEFAULT 'unknown'
+                CHECK (freshness_state IN (
+                    'current',
+                    'stale',
+                    'future_due',
+                    'expired',
+                    'conflicted',
+                    'unknown'
+                )),
+            content_preview TEXT NOT NULL CHECK (length(content_preview) > 0),
+            proposed_content TEXT,
+            reason_codes TEXT NOT NULL DEFAULT '[]',
+            policy_explanation_json TEXT NOT NULL DEFAULT '{}',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            application_result_json TEXT,
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            applied_at TEXT,
+            CHECK (
+                proposed_action NOT IN ('create', 'update', 'merge')
+                OR (proposed_content IS NOT NULL AND length(proposed_content) > 0)
+            )
+        );
+
+        INSERT INTO dream_candidates_new (
+            id, job_id, workspace, kind, proposed_action, review_state,
+            confidence, freshness_state, content_preview, proposed_content,
+            reason_codes, policy_explanation_json, metadata_json,
+            application_result_json, created_at, reviewed_at, applied_at
+        )
+        SELECT
+            id, job_id, workspace, kind, proposed_action, review_state,
+            confidence, freshness_state, content_preview, proposed_content,
+            reason_codes, policy_explanation_json, metadata_json,
+            application_result_json, created_at, reviewed_at, applied_at
+        FROM dream_candidates;
+
+        DROP TABLE dream_candidates;
+        ALTER TABLE dream_candidates_new RENAME TO dream_candidates;
+
+        CREATE INDEX IF NOT EXISTS idx_dream_candidates_job
+            ON dream_candidates(job_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_dream_candidates_workspace_review
+            ON dream_candidates(workspace, review_state, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_dream_candidates_kind
+            ON dream_candidates(kind, freshness_state, created_at DESC);
+
+        PRAGMA foreign_keys = ON;
+
+        INSERT INTO schema_version (version) VALUES (45);
+        "#,
+    )?;
+
+    tracing::info!("Migration v45 complete: agent writeback dream candidates enabled");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2429,12 +2538,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 44);
+        assert_eq!(version, 45);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 44);
+        assert_eq!(SCHEMA_VERSION, 45);
     }
 
     #[test]
@@ -2589,7 +2698,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 44, "should reach v44 after full migration");
+        assert_eq!(version, 45, "should reach v45 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
@@ -2776,6 +2885,41 @@ mod tests {
                 .expect("query sqlite_master");
             assert_eq!(exists, 1, "{table} table should exist after migration");
         }
+    }
+
+    #[test]
+    fn test_dream_candidates_allow_agent_writeback_kind() {
+        let conn = in_memory_conn();
+        conn.execute(
+            "INSERT INTO dream_jobs (id, workspace, status, created_at)
+             VALUES ('agent-writeback-job', 'default', 'completed', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("insert dream job");
+
+        conn.execute(
+            "INSERT INTO dream_candidates
+                (id, job_id, workspace, kind, proposed_action, confidence,
+                 freshness_state, content_preview, proposed_content, reason_codes,
+                 policy_explanation_json, metadata_json, created_at)
+             VALUES
+                ('agent-writeback-candidate', 'agent-writeback-job', 'default',
+                 'agent_writeback', 'create', 0.7, 'current',
+                 'Pending agent writeback.', 'Pending agent writeback.',
+                 '[\"agent_writeback\"]', '{}', '{\"origin\":\"agent_writeback\"}',
+                 '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("agent_writeback dream candidate kind should be accepted");
+
+        let kind: String = conn
+            .query_row(
+                "SELECT kind FROM dream_candidates WHERE id = 'agent-writeback-candidate'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read candidate kind");
+        assert_eq!(kind, "agent_writeback");
     }
 
     #[test]

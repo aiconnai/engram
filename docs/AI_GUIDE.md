@@ -1733,17 +1733,26 @@ governance contract for:
 
 - recall paths (`memory_smart_retrieve`, `memory_digest`, `memory_get_public`);
 - canonical write paths (`memory_create`, `memory_create_batch`, `context_seed`);
-- pending review boundaries for future `agent_writeback` dream candidates;
+- pending review boundaries for `agent_writeback` dream candidates;
 - provenance surfaces (`enrichment_events`, operational context artifacts);
 - rules that generated memory is pending/evidence-only until reviewed.
 
-The pending writeback review/apply tools are part of the Advanced tool tier and
+To propose generated memory without immediately trusting it, use
+`memory_agent_writeback` with `dream-phase` enabled. It is Advanced-tier,
+defaults to `dry_run=true`, requires at least one `source_memory_ids` or
+`evidence` source, and requires `confirm=true` when `dry_run=false`. A confirmed
+call creates only a pending `dream_candidates` row with kind `agent_writeback`;
+it does not mutate canonical memory.
+
+The review/apply tools (`dream_candidates_list`, `dream_candidate_get`,
+`dream_candidate_review`, `dream_candidate_apply`) are also Advanced-tier and
 require the `dream-phase` feature. Agents running at the default Standard tier
 must opt in with `ENGRAM_TOOL_TIER=advanced` or `ENGRAM_TOOL_TIER=all` before
-they can inspect, review, or apply dream candidates.
+they can create, inspect, review, or apply pending writebacks.
 
-The first C1 slice is MCP-only and requires no schema migration. CLI wrappers or
-writeback automation should be thin layers over the same contract.
+This slice adds schema migration v45 to allow the `agent_writeback` candidate
+kind on the existing `dream_candidates` table. CLI wrappers or writeback
+automation should be thin layers over the same MCP handler.
 
 ---
 

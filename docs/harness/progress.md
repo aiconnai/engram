@@ -1251,3 +1251,49 @@ Verification:
 - Todo 5 AC (`Harness Contract` in 3 docs, `sensors.sh quick` in 2; no
   "AI review is authoritative") — PASS.
 - `rtk git diff --check` — PASS (no whitespace/conflict markers).
+
+## Agent Memory Contract C1.1 — pending writeback candidates — 2026-07-03
+
+Plan: `docs/superpowers/plans/2026-07-03-agent-memory-contract.md`.
+Branch: `codex/c1-agent-writeback-candidates`.
+Progress log:
+`docs/harness/progress/2026-07-03-agent-memory-contract-c1.md`.
+
+Done in this slice:
+
+- Added schema migration v45 so the existing `dream_candidates.kind` CHECK
+  accepts `agent_writeback`; no new writeback table was introduced.
+- Added `agent_writeback` to storage-level dream candidate validation.
+- Added Advanced-tier, `dream-phase`-gated MCP tool `memory_agent_writeback`.
+- `memory_agent_writeback` defaults to `dry_run=true`, requires `confirm=true`
+  for live pending-candidate creation, and requires at least one evidence source
+  (`source_memory_ids` or structured `evidence`).
+- Confirmed calls create only `dream_candidates` and `dream_candidate_sources`;
+  canonical memory still changes only through the existing
+  `dream_candidate_review` + `dream_candidate_apply` path.
+- Updated `memory_agent_contract` to version `agent-memory-contract-v1` with
+  the new creation tool, schema version, and creation rules.
+- Regenerated `docs/MCP_TOOLS.md` and updated `docs/AI_GUIDE.md`.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-07-03-c1-agent-writeback-candidates.md`.
+
+Verification so far:
+
+- `rtk cargo test --lib storage::migrations::tests::test_dream_candidates_allow_agent_writeback_kind` — PASS.
+- `rtk cargo test --features dream-phase --test mcp_protocol_tests memory_agent_writeback_tool_is_advanced_dry_run_mutating_surface` — PASS.
+- `rtk cargo test --features dream-phase --test dream_integration test_mcp_memory_agent_writeback_requires_review_before_canonical_apply` — PASS.
+- `rtk cargo test --test mcp_protocol_tests memory_agent_contract_dispatches_governance_contract` — PASS.
+- `rtk cargo fmt --all -- --check` — PASS.
+- `rtk git diff --check` — PASS.
+- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
+- `rtk cargo check --workspace --all-targets --locked` — PASS.
+- `rtk cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` — PASS.
+- `rtk cargo test --workspace --all-targets --locked` — PASS, 1249 tests.
+- `rtk bash docs/harness/bin/sensors.sh` — PASS, full lane, timestamp
+  `2026-07-03T10:18:59Z`, duration 89s.
+- MCP stdio smoke with `--features dream-phase` and isolated `ENGRAM_DB_PATH`:
+  `memory_agent_writeback` returned `status=dry_run` and
+  `canonical_memory_mutated=false` by default.
+- MCP stdio smoke with `dry_run=false, confirm=true` created pending candidate
+  `smoke-agent-writeback-candidate`; `dream_candidate_get` returned the pending
+  `agent_writeback` candidate and its source.

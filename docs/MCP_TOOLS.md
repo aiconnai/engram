@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **279**
+Total tools: **280**
 
 ## Summary
 
@@ -40,6 +40,7 @@ Total tools: **279**
 | `dream_candidate_get` | advanced | readOnlyHint | `id` |
 | `dream_candidate_review` | advanced | mutating (no MCP hints) | `id`, `review_state` |
 | `dream_candidate_apply` | advanced | mutating (no MCP hints) | `id` |
+| `memory_agent_writeback` | advanced | mutating (no MCP hints) | `proposed_content` |
 | `dream_eval_run` | advanced | readOnlyHint | none |
 | `workspace_list` | essential | readOnlyHint | none |
 | `workspace_stats` | standard | readOnlyHint | `workspace` |
@@ -713,6 +714,28 @@ Apply an accepted or edited dream candidate to canonical memory. Requires confir
 | `id` | `string` | yes | Dream candidate id |
 | `confirm` | `boolean` | no | Must be true for canonical mutation. Default: `false`. |
 | `dry_run` | `boolean` | no | Preview planned canonical mutation without applying. Default: `false`. |
+
+### `memory_agent_writeback`
+
+Create a pending agent-generated memory proposal as an agent_writeback dream candidate. Defaults to dry_run=true and never mutates canonical memory; review/apply still happens through dream_candidate_get/review/apply.
+
+- Tier: `advanced`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `proposed_content`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `proposed_content` | `string` | yes | Agent-generated memory content to propose for human/agent review. |
+| `workspace` | `string` | no | Workspace for the pending candidate. Default: `default`. |
+| `job_id` | `string` | no | Optional dream job id to group writeback candidates. Omit to generate one. |
+| `candidate_id` | `string` | no | Optional stable candidate id. Omit to generate one. |
+| `confidence` | `number` | no | Confidence in the proposed writeback. Default: `0.5`. Minimum: `0`. Maximum: `1`. |
+| `reason_codes` | `array` | no | Reason codes for the pending candidate. Defaults to agent_writeback. Items: `string`. |
+| `metadata` | `object` | no | Additional candidate metadata. Governance markers are added by Engram. |
+| `source_memory_ids` | `array` | no | Canonical memory ids that support this proposal. Items: `integer`. |
+| `evidence` | `array` | no | Additional non-memory evidence sources. At least one source_memory_ids entry or evidence item is required. Items: `object`. |
+| `dry_run` | `boolean` | no | Preview the pending candidate without writing dream_candidates. Default: `true`. |
+| `confirm` | `boolean` | no | Required with dry_run=false to create the pending candidate. Default: `false`. |
 
 ### `dream_eval_run`
 

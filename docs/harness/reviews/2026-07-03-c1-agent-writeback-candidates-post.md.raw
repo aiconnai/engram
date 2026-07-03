@@ -1,0 +1,1211 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: c1-agent-writeback-candidates
+**Mode**: post
+**Date (UTC)**: 2026-07-03
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/ERRORS_AND_LESSONS.md b/ERRORS_AND_LESSONS.md
+index dd2a1d5..c3c4cad 100644
+--- a/ERRORS_AND_LESSONS.md
++++ b/ERRORS_AND_LESSONS.md
+@@ -41,0 +42,6 @@ Tech Debt, Security, Performance, Fragile Areas
++### [Data Processing] Dream candidate kind changes need schema and storage updates
++**Context:** Adding a new `dream_candidates.kind` value such as `agent_writeback`.
++**Wrong:** Updating only Rust allowlists or metadata while SQLite still has a CHECK constraint that rejects the new kind.
++**Right:** Update storage validation and add a schema migration that rebuilds the constrained table, then cover the new kind with a migration test.
++**Date:** 2026-07-03
++
+@@ -75 +80,0 @@ Don't stop at the first layer that looks correct. Bugs hide behind other bugs.
+-
+diff --git a/docs/AI_GUIDE.md b/docs/AI_GUIDE.md
+index fa4e0b0..843bb30 100644
+--- a/docs/AI_GUIDE.md
++++ b/docs/AI_GUIDE.md
+@@ -1736 +1736 @@ governance contract for:
+-- pending review boundaries for future `agent_writeback` dream candidates;
++- pending review boundaries for `agent_writeback` dream candidates;
+@@ -1740 +1740,9 @@ governance contract for:
+-The pending writeback review/apply tools are part of the Advanced tool tier and
++To propose generated memory without immediately trusting it, use
++`memory_agent_writeback` with `dream-phase` enabled. It is Advanced-tier,
++defaults to `dry_run=true`, requires at least one `source_memory_ids` or
++`evidence` source, and requires `confirm=true` when `dry_run=false`. A confirmed
++call creates only a pending `dream_candidates` row with kind `agent_writeback`;
++it does not mutate canonical memory.
++
++The review/apply tools (`dream_candidates_list`, `dream_candidate_get`,
++`dream_candidate_review`, `dream_candidate_apply`) are also Advanced-tier and
+@@ -1743 +1751 @@ must opt in with `ENGRAM_TOOL_TIER=advanced` or `ENGRAM_TOOL_TIER=all` before
+-they can inspect, review, or apply dream candidates.
++they can create, inspect, review, or apply pending writebacks.
+@@ -1745,2 +1753,3 @@ they can inspect, review, or apply dream candidates.
+-The first C1 slice is MCP-only and requires no schema migration. CLI wrappers or
+-writeback automation should be thin layers over the same contract.
++This slice adds schema migration v45 to allow the `agent_writeback` candidate
++kind on the existing `dream_candidates` table. CLI wrappers or writeback
++automation should be thin layers over the same MCP handler.
+diff --git a/docs/MCP_TOOLS.md b/docs/MCP_TOOLS.md
+index 0d6a580..7e1a04d 100644
+--- a/docs/MCP_TOOLS.md
++++ b/docs/MCP_TOOLS.md
+@@ -9 +9 @@ It is generated from `src/mcp/tools/registry.rs`.
+-Total tools: **279**
++Total tools: **280**
+@@ -42,0 +43 @@ Total tools: **279**
++| `memory_agent_writeback` | advanced | mutating (no MCP hints) | `proposed_content` |
+@@ -716,0 +718,22 @@ Apply an accepted or edited dream candidate to canonical memory. Requires confir
++### `memory_agent_writeback`
++
++Create a pending agent-generated memory proposal as an agent_writeback dream candidate. Defaults to dry_run=true and never mutates canonical memory; review/apply still happens through dream_candidate_get/review/apply.
++
++- Tier: `advanced`
++- Annotations: mutating (no MCP hints)
++- Required inputs: `proposed_content`
++
++| Input | Type | Required | Summary |
++|-------|------|----------|---------|
++| `proposed_content` | `string` | yes | Agent-generated memory content to propose for human/agent review. |
++| `workspace` | `string` | no | Workspace for the pending candidate. Default: `default`. |
++| `job_id` | `string` | no | Optional dream job id to group writeback candidates. Omit to generate one. |
++| `candidate_id` | `string` | no | Optional stable candidate id. Omit to generate one. |
++| `confidence` | `number` | no | Confidence in the proposed writeback. Default: `0.5`. Minimum: `0`. Maximum: `1`. |
++| `reason_codes` | `array` | no | Reason codes for the pending candidate. Defaults to agent_writeback. Items: `string`. |
++| `metadata` | `object` | no | Additional candidate metadata. Governance markers are added by Engram. |
++| `source_memory_ids` | `array` | no | Canonical memory ids that support this proposal. Items: `integer`. |
++| `evidence` | `array` | no | Additional non-memory evidence sources. At least one source_memory_ids entry or evidence item is required. Items: `object`. |
++| `dry_run` | `boolean` | no | Preview the pending candidate without writing dream_candidates. Default: `true`. |
++| `confirm` | `boolean` | no | Required with dry_run=false to create the pending candidate. Default: `false`. |
++
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index d762283..e3adbd7 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -5,2 +5,2 @@ mode=full
+-timestamp=2026-07-03T09:42:15Z
+-duration_sec=92
++timestamp=2026-07-03T10:18:59Z
++duration_sec=89
+diff --git a/docs/harness/.sensors-log b/docs/harness/.sensors-log
+index 2263ad3..db83232 100644
+--- a/docs/harness/.sensors-log
++++ b/docs/harness/.sensors-log
+@@ -34,0 +35 @@
++{"schema_version":"sensors-log-v1","timestamp":"2026-07-03T10:18:59Z","tool":"sensors","mode":"full","status":"pass","duration_sec":89,"ci_status":"pass","doctor_status":"pass","ci_command":"fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor","ci_steps":{"fmt":"pass","clippy":"pass","test_lib":"pass","test_integration":"pass","test_integration_watch":"pass","wasm_target":"pass","wasm_all_targets":"pass","wasm_wasm_target":"pass","doc":"pass","ref_check":"pass"},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
+diff --git a/docs/harness/canvas/2026-07-03-c1-agent-writeback-candidates.md b/docs/harness/canvas/2026-07-03-c1-agent-writeback-candidates.md
+new file mode 100644
+index 0000000..632ffc7
+--- /dev/null
++++ b/docs/harness/canvas/2026-07-03-c1-agent-writeback-candidates.md
+@@ -0,0 +1,52 @@
++# Review Canvas: c1-agent-writeback-candidates
++
++Date: 2026-07-03
++Owner: Ronaldo + Codex
++Scope: Add pending agent writebacks as `agent_writeback` dream candidates without a new writeback table.
++
++## Trigger
++
++| Trigger | Evidence |
++|---|---|
++| Storage migration | `SCHEMA_VERSION` moves to 45 so the existing `dream_candidates.kind` CHECK accepts `agent_writeback`. |
++| MCP surface change | New Advanced-tier `memory_agent_writeback` tool creates pending candidates behind `dream-phase`. |
++| Generated memory governance | Agent-generated memory must remain pending/evidence-only until review and explicit apply. |
++
++## Approaches Considered
++
++| Approach | Decision | Reason |
++|---|---|---|
++| New writeback table | Rejected | Violates the approved condition to reuse the dream candidate review/apply pipeline first. |
++| Store agent writebacks as another existing kind plus metadata | Rejected | Avoids migration but hides semantics and makes kind-level review/reporting weaker. |
++| Add `agent_writeback` to `dream_candidates` | Accepted | Minimal schema change, keeps review/apply/dry-run semantics, and preserves one pending-candidate path. |
++
++## Hot Path Complexity
++
++| Path | Time impact | Space impact | Notes |
++|---|---|---|---|
++| `memory_agent_writeback` dry-run | O(number of sources) | Small JSON response only | Default path writes nothing. |
++| confirmed pending candidate creation | O(number of sources) inserts | One candidate row plus source rows | No canonical memory row is created before review/apply. |
++| `dream_candidate_apply` | Existing behavior | Existing behavior plus `agent_writeback` kind | Applies only accepted/edited candidates. |
++
++## Edge Cases
++
++| Edge case | Verification plan |
++|---|---|
++| Live writeback without `confirm=true` | Integration test expects an error. |
++| No evidence sources | Integration test expects an error before candidate creation. |
++| Pending candidate applied before review | Integration test expects `dream_candidate_apply` to reject pending state. |
++| Schema CHECK rejects new kind | Migration test inserts `agent_writeback` candidate after v45. |
++
++## Breakage Risk
++
++| Risk | Impact | Mitigation | Verification |
++|---|---|---|---|
++| MCP tools/list advertises unavailable feature-gated tool | Agents call unknown tools | Add `memory_agent_writeback` to dream-phase feature filter. | Protocol test with `dream-phase`; MCP reference check. |
++| v45 table rebuild drops existing candidates | Data loss | Copy all `dream_candidates` columns and keep sources table intact. | Migration tests plus review of SQL column list. |
++| Agent-created candidate mutates canonical memory too early | Trusted generated memory bypasses governance | Handler writes only `dream_candidates` and sources; canonical apply remains existing review/apply path. | Integration test compares memory count before and after pending creation. |
++
++## Decision
++
++Proceed.
++
++Reason: The accepted approach is the smallest durable change that satisfies the governance requirement: pending generated writebacks reuse the existing dream candidate review/apply path, dry-run is the default, and canonical memory changes only after review plus explicit apply.
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 268679d..bce2741 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -1253,0 +1254,46 @@ Verification:
++
++## Agent Memory Contract C1.1 — pending writeback candidates — 2026-07-03
++
++Plan: `docs/superpowers/plans/2026-07-03-agent-memory-contract.md`.
++Branch: `codex/c1-agent-writeback-candidates`.
++Progress log:
++`docs/harness/progress/2026-07-03-agent-memory-contract-c1.md`.
++
++Done in this slice:
++
++- Added schema migration v45 so the existing `dream_candidates.kind` CHECK
++  accepts `agent_writeback`; no new writeback table was introduced.
++- Added `agent_writeback` to storage-level dream candidate validation.
++- Added Advanced-tier, `dream-phase`-gated MCP tool `memory_agent_writeback`.
++- `memory_agent_writeback` defaults to `dry_run=true`, requires `confirm=true`
++  for live pending-candidate creation, and requires at least one evidence source
++  (`source_memory_ids` or structured `evidence`).
++- Confirmed calls create only `dream_candidates` and `dream_candidate_sources`;
++  canonical memory still changes only through the existing
++  `dream_candidate_review` + `dream_candidate_apply` path.
++- Updated `memory_agent_contract` to version `agent-memory-contract-v1` with
++  the new creation tool, schema version, and creation rules.
++- Regenerated `docs/MCP_TOOLS.md` and updated `docs/AI_GUIDE.md`.
++- Added Review Canvas:
++  `docs/harness/canvas/2026-07-03-c1-agent-writeback-candidates.md`.
++
++Verification so far:
++
++- `rtk cargo test --lib storage::migrations::tests::test_dream_candidates_allow_agent_writeback_kind` — PASS.
++- `rtk cargo test --features dream-phase --test mcp_protocol_tests memory_agent_writeback_tool_is_advanced_dry_run_mutating_surface` — PASS.
++- `rtk cargo test --features dream-phase --test dream_integration test_mcp_memory_agent_writeback_requires_review_before_canonical_apply` — PASS.
++- `rtk cargo test --test mcp_protocol_tests memory_agent_contract_dispatches_governance_contract` — PASS.
++- `rtk cargo fmt --all -- --check` — PASS.
++- `rtk git diff --check` — PASS.
++- `rtk ./scripts/generate-mcp-reference.sh --check` — PASS.
++- `rtk cargo check --workspace --all-targets --locked` — PASS.
++- `rtk cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` — PASS.
++- `rtk cargo test --workspace --all-targets --locked` — PASS, 1249 tests.
++- `rtk bash docs/harness/bin/sensors.sh` — PASS, full lane, timestamp
++  `2026-07-03T10:18:59Z`, duration 89s.
++- MCP stdio smoke with `--features dream-phase` and isolated `ENGRAM_DB_PATH`:
++  `memory_agent_writeback` returned `status=dry_run` and
++  `canonical_memory_mutated=false` by default.
++- MCP stdio smoke with `dry_run=false, confirm=true` created pending candidate
++  `smoke-agent-writeback-candidate`; `dream_candidate_get` returned the pending
++  `agent_writeback` candidate and its source.
+diff --git a/docs/superpowers/plans/2026-07-03-agent-memory-contract.md b/docs/superpowers/plans/2026-07-03-agent-memory-contract.md
+index 81af0e3..8ece1e4 100644
+--- a/docs/superpowers/plans/2026-07-03-agent-memory-contract.md
++++ b/docs/superpowers/plans/2026-07-03-agent-memory-contract.md
+@@ -7 +7 @@
+-**Baseline:** C0 is landed on `main` as `74c7404 refactor(mcp): consolidate tool registry definitions`; PR #108 lifecycle predicate unification is merged as `e156810 feat(lifecycle): unify decay lifecycle predicate (#108)`.
++**Baseline:** C0 is landed on `main` as `74c7404 refactor(mcp): consolidate tool registry definitions`; PR #108 lifecycle predicate unification is merged as `e156810 feat(lifecycle): unify decay lifecycle predicate (#108)`. C1.0 landed on `main` as PR #114 (`e62c8a4 feat(mcp): expose agent memory contract`).
+@@ -9 +9 @@
+-**Architecture:** Add a small read-only MCP contract surface first. Later slices reuse `dream_candidates` for pending agent writebacks, opt-in recall traces per workspace, and a daily handoff recipe. No schema migration in the first slice; `SCHEMA_VERSION` remains 44.
++**Architecture:** Add a small read-only MCP contract surface first. Later slices reuse `dream_candidates` for pending agent writebacks, opt-in recall traces per workspace, and a daily handoff recipe. C1.0 had no schema migration; C1.1 adds migration v45 only to extend the existing `dream_candidates.kind` CHECK with `agent_writeback`.
+@@ -18,0 +19,2 @@
++- Do not add a new writeback table in C1.1; migration v45 only expands the
++  existing `dream_candidates.kind` CHECK for `agent_writeback`.
+@@ -37,0 +40,3 @@
++| Modify | `src/storage/migrations.rs` | C1.1 migration v45 for the existing `dream_candidates` candidate kind CHECK. |
++| Modify | `src/storage/dream_snapshots.rs` | Allow `agent_writeback` through storage-level candidate validation. |
++| Create | `src/mcp/handlers/agent_writeback.rs` | Advanced MCP handler that creates pending writeback candidates with dry-run/confirm/evidence gates. |
+@@ -90,0 +96,37 @@ Future work must remain separate from C1.0:
++## Task 4: C1.1 pending agent writeback candidates
++
++- [x] Add `agent_writeback` to the existing `dream_candidates` kind validation
++  and schema CHECK via migration v45.
++- [x] Add Advanced-tier `memory_agent_writeback` behind the `dream-phase`
++  feature gate.
++- [x] Default `memory_agent_writeback` to `dry_run=true`.
++- [x] Require `confirm=true` when `dry_run=false`.
++- [x] Require at least one source (`source_memory_ids` or structured
++  `evidence`) before creating a pending candidate.
++- [x] Confirmed calls create only pending `dream_candidates` records and
++  `dream_candidate_sources`; they do not mutate canonical memory.
++- [x] Reuse `dream_candidate_get`, `dream_candidate_review`, and
++  `dream_candidate_apply` for inspection, review, dry-run apply, and final
++  canonical mutation.
++
++**QA:**
++
++```bash
++rtk cargo test --lib storage::migrations::tests::test_dream_candidates_allow_agent_writeback_kind
++rtk cargo test --features dream-phase --test mcp_protocol_tests memory_agent_writeback_tool_is_advanced_dry_run_mutating_surface
++rtk cargo test --features dream-phase --test dream_integration test_mcp_memory_agent_writeback_requires_review_before_canonical_apply
++```
++
++Targeted QA status on 2026-07-03: all three commands above passed after the
++handler split, plus `rtk cargo test --test mcp_protocol_tests
++memory_agent_contract_dispatches_governance_contract`, `rtk cargo fmt --all
++-- --check`, `rtk git diff --check`, and `rtk
++./scripts/generate-mcp-reference.sh --check`.
++
++Full local gate status on 2026-07-03: `rtk cargo check --workspace
++--all-targets --locked`, `rtk cargo clippy --workspace --all-targets
++--all-features --locked -- -D warnings`, `rtk cargo test --workspace
++--all-targets --locked`, and `rtk bash docs/harness/bin/sensors.sh` passed.
++Manual MCP stdio smoke with `--features dream-phase` verified both default
++dry-run and confirmed pending-candidate creation plus `dream_candidate_get`.
++
+diff --git a/src/mcp/handlers/agent_memory_contract.rs b/src/mcp/handlers/agent_memory_contract.rs
+index 287eb7c..7dc7671 100644
+--- a/src/mcp/handlers/agent_memory_contract.rs
++++ b/src/mcp/handlers/agent_memory_contract.rs
+@@ -2,0 +3,2 @@ use serde_json::{json, Value};
++use crate::storage::SCHEMA_VERSION;
++
+@@ -5 +7 @@ use super::HandlerContext;
+-const CONTRACT_VERSION: &str = "agent-memory-contract-v0";
++const CONTRACT_VERSION: &str = "agent-memory-contract-v1";
+@@ -13,2 +15,3 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
+-            "schema_migration_required": false,
+-            "first_slice": "mcp_read_only"
++            "schema_migration_required": true,
++            "schema_version": SCHEMA_VERSION,
++            "current_slice": "pending_agent_writeback_candidates"
+@@ -41,0 +45 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
++                "creation_tool": "memory_agent_writeback",
+@@ -44,0 +49,6 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
++                "creation_rules": [
++                    "memory_agent_writeback defaults to dry_run=true.",
++                    "memory_agent_writeback requires confirm=true when dry_run=false.",
++                    "memory_agent_writeback requires at least one source_memory_ids entry or evidence source.",
++                    "Pending candidate creation does not mutate canonical memory."
++                ],
+diff --git a/src/mcp/handlers/agent_writeback.rs b/src/mcp/handlers/agent_writeback.rs
+new file mode 100644
+index 0000000..7101439
+--- /dev/null
++++ b/src/mcp/handlers/agent_writeback.rs
+@@ -0,0 +1,110 @@
++use rusqlite::Connection;
++use serde_json::{json, Value};
++
++use crate::error::{EngramError, Result};
++use crate::mcp::handlers::agent_writeback_plan::{
++    dry_run_response, parse_agent_writeback_plan, AgentWritebackPlan, AGENT_WRITEBACK_ACTION,
++    AGENT_WRITEBACK_KIND, AGENT_WRITEBACK_MODEL_PROFILE,
++};
++use crate::mcp::handlers::HandlerContext;
++use crate::storage::{
++    add_dream_candidate_source, create_dream_candidate, create_dream_job,
++    get_dream_candidate_with_sources, get_dream_job, NewDreamCandidate, NewDreamCandidateSource,
++    NewDreamJob,
++};
++
++pub fn memory_agent_writeback(ctx: &HandlerContext, params: Value) -> Value {
++    let plan = match parse_agent_writeback_plan(params) {
++        Ok(plan) => plan,
++        Err(error) => return json!({"error": error.to_string()}),
++    };
++
++    if plan.dry_run {
++        return dry_run_response(&plan);
++    }
++    if !plan.confirm {
++        return json!({"error": "memory_agent_writeback requires confirm=true unless dry_run=true"});
++    }
++
++    ctx.storage
++        .with_transaction(|conn| create_pending_agent_writeback(conn, &plan))
++        .unwrap_or_else(|error| json!({"error": error.to_string()}))
++}
++
++fn create_pending_agent_writeback(conn: &Connection, plan: &AgentWritebackPlan) -> Result<Value> {
++    ensure_agent_writeback_job(conn, plan)?;
++    let candidate = create_dream_candidate(
++        conn,
++        &NewDreamCandidate {
++            id: plan.candidate_id.as_deref(),
++            job_id: &plan.job_id,
++            workspace: &plan.workspace,
++            kind: AGENT_WRITEBACK_KIND,
++            proposed_action: AGENT_WRITEBACK_ACTION,
++            confidence: plan.confidence,
++            freshness_state: "current",
++            content_preview: &plan.content_preview,
++            proposed_content: Some(&plan.proposed_content),
++            reason_codes: &plan.reason_codes,
++            policy_explanation: &plan.policy_explanation,
++            metadata: &plan.metadata,
++        },
++    )?;
++    let candidate_id = candidate.id;
++
++    for source in &plan.sources {
++        add_dream_candidate_source(
++            conn,
++            &NewDreamCandidateSource {
++                candidate_id: &candidate_id,
++                source_type: &source.source_type,
++                source_id: &source.source_id,
++                source_ref: source.source_ref.as_deref(),
++                evidence: &source.evidence,
++            },
++        )?;
++    }
++
++    let candidate = get_dream_candidate_with_sources(conn, &candidate_id)?.ok_or_else(|| {
++        EngramError::Storage(format!(
++            "agent writeback candidate {candidate_id} was not readable after insert"
++        ))
++    })?;
++    Ok(json!({
++        "status": "success",
++        "dry_run": false,
++        "canonical_memory_mutated": false,
++        "candidate": candidate
++    }))
++}
++
++fn ensure_agent_writeback_job(conn: &Connection, plan: &AgentWritebackPlan) -> Result<()> {
++    if let Some(job) = get_dream_job(conn, &plan.job_id)? {
++        if job.workspace != plan.workspace {
++            return Err(EngramError::Conflict(format!(
++                "dream job {} belongs to workspace {}, not {}",
++                plan.job_id, job.workspace, plan.workspace
++            )));
++        }
++        return Ok(());
++    }
++
++    let input_summary = json!({
++        "created_by": "memory_agent_writeback",
++        "workspace": plan.workspace,
++        "candidate_kind": AGENT_WRITEBACK_KIND,
++        "canonical_memory_mutated": false,
++        "evidence_source_count": plan.sources.len()
++    });
++    create_dream_job(
++        conn,
++        &NewDreamJob {
++            id: Some(&plan.job_id),
++            workspace: &plan.workspace,
++            instructions: Some("agent writeback pending review"),
++            model_profile: Some(AGENT_WRITEBACK_MODEL_PROFILE),
++            input_summary: &input_summary,
++        },
++    )?;
++    Ok(())
++}
+diff --git a/src/mcp/handlers/agent_writeback_plan.rs b/src/mcp/handlers/agent_writeback_plan.rs
+new file mode 100644
+index 0000000..3c73063
+--- /dev/null
++++ b/src/mcp/handlers/agent_writeback_plan.rs
+@@ -0,0 +1,268 @@
++use std::collections::HashSet;
++
++use serde::Deserialize;
++use serde_json::{json, Map, Value};
++
++use crate::error::{EngramError, Result};
++
++pub(crate) const AGENT_WRITEBACK_KIND: &str = "agent_writeback";
++pub(crate) const AGENT_WRITEBACK_ACTION: &str = "create";
++pub(crate) const AGENT_WRITEBACK_MODEL_PROFILE: &str = "agent-writeback-v1";
++
++const DEFAULT_WORKSPACE: &str = "default";
++const DEFAULT_CONFIDENCE: f64 = 0.5;
++const PREVIEW_MAX_CHARS: usize = 180;
++
++#[derive(Debug, Deserialize)]
++struct AgentWritebackRequest {
++    proposed_content: String,
++    #[serde(default)]
++    workspace: Option<String>,
++    #[serde(default)]
++    job_id: Option<String>,
++    #[serde(default)]
++    candidate_id: Option<String>,
++    #[serde(default)]
++    confidence: Option<f64>,
++    #[serde(default)]
++    reason_codes: Option<Vec<String>>,
++    #[serde(default)]
++    metadata: Option<Value>,
++    #[serde(default)]
++    source_memory_ids: Option<Vec<i64>>,
++    #[serde(default)]
++    evidence: Option<Vec<AgentWritebackEvidenceInput>>,
++    #[serde(default)]
++    dry_run: Option<bool>,
++    #[serde(default)]
++    confirm: Option<bool>,
++}
++
++#[derive(Debug, Deserialize)]
++struct AgentWritebackEvidenceInput {
++    source_type: String,
++    source_id: String,
++    #[serde(default)]
++    source_ref: Option<String>,
++    #[serde(default)]
++    evidence: Option<Value>,
++}
++
++#[derive(Debug)]
++pub(crate) struct AgentWritebackPlan {
++    pub(crate) workspace: String,
++    pub(crate) job_id: String,
++    pub(crate) candidate_id: Option<String>,
++    pub(crate) proposed_content: String,
++    pub(crate) content_preview: String,
++    pub(crate) confidence: f64,
++    pub(crate) reason_codes: Value,
++    pub(crate) metadata: Value,
++    pub(crate) policy_explanation: Value,
++    pub(crate) sources: Vec<AgentWritebackSourcePlan>,
++    pub(crate) dry_run: bool,
++    pub(crate) confirm: bool,
++}
++
++#[derive(Debug)]
++pub(crate) struct AgentWritebackSourcePlan {
++    pub(crate) source_type: String,
++    pub(crate) source_id: String,
++    pub(crate) source_ref: Option<String>,
++    pub(crate) evidence: Value,
++}
++
++pub(crate) fn parse_agent_writeback_plan(params: Value) -> Result<AgentWritebackPlan> {
++    let request = serde_json::from_value::<AgentWritebackRequest>(params).map_err(|error| {
++        EngramError::InvalidInput(format!("invalid memory_agent_writeback request: {error}"))
++    })?;
++    build_agent_writeback_plan(request)
++}
++
++pub(crate) fn dry_run_response(plan: &AgentWritebackPlan) -> Value {
++    json!({
++        "status": "dry_run",
++        "dry_run": true,
++        "canonical_memory_mutated": false,
++        "candidate": {
++            "id": plan.candidate_id,
++            "job_id": plan.job_id,
++            "workspace": plan.workspace,
++            "kind": AGENT_WRITEBACK_KIND,
++            "proposed_action": AGENT_WRITEBACK_ACTION,
++            "review_state": "pending",
++            "confidence": plan.confidence,
++            "freshness_state": "current",
++            "content_preview": plan.content_preview,
++            "proposed_content": plan.proposed_content,
++            "reason_codes": plan.reason_codes,
++            "metadata": plan.metadata
++        },
++        "sources_count": plan.sources.len()
++    })
++}
++
++fn build_agent_writeback_plan(request: AgentWritebackRequest) -> Result<AgentWritebackPlan> {
++    let proposed_content = required_trimmed(request.proposed_content, "proposed_content")?;
++    let workspace = match request.workspace {
++        Some(workspace) => required_trimmed(workspace, "workspace")?,
++        None => DEFAULT_WORKSPACE.to_string(),
++    };
++    let job_id = optional_trimmed(request.job_id, "job_id")?
++        .unwrap_or_else(|| format!("agent_writeback:{}", uuid::Uuid::new_v4()));
++    let candidate_id = optional_trimmed(request.candidate_id, "candidate_id")?;
++    let confidence = request.confidence.unwrap_or(DEFAULT_CONFIDENCE);
++    if !(0.0..=1.0).contains(&confidence) {
++        return Err(EngramError::InvalidInput(
++            "confidence must be between 0.0 and 1.0".to_string(),
++        ));
++    }
++
++    let reason_codes = normalize_reason_codes(request.reason_codes)?;
++    let source_memory_ids = normalize_source_memory_ids(request.source_memory_ids)?;
++    let mut metadata = normalize_metadata(request.metadata)?;
++    let mut sources = Vec::new();
++    let mut source_keys = HashSet::new();
++
++    for memory_id in &source_memory_ids {
++        push_source(
++            &mut sources,
++            &mut source_keys,
++            AgentWritebackSourcePlan {
++                source_type: "memory".to_string(),
++                source_id: memory_id.to_string(),
++                source_ref: Some(format!("memory:{memory_id}")),
++                evidence: json!({"role": "source_memory", "memory_id": memory_id}),
++            },
++        )?;
++    }
++
++    for evidence in request.evidence.unwrap_or_default() {
++        push_source(
++            &mut sources,
++            &mut source_keys,
++            AgentWritebackSourcePlan {
++                source_type: required_trimmed(evidence.source_type, "evidence.source_type")?,
++                source_id: required_trimmed(evidence.source_id, "evidence.source_id")?,
++                source_ref: optional_trimmed(evidence.source_ref, "evidence.source_ref")?,
++                evidence: evidence.evidence.unwrap_or_else(|| json!({})),
++            },
++        )?;
++    }
++
++    if sources.is_empty() {
++        return Err(EngramError::InvalidInput(
++            "memory_agent_writeback requires at least one source_memory_ids entry or evidence source"
++                .to_string(),
++        ));
++    }
++
++    metadata.insert("origin".to_string(), json!("agent_writeback"));
++    metadata.insert("status".to_string(), json!("pending_review"));
++    metadata.insert("generated_by_ai".to_string(), json!(true));
++    metadata.insert("evidence_only_until_review".to_string(), json!(true));
++    metadata.insert("review_required".to_string(), json!(true));
++    metadata.insert("source_memory_ids".to_string(), json!(source_memory_ids));
++    metadata.insert("evidence_source_count".to_string(), json!(sources.len()));
++
++    Ok(AgentWritebackPlan {
++        workspace,
++        job_id,
++        candidate_id,
++        content_preview: content_preview(&proposed_content),
++        proposed_content,
++        confidence,
++        reason_codes: json!(reason_codes),
++        metadata: Value::Object(metadata),
++        policy_explanation: json!({
++            "policy": "agent-generated memory remains pending until dream_candidate_review and dream_candidate_apply",
++            "canonical_memory_mutated": false,
++            "requires_review": true
++        }),
++        sources,
++        dry_run: request.dry_run.unwrap_or(true),
++        confirm: request.confirm.unwrap_or(false),
++    })
++}
++
++fn required_trimmed(value: String, field: &str) -> Result<String> {
++    let trimmed = value.trim();
++    if trimmed.is_empty() {
++        Err(EngramError::InvalidInput(format!("{field} is required")))
++    } else {
++        Ok(trimmed.to_string())
++    }
++}
++
++fn optional_trimmed(value: Option<String>, field: &str) -> Result<Option<String>> {
++    value
++        .map(|value| required_trimmed(value, field))
++        .transpose()
++}
++
++fn normalize_reason_codes(reason_codes: Option<Vec<String>>) -> Result<Vec<String>> {
++    let raw_codes = reason_codes.unwrap_or_else(|| vec![AGENT_WRITEBACK_KIND.to_string()]);
++    let mut normalized = Vec::with_capacity(raw_codes.len());
++    for code in raw_codes {
++        normalized.push(required_trimmed(code, "reason_codes")?);
++    }
++    if normalized.is_empty() {
++        Ok(vec![AGENT_WRITEBACK_KIND.to_string()])
++    } else {
++        Ok(normalized)
++    }
++}
++
++fn normalize_source_memory_ids(source_memory_ids: Option<Vec<i64>>) -> Result<Vec<i64>> {
++    let mut normalized = Vec::new();
++    let mut seen = HashSet::new();
++    for memory_id in source_memory_ids.unwrap_or_default() {
++        if memory_id <= 0 {
++            return Err(EngramError::InvalidInput(
++                "source_memory_ids must contain positive memory ids".to_string(),
++            ));
++        }
++        if !seen.insert(memory_id) {
++            return Err(EngramError::InvalidInput(
++                "source_memory_ids must not contain duplicate ids".to_string(),
++            ));
++        }
++        normalized.push(memory_id);
++    }
++    Ok(normalized)
++}
++
++fn normalize_metadata(metadata: Option<Value>) -> Result<Map<String, Value>> {
++    match metadata {
++        Some(Value::Object(metadata)) => Ok(metadata),
++        Some(Value::Null) | None => Ok(Map::new()),
++        Some(_) => Err(EngramError::InvalidInput(
++            "metadata must be a JSON object".to_string(),
++        )),
++    }
++}
++
++fn push_source(
++    sources: &mut Vec<AgentWritebackSourcePlan>,
++    source_keys: &mut HashSet<(String, String)>,
++    source: AgentWritebackSourcePlan,
++) -> Result<()> {
++    let key = (source.source_type.clone(), source.source_id.clone());
++    if !source_keys.insert(key.clone()) {
++        return Err(EngramError::InvalidInput(format!(
++            "duplicate evidence source {}:{}",
++            key.0, key.1
++        )));
++    }
++    sources.push(source);
++    Ok(())
++}
++
++fn content_preview(content: &str) -> String {
++    let trimmed = content.trim();
++    let mut preview = trimmed.chars().take(PREVIEW_MAX_CHARS).collect::<String>();
++    if trimmed.chars().count() > PREVIEW_MAX_CHARS {
++        preview.push_str("...");
++    }
++    preview
++}
+diff --git a/src/mcp/handlers/mod.rs b/src/mcp/handlers/mod.rs
+index 2e59c42..6d25661 100644
+--- a/src/mcp/handlers/mod.rs
++++ b/src/mcp/handlers/mod.rs
+@@ -17,0 +18,4 @@ pub mod agent_memory_contract;
++#[cfg(feature = "dream-phase")]
++pub mod agent_writeback;
++#[cfg(feature = "dream-phase")]
++mod agent_writeback_plan;
+@@ -158,0 +163,2 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
++        #[cfg(feature = "dream-phase")]
++        "memory_agent_writeback" => agent_writeback::memory_agent_writeback(ctx, params),
+diff --git a/src/mcp/tools/mod.rs b/src/mcp/tools/mod.rs
+index 7cb0b2f..3bc9f46 100644
+--- a/src/mcp/tools/mod.rs
++++ b/src/mcp/tools/mod.rs
+@@ -82,0 +83 @@ fn tool_feature_available(name: &str) -> bool {
++        | "memory_agent_writeback"
+diff --git a/src/mcp/tools/registry.rs b/src/mcp/tools/registry.rs
+index 5722dbf..d8282f5 100644
+--- a/src/mcp/tools/registry.rs
++++ b/src/mcp/tools/registry.rs
+@@ -521,0 +522,40 @@
++    },
++    ToolDef {
++        name: "memory_agent_writeback",
++        description: "Create a pending agent-generated memory proposal as an agent_writeback dream candidate. Defaults to dry_run=true and never mutates canonical memory; review/apply still happens through dream_candidate_get/review/apply.",
++        schema: r#"{
++            "type": "object",
++            "properties": {
++                "proposed_content": {"type": "string", "minLength": 1, "description": "Agent-generated memory content to propose for human/agent review."},
++                "workspace": {"type": "string", "default": "default", "description": "Workspace for the pending candidate."},
++                "job_id": {"type": "string", "description": "Optional dream job id to group writeback candidates. Omit to generate one."},
++                "candidate_id": {"type": "string", "description": "Optional stable candidate id. Omit to generate one."},
++                "confidence": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5, "description": "Confidence in the proposed writeback."},
++                "reason_codes": {"type": "array", "items": {"type": "string"}, "description": "Reason codes for the pending candidate. Defaults to agent_writeback."},
++                "metadata": {"type": "object", "description": "Additional candidate metadata. Governance markers are added by Engram."},
++                "source_memory_ids": {
++                    "type": "array",
++                    "items": {"type": "integer", "minimum": 1},
++                    "description": "Canonical memory ids that support this proposal."
++                },
++                "evidence": {
++                    "type": "array",
++                    "description": "Additional non-memory evidence sources. At least one source_memory_ids entry or evidence item is required.",
++                    "items": {
++                        "type": "object",
++                        "properties": {
++                            "source_type": {"type": "string", "minLength": 1},
++                            "source_id": {"type": "string", "minLength": 1},
++                            "source_ref": {"type": "string"},
++                            "evidence": {"type": "object"}
++                        },
++                        "required": ["source_type", "source_id"]
++                    }
++                },
++                "dry_run": {"type": "boolean", "default": true, "description": "Preview the pending candidate without writing dream_candidates."},
++                "confirm": {"type": "boolean", "default": false, "description": "Required with dry_run=false to create the pending candidate."}
++            },
++            "required": ["proposed_content"]
++        }"#,
++        annotations: ToolAnnotations::mutating(),
++        tier: ToolTier::Advanced,
+diff --git a/src/storage/dream_snapshots.rs b/src/storage/dream_snapshots.rs
+index f0c00f7..d788ea3 100644
+--- a/src/storage/dream_snapshots.rs
++++ b/src/storage/dream_snapshots.rs
+@@ -32,0 +33 @@ const CANDIDATE_KINDS: &[&str] = &[
++    "agent_writeback",
+diff --git a/src/storage/migrations.rs b/src/storage/migrations.rs
+index 9f9fa5d..53bf314 100644
+--- a/src/storage/migrations.rs
++++ b/src/storage/migrations.rs
+@@ -8 +8 @@ use crate::error::{EngramError, Result};
+-pub const SCHEMA_VERSION: i32 = 44;
++pub const SCHEMA_VERSION: i32 = 45;
+@@ -211,0 +212,4 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
++    if current_version < 45 {
++        migrate_v45(conn)?;
++    }
++
+@@ -2410,0 +2415,105 @@ fn migrate_v44(conn: &Connection) -> Result<()> {
++fn migrate_v45(conn: &Connection) -> Result<()> {
++    tracing::info!("Migration v45: Allowing agent writeback dream candidates...");
++
++    conn.execute_batch(
++        r#"
++        PRAGMA foreign_keys = OFF;
++
++        CREATE TABLE dream_candidates_new (
++            id TEXT PRIMARY KEY CHECK (length(id) > 0),
++            job_id TEXT NOT NULL
++                REFERENCES dream_jobs(id) ON DELETE CASCADE,
++            workspace TEXT NOT NULL CHECK (length(workspace) > 0),
++            kind TEXT NOT NULL
++                CHECK (kind IN (
++                    'summary',
++                    'preference',
++                    'constraint',
++                    'project_state',
++                    'stale_fact',
++                    'contradiction',
++                    'merge',
++                    'promotion',
++                    'decay',
++                    'temporal_update',
++                    'agent_writeback'
++                )),
++            proposed_action TEXT NOT NULL
++                CHECK (proposed_action IN (
++                    'create',
++                    'update',
++                    'merge',
++                    'supersede',
++                    'expire',
++                    'promote',
++                    'demote',
++                    'ignore'
++                )),
++            review_state TEXT NOT NULL DEFAULT 'pending'
++                CHECK (review_state IN (
++                    'pending',
++                    'accepted',
++                    'edited',
++                    'rejected',
++                    'applied',
++                    'archived'
++                )),
++            confidence REAL NOT NULL
++                CHECK (confidence >= 0.0 AND confidence <= 1.0),
++            freshness_state TEXT NOT NULL DEFAULT 'unknown'
++                CHECK (freshness_state IN (
++                    'current',
++                    'stale',
++                    'future_due',
++                    'expired',
++                    'conflicted',
++                    'unknown'
++                )),
++            content_preview TEXT NOT NULL CHECK (length(content_preview) > 0),
++            proposed_content TEXT,
++            reason_codes TEXT NOT NULL DEFAULT '[]',
++            policy_explanation_json TEXT NOT NULL DEFAULT '{}',
++            metadata_json TEXT NOT NULL DEFAULT '{}',
++            application_result_json TEXT,
++            created_at TEXT NOT NULL,
++            reviewed_at TEXT,
++            applied_at TEXT,
++            CHECK (
++                proposed_action NOT IN ('create', 'update', 'merge')
++                OR (proposed_content IS NOT NULL AND length(proposed_content) > 0)
++            )
++        );
++
++        INSERT INTO dream_candidates_new (
++            id, job_id, workspace, kind, proposed_action, review_state,
++            confidence, freshness_state, content_preview, proposed_content,
++            reason_codes, policy_explanation_json, metadata_json,
++            application_result_json, created_at, reviewed_at, applied_at
++        )
++        SELECT
++            id, job_id, workspace, kind, proposed_action, review_state,
++            confidence, freshness_state, content_preview, proposed_content,
++            reason_codes, policy_explanation_json, metadata_json,
++            application_result_json, created_at, reviewed_at, applied_at
++        FROM dream_candidates;
++
++        DROP TABLE dream_candidates;
++        ALTER TABLE dream_candidates_new RENAME TO dream_candidates;
++
++        CREATE INDEX IF NOT EXISTS idx_dream_candidates_job
++            ON dream_candidates(job_id, created_at DESC);
++        CREATE INDEX IF NOT EXISTS idx_dream_candidates_workspace_review
++            ON dream_candidates(workspace, review_state, created_at DESC);
++        CREATE INDEX IF NOT EXISTS idx_dream_candidates_kind
++            ON dream_candidates(kind, freshness_state, created_at DESC);
++
++        PRAGMA foreign_keys = ON;
++
++        INSERT INTO schema_version (version) VALUES (45);
++        "#,
++    )?;
++
++    tracing::info!("Migration v45 complete: agent writeback dream candidates enabled");
++    Ok(())
++}
++
+@@ -2432 +2541 @@ mod tests {
+-        assert_eq!(version, 44);
++        assert_eq!(version, 45);
+@@ -2437 +2546 @@ mod tests {
+-        assert_eq!(SCHEMA_VERSION, 44);
++        assert_eq!(SCHEMA_VERSION, 45);
+@@ -2592 +2701 @@ mod tests {
+-        assert_eq!(version, 44, "should reach v44 after full migration");
++        assert_eq!(version, 45, "should reach v45 after full migration");
+@@ -2780,0 +2890,35 @@ mod tests {
++    #[test]
++    fn test_dream_candidates_allow_agent_writeback_kind() {
++        let conn = in_memory_conn();
++        conn.execute(
++            "INSERT INTO dream_jobs (id, workspace, status, created_at)
++             VALUES ('agent-writeback-job', 'default', 'completed', '2026-01-01T00:00:00Z')",
++            [],
++        )
++        .expect("insert dream job");
++
++        conn.execute(
++            "INSERT INTO dream_candidates
++                (id, job_id, workspace, kind, proposed_action, confidence,
++                 freshness_state, content_preview, proposed_content, reason_codes,
++                 policy_explanation_json, metadata_json, created_at)
++             VALUES
++                ('agent-writeback-candidate', 'agent-writeback-job', 'default',
++                 'agent_writeback', 'create', 0.7, 'current',
++                 'Pending agent writeback.', 'Pending agent writeback.',
++                 '[\"agent_writeback\"]', '{}', '{\"origin\":\"agent_writeback\"}',
++                 '2026-01-01T00:00:00Z')",
++            [],
++        )
++        .expect("agent_writeback dream candidate kind should be accepted");
++
++        let kind: String = conn
++            .query_row(
++                "SELECT kind FROM dream_candidates WHERE id = 'agent-writeback-candidate'",
++                [],
++                |row| row.get(0),
++            )
++            .expect("read candidate kind");
++        assert_eq!(kind, "agent_writeback");
++    }
++
+diff --git a/src/storage/mod.rs b/src/storage/mod.rs
+index a21915f..37e0c6f 100644
+--- a/src/storage/mod.rs
++++ b/src/storage/mod.rs
+@@ -111,0 +112 @@ pub use meilisearch_indexer::MeilisearchIndexer;
++pub(crate) use migrations::SCHEMA_VERSION;
+diff --git a/tests/dream_integration.rs b/tests/dream_integration.rs
+index 37c9dbc..3ee954d 100644
+--- a/tests/dream_integration.rs
++++ b/tests/dream_integration.rs
+@@ -262,0 +263,160 @@ fn test_mcp_dream_candidate_review_and_apply() {
++#[cfg(feature = "dream-phase")]
++#[test]
++fn test_mcp_memory_agent_writeback_requires_review_before_canonical_apply() {
++    use engram::mcp::handlers::dispatch;
++    use engram::storage::Storage;
++    use serde_json::json;
++
++    let storage = Storage::open_in_memory().unwrap();
++    let source_id: i64 = storage
++        .with_connection(|conn| {
++            conn.execute(
++                "INSERT INTO memories (content, workspace, importance, created_at, updated_at)
++                 VALUES ('Source fact for agent writeback.', 'default', 0.8, datetime('now'), datetime('now'))",
++                [],
++            )?;
++            Ok(conn.last_insert_rowid())
++        })
++        .unwrap();
++    let ctx = test_handler_context(storage.clone());
++
++    let missing_evidence = dispatch(
++        &ctx,
++        "memory_agent_writeback",
++        json!({"proposed_content": "Agent-generated fact without evidence."}),
++    );
++    assert!(
++        missing_evidence.get("error").is_some(),
++        "agent writeback should require evidence, got {missing_evidence:?}"
++    );
++
++    let dry_run = dispatch(
++        &ctx,
++        "memory_agent_writeback",
++        json!({
++            "proposed_content": "Agent-generated summary pending review.",
++            "source_memory_ids": [source_id]
++        }),
++    );
++    assert_eq!(dry_run.get("status").unwrap(), "dry_run");
++    assert_eq!(dry_run["canonical_memory_mutated"], json!(false));
++    assert_eq!(dry_run["candidate"]["kind"], "agent_writeback");
++    assert_eq!(dry_run["candidate"]["review_state"], "pending");
++
++    let unconfirmed = dispatch(
++        &ctx,
++        "memory_agent_writeback",
++        json!({
++            "proposed_content": "Agent-generated summary pending review.",
++            "source_memory_ids": [source_id],
++            "dry_run": false
++        }),
++    );
++    assert!(
++        unconfirmed.get("error").is_some(),
++        "live agent writeback should require confirm=true, got {unconfirmed:?}"
++    );
++
++    let before_count: i64 = storage
++        .with_connection(|conn| {
++            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
++                .map_err(Into::into)
++        })
++        .unwrap();
++    let created = dispatch(
++        &ctx,
++        "memory_agent_writeback",
++        json!({
++            "candidate_id": "agent-writeback-candidate-1",
++            "job_id": "agent-writeback-job-1",
++            "workspace": "default",
++            "proposed_content": "Agent-generated summary pending review.",
++            "source_memory_ids": [source_id],
++            "evidence": [{
++                "source_type": "session",
++                "source_id": "session-1",
++                "source_ref": "session:1",
++                "evidence": {"excerpt": "Agent observed the source fact."}
++            }],
++            "dry_run": false,
++            "confirm": true
++        }),
++    );
++    assert_eq!(created.get("status").unwrap(), "success");
++    assert_eq!(created["canonical_memory_mutated"], json!(false));
++    assert_eq!(created["candidate"]["candidate"]["kind"], "agent_writeback");
++    assert_eq!(created["candidate"]["candidate"]["review_state"], "pending");
++    assert_eq!(
++        created["candidate"]["sources"]
++            .as_array()
++            .expect("candidate sources")
++            .len(),
++        2
++    );
++    let after_create_count: i64 = storage
++        .with_connection(|conn| {
++            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
++                .map_err(Into::into)
++        })
++        .unwrap();
++    assert_eq!(
++        after_create_count, before_count,
++        "pending writeback creation must not mutate canonical memory"
++    );
++
++    let fetched = dispatch(
++        &ctx,
++        "dream_candidate_get",
++        json!({"id": "agent-writeback-candidate-1"}),
++    );
++    assert_eq!(
++        fetched["candidate"]["sources"]
++            .as_array()
++            .expect("fetched candidate sources")
++            .len(),
++        2
++    );
++
++    let premature_apply = dispatch(
++        &ctx,
++        "dream_candidate_apply",
++        json!({"id": "agent-writeback-candidate-1", "confirm": true}),
++    );
++    assert!(
++        premature_apply.get("error").is_some(),
++        "pending agent writeback must be reviewed before apply, got {premature_apply:?}"
++    );
++
++    let reviewed = dispatch(
++        &ctx,
++        "dream_candidate_review",
++        json!({"id": "agent-writeback-candidate-1", "review_state": "accepted"}),
++    );
++    assert_eq!(reviewed.get("status").unwrap(), "success");
++
++    let apply_dry_run = dispatch(
++        &ctx,
++        "dream_candidate_apply",
++        json!({"id": "agent-writeback-candidate-1", "dry_run": true}),
++    );
++    assert_eq!(apply_dry_run.get("status").unwrap(), "dry_run");
++    assert_eq!(
++        apply_dry_run["planned"]["kind"].as_str(),
++        Some("agent_writeback")
++    );
++
++    let applied = dispatch(
++        &ctx,
++        "dream_candidate_apply",
++        json!({"id": "agent-writeback-candidate-1", "confirm": true}),
++    );
++    assert_eq!(applied.get("status").unwrap(), "completed");
++    let after_apply_count: i64 = storage
++        .with_connection(|conn| {
++            conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
++                .map_err(Into::into)
++        })
++        .unwrap();
++    assert_eq!(after_apply_count, before_count + 1);
++}
++
+diff --git a/tests/mcp_protocol_tests.rs b/tests/mcp_protocol_tests.rs
+index 9eb3bb8..7eb3816 100644
+--- a/tests/mcp_protocol_tests.rs
++++ b/tests/mcp_protocol_tests.rs
+@@ -930,0 +931,45 @@ fn memory_agent_contract_tool_is_read_only_standard_tier() {
++#[cfg(feature = "dream-phase")]
++#[test]
++fn memory_agent_writeback_tool_is_advanced_dry_run_mutating_surface() {
++    let standard_tools = get_tool_definitions_tiered(Some("standard"));
++    assert!(
++        standard_tools
++            .iter()
++            .all(|tool| tool.name != "memory_agent_writeback"),
++        "memory_agent_writeback should require Advanced tier"
++    );
++
++    let advanced_tools = get_tool_definitions_tiered(Some("advanced"));
++    let writeback_tool = advanced_tools
++        .iter()
++        .find(|tool| tool.name == "memory_agent_writeback")
++        .expect("advanced tier should include memory_agent_writeback");
++
++    let annotations = writeback_tool
++        .annotations
++        .as_ref()
++        .expect("memory_agent_writeback should expose annotations");
++    assert_eq!(
++        annotations.read_only_hint, None,
++        "memory_agent_writeback mutates dream_candidates, not canonical memories"
++    );
++    assert_eq!(
++        writeback_tool.input_schema["properties"]["dry_run"]["default"].as_bool(),
++        Some(true),
++        "memory_agent_writeback should default to dry-run"
++    );
++    assert_eq!(
++        writeback_tool.input_schema["properties"]["confirm"]["default"].as_bool(),
++        Some(false),
++        "memory_agent_writeback should require explicit confirm for pending candidate creation"
++    );
++    assert!(
++        writeback_tool.input_schema["required"]
++            .as_array()
++            .expect("required fields")
++            .iter()
++            .any(|field| field.as_str() == Some("proposed_content")),
++        "memory_agent_writeback should require proposed_content"
++    );
++}
++
+@@ -939 +984 @@ fn memory_agent_contract_dispatches_governance_contract() {
+-        Some("agent-memory-contract-v0")
++        Some("agent-memory-contract-v1")
+@@ -943,2 +988,2 @@ fn memory_agent_contract_dispatches_governance_contract() {
+-        Some(false),
+-        "C1.0 contract must not require a schema migration"
++        Some(true),
++        "C1.1 contract adds the agent_writeback dream candidate kind"
+@@ -945,0 +991 @@ fn memory_agent_contract_dispatches_governance_contract() {
++    assert_eq!(contract["baseline"]["schema_version"].as_i64(), Some(45));
+@@ -958,0 +1005,4 @@ fn memory_agent_contract_dispatches_governance_contract() {
++    assert_eq!(
++        contract["writeback"]["pending_review"]["creation_tool"].as_str(),
++        Some("memory_agent_writeback")
++    );
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.
