@@ -1737,6 +1737,11 @@ governance contract for:
 - provenance surfaces (`enrichment_events`, operational context artifacts);
 - rules that generated memory is pending/evidence-only until reviewed.
 
+The pending writeback review/apply tools are part of the Advanced tool tier and
+require the `dream-phase` feature. Agents running at the default Standard tier
+must opt in with `ENGRAM_TOOL_TIER=advanced` or `ENGRAM_TOOL_TIER=all` before
+they can inspect, review, or apply dream candidates.
+
 The first C1 slice is MCP-only and requires no schema migration. CLI wrappers or
 writeback automation should be thin layers over the same contract.
 

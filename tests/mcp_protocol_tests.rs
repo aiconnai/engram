@@ -952,8 +952,23 @@ fn memory_agent_contract_dispatches_governance_contract() {
         Some("agent_writeback")
     );
     assert_eq!(
+        contract["writeback"]["pending_review"]["required_tool_tier"].as_str(),
+        Some("advanced"),
+        "dream candidate review/apply tools are Advanced-tier"
+    );
+    assert_eq!(
         contract["writeback"]["generated_memory_default"].as_str(),
         Some("pending_or_evidence_only")
+    );
+
+    let review_tools = contract["writeback"]["pending_review"]["review_tools"]
+        .as_array()
+        .expect("contract should list dream candidate review tools");
+    assert!(
+        review_tools
+            .iter()
+            .any(|tool| tool.as_str() == Some("dream_candidate_get")),
+        "contract should require inspecting candidates before review/apply: {contract}"
     );
 
     let must_not = contract["must_not"]

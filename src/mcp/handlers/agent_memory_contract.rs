@@ -8,11 +8,10 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
     json!({
         "contract_version": CONTRACT_VERSION,
         "scope": "mcp",
-        "published_at": "2026-07-03",
+        "status": "active",
         "baseline": {
-            "c0_commit": "74c7404",
-            "lifecycle_predicate_pr": "#108",
-            "schema_migration_required": false
+            "schema_migration_required": false,
+            "first_slice": "mcp_read_only"
         },
         "recall": {
             "primary_tools": [
@@ -41,8 +40,17 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
                 "storage": "dream_candidates",
                 "candidate_kind": "agent_writeback",
                 "feature_gate": "dream-phase",
+                "required_tool_tier": "advanced",
+                "visibility": "Set ENGRAM_TOOL_TIER=advanced or ENGRAM_TOOL_TIER=all to expose dream candidate review/apply tools.",
                 "review_tools": [
                     "dream_candidates_list",
+                    "dream_candidate_get",
+                    "dream_candidate_review",
+                    "dream_candidate_apply"
+                ],
+                "review_sequence": [
+                    "dream_candidates_list",
+                    "dream_candidate_get",
                     "dream_candidate_review",
                     "dream_candidate_apply"
                 ],
@@ -51,6 +59,7 @@ pub fn memory_agent_contract(_ctx: &HandlerContext, _params: Value) -> Value {
             "rules": [
                 "Generated memory must be tagged or reviewed before it can influence future agent behavior.",
                 "Use context_seed for revisable assumptions; seeded facts remain unverified by default.",
+                "Pending agent writebacks require Advanced-tier dream candidate tools; Standard-tier agents must opt in or defer writeback review.",
                 "Do not bypass enrichment events when creating durable memory."
             ]
         },

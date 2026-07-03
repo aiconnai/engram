@@ -46,6 +46,7 @@
   - recall surfaces: `memory_smart_retrieve`, `memory_digest`, `memory_get_public`;
   - write surfaces: `memory_create`, `memory_create_batch`, `context_seed`;
   - pending writeback plan: `dream_candidates` with kind `agent_writeback`;
+  - pending-review visibility: `dream_candidate_*` review/apply tools require the Advanced tier and `dream-phase`;
   - enforcement rules: evidence-only/generated memory defaults, no trusted instruction by default, review/apply confirm or dry-run;
   - provenance surfaces: enrichment events and operational context artifacts;
   - rollout state: no schema migration, recall traces opt-in planned.
@@ -79,6 +80,10 @@ rtk ./scripts/generate-mcp-reference.sh --check
 Future work must remain separate from C1.0:
 
 1. `agent_writeback` candidate kind on existing `dream_candidates` review/apply flow.
+   The review sequence must list `dream_candidates_list`,
+   `dream_candidate_get`, `dream_candidate_review`, and
+   `dream_candidate_apply`, and must state that these tools require Advanced
+   tool exposure (`ENGRAM_TOOL_TIER=advanced` or `all`) plus `dream-phase`.
 2. Workspace opt-in recall trace setting and storage budget checks.
 3. Daily agent handoff recipe using contract + doctor + provenance.
 4. Thin CLI wrapper only after the MCP handler is stable.
