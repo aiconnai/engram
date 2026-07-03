@@ -2079,6 +2079,16 @@
         tier: ToolTier::Essential,
     },
     ToolDef {
+        name: "memory_agent_contract",
+        description: "Return the read-only Agent Memory Contract: governed recall paths, safe writeback rules, provenance requirements, tool tier defaults, and future pending-review boundaries for agent-generated memory.",
+        schema: r#"{
+            "type": "object",
+            "properties": {}
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
+    ToolDef {
         name: "memory_council",
         description: "Run a question through an llm-council instance (Karpathy council orchestration) and return consolidated stage outputs and final answer. Optionally persist a checkpoint memory.",
         schema: r#"{

@@ -14,6 +14,7 @@ use crate::search::{FuzzyEngine, SearchConfig, SearchResultCache};
 use crate::storage::Storage;
 
 pub mod agent;
+pub mod agent_memory_contract;
 pub mod auto_consolidate;
 pub mod autonomous;
 pub mod compression;
@@ -154,6 +155,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         }
         "memory_smart_retrieve" => smart_retrieve::memory_smart_retrieve(ctx, params),
         "memory_digest" => digest::memory_digest(ctx, params),
+        "memory_agent_contract" => agent_memory_contract::memory_agent_contract(ctx, params),
         "memory_search_suggest" => search::search_suggest(ctx, params),
         "memory_search_by_identity" => search::memory_search_by_identity(ctx, params),
         "memory_session_search" => search::memory_session_search(ctx, params),

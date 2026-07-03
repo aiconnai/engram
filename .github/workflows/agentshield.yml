@@ -25,3 +25,4 @@ jobs:
           ignore-tests: true
           format: sarif
           upload-sarif: true
+          version: v0.8.7

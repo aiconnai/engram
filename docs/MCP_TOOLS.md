@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **278**
+Total tools: **279**
 
 ## Summary
 
@@ -134,6 +134,7 @@ Total tools: **278**
 | `memory_search` | essential | readOnlyHint | `query` |
 | `memory_smart_retrieve` | essential | readOnlyHint | `query` |
 | `memory_digest` | essential | readOnlyHint | `topic` |
+| `memory_agent_contract` | standard | readOnlyHint | none |
 | `memory_council` | standard | mutating (no MCP hints) | `prompt` |
 | `memory_search_suggest` | standard | readOnlyHint | `query` |
 | `memory_find_duplicates` | standard | readOnlyHint | none |
@@ -2004,6 +2005,18 @@ Build an actionable, source-linked digest for a topic by orchestrating existing 
 | `include_next_actions` | `boolean` | no | Include extractive next-action suggestions grounded in source IDs Default: `true`. |
 | `current_git_branch` | `string` | no | Current branch used for Operational Context staleness warnings |
 | `current_commit_hash` | `string` | no | Current commit used for Operational Context staleness warnings |
+
+### `memory_agent_contract`
+
+Return the read-only Agent Memory Contract: governed recall paths, safe writeback rules, provenance requirements, tool tier defaults, and future pending-review boundaries for agent-generated memory.
+
+- Tier: `standard`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
 
 ### `memory_council`
 

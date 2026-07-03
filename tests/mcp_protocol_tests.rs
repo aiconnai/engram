@@ -18,9 +18,9 @@ use serde_json::{json, Value};
 
 use engram::embedding::{create_embedder, EmbeddingCache};
 use engram::mcp::{
-    get_prompt, get_tool_definitions, handlers, list_prompts, list_resources, methods,
-    read_resource, InitializeResult, McpHandler, McpRequest, McpResponse, PromptCapabilities,
-    ResourceCapabilities, ServerCapabilities, ToolCallResult, ToolsCapability,
+    get_prompt, get_tool_definitions, get_tool_definitions_tiered, handlers, list_prompts,
+    list_resources, methods, read_resource, InitializeResult, McpHandler, McpRequest, McpResponse,
+    PromptCapabilities, ResourceCapabilities, ServerCapabilities, ToolCallResult, ToolsCapability,
     MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
 };
 use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
@@ -894,6 +894,91 @@ fn memory_digest_tool_is_listed_read_only_and_dispatches() {
                 && edge["edge_type"].as_str() == Some("related_to")
         }),
         "digest should include source cross-reference: {digest}"
+    );
+}
+
+#[test]
+fn memory_agent_contract_tool_is_read_only_standard_tier() {
+    let tools = get_tool_definitions_tiered(Some("standard"));
+    let contract_tool = tools
+        .iter()
+        .find(|tool| tool.name == "memory_agent_contract")
+        .expect("standard tier should include memory_agent_contract");
+
+    let annotations = contract_tool
+        .annotations
+        .as_ref()
+        .expect("memory_agent_contract should expose annotations");
+    assert_eq!(
+        annotations.read_only_hint,
+        Some(true),
+        "memory_agent_contract must be read-only"
+    );
+    assert_eq!(
+        contract_tool.input_schema["type"].as_str(),
+        Some("object"),
+        "memory_agent_contract schema should be an object"
+    );
+    assert!(
+        contract_tool.input_schema["properties"]
+            .as_object()
+            .expect("memory_agent_contract properties should be an object")
+            .is_empty(),
+        "memory_agent_contract should not require arguments"
+    );
+}
+
+#[test]
+fn memory_agent_contract_dispatches_governance_contract() {
+    let handler = TestHandler::new();
+
+    let contract = call_tool_json(&handler, 128, "memory_agent_contract", json!({}));
+
+    assert_eq!(
+        contract["contract_version"].as_str(),
+        Some("agent-memory-contract-v0")
+    );
+    assert_eq!(
+        contract["baseline"]["schema_migration_required"].as_bool(),
+        Some(false),
+        "C1.0 contract must not require a schema migration"
+    );
+    assert_eq!(
+        contract["recall"]["primary_tools"][0].as_str(),
+        Some("memory_smart_retrieve")
+    );
+    assert_eq!(
+        contract["writeback"]["pending_review"]["candidate_kind"].as_str(),
+        Some("agent_writeback")
+    );
+    assert_eq!(
+        contract["writeback"]["pending_review"]["required_tool_tier"].as_str(),
+        Some("advanced"),
+        "dream candidate review/apply tools are Advanced-tier"
+    );
+    assert_eq!(
+        contract["writeback"]["generated_memory_default"].as_str(),
+        Some("pending_or_evidence_only")
+    );
+
+    let review_tools = contract["writeback"]["pending_review"]["review_tools"]
+        .as_array()
+        .expect("contract should list dream candidate review tools");
+    assert!(
+        review_tools
+            .iter()
+            .any(|tool| tool.as_str() == Some("dream_candidate_get")),
+        "contract should require inspecting candidates before review/apply: {contract}"
+    );
+
+    let must_not = contract["must_not"]
+        .as_array()
+        .expect("contract must include must_not rules");
+    assert!(
+        must_not.iter().any(|rule| rule
+            .as_str()
+            .is_some_and(|text| { text.contains("trusted instruction by default") })),
+        "contract must forbid trusting generated memory by default: {contract}"
     );
 }
 
