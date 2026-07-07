@@ -303,6 +303,43 @@ mod tests {
         }
     }
 
+    /// Regression guard for the Essential default surface: the default
+    /// `tools/list` must stay small and curated. Any tool promoted into (or
+    /// leaking out of) the default tier fails here, independent of which
+    /// optional features are compiled in.
+    #[test]
+    fn test_default_tier_surface_regression() {
+        let tools = get_tool_definitions_tiered(None);
+
+        let expected = TOOL_DEFINITIONS
+            .iter()
+            .filter(|t| t.tier == ToolTier::Essential || t.name == "discover_tools")
+            .count();
+        assert_eq!(
+            tools.len(),
+            expected,
+            "default surface must be exactly the Essential tier plus discover_tools"
+        );
+
+        for name in ["discover_tools", "memory_digest", "memory_create"] {
+            assert!(
+                tools.iter().any(|t| t.name == name),
+                "default tools/list must include {name}"
+            );
+        }
+        for name in [
+            "memory_search",
+            "memory_delete",
+            "session_index",
+            "identity_create",
+        ] {
+            assert!(
+                tools.iter().all(|t| t.name != name),
+                "default tools/list must not expose {name}"
+            );
+        }
+    }
+
     #[test]
     fn test_advanced_tiers_include_advanced_tools() {
         for tier in ["all", "advanced"] {

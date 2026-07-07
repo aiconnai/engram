@@ -14,7 +14,24 @@ package registries, and dated external sources.
 
 ### Changed
 
-No public changes are queued yet for the next release.
+- **Default MCP tool surface is now Essential-only (behavioral change).**
+  `tools/list` advertises a curated ~15-tool Essential profile plus
+  `discover_tools` instead of the full tool set. **Migration:** hosts that
+  relied on the previous broad first-connect surface (including
+  `memory_search`, `memory_delete`, `session_index`, `identity_create`) should
+  set `ENGRAM_TOOL_TIER=standard` in the server environment; use
+  `ENGRAM_TOOL_TIER=all` for every compiled tool. Calling any tool by name
+  still works regardless of tier — only advertisement changes.
+- **`discover_tools` is now a full catalog browser.** Results include `group`,
+  `availability`, `feature`, and `enable_with` hints, and the listing covers
+  tools disabled by compile-time features (`availability=feature_disabled`)
+  with `total_defined` in the payload. Invalid `tier`, `group`/`category`,
+  `search`, or `detail` arguments are rejected with explicit errors instead of
+  being silently ignored.
+- **Feature split: `snapshot` and `attestation`.** The former
+  `agent-portability` feature is split into independent `snapshot` and
+  `attestation` features; `agent-portability` remains as a compatibility alias
+  enabling both. `clip-embeddings` is likewise a standalone feature.
 
 ## [0.22.0] - 2026-06-19
 

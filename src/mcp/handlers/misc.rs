@@ -944,12 +944,49 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
         iter_tool_definitions, tool_feature_available, ToolTier, TOOL_DEFINITIONS,
     };
 
-    let tier_filter = params.get("tier").and_then(|v| v.as_str());
-    let group_filter = params
-        .get("group")
-        .or_else(|| params.get("category"))
-        .and_then(|v| v.as_str());
-    let search = params.get("search").and_then(|v| v.as_str());
+    // Validate filters at the boundary: `as_str()` returns None both for a
+    // missing key and for a wrong-typed value, so distinguish the two and
+    // reject invalid input loudly instead of silently ignoring the filter.
+    let tier_filter = match params.get("tier") {
+        None => None,
+        Some(value) => match value.as_str() {
+            Some(t @ ("essential" | "standard" | "advanced")) => Some(t),
+            Some(other) => {
+                return json!({
+                    "error": format!(
+                        "invalid tier '{other}': expected one of 'essential', 'standard', 'advanced'"
+                    )
+                });
+            }
+            None => {
+                return json!({
+                    "error": "invalid tier type: expected string 'essential', 'standard', or 'advanced'"
+                });
+            }
+        },
+    };
+    let group_filter = match params.get("group").or_else(|| params.get("category")) {
+        None => None,
+        Some(value) => match value.as_str() {
+            Some(group) => Some(group),
+            None => {
+                return json!({
+                    "error": "invalid group type: expected string group name"
+                });
+            }
+        },
+    };
+    let search = match params.get("search") {
+        None => None,
+        Some(value) => match value.as_str() {
+            Some(q) => Some(q),
+            None => {
+                return json!({
+                    "error": "invalid search type: expected string query"
+                });
+            }
+        },
+    };
 
     // Validate `detail` at the boundary: reject unknown values loudly rather
     // than silently defaulting, so agents get clear feedback on typos.

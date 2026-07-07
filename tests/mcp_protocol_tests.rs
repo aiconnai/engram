@@ -1970,6 +1970,60 @@ fn test_discover_tools_summary_includes_group_and_availability() {
 }
 
 #[test]
+fn test_discover_tools_rejects_invalid_tier_value() {
+    // A typo like "esential" must error loudly, not silently return the
+    // unfiltered list (the filter's catch-all arm would otherwise match all).
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "tier": "esential" }));
+    let error = data["error"].as_str().expect("expected error for bad tier");
+    assert!(error.contains("invalid tier"), "got: {error}");
+}
+
+#[test]
+fn test_discover_tools_rejects_non_string_tier() {
+    // as_str() returns None for wrong-typed values too; a numeric tier must
+    // not be treated as "no filter".
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "tier": 123 }));
+    let error = data["error"].as_str().expect("expected error for bad tier");
+    assert!(error.contains("invalid tier type"), "got: {error}");
+}
+
+#[test]
+fn test_discover_tools_rejects_non_string_group_and_category() {
+    let handler = TestHandler::new();
+    for arguments in [json!({ "group": 5 }), json!({ "category": ["memory"] })] {
+        let data = call_discover_tools(&handler, arguments);
+        let error = data["error"]
+            .as_str()
+            .expect("expected error for bad group/category");
+        assert!(error.contains("invalid group type"), "got: {error}");
+    }
+}
+
+#[test]
+fn test_discover_tools_rejects_non_string_search() {
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "search": 42 }));
+    let error = data["error"]
+        .as_str()
+        .expect("expected error for bad search");
+    assert!(error.contains("invalid search type"), "got: {error}");
+}
+
+#[test]
+fn test_discover_tools_accepts_valid_tier_values() {
+    let handler = TestHandler::new();
+    for tier in ["essential", "standard", "advanced"] {
+        let data = call_discover_tools(&handler, json!({ "tier": tier }));
+        assert!(
+            data["tools"].is_array(),
+            "tier '{tier}' must be accepted, got: {data}"
+        );
+    }
+}
+
+#[test]
 fn test_discover_tools_lists_feature_disabled_tools_by_group() {
     let handler = TestHandler::new();
     let data = call_discover_tools(
