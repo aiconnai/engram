@@ -15,16 +15,19 @@ fi
 cd "$REPO_ROOT"
 
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=docs/harness/bin/lib.sh
 source "$BIN_DIR/lib.sh"
 
 SUPPRESS_ABORT_MESSAGE=0
 
+# shellcheck disable=SC2329  # invoked indirectly via on_exit/trap
 cleanup_tmp() {
   if [ -n "${CI_OUTPUT:-}" ] && [ -f "$CI_OUTPUT" ]; then
     rm -f "$CI_OUTPUT"
   fi
 }
 
+# shellcheck disable=SC2329  # invoked via trap EXIT below
 on_exit() {
   local rc=$?
   cleanup_tmp
@@ -69,7 +72,6 @@ SENSORS_STARTED_AT="$SECONDS"
 CI_STEP_NAMES=()
 CI_STEP_STATUSES=()
 CI_STEP_ORDER=()
-CI_STEP_STATUSES_JSON=""
 CI_REQUIRED_FEATURES_VALUE=""
 CI_FEATURES_SOURCE="default"
 
@@ -80,7 +82,7 @@ set_ci_step_status() {
   idx=0
   while [ "$idx" -lt "${#CI_STEP_NAMES[@]}" ]; do
     if [ "${CI_STEP_NAMES[$idx]}" = "$step" ]; then
-      CI_STEP_STATUSES[$idx]="$status"
+      CI_STEP_STATUSES[idx]="$status"
       return 0
     fi
     idx=$((idx + 1))
@@ -110,6 +112,7 @@ resolve_ci_required_features() {
     return 0
   fi
   if [ -f scripts/ci-required-features.env ]; then
+    # shellcheck source=scripts/ci-required-features.env
     source scripts/ci-required-features.env
     if [ -n "${CI_REQUIRED_FEATURES:-}" ]; then
       CI_REQUIRED_FEATURES_VALUE="$CI_REQUIRED_FEATURES"
@@ -419,6 +422,7 @@ ci_feature_args() {
   echo "--features ${CI_REQUIRED_FEATURES_VALUE}"
 }
 
+# shellcheck disable=SC2329  # invoked indirectly through run_ci_step
 check_wasm_target_installed() {
   rustup target list --installed | grep -qx "wasm32-unknown-unknown"
 }
@@ -721,22 +725,26 @@ CI_STATUS="pass"
 CI_COMMAND_LABEL="fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check"
 CI_FEATURE_ARGS="$(ci_feature_args)"
 
+# shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
 run_ci_step "fmt" "fmt" cargo fmt --all -- --check && \
 run_ci_step "clippy" "clippy" env $CI_REQUIRED_FEATURES_ENV cargo clippy --all-targets --no-default-features $CI_FEATURE_ARGS -- -D warnings || CI_STATUS="fail"
 
 if [ "$CI_STATUS" = "pass" ]; then
+  # shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
   run_ci_step "test_lib" "test_lib" \
     env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
     cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --lib --tests -- --test-threads=1 || CI_STATUS="fail"
 fi
 
 if [ "$CI_STATUS" = "pass" ]; then
+  # shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
   run_ci_step "test_integration" "test_integration" \
     env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
     cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --bin engram-server || CI_STATUS="fail"
 fi
 
 if [ "$CI_STATUS" = "pass" ]; then
+  # shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
   run_ci_step "test_integration_watch" "test_integration_watch" \
     env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
     cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --bin engram-watcher || CI_STATUS="fail"
@@ -755,6 +763,7 @@ if [ "$CI_STATUS" = "pass" ]; then
 fi
 
 if [ "$CI_STATUS" = "pass" ]; then
+  # shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
   run_ci_step "doc" "doc" \
     env RUSTDOCFLAGS="-D warnings" $CI_REQUIRED_FEATURES_ENV \
     cargo doc --no-default-features $CI_FEATURE_ARGS --no-deps --document-private-items || CI_STATUS="fail"
@@ -765,7 +774,6 @@ if [ "$CI_STATUS" = "pass" ]; then
 fi
 
 if [ "$CI_STATUS" != "pass" ]; then
-  CI_EXIT=1
   if [ -n "$EXCLUDE_SENSOR" ] && is_expected_excluded_failure "$EXCLUDE_SENSOR"; then
     CI_STATUS="pass_with_exclusion"
     echo "    mapped failure to pass_with_exclusion via documented exclusion"

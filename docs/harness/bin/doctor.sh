@@ -479,7 +479,9 @@ require_grep .claude/fp-rules.txt 'fp-rules' 'false-positive tuning file identif
 
 # Repository skills inventory and frontmatter validation
 require_grep docs/harness/README.md 'SKILLS\.md' 'README mentions SKILLS.md'
+# shellcheck disable=SC2016  # literal backticks are part of the grep pattern
 require_grep docs/harness/SKILLS.md '`loop-engineering`' 'SKILLS documents loop-engineering'
+# shellcheck disable=SC2088  # literal tilde is part of the grep pattern
 require_grep docs/harness/SKILLS.md '~/.codex/skills' 'SKILLS documents personal skill location'
 
 UNTRACKED_SKILLS="$(git ls-files --others --exclude-standard -- 'skills/*/SKILL.md' 2>/dev/null || true)"
