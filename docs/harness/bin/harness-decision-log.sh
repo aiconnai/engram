@@ -160,7 +160,8 @@ run_new() {
   local decision=""
   local rationale=""
   local id=""
-  local date="$(date -u +%Y-%m-%d)"
+  local date
+  date="$(date -u +%Y-%m-%d)"
   local option_count=0
 
   local -a options

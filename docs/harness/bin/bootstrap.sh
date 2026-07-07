@@ -20,6 +20,7 @@ cd "$REPO_ROOT" 2>/dev/null || true
 
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo docs/harness/bin)"
 if [ -f "$BIN_DIR/lib.sh" ]; then
+  # shellcheck source=docs/harness/bin/lib.sh
   source "$BIN_DIR/lib.sh"
 else
   field_value() {
