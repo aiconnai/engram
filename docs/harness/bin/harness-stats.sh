@@ -90,7 +90,7 @@ PY
     exit 0
   fi
   echo "WARN: no sensors log at $SENSORS_LOG_PATH"
-  echo "Hint: run `bash docs/harness/bin/sensors.sh` once to create it."
+  echo 'Hint: run "bash docs/harness/bin/sensors.sh" once to create it.'
   exit 0
 fi
 

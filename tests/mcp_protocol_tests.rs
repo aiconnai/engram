@@ -2014,7 +2014,7 @@ fn test_discover_tools_rejects_non_string_search() {
 #[test]
 fn test_discover_tools_accepts_valid_tier_values() {
     let handler = TestHandler::new();
-    for tier in ["essential", "standard", "advanced"] {
+    for tier in ["essential", "standard", "advanced", "all"] {
         let data = call_discover_tools(&handler, json!({ "tier": tier }));
         assert!(
             data["tools"].is_array(),
@@ -2047,10 +2047,42 @@ fn test_discover_tools_lists_feature_disabled_tools_by_group() {
         Some(expected_availability)
     );
     assert_eq!(attestation["feature"].as_str(), Some("attestation"));
+    assert_eq!(
+        attestation["required_features"].as_array().map(Vec::len),
+        Some(1)
+    );
     assert!(attestation["enable_with"]
         .as_str()
         .expect("enable_with must be present")
         .contains("attestation"));
+}
+
+#[test]
+fn test_discover_tools_enablement_includes_all_required_features() {
+    // Given: memory_sync_media is discoverable even when feature-gated.
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "search": "memory_sync_media" }));
+
+    // When: the tool summary is inspected.
+    let tools = data["tools"].as_array().expect("tools must be an array");
+    let tool = tools
+        .iter()
+        .find(|tool| tool["name"].as_str() == Some("memory_sync_media"))
+        .expect("memory_sync_media must be discoverable");
+
+    // Then: both compile-time features required by dispatch are exposed.
+    assert_eq!(tool["feature"].as_str(), Some("multimodal,cloud"));
+    let required_features = tool["required_features"]
+        .as_array()
+        .expect("required_features must be an array")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect::<Vec<_>>();
+    assert_eq!(required_features, ["multimodal", "cloud"]);
+    assert_eq!(
+        tool["enable_with"].as_str(),
+        Some("cargo build --features multimodal,cloud")
+    );
 }
 
 #[test]

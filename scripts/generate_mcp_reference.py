@@ -24,7 +24,7 @@ class Tool:
     annotations: str
     tier: str
     group: str
-    required_feature: str | None
+    required_features: tuple[str, ...]
 
 
 NAME_RE = re.compile(r'name:\s*"(?P<value>(?:\\.|[^"\\])*)"')
@@ -100,7 +100,7 @@ def parse_tools(source: Path) -> list[Tool]:
                 annotations=annotation_summary(block),
                 tier=required_match(TIER_RE, block, f"{name} tier").lower(),
                 group=tool_group(name),
-                required_feature=required_feature(name),
+                required_features=required_features(name),
             )
         )
 
@@ -227,15 +227,17 @@ def render_reference(tools: list[Tool], source: Path) -> str:
 
     for tool in tools:
         required = required_fields(tool.schema)
+        feature_summary = required_feature_summary(tool)
         lines.append(
             f"| `{escape_table(tool.name)}` | {tool.tier} | {escape_table(tool.group)} | "
-            f"{escape_table(tool.required_feature or 'always')} | "
+            f"{escape_table(feature_summary)} | "
             f"{escape_table(tool.annotations)} | {escape_table(required_summary(required))} |"
         )
 
     lines.extend(["", "## Tools", ""])
     for tool in tools:
         required = required_fields(tool.schema)
+        feature_summary = required_feature_summary(tool)
         properties = schema_properties(tool.schema)
         lines.extend(
             [
@@ -245,7 +247,7 @@ def render_reference(tools: list[Tool], source: Path) -> str:
                 "",
                 f"- Tier: `{tool.tier}`",
                 f"- Group: `{tool.group}`",
-                f"- Required feature: `{tool.required_feature or 'always'}`",
+                f"- Required feature: `{feature_summary}`",
                 f"- Annotations: {tool.annotations}",
                 f"- Required inputs: {required_summary(required)}",
                 "",
@@ -269,7 +271,13 @@ def render_reference(tools: list[Tool], source: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def required_feature(name: str) -> str | None:
+def required_feature_summary(tool: Tool) -> str:
+    if not tool.required_features:
+        return "always"
+    return ",".join(tool.required_features)
+
+
+def required_features(name: str) -> tuple[str, ...]:
     match name:
         case (
             "langfuse_connect"
@@ -278,14 +286,14 @@ def required_feature(name: str) -> str | None:
             | "langfuse_extract_patterns"
             | "memory_from_trace"
         ):
-            return "langfuse"
+            return ("langfuse",)
         case (
             "meilisearch_search"
             | "meilisearch_reindex"
             | "meilisearch_status"
             | "meilisearch_config"
         ):
-            return "meilisearch"
+            return ("meilisearch",)
         case (
             "memory_auto_link"
             | "memory_list_auto_links"
@@ -294,19 +302,20 @@ def required_feature(name: str) -> str | None:
             | "memory_get_cluster"
             | "memory_list_clusters"
         ):
-            return "emergent-graph"
+            return ("emergent-graph",)
+        case "memory_sync_media":
+            return ("multimodal", "cloud")
         case (
-            "memory_sync_media"
-            | "memory_describe_image"
+            "memory_describe_image"
             | "memory_transcribe_audio"
             | "memory_capture_screenshot"
             | "memory_process_video"
             | "memory_list_media"
             | "memory_search_by_image"
         ):
-            return "multimodal"
+            return ("multimodal",)
         case "memory_graph_path" | "memory_temporal_snapshot" | "memory_scope_snapshot":
-            return "duckdb-graph"
+            return ("duckdb-graph",)
         case (
             "dream_run_now"
             | "dream_create"
@@ -321,23 +330,24 @@ def required_feature(name: str) -> str | None:
             | "memory_agent_writeback"
             | "dream_eval_run"
         ):
-            return "dream-phase"
+            return ("dream-phase",)
         case (
             "attestation_log"
             | "attestation_verify"
             | "attestation_chain_verify"
             | "attestation_list"
         ):
-            return "attestation"
+            return ("attestation",)
         case "snapshot_create" | "snapshot_load" | "snapshot_inspect":
-            return "snapshot"
+            return ("snapshot",)
         case _:
-            return None
+            return ()
 
 
 def tool_group(name: str) -> str:
-    feature = required_feature(name)
-    if feature is not None:
+    features = required_features(name)
+    if features:
+        feature = features[0]
         match feature:
             case "langfuse":
                 return "feature.langfuse"

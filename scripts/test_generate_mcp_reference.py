@@ -77,7 +77,7 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
             annotations="readOnlyHint",
             tier="essential",
             group="memory.core",
-            required_feature=None,
+            required_features=(),
         )
 
         markdown = generator.render_reference([tool], generator.DEFAULT_SOURCE)
@@ -89,6 +89,25 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         self.assertIn("- Required feature: `always`", markdown)
         self.assertIn("| `mode` | `string` | yes |", markdown)
         self.assertIn("Allowed: `fast`, `safe`.", markdown)
+
+    def test_required_feature_summary_includes_multiple_features(self) -> None:
+        tool = generator.Tool(
+            name="memory_sync_media",
+            description="Sync media",
+            schema={"type": "object", "properties": {}},
+            annotations="mutating (no MCP hints)",
+            tier="advanced",
+            group="feature.multimodal",
+            required_features=("multimodal", "cloud"),
+        )
+
+        markdown = generator.render_reference([tool], generator.DEFAULT_SOURCE)
+
+        self.assertIn(
+            "| `memory_sync_media` | advanced | feature.multimodal | multimodal,cloud |",
+            markdown,
+        )
+        self.assertIn("- Required feature: `multimodal,cloud`", markdown)
 
 
 if __name__ == "__main__":

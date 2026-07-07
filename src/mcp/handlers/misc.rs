@@ -940,7 +940,7 @@ enum DiscoverDetail {
 /// List available tools by tier, category, or search query.
 pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
     use crate::mcp::tools::{
-        catalog::{required_feature, tool_group},
+        catalog::{required_feature_summary, required_features, tool_group},
         iter_tool_definitions, tool_feature_available, ToolTier, TOOL_DEFINITIONS,
     };
 
@@ -950,17 +950,17 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
     let tier_filter = match params.get("tier") {
         None => None,
         Some(value) => match value.as_str() {
-            Some(t @ ("essential" | "standard" | "advanced")) => Some(t),
+            Some(t @ ("essential" | "standard" | "advanced" | "all")) => Some(t),
             Some(other) => {
                 return json!({
                     "error": format!(
-                        "invalid tier '{other}': expected one of 'essential', 'standard', 'advanced'"
+                        "invalid tier '{other}': expected one of 'essential', 'standard', 'advanced', 'all'"
                     )
                 });
             }
             None => {
                 return json!({
-                    "error": "invalid tier type: expected string 'essential', 'standard', or 'advanced'"
+                    "error": "invalid tier type: expected string 'essential', 'standard', 'advanced', or 'all'"
                 });
             }
         },
@@ -1053,14 +1053,16 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
                 ToolTier::Standard => "standard",
                 ToolTier::Advanced => "advanced",
             };
-            let feature = required_feature(def.name);
+            let features = required_features(def.name);
+            let feature = required_feature_summary(def.name);
             let available = tool_feature_available(def.name);
             let availability = if available {
                 "available"
             } else {
                 "feature_disabled"
             };
-            let enable_with = feature.map(|name| format!("cargo build --features {name}"));
+            let enable_with = (!features.is_empty())
+                .then(|| format!("cargo build --features {}", features.join(",")));
             let base = json!({
                 "name": def.name,
                 "description": def.description,
@@ -1068,6 +1070,7 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
                 "group": tool_group(def.name),
                 "availability": availability,
                 "feature": feature,
+                "required_features": features,
                 "enable_with": enable_with
             });
             match detail {
