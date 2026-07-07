@@ -67,7 +67,7 @@ pub(super) async fn handle_mcp(
             is_rate_limited = true;
             decision = "rate_limited";
             include_retry_after = true;
-            rate_limited_response(request.id, is_notification, uri.path())
+            rate_limited_response(request.id, is_notification)
         } else {
             if is_notification {
                 (StatusCode::ACCEPTED, serde_json::Value::Null)
@@ -86,7 +86,7 @@ pub(super) async fn handle_mcp(
         is_rate_limited = true;
         decision = "rate_limited";
         include_retry_after = true;
-        rate_limited_response(request.id, is_notification, uri.path())
+        rate_limited_response(request.id, is_notification)
     } else if is_notification {
         decision = "success";
         (StatusCode::ACCEPTED, serde_json::Value::Null)

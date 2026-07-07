@@ -38,7 +38,6 @@ pub(super) struct RateLimitDecision {
 pub(super) fn rate_limited_response(
     id: Option<serde_json::Value>,
     is_notification: bool,
-    route: &str,
 ) -> (StatusCode, serde_json::Value) {
     if is_notification {
         return (StatusCode::ACCEPTED, serde_json::Value::Null);
@@ -54,7 +53,6 @@ pub(super) fn rate_limited_response(
         .unwrap_or_else(|e| {
             tracing::error!(
                 error = %e,
-                route = %route,
                 "failed to serialize error response"
             );
             serde_json::Value::Null
