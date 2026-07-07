@@ -1,86 +1,78 @@
 # Engram
 
 **MCP memory server for Claude Code, Cursor, and AI agents.**
-Engram is a Rust, local-first memory layer for teams that need agents to
-remember proprietary project context across sessions. It ingests meetings, docs,
-transcripts, and decisions; stores them in SQLite; indexes them with hybrid
-BM25/vector/fuzzy search and knowledge graph links; and exposes the same source
-of truth through MCP, HTTP JSON-RPC, CLI, Python, and TypeScript SDKs.
-
-Use Engram when coding agents, research crews, or internal AI tools need durable
-memory with provenance instead of rebuilding context from chat history.
 
 [![Crates.io](https://img.shields.io/crates/v/engram-core)](https://crates.io/crates/engram-core)
 [![docs.rs](https://img.shields.io/docsrs/engram-core)](https://docs.rs/engram-core)
+[![CI](https://github.com/aiconnai/engram/actions/workflows/ci.yml/badge.svg)](https://github.com/aiconnai/engram/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
----
+Engram is a Rust, local-first memory layer for teams that need agents to
+remember proprietary project context across sessions. It ingests meetings,
+docs, transcripts, and decisions; stores them in SQLite; indexes them with
+hybrid BM25/vector/fuzzy search and knowledge graph links; and exposes the same
+source of truth through MCP, HTTP JSON-RPC, CLI, and Python/TypeScript SDKs.
 
-## Supported Interfaces and Adapters
-
-- MCP server over stdio and HTTP for Claude Code, Cursor, VS Code MCP clients,
-  and other Model Context Protocol hosts.
-- HTTP JSON-RPC MCP endpoints, optional WebSocket event streaming, and
-  `engram-cli` over the same memory store.
-- Rust single binary with SQLite + WAL local storage, optional cloud sync, and
-  optional Meilisearch indexing.
-- Python SDK and TypeScript SDK for application code and hosted deployments.
-- Python adapters for CrewAI, LangChain, LlamaIndex, and OpenAI Assistants API
-  threads.
-- Project Context Discovery for `CLAUDE.md`, `AGENTS.md`, `.cursorrules`,
-  GitHub Copilot instructions, and similar repo policy files.
-
-## Workflows and Ecosystems That Benefit
-
-The native adapters above cover MCP clients, the SDKs, and the listed Python
-framework integrations. The same MCP/HTTP/SDK surface can also harden workflows
-built around OpenAI Agents SDK, LangGraph, FastMCP servers, Playwright MCP,
-Browser Use, and other agent runtimes, but those are integration patterns rather
-than first-party adapters in this repository.
-
-## Works With
-
-| Ecosystem | How this project helps |
-|-----------|------------------------|
-| Claude Code | Native MCP server gives Claude durable project memory, decision search, and repo context retrieval. |
-| Cursor | Native MCP configuration lets Cursor query the same memory store from `.cursor/mcp.json`. |
-| VS Code MCP clients | Stdio and HTTP MCP transports expose memory tools to MCP-aware VS Code setups. |
-| CrewAI | Python SDK includes short-term, long-term, and entity memory adapters backed by Engram. |
-| LangChain | Python SDK includes chat history and vector-store-style adapters over Engram hybrid search. |
-| LlamaIndex | Python SDK includes document store, vector store, and chat store adapters. |
-| OpenAI Assistants API / Threads | Python adapter syncs thread messages into searchable Engram session memory. |
-| OpenAI Agents SDK | No native adapter yet; use MCP, HTTP JSON-RPC, or the SDKs to persist agent state and decisions. |
-| LangGraph | No native adapter yet; use Engram as a separate durable memory/retrieval service from graph nodes. |
-| FastMCP servers | FastMCP projects can call Engram as an external memory server or HTTP service. |
-| Playwright MCP | Store browser task findings, QA notes, and crawl decisions; Engram does not automate the browser. |
-| Browser Use | Persist web task context and decisions across runs; browser control stays in Browser Use. |
-
-## Searchable Guides
-
-- [User guide](docs/USER_GUIDE.md)
-- [MCP memory server guide](docs/integrations/mcp-memory-server.md)
-- [Claude Code MCP memory guide](docs/integrations/claude-code-mcp-memory.md)
-- [Cursor MCP memory guide](docs/integrations/cursor-mcp-memory.md)
-- [OpenAI Agents memory guide](docs/integrations/openai-agents-memory.md)
-
-## Runnable Examples
-
-- [Claude MCP](examples/claude-mcp/) - Claude Code MCP config plus a seed/search smoke test.
-- [OpenAI Agents SDK](examples/openai-agents-sdk/) - function tools that call Engram over HTTP JSON-RPC.
-- [FastMCP server](examples/fastmcp-server/) - FastMCP tools backed by Engram memory calls.
-- [LangGraph tool](examples/langgraph-tool/) - graph nodes that search and store Engram memory.
+Use Engram when coding agents, research crews, or internal AI tools need
+durable memory with provenance instead of rebuilding context from chat history.
 
 ---
 
-## Choose Your Path
+## Quick Start
 
-<table>
-<tr>
-<td width="50%" valign="top">
+```bash
+# Install with Homebrew (tracks the GitHub release artifacts)
+brew install aiconnai/engram/engram
 
-### Internal Knowledge Server (Primary)
+# Or install from crates.io (may lag the latest GitHub/Homebrew release)
+cargo install engram-core
 
-Use Engram when the hard part is not model access. The hard part is organizing your own context so the team can move fast without rebuilding the same mental model in every conversation.
+# Or from source
+git clone https://github.com/aiconnai/engram.git
+cd engram && cargo install --path .
+```
+
+Run as an MCP server:
+
+```bash
+# stdio transport (Claude Code, Cursor, VS Code MCP clients, etc.)
+engram-server --transport stdio
+
+# HTTP JSON-RPC transport
+engram-server --transport http --http-port 8080
+
+# Both (default)
+engram-server --transport both --http-port 8080
+```
+
+### MCP Configuration
+
+Add to your MCP config (e.g. `~/.claude/mcp.json`, `.cursor/mcp.json`, or your
+VS Code MCP extension config):
+
+```json
+{
+  "mcpServers": {
+    "engram": {
+      "command": "engram-server",
+      "args": [],
+      "env": {
+        "ENGRAM_DB_PATH": "~/.local/share/engram/memories.db"
+      }
+    }
+  }
+}
+```
+
+By default, `tools/list` exposes a focused Essential profile plus
+`discover_tools`. Set `ENGRAM_TOOL_TIER=standard` in `env` when an MCP host
+needs the broader pre-0.23 tool surface on first connect, or
+`ENGRAM_TOOL_TIER=all` for every compiled tool.
+
+If you built from source, use the full path to the binary
+(e.g. `/path/to/engram/target/release/engram-server`).
+
+First calls over HTTP:
 
 ```bash
 # Store a memory
@@ -94,161 +86,17 @@ curl -X POST localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory_search","arguments":{"query":"user preferences"}}}'
 ```
 
-**What you get:**
-- Structured ingestion workflows for notes, meetings, transcripts, and project artifacts
-- Hybrid search (BM25 + vectors + fuzzy) in one call
-- Memory policy layer: deterministic scoring for salience, retention, retrieval priority, reinforcement, decay, and conflict demotion over explicit memories.
-- MCP / HTTP JSON-RPC / CLI / SDK access to the same organized memory
-- Local-first storage with a single Rust binary and documented deployment profile
-
-</td>
-<td width="50%" valign="top">
-
-### Agent Workflow Support
-
-Capture project context and decision trails so coding agents stop repeating the same questions and stop drifting from prior decisions.
-
-```bash
-# Search decisions
-engram-cli search "why did we choose postgres"
-```
-
-**What you get:**
-- Project Context Discovery (CLAUDE.md, AGENTS.md, .cursorrules, etc.) via MCP tools
-- Decision trails with provenance, tags, and metadata
-- Local-first by default, with optional sync for shared or hosted deployments
-
-</td>
-</tr>
-</table>
+For a full repository setup (repo-local databases, agent instructions, CLI,
+local embeddings), see
+[Using Engram From Another Repository](docs/USING_ENGRAM_IN_A_REPO.md).
 
 ---
-
-## Use Engram In Your Repository
-
-See [Using Engram From Another Repository](docs/USING_ENGRAM_IN_A_REPO.md) for a practical setup guide covering MCP config, repo-local databases, agent instructions, CLI usage, HTTP access, and local embeddings.
-
-## What Engram Solves
-
-Engram is built for teams that accumulate more context than a single person can keep in their head.
-
-- Interviews, meetings, docs, and transcripts become hard to search manually at scale.
-- Not everyone attends every conversation, so information becomes unevenly distributed across the team.
-- That asymmetry slows down decisions that need speed and conviction.
-- Engram turns scattered artifacts into a structured memory layer that agents can query directly from the source.
-
-## How It Works
-
-1. Ingest the material: meetings, docs, transcripts, and notes.
-2. Organize the data: normalize, tag, and store it with durable provenance.
-3. Index it: combine exact, fuzzy, and semantic retrieval.
-4. Expose it via MCP: let Claude Code and other agents ask questions against the same knowledge base.
-
----
-
-### Quick Start
-
-```bash
-# Install with Homebrew (tracks the GitHub release artifacts)
-brew install aiconnai/engram/engram
-
-# Or install from crates.io
-# The crates.io package can lag the latest GitHub/Homebrew release; check the
-# badge above when you need an exact version.
-cargo install engram-core
-
-# Or from source
-git clone https://github.com/aiconnai/engram.git
-cd engram && cargo install --path .
-
-# Run as MCP server (Claude Code, Cursor, VS Code MCP clients, etc.)
-engram-server --transport stdio
-
-# Or run as HTTP MCP transport
-engram-server --transport http --http-port 8080
-```
-
-## SDK Integration Pattern: Council Skill
-
-Engram exposes the MCP tool `memory_council` and both SDKs now include a reusable helper wrapper.
-
-- Python SDK: `engram_client.integrations.CouncilSkill`
-- TypeScript SDK: `CouncilSkill` from `engram-client`
-- `memory_council` MCP tool: direct fallback via HTTP/MCP
-
-The hosted URLs below are placeholders for your own deployment. They are not a
-claim that a public Engram SaaS endpoint is generally available.
-
-Python:
-
-```python
-from engram_client import EngramClient
-from engram_client.integrations import CouncilSkill
-
-async def run_review() -> None:
-    async with EngramClient(
-        base_url="https://your-hosted-engram.example.com",
-        api_key="ek_...",
-        tenant="my-tenant",
-    ) as client:
-        council = CouncilSkill(
-            client,
-            default_workspace="architecture",
-            default_timeout_seconds=120,
-            default_include_raw_stages=False,
-        )
-        result = await council.ask("Should we switch from Redis to Postgres?")
-        print(result)
-```
-
-TypeScript:
-
-```typescript
-import { CouncilSkill, EngramClient } from "engram-client";
-
-const client = new EngramClient({
-  baseUrl: "https://your-hosted-engram.example.com",
-  apiKey: "ek_...",
-  tenant: "my-tenant",
-});
-
-const council = new CouncilSkill(client, {
-  defaultWorkspace: "architecture",
-  defaultTimeoutSeconds: 120,
-});
-
-const result = await council.askWithPersistence(
-  "Should we switch from Redis to Postgres?"
-);
-```
-
-Use this when multiple agents need the same structured consensus process.
-
-## Reusable Agent Skill Pack
-
-Engram includes a ready-to-use Claude skill for this workflow in:
-
-- `skills/engram-council/SKILL.md`
-
-Install the skill folder in your Claude or agent skills environment and enable
-it when you want consistent, low-overhead consensus prompts:
-
-1. Open your agent's skills settings
-2. Add the folder `skills/engram-council/`
-3. Enable `engram-council`
-4. Keep your Engram MCP server configured as usual
-
-The skill follows this flow:
-
-- Prefer SDK `CouncilSkill` wrappers
-- Fallback to direct `memory_council` MCP call when needed
-- Optionally persist decision checkpoints to project memory
 
 ## Why Engram
 
-Agents forget between sessions. Context windows overflow. Important knowledge gets buried in chat logs and meeting notes.
-
-Engram turns that into a queryable memory system that keeps the team aligned on the same facts.
+Agents forget between sessions. Context windows overflow. Important knowledge
+gets buried in chat logs and meeting notes. Engram turns scattered artifacts
+into a structured memory layer that agents query directly from the source:
 
 | Problem | Engram Solution |
 |---------|-----------------|
@@ -259,15 +107,17 @@ Engram turns that into a queryable memory system that keeps the team aligned on 
 | Agents need direct access to the same facts | **MCP-native** tools for read/write/search workflows |
 | No project awareness | **Project Context Discovery** (CLAUDE.md, AGENTS.md, .cursorrules, etc.) |
 
----
+How it works:
 
-## Positioning
+1. **Ingest** meetings, docs, transcripts, and notes.
+2. **Organize** — normalize, tag, and store with durable provenance.
+3. **Index** — combine exact, fuzzy, and semantic retrieval.
+4. **Expose via MCP** — let Claude Code and other agents query the same
+   knowledge base.
 
-Engram's strongest fit is local-first, MCP-native memory for proprietary project
-context: decisions, repo policy, meetings, transcripts, and agent handoffs. For
-competitive and marketing planning notes, see [`docs/strategy/`](docs/strategy/).
-Those notes are intentionally not public-use claims until competitor, feature,
-and performance statements have been independently fact-checked.
+Wondering how Engram compares to Mem0, Zep/Graphiti, Cognee, or simpler MCP
+memory servers? See the honest comparison in
+[docs/COMPARISON.md](docs/COMPARISON.md).
 
 ---
 
@@ -296,256 +146,127 @@ Isolate memories by project or context through the MCP tools:
 }
 ```
 
-```json
-{
-  "name": "workspace_list",
-  "arguments": {}
-}
-```
-
-### Memory Tiering
+### Memory Tiering & Lifecycle
 
 Two tiers for different retention needs:
 
-- **Permanent**: Important knowledge, decisions (never expires)
-- **Daily**: Session context, scratch notes (auto-expire after 24h)
+- **Permanent**: important knowledge and decisions (never expires) —
+  `memory_create`
+- **Daily**: session context and scratch notes (auto-expire after 24h) —
+  `memory_create_daily`
 
-```json
-{
-  "name": "memory_create_daily",
-  "arguments": {
-    "content": "Current debugging task",
-    "workspace": "my-project"
-  }
-}
-```
+Salience scoring prioritizes memories by recency, frequency, importance, and
+feedback (`salience_top`, `salience_boost`). Salience decays over time;
+lifecycle transitions (`Active -> Stale -> Archived`) are decided by
+`lifecycle_run`.
 
 ### Session Transcript Indexing
 
-Store and search conversation transcripts through MCP:
+Store conversation transcripts with `session_index` and search them with
+`memory_search` (`"include_transcripts": true`).
 
-```json
-{
-  "name": "session_index",
-  "arguments": {
-    "session_id": "chat-123",
-    "workspace": "my-project",
-    "messages": [
-      { "role": "user", "content": "How should we handle errors?" },
-      { "role": "assistant", "content": "Use Result with contextual errors." }
-    ]
-  }
-}
-```
+### Knowledge Graph & Identity Links
 
-```json
-{
-  "name": "memory_search",
-  "arguments": {
-    "query": "error handling",
-    "workspace": "my-project",
-    "include_transcripts": true
-  }
-}
-```
-
-### Identity Links (Entity Unification)
-
-Link different mentions to canonical identities:
-
-```json
-{
-  "name": "identity_create",
-  "arguments": {
-    "canonical_id": "user:ronaldo",
-    "display_name": "Ronaldo",
-    "entity_type": "person",
-    "aliases": ["Ronaldo", "@ronaldo"]
-  }
-}
-```
-
-### Knowledge Graph
+Entity extraction (`memory_extract_entities`) links memories through shared
+entities; `identity_create` unifies different mentions under canonical
+identities. Multi-hop traversal and shortest-path are available via
+`memory_traverse` and `memory_find_path`, and the graph can be exported:
 
 ```bash
-# Export the graph
 engram-cli graph --format json --output graph.json
 ```
 
-Entity extraction (`memory_extract_entities`) links memories through shared entities.  
-Multi-hop traversal and shortest-path are available via MCP tools:
-- `memory_traverse`
-- `memory_find_path`
-
-### Multiple Interfaces
-
-- **MCP**: Native Model Context Protocol for Claude Code, Cursor, VS Code MCP clients
-- **HTTP JSON-RPC**: MCP-compatible endpoint at `POST /mcp` and `POST /v1/mcp`
-- **WebSocket**: Optional event stream when `ENGRAM_WS_PORT` is enabled
-- **CLI**: Developer-friendly commands
-- **SDKs**: Python and TypeScript clients for application code
-
-### Salience Scoring
-
-Dynamic memory prioritization based on recency, frequency, importance, and feedback:
-
-```json
-{
-  "name": "salience_top",
-  "arguments": {
-    "limit": 10,
-    "workspace": "my-project"
-  }
-}
-```
-
-```json
-{
-  "name": "salience_boost",
-  "arguments": {
-    "id": 42,
-    "boost_amount": 0.2,
-    "reason": "Relevant to the current debugging task"
-  }
-}
-```
-
-Salience decays over time for scoring and history. Lifecycle transitions
-(`Active -> Stale -> Archived`) are decided by `lifecycle_run`.
-
 ### Context Quality
 
-5-component quality assessment (clarity, completeness, freshness, consistency, source trust):
-
-```json
-{
-  "name": "quality_report",
-  "arguments": {
-    "workspace": "my-project"
-  }
-}
-```
-
-```json
-{
-  "name": "quality_find_duplicates",
-  "arguments": {
-    "threshold": 0.85,
-    "limit": 100
-  }
-}
-```
-
-Includes conflict detection for contradictions between memories and resolution workflows.
-
-### Optional Meilisearch Backend
-
-Offload search to Meilisearch for larger-scale deployments (feature-gated):
-
-```bash
-# Build with Meilisearch support
-cargo build --features meilisearch
-
-# Run with Meilisearch indexer
-engram-server --meilisearch-url http://localhost:7700 --meilisearch-indexer
-```
-
-SQLite remains the source of truth. MeilisearchIndexer syncs changes in the background.
-
-### MCP Resources & Prompts
-
-Engram exposes MCP Resources and Prompts for richer agent integration:
-
-**Resources** — Query-only URI templates:
-- `engram://memory/{id}` — Get specific memory
-- `engram://workspace/{name}` — Get workspace statistics
-- `engram://workspace/{name}/memories` — List workspace memories
-- `engram://stats` — Global statistics
-- `engram://entities` — Extracted entities
-
-**Prompts** — Guided workflows for agents:
-- `create-knowledge-base` — Steps to build a new knowledge base
-- `daily-review` — Daily memory review and archival workflow
-- `search-and-organize` — Search results with suggested tags
-- `seed-entity` — Initialize entity graph from project
-
-### Streamable HTTP Transport
-
-Run Engram as HTTP server with JSON-RPC 2.0 support:
-
-```bash
-# HTTP-only server (port 8080)
-engram-server --transport http --http-port 8080
-
-# Both HTTP and stdio (default)
-engram-server --transport both --http-port 8080
-
-# Bearer token authentication
-ENGRAM_HTTP_API_KEY=secret-token-here engram-server --transport http
-```
-
-Clients connect via HTTP with JSON-RPC 2.0 at `POST /mcp`; `POST /v1/mcp` is
-also accepted as a compatibility alias. See [MCP HTTP Authentication](docs/MCP_AUTH.md).
+5-component quality assessment (clarity, completeness, freshness, consistency,
+source trust) via `quality_report`, plus duplicate detection
+(`quality_find_duplicates`) and conflict detection/resolution workflows for
+contradictions between memories.
 
 ### Project Context Discovery
 
-Ingest and query instruction and policy files using MCP tools:
-- `memory_scan_project`
-- `memory_get_project_context`
+Ingest and query repo instruction and policy files with `memory_scan_project`
+and `memory_get_project_context`. Supported patterns include `CLAUDE.md`,
+`AGENTS.md`, `.cursorrules`, `.github/copilot-instructions.md`,
+`.aider.conf.yml`, `CONVENTIONS.md`, and `CODING_GUIDELINES.md` (when present).
 
-**Supported patterns:**
-- CLAUDE.md
-- AGENTS.md (agora com documentação útil para agentes)
-- .cursorrules
-- .github/copilot-instructions.md
-- .aider.conf.yml (se existir)
-- CONVENTIONS.md, CODING_GUIDELINES.md (se existirem)
+### MCP Resources & Prompts
 
----
+**Resources** — query-only URI templates: `engram://memory/{id}`,
+`engram://workspace/{name}`, `engram://workspace/{name}/memories`,
+`engram://stats`, `engram://entities`.
 
-## MCP Configuration
+**Prompts** — guided workflows for agents: `create-knowledge-base`,
+`daily-review`, `search-and-organize`, `seed-entity`.
 
-Add to your MCP config (for example: `~/.claude/mcp.json`, `.cursor/mcp.json`, or your VS Code MCP extension config):
+### Optional Meilisearch Backend
 
-```json
-{
-  "mcpServers": {
-    "engram": {
-      "command": "engram-server",
-      "args": [],
-      "env": {
-        "ENGRAM_DB_PATH": "~/.local/share/engram/memories.db"
-      }
-    }
-  }
-}
+Offload search to Meilisearch for larger-scale deployments (feature-gated).
+SQLite remains the source of truth; the indexer syncs changes in the background:
+
+```bash
+cargo build --features meilisearch
+engram-server --meilisearch-url http://localhost:7700 --meilisearch-indexer
 ```
-
-Set `ENGRAM_TOOL_TIER=standard` in `env` when an MCP host needs the broader
-pre-0.23 tool surface on first connect.
-
-If you built from source instead of installing via Homebrew, use the full path to the binary (e.g. `/path/to/engram/target/release/engram-server`).
-
-### Available MCP Tools
-
-The MCP tool reference is generated from source of truth (`src/mcp/tools/registry.rs`) and tracked in `docs/MCP_TOOLS.md`.
-
-- Full reference: [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md)
-- By default, `tools/list` exposes only the Essential profile plus
-  `discover_tools`; set `ENGRAM_TOOL_TIER=standard` or `all` for broader
-  profiles.
-- Generated count, tier, group, feature requirement, and schema are in that reference
-  (single source of truth).
-- Regenerate with: `./scripts/generate-mcp-reference.sh`
 
 ### Dream Snapshot Review Pipeline
 
-RFC 0007 defines an implemented reviewable dream snapshot pipeline for derived
-memory proposals. Dream output is candidate memory until it is reviewed and
-explicitly applied with confirmation; it is not canonical memory by default.
+RFC 0007 defines an implemented reviewable pipeline for derived memory
+proposals. Dream output is candidate memory until reviewed and explicitly
+applied with confirmation; it is not canonical memory by default. See the
+[contract](docs/rfcs/0007-dream-snapshot-review-pipeline.md) and
+[eval scaffold](docs/DREAM_SNAPSHOT_EVALS.md).
 
-- Contract: [docs/rfcs/0007-dream-snapshot-review-pipeline.md](docs/rfcs/0007-dream-snapshot-review-pipeline.md)
-- Eval scaffold: [docs/DREAM_SNAPSHOT_EVALS.md](docs/DREAM_SNAPSHOT_EVALS.md)
+### Available MCP Tools
+
+The MCP tool reference is generated from the source of truth
+(`src/mcp/tools/registry.rs`) and tracked in
+[docs/MCP_TOOLS.md](docs/MCP_TOOLS.md).
+
+- By default, `tools/list` exposes only the Essential profile plus
+  `discover_tools`; set `ENGRAM_TOOL_TIER=standard` or `all` for broader
+  profiles.
+- Generated count, tier, group, feature requirement, and schema are in that
+  reference (single source of truth).
+- Regenerate with: `./scripts/generate-mcp-reference.sh`
+
+---
+
+## Interfaces & Integrations
+
+- **MCP** over stdio and HTTP for Claude Code, Cursor, VS Code MCP clients, and
+  other Model Context Protocol hosts.
+- **HTTP JSON-RPC 2.0** at `POST /mcp` (`POST /v1/mcp` as compatibility alias),
+  with optional Bearer token auth via `ENGRAM_HTTP_API_KEY` — see
+  [MCP HTTP Authentication](docs/MCP_AUTH.md).
+- **WebSocket** event streaming, opt-in via `ENGRAM_WS_PORT`.
+- **CLI** (`engram-cli`) over the same memory store.
+- **Python and TypeScript SDKs** for application code and hosted deployments.
+
+| Ecosystem | How Engram helps |
+|-----------|------------------|
+| Claude Code / Cursor / VS Code MCP clients | Native MCP server for durable project memory, decision search, and repo context retrieval. |
+| CrewAI | Python SDK adapters for short-term, long-term, and entity memory. |
+| LangChain | Python SDK chat history and vector-store-style adapters over hybrid search. |
+| LlamaIndex | Python SDK document store, vector store, and chat store adapters. |
+| OpenAI Assistants API / Threads | Python adapter syncs thread messages into searchable session memory. |
+| OpenAI Agents SDK, LangGraph, FastMCP, Playwright MCP, Browser Use | No first-party adapters; integrate via MCP, HTTP JSON-RPC, or the SDKs — see the runnable examples below. |
+
+**Runnable examples:**
+
+- [Claude MCP](examples/claude-mcp/) — Claude Code MCP config plus a seed/search smoke test.
+- [OpenAI Agents SDK](examples/openai-agents-sdk/) — function tools that call Engram over HTTP JSON-RPC.
+- [FastMCP server](examples/fastmcp-server/) — FastMCP tools backed by Engram memory calls.
+- [LangGraph tool](examples/langgraph-tool/) — graph nodes that search and store Engram memory.
+
+### Council Skill (SDKs + MCP)
+
+Engram exposes the `memory_council` MCP tool for structured multi-perspective
+consensus, wrapped by both SDKs (`engram_client.integrations.CouncilSkill` in
+Python, `CouncilSkill` from `engram-client` in TypeScript). A ready-to-use
+Claude skill lives in [`skills/engram-council/`](skills/engram-council/) —
+install the folder in your agent's skills environment and keep your Engram MCP
+server configured as usual.
 
 ---
 
@@ -554,12 +275,14 @@ explicitly applied with confirmation; it is not canonical memory by default.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ENGRAM_DB_PATH` | SQLite database path | `~/.local/share/engram/memories.db` |
+| `ENGRAM_TOOL_TIER` | MCP tool surface (`essential`, `standard`, `all`) | `essential` |
 | `ENGRAM_STORAGE_URI` | S3/R2 URI for cloud sync | - |
 | `ENGRAM_CLOUD_ENCRYPT` | AES-256-GCM encryption | `false` |
 | `ENGRAM_EMBEDDING_MODEL` | Embedding model (`tfidf`, `local`, `openai`) | `tfidf` |
 | `ENGRAM_ONNX_MODEL_DIR` | Local embedding model directory (`model.onnx` + `tokenizer.json`) | platform data dir |
 | `ENGRAM_CLEANUP_INTERVAL` | Expired memory cleanup interval (seconds) | `3600` |
 | `ENGRAM_WS_PORT` | WebSocket server port (0 = disabled) | `0` |
+| `ENGRAM_HTTP_API_KEY` | Bearer token for the HTTP transport | - |
 | `OPENAI_API_KEY` | OpenAI API key (for `openai` embeddings) | - |
 | `MEILISEARCH_URL` | Meilisearch URL (requires `--features meilisearch`) | - |
 | `MEILISEARCH_API_KEY` | Meilisearch API key | - |
@@ -568,7 +291,8 @@ explicitly applied with confirmation; it is not canonical memory by default.
 
 ### Local embeddings
 
-Local sentence-transformer embeddings are opt-in and keep the default binary small:
+Local sentence-transformer embeddings are opt-in and keep the default binary
+small:
 
 ```bash
 cargo build --features local-embeddings
@@ -576,7 +300,8 @@ cargo build --features local-embeddings
 ENGRAM_EMBEDDING_MODEL=local ./target/debug/engram-server
 ```
 
-This backend uses ONNX Runtime with `all-MiniLM-L6-v2` (384 dimensions). The model is downloaded explicitly and is not bundled into the binary.
+This backend uses ONNX Runtime with `all-MiniLM-L6-v2` (384 dimensions). The
+model is downloaded explicitly and is not bundled into the binary.
 
 ---
 
@@ -601,8 +326,22 @@ This backend uses ONNX Runtime with `all-MiniLM-L6-v2` (384 dimensions). The mod
 │  • Optional S3/R2 sync with AES-256 encryption                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
-* WebSocket event streaming is opt-in via `ENGRAM_WS_PORT`; the MCP stdio and
-  HTTP JSON-RPC transports are the primary agent interfaces.
+
+\* WebSocket event streaming is opt-in via `ENGRAM_WS_PORT`; the MCP stdio and
+HTTP JSON-RPC transports are the primary agent interfaces.
+
+---
+
+## Documentation
+
+- [Quickstart](docs/QUICKSTART.md) · [Getting Started](docs/GETTING_STARTED.md) · [User Guide](docs/USER_GUIDE.md)
+- [Using Engram From Another Repository](docs/USING_ENGRAM_IN_A_REPO.md)
+- [Engram vs alternatives](docs/COMPARISON.md)
+- [MCP memory server guide](docs/integrations/mcp-memory-server.md)
+- [Claude Code MCP memory guide](docs/integrations/claude-code-mcp-memory.md)
+- [Cursor MCP memory guide](docs/integrations/cursor-mcp-memory.md)
+- [OpenAI Agents memory guide](docs/integrations/openai-agents-memory.md)
+- [Architecture](docs/ARCHITECTURE.md) · [MCP tool reference](docs/MCP_TOOLS.md) · [Roadmap](docs/ROADMAP.md)
 
 ---
 
