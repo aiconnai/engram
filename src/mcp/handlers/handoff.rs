@@ -44,7 +44,9 @@ pub fn session_land(ctx: &HandlerContext, params: Value) -> Value {
 
         // Query open todos and issues
         let mut open_stmt = conn.prepare(
-            "SELECT id, content, memory_type, tags, importance, created_at \
+            // `memories` has no `tags` column (tags live in the normalized
+            // `tags`/`memory_tags` tables); a literal keeps the column shape.
+            "SELECT id, content, memory_type, '' AS tags, importance, created_at \
              FROM memories \
              WHERE workspace = ?1 \
                AND memory_type IN ('todo', 'issue') \
@@ -234,7 +236,65 @@ fn build_bootstrap_prompt(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::Storage;
     use serde_json::json;
+    use std::sync::Arc;
+
+    fn test_ctx() -> HandlerContext {
+        let storage = Storage::open_in_memory().expect("open in-memory storage");
+        HandlerContext {
+            storage,
+            embedder: Arc::new(crate::embedding::TfIdfEmbedder::new(128)),
+            fuzzy_engine: Arc::new(parking_lot::Mutex::new(crate::search::FuzzyEngine::new())),
+            search_config: crate::search::SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(crate::embedding::EmbeddingCache::default()),
+            search_cache: Arc::new(crate::search::SearchResultCache::new(
+                crate::search::AdaptiveCacheConfig::default(),
+            )),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 300,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(
+                tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap(),
+            ),
+        }
+    }
+
+    #[test]
+    fn test_session_land_returns_open_items() {
+        let ctx = test_ctx();
+        let input = crate::types::CreateMemoryInput {
+            content: "Ship the release checklist".to_string(),
+            memory_type: crate::types::MemoryType::Todo,
+            workspace: Some("proj".to_string()),
+            importance: Some(0.8),
+            ..Default::default()
+        };
+        ctx.storage
+            .with_transaction(|conn| crate::storage::queries::create_memory(conn, &input))
+            .expect("seed todo memory");
+
+        let result = session_land(&ctx, json!({"session_id": "sess-1", "workspace": "proj"}));
+
+        assert!(
+            result.get("error").is_none(),
+            "session_land returned an error: {}",
+            result
+        );
+        let open_items = result["handoff"]["open_items"]
+            .as_array()
+            .expect("open_items should be an array");
+        assert_eq!(open_items.len(), 1);
+        assert_eq!(open_items[0]["content"], "Ship the release checklist");
+        assert_eq!(open_items[0]["memory_type"], "todo");
+    }
 
     #[test]
     fn test_build_bootstrap_prompt_with_all_sections() {
