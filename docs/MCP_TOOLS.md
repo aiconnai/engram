@@ -188,7 +188,7 @@ Total tools: **280**
 | `memory_sentiment_analyze` | standard | memory.admin | always | readOnlyHint | `id` |
 | `memory_sentiment_timeline` | standard | memory.admin | always | readOnlyHint | none |
 | `memory_sync_status` | advanced | memory.core | always | readOnlyHint | none |
-| `memory_sync_media` | advanced | feature.multimodal | multimodal | mutating (no MCP hints) | none |
+| `memory_sync_media` | advanced | feature.multimodal | multimodal,cloud | mutating (no MCP hints) | none |
 | `memory_events_poll` | advanced | memory.admin | always | readOnlyHint | none |
 | `memory_events_clear` | advanced | memory.admin | always | destructiveHint | none |
 | `sync_version` | advanced | sync | always | readOnlyHint | none |
@@ -3099,7 +3099,7 @@ Sync local media assets (images, audio, video) to cloud S3/R2 storage. Uploads f
 
 - Tier: `advanced`
 - Group: `feature.multimodal`
-- Required feature: `multimodal`
+- Required feature: `multimodal,cloud`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 

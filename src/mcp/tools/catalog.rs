@@ -1,29 +1,29 @@
-pub(crate) fn required_feature(name: &str) -> Option<&'static str> {
-    let feature = match name {
+pub(crate) fn required_features(name: &str) -> &'static [&'static str] {
+    match name {
         "langfuse_connect"
         | "langfuse_sync"
         | "langfuse_sync_status"
         | "langfuse_extract_patterns"
-        | "memory_from_trace" => "langfuse",
+        | "memory_from_trace" => &["langfuse"],
         "meilisearch_search"
         | "meilisearch_reindex"
         | "meilisearch_status"
-        | "meilisearch_config" => "meilisearch",
+        | "meilisearch_config" => &["meilisearch"],
         "memory_auto_link"
         | "memory_list_auto_links"
         | "memory_auto_link_stats"
         | "memory_cluster"
         | "memory_get_cluster"
-        | "memory_list_clusters" => "emergent-graph",
-        "memory_sync_media"
-        | "memory_describe_image"
+        | "memory_list_clusters" => &["emergent-graph"],
+        "memory_sync_media" => &["multimodal", "cloud"],
+        "memory_describe_image"
         | "memory_transcribe_audio"
         | "memory_capture_screenshot"
         | "memory_process_video"
         | "memory_list_media"
-        | "memory_search_by_image" => "multimodal",
+        | "memory_search_by_image" => &["multimodal"],
         "memory_graph_path" | "memory_temporal_snapshot" | "memory_scope_snapshot" => {
-            "duckdb-graph"
+            &["duckdb-graph"]
         }
         "dream_run_now"
         | "dream_create"
@@ -36,15 +36,26 @@ pub(crate) fn required_feature(name: &str) -> Option<&'static str> {
         | "dream_candidate_review"
         | "dream_candidate_apply"
         | "memory_agent_writeback"
-        | "dream_eval_run" => "dream-phase",
+        | "dream_eval_run" => &["dream-phase"],
         "attestation_log"
         | "attestation_verify"
         | "attestation_chain_verify"
-        | "attestation_list" => "attestation",
-        "snapshot_create" | "snapshot_load" | "snapshot_inspect" => "snapshot",
-        _ => return None,
-    };
-    Some(feature)
+        | "attestation_list" => &["attestation"],
+        "snapshot_create" | "snapshot_load" | "snapshot_inspect" => &["snapshot"],
+        _ => &[],
+    }
+}
+
+pub(crate) fn required_feature(name: &str) -> Option<&'static str> {
+    required_features(name).first().copied()
+}
+
+pub(crate) fn required_feature_summary(name: &str) -> Option<String> {
+    match required_features(name) {
+        [] => None,
+        [feature] => Some((*feature).to_string()),
+        features => Some(features.join(",")),
+    }
 }
 
 pub(crate) fn tool_group(name: &str) -> &'static str {
