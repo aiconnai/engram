@@ -23,28 +23,31 @@ pub(super) fn query_workspace_memories(
                AND m.valid_to IS NULL
              ORDER BY m.memory_type, m.created_at",
         )?;
-        let rows = stmt.query_map(rusqlite::params![workspace], |row| {
-            let metadata_str: Option<String> = row.get(11)?;
-            let metadata: Value = metadata_str
-                .as_deref()
-                .and_then(|s| serde_json::from_str(s).ok())
-                .unwrap_or(Value::Null);
-            Ok(json!({
-                "id": row.get::<_, i64>(0)?,
-                "content": row.get::<_, String>(1)?,
-                "memory_type": row.get::<_, String>(2)?,
-                "importance": row.get::<_, Option<f64>>(3)?,
-                "workspace": row.get::<_, String>(4)?,
-                "tier": row.get::<_, Option<String>>(5)?,
-                "created_at": row.get::<_, String>(6)?,
-                "updated_at": row.get::<_, Option<String>>(7)?,
-                "tags": row.get::<_, Option<String>>(8)?,
-                "scope": row.get::<_, Option<String>>(9)?,
-                "version": row.get::<_, Option<i64>>(10)?,
-                "metadata": metadata,
-                "content_hash": row.get::<_, Option<String>>(12)?
-            }))
-        })?;
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(std::iter::once(workspace)),
+            |row| {
+                let metadata_str: Option<String> = row.get(11)?;
+                let metadata: Value = metadata_str
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str(s).ok())
+                    .unwrap_or(Value::Null);
+                Ok(json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "content": row.get::<_, String>(1)?,
+                    "memory_type": row.get::<_, String>(2)?,
+                    "importance": row.get::<_, Option<f64>>(3)?,
+                    "workspace": row.get::<_, String>(4)?,
+                    "tier": row.get::<_, Option<String>>(5)?,
+                    "created_at": row.get::<_, String>(6)?,
+                    "updated_at": row.get::<_, Option<String>>(7)?,
+                    "tags": row.get::<_, Option<String>>(8)?,
+                    "scope": row.get::<_, Option<String>>(9)?,
+                    "version": row.get::<_, Option<i64>>(10)?,
+                    "metadata": metadata,
+                    "content_hash": row.get::<_, Option<String>>(12)?
+                }))
+            },
+        )?;
         let memories: Vec<Value> = rows.filter_map(|r| r.ok()).collect();
         Ok(memories)
     })
