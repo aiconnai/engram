@@ -192,7 +192,7 @@
             "required": ["id"]
         }"#,
         annotations: ToolAnnotations::destructive(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     ToolDef {
         name: "memory_list",
@@ -221,7 +221,7 @@
             }
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     // Convenience creators
     ToolDef {
@@ -301,7 +301,7 @@
         description: "Get storage statistics",
         schema: r#"{"type": "object", "properties": {}}"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     // Graph
     ToolDef {
@@ -784,7 +784,7 @@
             "required": ["session_id", "messages"]
         }"#,
         annotations: ToolAnnotations::mutating(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     ToolDef {
         name: "session_index_delta",
@@ -837,7 +837,7 @@
             }
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     ToolDef {
         name: "session_delete",
@@ -869,7 +869,7 @@
             "required": ["canonical_id", "display_name"]
         }"#,
         annotations: ToolAnnotations::mutating(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     ToolDef {
         name: "identity_get",
@@ -952,7 +952,7 @@
             "required": ["alias"]
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     ToolDef {
         name: "identity_list",
@@ -2071,7 +2071,7 @@
             "required": ["query"]
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     ToolDef {
         name: "memory_smart_retrieve",
@@ -2126,7 +2126,7 @@
             "properties": {}
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Standard,
+        tier: ToolTier::Essential,
     },
     ToolDef {
         name: "memory_council",
@@ -2495,7 +2495,7 @@
             "required": ["from_id", "to_id"]
         }"#,
         annotations: ToolAnnotations::mutating(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     ToolDef {
         name: "memory_unlink",
@@ -2527,7 +2527,7 @@
             "required": ["id"]
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     // Entity Extraction (RML-925)
     ToolDef {
@@ -2600,7 +2600,7 @@
             "required": ["id"]
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Essential,
+        tier: ToolTier::Standard,
     },
     ToolDef {
         name: "memory_find_path",
@@ -3355,7 +3355,7 @@
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Advanced,
     },
-    // ── Snapshot Tools (agent-portability) ────────────────────────────────────
+    // ── Snapshot Tools (snapshot) ────────────────────────────────────
     ToolDef {
         name: "snapshot_create",
         description: "Create a portable .egm snapshot of memories filtered by workspace, tags, date range, or importance. Optionally encrypt with AES-256-GCM or sign with Ed25519.",
@@ -3406,7 +3406,7 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
-    // ── Attestation Tools (agent-portability) ──────────────────────────────────
+    // ── Attestation Tools (attestation) ──────────────────────────────────
     ToolDef {
         name: "attestation_log",
         description: "Log a document ingestion with cryptographic attestation. Creates a chained record proving the document was processed.",
@@ -4092,14 +4092,15 @@
     // ── Meta / Discovery ─────────────────────────────────────────────────────
     ToolDef {
         name: "discover_tools",
-        description: "List available Engram tools by tier and category. Use this to progressively discover capabilities beyond the essential tool set. The `detail` parameter controls how much per-tool information is returned, from names only up to full input schemas.",
+        description: "List Engram tools by tier, group, or search query. Includes feature-disabled tools with enablement hints so agents can progressively discover capabilities beyond the small default tools/list surface.",
         schema: r#"{
             "type": "object",
             "properties": {
-                "tier": {"type": "string", "enum": ["essential", "standard", "advanced", "all"], "default": "all", "description": "Filter by tier: essential (~20 core tools), standard (~57 common tools), advanced (~104 specialized tools), all (everything)"},
-                "category": {"type": "string", "description": "Filter by category keyword (e.g., 'search', 'graph', 'session', 'identity', 'quality')"},
+                "tier": {"type": "string", "enum": ["essential", "standard", "advanced", "all"], "default": "all", "description": "Filter by tier: essential (small first-connect surface), standard (common workflows), advanced (specialized tools), all (everything)"},
+                "group": {"type": "string", "description": "Filter by structured group (e.g., 'memory.search', 'context', 'identity', 'feature.attestation')"},
+                "category": {"type": "string", "description": "Deprecated alias for group/search-style filtering."},
                 "search": {"type": "string", "description": "Search tool names and descriptions"},
-                "detail": {"type": "string", "enum": ["names", "summary", "schema"], "default": "summary", "description": "Per-tool detail level: 'names' (name only, cheapest), 'summary' (name + description + tier, the default), or 'schema' (summary plus the full input schema as a JSON object, so the tool can be called without a separate tools/list round-trip)."}
+                "detail": {"type": "string", "enum": ["names", "summary", "schema"], "default": "summary", "description": "Per-tool detail level: 'names' (name only, cheapest), 'summary' (name + description + tier + group + availability + feature hints, the default), or 'schema' (summary plus the full input schema as a JSON object, so the tool can be called without a separate tools/list round-trip)."}
             }
         }"#,
         tier: ToolTier::Essential,
@@ -4256,7 +4257,7 @@
             }
         }"#,
         annotations: ToolAnnotations::read_only(),
-        tier: ToolTier::Standard,
+        tier: ToolTier::Essential,
     },
     ToolDef {
         name: "memory_content_stats",

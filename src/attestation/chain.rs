@@ -443,8 +443,6 @@ fn hash_bytes(data: &[u8]) -> String {
 /// Sign the `record_hash` string with an Ed25519 secret key.
 /// Returns hex-encoded signature.
 ///
-/// This is only compiled when `agent-portability` is active (which is the only
-/// context in which this module exists), so no additional cfg gate is needed.
 fn sign_record_hash(record_hash: &str, secret_key_bytes: &[u8; 32]) -> Result<String> {
     use ed25519_dalek::{Signature, Signer, SigningKey};
 

@@ -939,10 +939,16 @@ enum DiscoverDetail {
 
 /// List available tools by tier, category, or search query.
 pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
-    use crate::mcp::tools::{iter_tool_definitions, ToolTier};
+    use crate::mcp::tools::{
+        catalog::{required_feature, tool_group},
+        iter_tool_definitions, tool_feature_available, ToolTier, TOOL_DEFINITIONS,
+    };
 
     let tier_filter = params.get("tier").and_then(|v| v.as_str());
-    let category = params.get("category").and_then(|v| v.as_str());
+    let group_filter = params
+        .get("group")
+        .or_else(|| params.get("category"))
+        .and_then(|v| v.as_str());
     let search = params.get("search").and_then(|v| v.as_str());
 
     // Validate `detail` at the boundary: reject unknown values loudly rather
@@ -968,7 +974,8 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
         },
     };
 
-    let tools: Vec<Value> = iter_tool_definitions()
+    let tools: Vec<Value> = TOOL_DEFINITIONS
+        .iter()
         .filter(|def| {
             if let Some(t) = tier_filter {
                 match t {
@@ -984,10 +991,11 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
                     _ => {}
                 }
             }
-            if let Some(cat) = category {
-                let cat_lower = cat.to_lowercase();
-                if !def.name.contains(&cat_lower)
-                    && !def.description.to_lowercase().contains(&cat_lower)
+            if let Some(group) = group_filter {
+                let group_lower = group.to_lowercase();
+                if !tool_group(def.name).contains(&group_lower)
+                    && !def.name.contains(&group_lower)
+                    && !def.description.to_lowercase().contains(&group_lower)
                 {
                     return false;
                 }
@@ -1008,19 +1016,36 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
                 ToolTier::Standard => "standard",
                 ToolTier::Advanced => "advanced",
             };
+            let feature = required_feature(def.name);
+            let available = tool_feature_available(def.name);
+            let availability = if available {
+                "available"
+            } else {
+                "feature_disabled"
+            };
+            let enable_with = feature.map(|name| format!("cargo build --features {name}"));
+            let base = json!({
+                "name": def.name,
+                "description": def.description,
+                "tier": tier_str,
+                "group": tool_group(def.name),
+                "availability": availability,
+                "feature": feature,
+                "enable_with": enable_with
+            });
             match detail {
                 DiscoverDetail::Names => json!({ "name": def.name }),
-                DiscoverDetail::Summary => json!({
-                    "name": def.name,
-                    "description": def.description,
-                    "tier": tier_str
-                }),
-                DiscoverDetail::Schema => json!({
-                    "name": def.name,
-                    "description": def.description,
-                    "tier": tier_str,
-                    "schema": serde_json::from_str::<Value>(def.schema).unwrap_or(json!({}))
-                }),
+                DiscoverDetail::Summary => base,
+                DiscoverDetail::Schema => {
+                    let mut tool = base;
+                    if let Value::Object(ref mut object) = tool {
+                        object.insert(
+                            "schema".to_string(),
+                            serde_json::from_str::<Value>(def.schema).unwrap_or(json!({})),
+                        );
+                    }
+                    tool
+                }
             }
         })
         .collect();
@@ -1040,6 +1065,7 @@ pub fn discover_tools(_ctx: &HandlerContext, params: Value) -> Value {
         "tools": tools,
         "count": count,
         "total_available": iter_tool_definitions().count(),
+        "total_defined": TOOL_DEFINITIONS.len(),
         "tier_summary": {
             "essential": essential_count,
             "standard": standard_count,

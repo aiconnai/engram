@@ -275,7 +275,7 @@ fn test_tool_registry_has_no_orphan_definition_files() {
         .join("mcp")
         .join("tools");
 
-    let allowed = ["mod.rs", "registry.rs"];
+    let allowed = ["catalog.rs", "mod.rs", "registry.rs"];
     for entry in std::fs::read_dir(&tools_dir).expect("read src/mcp/tools") {
         let path = entry.expect("read tool definition dir entry").path();
         let file_name = path
@@ -1947,6 +1947,56 @@ fn test_discover_tools_default_detail_is_summary() {
         "summary detail must NOT include schema, got: {}",
         tool
     );
+}
+
+#[test]
+fn test_discover_tools_summary_includes_group_and_availability() {
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "search": "discover_tools" }));
+    let tools = data["tools"].as_array().expect("tools must be an array");
+    let tool = tools
+        .iter()
+        .find(|t| t["name"].as_str() == Some("discover_tools"))
+        .expect("discover_tools must be discoverable by itself");
+
+    assert!(
+        tool["group"].is_string(),
+        "summary detail must include group"
+    );
+    assert!(
+        tool["availability"].is_string(),
+        "summary detail must include availability"
+    );
+}
+
+#[test]
+fn test_discover_tools_lists_feature_disabled_tools_by_group() {
+    let handler = TestHandler::new();
+    let data = call_discover_tools(
+        &handler,
+        json!({ "detail": "summary", "group": "feature.attestation" }),
+    );
+
+    let tools = data["tools"].as_array().expect("tools must be an array");
+    let attestation = tools
+        .iter()
+        .find(|tool| tool["name"].as_str() == Some("attestation_log"))
+        .expect("attestation_log must remain discoverable when its feature is disabled");
+
+    assert_eq!(attestation["group"].as_str(), Some("feature.attestation"));
+    #[cfg(feature = "attestation")]
+    let expected_availability = "available";
+    #[cfg(not(feature = "attestation"))]
+    let expected_availability = "feature_disabled";
+    assert_eq!(
+        attestation["availability"].as_str(),
+        Some(expected_availability)
+    );
+    assert_eq!(attestation["feature"].as_str(), Some("attestation"));
+    assert!(attestation["enable_with"]
+        .as_str()
+        .expect("enable_with must be present")
+        .contains("attestation"));
 }
 
 #[test]

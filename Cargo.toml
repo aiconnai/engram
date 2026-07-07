@@ -89,6 +89,8 @@ openai = ["http-client"]
 # Multimodal vision processing (Gemini + OpenAI Vision)
 multimodal = ["http-client", "dep:async-trait"]
 
+clip-embeddings = ["multimodal", "openai"]
+
 # PDF document ingestion
 pdf = ["dep:pdf-extract"]
 
@@ -155,14 +157,17 @@ advanced-graph = []
 # Autonomous agent: full agentic loop combining all advanced capabilities
 autonomous-agent = ["compression", "agentic-evolution", "advanced-graph"]
 
-# Agent portability: snapshot + attestation for multi-agent memory sharing (Phase L)
-agent-portability = ["dep:zip", "dep:ed25519-dalek", "dep:aes-gcm"]
+snapshot = ["dep:zip", "dep:aes-gcm", "dep:ed25519-dalek"]
+
+attestation = ["dep:ed25519-dalek"]
+
+agent-portability = ["snapshot", "attestation"]
 
 # gRPC transport via tonic (Phase N)
 grpc = ["dep:tonic", "dep:prost", "dep:tonic-build"]
 
 # All features
-full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "emergent-graph", "ollama", "cohere", "voyage", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "agent-portability", "grpc"]
+full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "clip-embeddings", "emergent-graph", "ollama", "cohere", "voyage", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "snapshot", "attestation", "agent-portability", "grpc"]
 
 [dependencies]
 # Async runtime

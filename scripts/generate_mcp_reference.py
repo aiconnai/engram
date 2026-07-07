@@ -23,6 +23,8 @@ class Tool:
     schema: dict
     annotations: str
     tier: str
+    group: str
+    required_feature: str | None
 
 
 NAME_RE = re.compile(r'name:\s*"(?P<value>(?:\\.|[^"\\])*)"')
@@ -97,6 +99,8 @@ def parse_tools(source: Path) -> list[Tool]:
                 schema=schema,
                 annotations=annotation_summary(block),
                 tier=required_match(TIER_RE, block, f"{name} tier").lower(),
+                group=tool_group(name),
+                required_feature=required_feature(name),
             )
         )
 
@@ -217,14 +221,15 @@ def render_reference(tools: list[Tool], source: Path) -> str:
         "",
         "## Summary",
         "",
-        "| Tool | Tier | Annotations | Required Inputs |",
-        "|------|------|-------------|-----------------|",
+        "| Tool | Tier | Group | Feature | Annotations | Required Inputs |",
+        "|------|------|-------|---------|-------------|-----------------|",
     ]
 
     for tool in tools:
         required = required_fields(tool.schema)
         lines.append(
-            f"| `{escape_table(tool.name)}` | {tool.tier} | "
+            f"| `{escape_table(tool.name)}` | {tool.tier} | {escape_table(tool.group)} | "
+            f"{escape_table(tool.required_feature or 'always')} | "
             f"{escape_table(tool.annotations)} | {escape_table(required_summary(required))} |"
         )
 
@@ -239,6 +244,8 @@ def render_reference(tools: list[Tool], source: Path) -> str:
                 tool.description,
                 "",
                 f"- Tier: `{tool.tier}`",
+                f"- Group: `{tool.group}`",
+                f"- Required feature: `{tool.required_feature or 'always'}`",
                 f"- Annotations: {tool.annotations}",
                 f"- Required inputs: {required_summary(required)}",
                 "",
@@ -260,6 +267,241 @@ def render_reference(tools: list[Tool], source: Path) -> str:
     while lines and lines[-1] == "":
         lines.pop()
     return "\n".join(lines) + "\n"
+
+
+def required_feature(name: str) -> str | None:
+    match name:
+        case (
+            "langfuse_connect"
+            | "langfuse_sync"
+            | "langfuse_sync_status"
+            | "langfuse_extract_patterns"
+            | "memory_from_trace"
+        ):
+            return "langfuse"
+        case (
+            "meilisearch_search"
+            | "meilisearch_reindex"
+            | "meilisearch_status"
+            | "meilisearch_config"
+        ):
+            return "meilisearch"
+        case (
+            "memory_auto_link"
+            | "memory_list_auto_links"
+            | "memory_auto_link_stats"
+            | "memory_cluster"
+            | "memory_get_cluster"
+            | "memory_list_clusters"
+        ):
+            return "emergent-graph"
+        case (
+            "memory_sync_media"
+            | "memory_describe_image"
+            | "memory_transcribe_audio"
+            | "memory_capture_screenshot"
+            | "memory_process_video"
+            | "memory_list_media"
+            | "memory_search_by_image"
+        ):
+            return "multimodal"
+        case "memory_graph_path" | "memory_temporal_snapshot" | "memory_scope_snapshot":
+            return "duckdb-graph"
+        case (
+            "dream_run_now"
+            | "dream_create"
+            | "dream_get"
+            | "dream_list"
+            | "dream_cancel"
+            | "dream_archive"
+            | "dream_candidates_list"
+            | "dream_candidate_get"
+            | "dream_candidate_review"
+            | "dream_candidate_apply"
+            | "memory_agent_writeback"
+            | "dream_eval_run"
+        ):
+            return "dream-phase"
+        case (
+            "attestation_log"
+            | "attestation_verify"
+            | "attestation_chain_verify"
+            | "attestation_list"
+        ):
+            return "attestation"
+        case "snapshot_create" | "snapshot_load" | "snapshot_inspect":
+            return "snapshot"
+        case _:
+            return None
+
+
+def tool_group(name: str) -> str:
+    feature = required_feature(name)
+    if feature is not None:
+        match feature:
+            case "langfuse":
+                return "feature.langfuse"
+            case "meilisearch":
+                return "feature.meilisearch"
+            case "emergent-graph":
+                return "feature.emergent_graph"
+            case "multimodal":
+                return "feature.multimodal"
+            case "duckdb-graph":
+                return "feature.duckdb_graph"
+            case "dream-phase":
+                return "feature.dream"
+            case "attestation":
+                return "feature.attestation"
+            case "snapshot":
+                return "feature.snapshot"
+            case _:
+                return "feature.other"
+
+    match name:
+        case "discover_tools" | "recent_activity" | "memory_agent_contract":
+            return "core"
+        case (
+            "context_seed"
+            | "context_record"
+            | "context_record_artifact"
+            | "context_get_artifact"
+            | "context_search"
+            | "context_build_bundle"
+            | "context_budget_check"
+        ):
+            return "context"
+        case _:
+            pass
+
+    prefix = name.split("_", maxsplit=1)[0]
+    match prefix:
+        case "identity":
+            return "identity"
+        case "session":
+            return "session"
+        case "workspace":
+            return "workspace"
+        case "quality" | "salience":
+            return "quality"
+        case "scope":
+            return "scope"
+        case "temporal":
+            return "temporal"
+        case "sync":
+            return "sync"
+        case "agent":
+            return "agent"
+        case "harness":
+            return "harness"
+        case "lifecycle" | "retention":
+            return "lifecycle"
+        case "attestation" | "snapshot":
+            return "portability"
+        case "embedding":
+            return "embedding"
+        case "search":
+            return "search"
+        case "pending":
+            return "admin"
+        case "memory":
+            return memory_subgroup(name)
+        case _:
+            return "misc"
+
+
+def memory_subgroup(name: str) -> str:
+    if any(
+        needle in name
+        for needle in (
+            "search",
+            "retrieve",
+            "digest",
+            "expand",
+            "related",
+            "traverse",
+            "find_path",
+            "smart",
+            "injection",
+        )
+    ):
+        return "memory.search"
+    if "identity" in name:
+        return "identity"
+    if "block" in name:
+        return "memory.block"
+    if any(needle in name for needle in ("quality", "conflict", "duplicate", "reconcile")):
+        return "memory.quality"
+    if any(
+        needle in name
+        for needle in (
+            "lifecycle",
+            "archive",
+            "decay",
+            "promote",
+            "cleanup",
+            "expir",
+            "consolidat",
+            "garden",
+            "score",
+            "policy",
+        )
+    ):
+        return "memory.lifecycle"
+    if any(
+        needle in name
+        for needle in (
+            "entity",
+            "link",
+            "cluster",
+            "coactivation",
+            "fact",
+            "triplet",
+            "knowledge",
+            "reflect",
+        )
+    ):
+        return "memory.graph"
+    if any(
+        needle in name
+        for needle in (
+            "session",
+            "working_memory",
+            "checkpoint",
+            "observe_tool",
+            "archived_output",
+        )
+    ):
+        return "memory.session"
+    if any(
+        needle in name
+        for needle in (
+            "enrichment",
+            "replay",
+            "events",
+            "stats",
+            "versions",
+            "cache",
+            "embedding",
+            "share",
+            "import",
+            "export",
+            "migrate",
+            "rebuild",
+            "tag",
+            "validate",
+            "upload",
+            "compress",
+            "sentiment",
+            "feedback",
+            "utility",
+            "synthesis",
+            "detect",
+            "suggest",
+        )
+    ):
+        return "memory.admin"
+    return "memory.core"
 
 
 def required_fields(schema: dict) -> set[str]:

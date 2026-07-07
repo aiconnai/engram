@@ -4,6 +4,8 @@ use serde_json::json;
 
 use super::protocol::{ToolAnnotations, ToolDefinition};
 
+pub(crate) mod catalog;
+
 /// Tool exposure tier for progressive discovery.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolTier {
@@ -32,7 +34,7 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = include!("registry.rs");
 /// Called by both `get_tool_definitions` and `get_tool_definitions_tiered` so
 /// that `tools/list` never advertises a tool that `tools/call` would reject with
 /// "Unknown tool".
-fn tool_feature_available(name: &str) -> bool {
+pub(crate) fn tool_feature_available(name: &str) -> bool {
     match name {
         // langfuse feature
         "langfuse_connect"
@@ -83,14 +85,12 @@ fn tool_feature_available(name: &str) -> bool {
         | "memory_agent_writeback"
         | "dream_eval_run" => cfg!(feature = "dream-phase"),
 
-        // agent-portability feature
         "attestation_log"
         | "attestation_verify"
         | "attestation_chain_verify"
-        | "attestation_list"
-        | "snapshot_create"
-        | "snapshot_load"
-        | "snapshot_inspect" => cfg!(feature = "agent-portability"),
+        | "attestation_list" => cfg!(feature = "attestation"),
+
+        "snapshot_create" | "snapshot_load" | "snapshot_inspect" => cfg!(feature = "snapshot"),
 
         _ => true,
     }
@@ -113,22 +113,22 @@ pub fn get_tool_definitions() -> Vec<ToolDefinition> {
 
 /// Get tool definitions filtered by maximum tier level.
 ///
+/// - `None` (default) → only Essential tools + discover_tools
 /// - `Some("essential")` → only Essential tools + discover_tools
 /// - `Some("standard")` → Essential + Standard tools + discover_tools
-/// - `None` → Essential + Standard tools + discover_tools
 /// - `Some("advanced")` or `Some("all")` → all tools
 pub fn get_tool_definitions_tiered(max_tier: Option<&str>) -> Vec<ToolDefinition> {
     let max = match max_tier {
-        Some("essential") => ToolTier::Essential,
-        Some("standard") | None => ToolTier::Standard,
+        None | Some("essential") => ToolTier::Essential,
+        Some("standard") => ToolTier::Standard,
         Some("advanced") | Some("all") => ToolTier::Advanced,
         Some(unknown) => {
             tracing::warn!(
                 target: "engram::mcp::tools",
                 tool_tier = %unknown,
-                "unknown ENGRAM_TOOL_TIER; falling back to standard tool tier"
+                "unknown ENGRAM_TOOL_TIER; falling back to essential tool tier"
             );
-            ToolTier::Standard
+            ToolTier::Essential
         }
     };
 
@@ -273,10 +273,8 @@ mod tests {
             .iter()
             .filter(|t| t.tier == ToolTier::Advanced)
             .count();
-        // Ranges widened after the dispatch/registry reconciliation that
-        // advertised ~59 previously-hidden tools (registry grew to ~250).
-        assert!((18..=25).contains(&essential), "essential: {}", essential);
-        assert!((60..=130).contains(&standard), "standard: {}", standard);
+        assert!((12..=16).contains(&essential), "essential: {}", essential);
+        assert!((120..=130).contains(&standard), "standard: {}", standard);
         // Advanced count depends on feature flags (feature-gated tools are Advanced)
         assert!(advanced >= 80, "advanced: {}", advanced);
         assert_eq!(essential + standard + advanced, TOOL_DEFINITIONS.len());
@@ -287,12 +285,12 @@ mod tests {
         for tier in [None, Some("advnaced")] {
             let tools = get_tool_definitions_tiered(tier);
             assert!(
-                tools.iter().any(|t| t.name == "memory_search"),
+                tools.iter().any(|t| t.name == "memory_digest"),
                 "default tools/list should include essential tools"
             );
             assert!(
-                tools.iter().any(|t| t.name == "quality_report"),
-                "default tools/list should include standard tools"
+                tools.iter().all(|t| t.name != "memory_search"),
+                "default tools/list should not expose standard tools"
             );
             assert!(
                 tools.iter().any(|t| t.name == "discover_tools"),
@@ -407,21 +405,17 @@ mod tests {
             "context_seed",
             "memory_get",
             "memory_update",
-            "memory_delete",
-            "memory_list",
-            "memory_search",
             "memory_search_compact",
             "memory_expand",
+            "memory_digest",
             "memory_get_injection_prompt",
-            "memory_link",
-            "memory_related",
-            "memory_traverse",
-            "memory_stats",
+            "memory_list_compact",
+            "memory_smart_retrieve",
+            "memory_agent_contract",
+            "recent_activity",
             "workspace_list",
-            "session_index",
-            "session_list",
-            "identity_create",
-            "identity_resolve",
+            "session_land",
+            "discover_tools",
         ];
         for name in essential_names {
             let tool = TOOL_DEFINITIONS
