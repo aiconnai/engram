@@ -391,13 +391,26 @@ ENGRAM_MCP_URL=https://engram.example.com/mcp
 ENGRAM_WORKSPACE=my-org/my-repo
 # Set locally, never commit:
 # ENGRAM_HTTP_API_KEY=...
+# Optional: widen first-connect MCP exposure beyond the Essential profile.
+# ENGRAM_TOOL_TIER=standard
 # Optional MCP HTTP rate limiting:
 # ENGRAM_HTTP_RATE_LIMIT_RPS=120
 # ENGRAM_HTTP_RATE_LIMIT_BURST=240
 # ENGRAM_HTTP_RATE_LIMIT_KEY=x-tenant-id
 ```
 
-## 10. Reusable Council Workflow (`engram-council` Skill)
+## 10. Tool Exposure Profiles
+
+Engram keeps `tools/list` small by default so MCP hosts do not load the full
+registry on first connect. The default Essential profile includes the core
+create/recall/context tools plus `discover_tools`.
+
+Use `ENGRAM_TOOL_TIER=standard` when an agent or MCP host needs the broader
+common workflow surface immediately, or `ENGRAM_TOOL_TIER=all` for every
+compiled tool. Tools outside the current profile remain discoverable through
+`discover_tools`, including feature-disabled tools with their build flag.
+
+## 11. Reusable Council Workflow (`engram-council` Skill)
 
 For architecture decisions or design discussions, use the MCP `memory_council` tool or the new reusable SDK wrappers:
 

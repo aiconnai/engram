@@ -8,7 +8,7 @@ use std::path::Path;
 
 use clap::{Parser, Subcommand};
 
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "attestation")]
 use engram::attestation::{AttestationChain, AttestationFilter};
 use engram::embedding::{
     create_embedder, run_embedding_queue_hygiene, EmbeddingQueueHygieneConfig,
@@ -17,7 +17,7 @@ use engram::embedding::{
 use engram::error::Result;
 use engram::graph::KnowledgeGraph;
 use engram::search::{hybrid_search, SearchConfig};
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "snapshot")]
 use engram::snapshot::{LoadStrategy, SnapshotBuilder, SnapshotLoader};
 use engram::storage::queries::*;
 use engram::storage::{health_check_storage, HealthStatus, Storage};
@@ -25,7 +25,7 @@ use engram::types::*;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "onnx-embed")]
 use sha2::{Digest, Sha256};
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "snapshot")]
 use std::str::FromStr as _;
 
 #[derive(Parser)]
@@ -137,13 +137,13 @@ enum Commands {
         action: ModelAction,
     },
     /// Create, load, or inspect .egm snapshots
-    #[cfg(feature = "agent-portability")]
+    #[cfg(feature = "snapshot")]
     Snapshot {
         #[command(subcommand)]
         action: SnapshotAction,
     },
     /// Log and verify document attestations
-    #[cfg(feature = "agent-portability")]
+    #[cfg(feature = "attestation")]
     Attest {
         #[command(subcommand)]
         action: AttestAction,
@@ -201,7 +201,7 @@ enum MaintenanceAction {
     },
 }
 
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "snapshot")]
 #[derive(Subcommand)]
 enum SnapshotAction {
     /// Create a snapshot
@@ -234,7 +234,7 @@ enum SnapshotAction {
     },
 }
 
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "attestation")]
 #[derive(Subcommand)]
 enum AttestAction {
     /// Log document attestation
@@ -617,7 +617,7 @@ fn main() -> Result<()> {
             }
         }
 
-        #[cfg(feature = "agent-portability")]
+        #[cfg(feature = "snapshot")]
         Commands::Snapshot { action } => match action {
             SnapshotAction::Create {
                 output,
@@ -703,7 +703,7 @@ fn main() -> Result<()> {
             }
         },
 
-        #[cfg(feature = "agent-portability")]
+        #[cfg(feature = "attestation")]
         Commands::Attest { action } => match action {
             AttestAction::Log {
                 path,

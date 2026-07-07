@@ -521,6 +521,9 @@ Add to your MCP config (for example: `~/.claude/mcp.json`, `.cursor/mcp.json`, o
 }
 ```
 
+Set `ENGRAM_TOOL_TIER=standard` in `env` when an MCP host needs the broader
+pre-0.23 tool surface on first connect.
+
 If you built from source instead of installing via Homebrew, use the full path to the binary (e.g. `/path/to/engram/target/release/engram-server`).
 
 ### Available MCP Tools
@@ -528,7 +531,11 @@ If you built from source instead of installing via Homebrew, use the full path t
 The MCP tool reference is generated from source of truth (`src/mcp/tools/registry.rs`) and tracked in `docs/MCP_TOOLS.md`.
 
 - Full reference: [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md)
-- Generated count and schema are in that reference (single source of truth).
+- By default, `tools/list` exposes only the Essential profile plus
+  `discover_tools`; set `ENGRAM_TOOL_TIER=standard` or `all` for broader
+  profiles.
+- Generated count, tier, group, feature requirement, and schema are in that reference
+  (single source of truth).
 - Regenerate with: `./scripts/generate-mcp-reference.sh`
 
 ### Dream Snapshot Review Pipeline

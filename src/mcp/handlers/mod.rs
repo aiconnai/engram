@@ -53,7 +53,7 @@ pub mod sync;
 pub mod temporal;
 pub mod workspace;
 
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "attestation")]
 pub mod attestation;
 #[cfg(feature = "duckdb-graph")]
 pub mod duckdb_graph;
@@ -61,7 +61,7 @@ pub mod duckdb_graph;
 pub mod emergent_graph;
 #[cfg(feature = "multimodal")]
 pub mod multimodal;
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "snapshot")]
 pub mod snapshot;
 
 /// Shared state passed to every tool handler.
@@ -493,22 +493,22 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_enrichment_audit" => enrichment_audit::memory_enrichment_audit(ctx, params),
         "memory_replay_at_time" => enrichment_audit::memory_replay_at_time(ctx, params),
 
-        // ── Attestation (agent-portability) ──────────────────────────────────
-        #[cfg(feature = "agent-portability")]
+        // ── Attestation ──────────────────────────────────
+        #[cfg(feature = "attestation")]
         "attestation_log" => attestation::attestation_log(ctx, params),
-        #[cfg(feature = "agent-portability")]
+        #[cfg(feature = "attestation")]
         "attestation_verify" => attestation::attestation_verify(ctx, params),
-        #[cfg(feature = "agent-portability")]
+        #[cfg(feature = "attestation")]
         "attestation_chain_verify" => attestation::attestation_chain_verify(ctx, params),
-        #[cfg(feature = "agent-portability")]
+        #[cfg(feature = "attestation")]
         "attestation_list" => attestation::attestation_list(ctx, params),
 
-        // ── Snapshot (agent-portability) ─────────────────────────────────────
-        #[cfg(feature = "agent-portability")]
+        // ── Snapshot ─────────────────────────────────────
+        #[cfg(feature = "snapshot")]
         "snapshot_create" => snapshot::snapshot_create(ctx, params),
-        #[cfg(feature = "agent-portability")]
+        #[cfg(feature = "snapshot")]
         "snapshot_load" => snapshot::snapshot_load(ctx, params),
-        #[cfg(feature = "agent-portability")]
+        #[cfg(feature = "snapshot")]
         "snapshot_inspect" => snapshot::snapshot_inspect(ctx, params),
 
         // ── DuckDB graph (feature-gated) ─────────────────────────────────────

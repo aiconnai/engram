@@ -275,7 +275,7 @@ fn test_tool_registry_has_no_orphan_definition_files() {
         .join("mcp")
         .join("tools");
 
-    let allowed = ["mod.rs", "registry.rs"];
+    let allowed = ["catalog.rs", "mod.rs", "registry.rs"];
     for entry in std::fs::read_dir(&tools_dir).expect("read src/mcp/tools") {
         let path = entry.expect("read tool definition dir entry").path();
         let file_name = path
@@ -1947,6 +1947,110 @@ fn test_discover_tools_default_detail_is_summary() {
         "summary detail must NOT include schema, got: {}",
         tool
     );
+}
+
+#[test]
+fn test_discover_tools_summary_includes_group_and_availability() {
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "search": "discover_tools" }));
+    let tools = data["tools"].as_array().expect("tools must be an array");
+    let tool = tools
+        .iter()
+        .find(|t| t["name"].as_str() == Some("discover_tools"))
+        .expect("discover_tools must be discoverable by itself");
+
+    assert!(
+        tool["group"].is_string(),
+        "summary detail must include group"
+    );
+    assert!(
+        tool["availability"].is_string(),
+        "summary detail must include availability"
+    );
+}
+
+#[test]
+fn test_discover_tools_rejects_invalid_tier_value() {
+    // A typo like "esential" must error loudly, not silently return the
+    // unfiltered list (the filter's catch-all arm would otherwise match all).
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "tier": "esential" }));
+    let error = data["error"].as_str().expect("expected error for bad tier");
+    assert!(error.contains("invalid tier"), "got: {error}");
+}
+
+#[test]
+fn test_discover_tools_rejects_non_string_tier() {
+    // as_str() returns None for wrong-typed values too; a numeric tier must
+    // not be treated as "no filter".
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "tier": 123 }));
+    let error = data["error"].as_str().expect("expected error for bad tier");
+    assert!(error.contains("invalid tier type"), "got: {error}");
+}
+
+#[test]
+fn test_discover_tools_rejects_non_string_group_and_category() {
+    let handler = TestHandler::new();
+    for arguments in [json!({ "group": 5 }), json!({ "category": ["memory"] })] {
+        let data = call_discover_tools(&handler, arguments);
+        let error = data["error"]
+            .as_str()
+            .expect("expected error for bad group/category");
+        assert!(error.contains("invalid group type"), "got: {error}");
+    }
+}
+
+#[test]
+fn test_discover_tools_rejects_non_string_search() {
+    let handler = TestHandler::new();
+    let data = call_discover_tools(&handler, json!({ "search": 42 }));
+    let error = data["error"]
+        .as_str()
+        .expect("expected error for bad search");
+    assert!(error.contains("invalid search type"), "got: {error}");
+}
+
+#[test]
+fn test_discover_tools_accepts_valid_tier_values() {
+    let handler = TestHandler::new();
+    for tier in ["essential", "standard", "advanced"] {
+        let data = call_discover_tools(&handler, json!({ "tier": tier }));
+        assert!(
+            data["tools"].is_array(),
+            "tier '{tier}' must be accepted, got: {data}"
+        );
+    }
+}
+
+#[test]
+fn test_discover_tools_lists_feature_disabled_tools_by_group() {
+    let handler = TestHandler::new();
+    let data = call_discover_tools(
+        &handler,
+        json!({ "detail": "summary", "group": "feature.attestation" }),
+    );
+
+    let tools = data["tools"].as_array().expect("tools must be an array");
+    let attestation = tools
+        .iter()
+        .find(|tool| tool["name"].as_str() == Some("attestation_log"))
+        .expect("attestation_log must remain discoverable when its feature is disabled");
+
+    assert_eq!(attestation["group"].as_str(), Some("feature.attestation"));
+    #[cfg(feature = "attestation")]
+    let expected_availability = "available";
+    #[cfg(not(feature = "attestation"))]
+    let expected_availability = "feature_disabled";
+    assert_eq!(
+        attestation["availability"].as_str(),
+        Some(expected_availability)
+    );
+    assert_eq!(attestation["feature"].as_str(), Some("attestation"));
+    assert!(attestation["enable_with"]
+        .as_str()
+        .expect("enable_with must be present")
+        .contains("attestation"));
 }
 
 #[test]

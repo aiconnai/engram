@@ -362,9 +362,9 @@ pub fn scan_project(ctx: &HandlerContext, params: Value) -> Value {
         }
     }
 
-    // Phase L: best-effort attestation for each discovered file (agent-portability feature).
+    // Phase L: best-effort attestation for each discovered file (attestation feature).
     // Errors are logged but never propagated — attestation is a non-blocking enhancement.
-    #[cfg(feature = "agent-portability")]
+    #[cfg(feature = "attestation")]
     {
         use crate::attestation::AttestationChain;
         let chain = AttestationChain::new(ctx.storage.clone());

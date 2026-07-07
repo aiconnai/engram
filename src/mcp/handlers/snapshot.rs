@@ -1,11 +1,3 @@
-//! Snapshot MCP tool handlers for agent-portability.
-//!
-//! Provides three tools for creating, loading, and inspecting .egm snapshot
-//! archives — portable knowledge packages for distributing AI memory between
-//! agents and deployments.
-
-use std::path::Path;
-
 use serde_json::{json, Value};
 
 use super::HandlerContext;
@@ -246,17 +238,14 @@ pub fn snapshot_load(ctx: &HandlerContext, params: Value) -> Value {
 
     match result {
         Ok(load_result) => {
-            // Phase L: log attestation for the loaded snapshot manifest (best-effort).
-            // Use the raw snapshot archive bytes as document content so the hash
-            // matches what an external verifier would compute over the .egm file.
+            #[cfg(feature = "attestation")]
             {
                 use crate::attestation::AttestationChain;
                 let chain = AttestationChain::new(ctx.storage.clone());
-                let snapshot_name = Path::new(&path_str)
+                let snapshot_name = std::path::Path::new(&path_str)
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| path_str.clone());
-                // Read the archive bytes for attestation (best-effort).
                 if let Ok(archive_bytes) = std::fs::read(path) {
                     if let Err(e) =
                         chain.log_document(&archive_bytes, &snapshot_name, None, &[], None)

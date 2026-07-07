@@ -17,7 +17,7 @@ mod provider;
 mod queue;
 mod tfidf;
 
-#[cfg(feature = "multimodal")]
+#[cfg(feature = "clip-embeddings")]
 pub mod clip;
 #[cfg(feature = "cohere")]
 pub mod cohere;
@@ -31,7 +31,7 @@ pub mod onnx_registry;
 pub mod voyage;
 
 pub use cache::{EmbeddingCache, EmbeddingCacheStats};
-#[cfg(feature = "multimodal")]
+#[cfg(feature = "clip-embeddings")]
 pub use clip::{ClipEmbedder, MultimodalEmbedder, CLIP_PROVIDER_NAME};
 pub use provider::{EmbeddingProvider, EmbeddingProviderInfo, EmbeddingRegistry};
 pub use queue::{
@@ -302,7 +302,7 @@ impl Embedder for OpenAIEmbedder {
 /// - `dimensions`: Expected output dimensions
 pub fn create_embedder(config: &EmbeddingConfig) -> Result<Arc<dyn Embedder>> {
     match config.model.as_str() {
-        #[cfg(feature = "multimodal")]
+        #[cfg(feature = "clip-embeddings")]
         "clip" => {
             clip::create_clip_embedder()
                 .map(|e| e as Arc<dyn Embedder>)

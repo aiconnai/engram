@@ -8,7 +8,7 @@
 #![allow(clippy::large_enum_variant)]
 
 pub mod app_state;
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "attestation")]
 pub mod attestation;
 pub mod auth;
 pub mod bench;
@@ -28,7 +28,7 @@ pub mod mcp;
 pub mod multimodal;
 pub mod realtime;
 pub mod search;
-#[cfg(feature = "agent-portability")]
+#[cfg(feature = "snapshot")]
 pub mod snapshot;
 pub mod storage;
 pub mod sync;

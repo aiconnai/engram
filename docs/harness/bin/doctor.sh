@@ -516,7 +516,15 @@ require_frontmatter_field() {
     fail "skill has no YAML frontmatter block: $file ($label)" "skill_frontmatter:$file:$key" "$file"
     return
   fi
-  if printf '%s\n' "$block" | grep -qE "^${key}:[[:space:]]*${value_re}[[:space:]]*$"; then
+  if [ "$key" = "name" ]; then
+    local actual
+    actual="$(printf '%s\n' "$block" | awk -F':[[:space:]]*' '$1 == "name" { print $2; exit }')"
+    if [ "$actual" = "$value_re" ]; then
+      add_check "skill_frontmatter:$file:$key" "pass" "frontmatter field present: $label" "$file"
+    else
+      fail "skill frontmatter missing/invalid $key: $file ($label)" "skill_frontmatter:$file:$key" "$file"
+    fi
+  elif printf '%s\n' "$block" | grep -qE "^${key}:[[:space:]]*${value_re}[[:space:]]*$"; then
     add_check "skill_frontmatter:$file:$key" "pass" "frontmatter field present: $label" "$file"
   else
     fail "skill frontmatter missing/invalid $key: $file ($label)" "skill_frontmatter:$file:$key" "$file"
@@ -740,7 +748,8 @@ for index, line in enumerate(lines, start=1):
         raise SystemExit(f"line {index}: invalid JSON: {exc}") from exc
     missing = sorted(required - item.keys())
     if missing:
-        raise SystemExit(f"line {index}: missing keys: {", ".join(missing)}")
+        missing_keys = ", ".join(missing)
+        raise SystemExit(f"line {index}: missing keys: {missing_keys}")
     schema_version = item["schema_version"]
     tool = item["tool"]
     status = item["status"]

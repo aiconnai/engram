@@ -45,7 +45,7 @@ pub fn ingest_document(ctx: &HandlerContext, params: Value) -> Value {
     match ingestor.ingest_file(&input.path, config) {
         Ok(result) => {
             // Phase L: best-effort attestation for the ingested document.
-            #[cfg(feature = "agent-portability")]
+            #[cfg(feature = "attestation")]
             {
                 use crate::attestation::AttestationChain;
                 let chain = AttestationChain::new(ctx.storage.clone());

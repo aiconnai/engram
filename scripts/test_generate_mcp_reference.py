@@ -76,11 +76,17 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
             },
             annotations="readOnlyHint",
             tier="essential",
+            group="memory.core",
+            required_feature=None,
         )
 
         markdown = generator.render_reference([tool], generator.DEFAULT_SOURCE)
 
+        self.assertIn("| Tool | Tier | Group | Feature | Annotations | Required Inputs |", markdown)
+        self.assertIn("| `sample` | essential | memory.core | always |", markdown)
         self.assertIn("### `sample`", markdown)
+        self.assertIn("- Group: `memory.core`", markdown)
+        self.assertIn("- Required feature: `always`", markdown)
         self.assertIn("| `mode` | `string` | yes |", markdown)
         self.assertIn("Allowed: `fast`, `safe`.", markdown)
 

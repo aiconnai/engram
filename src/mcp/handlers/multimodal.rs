@@ -367,6 +367,8 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
         .get("strategy")
         .and_then(|v| v.as_str())
         .unwrap_or("auto");
+    #[cfg(not(feature = "clip-embeddings"))]
+    let _ = strategy;
 
     // Step 1: Validate and read the image file
     let validated_image = match validate_media_path(&image_path) {
@@ -426,8 +428,7 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
     // Step 4: Determine strategy
     let strategy_used;
 
-    // Attempt CLIP/multimodal embedding if strategy allows
-    #[cfg(feature = "multimodal")]
+    #[cfg(feature = "clip-embeddings")]
     let query_embedding: Option<Vec<f32>> = if strategy == "clip" || strategy == "auto" {
         use crate::embedding::clip::{ClipEmbedder, MultimodalEmbedder};
         if let Ok(clip) = ClipEmbedder::from_env() {
@@ -451,7 +452,7 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
         ctx.embedder.embed(&query_text).ok()
     };
 
-    #[cfg(not(feature = "multimodal"))]
+    #[cfg(not(feature = "clip-embeddings"))]
     let query_embedding: Option<Vec<f32>> = {
         strategy_used = "description";
         ctx.embedder.embed(&query_text).ok()

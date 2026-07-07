@@ -1,4 +1,4 @@
-//! Attestation tool handlers (Phase L — agent-portability).
+//! Attestation tool handlers (Phase L).
 //!
 //! Provides 4 MCP tools for cryptographic document attestation:
 //! - `attestation_log` — record a document ingestion with a chained proof

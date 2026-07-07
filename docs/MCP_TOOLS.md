@@ -10,288 +10,288 @@ Total tools: **280**
 
 ## Summary
 
-| Tool | Tier | Annotations | Required Inputs |
-|------|------|-------------|-----------------|
-| `memory_create` | essential | mutating (no MCP hints) | `content` |
-| `context_seed` | essential | mutating (no MCP hints) | `facts` |
-| `memory_seed` | advanced | mutating (no MCP hints) | `facts` |
-| `memory_get` | essential | readOnlyHint | `id` |
-| `memory_update` | essential | mutating (no MCP hints) | `id` |
-| `memory_delete` | essential | destructiveHint | `id` |
-| `memory_list` | essential | readOnlyHint | none |
-| `memory_create_todo` | standard | mutating (no MCP hints) | `content` |
-| `memory_create_issue` | standard | mutating (no MCP hints) | `title` |
-| `memory_versions` | advanced | readOnlyHint | `id` |
-| `memory_set_expiration` | standard | mutating (no MCP hints) | `id`, `ttl_seconds` |
-| `memory_cleanup_expired` | standard | destructiveHint | none |
-| `memory_stats` | essential | readOnlyHint | none |
-| `memory_export_graph` | standard | readOnlyHint | none |
-| `memory_scan_project` | advanced | mutating (no MCP hints) | none |
-| `memory_get_project_context` | advanced | readOnlyHint | none |
-| `memory_list_instruction_files` | advanced | readOnlyHint | none |
-| `memory_ingest_document` | advanced | mutating (no MCP hints) | `path` |
-| `dream_run_now` | advanced | idempotentHint | none |
-| `dream_create` | advanced | mutating (no MCP hints) | none |
-| `dream_get` | advanced | readOnlyHint | `id` |
-| `dream_list` | advanced | readOnlyHint | none |
-| `dream_cancel` | advanced | idempotentHint | `id` |
-| `dream_archive` | advanced | idempotentHint | `id` |
-| `dream_candidates_list` | advanced | readOnlyHint | none |
-| `dream_candidate_get` | advanced | readOnlyHint | `id` |
-| `dream_candidate_review` | advanced | mutating (no MCP hints) | `id`, `review_state` |
-| `dream_candidate_apply` | advanced | mutating (no MCP hints) | `id` |
-| `memory_agent_writeback` | advanced | mutating (no MCP hints) | `proposed_content` |
-| `dream_eval_run` | advanced | readOnlyHint | none |
-| `workspace_list` | essential | readOnlyHint | none |
-| `workspace_stats` | standard | readOnlyHint | `workspace` |
-| `workspace_move` | standard | mutating (no MCP hints) | `id`, `workspace` |
-| `workspace_delete` | advanced | destructiveHint | `workspace` |
-| `memory_create_daily` | standard | mutating (no MCP hints) | `content` |
-| `memory_score` | standard | mutating (no MCP hints) | `id` |
-| `memory_promote` | standard | mutating (no MCP hints) | `id` |
-| `memory_decay` | standard | mutating (no MCP hints) | none |
-| `memory_explain` | standard | readOnlyHint | `id` |
-| `memory_reconcile_conflict` | standard | mutating (no MCP hints) | `id`, `reason` |
-| `memory_promote_to_permanent` | standard | mutating (no MCP hints) | `id` |
-| `embedding_cache_stats` | advanced | readOnlyHint | none |
-| `embedding_cache_clear` | advanced | destructiveHint | none |
-| `session_index` | essential | mutating (no MCP hints) | `messages`, `session_id` |
-| `session_index_delta` | standard | mutating (no MCP hints) | `messages`, `session_id` |
-| `session_get` | standard | readOnlyHint | `session_id` |
-| `session_list` | essential | readOnlyHint | none |
-| `session_delete` | standard | destructiveHint | `session_id` |
-| `identity_create` | essential | mutating (no MCP hints) | `canonical_id`, `display_name` |
-| `identity_get` | standard | readOnlyHint | `canonical_id` |
-| `identity_update` | standard | mutating (no MCP hints) | `canonical_id` |
-| `identity_delete` | standard | destructiveHint | `canonical_id` |
-| `identity_add_alias` | standard | mutating (no MCP hints) | `alias`, `canonical_id` |
-| `identity_remove_alias` | advanced | mutating (no MCP hints) | `alias` |
-| `identity_resolve` | essential | readOnlyHint | `alias` |
-| `identity_list` | standard | readOnlyHint | none |
-| `identity_search` | standard | readOnlyHint | `query` |
-| `identity_link` | standard | mutating (no MCP hints) | `canonical_id`, `memory_id` |
-| `identity_unlink` | advanced | mutating (no MCP hints) | `canonical_id`, `memory_id` |
-| `memory_get_identities` | advanced | readOnlyHint | `id` |
-| `memory_create_batch` | standard | mutating (no MCP hints) | `memories` |
-| `memory_delete_batch` | standard | destructiveHint | `ids` |
-| `memory_ingest_fact` | standard | mutating (no MCP hints) | `fact` |
-| `memory_ingest_fact_batch` | standard | mutating (no MCP hints) | `facts` |
-| `memory_tags` | standard | readOnlyHint | none |
-| `memory_tag_hierarchy` | advanced | readOnlyHint | none |
-| `memory_validate_tags` | advanced | readOnlyHint | none |
-| `memory_rebuild_embeddings` | advanced | idempotentHint | none |
-| `memory_rebuild_crossrefs` | advanced | idempotentHint | none |
-| `context_budget_check` | advanced | readOnlyHint | `budget`, `memory_ids`, `model` |
-| `pending_injections_count` | advanced | readOnlyHint | none |
-| `pending_injections_cleanup` | advanced | destructiveHint | none |
-| `memory_archive_old` | advanced | mutating (no MCP hints) | none |
-| `memory_from_trace` | advanced | mutating (no MCP hints) | `trace_id` |
-| `lifecycle_status` | standard | readOnlyHint | none |
-| `lifecycle_run` | standard | idempotentHint | none |
-| `memory_set_lifecycle` | advanced | mutating (no MCP hints) | `id`, `state` |
-| `lifecycle_config` | advanced | readOnlyHint | none |
-| `retention_policy_set` | standard | mutating (no MCP hints) | `workspace` |
-| `retention_policy_get` | standard | readOnlyHint | `workspace` |
-| `retention_policy_list` | standard | readOnlyHint | none |
-| `retention_policy_delete` | advanced | destructiveHint | `workspace` |
-| `retention_policy_apply` | advanced | idempotentHint | none |
-| `salience_get` | advanced | readOnlyHint | `id` |
-| `salience_set_importance` | advanced | mutating (no MCP hints) | `id`, `importance` |
-| `salience_boost` | advanced | mutating (no MCP hints) | `id` |
-| `salience_demote` | advanced | mutating (no MCP hints) | `id` |
-| `salience_decay_run` | advanced | mutating (no MCP hints) | none |
-| `salience_stats` | advanced | readOnlyHint | none |
-| `salience_history` | advanced | readOnlyHint | `id` |
-| `salience_top` | advanced | readOnlyHint | none |
-| `quality_score` | standard | readOnlyHint | `id` |
-| `quality_report` | standard | readOnlyHint | none |
-| `quality_find_duplicates` | advanced | readOnlyHint | none |
-| `quality_get_duplicates` | advanced | readOnlyHint | none |
-| `quality_find_conflicts` | advanced | readOnlyHint | `id` |
-| `quality_get_conflicts` | advanced | readOnlyHint | none |
-| `quality_resolve_conflict` | advanced | destructiveHint | `conflict_id`, `resolution` |
-| `quality_source_trust` | advanced | readOnlyHint | `source_type` |
-| `quality_improve` | advanced | mutating (no MCP hints) | `id` |
-| `memory_export_markdown` | advanced | readOnlyHint | `workspace` |
-| `memory_import_markdown` | advanced | mutating (no MCP hints) | `input_dir` |
-| `memory_block_create` | standard | mutating (no MCP hints) | `name` |
-| `memory_block_get` | standard | readOnlyHint | `name` |
-| `memory_block_edit` | standard | mutating (no MCP hints) | `content`, `name` |
-| `memory_block_list` | standard | readOnlyHint | none |
-| `memory_block_archive` | standard | mutating (no MCP hints) | `name` |
-| `memory_block_history` | standard | readOnlyHint | `name` |
-| `memory_cache_stats` | standard | readOnlyHint | none |
-| `memory_cache_clear` | advanced | mutating (no MCP hints) | none |
-| `memory_compress_for_context` | standard | readOnlyHint | `ids` |
-| `memory_embedding_migrate` | advanced | mutating (no MCP hints) | none |
-| `memory_embedding_providers` | standard | readOnlyHint | none |
-| `temporal_add_edge` | advanced | mutating (no MCP hints) | `from_id`, `relation`, `to_id`, `valid_from` |
-| `temporal_contradictions` | advanced | readOnlyHint | none |
-| `temporal_diff` | advanced | readOnlyHint | `t1`, `t2` |
-| `temporal_snapshot` | advanced | readOnlyHint | `timestamp` |
-| `temporal_timeline` | advanced | readOnlyHint | `from_id`, `to_id` |
-| `memory_enrichment_timeline` | standard | readOnlyHint | `memory_id` |
-| `memory_enrichment_audit` | advanced | readOnlyHint | none |
-| `memory_search` | essential | readOnlyHint | `query` |
-| `memory_smart_retrieve` | essential | readOnlyHint | `query` |
-| `memory_digest` | essential | readOnlyHint | `topic` |
-| `memory_agent_contract` | standard | readOnlyHint | none |
-| `memory_council` | standard | mutating (no MCP hints) | `prompt` |
-| `memory_search_suggest` | standard | readOnlyHint | `query` |
-| `memory_find_duplicates` | standard | readOnlyHint | none |
-| `memory_find_semantic_duplicates` | standard | readOnlyHint | none |
-| `langfuse_connect` | advanced | mutating (no MCP hints) | none |
-| `langfuse_sync` | advanced | mutating (no MCP hints) | none |
-| `langfuse_sync_status` | advanced | readOnlyHint | `task_id` |
-| `langfuse_extract_patterns` | advanced | readOnlyHint | none |
-| `search_cache_feedback` | standard | mutating (no MCP hints) | `positive`, `query` |
-| `search_cache_stats` | advanced | readOnlyHint | none |
-| `search_cache_clear` | advanced | destructiveHint | none |
-| `memory_search_by_identity` | standard | mutating (no MCP hints) | `identity` |
-| `memory_session_search` | standard | mutating (no MCP hints) | `query` |
-| `meilisearch_search` | advanced | readOnlyHint | `query` |
-| `meilisearch_reindex` | advanced | idempotentHint | none |
-| `meilisearch_status` | advanced | readOnlyHint | none |
-| `meilisearch_config` | advanced | readOnlyHint | none |
-| `memory_search_compact` | essential | readOnlyHint | `query` |
-| `memory_expand` | essential | readOnlyHint | `ids` |
-| `memory_detect_updates` | standard | readOnlyHint | `content` |
-| `memory_explain_search` | standard | readOnlyHint | `results` |
-| `memory_suggest_acquisitions` | standard | readOnlyHint | none |
-| `memory_link` | essential | mutating (no MCP hints) | `from_id`, `to_id` |
-| `memory_unlink` | standard | mutating (no MCP hints) | `from_id`, `to_id` |
-| `memory_related` | essential | readOnlyHint | `id` |
-| `memory_extract_entities` | standard | idempotentHint | `id` |
-| `memory_get_entities` | standard | readOnlyHint | `id` |
-| `memory_search_entities` | standard | readOnlyHint | `query` |
-| `memory_entity_stats` | advanced | readOnlyHint | none |
-| `memory_traverse` | essential | readOnlyHint | `id` |
-| `memory_find_path` | standard | readOnlyHint | `from_id`, `to_id` |
-| `memory_graph_path` | advanced | readOnlyHint, idempotentHint | `scope`, `source_id`, `target_id` |
-| `memory_temporal_snapshot` | advanced | readOnlyHint, idempotentHint | `scope`, `timestamp` |
-| `memory_scope_snapshot` | advanced | readOnlyHint, idempotentHint | `from_timestamp`, `scope`, `to_timestamp` |
-| `memory_auto_link` | advanced | mutating (no MCP hints) | none |
-| `memory_auto_link_stats` | standard | readOnlyHint | none |
-| `memory_cluster` | advanced | readOnlyHint | none |
-| `memory_coactivation_report` | standard | readOnlyHint | none |
-| `memory_fact_graph` | standard | readOnlyHint | `subject` |
-| `memory_garden` | advanced | mutating (no MCP hints) | none |
-| `memory_garden_preview` | standard | readOnlyHint | none |
-| `memory_get_cluster` | standard | readOnlyHint | `memory_id` |
-| `memory_knowledge_stats` | standard | readOnlyHint | none |
-| `memory_list_auto_links` | standard | readOnlyHint | none |
-| `memory_list_clusters` | standard | readOnlyHint | none |
-| `memory_list_facts` | standard | readOnlyHint | none |
-| `memory_query_triplets` | standard | readOnlyHint | none |
-| `memory_reflect` | standard | readOnlyHint | `ids` |
-| `memory_resolve_conflict` | standard | mutating (no MCP hints) | `conflict_id` |
-| `memory_sentiment_analyze` | standard | readOnlyHint | `id` |
-| `memory_sentiment_timeline` | standard | readOnlyHint | none |
-| `memory_sync_status` | advanced | readOnlyHint | none |
-| `memory_sync_media` | advanced | mutating (no MCP hints) | none |
-| `memory_events_poll` | advanced | readOnlyHint | none |
-| `memory_events_clear` | advanced | destructiveHint | none |
-| `sync_version` | advanced | readOnlyHint | none |
-| `sync_delta` | advanced | readOnlyHint | `since_version` |
-| `sync_state` | advanced | readOnlyHint | `agent_id` |
-| `sync_cleanup` | advanced | destructiveHint | none |
-| `memory_share` | advanced | mutating (no MCP hints) | `from_agent`, `memory_id`, `to_agent` |
-| `memory_shared_poll` | advanced | readOnlyHint | `agent_id` |
-| `memory_share_ack` | advanced | mutating (no MCP hints) | `agent_id`, `share_id` |
-| `memory_grant_access` | advanced | mutating (no MCP hints) | `agent_id`, `scope_path` |
-| `memory_revoke_access` | advanced | destructiveHint | `agent_id`, `scope_path` |
-| `memory_list_grants` | advanced | readOnlyHint | `agent_id` |
-| `memory_check_access` | advanced | readOnlyHint | `agent_id`, `scope_path` |
-| `memory_search_by_image` | advanced | readOnlyHint | `image_path` |
-| `memory_upload_image` | advanced | mutating (no MCP hints) | `file_path`, `memory_id` |
-| `memory_migrate_images` | advanced | idempotentHint | none |
-| `memory_capture_screenshot` | advanced | readOnlyHint | none |
-| `memory_describe_image` | advanced | readOnlyHint | `image_path` |
-| `memory_list_media` | standard | readOnlyHint | none |
-| `memory_process_video` | advanced | mutating (no MCP hints) | `video_path` |
-| `memory_transcribe_audio` | advanced | readOnlyHint | `audio_path` |
-| `agent_register` | advanced | mutating (no MCP hints) | `agent_id` |
-| `agent_deregister` | advanced | destructiveHint | `agent_id` |
-| `agent_heartbeat` | advanced | mutating (no MCP hints) | `agent_id` |
-| `agent_list` | advanced | readOnlyHint | none |
-| `agent_get` | advanced | readOnlyHint | `agent_id` |
-| `agent_capabilities` | advanced | mutating (no MCP hints) | `agent_id`, `capabilities` |
-| `snapshot_create` | advanced | mutating (no MCP hints) | `output_path` |
-| `snapshot_load` | advanced | mutating (no MCP hints) | `path`, `strategy` |
-| `snapshot_inspect` | advanced | readOnlyHint | `path` |
-| `attestation_log` | advanced | mutating (no MCP hints) | `content`, `document_name` |
-| `attestation_verify` | advanced | readOnlyHint | `content` |
-| `attestation_chain_verify` | advanced | readOnlyHint | none |
-| `attestation_list` | advanced | readOnlyHint | none |
-| `memory_agent_start` | standard | readOnlyHint | none |
-| `memory_agent_stop` | standard | readOnlyHint | none |
-| `memory_agent_status` | standard | readOnlyHint | none |
-| `memory_agent_metrics` | advanced | mutating (no MCP hints) | none |
-| `harness_record` | advanced | mutating (no MCP hints) | `kind`, `summary` |
-| `harness_status` | advanced | readOnlyHint | none |
-| `harness_handoff` | advanced | mutating (no MCP hints) | `current_goal`, `next_steps` |
-| `harness_verify` | advanced | mutating (no MCP hints) | `command`, `exit_code`, `output_summary` |
-| `memory_suggest_tags` | advanced | readOnlyHint | none |
-| `memory_auto_tag` | advanced | mutating (no MCP hints) | `id` |
-| `session_context_create` | standard | mutating (no MCP hints) | `name` |
-| `session_context_add_memory` | advanced | mutating (no MCP hints) | `memory_id`, `session_id` |
-| `session_context_remove_memory` | advanced | mutating (no MCP hints) | `memory_id`, `session_id` |
-| `session_context_get` | standard | readOnlyHint | `session_id` |
-| `session_context_list` | standard | readOnlyHint | none |
-| `session_context_search` | standard | readOnlyHint | `query`, `session_id` |
-| `session_context_update_summary` | advanced | mutating (no MCP hints) | `session_id`, `summary` |
-| `session_context_end` | advanced | mutating (no MCP hints) | `session_id` |
-| `session_context_export` | advanced | readOnlyHint | `session_id` |
-| `memory_get_public` | advanced | readOnlyHint | `id` |
-| `memory_get_injection_prompt` | essential | readOnlyHint | `query` |
-| `memory_observe_tool_use` | standard | mutating (no MCP hints) | `tool_input`, `tool_name`, `tool_output` |
-| `memory_archive_tool_output` | standard | mutating (no MCP hints) | `raw_output`, `tool_name` |
-| `memory_get_archived_output` | standard | readOnlyHint | `archive_id` |
-| `memory_get_working_memory` | standard | readOnlyHint | `session_id` |
-| `session_land` | essential | mutating (no MCP hints) | `session_id` |
-| `memory_build_context` | standard | readOnlyHint | `query` |
-| `context_record` | standard | mutating (no MCP hints) | `event_type`, `session_id`, `source` |
-| `context_record_artifact` | standard | mutating (no MCP hints) | `kind` |
-| `context_get_artifact` | standard | readOnlyHint | `artifact_id`, `reason` |
-| `context_search` | standard | readOnlyHint | `query` |
-| `context_build_bundle` | standard | readOnlyHint | none |
-| `recent_activity` | essential | readOnlyHint | none |
-| `discover_tools` | essential | readOnlyHint | none |
-| `memory_prepare_context` | advanced | readOnlyHint | `query` |
-| `memory_extract_facts` | standard | mutating (no MCP hints) | `memory_id` |
-| `scope_get` | standard | readOnlyHint | `memory_id` |
-| `scope_list` | standard | readOnlyHint | none |
-| `scope_search` | standard | readOnlyHint | `query`, `scope_path` |
-| `scope_set` | standard | mutating (no MCP hints) | `memory_id`, `scope_path` |
-| `scope_tree` | standard | readOnlyHint | none |
-| `memory_soft_trim` | advanced | readOnlyHint | `id` |
-| `memory_list_compact` | standard | readOnlyHint | none |
-| `memory_content_stats` | advanced | readOnlyHint | `id` |
-| `memory_export` | advanced | readOnlyHint | none |
-| `memory_import` | advanced | mutating (no MCP hints) | `data` |
-| `memory_create_section` | standard | mutating (no MCP hints) | `title` |
-| `memory_checkpoint` | standard | mutating (no MCP hints) | `session_id`, `summary` |
-| `memory_create_episodic` | standard | mutating (no MCP hints) | `content`, `event_time` |
-| `memory_create_procedural` | standard | mutating (no MCP hints) | `content`, `trigger_pattern` |
-| `memory_get_timeline` | standard | readOnlyHint | none |
-| `memory_get_procedures` | standard | readOnlyHint | none |
-| `memory_record_procedure_outcome` | standard | mutating (no MCP hints) | `id`, `success` |
-| `memory_boost` | standard | mutating (no MCP hints) | `id` |
-| `memory_explain_utility` | standard | readOnlyHint | `memory_id` |
-| `memory_summarize` | advanced | mutating (no MCP hints) | `memory_ids` |
-| `memory_get_full` | advanced | readOnlyHint | `id` |
-| `memory_auto_consolidate` | advanced | mutating (no MCP hints) | `action` |
-| `memory_consolidate_batch` | advanced | destructiveHint | none |
-| `memory_consolidation_history` | advanced | readOnlyHint | none |
-| `memory_compress` | advanced | readOnlyHint | `id` |
-| `memory_consolidate` | advanced | mutating (no MCP hints) | none |
-| `memory_decompress` | standard | readOnlyHint | `id` |
-| `memory_detect_conflicts` | standard | mutating (no MCP hints) | none |
-| `memory_feedback` | standard | mutating (no MCP hints) | `memory_id`, `query`, `signal` |
-| `memory_feedback_stats` | standard | readOnlyHint | none |
-| `memory_synthesis` | standard | readOnlyHint | `content_a`, `content_b` |
-| `memory_utility_score` | standard | readOnlyHint | `id` |
-| `memory_replay_at_time` | advanced | readOnlyHint | `memory_id`, `timestamp` |
+| Tool | Tier | Group | Feature | Annotations | Required Inputs |
+|------|------|-------|---------|-------------|-----------------|
+| `memory_create` | essential | memory.core | always | mutating (no MCP hints) | `content` |
+| `context_seed` | essential | context | always | mutating (no MCP hints) | `facts` |
+| `memory_seed` | advanced | memory.core | always | mutating (no MCP hints) | `facts` |
+| `memory_get` | essential | memory.core | always | readOnlyHint | `id` |
+| `memory_update` | essential | memory.core | always | mutating (no MCP hints) | `id` |
+| `memory_delete` | standard | memory.core | always | destructiveHint | `id` |
+| `memory_list` | standard | memory.core | always | readOnlyHint | none |
+| `memory_create_todo` | standard | memory.core | always | mutating (no MCP hints) | `content` |
+| `memory_create_issue` | standard | memory.core | always | mutating (no MCP hints) | `title` |
+| `memory_versions` | advanced | memory.admin | always | readOnlyHint | `id` |
+| `memory_set_expiration` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id`, `ttl_seconds` |
+| `memory_cleanup_expired` | standard | memory.lifecycle | always | destructiveHint | none |
+| `memory_stats` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_export_graph` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_scan_project` | advanced | memory.core | always | mutating (no MCP hints) | none |
+| `memory_get_project_context` | advanced | memory.core | always | readOnlyHint | none |
+| `memory_list_instruction_files` | advanced | memory.core | always | readOnlyHint | none |
+| `memory_ingest_document` | advanced | memory.core | always | mutating (no MCP hints) | `path` |
+| `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
+| `dream_create` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | none |
+| `dream_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
+| `dream_list` | advanced | feature.dream | dream-phase | readOnlyHint | none |
+| `dream_cancel` | advanced | feature.dream | dream-phase | idempotentHint | `id` |
+| `dream_archive` | advanced | feature.dream | dream-phase | idempotentHint | `id` |
+| `dream_candidates_list` | advanced | feature.dream | dream-phase | readOnlyHint | none |
+| `dream_candidate_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
+| `dream_candidate_review` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `id`, `review_state` |
+| `dream_candidate_apply` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `id` |
+| `memory_agent_writeback` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `proposed_content` |
+| `dream_eval_run` | advanced | feature.dream | dream-phase | readOnlyHint | none |
+| `workspace_list` | essential | workspace | always | readOnlyHint | none |
+| `workspace_stats` | standard | workspace | always | readOnlyHint | `workspace` |
+| `workspace_move` | standard | workspace | always | mutating (no MCP hints) | `id`, `workspace` |
+| `workspace_delete` | advanced | workspace | always | destructiveHint | `workspace` |
+| `memory_create_daily` | standard | memory.core | always | mutating (no MCP hints) | `content` |
+| `memory_score` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
+| `memory_promote` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
+| `memory_decay` | standard | memory.lifecycle | always | mutating (no MCP hints) | none |
+| `memory_explain` | standard | memory.core | always | readOnlyHint | `id` |
+| `memory_reconcile_conflict` | standard | memory.quality | always | mutating (no MCP hints) | `id`, `reason` |
+| `memory_promote_to_permanent` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
+| `embedding_cache_stats` | advanced | embedding | always | readOnlyHint | none |
+| `embedding_cache_clear` | advanced | embedding | always | destructiveHint | none |
+| `session_index` | standard | session | always | mutating (no MCP hints) | `messages`, `session_id` |
+| `session_index_delta` | standard | session | always | mutating (no MCP hints) | `messages`, `session_id` |
+| `session_get` | standard | session | always | readOnlyHint | `session_id` |
+| `session_list` | standard | session | always | readOnlyHint | none |
+| `session_delete` | standard | session | always | destructiveHint | `session_id` |
+| `identity_create` | standard | identity | always | mutating (no MCP hints) | `canonical_id`, `display_name` |
+| `identity_get` | standard | identity | always | readOnlyHint | `canonical_id` |
+| `identity_update` | standard | identity | always | mutating (no MCP hints) | `canonical_id` |
+| `identity_delete` | standard | identity | always | destructiveHint | `canonical_id` |
+| `identity_add_alias` | standard | identity | always | mutating (no MCP hints) | `alias`, `canonical_id` |
+| `identity_remove_alias` | advanced | identity | always | mutating (no MCP hints) | `alias` |
+| `identity_resolve` | standard | identity | always | readOnlyHint | `alias` |
+| `identity_list` | standard | identity | always | readOnlyHint | none |
+| `identity_search` | standard | identity | always | readOnlyHint | `query` |
+| `identity_link` | standard | identity | always | mutating (no MCP hints) | `canonical_id`, `memory_id` |
+| `identity_unlink` | advanced | identity | always | mutating (no MCP hints) | `canonical_id`, `memory_id` |
+| `memory_get_identities` | advanced | memory.core | always | readOnlyHint | `id` |
+| `memory_create_batch` | standard | memory.core | always | mutating (no MCP hints) | `memories` |
+| `memory_delete_batch` | standard | memory.core | always | destructiveHint | `ids` |
+| `memory_ingest_fact` | standard | memory.graph | always | mutating (no MCP hints) | `fact` |
+| `memory_ingest_fact_batch` | standard | memory.graph | always | mutating (no MCP hints) | `facts` |
+| `memory_tags` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_tag_hierarchy` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_validate_tags` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_rebuild_embeddings` | advanced | memory.admin | always | idempotentHint | none |
+| `memory_rebuild_crossrefs` | advanced | memory.admin | always | idempotentHint | none |
+| `context_budget_check` | advanced | context | always | readOnlyHint | `budget`, `memory_ids`, `model` |
+| `pending_injections_count` | advanced | admin | always | readOnlyHint | none |
+| `pending_injections_cleanup` | advanced | admin | always | destructiveHint | none |
+| `memory_archive_old` | advanced | memory.lifecycle | always | mutating (no MCP hints) | none |
+| `memory_from_trace` | advanced | feature.langfuse | langfuse | mutating (no MCP hints) | `trace_id` |
+| `lifecycle_status` | standard | lifecycle | always | readOnlyHint | none |
+| `lifecycle_run` | standard | lifecycle | always | idempotentHint | none |
+| `memory_set_lifecycle` | advanced | memory.lifecycle | always | mutating (no MCP hints) | `id`, `state` |
+| `lifecycle_config` | advanced | lifecycle | always | readOnlyHint | none |
+| `retention_policy_set` | standard | lifecycle | always | mutating (no MCP hints) | `workspace` |
+| `retention_policy_get` | standard | lifecycle | always | readOnlyHint | `workspace` |
+| `retention_policy_list` | standard | lifecycle | always | readOnlyHint | none |
+| `retention_policy_delete` | advanced | lifecycle | always | destructiveHint | `workspace` |
+| `retention_policy_apply` | advanced | lifecycle | always | idempotentHint | none |
+| `salience_get` | advanced | quality | always | readOnlyHint | `id` |
+| `salience_set_importance` | advanced | quality | always | mutating (no MCP hints) | `id`, `importance` |
+| `salience_boost` | advanced | quality | always | mutating (no MCP hints) | `id` |
+| `salience_demote` | advanced | quality | always | mutating (no MCP hints) | `id` |
+| `salience_decay_run` | advanced | quality | always | mutating (no MCP hints) | none |
+| `salience_stats` | advanced | quality | always | readOnlyHint | none |
+| `salience_history` | advanced | quality | always | readOnlyHint | `id` |
+| `salience_top` | advanced | quality | always | readOnlyHint | none |
+| `quality_score` | standard | quality | always | readOnlyHint | `id` |
+| `quality_report` | standard | quality | always | readOnlyHint | none |
+| `quality_find_duplicates` | advanced | quality | always | readOnlyHint | none |
+| `quality_get_duplicates` | advanced | quality | always | readOnlyHint | none |
+| `quality_find_conflicts` | advanced | quality | always | readOnlyHint | `id` |
+| `quality_get_conflicts` | advanced | quality | always | readOnlyHint | none |
+| `quality_resolve_conflict` | advanced | quality | always | destructiveHint | `conflict_id`, `resolution` |
+| `quality_source_trust` | advanced | quality | always | readOnlyHint | `source_type` |
+| `quality_improve` | advanced | quality | always | mutating (no MCP hints) | `id` |
+| `memory_export_markdown` | advanced | memory.admin | always | readOnlyHint | `workspace` |
+| `memory_import_markdown` | advanced | memory.admin | always | mutating (no MCP hints) | `input_dir` |
+| `memory_block_create` | standard | memory.block | always | mutating (no MCP hints) | `name` |
+| `memory_block_get` | standard | memory.block | always | readOnlyHint | `name` |
+| `memory_block_edit` | standard | memory.block | always | mutating (no MCP hints) | `content`, `name` |
+| `memory_block_list` | standard | memory.block | always | readOnlyHint | none |
+| `memory_block_archive` | standard | memory.block | always | mutating (no MCP hints) | `name` |
+| `memory_block_history` | standard | memory.block | always | readOnlyHint | `name` |
+| `memory_cache_stats` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_cache_clear` | advanced | memory.admin | always | mutating (no MCP hints) | none |
+| `memory_compress_for_context` | standard | memory.admin | always | readOnlyHint | `ids` |
+| `memory_embedding_migrate` | advanced | memory.admin | always | mutating (no MCP hints) | none |
+| `memory_embedding_providers` | standard | memory.admin | always | readOnlyHint | none |
+| `temporal_add_edge` | advanced | temporal | always | mutating (no MCP hints) | `from_id`, `relation`, `to_id`, `valid_from` |
+| `temporal_contradictions` | advanced | temporal | always | readOnlyHint | none |
+| `temporal_diff` | advanced | temporal | always | readOnlyHint | `t1`, `t2` |
+| `temporal_snapshot` | advanced | temporal | always | readOnlyHint | `timestamp` |
+| `temporal_timeline` | advanced | temporal | always | readOnlyHint | `from_id`, `to_id` |
+| `memory_enrichment_timeline` | standard | memory.admin | always | readOnlyHint | `memory_id` |
+| `memory_enrichment_audit` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_search` | standard | memory.search | always | readOnlyHint | `query` |
+| `memory_smart_retrieve` | essential | memory.search | always | readOnlyHint | `query` |
+| `memory_digest` | essential | memory.search | always | readOnlyHint | `topic` |
+| `memory_agent_contract` | essential | core | always | readOnlyHint | none |
+| `memory_council` | standard | memory.core | always | mutating (no MCP hints) | `prompt` |
+| `memory_search_suggest` | standard | memory.search | always | readOnlyHint | `query` |
+| `memory_find_duplicates` | standard | memory.quality | always | readOnlyHint | none |
+| `memory_find_semantic_duplicates` | standard | memory.quality | always | readOnlyHint | none |
+| `langfuse_connect` | advanced | feature.langfuse | langfuse | mutating (no MCP hints) | none |
+| `langfuse_sync` | advanced | feature.langfuse | langfuse | mutating (no MCP hints) | none |
+| `langfuse_sync_status` | advanced | feature.langfuse | langfuse | readOnlyHint | `task_id` |
+| `langfuse_extract_patterns` | advanced | feature.langfuse | langfuse | readOnlyHint | none |
+| `search_cache_feedback` | standard | search | always | mutating (no MCP hints) | `positive`, `query` |
+| `search_cache_stats` | advanced | search | always | readOnlyHint | none |
+| `search_cache_clear` | advanced | search | always | destructiveHint | none |
+| `memory_search_by_identity` | standard | memory.search | always | mutating (no MCP hints) | `identity` |
+| `memory_session_search` | standard | memory.search | always | mutating (no MCP hints) | `query` |
+| `meilisearch_search` | advanced | feature.meilisearch | meilisearch | readOnlyHint | `query` |
+| `meilisearch_reindex` | advanced | feature.meilisearch | meilisearch | idempotentHint | none |
+| `meilisearch_status` | advanced | feature.meilisearch | meilisearch | readOnlyHint | none |
+| `meilisearch_config` | advanced | feature.meilisearch | meilisearch | readOnlyHint | none |
+| `memory_search_compact` | essential | memory.search | always | readOnlyHint | `query` |
+| `memory_expand` | essential | memory.search | always | readOnlyHint | `ids` |
+| `memory_detect_updates` | standard | memory.admin | always | readOnlyHint | `content` |
+| `memory_explain_search` | standard | memory.search | always | readOnlyHint | `results` |
+| `memory_suggest_acquisitions` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_link` | standard | memory.graph | always | mutating (no MCP hints) | `from_id`, `to_id` |
+| `memory_unlink` | standard | memory.graph | always | mutating (no MCP hints) | `from_id`, `to_id` |
+| `memory_related` | standard | memory.search | always | readOnlyHint | `id` |
+| `memory_extract_entities` | standard | memory.core | always | idempotentHint | `id` |
+| `memory_get_entities` | standard | memory.core | always | readOnlyHint | `id` |
+| `memory_search_entities` | standard | memory.search | always | readOnlyHint | `query` |
+| `memory_entity_stats` | advanced | memory.graph | always | readOnlyHint | none |
+| `memory_traverse` | standard | memory.search | always | readOnlyHint | `id` |
+| `memory_find_path` | standard | memory.search | always | readOnlyHint | `from_id`, `to_id` |
+| `memory_graph_path` | advanced | feature.duckdb_graph | duckdb-graph | readOnlyHint, idempotentHint | `scope`, `source_id`, `target_id` |
+| `memory_temporal_snapshot` | advanced | feature.duckdb_graph | duckdb-graph | readOnlyHint, idempotentHint | `scope`, `timestamp` |
+| `memory_scope_snapshot` | advanced | feature.duckdb_graph | duckdb-graph | readOnlyHint, idempotentHint | `from_timestamp`, `scope`, `to_timestamp` |
+| `memory_auto_link` | advanced | feature.emergent_graph | emergent-graph | mutating (no MCP hints) | none |
+| `memory_auto_link_stats` | standard | feature.emergent_graph | emergent-graph | readOnlyHint | none |
+| `memory_cluster` | advanced | feature.emergent_graph | emergent-graph | readOnlyHint | none |
+| `memory_coactivation_report` | standard | memory.graph | always | readOnlyHint | none |
+| `memory_fact_graph` | standard | memory.graph | always | readOnlyHint | `subject` |
+| `memory_garden` | advanced | memory.lifecycle | always | mutating (no MCP hints) | none |
+| `memory_garden_preview` | standard | memory.lifecycle | always | readOnlyHint | none |
+| `memory_get_cluster` | standard | feature.emergent_graph | emergent-graph | readOnlyHint | `memory_id` |
+| `memory_knowledge_stats` | standard | memory.graph | always | readOnlyHint | none |
+| `memory_list_auto_links` | standard | feature.emergent_graph | emergent-graph | readOnlyHint | none |
+| `memory_list_clusters` | standard | feature.emergent_graph | emergent-graph | readOnlyHint | none |
+| `memory_list_facts` | standard | memory.graph | always | readOnlyHint | none |
+| `memory_query_triplets` | standard | memory.graph | always | readOnlyHint | none |
+| `memory_reflect` | standard | memory.graph | always | readOnlyHint | `ids` |
+| `memory_resolve_conflict` | standard | memory.quality | always | mutating (no MCP hints) | `conflict_id` |
+| `memory_sentiment_analyze` | standard | memory.admin | always | readOnlyHint | `id` |
+| `memory_sentiment_timeline` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_sync_status` | advanced | memory.core | always | readOnlyHint | none |
+| `memory_sync_media` | advanced | feature.multimodal | multimodal | mutating (no MCP hints) | none |
+| `memory_events_poll` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_events_clear` | advanced | memory.admin | always | destructiveHint | none |
+| `sync_version` | advanced | sync | always | readOnlyHint | none |
+| `sync_delta` | advanced | sync | always | readOnlyHint | `since_version` |
+| `sync_state` | advanced | sync | always | readOnlyHint | `agent_id` |
+| `sync_cleanup` | advanced | sync | always | destructiveHint | none |
+| `memory_share` | advanced | memory.admin | always | mutating (no MCP hints) | `from_agent`, `memory_id`, `to_agent` |
+| `memory_shared_poll` | advanced | memory.admin | always | readOnlyHint | `agent_id` |
+| `memory_share_ack` | advanced | memory.admin | always | mutating (no MCP hints) | `agent_id`, `share_id` |
+| `memory_grant_access` | advanced | memory.core | always | mutating (no MCP hints) | `agent_id`, `scope_path` |
+| `memory_revoke_access` | advanced | memory.core | always | destructiveHint | `agent_id`, `scope_path` |
+| `memory_list_grants` | advanced | memory.core | always | readOnlyHint | `agent_id` |
+| `memory_check_access` | advanced | memory.core | always | readOnlyHint | `agent_id`, `scope_path` |
+| `memory_search_by_image` | advanced | feature.multimodal | multimodal | readOnlyHint | `image_path` |
+| `memory_upload_image` | advanced | memory.admin | always | mutating (no MCP hints) | `file_path`, `memory_id` |
+| `memory_migrate_images` | advanced | memory.admin | always | idempotentHint | none |
+| `memory_capture_screenshot` | advanced | feature.multimodal | multimodal | readOnlyHint | none |
+| `memory_describe_image` | advanced | feature.multimodal | multimodal | readOnlyHint | `image_path` |
+| `memory_list_media` | standard | feature.multimodal | multimodal | readOnlyHint | none |
+| `memory_process_video` | advanced | feature.multimodal | multimodal | mutating (no MCP hints) | `video_path` |
+| `memory_transcribe_audio` | advanced | feature.multimodal | multimodal | readOnlyHint | `audio_path` |
+| `agent_register` | advanced | agent | always | mutating (no MCP hints) | `agent_id` |
+| `agent_deregister` | advanced | agent | always | destructiveHint | `agent_id` |
+| `agent_heartbeat` | advanced | agent | always | mutating (no MCP hints) | `agent_id` |
+| `agent_list` | advanced | agent | always | readOnlyHint | none |
+| `agent_get` | advanced | agent | always | readOnlyHint | `agent_id` |
+| `agent_capabilities` | advanced | agent | always | mutating (no MCP hints) | `agent_id`, `capabilities` |
+| `snapshot_create` | advanced | feature.snapshot | snapshot | mutating (no MCP hints) | `output_path` |
+| `snapshot_load` | advanced | feature.snapshot | snapshot | mutating (no MCP hints) | `path`, `strategy` |
+| `snapshot_inspect` | advanced | feature.snapshot | snapshot | readOnlyHint | `path` |
+| `attestation_log` | advanced | feature.attestation | attestation | mutating (no MCP hints) | `content`, `document_name` |
+| `attestation_verify` | advanced | feature.attestation | attestation | readOnlyHint | `content` |
+| `attestation_chain_verify` | advanced | feature.attestation | attestation | readOnlyHint | none |
+| `attestation_list` | advanced | feature.attestation | attestation | readOnlyHint | none |
+| `memory_agent_start` | standard | memory.core | always | readOnlyHint | none |
+| `memory_agent_stop` | standard | memory.core | always | readOnlyHint | none |
+| `memory_agent_status` | standard | memory.core | always | readOnlyHint | none |
+| `memory_agent_metrics` | advanced | memory.core | always | mutating (no MCP hints) | none |
+| `harness_record` | advanced | harness | always | mutating (no MCP hints) | `kind`, `summary` |
+| `harness_status` | advanced | harness | always | readOnlyHint | none |
+| `harness_handoff` | advanced | harness | always | mutating (no MCP hints) | `current_goal`, `next_steps` |
+| `harness_verify` | advanced | harness | always | mutating (no MCP hints) | `command`, `exit_code`, `output_summary` |
+| `memory_suggest_tags` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_auto_tag` | advanced | memory.admin | always | mutating (no MCP hints) | `id` |
+| `session_context_create` | standard | session | always | mutating (no MCP hints) | `name` |
+| `session_context_add_memory` | advanced | session | always | mutating (no MCP hints) | `memory_id`, `session_id` |
+| `session_context_remove_memory` | advanced | session | always | mutating (no MCP hints) | `memory_id`, `session_id` |
+| `session_context_get` | standard | session | always | readOnlyHint | `session_id` |
+| `session_context_list` | standard | session | always | readOnlyHint | none |
+| `session_context_search` | standard | session | always | readOnlyHint | `query`, `session_id` |
+| `session_context_update_summary` | advanced | session | always | mutating (no MCP hints) | `session_id`, `summary` |
+| `session_context_end` | advanced | session | always | mutating (no MCP hints) | `session_id` |
+| `session_context_export` | advanced | session | always | readOnlyHint | `session_id` |
+| `memory_get_public` | advanced | memory.core | always | readOnlyHint | `id` |
+| `memory_get_injection_prompt` | essential | memory.search | always | readOnlyHint | `query` |
+| `memory_observe_tool_use` | standard | memory.session | always | mutating (no MCP hints) | `tool_input`, `tool_name`, `tool_output` |
+| `memory_archive_tool_output` | standard | memory.lifecycle | always | mutating (no MCP hints) | `raw_output`, `tool_name` |
+| `memory_get_archived_output` | standard | memory.lifecycle | always | readOnlyHint | `archive_id` |
+| `memory_get_working_memory` | standard | memory.session | always | readOnlyHint | `session_id` |
+| `session_land` | essential | session | always | mutating (no MCP hints) | `session_id` |
+| `memory_build_context` | standard | memory.core | always | readOnlyHint | `query` |
+| `context_record` | standard | context | always | mutating (no MCP hints) | `event_type`, `session_id`, `source` |
+| `context_record_artifact` | standard | context | always | mutating (no MCP hints) | `kind` |
+| `context_get_artifact` | standard | context | always | readOnlyHint | `artifact_id`, `reason` |
+| `context_search` | standard | context | always | readOnlyHint | `query` |
+| `context_build_bundle` | standard | context | always | readOnlyHint | none |
+| `recent_activity` | essential | core | always | readOnlyHint | none |
+| `discover_tools` | essential | core | always | readOnlyHint | none |
+| `memory_prepare_context` | advanced | memory.core | always | readOnlyHint | `query` |
+| `memory_extract_facts` | standard | memory.graph | always | mutating (no MCP hints) | `memory_id` |
+| `scope_get` | standard | scope | always | readOnlyHint | `memory_id` |
+| `scope_list` | standard | scope | always | readOnlyHint | none |
+| `scope_search` | standard | scope | always | readOnlyHint | `query`, `scope_path` |
+| `scope_set` | standard | scope | always | mutating (no MCP hints) | `memory_id`, `scope_path` |
+| `scope_tree` | standard | scope | always | readOnlyHint | none |
+| `memory_soft_trim` | advanced | memory.core | always | readOnlyHint | `id` |
+| `memory_list_compact` | essential | memory.core | always | readOnlyHint | none |
+| `memory_content_stats` | advanced | memory.admin | always | readOnlyHint | `id` |
+| `memory_export` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_import` | advanced | memory.admin | always | mutating (no MCP hints) | `data` |
+| `memory_create_section` | standard | memory.core | always | mutating (no MCP hints) | `title` |
+| `memory_checkpoint` | standard | memory.session | always | mutating (no MCP hints) | `session_id`, `summary` |
+| `memory_create_episodic` | standard | memory.core | always | mutating (no MCP hints) | `content`, `event_time` |
+| `memory_create_procedural` | standard | memory.core | always | mutating (no MCP hints) | `content`, `trigger_pattern` |
+| `memory_get_timeline` | standard | memory.core | always | readOnlyHint | none |
+| `memory_get_procedures` | standard | memory.core | always | readOnlyHint | none |
+| `memory_record_procedure_outcome` | standard | memory.core | always | mutating (no MCP hints) | `id`, `success` |
+| `memory_boost` | standard | memory.core | always | mutating (no MCP hints) | `id` |
+| `memory_explain_utility` | standard | memory.admin | always | readOnlyHint | `memory_id` |
+| `memory_summarize` | advanced | memory.core | always | mutating (no MCP hints) | `memory_ids` |
+| `memory_get_full` | advanced | memory.core | always | readOnlyHint | `id` |
+| `memory_auto_consolidate` | advanced | memory.lifecycle | always | mutating (no MCP hints) | `action` |
+| `memory_consolidate_batch` | advanced | memory.lifecycle | always | destructiveHint | none |
+| `memory_consolidation_history` | advanced | memory.lifecycle | always | readOnlyHint | none |
+| `memory_compress` | advanced | memory.admin | always | readOnlyHint | `id` |
+| `memory_consolidate` | advanced | memory.lifecycle | always | mutating (no MCP hints) | none |
+| `memory_decompress` | standard | memory.admin | always | readOnlyHint | `id` |
+| `memory_detect_conflicts` | standard | memory.quality | always | mutating (no MCP hints) | none |
+| `memory_feedback` | standard | memory.admin | always | mutating (no MCP hints) | `memory_id`, `query`, `signal` |
+| `memory_feedback_stats` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_synthesis` | standard | memory.admin | always | readOnlyHint | `content_a`, `content_b` |
+| `memory_utility_score` | standard | memory.lifecycle | always | readOnlyHint | `id` |
+| `memory_replay_at_time` | advanced | memory.admin | always | readOnlyHint | `memory_id`, `timestamp` |
 
 ## Tools
 
@@ -300,6 +300,8 @@ Total tools: **280**
 Store an explicit durable memory with inspectable provenance. Use for stable preferences, decisions, insights, and project context when the fact is intentional and worth preserving.
 
 - Tier: `essential`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `content`
 
@@ -328,6 +330,8 @@ Store an explicit durable memory with inspectable provenance. Use for stable pre
 Injects initial context (premises, persona assumptions, or structured facts) about an entity to avoid cold start. Seeded memories are tagged as origin:seed and status:unverified, and should be treated as revisable assumptions.
 
 - Tier: `essential`
+- Group: `context`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `facts`
 
@@ -345,6 +349,8 @@ Injects initial context (premises, persona assumptions, or structured facts) abo
 Deprecated alias for context_seed. Use context_seed instead.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `facts`
 
@@ -362,6 +368,8 @@ Deprecated alias for context_seed. Use context_seed instead.
 Retrieve a memory by its ID
 
 - Tier: `essential`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -375,6 +383,8 @@ Retrieve a memory by its ID
 Update an existing memory
 
 - Tier: `essential`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -396,7 +406,9 @@ Update an existing memory
 
 Delete a memory (soft delete)
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `id`
 
@@ -409,7 +421,9 @@ Delete a memory (soft delete)
 
 List memories with filtering and pagination. Supports workspace isolation, tier filtering, and advanced filter syntax with AND/OR and comparison operators.
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -433,6 +447,8 @@ List memories with filtering and pagination. Supports workspace isolation, tier 
 Create a TODO memory with priority
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `content`
 
@@ -448,6 +464,8 @@ Create a TODO memory with priority
 Create an ISSUE memory for tracking problems
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `title`
 
@@ -463,6 +481,8 @@ Create an ISSUE memory for tracking problems
 Get version history for a memory
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -475,6 +495,8 @@ Get version history for a memory
 Set or update the expiration time for a memory
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`, `ttl_seconds`
 
@@ -488,6 +510,8 @@ Set or update the expiration time for a memory
 Delete all expired memories. Typically called by a background job, but can be invoked manually.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: none
 
@@ -499,7 +523,9 @@ Delete all expired memories. Typically called by a background job, but can be in
 
 Get storage statistics
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -512,6 +538,8 @@ Get storage statistics
 Export knowledge graph visualization
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -526,6 +554,8 @@ Export knowledge graph visualization
 Scan current directory for AI instruction files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) and ingest them as memories. Creates parent memory for each file and child memories for sections.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -540,6 +570,8 @@ Scan current directory for AI instruction files (CLAUDE.md, AGENTS.md, .cursorru
 Get all project context memories for the current working directory. Returns instruction files and their sections.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -554,6 +586,8 @@ Get all project context memories for the current working directory. Returns inst
 List AI instruction files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) in a directory without ingesting them. Returns file paths, types, and sizes for discovery purposes.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -567,6 +601,8 @@ List AI instruction files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) in a direct
 Ingest a document (PDF or Markdown) into memory. Extracts text, splits into chunks with overlap, and creates memories with deduplication.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `path`
 
@@ -584,6 +620,8 @@ Ingest a document (PDF or Markdown) into memory. Extracts text, splits into chun
 Manually trigger the Dream Phase (background consolidation) across all workspaces. This process compresses old memories and identifies patterns while the agent is 'sleeping'.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: idempotentHint
 - Required inputs: none
 
@@ -596,6 +634,8 @@ Manually trigger the Dream Phase (background consolidation) across all workspace
 Create a reviewable dream snapshot job and optionally run deterministic candidate generation. Generated candidates are proposals, not canonical memories.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -614,6 +654,8 @@ Create a reviewable dream snapshot job and optionally run deterministic candidat
 Inspect one dream snapshot job.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -626,6 +668,8 @@ Inspect one dream snapshot job.
 List dream snapshot jobs by workspace and status.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -640,6 +684,8 @@ List dream snapshot jobs by workspace and status.
 Cancel a pending or running dream snapshot job idempotently.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: idempotentHint
 - Required inputs: `id`
 
@@ -652,6 +698,8 @@ Cancel a pending or running dream snapshot job idempotently.
 Archive a terminal dream snapshot job.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: idempotentHint
 - Required inputs: `id`
 
@@ -664,6 +712,8 @@ Archive a terminal dream snapshot job.
 List review candidates emitted by dream snapshot jobs. Results are proposals and are not canonical memory facts.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -679,6 +729,8 @@ List review candidates emitted by dream snapshot jobs. Results are proposals and
 Inspect one dream candidate and its evidence sources.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -691,6 +743,8 @@ Inspect one dream candidate and its evidence sources.
 Review a dream candidate by accepting, editing, rejecting, or archiving it. This does not mutate canonical memory.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`, `review_state`
 
@@ -706,6 +760,8 @@ Review a dream candidate by accepting, editing, rejecting, or archiving it. This
 Apply an accepted or edited dream candidate to canonical memory. Requires confirm=true unless dry_run=true; repeated apply is idempotent.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -720,6 +776,8 @@ Apply an accepted or edited dream candidate to canonical memory. Requires confir
 Create a pending agent-generated memory proposal as an agent_writeback dream candidate. Defaults to dry_run=true and never mutates canonical memory; review/apply still happens through dream_candidate_get/review/apply.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `proposed_content`
 
@@ -742,6 +800,8 @@ Create a pending agent-generated memory proposal as an agent_writeback dream can
 Run deterministic local dream snapshot evaluation fixtures and return parseable CI-safe metrics. Does not require network, credentials, or model access.
 
 - Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -755,6 +815,8 @@ Run deterministic local dream snapshot evaluation fixtures and return parseable 
 List all workspaces with their statistics (memory count, tier breakdown, etc.)
 
 - Tier: `essential`
+- Group: `workspace`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -767,6 +829,8 @@ List all workspaces with their statistics (memory count, tier breakdown, etc.)
 Get detailed statistics for a specific workspace
 
 - Tier: `standard`
+- Group: `workspace`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `workspace`
 
@@ -779,6 +843,8 @@ Get detailed statistics for a specific workspace
 Move a memory to a different workspace
 
 - Tier: `standard`
+- Group: `workspace`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`, `workspace`
 
@@ -792,6 +858,8 @@ Move a memory to a different workspace
 Delete a workspace. Can either move all memories to 'default' workspace or hard delete them.
 
 - Tier: `advanced`
+- Group: `workspace`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `workspace`
 
@@ -805,6 +873,8 @@ Delete a workspace. Can either move all memories to 'default' workspace or hard 
 Create a daily (ephemeral) memory that auto-expires after the specified TTL. Useful for session context and scratch notes.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `content`
 
@@ -823,6 +893,8 @@ Create a daily (ephemeral) memory that auto-expires after the specified TTL. Use
 Compute deterministic memory policy scores for a memory. When persist=true, upserts the memory_policy row and emits a best-effort policy audit event.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -836,6 +908,8 @@ Compute deterministic memory policy scores for a memory. When persist=true, upse
 Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -849,6 +923,8 @@ Reinforce a memory's policy record, optionally promoting a Daily-tier memory to 
 Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply updates memory_policy scores only. Use lifecycle_run for lifecycle_state transitions.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -862,6 +938,8 @@ Compute or apply conservative memory policy decay for a workspace. Dry-run is th
 Explain a memory's current policy score with feature components, reason text, and policy audit count.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -874,6 +952,8 @@ Explain a memory's current policy score with feature components, reason text, an
 Record a conflict reconciliation signal for a memory policy without deleting or mutating memory content.
 
 - Tier: `standard`
+- Group: `memory.quality`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`, `reason`
 
@@ -887,6 +967,8 @@ Record a conflict reconciliation signal for a memory policy without deleting or 
 Promote a daily memory to permanent tier. Clears the expiration and makes the memory permanent.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -899,6 +981,8 @@ Promote a daily memory to permanent tier. Clears the expiration and makes the me
 Get statistics about the embedding cache (hits, misses, entries, bytes used, hit rate)
 
 - Tier: `advanced`
+- Group: `embedding`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -911,6 +995,8 @@ Get statistics about the embedding cache (hits, misses, entries, bytes used, hit
 Clear all entries from the embedding cache
 
 - Tier: `advanced`
+- Group: `embedding`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: none
 
@@ -922,7 +1008,9 @@ Clear all entries from the embedding cache
 
 Index a conversation into searchable memory chunks. Uses dual-limiter chunking (messages + characters) with overlap.
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `messages`, `session_id`
 
@@ -943,6 +1031,8 @@ Index a conversation into searchable memory chunks. Uses dual-limiter chunking (
 Incrementally index new messages to an existing session. More efficient than full reindex.
 
 - Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `messages`, `session_id`
 
@@ -956,6 +1046,8 @@ Incrementally index new messages to an existing session. More efficient than ful
 Get information about an indexed session
 
 - Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `session_id`
 
@@ -967,7 +1059,9 @@ Get information about an indexed session
 
 List indexed sessions with optional workspace filter
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -981,6 +1075,8 @@ List indexed sessions with optional workspace filter
 Delete a session and all its indexed chunks
 
 - Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `session_id`
 
@@ -992,7 +1088,9 @@ Delete a session and all its indexed chunks
 
 Create a new identity with canonical ID, display name, and optional aliases
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `canonical_id`, `display_name`
 
@@ -1010,6 +1108,8 @@ Create a new identity with canonical ID, display name, and optional aliases
 Get an identity by its canonical ID
 
 - Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `canonical_id`
 
@@ -1022,6 +1122,8 @@ Get an identity by its canonical ID
 Update an identity's display name, description, or type
 
 - Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `canonical_id`
 
@@ -1037,6 +1139,8 @@ Update an identity's display name, description, or type
 Delete an identity and all its aliases
 
 - Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `canonical_id`
 
@@ -1049,6 +1153,8 @@ Delete an identity and all its aliases
 Add an alias to an identity. Aliases are normalized (lowercase, trimmed). Conflicts with existing aliases are rejected.
 
 - Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `alias`, `canonical_id`
 
@@ -1063,6 +1169,8 @@ Add an alias to an identity. Aliases are normalized (lowercase, trimmed). Confli
 Remove an alias from any identity
 
 - Tier: `advanced`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `alias`
 
@@ -1074,7 +1182,9 @@ Remove an alias from any identity
 
 Resolve an alias to its canonical identity. Returns the identity if found, null otherwise.
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `alias`
 
@@ -1087,6 +1197,8 @@ Resolve an alias to its canonical identity. Returns the identity if found, null 
 List all identities with optional type filter
 
 - Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1100,6 +1212,8 @@ List all identities with optional type filter
 Search identities by alias or display name
 
 - Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -1113,6 +1227,8 @@ Search identities by alias or display name
 Link an identity to a memory (mark that the identity is mentioned in the memory)
 
 - Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `canonical_id`, `memory_id`
 
@@ -1127,6 +1243,8 @@ Link an identity to a memory (mark that the identity is mentioned in the memory)
 Remove the link between an identity and a memory
 
 - Tier: `advanced`
+- Group: `identity`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `canonical_id`, `memory_id`
 
@@ -1140,6 +1258,8 @@ Remove the link between an identity and a memory
 Get all identities (persons, organizations, projects, etc.) linked to a memory. Returns identity details including display name, type, aliases, and mention information.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -1152,6 +1272,8 @@ Get all identities (persons, organizations, projects, etc.) linked to a memory. 
 Create multiple memories in a single operation. More efficient than individual creates for bulk imports.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `memories`
 
@@ -1164,6 +1286,8 @@ Create multiple memories in a single operation. More efficient than individual c
 Delete multiple memories in a single operation.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `ids`
 
@@ -1177,6 +1301,8 @@ Delete multiple memories in a single operation.
 Append-only fact ingest for high-frequency sources (sessions, file watchers). Always inserts a new memory with memory_type='fact'. No dedup or upsert.
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `fact`
 
@@ -1195,6 +1321,8 @@ Append-only fact ingest for high-frequency sources (sessions, file watchers). Al
 Batch append-only fact ingest. Inserts all facts in a single transaction. Returns count and ids.
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `facts`
 
@@ -1209,6 +1337,8 @@ Batch append-only fact ingest. Inserts all facts in a single transaction. Return
 List all tags with usage counts and most recent usage timestamps.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1221,6 +1351,8 @@ List all tags with usage counts and most recent usage timestamps.
 Get tags organized in a hierarchical tree structure. Tags with slashes are treated as paths (e.g., 'project/engram/core').
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1233,6 +1365,8 @@ Get tags organized in a hierarchical tree structure. Tags with slashes are treat
 Validate tag consistency across memories. Reports orphaned tags, unused tags, and suggested normalizations.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1245,6 +1379,8 @@ Validate tag consistency across memories. Reports orphaned tags, unused tags, an
 Rebuild embeddings for all memories that are missing them. Useful after model changes or data recovery.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: idempotentHint
 - Required inputs: none
 
@@ -1257,6 +1393,8 @@ Rebuild embeddings for all memories that are missing them. Useful after model ch
 Rebuild cross-reference links between memories. Re-analyzes all memories to find and create links.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: idempotentHint
 - Required inputs: none
 
@@ -1269,6 +1407,8 @@ Rebuild cross-reference links between memories. Re-analyzes all memories to find
 Check token usage of memories against a budget. Returns token counts and suggestions if over budget.
 
 - Tier: `advanced`
+- Group: `context`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `budget`, `memory_ids`, `model`
 
@@ -1284,6 +1424,8 @@ Check token usage of memories against a budget. Returns token counts and suggest
 Count of non-expired payloads queued in pending_injections for a workspace, waiting to be consumed by the next SessionStart.
 
 - Tier: `advanced`
+- Group: `admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1296,6 +1438,8 @@ Count of non-expired payloads queued in pending_injections for a workspace, wait
 Drop every pending_injections row whose expires_at has passed. Idempotent. Returns the count removed.
 
 - Tier: `advanced`
+- Group: `admin`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: none
 
@@ -1308,6 +1452,8 @@ Drop every pending_injections row whose expires_at has passed. Idempotent. Retur
 Compress already-Archived memories by creating summary rows. Does not move originals to archived state; use lifecycle_run for lifecycle transitions.
 
 - Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -1324,6 +1470,8 @@ Compress already-Archived memories by creating summary rows. Does not move origi
 Create a memory from a specific Langfuse trace ID.
 
 - Tier: `advanced`
+- Group: `feature.langfuse`
+- Required feature: `langfuse`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `trace_id`
 
@@ -1339,6 +1487,8 @@ Create a memory from a specific Langfuse trace ID.
 Get lifecycle statistics (active/stale/archived counts by workspace).
 
 - Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1351,6 +1501,8 @@ Get lifecycle statistics (active/stale/archived counts by workspace).
 Run the canonical lifecycle predicate to mark stale and archive idle memories. Dry run by default; this is the only decay-derived lifecycle writer.
 
 - Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
 - Annotations: idempotentHint
 - Required inputs: none
 
@@ -1368,6 +1520,8 @@ Run the canonical lifecycle predicate to mark stale and archive idle memories. D
 Manually set the lifecycle state of a memory.
 
 - Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`, `state`
 
@@ -1381,6 +1535,8 @@ Manually set the lifecycle state of a memory.
 Get lifecycle predicate configuration defaults and optional overrides.
 
 - Tier: `advanced`
+- Group: `lifecycle`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1396,6 +1552,8 @@ Get lifecycle predicate configuration defaults and optional overrides.
 Set a retention policy for a workspace. Controls compression of already-Archived memories, max memory count, and auto-deletion.
 
 - Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `workspace`
 
@@ -1415,6 +1573,8 @@ Set a retention policy for a workspace. Controls compression of already-Archived
 Get the retention policy for a workspace.
 
 - Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `workspace`
 
@@ -1427,6 +1587,8 @@ Get the retention policy for a workspace.
 List all retention policies across all workspaces.
 
 - Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1439,6 +1601,8 @@ List all retention policies across all workspaces.
 Delete a retention policy for a workspace.
 
 - Tier: `advanced`
+- Group: `lifecycle`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `workspace`
 
@@ -1451,6 +1615,8 @@ Delete a retention policy for a workspace.
 Apply all retention policies now. Compresses, caps, and deletes per workspace rules.
 
 - Tier: `advanced`
+- Group: `lifecycle`
+- Required feature: `always`
 - Annotations: idempotentHint
 - Required inputs: none
 
@@ -1463,6 +1629,8 @@ Apply all retention policies now. Compresses, caps, and deletes per workspace ru
 Get the salience score for a memory. Returns recency, frequency, importance, and feedback components with the combined score and lifecycle state.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -1476,6 +1644,8 @@ Get the salience score for a memory. Returns recency, frequency, importance, and
 Set the importance score for a memory. This is the static importance component of salience.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`, `importance`
 
@@ -1489,6 +1659,8 @@ Set the importance score for a memory. This is the static importance component o
 Boost a memory's salience score temporarily or permanently. Useful for marking memories as contextually relevant.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -1503,6 +1675,8 @@ Boost a memory's salience score temporarily or permanently. Useful for marking m
 Demote a memory's salience score. Useful for marking memories as less relevant.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -1517,6 +1691,8 @@ Demote a memory's salience score. Useful for marking memories as less relevant.
 Run salience score decay and optionally record salience history. Does not update lifecycle_state; use lifecycle_run for lifecycle transitions.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -1531,6 +1707,8 @@ Run salience score decay and optionally record salience history. Does not update
 Get salience statistics across all memories. Returns distribution, percentiles, and state counts.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1543,6 +1721,8 @@ Get salience statistics across all memories. Returns distribution, percentiles, 
 Get salience score history for a memory. Shows how salience has changed over time.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -1556,6 +1736,8 @@ Get salience score history for a memory. Shows how salience has changed over tim
 Get top memories by salience score. Useful for context injection.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1571,6 +1753,8 @@ Get top memories by salience score. Useful for context injection.
 Get the quality score for a memory with detailed breakdown of clarity, completeness, freshness, consistency, and source trust components.
 
 - Tier: `standard`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -1583,6 +1767,8 @@ Get the quality score for a memory with detailed breakdown of clarity, completen
 Generate a comprehensive quality report for a workspace. Includes quality distribution, top issues, conflict and duplicate counts.
 
 - Tier: `standard`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1595,6 +1781,8 @@ Generate a comprehensive quality report for a workspace. Includes quality distri
 Find near-duplicate memories using text similarity. Returns pairs of similar memories above the threshold.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1608,6 +1796,8 @@ Find near-duplicate memories using text similarity. Returns pairs of similar mem
 Get pending duplicate candidates that need review.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1620,6 +1810,8 @@ Get pending duplicate candidates that need review.
 Detect conflicts for a memory against existing memories. Finds contradictions, staleness, and semantic overlaps.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -1632,6 +1824,8 @@ Detect conflicts for a memory against existing memories. Finds contradictions, s
 Get unresolved conflicts that need attention.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1644,6 +1838,8 @@ Get unresolved conflicts that need attention.
 Resolve a conflict between memories. Options: keep_a, keep_b, merge, keep_both, delete_both, false_positive.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `conflict_id`, `resolution`
 
@@ -1658,6 +1854,8 @@ Resolve a conflict between memories. Options: keep_a, keep_b, merge, keep_both, 
 Get or update trust score for a source type. Higher trust means memories from this source are weighted more in quality calculations.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `source_type`
 
@@ -1673,6 +1871,8 @@ Get or update trust score for a source type. Higher trust means memories from th
 Get suggestions for improving a memory's quality. Returns actionable recommendations.
 
 - Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -1685,6 +1885,8 @@ Get suggestions for improving a memory's quality. Returns actionable recommendat
 Export a workspace as human-readable Markdown files with YAML frontmatter and wiki-style [[links]]. Creates one .md file per memory, organized by type in subdirectories, with an index.md overview.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `workspace`
 
@@ -1699,6 +1901,8 @@ Export a workspace as human-readable Markdown files with YAML frontmatter and wi
 Import memories from Markdown files with engram_ frontmatter (RFC 0004). Review mode by default (confirm: false) — returns a staged list without writing. Detects drift via content_hash and version conflicts via engram_version. Ignores non-engram_ frontmatter keys (Obsidian-safe).
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `input_dir`
 
@@ -1714,6 +1918,8 @@ Import memories from Markdown files with engram_ frontmatter (RFC 0004). Review 
 Create a named, token-bounded memory block (Letta/MemGPT-style self-editing context slot).
 
 - Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `name`
 
@@ -1728,6 +1934,8 @@ Create a named, token-bounded memory block (Letta/MemGPT-style self-editing cont
 Retrieve a memory block by name.
 
 - Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `name`
 
@@ -1740,6 +1948,8 @@ Retrieve a memory block by name.
 Update the content of an existing memory block, incrementing its version and recording the reason.
 
 - Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `content`, `name`
 
@@ -1754,6 +1964,8 @@ Update the content of an existing memory block, incrementing its version and rec
 List all memory blocks with their names, versions, and token usage.
 
 - Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1766,6 +1978,8 @@ List all memory blocks with their names, versions, and token usage.
 Permanently delete a memory block and return its final content before deletion. Destructive and irreversible.
 
 - Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `name`
 
@@ -1778,6 +1992,8 @@ Permanently delete a memory block and return its final content before deletion. 
 Return the edit history for a named memory block.
 
 - Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `name`
 
@@ -1791,6 +2007,8 @@ Return the edit history for a named memory block.
 Return hit/miss statistics and entry count for the in-memory semantic search cache.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1803,6 +2021,8 @@ Return hit/miss statistics and entry count for the in-memory semantic search cac
 Evict all entries from the semantic search cache. Mutates in-memory cache state.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -1815,6 +2035,8 @@ Evict all entries from the semantic search cache. Mutates in-memory cache state.
 Pack a set of memories into a token budget for LLM context, returning compressed entries and diagnostics about skipped memories.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `ids`
 
@@ -1829,6 +2051,8 @@ Pack a set of memories into a token budget for LLM context, returning compressed
 Re-embed all memories using the active embedding model; use dry_run to count affected memories without writing.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -1842,6 +2066,8 @@ Re-embed all memories using the active embedding model; use dry_run to count aff
 List the active embedding provider including model name and vector dimensions.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1854,6 +2080,8 @@ List the active embedding provider including model name and vector dimensions.
 Add a bi-temporal validity edge between two memories in the knowledge graph.
 
 - Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `from_id`, `relation`, `to_id`, `valid_from`
 
@@ -1873,6 +2101,8 @@ Add a bi-temporal validity edge between two memories in the knowledge graph.
 Detect overlapping or contradictory edge pairs in the temporal knowledge graph.
 
 - Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1885,6 +2115,8 @@ Detect overlapping or contradictory edge pairs in the temporal knowledge graph.
 Compute the set of added, removed, and changed edges between two RFC3339 timestamps in the temporal graph.
 
 - Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `t1`, `t2`
 
@@ -1899,6 +2131,8 @@ Compute the set of added, removed, and changed edges between two RFC3339 timesta
 Return all currently-valid temporal graph edges as of a given RFC3339 timestamp.
 
 - Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `timestamp`
 
@@ -1912,6 +2146,8 @@ Return all currently-valid temporal graph edges as of a given RFC3339 timestamp.
 Return the full edge history between two memory IDs, ordered chronologically.
 
 - Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `from_id`, `to_id`
 
@@ -1926,6 +2162,8 @@ Return the full edge history between two memory IDs, ordered chronologically.
 List all enrichment events for a specific memory (lifecycle transitions, consolidation, compression, etc.). Shows what automated operations affected this memory and why.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `memory_id`
 
@@ -1942,6 +2180,8 @@ List all enrichment events for a specific memory (lifecycle transitions, consoli
 Query enrichment events globally with filters (status, event_type, agent_id, operation_id, workspace, time range). Use for compliance audit and batch tracing.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -1965,7 +2205,9 @@ Query enrichment events globally with filters (status, event_type, agent_id, ope
 
 Search memories using hybrid search (keyword + semantic). Automatically selects optimal strategy with optional reranking. Supports workspace isolation, tier filtering, and advanced filters.
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -1995,6 +2237,8 @@ Search memories using hybrid search (keyword + semantic). Automatically selects 
 Intent-aware unified retrieval. Classifies the query (lookup, exploration, context, path) and dispatches to the right combination of internal retrievers, then merges and dedupes results. Returns audit fields `intents_used` and `strategies_called`.
 
 - Tier: `essential`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -2010,6 +2254,8 @@ Intent-aware unified retrieval. Classifies the query (lookup, exploration, conte
 Build an actionable, source-linked digest for a topic by orchestrating existing read-only retrieval, graph, and operational-context tools. Returns summaries, source memory IDs, relationships, next actions, provenance, and warnings without mutating memory or invoking an LLM.
 
 - Tier: `essential`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `topic`
 
@@ -2033,7 +2279,9 @@ Build an actionable, source-linked digest for a topic by orchestrating existing 
 
 Return the read-only Agent Memory Contract: governed recall paths, safe writeback rules, provenance requirements, tool tier defaults, and future pending-review boundaries for agent-generated memory.
 
-- Tier: `standard`
+- Tier: `essential`
+- Group: `core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2046,6 +2294,8 @@ Return the read-only Agent Memory Contract: governed recall paths, safe writebac
 Run a question through an llm-council instance (Karpathy council orchestration) and return consolidated stage outputs and final answer. Optionally persist a checkpoint memory.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `prompt`
 
@@ -2065,6 +2315,8 @@ Run a question through an llm-council instance (Karpathy council orchestration) 
 Get search suggestions and typo corrections
 
 - Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -2077,6 +2329,8 @@ Get search suggestions and typo corrections
 Find potential duplicate memories
 
 - Tier: `standard`
+- Group: `memory.quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2089,6 +2343,8 @@ Find potential duplicate memories
 Find semantically similar memories using embedding cosine similarity (LLM-powered dedup). Goes beyond hash/n-gram to detect paraphrased content.
 
 - Tier: `standard`
+- Group: `memory.quality`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2103,6 +2359,8 @@ Find semantically similar memories using embedding cosine similarity (LLM-powere
 Configure Langfuse connection for observability integration. Stores config in metadata.
 
 - Tier: `advanced`
+- Group: `feature.langfuse`
+- Required feature: `langfuse`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -2117,6 +2375,8 @@ Configure Langfuse connection for observability integration. Stores config in me
 Start background sync from Langfuse traces to memories. Returns task_id for status checking.
 
 - Tier: `advanced`
+- Group: `feature.langfuse`
+- Required feature: `langfuse`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -2132,6 +2392,8 @@ Start background sync from Langfuse traces to memories. Returns task_id for stat
 Check the status of a Langfuse sync task.
 
 - Tier: `advanced`
+- Group: `feature.langfuse`
+- Required feature: `langfuse`
 - Annotations: readOnlyHint
 - Required inputs: `task_id`
 
@@ -2144,6 +2406,8 @@ Check the status of a Langfuse sync task.
 Extract patterns from Langfuse traces without saving. Preview mode for pattern discovery.
 
 - Tier: `advanced`
+- Group: `feature.langfuse`
+- Required feature: `langfuse`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2158,6 +2422,8 @@ Extract patterns from Langfuse traces without saving. Preview mode for pattern d
 Report feedback on search results quality. Helps tune the adaptive cache threshold.
 
 - Tier: `standard`
+- Group: `search`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `positive`, `query`
 
@@ -2172,6 +2438,8 @@ Report feedback on search results quality. Helps tune the adaptive cache thresho
 Get search result cache statistics including hit rate, entry count, and current threshold.
 
 - Tier: `advanced`
+- Group: `search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2184,6 +2452,8 @@ Get search result cache statistics including hit rate, entry count, and current 
 Clear the search result cache. Useful after bulk operations.
 
 - Tier: `advanced`
+- Group: `search`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: none
 
@@ -2196,6 +2466,8 @@ Clear the search result cache. Useful after bulk operations.
 Search memories by identity (person, entity, or alias). Finds all mentions of a specific identity across memories.
 
 - Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `identity`
 
@@ -2210,6 +2482,8 @@ Search memories by identity (person, entity, or alias). Finds all mentions of a 
 Search within session transcript chunks. Useful for finding content from past conversations.
 
 - Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `query`
 
@@ -2225,6 +2499,8 @@ Search within session transcript chunks. Useful for finding content from past co
 Search memories using Meilisearch (typo-tolerant, fast full-text). Requires Meilisearch to be configured. Falls back to hybrid search if unavailable.
 
 - Tier: `advanced`
+- Group: `feature.meilisearch`
+- Required feature: `meilisearch`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -2242,6 +2518,8 @@ Search memories using Meilisearch (typo-tolerant, fast full-text). Requires Meil
 Trigger a full re-sync from SQLite to Meilisearch. Use after bulk imports or if the index is out of sync.
 
 - Tier: `advanced`
+- Group: `feature.meilisearch`
+- Required feature: `meilisearch`
 - Annotations: idempotentHint
 - Required inputs: none
 
@@ -2254,6 +2532,8 @@ Trigger a full re-sync from SQLite to Meilisearch. Use after bulk imports or if 
 Get Meilisearch index status including document count, indexing state, and health.
 
 - Tier: `advanced`
+- Group: `feature.meilisearch`
+- Required feature: `meilisearch`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2266,6 +2546,8 @@ Get Meilisearch index status including document count, indexing state, and healt
 Show current Meilisearch configuration (URL, sync interval, enabled status).
 
 - Tier: `advanced`
+- Group: `feature.meilisearch`
+- Required feature: `meilisearch`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2278,6 +2560,8 @@ Show current Meilisearch configuration (URL, sync interval, enabled status).
 Token-efficient search returning only id, title (first line, max 80 chars), created_at, and tags. Use memory_expand to get full content for specific IDs.
 
 - Tier: `essential`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -2293,6 +2577,8 @@ Token-efficient search returning only id, title (first line, max 80 chars), crea
 Fetch full memory content for specific IDs. Used after memory_search_compact to get full content only for memories you need.
 
 - Tier: `essential`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `ids`
 
@@ -2305,6 +2591,8 @@ Fetch full memory content for specific IDs. Used after memory_search_compact to 
 Given new content, identify existing memories in a workspace that may be stale or in need of an update.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `content`
 
@@ -2318,6 +2606,8 @@ Given new content, identify existing memories in a workspace that may be stale o
 Explain how each result in a scored search batch was ranked, breaking down bm25, vector, fuzzy, recency, importance, and optional rerank contributions.
 
 - Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `results`
 
@@ -2332,6 +2622,8 @@ Explain how each result in a scored search batch was ranked, breaking down bm25,
 Analyse knowledge gaps in a workspace and suggest new memories to create.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2344,7 +2636,9 @@ Analyse knowledge gaps in a workspace and suggest new memories to create.
 
 Create a cross-reference between two memories
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `from_id`, `to_id`
 
@@ -2362,6 +2656,8 @@ Create a cross-reference between two memories
 Remove a cross-reference
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `from_id`, `to_id`
 
@@ -2375,7 +2671,9 @@ Remove a cross-reference
 
 Get memories related to a given memory (depth>1 or include_entities returns traversal result)
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -2392,6 +2690,8 @@ Get memories related to a given memory (depth>1 or include_entities returns trav
 Extract named entities (people, organizations, projects, concepts) from a memory and store them
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: idempotentHint
 - Required inputs: `id`
 
@@ -2404,6 +2704,8 @@ Extract named entities (people, organizations, projects, concepts) from a memory
 Get all entities linked to a memory
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -2416,6 +2718,8 @@ Get all entities linked to a memory
 Search for entities by name prefix
 
 - Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -2430,6 +2734,8 @@ Search for entities by name prefix
 Get statistics about extracted entities
 
 - Tier: `advanced`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2441,7 +2747,9 @@ Get statistics about extracted entities
 
 Traverse the knowledge graph from a starting memory with full control over traversal options
 
-- Tier: `essential`
+- Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -2461,6 +2769,8 @@ Traverse the knowledge graph from a starting memory with full control over trave
 Find the shortest path between two memories in the knowledge graph
 
 - Tier: `standard`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `from_id`, `to_id`
 
@@ -2475,6 +2785,8 @@ Find the shortest path between two memories in the knowledge graph
 Finds how two entities are connected in the knowledge graph via DuckDB OLAP engine. Discovers hidden relationships across multiple hops using recursive path-finding.
 
 - Tier: `advanced`
+- Group: `feature.duckdb_graph`
+- Required feature: `duckdb-graph`
 - Annotations: readOnlyHint, idempotentHint
 - Required inputs: `scope`, `source_id`, `target_id`
 
@@ -2490,6 +2802,8 @@ Finds how two entities are connected in the knowledge graph via DuckDB OLAP engi
 Retrieves the exact facts and relationships that were true at a specific historical point in time. Uses DuckDB OLAP engine for fast columnar scans over temporal edges.
 
 - Tier: `advanced`
+- Group: `feature.duckdb_graph`
+- Required feature: `duckdb-graph`
 - Annotations: readOnlyHint, idempotentHint
 - Required inputs: `scope`, `timestamp`
 
@@ -2503,6 +2817,8 @@ Retrieves the exact facts and relationships that were true at a specific histori
 Compares the knowledge graph between two timestamps, showing what relationships were added, removed, or changed. Uses DuckDB OLAP engine for efficient temporal diff.
 
 - Tier: `advanced`
+- Group: `feature.duckdb_graph`
+- Required feature: `duckdb-graph`
 - Annotations: readOnlyHint, idempotentHint
 - Required inputs: `from_timestamp`, `scope`, `to_timestamp`
 
@@ -2517,6 +2833,8 @@ Compares the knowledge graph between two timestamps, showing what relationships 
 Run semantic and temporal auto-linker on a workspace, creating crossref edges in the database. Mutates the database.
 
 - Tier: `advanced`
+- Group: `feature.emergent_graph`
+- Required feature: `emergent-graph`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -2531,6 +2849,8 @@ Run semantic and temporal auto-linker on a workspace, creating crossref edges in
 Return aggregate statistics about auto-generated semantic and temporal links.
 
 - Tier: `standard`
+- Group: `feature.emergent_graph`
+- Required feature: `emergent-graph`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2543,6 +2863,8 @@ Return aggregate statistics about auto-generated semantic and temporal links.
 Run Louvain community detection on the memory graph and return detected clusters with modularity score.
 
 - Tier: `advanced`
+- Group: `feature.emergent_graph`
+- Required feature: `emergent-graph`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2557,6 +2879,8 @@ Run Louvain community detection on the memory graph and return detected clusters
 Return coactivation graph statistics including edge count, average strength, and strongest co-occurring memory pairs.
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2569,6 +2893,8 @@ Return coactivation graph statistics including edge count, average strength, and
 Return all stored subject-predicate-object facts for a given subject entity.
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `subject`
 
@@ -2581,6 +2907,8 @@ Return all stored subject-predicate-object facts for a given subject entity.
 Run full autonomous garden maintenance on a workspace: prunes stale memories, merges duplicates, archives cold entries, and compresses verbose content.
 
 - Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -2593,6 +2921,8 @@ Run full autonomous garden maintenance on a workspace: prunes stale memories, me
 Dry-run garden maintenance: reports what would be pruned, merged, archived, or compressed without making any changes.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2605,6 +2935,8 @@ Dry-run garden maintenance: reports what would be pruned, merged, archived, or c
 Return the Louvain community cluster that contains a specific memory, including its cluster ID, size, and member IDs.
 
 - Tier: `standard`
+- Group: `feature.emergent_graph`
+- Required feature: `emergent-graph`
 - Annotations: readOnlyHint
 - Required inputs: `memory_id`
 
@@ -2617,6 +2949,8 @@ Return the Louvain community cluster that contains a specific memory, including 
 Return aggregate statistics over the knowledge-graph facts table: total facts, unique subjects/predicates/objects, and top entities.
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2629,6 +2963,8 @@ Return aggregate statistics over the knowledge-graph facts table: total facts, u
 List auto-generated graph links (semantic or temporal) between memories, optionally filtered by link type.
 
 - Tier: `standard`
+- Group: `feature.emergent_graph`
+- Required feature: `emergent-graph`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2642,6 +2978,8 @@ List auto-generated graph links (semantic or temporal) between memories, optiona
 List all detected memory clusters from the persistent cluster table, optionally selecting the detection algorithm.
 
 - Tier: `standard`
+- Group: `feature.emergent_graph`
+- Required feature: `emergent-graph`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2654,6 +2992,8 @@ List all detected memory clusters from the persistent cluster table, optionally 
 List extracted subject-predicate-object facts, optionally scoped to a single source memory.
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2667,6 +3007,8 @@ List extracted subject-predicate-object facts, optionally scoped to a single sou
 SPARQL-like pattern query over the knowledge-graph facts table: match any combination of subject, predicate, and object (all optional, acts as wildcard when omitted).
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2681,6 +3023,8 @@ SPARQL-like pattern query over the knowledge-graph facts table: match any combin
 Generate a reflective synthesis over a set of memories at a configurable analytical depth (surface, analytical, or meta).
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `ids`
 
@@ -2694,6 +3038,8 @@ Generate a reflective synthesis over a set of memories at a configurable analyti
 Resolve a saved knowledge-graph conflict by ID using a chosen strategy, removing or retaining the conflicting edges accordingly.
 
 - Tier: `standard`
+- Group: `memory.quality`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `conflict_id`
 
@@ -2707,6 +3053,8 @@ Resolve a saved knowledge-graph conflict by ID using a chosen strategy, removing
 Analyze the sentiment of a single memory's content, returning a score, label (positive/neutral/negative), confidence, and keyword signals.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -2719,6 +3067,8 @@ Analyze the sentiment of a single memory's content, returning a score, label (po
 Compute a chronological sentiment timeline over memories in a workspace within an optional time range.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2734,6 +3084,8 @@ Compute a chronological sentiment timeline over memories in a workspace within a
 Get cloud sync status
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2746,6 +3098,8 @@ Get cloud sync status
 Sync local media assets (images, audio, video) to cloud S3/R2 storage. Uploads files from media_assets table that have not yet been synced. Returns a report of synced files. Requires both multimodal and cloud features.
 
 - Tier: `advanced`
+- Group: `feature.multimodal`
+- Required feature: `multimodal`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -2758,6 +3112,8 @@ Sync local media assets (images, audio, video) to cloud S3/R2 storage. Uploads f
 Poll for memory events (create, update, delete, etc.) since a given point. Useful for syncing and monitoring.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2773,6 +3129,8 @@ Poll for memory events (create, update, delete, etc.) since a given point. Usefu
 Clear old events from the event log. Helps manage storage for long-running systems.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: none
 
@@ -2787,6 +3145,8 @@ Clear old events from the event log. Helps manage storage for long-running syste
 Get the current sync version and metadata. Used to check if local data is up-to-date.
 
 - Tier: `advanced`
+- Group: `sync`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2799,6 +3159,8 @@ Get the current sync version and metadata. Used to check if local data is up-to-
 Get changes (delta) since a specific version. Returns created, updated, and deleted memories.
 
 - Tier: `advanced`
+- Group: `sync`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `since_version`
 
@@ -2811,6 +3173,8 @@ Get changes (delta) since a specific version. Returns created, updated, and dele
 Get or update sync state for a specific agent. Tracks what each agent has synced.
 
 - Tier: `advanced`
+- Group: `sync`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `agent_id`
 
@@ -2824,6 +3188,8 @@ Get or update sync state for a specific agent. Tracks what each agent has synced
 Clean up old sync data (events, etc.) older than specified days.
 
 - Tier: `advanced`
+- Group: `sync`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: none
 
@@ -2836,6 +3202,8 @@ Clean up old sync data (events, etc.) older than specified days.
 Share a memory with another agent. The target agent can poll for shared memories.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `from_agent`, `memory_id`, `to_agent`
 
@@ -2851,6 +3219,8 @@ Share a memory with another agent. The target agent can poll for shared memories
 Poll for memories shared with this agent.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `agent_id`
 
@@ -2864,6 +3234,8 @@ Poll for memories shared with this agent.
 Acknowledge receipt of a shared memory.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `agent_id`, `share_id`
 
@@ -2877,6 +3249,8 @@ Acknowledge receipt of a shared memory.
 Grant an agent access to a scope path. Supports read, write, and admin permissions. Access also applies to all descendant scopes.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `agent_id`, `scope_path`
 
@@ -2892,6 +3266,8 @@ Grant an agent access to a scope path. Supports read, write, and admin permissio
 Revoke an agent's access to a specific scope path.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `agent_id`, `scope_path`
 
@@ -2905,6 +3281,8 @@ Revoke an agent's access to a specific scope path.
 List all scope access grants for a given agent.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `agent_id`
 
@@ -2917,6 +3295,8 @@ List all scope access grants for a given agent.
 Check whether an agent has a required permission level on a scope path (including ancestor grants).
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `agent_id`, `scope_path`
 
@@ -2931,6 +3311,8 @@ Check whether an agent has a required permission level on a scope path (includin
 Search memories using an image as the query. Uses multimodal embeddings (CLIP-style) or falls back to describing the image via vision model and searching by description. Returns semantically similar memories — text or media — ranked by relevance.
 
 - Tier: `advanced`
+- Group: `feature.multimodal`
+- Required feature: `multimodal`
 - Annotations: readOnlyHint
 - Required inputs: `image_path`
 
@@ -2947,6 +3329,8 @@ Search memories using an image as the query. Uses multimodal embeddings (CLIP-st
 Upload an image file and attach it to a memory. The image will be stored locally and linked to the memory's metadata.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `file_path`, `memory_id`
 
@@ -2962,6 +3346,8 @@ Upload an image file and attach it to a memory. The image will be stored locally
 Migrate existing base64-encoded images in memories to file storage. Scans all memories and uploads any embedded data URIs to storage, replacing them with file references.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: idempotentHint
 - Required inputs: none
 
@@ -2974,6 +3360,8 @@ Migrate existing base64-encoded images in memories to file storage. Scans all me
 Capture a screenshot of the full screen or a specific application window and save it to a local file.
 
 - Tier: `advanced`
+- Group: `feature.multimodal`
+- Required feature: `multimodal`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -2986,6 +3374,8 @@ Capture a screenshot of the full screen or a specific application window and sav
 Describe the contents of an image file using the configured vision provider (requires VISION_PROVIDER env).
 
 - Tier: `advanced`
+- Group: `feature.multimodal`
+- Required feature: `multimodal`
 - Annotations: readOnlyHint
 - Required inputs: `image_path`
 
@@ -2999,6 +3389,8 @@ Describe the contents of an image file using the configured vision provider (req
 List media assets stored in the media_assets table, optionally filtered by type (image, audio, video).
 
 - Tier: `standard`
+- Group: `feature.multimodal`
+- Required feature: `multimodal`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3012,6 +3404,8 @@ List media assets stored in the media_assets table, optionally filtered by type 
 Process a video file: extract metadata and keyframe descriptions via the configured vision provider, and create a memory record for the result.
 
 - Tier: `advanced`
+- Group: `feature.multimodal`
+- Required feature: `multimodal`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `video_path`
 
@@ -3024,6 +3418,8 @@ Process a video file: extract metadata and keyframe descriptions via the configu
 Transcribe an audio file to text using the configured audio transcription provider.
 
 - Tier: `advanced`
+- Group: `feature.multimodal`
+- Required feature: `multimodal`
 - Annotations: readOnlyHint
 - Required inputs: `audio_path`
 
@@ -3036,6 +3432,8 @@ Transcribe an audio file to text using the configured audio transcription provid
 Register an AI agent with capabilities and namespace isolation. Upserts if agent_id already exists.
 
 - Tier: `advanced`
+- Group: `agent`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `agent_id`
 
@@ -3052,6 +3450,8 @@ Register an AI agent with capabilities and namespace isolation. Upserts if agent
 Deregister an AI agent (soft delete — sets status to 'inactive').
 
 - Tier: `advanced`
+- Group: `agent`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: `agent_id`
 
@@ -3064,6 +3464,8 @@ Deregister an AI agent (soft delete — sets status to 'inactive').
 Update an agent's heartbeat timestamp to indicate it is still alive.
 
 - Tier: `advanced`
+- Group: `agent`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `agent_id`
 
@@ -3076,6 +3478,8 @@ Update an agent's heartbeat timestamp to indicate it is still alive.
 List registered agents, optionally filtered by status or namespace.
 
 - Tier: `advanced`
+- Group: `agent`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3089,6 +3493,8 @@ List registered agents, optionally filtered by status or namespace.
 Get details of a specific registered agent by ID.
 
 - Tier: `advanced`
+- Group: `agent`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `agent_id`
 
@@ -3101,6 +3507,8 @@ Get details of a specific registered agent by ID.
 Update the capabilities list of a registered agent.
 
 - Tier: `advanced`
+- Group: `agent`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `agent_id`, `capabilities`
 
@@ -3114,6 +3522,8 @@ Update the capabilities list of a registered agent.
 Create a portable .egm snapshot of memories filtered by workspace, tags, date range, or importance. Optionally encrypt with AES-256-GCM or sign with Ed25519.
 
 - Tier: `advanced`
+- Group: `feature.snapshot`
+- Required feature: `snapshot`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `output_path`
 
@@ -3134,6 +3544,8 @@ Create a portable .egm snapshot of memories filtered by workspace, tags, date ra
 Load a .egm snapshot into the memory store. Strategies: merge (skip duplicates), replace (clear workspace first), isolate (new workspace), dry_run (preview only).
 
 - Tier: `advanced`
+- Group: `feature.snapshot`
+- Required feature: `snapshot`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `path`, `strategy`
 
@@ -3149,6 +3561,8 @@ Load a .egm snapshot into the memory store. Strategies: merge (skip duplicates),
 Inspect a .egm snapshot without loading it. Returns manifest, file list, and size.
 
 - Tier: `advanced`
+- Group: `feature.snapshot`
+- Required feature: `snapshot`
 - Annotations: readOnlyHint
 - Required inputs: `path`
 
@@ -3161,6 +3575,8 @@ Inspect a .egm snapshot without loading it. Returns manifest, file list, and siz
 Log a document ingestion with cryptographic attestation. Creates a chained record proving the document was processed.
 
 - Tier: `advanced`
+- Group: `feature.attestation`
+- Required feature: `attestation`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `content`, `document_name`
 
@@ -3177,6 +3593,8 @@ Log a document ingestion with cryptographic attestation. Creates a chained recor
 Verify whether a document has been attested (ingested and recorded).
 
 - Tier: `advanced`
+- Group: `feature.attestation`
+- Required feature: `attestation`
 - Annotations: readOnlyHint
 - Required inputs: `content`
 
@@ -3189,6 +3607,8 @@ Verify whether a document has been attested (ingested and recorded).
 Verify the integrity of the entire attestation chain. Returns valid, broken (with location), or empty.
 
 - Tier: `advanced`
+- Group: `feature.attestation`
+- Required feature: `attestation`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3201,6 +3621,8 @@ Verify the integrity of the entire attestation chain. Returns valid, broken (wit
 List attestation records with optional filters. Supports JSON, CSV, and Merkle proof export formats.
 
 - Tier: `advanced`
+- Group: `feature.attestation`
+- Required feature: `attestation`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3217,6 +3639,8 @@ List attestation records with optional filters. Supports JSON, CSV, and Merkle p
 Configure a tick-based memory agent for a workspace and return its initial configuration.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3230,6 +3654,8 @@ Configure a tick-based memory agent for a workspace and return its initial confi
 Stop a tick-based memory agent (no-op for stateless agents; resets client-side tracking).
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3242,6 +3668,8 @@ Stop a tick-based memory agent (no-op for stateless agents; resets client-side t
 Return current status and memory statistics for a workspace agent.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3254,6 +3682,8 @@ Return current status and memory statistics for a workspace agent.
 Run one full agent cycle (prune/merge/archive) and return the actions taken and aggregate metrics. Mutates the database.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -3267,6 +3697,8 @@ Run one full agent cycle (prune/merge/archive) and return the actions taken and 
 Record a durable harness event (decision, handoff, failed_attempt, verification_result, risk, assumption, bug_reproduction, issue_update) with structured metadata for cross-session continuity. Use instead of memory_create when capturing work-state evidence rather than facts.
 
 - Tier: `advanced`
+- Group: `harness`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `kind`, `summary`
 
@@ -3288,6 +3720,8 @@ Record a durable harness event (decision, handoff, failed_attempt, verification_
 Assemble current project state from harness memory records and optional git state. Returns current objective, active issues, recent decisions, known blockers, last verification, last handoff, and a suggested next action. Token-budget aware; degrades gracefully when git is unavailable.
 
 - Tier: `advanced`
+- Group: `harness`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3303,6 +3737,8 @@ Assemble current project state from harness memory records and optional git stat
 Generate a structured handoff packet for next-agent continuity: current goal, files touched, decisions, tests run/not run, risks, blockers, and next steps. Optionally persists as a harness record. Does NOT claim completion unless verification_evidence is provided.
 
 - Tier: `advanced`
+- Group: `harness`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `current_goal`, `next_steps`
 
@@ -3327,6 +3763,8 @@ Generate a structured handoff packet for next-agent continuity: current goal, fi
 Record a verification command outcome with exit code, output summary, and optional evidence path/hash. Supports negative evidence (failures, skips with reason). Surfaces in harness_status as last_verification and feeds harness_handoff completion gating.
 
 - Tier: `advanced`
+- Group: `harness`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `command`, `exit_code`, `output_summary`
 
@@ -3349,6 +3787,8 @@ Record a verification command outcome with exit code, output summary, and option
 Suggest tags for a memory based on AI content analysis. Uses pattern matching, keyword extraction, and structure detection to suggest relevant tags with confidence scores.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3372,6 +3812,8 @@ Suggest tags for a memory based on AI content analysis. Uses pattern matching, k
 Automatically suggest and optionally apply tags to a memory. Analyzes content using AI heuristics and can merge suggested tags with existing ones.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -3390,6 +3832,8 @@ Automatically suggest and optionally apply tags to a memory. Analyzes content us
 Create a new session context for tracking related memories during a conversation or task.
 
 - Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `name`
 
@@ -3405,6 +3849,8 @@ Create a new session context for tracking related memories during a conversation
 Add a memory to a session context with relevance score and role.
 
 - Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `memory_id`, `session_id`
 
@@ -3420,6 +3866,8 @@ Add a memory to a session context with relevance score and role.
 Remove a memory from a session context.
 
 - Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `memory_id`, `session_id`
 
@@ -3433,6 +3881,8 @@ Remove a memory from a session context.
 Get a session context with its linked memories.
 
 - Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `session_id`
 
@@ -3445,6 +3895,8 @@ Get a session context with its linked memories.
 List all session contexts with optional filtering.
 
 - Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3460,6 +3912,8 @@ List all session contexts with optional filtering.
 Search memories within a specific session context.
 
 - Tier: `standard`
+- Group: `session`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`, `session_id`
 
@@ -3474,6 +3928,8 @@ Search memories within a specific session context.
 Update the summary of a session context.
 
 - Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `session_id`, `summary`
 
@@ -3487,6 +3943,8 @@ Update the summary of a session context.
 End a session context, marking it as inactive.
 
 - Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `session_id`
 
@@ -3500,6 +3958,8 @@ End a session context, marking it as inactive.
 Export a session context with all its memories for archival or sharing.
 
 - Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `session_id`
 
@@ -3514,6 +3974,8 @@ Export a session context with all its memories for archival or sharing.
 Get a memory with all <private>...</private> tagged sections removed. Safe for sharing in multi-agent contexts.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -3526,6 +3988,8 @@ Get a memory with all <private>...</private> tagged sections removed. Safe for s
 Assembles the most relevant memories into a ready-to-inject system prompt block. Uses hybrid search to find relevant memories and formats them as markdown, respecting a token budget.
 
 - Tier: `essential`
+- Group: `memory.search`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -3541,6 +4005,8 @@ Assembles the most relevant memories into a ready-to-inject system prompt block.
 Store a tool observation as an episodic memory for session continuity. Automatically compresses large inputs/outputs.
 
 - Tier: `standard`
+- Group: `memory.session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `tool_input`, `tool_name`, `tool_output`
 
@@ -3557,6 +4023,8 @@ Store a tool observation as an episodic memory for session continuity. Automatic
 Archives a tool's full raw output to memory and returns a compressed summary (~500 tokens) for use in the active context. Transforms O(N²) context growth to O(N) by keeping only summaries in the working context while preserving full outputs for on-demand retrieval.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `raw_output`, `tool_name`
 
@@ -3573,6 +4041,8 @@ Archives a tool's full raw output to memory and returns a compressed summary (~5
 Retrieves the full raw output for an archived tool observation by its archive ID. Use when you need the complete output that was previously compressed for context efficiency.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `archive_id`
 
@@ -3585,6 +4055,8 @@ Retrieves the full raw output for an archived tool observation by its archive ID
 Assembles all compressed tool observations for a session into a token-budgeted working memory block. Includes archive references for retrieving full outputs on demand. This is the core of the Endless Mode context management system.
 
 - Tier: `standard`
+- Group: `memory.session`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `session_id`
 
@@ -3600,6 +4072,8 @@ Assembles all compressed tool observations for a session into a token-budgeted w
 Generate a structured session handoff ('land the plane'). Creates a checkpoint memory with session summary, open items, recent decisions, and a bootstrap prompt for the next session. Call this at the end of every work session for seamless continuity.
 
 - Tier: `essential`
+- Group: `session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `session_id`
 
@@ -3615,6 +4089,8 @@ Generate a structured session handoff ('land the plane'). Creates a checkpoint m
 Build a structured prompt context from relevant memories using hybrid search, with optional graph traversal depth, timeframe filtering, type filtering, and relationship graph inclusion. Inspired by Basic Memory's build_context.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -3635,6 +4111,8 @@ Build a structured prompt context from relevant memories using hybrid search, wi
 Record a scoped Operational Context event and optional derived summary. Redacts text before storage, requires provenance scope, keeps raw payload storage off, and supports RTK-compatible external summary metadata without dereferencing external pointers.
 
 - Tier: `standard`
+- Group: `context`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `event_type`, `session_id`, `source`
 
@@ -3677,6 +4155,8 @@ Record a scoped Operational Context event and optional derived summary. Redacts 
 Record an Operational Context artifact pointer or explicitly retained redacted raw artifact. Pointer-only is the default; raw_content requires retain_raw=true and policy approval.
 
 - Tier: `standard`
+- Group: `context`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `kind`
 
@@ -3712,6 +4192,8 @@ Record an Operational Context artifact pointer or explicitly retained redacted r
 Explicitly retrieve retained Operational Context artifact content after access, retention, staleness, and redaction checks. Search and bundle tools return artifact pointers only; this tool requires an artifact_id and reason.
 
 - Tier: `standard`
+- Group: `context`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `artifact_id`, `reason`
 
@@ -3734,6 +4216,8 @@ Explicitly retrieve retained Operational Context artifact content after access, 
 Search scoped Operational Context events and derived summaries. Searches event metadata, command/tool names, summaries, structured facts, failure signals, decisions, inspected/touched file metadata, and artifact pointers without returning raw artifact content.
 
 - Tier: `standard`
+- Group: `context`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -3760,6 +4244,8 @@ Search scoped Operational Context events and derived summaries. Searches event m
 Build a compact agent-ready Operational Context bundle for resuming work. Includes relevant failures, inferred unresolved blockers, recent decisions, commands already run, inspected/touched files, staleness warnings, and optional artifact pointers with provenance for every item. Does not include raw artifact content.
 
 - Tier: `standard`
+- Group: `context`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3783,6 +4269,8 @@ Build a compact agent-ready Operational Context bundle for resuming work. Includ
 Discover recently created or updated memories. Returns compact previews sorted by most recent activity. Useful for understanding what has changed recently.
 
 - Tier: `essential`
+- Group: `core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3795,24 +4283,29 @@ Discover recently created or updated memories. Returns compact previews sorted b
 
 ### `discover_tools`
 
-List available Engram tools by tier and category. Use this to progressively discover capabilities beyond the essential tool set. The `detail` parameter controls how much per-tool information is returned, from names only up to full input schemas.
+List Engram tools by tier, group, or search query. Includes feature-disabled tools with enablement hints so agents can progressively discover capabilities beyond the small default tools/list surface.
 
 - Tier: `essential`
+- Group: `core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| `tier` | `string` | no | Filter by tier: essential (~20 core tools), standard (~57 common tools), advanced (~104 specialized tools), all (everything) Default: `all`. Allowed: `essential`, `standard`, `advanced`, `all`. |
-| `category` | `string` | no | Filter by category keyword (e.g., 'search', 'graph', 'session', 'identity', 'quality') |
+| `tier` | `string` | no | Filter by tier: essential (small first-connect surface), standard (common workflows), advanced (specialized tools), all (everything) Default: `all`. Allowed: `essential`, `standard`, `advanced`, `all`. |
+| `group` | `string` | no | Filter by structured group (e.g., 'memory.search', 'context', 'identity', 'feature.attestation') |
+| `category` | `string` | no | Deprecated alias for group/search-style filtering. |
 | `search` | `string` | no | Search tool names and descriptions |
-| `detail` | `string` | no | Per-tool detail level: 'names' (name only, cheapest), 'summary' (name + description + tier, the default), or 'schema' (summary plus the full input schema as a JSON object, so the tool can be called without a separate tools/list round-trip). Default: `summary`. Allowed: `names`, `summary`, `schema`. |
+| `detail` | `string` | no | Per-tool detail level: 'names' (name only, cheapest), 'summary' (name + description + tier + group + availability + feature hints, the default), or 'schema' (summary plus the full input schema as a JSON object, so the tool can be called without a separate tools/list round-trip). Default: `summary`. Allowed: `names`, `summary`, `schema`. |
 
 ### `memory_prepare_context`
 
 Prepare optimized context for LLM using RTK-inspired pipeline (filter, group, truncate). Reduces token usage by 70-95% through intelligent context preparation.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`
 
@@ -3827,6 +4320,8 @@ Prepare optimized context for LLM using RTK-inspired pipeline (filter, group, tr
 Extract subject-predicate-object facts from a memory's content using rule-based NLP and persist them to the facts table.
 
 - Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `memory_id`
 
@@ -3839,6 +4334,8 @@ Extract subject-predicate-object facts from a memory's content using rule-based 
 Return the current scope path and level for a given memory.
 
 - Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `memory_id`
 
@@ -3851,6 +4348,8 @@ Return the current scope path and level for a given memory.
 List all distinct scope paths currently present in the database.
 
 - Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3863,6 +4362,8 @@ List all distinct scope paths currently present in the database.
 Search for memories whose content matches a query within a given scope, including ancestor scopes.
 
 - Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`, `scope_path`
 
@@ -3876,6 +4377,8 @@ Search for memories whose content matches a query within a given scope, includin
 Assign or update the hierarchical scope of a memory.
 
 - Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `memory_id`, `scope_path`
 
@@ -3889,6 +4392,8 @@ Assign or update the hierarchical scope of a memory.
 Return a hierarchical tree of all scopes in the database.
 
 - Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3901,6 +4406,8 @@ Return a hierarchical tree of all scopes in the database.
 Intelligently trim memory content while preserving context. Keeps the beginning (head) and end (tail) of content with an ellipsis in the middle. Useful for displaying long content in limited space while keeping important context from both ends.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -3917,7 +4424,9 @@ Intelligently trim memory content while preserving context. Keeps the beginning 
 
 List memories with compact preview instead of full content. More efficient for browsing/listing UIs. Returns only essential fields and a truncated content preview with metadata about original content length.
 
-- Tier: `standard`
+- Tier: `essential`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3939,6 +4448,8 @@ List memories with compact preview instead of full content. More efficient for b
 Get content statistics for a memory (character count, word count, line count, sentence count, paragraph count)
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -3951,6 +4462,8 @@ Get content statistics for a memory (character count, word count, line count, se
 Export all memories to a JSON-serializable format for backup or migration.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -3964,6 +4477,8 @@ Export all memories to a JSON-serializable format for backup or migration.
 Import memories from a previously exported JSON format.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `data`
 
@@ -3977,6 +4492,8 @@ Import memories from a previously exported JSON format.
 Create a section memory for organizing content hierarchically. Sections can have parent sections for nested organization.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `title`
 
@@ -3993,6 +4510,8 @@ Create a section memory for organizing content hierarchically. Sections can have
 Create a checkpoint memory marking a significant point in a session. Useful for session resumption and context restoration.
 
 - Tier: `standard`
+- Group: `memory.session`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `session_id`, `summary`
 
@@ -4008,6 +4527,8 @@ Create a checkpoint memory marking a significant point in a session. Useful for 
 Create an episodic memory representing an event with temporal context. Use for tracking when things happened and their duration.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `content`, `event_time`
 
@@ -4026,6 +4547,8 @@ Create an episodic memory representing an event with temporal context. Use for t
 Create a procedural memory representing a learned pattern or workflow. Tracks success/failure to measure effectiveness.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `content`, `trigger_pattern`
 
@@ -4043,6 +4566,8 @@ Create a procedural memory representing a learned pattern or workflow. Tracks su
 Query episodic memories by time range. Returns events ordered by event_time.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -4059,6 +4584,8 @@ Query episodic memories by time range. Returns events ordered by event_time.
 List procedural memories (learned patterns/workflows). Optionally filter by trigger pattern.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -4074,6 +4601,8 @@ List procedural memories (learned patterns/workflows). Optionally filter by trig
 Record a success or failure for a procedural memory. Increments the corresponding counter.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`, `success`
 
@@ -4087,6 +4616,8 @@ Record a success or failure for a procedural memory. Increments the correspondin
 Temporarily boost a memory's importance score. The boost can optionally decay over time.
 
 - Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `id`
 
@@ -4101,6 +4632,8 @@ Temporarily boost a memory's importance score. The boost can optionally decay ov
 Explain why a memory has its current utility score. Returns the full feedback history summary (useful vs. not-useful retrievals), how much temporal decay has been applied, and a plain-English narrative. Useful for debugging or auditing memory quality.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `memory_id`
 
@@ -4113,6 +4646,8 @@ Explain why a memory has its current utility score. Returns the full feedback hi
 Create a summary of one or more memories. Returns a new Summary-type memory with summary_of_id set.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `memory_ids`
 
@@ -4129,6 +4664,8 @@ Create a summary of one or more memories. Returns a new Summary-type memory with
 Get the full/original content of a memory. If the memory is a Summary, returns the original content from summary_of_id.
 
 - Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -4141,6 +4678,8 @@ Get the full/original content of a memory. If the memory is a Summary, returns t
 Enable, disable, configure, or inspect the automatic consolidation scheduler. Use action='enable'/'disable' to toggle it, 'set_interval' with interval_seconds to change the period (60–86400), or 'get_status' to inspect current settings.
 
 - Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `action`
 
@@ -4154,6 +4693,8 @@ Enable, disable, configure, or inspect the automatic consolidation scheduler. Us
 Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories. Defaults to dry-run; returns a structured report of actions taken (or that would be taken).
 
 - Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: destructiveHint
 - Required inputs: none
 
@@ -4168,6 +4709,8 @@ Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, 
 List recent auto-consolidation runs for a workspace (or all workspaces). Newest-first.
 
 - Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -4181,6 +4724,8 @@ List recent auto-consolidation runs for a workspace (or all workspaces). Newest-
 Apply rule-based semantic compression to a single memory and return the structured result with key entities and facts.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -4194,6 +4739,8 @@ Apply rule-based semantic compression to a single memory and return the structur
 Run offline consolidation over a workspace, merging and archiving similar memories; use dry_run to preview without writing.
 
 - Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -4208,6 +4755,8 @@ Run offline consolidation over a workspace, merging and archiving similar memori
 Retrieve the original (uncompressed) content of a memory by ID.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -4220,6 +4769,8 @@ Retrieve the original (uncompressed) content of a memory by ID.
 Detect contradictory or conflicting facts in the knowledge graph; optionally persist detected conflicts for later resolution.
 
 - Tier: `standard`
+- Group: `memory.quality`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
 
@@ -4232,6 +4783,8 @@ Detect contradictory or conflicting facts in the knowledge graph; optionally per
 Record relevance feedback for a search result and update the memory's utility score; schedules low-utility memories for consolidation.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `memory_id`, `query`, `signal`
 
@@ -4249,6 +4802,8 @@ Record relevance feedback for a search result and update the memory's utility sc
 Return aggregated search-feedback statistics (thumbs-up/down counts, top-rated queries) for a workspace.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -4261,6 +4816,8 @@ Return aggregated search-feedback statistics (thumbs-up/down counts, top-rated q
 Check semantic overlap between two content strings and produce a merged synthesis using the chosen strategy.
 
 - Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `content_a`, `content_b`
 
@@ -4276,6 +4833,8 @@ Check semantic overlap between two content strings and produce a merged synthesi
 Compute the Q-value utility score for a memory based on its retrieval feedback history.
 
 - Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
 
@@ -4288,6 +4847,8 @@ Compute the Q-value utility score for a memory based on its retrieval feedback h
 Replay one memory as it existed at a given RFC3339 timestamp and optionally return enrichment events affecting it up to that time.
 
 - Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `memory_id`, `timestamp`
 

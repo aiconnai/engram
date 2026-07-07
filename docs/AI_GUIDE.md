@@ -875,9 +875,12 @@ Store and search across text, images, audio, and video.
 }
 ```
 
-Uses CLIP-style cross-modal embeddings. Falls back to vision model description + text search.
+Uses vision model description + text search by default. With
+`clip-embeddings`, it can use the CLIP-style description-mediated embedding
+path and fall back to description search.
 
-**Requires:** `--features multimodal`
+**Requires:** `--features multimodal` (`--features clip-embeddings` for the
+CLIP-style embedding strategy)
 
 ---
 
@@ -948,7 +951,7 @@ Create portable `.egm` knowledge packages that can be shared between Engram inst
 
 Returns metadata: memory count, workspace, creation date, encryption status, signature status — without loading the data.
 
-**Requires:** `--features agent-portability`
+**Requires:** `--features snapshot`
 
 ---
 
@@ -1006,7 +1009,7 @@ Verifies the entire attestation chain — each record links to its predecessor v
 
 Formats: `json`, `csv`, `merkle_proof`.
 
-**Requires:** `--features agent-portability`
+**Requires:** `--features attestation`
 
 ---
 
@@ -1644,7 +1647,10 @@ Every tool includes MCP 2025-11-25 annotations:
 |-------------|-------------|
 | `cloud` | `memory_sync_status`, `memory_sync_media` (with multimodal) |
 | `multimodal` | `memory_search_by_image`, Image/Audio/Video types |
-| `agent-portability` | `snapshot_*`, `attestation_*` |
+| `clip-embeddings` | CLIP-style strategy for `memory_search_by_image` |
+| `snapshot` | `snapshot_*` |
+| `attestation` | `attestation_*` |
+| `agent-portability` | Compatibility umbrella for `snapshot` + `attestation` |
 | `watcher` | `engram-watcher` binary |
 | `grpc` | gRPC transport |
 | `openai` | OpenAI embeddings (vs default TF-IDF) |
@@ -1689,21 +1695,20 @@ Engram exposes the generated tool set shown in the MCP reference. To avoid overw
 
 | Tier | Description |
 |------|-------------|
-| **Essential** | Core tools every agent needs: CRUD, search, stats, sessions |
-| **Standard** | Common operations: lifecycle, quality, identity, context engineering |
+| **Essential** | Small first-connect surface for core create/recall/context workflows |
+| **Standard** | Common operations: lifecycle, quality, identity, sessions, graph basics |
 | **Advanced** | Specialized: compression, evolution, attestation, multimodal |
 
 ### Controlling Exposure
 
-By default, `tools/list` exposes the standard tier: Essential + Standard tools
-and `discover_tools`. Set `ENGRAM_TOOL_TIER` to narrow or widen the listed
-surface:
+By default, `tools/list` exposes only the Essential tier and `discover_tools`.
+Set `ENGRAM_TOOL_TIER` to widen the listed surface:
 
 ```bash
-# Only essential tools — great for simple agents
+# Essential tools — default first-connect surface
 ENGRAM_TOOL_TIER=essential cargo run --bin engram-server
 
-# Essential + standard — default and recommended for most agents
+# Essential + standard — broader pre-0.23 style surface
 ENGRAM_TOOL_TIER=standard cargo run --bin engram-server
 
 # Advanced/specialized tools — opt in when an agent needs specialized capabilities
@@ -1719,11 +1724,13 @@ The `discover_tools` tool is always available regardless of tier setting:
 
 ```json
 {"tool": "discover_tools", "params": {"tier": "standard"}}
-{"tool": "discover_tools", "params": {"category": "search"}}
+{"tool": "discover_tools", "params": {"group": "memory.search"}}
 {"tool": "discover_tools", "params": {"search": "graph"}}
 ```
 
-Response includes tool names, descriptions, tiers, and summary counts. Agents can progressively discover capabilities as needed.
+Response includes tool names, descriptions, tiers, groups, availability, feature
+requirements, enablement hints, and summary counts. Agents can progressively
+discover capabilities as needed.
 
 ### Agent Memory Contract
 
