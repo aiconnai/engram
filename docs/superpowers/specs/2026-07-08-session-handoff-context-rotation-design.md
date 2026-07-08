@@ -76,18 +76,20 @@ The user or agent asks for a handoff in natural language, for example:
 Prepare a session handoff so I can continue in a new AI session.
 ```
 
-The MCP surface should collect or infer the minimum inputs:
+The MCP surface should collect or infer the minimum inputs. `session_id` is
+preferred but not required for the one-action UX:
 
 ```json
 {
-  "session_id": "current-session-id",
+  "session_id": "optional-current-session-id",
   "workspace": "default",
   "summary": "optional human summary",
   "next_session_hints": ["optional next step"]
 }
 ```
 
-If richer fields are available, the builder should include them:
+If richer explicit fields are available from the user, agent, or host, the
+builder should accept them and prefer them over inferred summaries:
 
 ```json
 {
@@ -140,12 +142,13 @@ The response must include a copy-ready Markdown block:
 The CLI command should call the same builder and print the copy-ready block:
 
 ```bash
-engram session handoff --session <session-id>
+engram session handoff
 ```
 
 Useful options:
 
 ```bash
+engram session handoff --session <session-id>
 engram session handoff --workspace <workspace>
 engram session handoff --summary "..."
 engram session handoff --next "..."
@@ -154,7 +157,25 @@ engram session handoff --json
 ```
 
 Default CLI output is human-copyable Markdown. `--json` returns the structured
-packet for automation.
+packet for automation. `persist` defaults to `true`; `--no-persist` disables
+checkpoint creation.
+
+When `--session` is omitted, the CLI should use the most recent session in the
+selected workspace. If no session exists, it may still produce a workspace-level
+handoff from recent memories and Operational Context, but it must include a
+warning that no concrete session was resolved.
+
+## Surface Ownership
+
+`session_land`, `harness_handoff`, any friendlier MCP alias, and the CLI command
+must not grow separate handoff assembly logic.
+
+The shared builder owns normalization, section assembly, warning generation,
+copy-block rendering, and checkpoint persistence. `session_land` remains the
+simple session-continuation surface. `harness_handoff` remains the stricter
+explicit surface for curated engineering handoffs, but it should migrate to the
+same builder for rendering and persistence so that decisions, verification,
+risks, blockers, and next steps have one product contract.
 
 ## Shared Builder Contract
 
@@ -166,11 +187,18 @@ Suggested input shape:
 
 ```rust
 pub struct SessionHandoffRequest {
-    pub session_id: String,
+    pub session_id: Option<String>,
     pub workspace: Option<String>,
     pub summary: Option<String>,
     pub current_goal: Option<String>,
     pub next_session_hints: Vec<String>,
+    pub files_touched: Vec<String>,
+    pub decisions_made: Vec<String>,
+    pub tests_run: Vec<String>,
+    pub tests_not_run: Vec<String>,
+    pub known_risks: Vec<String>,
+    pub blockers: Vec<String>,
+    pub next_steps: Vec<String>,
     pub persist: bool,
     pub include_operational_context: bool,
     pub include_digest: bool,
@@ -181,7 +209,7 @@ Suggested output shape:
 
 ```rust
 pub struct SessionHandoffPacket {
-    pub session_id: String,
+    pub session_id: Option<String>,
     pub workspace: String,
     pub created_at: String,
     pub summary: String,
@@ -201,28 +229,36 @@ pub struct SessionHandoffPacket {
 ```
 
 The exact Rust type names may follow existing module conventions, but these
-fields define the product contract.
+fields define the product contract. Memory IDs should use the actual storage ID
+type used by the implementation; `i64` above reflects the current handler shape
+and should be checked before coding.
 
 ## Data Flow
 
-1. Validate the request. `session_id` is required; `workspace` defaults to
-   `default`; empty optional strings are ignored.
-2. Read recent session, workspace, todo, issue, decision, verification, and
+1. Validate the request. `workspace` defaults to `default`; empty optional
+   strings are ignored.
+2. Resolve the session. If `session_id` is provided, use it. If it is omitted,
+   select the most recent session in the workspace via the same semantics as
+   `session_list` and add a warning that fallback resolution was used. If no
+   session exists, continue with workspace-level context and add a warning.
+3. Read recent session, workspace, todo, issue, decision, verification, and
    Operational Context records.
-3. Build a compact Operational Context section through `context_build_bundle`
+4. Build a compact Operational Context section through `context_build_bundle`
    when enabled.
-4. Build a topic digest through `memory_digest` when a goal or query is
+5. Build a topic digest through `memory_digest` when a goal or query is
    available.
-5. Merge sections into one deterministic packet. Prefer explicit user-provided
+6. Merge sections into one deterministic packet. Prefer explicit user-provided
    fields over inferred summaries.
-6. Emit warnings for missing goal, missing next steps, missing verification,
+7. Emit warnings for missing goal, missing next steps, missing verification,
    stale context, or omitted raw artifacts.
-7. Persist a checkpoint memory when `persist=true`.
-8. Return both structured JSON and a copy-ready Markdown block.
+8. Persist a checkpoint memory when `persist=true`.
+9. Return both structured JSON and a copy-ready Markdown block.
 
 ## Error Handling
 
-- Missing `session_id` is a structured validation error.
+- Missing `session_id` triggers fallback session resolution, not an immediate
+  error. It becomes an error only when a caller explicitly requires a concrete
+  session and no matching session can be found.
 - Missing optional context is not fatal; it becomes a warning in the packet.
 - Retrieval failures for optional sections degrade gracefully and add warnings.
 - Checkpoint persistence failure returns the packet plus a persistence warning
@@ -242,20 +278,35 @@ fields define the product contract.
 - Generated text must be labeled as a derived continuation packet, not source of
   truth.
 
+For the MVP, "safe by default" is achieved by selection and existing policy
+boundaries, not by a new full-secret scanner. The builder should render only
+summaries, structured fields, metadata, memory previews, and artifact pointers;
+it must not dereference raw artifact content or include raw transcripts/logs.
+Operational Context rows should respect their existing redaction status and raw
+artifact access policy. Memory content rendered into the packet should reuse the
+existing private-content stripping behavior where applicable. If later work adds
+active secret scrubbing, that is additive and must not be required for the manual
+MVP to ship.
+
 ## Testing Strategy
 
 Minimum implementation tests:
 
-1. Unit test the shared builder with seeded memories for decisions, todos,
+1. Unit test fallback session resolution: omitted `session_id` uses the most
+   recent session in the workspace and emits a warning.
+2. Unit test the shared builder with seeded memories for decisions, todos,
    verification records, risks, and next steps.
-2. Unit test warning behavior for missing goal, missing verification, and empty
+3. Unit test explicit rich fields such as files touched, decisions, verification,
+   risks, blockers, and next steps overriding inferred text.
+4. Unit test warning behavior for missing goal, missing verification, and empty
    optional sections.
-3. MCP protocol test that calls the handoff surface and asserts the response has
+5. MCP protocol test that calls the handoff surface and asserts the response has
    structured fields plus `copy_block`.
-4. Persistence test that `persist=true` creates a checkpoint with the
+6. Persistence test that `persist=true` creates a checkpoint with the
    `session-handoff` tag.
-5. CLI smoke test for `engram session handoff --json` using a test database.
-6. Generated MCP reference check if any MCP schema or description changes.
+7. CLI smoke test for `engram session handoff --json` using a test database,
+   including the omitted-session fallback.
+8. Generated MCP reference check if any MCP schema or description changes.
 
 Docs-only design work does not require Rust tests. Implementation work must run
 the relevant Rust, MCP reference, and CLI checks before completion.
@@ -290,7 +341,13 @@ when and how the builder is invoked.
   action.
 - A user can generate the same packet through the CLI.
 - MCP and CLI share the same internal builder.
+- Omitting `session_id` falls back to the most recent session or a
+  warning-marked workspace-level handoff.
+- `harness_handoff` and `session_land` share the same builder contract instead
+  of maintaining parallel rendering/persistence logic.
 - The output includes a copy-ready Markdown block for the next AI session.
 - Missing verification, stale context, and omitted raw artifacts are explicit.
 - The packet can be persisted as a checkpoint.
-- No raw logs, secrets, or full transcripts are included by default.
+- No raw logs, raw artifact content, or full transcripts are included by
+  default; the MVP does not promise comprehensive active secret scrubbing beyond
+  existing redaction/private-content mechanisms.
