@@ -75,9 +75,18 @@ pub fn meilisearch_reindex(ctx: &HandlerContext, _params: Value) -> Value {
     };
 
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
-        if let Err(e) = rt.block_on(indexer.run_full_sync()) {
-            tracing::error!("Meilisearch reindex failed: {}", e);
+        match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(rt) => {
+                if let Err(e) = rt.block_on(indexer.run_full_sync()) {
+                    tracing::error!("Meilisearch reindex failed: {}", e);
+                }
+            }
+            Err(e) => {
+                tracing::error!("Meilisearch reindex: failed to create runtime: {}", e);
+            }
         }
     });
 
