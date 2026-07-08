@@ -11,6 +11,7 @@ mod interactive;
 mod maintenance;
 #[cfg(feature = "onnx-embed")]
 mod model;
+mod session;
 #[cfg(feature = "snapshot")]
 mod snapshot;
 mod util;
@@ -52,6 +53,7 @@ fn main() -> Result<()> {
         } => core::search(&storage, query, limit, explain)?,
         Commands::Delete { id } => core::delete(&storage, id)?,
         Commands::Stats => core::stats(&storage)?,
+        Commands::Session { action } => session::handle(&storage, action)?,
         Commands::Maintenance { action } => maintenance::handle(&storage, action)?,
         Commands::Graph {
             format,

@@ -268,10 +268,17 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
             }
             "verification_result" => {}
             "handoff" if last_handoff.is_none() => {
+                let handoff_summary = mem
+                    .metadata
+                    .get("current_goal")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or(&summary)
+                    .to_string();
                 last_handoff = Some(json!({
                     "memory_id": mem.id,
-                    "summary": summary,
+                    "summary": handoff_summary,
                     "created_at": created_at,
+                    "metadata": mem.metadata.clone(),
                 }));
             }
             "handoff" => {}
@@ -537,73 +544,50 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or("default")
         .to_string();
 
-    // ── Completion claim ─────────────────────────────────────────────────────
+    let mut packet = match crate::intelligence::build_session_handoff(
+        &ctx.storage,
+        crate::intelligence::SessionHandoffRequest {
+            workspace: Some(workspace.clone()),
+            current_goal: Some(current_goal.clone()),
+            files_touched: files_touched.clone(),
+            decisions_made: decisions_made.clone(),
+            tests_run: tests_run.clone(),
+            tests_not_run: tests_not_run.clone(),
+            known_risks: known_risks.clone(),
+            blockers: blockers.clone(),
+            next_steps: next_steps.clone(),
+            verification_evidence: verification_evidence.clone(),
+            issue_numbers: issue_numbers.clone(),
+            plan_doc_paths: plan_doc_paths.clone(),
+            persist,
+            ..Default::default()
+        },
+    ) {
+        Ok(packet) => packet,
+        Err(e) => return json!({"error": format!("Failed to build handoff: {e}")}),
+    };
+
+    if persist {
+        if let Some(checkpoint_id) = packet.checkpoint_id {
+            if let Err(err) =
+                mark_harness_handoff_checkpoint(ctx, checkpoint_id, &params, &current_goal)
+            {
+                packet
+                    .warnings
+                    .push(format!("Harness status indexing failed: {err}"));
+            }
+        }
+    }
+
     let has_evidence = verification_evidence
         .as_deref()
-        .map(|s| !s.is_empty())
+        .map(|value| !value.trim().is_empty())
         .unwrap_or(false);
-
-    // ── Persist if requested ─────────────────────────────────────────────────
-    let (handoff_id, created_at, persisted) = if persist {
-        // Build content (≤1000 chars)
-        let steps_text: String = next_steps
-            .iter()
-            .map(|s| format!("- {}", s))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let full_content = format!("{}\n\nNext steps:\n{}", current_goal, steps_text);
-        let content = if full_content.len() > 1000 {
-            // Truncate at a char boundary to avoid panicking on multi-byte UTF-8.
-            let mut boundary = 1000;
-            while !full_content.is_char_boundary(boundary) {
-                boundary -= 1;
-            }
-            full_content[..boundary].to_string()
-        } else {
-            full_content
-        };
-
-        let mut metadata: HashMap<String, Value> = HashMap::new();
-        metadata.insert("harness_kind".to_string(), json!("handoff"));
-        metadata.insert("files_touched".to_string(), json!(files_touched));
-        metadata.insert("decisions_made".to_string(), json!(decisions_made));
-        metadata.insert("tests_run".to_string(), json!(tests_run));
-        metadata.insert("tests_not_run".to_string(), json!(tests_not_run));
-        metadata.insert("known_risks".to_string(), json!(known_risks));
-        metadata.insert("blockers".to_string(), json!(blockers));
-        metadata.insert("issue_numbers".to_string(), json!(issue_numbers));
-        metadata.insert("plan_doc_paths".to_string(), json!(plan_doc_paths));
-        metadata.insert(
-            "verification_evidence".to_string(),
-            json!(verification_evidence),
-        );
-
-        let input = crate::types::CreateMemoryInput {
-            content,
-            memory_type: crate::types::MemoryType::Checkpoint,
-            tags: vec!["harness".to_string(), "handoff".to_string()],
-            metadata,
-            importance: Some(0.9),
-            workspace: Some(workspace.clone()),
-            tier: crate::types::MemoryTier::Permanent,
-            ..Default::default()
-        };
-
-        match ctx
-            .storage
-            .with_transaction(|conn| crate::storage::queries::create_memory(conn, &input))
-        {
-            Ok(memory) => (Some(memory.id), memory.created_at.to_rfc3339(), true),
-            Err(e) => return json!({"error": format!("Failed to persist handoff: {}", e)}),
-        }
-    } else {
-        (None, chrono::Utc::now().to_rfc3339(), false)
-    };
 
     // ── Build response ───────────────────────────────────────────────────────
     let mut response = json!({
-        "handoff_id": handoff_id,
-        "workspace": workspace,
+        "handoff_id": packet.checkpoint_id,
+        "workspace": packet.workspace,
         "current_goal": current_goal,
         "files_touched": files_touched,
         "decisions_made": decisions_made,
@@ -616,8 +600,10 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
         "plan_doc_paths": plan_doc_paths,
         "verification_evidence": verification_evidence,
         "completion_claimed": has_evidence,
-        "persisted": persisted,
-        "created_at": created_at,
+        "persisted": persist && packet.checkpoint_id.is_some(),
+        "created_at": packet.created_at,
+        "warnings": packet.warnings,
+        "copy_block": packet.copy_block,
     });
 
     if !has_evidence {
@@ -626,6 +612,62 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
     }
 
     response
+}
+
+fn mark_harness_handoff_checkpoint(
+    ctx: &HandlerContext,
+    checkpoint_id: i64,
+    params: &Value,
+    current_goal: &str,
+) -> crate::error::Result<()> {
+    ctx.storage.with_transaction(|conn| {
+        let memory = crate::storage::queries::get_memory(conn, checkpoint_id)?;
+        let mut tags = memory.tags.clone();
+        for tag in ["harness", "handoff"] {
+            if !tags.iter().any(|existing| existing == tag) {
+                tags.push(tag.to_string());
+            }
+        }
+
+        let mut metadata = memory.metadata.clone();
+        metadata.insert("harness_kind".to_string(), json!("handoff"));
+        metadata.insert("current_goal".to_string(), json!(current_goal));
+        metadata.insert("source".to_string(), json!("session_handoff_builder"));
+        for key in [
+            "files_touched",
+            "decisions_made",
+            "tests_run",
+            "tests_not_run",
+            "known_risks",
+            "blockers",
+            "next_steps",
+            "issue_numbers",
+            "plan_doc_paths",
+            "verification_evidence",
+        ] {
+            if let Some(value) = params.get(key) {
+                metadata.insert(key.to_string(), value.clone());
+            }
+        }
+
+        crate::storage::queries::update_memory(
+            conn,
+            checkpoint_id,
+            &crate::types::UpdateMemoryInput {
+                content: None,
+                memory_type: None,
+                tags: Some(tags),
+                metadata: Some(metadata),
+                importance: None,
+                scope: None,
+                ttl_seconds: None,
+                event_time: None,
+                trigger_pattern: None,
+                media_url: None,
+            },
+        )?;
+        Ok(())
+    })
 }
 
 /// Record a verification command outcome with exit code, output summary, and optional evidence.
@@ -1158,7 +1200,59 @@ mod tests {
         );
         assert_eq!(result["completion_claimed"], true);
         assert_eq!(result["persisted"], true);
-        assert_eq!(result["current_goal"], "Implement search index v2");
+        assert!(result["copy_block"]
+            .as_str()
+            .expect("copy_block")
+            .contains("# Continue this work in a new AI session"));
+        assert_eq!(result["current_goal"], json!("Implement search index v2"));
+        assert_eq!(result["completion_claimed"], json!(true));
+    }
+
+    #[test]
+    fn test_harness_handoff_persisted_checkpoint_surfaces_in_status() {
+        let ctx = test_ctx();
+        let ws = "handoff_status_ws";
+        let result = handle_harness_handoff(
+            &ctx,
+            json!({
+                "workspace": ws,
+                "current_goal": "Make handoff discoverable",
+                "next_steps": ["Resume from harness_status"],
+                "verification_evidence": "focused tests passed",
+            }),
+        );
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
+        let handoff_id = result["handoff_id"].as_i64().expect("handoff_id");
+
+        let status = handle_harness_status(
+            &ctx,
+            json!({
+                "workspace": ws,
+                "include_git": false,
+            }),
+        );
+        assert!(
+            status.get("error").is_none(),
+            "unexpected status error: {}",
+            status
+        );
+        assert_eq!(status["last_handoff"]["memory_id"], json!(handoff_id));
+        assert_eq!(
+            status["last_handoff"]["metadata"]["harness_kind"],
+            json!("handoff")
+        );
+        assert_eq!(
+            status["last_handoff"]["metadata"]["current_goal"],
+            json!("Make handoff discoverable")
+        );
+        assert_eq!(
+            status["current_objective"],
+            json!("Make handoff discoverable")
+        );
     }
 
     #[test]
@@ -1184,6 +1278,14 @@ mod tests {
             "got: {}",
             warning
         );
+        assert!(result["completion_warning"]
+            .as_str()
+            .expect("completion_warning")
+            .contains("No verification evidence provided"));
+        assert!(result["copy_block"]
+            .as_str()
+            .expect("copy_block")
+            .contains("Do not claim this work is complete"));
     }
 
     #[test]

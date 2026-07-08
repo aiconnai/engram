@@ -3887,16 +3887,15 @@
     // ── Session Handoff ────────────────────────────────────────────────
     ToolDef {
         name: "session_land",
-        description: "Generate a structured session handoff ('land the plane'). Creates a checkpoint memory with session summary, open items, recent decisions, and a bootstrap prompt for the next session. Call this at the end of every work session for seamless continuity.",
+        description: "Generate a structured session handoff ('land the plane'). Creates a checkpoint memory with session summary, open items, recent decisions, warnings, and a copy-ready block for the next session. If session_id is omitted, Engram falls back to the most recent session in the workspace, or returns a workspace-level packet with a warning.",
         schema: r#"{
             "type": "object",
             "properties": {
-                "session_id": {"type": "string", "description": "Session identifier to hand off"},
+                "session_id": {"type": "string", "description": "Optional session identifier to hand off. Omit to use the most recent session in the workspace when available."},
                 "workspace": {"type": "string", "description": "Workspace scope (default: 'default')"},
                 "summary": {"type": "string", "description": "Summary of what was accomplished this session"},
                 "next_session_hints": {"type": "array", "items": {"type": "string"}, "description": "Hints for what should be done next session"}
-            },
-            "required": ["session_id"]
+            }
         }"#,
         annotations: ToolAnnotations::mutating(),
         tier: ToolTier::Essential,
