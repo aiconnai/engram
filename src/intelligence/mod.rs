@@ -46,6 +46,7 @@ pub mod project_context;
 pub mod quality;
 pub mod salience;
 pub mod session_context;
+pub mod session_handoff;
 pub mod session_indexing;
 pub mod suggestions;
 pub mod synthesis;
@@ -97,6 +98,9 @@ pub use session_context::{
     remove_memory_from_session, search_session_memories, update_session_context,
     update_session_summary, ContextRole, CreateSessionInput, SessionContext, SessionExport,
     SessionMemoryLink, SessionSearchResult,
+};
+pub use session_handoff::{
+    build_session_handoff, HandoffItem, SessionHandoffPacket, SessionHandoffRequest,
 };
 pub use session_indexing::{
     chunk_conversation, delete_session, get_session, index_conversation, index_conversation_delta,
