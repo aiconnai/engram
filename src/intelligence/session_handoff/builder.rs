@@ -1,3 +1,5 @@
+use super::operational_context::attach_operational_context;
+use super::persistence::persist_checkpoint;
 use super::privacy::strip_private_content;
 use super::render::render_copy_block;
 use super::retrieval::{collect_open_items, collect_recent_decisions, push_source_ids};
@@ -61,9 +63,19 @@ pub fn build_session_handoff(
             .push(format!("Decision retrieval failed: {err}")),
     }
 
+    attach_operational_context(storage, &request, &mut packet);
     push_source_ids(&mut packet);
     add_completeness_warnings(&mut packet);
     packet.copy_block = render_copy_block(&packet);
+    if request.persist {
+        match persist_checkpoint(storage, &packet) {
+            Ok(checkpoint_id) => packet.checkpoint_id = Some(checkpoint_id),
+            Err(err) => packet
+                .warnings
+                .push(format!("Checkpoint persistence failed: {err}")),
+        }
+        packet.copy_block = render_copy_block(&packet);
+    }
     Ok(packet)
 }
 
