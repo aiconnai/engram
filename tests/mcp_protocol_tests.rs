@@ -305,6 +305,100 @@ fn create_memory_for_search(handler: &TestHandler, id: i64, content: &str) -> i6
 }
 
 #[test]
+fn session_land_protocol_without_session_id_returns_handoff_packet() {
+    let handler = TestHandler::new();
+
+    let result = call_tool_json(
+        &handler,
+        301,
+        "session_land",
+        json!({
+            "workspace": "default",
+            "summary": "Manual protocol-level session rotation",
+            "current_goal": "Add MCP protocol coverage for session handoff",
+            "next_session_hints": ["Resume from the copy block"]
+        }),
+    );
+
+    assert!(
+        result.get("error").is_none(),
+        "session_land returned tool error: {result}"
+    );
+    let handoff = &result["handoff"];
+    let copy_block = handoff["copy_block"]
+        .as_str()
+        .expect("handoff.copy_block must be present");
+    assert!(
+        copy_block.contains("# Continue this work in a new AI session"),
+        "copy block should contain continuation heading: {copy_block}"
+    );
+    assert_eq!(
+        handoff["bootstrap_prompt"], handoff["copy_block"],
+        "bootstrap_prompt must remain a compatibility alias for copy_block"
+    );
+
+    let warnings = handoff["warnings"]
+        .as_array()
+        .expect("handoff.warnings must be an array");
+    assert!(
+        warnings.iter().any(|warning| warning
+            .as_str()
+            .is_some_and(|text| text.contains("No concrete session resolved"))),
+        "expected no-session fallback warning, got: {warnings:?}"
+    );
+
+    assert!(
+        result.get("checkpoint_id").is_some(),
+        "top-level checkpoint_id must be present"
+    );
+    assert!(
+        handoff.get("checkpoint_id").is_some(),
+        "handoff.checkpoint_id must be present"
+    );
+    assert_eq!(
+        result["checkpoint_id"], handoff["checkpoint_id"],
+        "top-level and nested checkpoint ids must match"
+    );
+}
+
+#[test]
+fn harness_handoff_protocol_warns_when_completion_lacks_verification() {
+    let handler = TestHandler::new();
+
+    let result = call_tool_json(
+        &handler,
+        302,
+        "harness_handoff",
+        json!({
+            "workspace": "default",
+            "current_goal": "Finish Task 7 MCP protocol coverage",
+            "next_steps": ["Run focused protocol tests"]
+        }),
+    );
+
+    assert!(
+        result.get("error").is_none(),
+        "harness_handoff returned tool error: {result}"
+    );
+    assert!(
+        result["copy_block"]
+            .as_str()
+            .is_some_and(|copy_block| !copy_block.is_empty()),
+        "harness_handoff must include copy_block: {result}"
+    );
+    assert_eq!(
+        result["completion_claimed"].as_bool(),
+        Some(false),
+        "missing verification evidence must not claim completion"
+    );
+    assert_eq!(
+        result["completion_warning"].as_str(),
+        Some("No verification evidence provided. Do not claim this work is complete."),
+        "missing verification evidence must produce a completion warning"
+    );
+}
+
+#[test]
 fn mcp_mock_parity_scenarios_match_fixture_contract() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/mcp_mock_parity_scenarios.json"))
