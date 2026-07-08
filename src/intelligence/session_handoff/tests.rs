@@ -86,3 +86,136 @@ fn omitted_session_id_without_sessions_returns_workspace_packet_with_warning() {
     );
     assert!(packet.copy_block.contains("## Source references"));
 }
+
+use crate::storage::queries::create_memory;
+use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
+
+fn seed_memory(storage: &Storage, workspace: &str, content: &str, memory_type: MemoryType) -> i64 {
+    storage
+        .with_transaction(|conn| {
+            let memory = create_memory(
+                conn,
+                &CreateMemoryInput {
+                    content: content.to_string(),
+                    memory_type,
+                    workspace: Some(workspace.to_string()),
+                    tier: MemoryTier::Permanent,
+                    ..Default::default()
+                },
+            )?;
+            Ok::<_, crate::error::EngramError>(memory.id)
+        })
+        .expect("seed memory")
+}
+
+#[test]
+fn explicit_fields_are_rendered_and_override_empty_inference() {
+    let storage = Storage::open_in_memory().expect("in-memory storage");
+
+    let packet = build_session_handoff(
+        &storage,
+        SessionHandoffRequest {
+            workspace: Some("explicit-workspace".to_string()),
+            current_goal: Some("Finish the shared handoff builder".to_string()),
+            files_touched: vec!["src/intelligence/session_handoff/builder.rs".to_string()],
+            decisions_made: vec!["Use one shared builder for MCP and CLI".to_string()],
+            tests_run: vec!["rtk cargo test session_handoff --lib".to_string()],
+            tests_not_run: vec!["full make ci not run in focused task".to_string()],
+            known_risks: vec!["MCP schema still needs migration".to_string()],
+            blockers: vec!["No blockers".to_string()],
+            next_steps: vec!["Wire session_land to the builder".to_string()],
+            persist: false,
+            ..SessionHandoffRequest::default()
+        },
+    )
+    .expect("handoff packet");
+
+    assert!(packet
+        .copy_block
+        .contains("Finish the shared handoff builder"));
+    assert!(packet
+        .copy_block
+        .contains("Use one shared builder for MCP and CLI"));
+    assert!(packet
+        .copy_block
+        .contains("rtk cargo test session_handoff --lib"));
+    assert!(packet
+        .copy_block
+        .contains("full make ci not run in focused task"));
+    assert!(packet
+        .copy_block
+        .contains("Wire session_land to the builder"));
+    assert!(packet
+        .copy_block
+        .contains("## What changed\n- src/intelligence/session_handoff/builder.rs"));
+}
+
+#[test]
+fn rendered_content_strips_private_tags_from_memory_previews() {
+    let storage = Storage::open_in_memory().expect("in-memory storage");
+    seed_memory(
+        &storage,
+        "safe-workspace",
+        "Public decision <private>SECRET_TOKEN</private> after text",
+        MemoryType::Decision,
+    );
+
+    let packet = build_session_handoff(
+        &storage,
+        SessionHandoffRequest {
+            workspace: Some("safe-workspace".to_string()),
+            persist: false,
+            ..SessionHandoffRequest::default()
+        },
+    )
+    .expect("handoff packet");
+
+    assert!(packet.copy_block.contains("Public decision"));
+    assert!(!packet.copy_block.contains("SECRET_TOKEN"));
+}
+
+#[test]
+fn memory_retrieval_populates_open_items_decisions_and_sorted_source_ids() {
+    let storage = Storage::open_in_memory().expect("in-memory storage");
+    let issue_id = seed_memory(
+        &storage,
+        "memory-workspace",
+        "Investigate MCP schema update",
+        MemoryType::Issue,
+    );
+    let decision_id = seed_memory(
+        &storage,
+        "memory-workspace",
+        "Reuse the shared handoff builder",
+        MemoryType::Decision,
+    );
+    let todo_id = seed_memory(
+        &storage,
+        "memory-workspace",
+        "Wire CLI wrapper next",
+        MemoryType::Todo,
+    );
+
+    let packet = build_session_handoff(
+        &storage,
+        SessionHandoffRequest {
+            workspace: Some("memory-workspace".to_string()),
+            decisions_made: vec!["Explicit reviewer decision".to_string()],
+            persist: false,
+            ..SessionHandoffRequest::default()
+        },
+    )
+    .expect("handoff packet");
+
+    assert!(packet.copy_block.contains("## Open items"));
+    assert!(packet.copy_block.contains("Investigate MCP schema update"));
+    assert!(packet.copy_block.contains("Wire CLI wrapper next"));
+    assert!(packet.copy_block.contains("Explicit reviewer decision"));
+    assert!(packet
+        .copy_block
+        .contains("Reuse the shared handoff builder"));
+    assert_eq!(
+        packet.source_memory_ids,
+        vec![issue_id, decision_id, todo_id]
+    );
+}

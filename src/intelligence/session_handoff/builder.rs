@@ -1,5 +1,6 @@
 use super::privacy::strip_private_content;
 use super::render::render_copy_block;
+use super::retrieval::{collect_open_items, collect_recent_decisions, push_source_ids};
 use super::types::{HandoffItem, SessionHandoffPacket, SessionHandoffRequest};
 use crate::error::Result;
 use crate::intelligence::session_indexing::list_sessions;
@@ -40,6 +41,27 @@ pub fn build_session_handoff(
         copy_block: String::new(),
     };
 
+    match collect_open_items(storage, &packet.workspace) {
+        Ok(open_items) => packet.open_items = open_items,
+        Err(err) => packet
+            .warnings
+            .push(format!("Open item retrieval failed: {err}")),
+    }
+
+    match collect_recent_decisions(storage, &packet.workspace) {
+        Ok(mut inferred_decisions) => {
+            if packet.decisions.is_empty() {
+                packet.decisions = inferred_decisions;
+            } else {
+                packet.decisions.append(&mut inferred_decisions);
+            }
+        }
+        Err(err) => packet
+            .warnings
+            .push(format!("Decision retrieval failed: {err}")),
+    }
+
+    push_source_ids(&mut packet);
     add_completeness_warnings(&mut packet);
     packet.copy_block = render_copy_block(&packet);
     Ok(packet)

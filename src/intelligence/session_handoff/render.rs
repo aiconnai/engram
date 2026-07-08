@@ -18,7 +18,19 @@ pub(super) fn render_copy_block(packet: &SessionHandoffPacket) -> String {
             .as_deref()
             .unwrap_or("No current goal captured."),
     );
-    output.push_str("\n\n## Decisions\n");
+    output.push_str("\n\n## What changed\n");
+    if packet.files_touched.is_empty() {
+        output.push_str("- No touched files captured.\n\n");
+    } else {
+        for file in &packet.files_touched {
+            output.push_str(&format!("- {}\n", strip_private_content(file)));
+        }
+        output.push('\n');
+    }
+
+    output.push_str("## Open items\n");
+    push_items(&mut output, &packet.open_items);
+    output.push_str("\n## Decisions\n");
     push_items(&mut output, &packet.decisions);
     output.push_str("\n## Verification\n");
     push_items(&mut output, &packet.verification);
