@@ -5,6 +5,7 @@ use crate::attest::AttestAction;
 use crate::maintenance::MaintenanceAction;
 #[cfg(feature = "onnx-embed")]
 use crate::model::ModelAction;
+use crate::session::SessionAction;
 #[cfg(feature = "snapshot")]
 use crate::snapshot::SnapshotAction;
 
@@ -76,6 +77,11 @@ pub(crate) enum Commands {
     },
     /// Show statistics
     Stats,
+    /// Session continuation and handoff workflows
+    Session {
+        #[command(subcommand)]
+        action: SessionAction,
+    },
     /// Read-only maintenance and storage diagnostics
     Maintenance {
         #[command(subcommand)]
