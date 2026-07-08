@@ -268,10 +268,17 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
             }
             "verification_result" => {}
             "handoff" if last_handoff.is_none() => {
+                let handoff_summary = mem
+                    .metadata
+                    .get("current_goal")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or(&summary)
+                    .to_string();
                 last_handoff = Some(json!({
                     "memory_id": mem.id,
-                    "summary": summary,
+                    "summary": handoff_summary,
                     "created_at": created_at,
+                    "metadata": mem.metadata.clone(),
                 }));
             }
             "handoff" => {}
@@ -537,7 +544,7 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or("default")
         .to_string();
 
-    let packet = match crate::intelligence::build_session_handoff(
+    let mut packet = match crate::intelligence::build_session_handoff(
         &ctx.storage,
         crate::intelligence::SessionHandoffRequest {
             workspace: Some(workspace.clone()),
@@ -559,6 +566,18 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
         Ok(packet) => packet,
         Err(e) => return json!({"error": format!("Failed to build handoff: {e}")}),
     };
+
+    if persist {
+        if let Some(checkpoint_id) = packet.checkpoint_id {
+            if let Err(err) =
+                mark_harness_handoff_checkpoint(ctx, checkpoint_id, &params, &current_goal)
+            {
+                packet
+                    .warnings
+                    .push(format!("Harness status indexing failed: {err}"));
+            }
+        }
+    }
 
     let has_evidence = verification_evidence
         .as_deref()
@@ -593,6 +612,62 @@ pub fn handle_harness_handoff(ctx: &HandlerContext, params: Value) -> Value {
     }
 
     response
+}
+
+fn mark_harness_handoff_checkpoint(
+    ctx: &HandlerContext,
+    checkpoint_id: i64,
+    params: &Value,
+    current_goal: &str,
+) -> crate::error::Result<()> {
+    ctx.storage.with_transaction(|conn| {
+        let memory = crate::storage::queries::get_memory(conn, checkpoint_id)?;
+        let mut tags = memory.tags.clone();
+        for tag in ["harness", "handoff"] {
+            if !tags.iter().any(|existing| existing == tag) {
+                tags.push(tag.to_string());
+            }
+        }
+
+        let mut metadata = memory.metadata.clone();
+        metadata.insert("harness_kind".to_string(), json!("handoff"));
+        metadata.insert("current_goal".to_string(), json!(current_goal));
+        metadata.insert("source".to_string(), json!("session_handoff_builder"));
+        for key in [
+            "files_touched",
+            "decisions_made",
+            "tests_run",
+            "tests_not_run",
+            "known_risks",
+            "blockers",
+            "next_steps",
+            "issue_numbers",
+            "plan_doc_paths",
+            "verification_evidence",
+        ] {
+            if let Some(value) = params.get(key) {
+                metadata.insert(key.to_string(), value.clone());
+            }
+        }
+
+        crate::storage::queries::update_memory(
+            conn,
+            checkpoint_id,
+            &crate::types::UpdateMemoryInput {
+                content: None,
+                memory_type: None,
+                tags: Some(tags),
+                metadata: Some(metadata),
+                importance: None,
+                scope: None,
+                ttl_seconds: None,
+                event_time: None,
+                trigger_pattern: None,
+                media_url: None,
+            },
+        )?;
+        Ok(())
+    })
 }
 
 /// Record a verification command outcome with exit code, output summary, and optional evidence.
@@ -1131,6 +1206,53 @@ mod tests {
             .contains("# Continue this work in a new AI session"));
         assert_eq!(result["current_goal"], json!("Implement search index v2"));
         assert_eq!(result["completion_claimed"], json!(true));
+    }
+
+    #[test]
+    fn test_harness_handoff_persisted_checkpoint_surfaces_in_status() {
+        let ctx = test_ctx();
+        let ws = "handoff_status_ws";
+        let result = handle_harness_handoff(
+            &ctx,
+            json!({
+                "workspace": ws,
+                "current_goal": "Make handoff discoverable",
+                "next_steps": ["Resume from harness_status"],
+                "verification_evidence": "focused tests passed",
+            }),
+        );
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
+        let handoff_id = result["handoff_id"].as_i64().expect("handoff_id");
+
+        let status = handle_harness_status(
+            &ctx,
+            json!({
+                "workspace": ws,
+                "include_git": false,
+            }),
+        );
+        assert!(
+            status.get("error").is_none(),
+            "unexpected status error: {}",
+            status
+        );
+        assert_eq!(status["last_handoff"]["memory_id"], json!(handoff_id));
+        assert_eq!(
+            status["last_handoff"]["metadata"]["harness_kind"],
+            json!("handoff")
+        );
+        assert_eq!(
+            status["last_handoff"]["metadata"]["current_goal"],
+            json!("Make handoff discoverable")
+        );
+        assert_eq!(
+            status["current_objective"],
+            json!("Make handoff discoverable")
+        );
     }
 
     #[test]

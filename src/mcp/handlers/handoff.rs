@@ -52,6 +52,10 @@ fn compatibility_handoff(packet: &SessionHandoffPacket, next_session_hints: &[St
             json!(compatibility_items(&packet.decisions)),
         );
         object.insert(
+            "open_items".to_string(),
+            json!(compatibility_items(&packet.open_items)),
+        );
+        object.insert(
             "memories_count".to_string(),
             json!(compatibility_memories_count(packet)),
         );
@@ -67,9 +71,14 @@ fn compatibility_items(items: &[HandoffItem]) -> Vec<Value> {
         .iter()
         .map(|item| {
             json!({
+                "id": item.source_memory_id,
                 "title": item.title,
                 "content": item.title,
                 "detail": item.detail,
+                "memory_type": item.detail.as_deref().unwrap_or("note"),
+                "tags": "",
+                "importance": 0.5,
+                "created_at": "",
                 "source_memory_id": item.source_memory_id,
                 "source_context_event_id": item.source_context_event_id,
             })
@@ -104,6 +113,9 @@ mod tests {
     use parking_lot::Mutex;
     use serde_json::json;
 
+    use crate::storage::queries::create_memory;
+    use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
+
     fn test_context() -> HandlerContext {
         HandlerContext {
             storage: crate::Storage::open_in_memory().expect("in-memory storage"),
@@ -127,9 +139,34 @@ mod tests {
         }
     }
 
+    fn seed_open_item(ctx: &HandlerContext, workspace: &str, content: &str) -> i64 {
+        ctx.storage
+            .with_transaction(|conn| {
+                let memory = create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: content.to_string(),
+                        memory_type: MemoryType::Todo,
+                        workspace: Some(workspace.to_string()),
+                        tier: MemoryTier::Permanent,
+                        tags: vec!["compatibility".to_string()],
+                        importance: Some(0.8),
+                        ..Default::default()
+                    },
+                )?;
+                Ok::<_, crate::error::EngramError>(memory.id)
+            })
+            .expect("seed open item")
+    }
+
     #[test]
     fn test_session_land_without_session_id_returns_workspace_packet() {
         let ctx = test_context();
+        let open_item_id = seed_open_item(
+            &ctx,
+            "default",
+            "Review compatibility docs <private>SECRET</private>",
+        );
         let result = session_land(
             &ctx,
             json!({
@@ -178,5 +215,19 @@ mod tests {
         );
         assert!(result["handoff"].get("copy_block").is_some());
         assert!(result["handoff"].get("warnings").is_some());
+
+        let open_items = result["handoff"]["open_items"]
+            .as_array()
+            .expect("open_items");
+        let open_item = open_items
+            .iter()
+            .find(|item| item["id"] == json!(open_item_id))
+            .expect("seeded open item");
+        assert_eq!(open_item["content"], json!("Review compatibility docs "));
+        assert_eq!(open_item["memory_type"], json!("todo"));
+        assert!(open_item["tags"].as_str().is_some());
+        assert!(open_item["importance"].as_f64().is_some());
+        assert!(open_item["created_at"].as_str().is_some());
+        assert!(!open_item.to_string().contains("SECRET"));
     }
 }
