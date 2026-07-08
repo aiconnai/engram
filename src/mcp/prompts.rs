@@ -77,13 +77,16 @@ pub fn list_prompts() -> Vec<PromptDefinition> {
         PromptDefinition {
             name: "session-handoff".to_string(),
             description: Some(
-                "End-of-session handoff: summarize progress, capture open items, and generate a bootstrap prompt for the next session".to_string(),
+                "End-of-session handoff: summarize progress, capture open items, and generate a copy-ready packet for the next session".to_string(),
             ),
             arguments: Some(vec![
                 PromptArgument {
                     name: "session_id".to_string(),
-                    description: Some("Session identifier for the handoff".to_string()),
-                    required: Some(true),
+                    description: Some(
+                        "Optional session identifier. Omit to use Engram's workspace fallback."
+                            .to_string(),
+                    ),
+                    required: Some(false),
                 },
                 PromptArgument {
                     name: "workspace".to_string(),
@@ -230,16 +233,31 @@ pub fn get_prompt(name: &str, arguments: &Value) -> Result<Vec<PromptMessage>, S
         }
 
         "session-handoff" => {
-            let session_id = arg("session_id")
-                .ok_or_else(|| "Missing required argument: session_id".to_string())?;
+            let session_id = arg("session_id");
             let workspace = arg("workspace").unwrap_or("default");
+            let session_note = session_id
+                .map(|id| format!("session '{id}'"))
+                .unwrap_or_else(|| format!("the most recent session in workspace '{workspace}'"));
+            let land_params = session_id
+                .map(|id| {
+                    format!(
+                        "{{\"session_id\": \"{}\", \"workspace\": \"{}\", \"summary\": \"<your summary>\", \"next_session_hints\": [\"<hint1>\", \"<hint2>\"]}}",
+                        id, workspace
+                    )
+                })
+                .unwrap_or_else(|| {
+                    format!(
+                        "{{\"workspace\": \"{}\", \"summary\": \"<your summary>\", \"next_session_hints\": [\"<hint1>\", \"<hint2>\"]}}",
+                        workspace
+                    )
+                });
 
             Ok(vec![PromptMessage {
                 role: "user".to_string(),
                 content: PromptContent {
                     content_type: "text".to_string(),
                     text: format!(
-                        "Please perform an end-of-session handoff for session '{}' in workspace '{}'.\n\n\
+                        "Please perform an end-of-session handoff for {}.\n\n\
                          Follow these steps:\n\n\
                          1. **Summarize Progress**: Briefly describe what was accomplished this session.\n\n\
                          2. **Capture Open Items**: Create or update todo memories for any unfinished work:\n\
@@ -248,11 +266,12 @@ pub fn get_prompt(name: &str, arguments: &Value) -> Result<Vec<PromptMessage>, S
                             ```\n\n\
                          3. **Land the Plane**: Call session_land to generate the handoff checkpoint:\n\
                             ```json\n\
-                            {{\"tool\": \"session_land\", \"params\": {{\"session_id\": \"{}\", \"workspace\": \"{}\", \"summary\": \"<your summary>\", \"next_session_hints\": [\"<hint1>\", \"<hint2>\"]}}}}\n\
+                            {{\"tool\": \"session_land\", \"params\": {}}}\n\
                             ```\n\n\
-                         4. **Report**: Share the bootstrap prompt from the handoff so it can be used to start the next session.\n\n\
+                         Call session_land with session_id when the host exposes it; otherwise omit it and let Engram use the most recent session in the workspace.\n\n\
+                         4. **Report**: Share the copy block from the handoff so it can be used to start the next session.\n\n\
                          This ensures seamless continuity across sessions — no context is lost.",
-                        session_id, workspace, workspace, session_id, workspace
+                        session_note, workspace, land_params
                     ),
                 },
             }])
@@ -395,11 +414,13 @@ mod tests {
     }
 
     #[test]
-    fn test_session_handoff_missing_session_id_returns_error() {
+    fn test_session_handoff_missing_session_id_uses_workspace_fallback() {
         let args = json!({});
-        let result = get_prompt("session-handoff", &args);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("session_id"));
+        let messages = get_prompt("session-handoff", &args).unwrap();
+        let text = &messages[0].content.text;
+        assert!(text.contains("most recent session in workspace 'default'"));
+        assert!(text.contains("\"tool\": \"session_land\""));
+        assert!(!text.contains("\"session_id\""));
     }
 
     #[test]
