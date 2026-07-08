@@ -34,7 +34,7 @@ pub fn session_land(ctx: &HandlerContext, params: Value) -> Value {
     match crate::intelligence::build_session_handoff(&ctx.storage, request) {
         Ok(packet) => {
             let checkpoint_id = packet.checkpoint_id;
-            let handoff = compatibility_handoff(&packet, &next_session_hints);
+            let handoff = compatibility_handoff(&ctx.storage, &packet, &next_session_hints);
             json!({
                 "handoff": handoff,
                 "checkpoint_id": checkpoint_id,
@@ -44,7 +44,11 @@ pub fn session_land(ctx: &HandlerContext, params: Value) -> Value {
     }
 }
 
-fn compatibility_handoff(packet: &SessionHandoffPacket, next_session_hints: &[String]) -> Value {
+fn compatibility_handoff(
+    storage: &crate::Storage,
+    packet: &SessionHandoffPacket,
+    next_session_hints: &[String],
+) -> Value {
     let mut handoff = json!(packet);
     if let Some(object) = handoff.as_object_mut() {
         object.insert(
@@ -53,7 +57,7 @@ fn compatibility_handoff(packet: &SessionHandoffPacket, next_session_hints: &[St
         );
         object.insert(
             "open_items".to_string(),
-            json!(compatibility_items(&packet.open_items)),
+            json!(compatibility_open_items(storage, &packet.open_items)),
         );
         object.insert(
             "memories_count".to_string(),
@@ -67,23 +71,51 @@ fn compatibility_handoff(packet: &SessionHandoffPacket, next_session_hints: &[St
 }
 
 fn compatibility_items(items: &[HandoffItem]) -> Vec<Value> {
-    items
-        .iter()
-        .map(|item| {
-            json!({
-                "id": item.source_memory_id,
-                "title": item.title,
-                "content": item.title,
-                "detail": item.detail,
-                "memory_type": item.detail.as_deref().unwrap_or("note"),
-                "tags": "",
-                "importance": 0.5,
-                "created_at": "",
-                "source_memory_id": item.source_memory_id,
-                "source_context_event_id": item.source_context_event_id,
-            })
+    items.iter().map(compatibility_item).collect()
+}
+
+fn compatibility_open_items(storage: &crate::Storage, items: &[HandoffItem]) -> Vec<Value> {
+    storage
+        .with_connection(|conn| {
+            let mut output = Vec::with_capacity(items.len());
+            for item in items {
+                if let Some(id) = item.source_memory_id {
+                    if let Ok(memory) = crate::storage::queries::get_memory(conn, id) {
+                        output.push(json!({
+                            "id": memory.id,
+                            "title": item.title,
+                            "content": item.title,
+                            "detail": item.detail,
+                            "memory_type": memory.memory_type.as_str(),
+                            "tags": memory.tags,
+                            "importance": memory.importance,
+                            "created_at": memory.created_at.to_rfc3339(),
+                            "source_memory_id": item.source_memory_id,
+                            "source_context_event_id": item.source_context_event_id,
+                        }));
+                        continue;
+                    }
+                }
+                output.push(compatibility_item(item));
+            }
+            Ok(output)
         })
-        .collect()
+        .unwrap_or_else(|_| compatibility_items(items))
+}
+
+fn compatibility_item(item: &HandoffItem) -> Value {
+    json!({
+        "id": item.source_memory_id,
+        "title": item.title,
+        "content": item.title,
+        "detail": item.detail,
+        "memory_type": item.detail.as_deref().unwrap_or("note"),
+        "tags": [],
+        "importance": 0.5,
+        "created_at": "",
+        "source_memory_id": item.source_memory_id,
+        "source_context_event_id": item.source_context_event_id,
+    })
 }
 
 fn compatibility_memories_count(packet: &SessionHandoffPacket) -> usize {
@@ -225,9 +257,17 @@ mod tests {
             .expect("seeded open item");
         assert_eq!(open_item["content"], json!("Review compatibility docs "));
         assert_eq!(open_item["memory_type"], json!("todo"));
-        assert!(open_item["tags"].as_str().is_some());
-        assert!(open_item["importance"].as_f64().is_some());
-        assert!(open_item["created_at"].as_str().is_some());
+        assert!(open_item["tags"]
+            .as_array()
+            .expect("tags")
+            .iter()
+            .any(|tag| tag == "compatibility"));
+        let importance = open_item["importance"].as_f64().expect("importance");
+        assert!((importance - 0.8).abs() < 0.001, "importance: {importance}");
+        assert!(!open_item["created_at"]
+            .as_str()
+            .expect("created_at")
+            .is_empty());
         assert!(!open_item.to_string().contains("SECRET"));
     }
 }
