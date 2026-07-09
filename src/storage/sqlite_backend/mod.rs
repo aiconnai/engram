@@ -279,9 +279,10 @@ impl StorageBackend for SqliteBackend {
     }
 
     fn get_memories_by_tag(&self, tag: &str, limit: Option<usize>) -> Result<Vec<Memory>> {
+        let tag = tag.to_string();
         self.storage.with_connection(|conn| {
             let options = ListOptions {
-                tags: Some(vec![tag.to_string()]),
+                tags: Some(vec![tag]),
                 limit: limit.map(|v| v as i64),
                 ..Default::default()
             };
