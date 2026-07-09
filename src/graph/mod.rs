@@ -15,5 +15,17 @@ pub mod duckdb_graph;
 pub mod temporal;
 pub mod triplets;
 
-mod core;
-pub use core::*;
+mod communities;
+mod export;
+mod filter;
+mod render;
+mod stats;
+mod types;
+
+pub use communities::GraphCluster;
+pub use filter::GraphFilter;
+pub use stats::{CentralityScores, GraphStats};
+pub use types::{GraphEdge, GraphNode, KnowledgeGraph};
+
+#[cfg(test)]
+mod tests;
