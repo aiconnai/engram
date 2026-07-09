@@ -55,7 +55,7 @@ bench = false
 
 [[bin]]
 name = "engram-cli"
-path = "src/bin/cli.rs"
+path = "src/bin/cli/main.rs"
 bench = false
 
 [[bin]]

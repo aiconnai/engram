@@ -248,7 +248,7 @@ Total tools: **280**
 | `memory_archive_tool_output` | standard | memory.lifecycle | always | mutating (no MCP hints) | `raw_output`, `tool_name` |
 | `memory_get_archived_output` | standard | memory.lifecycle | always | readOnlyHint | `archive_id` |
 | `memory_get_working_memory` | standard | memory.session | always | readOnlyHint | `session_id` |
-| `session_land` | essential | session | always | mutating (no MCP hints) | `session_id` |
+| `session_land` | essential | session | always | mutating (no MCP hints) | none |
 | `memory_build_context` | standard | memory.core | always | readOnlyHint | `query` |
 | `context_record` | standard | context | always | mutating (no MCP hints) | `event_type`, `session_id`, `source` |
 | `context_record_artifact` | standard | context | always | mutating (no MCP hints) | `kind` |
@@ -4069,17 +4069,17 @@ Assembles all compressed tool observations for a session into a token-budgeted w
 
 ### `session_land`
 
-Generate a structured session handoff ('land the plane'). Creates a checkpoint memory with session summary, open items, recent decisions, and a bootstrap prompt for the next session. Call this at the end of every work session for seamless continuity.
+Generate a structured session handoff ('land the plane'). Creates a checkpoint memory with session summary, open items, recent decisions, warnings, and a copy-ready block for the next session. If session_id is omitted, Engram falls back to the most recent session in the workspace, or returns a workspace-level packet with a warning.
 
 - Tier: `essential`
 - Group: `session`
 - Required feature: `always`
 - Annotations: mutating (no MCP hints)
-- Required inputs: `session_id`
+- Required inputs: none
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| `session_id` | `string` | yes | Session identifier to hand off |
+| `session_id` | `string` | no | Optional session identifier to hand off. Omit to use the most recent session in the workspace when available. |
 | `workspace` | `string` | no | Workspace scope (default: 'default') |
 | `summary` | `string` | no | Summary of what was accomplished this session |
 | `next_session_hints` | `array` | no | Hints for what should be done next session Items: `string`. |
