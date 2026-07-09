@@ -6,4 +6,5 @@ pub mod health;
 mod tests;
 
 pub use backend::MeilisearchBackend;
+pub use document::MeilisearchMemory;
 pub(super) const MEMORIES_INDEX: &str = "memories";

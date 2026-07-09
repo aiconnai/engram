@@ -45,7 +45,7 @@ pub enum ConflictType {
 }
 
 impl ConflictType {
-    pub(crate) fn as_str(&self) -> &'static str {
+    pub(super) fn as_str(&self) -> &'static str {
         match self {
             ConflictType::DirectContradiction => "direct_contradiction",
             ConflictType::TemporalInconsistency => "temporal_inconsistency",
@@ -54,7 +54,7 @@ impl ConflictType {
         }
     }
 
-    pub(crate) fn from_str(s: &str) -> Option<Self> {
+    pub(super) fn from_str(s: &str) -> Option<Self> {
         match s {
             "direct_contradiction" => Some(ConflictType::DirectContradiction),
             "temporal_inconsistency" => Some(ConflictType::TemporalInconsistency),
@@ -76,7 +76,7 @@ pub enum Severity {
 }
 
 impl Severity {
-    pub(crate) fn as_str(&self) -> &'static str {
+    pub(super) fn as_str(&self) -> &'static str {
         match self {
             Severity::Low => "low",
             Severity::Medium => "medium",
@@ -85,7 +85,7 @@ impl Severity {
         }
     }
 
-    pub(crate) fn from_str(s: &str) -> Option<Self> {
+    pub(super) fn from_str(s: &str) -> Option<Self> {
         match s {
             "low" => Some(Severity::Low),
             "medium" => Some(Severity::Medium),
@@ -130,7 +130,7 @@ pub enum ResolutionStrategy {
 }
 
 impl ResolutionStrategy {
-    pub(crate) fn as_str(&self) -> &'static str {
+    pub(super) fn as_str(&self) -> &'static str {
         match self {
             ResolutionStrategy::KeepNewer => "keep_newer",
             ResolutionStrategy::KeepHigherConfidence => "keep_higher_confidence",
@@ -139,7 +139,7 @@ impl ResolutionStrategy {
         }
     }
 
-    pub(crate) fn from_str(s: &str) -> Option<Self> {
+    pub(super) fn from_str(s: &str) -> Option<Self> {
         match s {
             "keep_newer" => Some(ResolutionStrategy::KeepNewer),
             "keep_higher_confidence" => Some(ResolutionStrategy::KeepHigherConfidence),
@@ -163,8 +163,8 @@ pub struct ResolutionResult {
     pub edges_kept: Vec<i64>,
 }
 
-// Pairs of relation types that are considered direct contradictions.
-pub(crate) const CONTRADICTING_PAIRS: &[(&str, &str)] = &[
+/// Pairs of relation types that are considered direct contradictions.
+pub(super) const CONTRADICTING_PAIRS: &[(&str, &str)] = &[
     ("supports", "contradicts"),
     ("agrees_with", "disagrees_with"),
     ("confirms", "refutes"),
