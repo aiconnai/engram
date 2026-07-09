@@ -257,3 +257,27 @@ Contributors will be recognized in:
 - The CHANGELOG for their changes
 
 Thank you for contributing to Engram!
+
+## API Stability and Public Types Policy
+
+`engram` is currently maintained under **1.0 API-stability policy** for public interfaces.
+
+### Types module (`src/types.rs`)
+
+The `types` module is part of the public contract. Any item exported from `src/types.rs`
+(e.g. `Memory`, `MemoryType`, `StorageConfig`, `CreateMemoryInput`, etc.) must remain semver-compatible:
+
+- Avoid breaking removals or signature changes.
+- Prefer additive changes (new enums variants, new optional fields) over removals.
+- Keep re-exports stable and stable paths (`crate::types::*`) unchanged.
+
+### Refactor rule for this workstream
+
+When refactoring type files in the `types` surface:
+
+1. Keep `src/types.rs` as a façade and compatibility re-export layer.
+2. Split physical definitions into internal submodules only.
+3. Preserve all public names and shapes.
+4. Validate with `public-api` diff before and after refactors.
+
+This policy applies to all public DTO changes in this repository and is intended to keep downstream Rust consumers and SDK integrations stable.
