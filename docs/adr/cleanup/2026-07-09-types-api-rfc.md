@@ -2,7 +2,7 @@
 adr: ADR-TYPES-20260709-1
 track: public-api-safe refactor
 service: engram-core
-status: Proposed
+status: Implemented
 owner: Codex
 created: 2026-07-09
 ---
@@ -42,28 +42,28 @@ Row 12 in `docs/adr/cleanup/2026-07-08-remaining-oversized-files-inspect.md` exp
 ### Unstable / transitional
 - None proposed for initial move. If we need migration helpers, keep them in non-re-exported internal submodule first.
 
-## Proposed physical organization
+## Physical organization (as built)
 
-Keep `src/types.rs` as facade + re-export layer only:
+`src/types.rs` is the module facade: private submodule declarations plus
+`pub use` re-exports only — no structural/business logic or additional public items.
 
-- `src/types.rs` (facade)
-  - `pub use` declarations only.
-  - No structural/business logic or additional public items.
+- `src/types.rs` (facade; `mod` declarations + `pub use` re-exports)
 - `src/types/`
-  - `mod.rs`
-  - `core.rs` (MemoryId, Memory, workspace validation + errors)
-  - `memory.rs` (MemoryType, MemoryTier, MemoryScope, Visibility, LifecycleState, CrossReference, EdgeType, RelationSource, MatchInfo, SearchResult)
-  - `stats.rs` (WorkspaceStats, StorageStats, CompactOp, CompactReport, RebuildReport, SyncStatus, EmbeddingStatus, EmbeddingState)
-  - `config.rs` (StorageConfig, EmbeddingConfig, StorageMode, DedupMode)
-  - `inputs.rs` (CreateMemoryInput, UpdateMemoryInput, CreateCrossRefInput, ListOptions, SearchOptions)
-  - `search.rs` (SearchStrategy, SortField, SortOrder, SearchResult-related helpers)
-  - `version.rs` (MemoryVersion, CompactOp if needed as a colocated file)
+  - `core.rs` (`MemoryId`, `Memory`, `LifecycleState`, `normalize_workspace`, `WorkspaceError`, `MAX_WORKSPACE_LENGTH`, `RESERVED_WORKSPACES`)
+  - `memory.rs` (`MemoryType`, `MemoryTier`, `MemoryScope`, `Visibility`, `CrossReference`, `EdgeType`, `RelationSource`)
+  - `stats.rs` (`WorkspaceStats`, `StorageStats`, `CompactOp`, `CompactReport`, `RebuildReport`, `SyncStatus`, `EmbeddingStatus`, `EmbeddingState`, `MemoryVersion`)
+  - `config.rs` (`StorageConfig`, `EmbeddingConfig`, `StorageMode`, `DedupMode`, `CreateMemoryInput`, `UpdateMemoryInput`, `CreateCrossRefInput`, `ListOptions`)
+  - `search.rs` (`SearchStrategy`, `SortField`, `SortOrder`, `SearchOptions`, `SearchResult`, `MatchInfo`)
 
-### Example mapping
+Notes vs. the original proposal: no separate `mod.rs` (the facade lives at
+`src/types.rs`), and the planned `inputs.rs`/`version.rs` were folded into
+`config.rs` and `stats.rs` respectively to keep files cohesive and under size limits.
 
-- `src/types.rs` after split:
-  - `pub use crate::types::{...}` from submodules (exact re-exports).
-- Existing `pub use types::*` in `src/lib.rs` remains unchanged.
+### Re-export mapping
+
+- `src/types.rs` re-exports every public item from its submodules verbatim,
+  so all paths `engram::types::X` (and `engram::X` via `pub use types::*`
+  in `src/lib.rs`) are unchanged.
 
 ## Refactoring strategy
 
@@ -89,7 +89,9 @@ Keep `src/types.rs` as facade + re-export layer only:
 
 ## Rollout plan
 
-1) Post plan to review.
-2) Implement mechanical split only.
-3) Run gates.
-4) Diff audit for public API equivalence using stored baseline in `docs/api/types-baseline.txt`.
+1) Post plan to review. ✅
+2) Implement mechanical split only. ✅
+3) Run gates. ✅
+4) Diff audit for public API equivalence using stored baseline in `docs/api/types-baseline.txt`. ✅
+   Baseline captured post-split with `cargo public-api -p engram-core --simplified`
+   (19,908 public items); future refactors must diff against this file.

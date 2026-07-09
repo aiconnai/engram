@@ -278,6 +278,9 @@ When refactoring type files in the `types` surface:
 1. Keep `src/types.rs` as a façade and compatibility re-export layer.
 2. Split physical definitions into internal submodules only.
 3. Preserve all public names and shapes.
-4. Validate with `public-api` diff before and after refactors.
+4. Validate with `public-api` diff before and after refactors:
+   `cargo public-api -p engram-core --simplified` compared against the stored
+   baseline in `docs/api/types-baseline.txt` (update the baseline only for
+   intentional, reviewed API changes).
 
 This policy applies to all public DTO changes in this repository and is intended to keep downstream Rust consumers and SDK integrations stable.
