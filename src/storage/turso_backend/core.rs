@@ -41,7 +41,7 @@ use crate::types::{
 
 use crate::storage::backend::SyncResult;
 
-pub(crate) const MEMORY_COLUMNS: &str = "id, content, memory_type, importance, access_count, created_at, updated_at, last_accessed_at, owner_id, visibility, version, has_embedding, metadata, scope_type, scope_id, workspace, tier, expires_at, content_hash, event_time, event_duration_seconds, trigger_pattern, procedure_success_count, procedure_failure_count, summary_of_id, lifecycle_state";
+pub(super) const MEMORY_COLUMNS: &str = "id, content, memory_type, importance, access_count, created_at, updated_at, last_accessed_at, owner_id, visibility, version, has_embedding, metadata, scope_type, scope_id, workspace, tier, expires_at, content_hash, event_time, event_duration_seconds, trigger_pattern, procedure_success_count, procedure_failure_count, summary_of_id, lifecycle_state";
 
 /// Turso/libSQL storage backend configuration
 #[derive(Debug, Clone)]
@@ -75,10 +75,10 @@ impl Default for TursoConfig {
 /// Implements the `StorageBackend` trait using libSQL (Turso's fork of SQLite)
 /// with support for embedded replicas and cloud sync.
 pub struct TursoBackend {
-    pub(crate) db: Database,
-    pub(crate) conn: Arc<RwLock<Connection>>,
-    pub(crate) config: TursoConfig,
-    pub(crate) schema_initialized: bool,
+    pub(super) db: Database,
+    pub(super) conn: Arc<RwLock<Connection>>,
+    pub(super) config: TursoConfig,
+    pub(super) schema_initialized: bool,
 }
 
 impl TursoBackend {
@@ -416,7 +416,7 @@ impl TursoBackend {
     }
 
     /// Execute a query and return results
-    pub(crate) async fn query_memories(
+    pub(super) async fn query_memories(
         &self,
         sql: &str,
         params: Vec<libsql::Value>,

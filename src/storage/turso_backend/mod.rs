@@ -28,5 +28,9 @@
 
 mod core;
 mod impls;
+mod impls_crud;
+mod impls_maintenance;
+mod impls_query;
+mod impls_relations;
 
 pub use core::{TursoBackend, TursoConfig};
