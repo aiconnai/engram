@@ -9,7 +9,8 @@ Scope: Make harness live-state metadata verifiable against current repository fa
 | Trigger | Evidence |
 |---|---|
 | Harness script change | New `docs/harness/bin/check-live-state.sh` and test driver under `docs/harness/bin/`. |
-| Harness process verification | Progress live state now records execution HEAD, sensor snapshot, checker status, and workflow enforcement mapping. |
+| Harness process verification | Progress live state now records execution HEAD, approved baseline/snapshot commit, sensor snapshot, checker status, and workflow enforcement mapping. |
+| Approved execution baseline | `843fd520cbd0eb4c2b1885fe11c997198beb2ca1` is valid only when bound to snapshot commit `3586a40e7952a051181d162028927a40bd6292f6`, the current review artifact, and this Canvas. |
 
 ## Approaches Considered
 

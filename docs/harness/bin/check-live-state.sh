@@ -59,7 +59,7 @@ add_failure() {
 require_progress_text() {
   local needle="$1"
   local label="$2"
-  if ! grep -Fq "$needle" "$PROGRESS_PATH"; then
+  if ! grep -Fq -- "$needle" "$PROGRESS_PATH"; then
     add_failure "missing progress reconciliation: $label"
   fi
 }
@@ -68,7 +68,7 @@ require_file_text() {
   local path="$1"
   local needle="$2"
   local label="$3"
-  if ! grep -Fq "$needle" "$path"; then
+  if ! grep -Fq -- "$needle" "$path"; then
     add_failure "workflow drift: $label not found in $path"
   fi
 }
@@ -93,6 +93,60 @@ LAST_REVIEW="$(field_value "$PROGRESS_PATH" "Last review")"
 LAST_SENSORS="$(field_value "$PROGRESS_PATH" "Last sensors")"
 LAST_CHECK="$(field_value "$PROGRESS_PATH" "Last live-state check")"
 ACTIVE_PLAN="$(field_value "$PROGRESS_PATH" "Active plan")"
+REVIEW_PATH=""
+SNAPSHOT_COMMIT=""
+CANVAS_PATH="docs/harness/canvas/2026-07-09-engram-10-of-10-live-state.md"
+CURRENT_REVIEW_PATH="$(find docs/harness/reviews -type f -name '*engram-10-of-10-live-state*post.md' ! -name '*.raw' | sort | tail -1)"
+
+commit_touches_file() {
+  local commit="$1"
+  local file="$2"
+  git diff-tree --no-commit-id --name-only -r "$commit" | grep -Fxq -- "$file"
+}
+
+approved_live_state_baseline_commit() {
+  local baseline="$1"
+
+  if [ -z "$baseline" ] || ! git cat-file -e "$baseline^{commit}" 2>/dev/null; then
+    return 1
+  fi
+  if ! git merge-base --is-ancestor "$baseline" HEAD; then
+    return 1
+  fi
+  if [ -z "$REVIEW_PATH" ] || [ ! -f "$CANVAS_PATH" ]; then
+    return 1
+  fi
+  if ! grep -Fq -- "$baseline" "$PROGRESS_PATH"; then
+    return 1
+  fi
+  if ! grep -Fq -- "$baseline" "$CANVAS_PATH"; then
+    return 1
+  fi
+
+  local candidate
+  while IFS= read -r candidate; do
+    case " $(git show -s --format=%P "$candidate") " in
+      *" $baseline "*) ;;
+      *) continue ;;
+    esac
+
+    if [ "$(git show -s --format=%s "$candidate")" != "docs(harness): make live state verifiable" ]; then
+      continue
+    fi
+
+    commit_touches_file "$candidate" "docs/harness/bin/check-live-state.sh" || continue
+    commit_touches_file "$candidate" "docs/harness/bin/test-check-live-state.sh" || continue
+    commit_touches_file "$candidate" "$CANVAS_PATH" || continue
+    commit_touches_file "$candidate" "docs/harness/progress.md" || continue
+    commit_touches_file "$candidate" "docs/harness/progress/2026-06-27-harness-live-state-closeout.md" || continue
+    commit_touches_file "$candidate" "$REVIEW_PATH" || continue
+
+    SNAPSHOT_COMMIT="$candidate"
+    return 0
+  done < <(git rev-list --reverse --ancestry-path "$baseline..HEAD")
+
+  return 1
+}
 
 for required_field in "Last commit" "Last review" "Last sensors" "Last live-state check" "Active plan"; do
   case "$required_field" in
@@ -106,14 +160,6 @@ for required_field in "Last commit" "Last review" "Last sensors" "Last live-stat
     add_failure "missing required field: $required_field"
   fi
 done
-
-if [ -n "$LAST_COMMIT" ] \
-  && [ "$LAST_COMMIT" != "$HEAD_FULL" ] \
-  && [ "$LAST_COMMIT" != "$HEAD_SHORT" ] \
-  && [ "$LAST_COMMIT" != "$PARENT_FULL" ] \
-  && [ "$LAST_COMMIT" != "$PARENT_SHORT" ]; then
-  add_failure "stale Last commit: found $LAST_COMMIT, expected $HEAD_SHORT or first parent $PARENT_SHORT"
-fi
 
 if [ -n "$ACTIVE_PLAN" ] && [ ! -f "$ACTIVE_PLAN" ]; then
   add_failure "active plan does not exist: $ACTIVE_PLAN"
@@ -132,7 +178,30 @@ if [ -n "$LAST_REVIEW" ]; then
     if ! grep -Fq "engram-10-of-10-live-state" <<<"$REVIEW_PATH"; then
       add_failure "Last review artifact is stale for this task: $REVIEW_PATH"
     fi
+    if [ -z "$CURRENT_REVIEW_PATH" ]; then
+      add_failure "no authoritative current review artifact found for engram-10-of-10-live-state"
+    elif [ "$REVIEW_PATH" != "$CURRENT_REVIEW_PATH" ]; then
+      add_failure "Last review is not authoritative current review: found $REVIEW_PATH, expected $CURRENT_REVIEW_PATH"
+    fi
   fi
+fi
+
+if [ -n "$LAST_COMMIT" ]; then
+  if [ "$LAST_COMMIT" = "$HEAD_FULL" ] || [ "$LAST_COMMIT" = "$HEAD_SHORT" ]; then
+    SNAPSHOT_COMMIT="$HEAD_FULL"
+  elif [ -n "$PARENT_FULL" ] \
+    && { [ "$LAST_COMMIT" = "$PARENT_FULL" ] || [ "$LAST_COMMIT" = "$PARENT_SHORT" ]; }; then
+    SNAPSHOT_COMMIT="$HEAD_FULL"
+  elif approved_live_state_baseline_commit "$LAST_COMMIT"; then
+    :
+  else
+    add_failure "stale Last commit: found $LAST_COMMIT, expected $HEAD_SHORT, first parent $PARENT_SHORT, or approved live-state baseline recorded in progress/canvas/review metadata"
+  fi
+fi
+
+if [ -n "$LAST_COMMIT" ] && [ -n "$SNAPSHOT_COMMIT" ] && [ "$LAST_COMMIT" != "$HEAD_FULL" ] && [ "$LAST_COMMIT" != "$HEAD_SHORT" ] && [ "$LAST_COMMIT" != "$PARENT_FULL" ] && [ "$LAST_COMMIT" != "$PARENT_SHORT" ]; then
+  require_progress_text "- **Approved execution baseline**: \`$LAST_COMMIT\`" "approved execution baseline row"
+  require_progress_text "- **Approved live-state snapshot commit**: \`$SNAPSHOT_COMMIT\`" "approved live-state snapshot commit row"
 fi
 
 if [ ! -f docs/harness/.sensors-last ]; then
@@ -179,6 +248,10 @@ require_progress_text "| \`Harness Contract\` | not in \`required_status_checks.
 require_progress_text "| \`Harness Doctor Advisory\` | advisory workflow job | \`.github/workflows/harness-contract.yml\` |" "Harness Doctor advisory row"
 
 echo "head=$HEAD_SHORT"
+if [ -n "$SNAPSHOT_COMMIT" ] && [ "$SNAPSHOT_COMMIT" != "$HEAD_FULL" ]; then
+  echo "approved_baseline=$LAST_COMMIT"
+  echo "snapshot_commit=$(git rev-parse --short "$SNAPSHOT_COMMIT")"
+fi
 echo "worktree_status=$WORKTREE_STATUS"
 
 if [ "${#FAILURES[@]}" -gt 0 ]; then
@@ -186,7 +259,7 @@ if [ "${#FAILURES[@]}" -gt 0 ]; then
   for failure in "${FAILURES[@]}"; do
     echo "$failure"
   done
-  echo "remediation: update Last commit in $PROGRESS_PATH to $HEAD_SHORT after running rtk git rev-parse HEAD"
+  echo "remediation: update Last commit in $PROGRESS_PATH to $HEAD_SHORT or the approved live-state baseline after running rtk git rev-parse HEAD and checking the live-state canvas/review snapshot"
   echo "remediation: update Last sensors in $PROGRESS_PATH from docs/harness/.sensors-last after running rtk bash docs/harness/bin/sensors.sh quick or full"
   echo "remediation: restore the progress live-state field table and required/advisory workflow reconciliation rows"
   exit 1

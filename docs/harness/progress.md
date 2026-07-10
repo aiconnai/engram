@@ -24,11 +24,13 @@
 ## Live-state self-check — 2026-07-10
 
 - **Execution HEAD**: `843fd520cbd0eb4c2b1885fe11c997198beb2ca1` (`843fd52`).
+- **Approved execution baseline**: `843fd520cbd0eb4c2b1885fe11c997198beb2ca1` (`843fd52`); this remains valid after later Wave 0 commits only when the checker can bind it to the current live-state review, Canvas, and snapshot commit metadata.
+- **Approved live-state snapshot commit**: `3586a40e7952a051181d162028927a40bd6292f6`; this commit is the direct child of the approved execution baseline and introduced the checker/test/Canvas/review artifacts.
 - **Sensor snapshot source**: `docs/harness/.sensors-last`, currently `status=pass`,
   `mode=full`, `timestamp=2026-07-10T00:27:38Z`.
 - **Checker surface**: `rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md`.
 - **Checker status**: pass for current progress; stale fixtures containing the old
-  `1aa14e5` Last commit fail with remediation to update the field to `843fd52`.
+  `1aa14e5` Last commit fail with remediation to use either current HEAD or the approved baseline bound to current review/Canvas/snapshot metadata.
 - **Dirty worktree handling**: the checker reports `worktree_status=dirty|clean`
   explicitly as diagnostic output; dirty state is not treated as success or failure
   because agents run it before and after staging/commit boundaries.

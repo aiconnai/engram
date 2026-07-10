@@ -74,8 +74,11 @@ predicate follow-up:
 The 10/10 harness maintenance wave requires live-state metadata to be
 truthful at execution time, not only historically accurate for the old
 bootstrap closeout. The stale `1aa14e5` commit marker is now a regression
-fixture: current live progress must point at execution HEAD `843fd52`
-(`843fd520cbd0eb4c2b1885fe11c997198beb2ca1`), while a temp fixture carrying `1aa14e5` must fail loudly.
+fixture: current live progress records approved execution baseline `843fd52`
+(`843fd520cbd0eb4c2b1885fe11c997198beb2ca1`). After later Wave 0 commits,
+that baseline remains valid only when the checker can bind it to the direct
+live-state snapshot commit, current review artifact, and Canvas metadata;
+a temp fixture carrying `1aa14e5` must fail loudly.
 
 ### Ações realizadas
 
@@ -104,7 +107,7 @@ fixture: current live progress must point at execution HEAD `843fd52`
 ### Evidência esperada
 
 - `rtk bash docs/harness/bin/test-check-live-state.sh` — checker CLI regression suite.
-- `rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md` — current progress matches repository facts.
+- `rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md` — current progress matches repository facts and accepts only current HEAD, first parent, or the approved live-state baseline bound to review/Canvas/snapshot metadata.
 - `rtk bash docs/harness/bin/bootstrap.sh` — live state visible to future agents.
 - `rtk bash docs/harness/bin/doctor.sh` — harness consistency.
 - `rtk bash docs/harness/bin/sensors.sh quick` — quick deterministic lane, not a substitute for the full lane; latest observed timestamp `2026-07-10T09:00:50Z`.

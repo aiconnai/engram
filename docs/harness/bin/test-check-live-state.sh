@@ -72,6 +72,8 @@ run_expect_failure() {
 }
 
 CURRENT_OUTPUT="$(run_expect_success "current progress passes" bash "$CHECKER" --progress "$PROGRESS")"
+assert_contains "$CURRENT_OUTPUT" "approved_baseline=843fd520cbd0eb4c2b1885fe11c997198beb2ca1" "happy path reports approved baseline"
+assert_contains "$CURRENT_OUTPUT" "snapshot_commit=3586a40" "happy path reports snapshot commit"
 assert_contains "$CURRENT_OUTPUT" "PASS live state matches current repository facts" "happy path reports PASS"
 
 MISSING_OPERAND_OUTPUT="$(run_expect_failure "missing progress operand fails" bash "$CHECKER" --progress)"
@@ -129,6 +131,23 @@ PY
 STALE_REVIEW_OUTPUT="$(run_expect_failure "stale review fixture fails" bash "$CHECKER" --progress "$STALE_REVIEW_FIXTURE")"
 assert_contains "$STALE_REVIEW_OUTPUT" "Last review artifact is stale for this task" "stale review is rejected"
 assert_not_contains "$STALE_REVIEW_OUTPUT" "PASS live state matches current repository facts" "stale review failure does not print misleading PASS"
+
+SUPERSEDED_REVIEW_FIXTURE="$TMP_DIR/superseded-review-progress.md"
+python3 - "$PROGRESS" "$SUPERSEDED_REVIEW_FIXTURE" <<'PY'
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text()
+superseded = source.replace(
+    "docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md",
+    "docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v2-post.md",
+)
+Path(sys.argv[2]).write_text(superseded)
+PY
+
+SUPERSEDED_REVIEW_OUTPUT="$(run_expect_failure "superseded same-task review fixture fails" bash "$CHECKER" --progress "$SUPERSEDED_REVIEW_FIXTURE")"
+assert_contains "$SUPERSEDED_REVIEW_OUTPUT" "Last review is not authoritative current review" "superseded same-task review is rejected"
+assert_not_contains "$SUPERSEDED_REVIEW_OUTPUT" "PASS live state matches current repository facts" "superseded review failure does not print misleading PASS"
 
 MALFORMED_FIXTURE="$TMP_DIR/malformed-progress.md"
 printf '# malformed\n\nNo live-state table here.\n' > "$MALFORMED_FIXTURE"
