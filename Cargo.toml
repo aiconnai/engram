@@ -81,7 +81,7 @@ default = ["cloud", "openai"]
 http-client = ["dep:reqwest"]
 
 # Cloud sync (S3/R2/GCS) - adds ~2MB to binary
-cloud = ["dep:aws-sdk-s3", "dep:aws-config", "dep:aes-gcm"]
+cloud = ["dep:aws-sdk-s3", "dep:aws-config", "dep:aes-gcm", "dep:zeroize"]
 
 # OpenAI embeddings - requires API key
 openai = ["http-client"]
@@ -204,7 +204,8 @@ aws-sdk-s3 = { version = "1.12", optional = true }
 aws-config = { version = "1.1", optional = true }
 
 # Encryption (for cloud sync)
-aes-gcm = { version = "0.10", optional = true }
+aes-gcm = { version = "0.10", optional = true, features = ["zeroize"] }
+zeroize = { version = "1", optional = true }
 rand = "0.8"
 base64 = "0.21"
 

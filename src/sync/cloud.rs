@@ -6,6 +6,8 @@ use aws_config::BehaviorVersion;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client as S3Client;
 
+use super::encryption::{decrypt_data_with_provider, encrypt_data_with_provider};
+use super::key_config::{CloudKeyProvider, ConfiguredCloudKeyProvider};
 use crate::error::{EngramError, Result};
 
 /// Cloud storage abstraction
@@ -14,7 +16,7 @@ pub struct CloudStorage {
     bucket: String,
     key: String,
     encrypt: bool,
-    encryption_key: Option<Vec<u8>>,
+    key_provider: Option<ConfiguredCloudKeyProvider>,
 }
 
 impl CloudStorage {
@@ -38,14 +40,8 @@ impl CloudStorage {
         let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
         let client = S3Client::new(&config);
 
-        // Generate encryption key if needed
-        let encryption_key = if encrypt {
-            tracing::warn!(
-                "CloudStorage: encryption is enabled but the key is ephemeral. \
-                 Data encrypted with this key will be permanently unrecoverable \
-                 after process restart. Use a persisted key for production workloads."
-            );
-            Some(generate_encryption_key()?)
+        let key_provider = if encrypt {
+            Some(ConfiguredCloudKeyProvider::from_env()?)
         } else {
             None
         };
@@ -55,8 +51,22 @@ impl CloudStorage {
             bucket,
             key,
             encrypt,
-            encryption_key,
+            key_provider,
         })
+    }
+
+    pub fn encryption_key_id(&self) -> Option<&str> {
+        self.key_provider
+            .as_ref()
+            .map(|provider| provider.active_key().id().as_str())
+    }
+
+    pub fn encryption_rotation_metadata(
+        &self,
+    ) -> Option<&super::key_config::CloudKeyRotationMetadata> {
+        self.key_provider
+            .as_ref()
+            .map(CloudKeyProvider::rotation_metadata)
     }
 
     /// Upload local file to cloud
@@ -184,66 +194,22 @@ impl CloudStorage {
         Ok(())
     }
 
-    /// Encrypt data using AES-256-GCM
     fn encrypt_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        use aes_gcm::{
-            aead::{Aead, KeyInit},
-            Aes256Gcm, Nonce,
-        };
-        use rand::RngCore;
-
-        let key = self
-            .encryption_key
-            .as_ref()
-            .ok_or_else(|| EngramError::Encryption("No encryption key".to_string()))?;
-
-        let cipher =
-            Aes256Gcm::new_from_slice(key).map_err(|e| EngramError::Encryption(e.to_string()))?;
-
-        // Generate random nonce
-        let mut nonce_bytes = [0u8; 12];
-        rand::thread_rng().fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
-
-        let ciphertext = cipher
-            .encrypt(nonce, data)
-            .map_err(|e| EngramError::Encryption(e.to_string()))?;
-
-        // Prepend nonce to ciphertext
-        let mut result = Vec::with_capacity(12 + ciphertext.len());
-        result.extend_from_slice(&nonce_bytes);
-        result.extend_from_slice(&ciphertext);
-
-        Ok(result)
+        let provider = self.configured_key_provider()?;
+        encrypt_data_with_provider(provider, data)
     }
 
-    /// Decrypt data using AES-256-GCM
     fn decrypt_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        use aes_gcm::{
-            aead::{Aead, KeyInit},
-            Aes256Gcm, Nonce,
-        };
+        let provider = self.configured_key_provider()?;
+        decrypt_data_with_provider(provider, data)
+    }
 
-        if data.len() < 12 {
-            return Err(EngramError::Encryption("Data too short".to_string()));
-        }
-
-        let key = self
-            .encryption_key
-            .as_ref()
-            .ok_or_else(|| EngramError::Encryption("No encryption key".to_string()))?;
-
-        let cipher =
-            Aes256Gcm::new_from_slice(key).map_err(|e| EngramError::Encryption(e.to_string()))?;
-
-        let nonce = Nonce::from_slice(&data[..12]);
-        let ciphertext = &data[12..];
-
-        let plaintext = cipher
-            .decrypt(nonce, ciphertext)
-            .map_err(|e| EngramError::Encryption(e.to_string()))?;
-
-        Ok(plaintext)
+    fn configured_key_provider(&self) -> Result<&ConfiguredCloudKeyProvider> {
+        self.key_provider.as_ref().ok_or_else(|| {
+            EngramError::Encryption(
+                "cloud encryption requires a configured durable key provider".to_string(),
+            )
+        })
     }
 }
 
@@ -253,19 +219,6 @@ pub struct CloudMetadata {
     pub size: u64,
     pub last_modified: Option<String>,
     pub etag: Option<String>,
-}
-
-/// Generate a random 256-bit encryption key.
-///
-/// **WARNING — ephemeral key**: this key is generated in memory and is never
-/// persisted. Any data encrypted with it becomes permanently unrecoverable
-/// after the process restarts. Callers that require durable encryption must
-/// derive or load the key from a persistent secret store before construction.
-fn generate_encryption_key() -> Result<Vec<u8>> {
-    use rand::RngCore;
-    let mut key = vec![0u8; 32];
-    rand::thread_rng().fill_bytes(&mut key);
-    Ok(key)
 }
 
 /// Derive encryption key from passphrase using Argon2id.
@@ -312,5 +265,30 @@ mod tests {
     fn test_derive_key_length() {
         let key = derive_key_from_passphrase("secret", b"saltysalt12345678").unwrap();
         assert_eq!(key.len(), 32, "key must be 32 bytes");
+    }
+
+    #[test]
+    fn missing_configured_key_fails_before_encrypted_write() {
+        // Given: an encrypted storage instance without a provider.
+        let sdk_config = aws_config::SdkConfig::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .build();
+        let storage = CloudStorage {
+            client: S3Client::new(&sdk_config),
+            bucket: "bucket".to_string(),
+            key: "path.db".to_string(),
+            encrypt: true,
+            key_provider: None,
+        };
+
+        // When: encryption is attempted before an upload body is built.
+        let error = storage
+            .encrypt_data(b"db bytes")
+            .expect_err("missing provider must fail");
+
+        // Then: the failure is explicit and contains no payload bytes.
+        let message = error.to_string();
+        assert!(message.contains("configured durable key provider"));
+        assert!(!message.contains("db bytes"));
     }
 }
