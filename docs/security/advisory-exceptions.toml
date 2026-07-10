@@ -1,0 +1,144 @@
+# Governed RustSec advisory exceptions.
+#
+# Each record must name the dependency path, feature exposure, owner, expiry, and
+# remediation. `scripts/check-security-exceptions.py` enforces parity with
+# `.cargo/audit.toml` ignores and `deny.toml` cargo-deny advisory ignores, and it
+# keeps feature-gated warnings out of global ignore lists.
+
+[metadata]
+schema_version = 1
+as_of = 2026-07-10
+owner = "supply-chain"
+
+[[exceptions]]
+advisory = "RUSTSEC-2026-0049"
+crate = "rustls-webpki"
+versions = ["0.102.8"]
+tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
+]
+feature = "turso optional feature; included by cargo-deny all-features"
+exposure = "Optional libSQL/Turso TLS validation path; advisory is CRL revocation handling and no Engram code enables permissive unknown-revocation policy."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Upgrade the libsql/hyper-rustls/rustls stack until rustls-webpki is >=0.103.13, then remove the cargo-deny ignore."
+feature_gated = true
+default_graph = false
+
+[[exceptions]]
+advisory = "RUSTSEC-2026-0098"
+crate = "rustls-webpki"
+versions = ["0.101.7", "0.102.8"]
+tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> aws-config 1.8.12/aws-sdk-s3 1.120.0 -> aws-smithy-http-client 1.1.5 -> hyper-rustls 0.24.2 -> rustls 0.21.12 -> rustls-webpki 0.101.7",
+  "engram-core 0.22.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
+]
+feature = "cloud default feature via AWS SDK, plus turso optional feature via libsql"
+exposure = "TLS certificate URI name-constraint handling in upstream TLS stacks; cloud is default, Turso is optional, and exploitation requires misissued certificates after signature validation."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Upgrade AWS SDK/libsql TLS stacks until rustls-webpki is >=0.103.13 everywhere, then remove the cargo-deny ignore."
+feature_gated = false
+default_graph = true
+
+[[exceptions]]
+advisory = "RUSTSEC-2026-0099"
+crate = "rustls-webpki"
+versions = ["0.101.7", "0.102.8"]
+tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> aws-config 1.8.12/aws-sdk-s3 1.120.0 -> aws-smithy-http-client 1.1.5 -> hyper-rustls 0.24.2 -> rustls 0.21.12 -> rustls-webpki 0.101.7",
+  "engram-core 0.22.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
+]
+feature = "cloud default feature via AWS SDK, plus turso optional feature via libsql"
+exposure = "TLS certificate wildcard DNS name-constraint handling in upstream TLS stacks; cloud is default, Turso is optional, and exploitation requires misissued certificates after signature validation."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Upgrade AWS SDK/libsql TLS stacks until rustls-webpki is >=0.103.13 everywhere, then remove the cargo-deny ignore."
+feature_gated = false
+default_graph = true
+
+[[exceptions]]
+advisory = "RUSTSEC-2026-0104"
+crate = "rustls-webpki"
+versions = ["0.101.7", "0.102.8"]
+tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> aws-config 1.8.12/aws-sdk-s3 1.120.0 -> aws-smithy-http-client 1.1.5 -> hyper-rustls 0.24.2 -> rustls 0.21.12 -> rustls-webpki 0.101.7",
+  "engram-core 0.22.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
+]
+feature = "cloud default feature via AWS SDK, plus turso optional feature via libsql"
+exposure = "TLS CRL parsing denial-of-service in upstream TLS stacks; Engram does not parse CRLs directly, but default cloud TLS may carry the transitive stack."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Upgrade AWS SDK/libsql TLS stacks until rustls-webpki is >=0.103.13 everywhere, then remove the cargo-deny ignore."
+feature_gated = false
+default_graph = true
+
+
+[[exceptions]]
+advisory = "RUSTSEC-2025-0141"
+crate = "bincode"
+versions = ["1.3.3"]
+tools = ["cargo-audit:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> libsql 0.9.30 -> bincode 1.3.3",
+]
+feature = "turso optional feature only"
+exposure = "Unmaintained serialization crate inside optional libSQL/Turso dependency; Engram does not call bincode directly."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Track libsql removal of bincode 1.x or replace the Turso stack; remove the cargo-audit ignore once Cargo.lock no longer contains bincode 1.x."
+feature_gated = true
+default_graph = false
+
+[[exceptions]]
+advisory = "RUSTSEC-2024-0436"
+crate = "paste"
+versions = ["1.0.15"]
+tools = ["cargo-audit:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> tokenizers 0.23.1 -> paste 1.0.15",
+  "engram-core 0.22.0 -> tokenizers 0.23.1 -> macro_rules_attribute 0.2.2 -> paste 1.0.15",
+]
+feature = "onnx-embed/local-embeddings optional feature only"
+exposure = "Unmaintained proc-macro dependency in optional local embedding tokenizers stack; not loaded by the default feature graph."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Track tokenizers removal of paste or replace the local embedding tokenizer stack; remove the cargo-audit ignore once Cargo.lock no longer contains paste."
+feature_gated = true
+default_graph = false
+
+[[exceptions]]
+advisory = "RUSTSEC-2025-0134"
+crate = "rustls-pemfile"
+versions = ["2.2.0"]
+tools = ["cargo-audit:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls-native-certs 0.7.3 -> rustls-pemfile 2.2.0",
+]
+feature = "turso optional feature only"
+exposure = "Unmaintained PEM parsing wrapper in optional libSQL/Turso TLS stack; Engram does not parse PEM files through this crate directly."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Track libsql/hyper-rustls migration to rustls-pki-types PEM APIs; remove the cargo-audit ignore once Cargo.lock no longer contains rustls-pemfile."
+feature_gated = true
+default_graph = false
+
+[[exceptions]]
+advisory = "RUSTSEC-2026-0192"
+crate = "ttf-parser"
+versions = ["0.25.1"]
+tools = ["cargo-audit:allowed-warning"]
+dependency_path = [
+  "engram-core 0.22.0 -> pdf-extract 0.12.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
+]
+feature = "pdf optional feature only"
+exposure = "Feature-gated PDF ingestion font parsing path; not present in the default non-PDF feature graph and not globally ignored in cargo-audit or cargo-deny."
+owner = "supply-chain"
+expires = 2026-08-31
+remediation = "Track lopdf/pdf-extract migration to skrifa or a maintained parser; remove this governed warning when the PDF stack no longer depends on ttf-parser."
+feature_gated = true
+default_graph = false
