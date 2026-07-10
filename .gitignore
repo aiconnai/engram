@@ -182,3 +182,8 @@ LOOP.md
 STATE.md
 loop-budget.md
 loop-run-log.md
+
+# Tracked public-API baseline (see CONTRIBUTING.md)
+!/docs/api/
+/docs/api/*
+!docs/api/types-baseline.txt

@@ -410,7 +410,7 @@ impl AutoCaptureEngine {
         if text.len() <= max_len {
             text.trim().to_string()
         } else {
-            format!("{}...", &text[..max_len].trim())
+            format!("{}...", text[..max_len].trim())
         }
     }
 
