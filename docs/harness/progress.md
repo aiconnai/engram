@@ -4,11 +4,12 @@
 |-------|-------|
 | Project | `engram` |
 | Active sprint | `Harness maintenance — live-state closeout` |
-| Active task | `harness-live-state-closeout — close completed bootstrap sprint metadata` |
+| Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
-| Last review | `2026-06-27 — pass: docs/harness/reviews/2026-06-27-harness-live-state-closeout-v2-post.md` |
-| Last sensors | `2026-06-27 — status=pass (full lane after live-state closeout; timestamp 2026-06-27T15:07:07Z)` |
-| Last commit | `1aa14e5` |
+| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
+| Last sensors | `2026-07-10 — status=pass (mode=full; timestamp 2026-07-10T00:27:38Z)` |
+| Last commit | `843fd520cbd0eb4c2b1885fe11c997198beb2ca1` |
+| Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
@@ -17,8 +18,33 @@
 - **Harness maintenance — live-state closeout**
 - **Log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)
 - **Status**: active — close stale live metadata after the completed bootstrap
-  sprint and the merged lifecycle predicate follow-up. Current `main` is
-  `1aa14e5`, and merged PR #108 commit `e156810` is contained in that history.
+  sprint and the merged lifecycle predicate follow-up. Execution HEAD for this live-state pass is
+  `843fd52` (`843fd520cbd0eb4c2b1885fe11c997198beb2ca1`); historical PR #108 commit `e156810` remains contained in main history.
+
+## Live-state self-check — 2026-07-10
+
+- **Execution HEAD**: `843fd520cbd0eb4c2b1885fe11c997198beb2ca1` (`843fd52`).
+- **Sensor snapshot source**: `docs/harness/.sensors-last`, currently `status=pass`,
+  `mode=full`, `timestamp=2026-07-10T00:27:38Z`.
+- **Checker surface**: `rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md`.
+- **Checker status**: pass for current progress; stale fixtures containing the old
+  `1aa14e5` Last commit fail with remediation to update the field to `843fd52`.
+- **Dirty worktree handling**: the checker reports `worktree_status=dirty|clean`
+  explicitly as diagnostic output; dirty state is not treated as success or failure
+  because agents run it before and after staging/commit boundaries.
+
+### Required versus advisory workflow reconciliation
+
+| Check | Live GitHub API status | Workflow source | Current contract |
+|---|---|---|---|
+| `Format` | branch-required | `.github/workflows/ci.yml` | Required CI job running `cargo fmt --all -- --check`. |
+| `Clippy` | branch-required | `.github/workflows/ci.yml` | Required CI job running clippy with required feature set. |
+| `Test (ubuntu-latest)` | branch-required | `.github/workflows/ci.yml` | Required Ubuntu test job for lib/tests, binary tests, and WASM checks. |
+| `Documentation` | branch-required | `.github/workflows/ci.yml` | Required docs job covering MCP reference check and rustdoc. |
+| `Security Audit` | branch-required | `.github/workflows/ci.yml` | Live branch-protection API currently lists this context as required; do not treat older advisory prose as current truth. |
+| `Cargo Deny` | branch-required | `.github/workflows/ci.yml` | Live branch-protection API currently lists this context as required; do not treat older advisory prose as current truth. |
+| `Harness Contract` | not in `required_status_checks.contexts` | `.github/workflows/harness-contract.yml` | Workflow exists, but the live API receipt does not list it as a required context; do not infer required status from workflow text. |
+| `Harness Doctor Advisory` | advisory workflow job | `.github/workflows/harness-contract.yml` | Non-blocking `doctor.sh`; stays advisory and must not be inferred as required. |
 
 ## Sprint encerrada
 
