@@ -1,6 +1,8 @@
 mod child_process;
 mod config;
 mod http_client;
+#[cfg(test)]
+mod http_client_tests;
 mod io;
 mod process;
 mod protocol;

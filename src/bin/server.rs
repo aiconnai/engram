@@ -241,7 +241,7 @@ struct EngramHandler {
     /// actual Langfuse calls lands in a follow-up task.
     #[cfg(feature = "langfuse")]
     #[allow(dead_code)]
-    langfuse_runtime: tokio::runtime::Runtime,
+    langfuse_runtime: Arc<tokio::runtime::Runtime>,
     /// Lifecycle hooks (Phase L - ENG-78). None unless `enable_hooks()` is called.
     #[cfg(feature = "hooks")]
     hook_manager: Option<Arc<engram::hooks::HookManager>>,
@@ -266,8 +266,9 @@ impl EngramHandler {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: tokio::runtime::Runtime::new()
-                .expect("Failed to create Langfuse runtime"),
+            langfuse_runtime: Arc::new(
+                tokio::runtime::Runtime::new().expect("Failed to create Langfuse runtime"),
+            ),
             #[cfg(feature = "hooks")]
             hook_manager: None,
         }
@@ -359,10 +360,7 @@ impl EngramHandler {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: self.meili_sync_interval,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new()
-                    .expect("Failed to create per-request Langfuse runtime"),
-            ),
+            langfuse_runtime: self.langfuse_runtime.clone(),
         }
     }
 }
@@ -911,8 +909,9 @@ mod tests {
             realtime: None,
             embedding_cache: Arc::new(engram::embedding::EmbeddingCache::default()),
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: tokio::runtime::Runtime::new()
-                .expect("Failed to create Langfuse runtime"),
+            langfuse_runtime: Arc::new(
+                tokio::runtime::Runtime::new().expect("Failed to create Langfuse runtime"),
+            ),
             #[cfg(feature = "meilisearch")]
             meili: None,
             #[cfg(feature = "meilisearch")]
