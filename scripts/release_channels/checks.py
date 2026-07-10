@@ -11,10 +11,11 @@ from pathlib import Path
 from release_channels.model import (
     DEFAULT_MATRIX, MISSING_SELF_TEST_TAG, REQUIRED_CHANNELS, REQUIRED_SDKS,
     Channel, CheckResult, CommandResult, MatrixPolicy, SdkCompatibility,
-    channel_map, local_version_from_cargo, local_version_from_package_json,
-    local_version_from_pyproject, parse_exact_version_line, parse_homebrew_version,
-    parse_matrix, parse_npm_version, parse_pip_index_version, read_text,
-    run_command, tag_exists, version_matches,
+    channel_map, fetch_pypi_package, local_version_from_cargo,
+    local_version_from_package_json, local_version_from_pyproject,
+    parse_exact_version_line, parse_homebrew_version, parse_matrix,
+    parse_npm_version, parse_pypi_json_version, read_text, run_command,
+    tag_exists, version_matches,
 )
 
 
@@ -83,7 +84,7 @@ def live_checks(policy: MatrixPolicy, channels: list[Channel], timeout_seconds: 
         CheckResult((gh_target.returncode == 0) is release.expected_present, f"GitHub release {release.target}", f"expected_present={release.expected_present}"),
         CheckResult(gh_latest.returncode == 0 and f'"{release.observed_latest}"' in gh_latest.stdout, f"GitHub release {release.observed_latest}", "expected present"),
         CheckResult(version_matches(run_command(["cargo", "search", cargo.package or "", "--limit", "5"], timeout_seconds), lambda text: parse_exact_version_line(text, cargo.package or ""), cargo.observed_version or ""), f"crates.io {cargo.package}", f"matrix={cargo.observed_version}"),
-        CheckResult(version_matches(run_command([sys.executable, "-m", "pip", "index", "versions", pypi.package or ""], timeout_seconds), lambda text: parse_pip_index_version(text, pypi.package or ""), pypi.observed_version or ""), f"PyPI {pypi.package}", f"matrix={pypi.observed_version}"),
+        CheckResult(version_matches(fetch_pypi_package(pypi.package or "", timeout_seconds), lambda text: parse_pypi_json_version(text, pypi.package or ""), pypi.observed_version or ""), f"PyPI {pypi.package}", f"matrix={pypi.observed_version}"),
         CheckResult(version_matches(run_command(["npm", "view", npm.package or "", "version", "--json"], timeout_seconds), parse_npm_version, npm.observed_version or ""), f"npm {npm.package}", f"matrix={npm.observed_version}"),
         CheckResult(version_matches(run_command(["brew", "info", "--json=v2", brew.package or ""], timeout_seconds), lambda text: parse_homebrew_version(text, brew.package or ""), brew.observed_version or ""), f"Homebrew {brew.package}", f"matrix={brew.observed_version}"),
     ])
@@ -107,13 +108,18 @@ def self_test_nonexistent_tag(timeout_seconds: int) -> int:
 
 def self_test_parser_hardening() -> int:
     cargo = "warning: mirror says engram-core = \"9.9.9\"\nnot-engram-core = \"0.21.1\""
+    pypi = '{"info":{"name":"not-engram-client","version":"0.4.0"}}'
     npm = '{"version":"9.9.9"}'
-    return print_results([CheckResult(parse_exact_version_line(cargo, "engram-core") is None and parse_npm_version(npm) is None, "untrusted registry parser", "misleading success output rejected")])
+    return print_results([CheckResult(parse_exact_version_line(cargo, "engram-core") is None and parse_pypi_json_version(pypi, "engram-client") is None and parse_npm_version(npm) is None, "untrusted registry parser", "misleading success output rejected")])
 
 
 def self_test_timeout() -> int:
     result = run_command([sys.executable, "-c", "import time; time.sleep(2)"], 1)
-    return print_results([CheckResult(result.returncode == 124, "bounded timeout", "sleep command timed out")])
+    pypi_result = fetch_pypi_package("engram-client", 0)
+    return print_results([
+        CheckResult(result.returncode == 124, "bounded timeout", "sleep command timed out"),
+        CheckResult(pypi_result.returncode == 124, "bounded PyPI probe timeout", "worker process timed out"),
+    ])
 
 
 def self_test_wrong_matrix() -> int:
@@ -131,7 +137,7 @@ def self_test_future_timestamp() -> int:
 def self_test_failed_registry_command() -> int:
     checks = [
         CheckResult(not version_matches(CommandResult(1, 'engram-core = "0.21.1"\n', "fail"), lambda text: parse_exact_version_line(text, "engram-core"), "0.21.1"), "fake cargo failure", "rejected"),
-        CheckResult(not version_matches(CommandResult(1, "engram-client (0.4.0)\n", "fail"), lambda text: parse_pip_index_version(text, "engram-client"), "0.4.0"), "fake pip failure", "rejected"),
+        CheckResult(not version_matches(CommandResult(1, '{"info":{"name":"engram-client","version":"0.4.0"}}', "fail"), lambda text: parse_pypi_json_version(text, "engram-client"), "0.4.0"), "fake PyPI failure", "rejected"),
         CheckResult(not version_matches(CommandResult(1, '"0.3.0"', "fail"), parse_npm_version, "0.3.0"), "fake npm failure", "rejected"),
         CheckResult(not version_matches(CommandResult(1, '{"formulae":[{"full_name":"aiconnai/engram/engram","versions":{"stable":"0.21.2"}}]}', "fail"), lambda text: parse_homebrew_version(text, "aiconnai/engram/engram"), "0.21.2"), "fake brew failure", "rejected"),
     ]

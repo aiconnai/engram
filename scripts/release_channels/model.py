@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,29 @@ REMOTE_TAG_URL = "https://github.com/aiconnai/engram.git"
 MISSING_SELF_TEST_TAG = "v0.0.0-engram-nonexistent-self-test"
 REQUIRED_CHANNELS = ("core", "git_tag", "github_release", "crates_io", "pypi", "npm", "homebrew", "docs", "changelog")
 REQUIRED_SDKS = ("python", "typescript")
+PYPI_JSON_PROBE = """
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+package = sys.argv[1]
+timeout_seconds = int(sys.argv[2])
+url = f"https://pypi.org/pypi/{urllib.parse.quote(package, safe='')}/json"
+request = urllib.request.Request(url, headers={"Accept": "application/json"})
+try:
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        sys.stdout.write(response.read().decode("utf-8"))
+except TimeoutError:
+    sys.stderr.write("timeout")
+    raise SystemExit(124)
+except urllib.error.URLError as error:
+    sys.stderr.write(str(error.reason))
+    raise SystemExit(1)
+except UnicodeDecodeError as error:
+    sys.stderr.write(str(error))
+    raise SystemExit(1)
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,14 +108,33 @@ def run_command(command: list[str], timeout_seconds: int) -> CommandResult:
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
+def fetch_pypi_package(package: str, timeout_seconds: int) -> CommandResult:
+    command = [
+        sys.executable,
+        "-I",
+        "-B",
+        "-c",
+        PYPI_JSON_PROBE,
+        package,
+        str(timeout_seconds),
+    ]
+    return run_command(command, timeout_seconds)
+
+
 def parse_exact_version_line(text: str, package: str) -> str | None:
     match = re.search(rf"^{re.escape(package)}\s*=\s*\"([^\"]+)\"", text, re.MULTILINE)
     return None if match is None else match.group(1)
 
 
-def parse_pip_index_version(text: str, package: str) -> str | None:
-    match = re.search(rf"^{re.escape(package)} \(([^)]+)\)$", text, re.MULTILINE)
-    return None if match is None else match.group(1)
+def parse_pypi_json_version(text: str, package: str) -> str | None:
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    info = payload.get("info") if isinstance(payload, dict) else None
+    name = info.get("name") if isinstance(info, dict) else None
+    version = info.get("version") if isinstance(info, dict) else None
+    return version if name == package and isinstance(version, str) else None
 
 
 def parse_npm_version(text: str) -> str | None:
