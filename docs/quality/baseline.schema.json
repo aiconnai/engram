@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiconnai.github.io/engram/schemas/quality-baseline.v1.json",
+  "title": "Engram quality and retrieval baseline evidence",
+  "description": "Schema for the frozen deterministic retrieval fixture baseline that Todo 24 will populate, plus the text Criterion artifact contract currently checked by scripts/check-quality-baseline.py.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source_revision",
+    "generated_at",
+    "deterministic_seed",
+    "corpus",
+    "metrics",
+    "benchmark_evidence"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "engram.quality-baseline.v1"
+    },
+    "source_revision": {
+      "description": "Git commit SHA for the source tree that generated the baseline.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "generated_at": {
+      "description": "RFC3339 UTC timestamp for baseline generation, encoded in canonical Zulu time (YYYY-MM-DDTHH:MM:SSZ).",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "deterministic_seed": {
+      "description": "Seed used for the frozen retrieval fixture corpus and query order.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "corpus": {
+      "description": "Frozen retrieval fixture corpus schema. This names the corpus and the deterministic query set without embedding private source content in the schema.",
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "fixture_path",
+        "schema",
+        "memory_count",
+        "query_count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "fixture_path": { "type": "string", "minLength": 1 },
+        "schema": {
+          "type": "object",
+          "required": ["memory_fields", "query_fields", "relevance_fields"],
+          "additionalProperties": false,
+          "properties": {
+            "memory_fields": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "query_fields": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "relevance_fields": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          }
+        },
+        "memory_count": { "type": "integer", "minimum": 1 },
+        "query_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "metrics": {
+      "description": "Deterministic retrieval quality metrics. Initial measured values become reviewed floors in Todo 24; this schema does not invent floors.",
+      "type": "object",
+      "required": ["recall@10", "mrr", "ndcg@10"],
+      "additionalProperties": false,
+      "properties": {
+        "recall@10": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mrr": { "type": "number", "minimum": 0, "maximum": 1 },
+        "ndcg@10": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "benchmark_evidence": {
+      "type": "object",
+      "required": ["criterion_baseline", "dream_eval_runbook"],
+      "additionalProperties": false,
+      "properties": {
+        "criterion_baseline": { "type": "string", "minLength": 1 },
+        "dream_eval_runbook": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "criterion_baseline_text": {
+      "description": "Current tracked text artifact contract: first non-empty line is Baseline:, followed by one or more '<benchmark>: <positive number> <unit>' lines. Units accepted by the checker are ns, us, µs, ms, and s."
+    }
+  }
+}
