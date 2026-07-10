@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.9"
+# dependencies = [
+#   "tomli>=1.1.0; python_version < '3.11'",
+# ]
 # ///
 # ─── How to run ───
 # rtk python3 scripts/check-security-exceptions.py \
@@ -14,11 +17,15 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import sys
-import tomllib
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 AUDIT_IGNORE: Final = "cargo-audit:ignore"
 AUDIT_WARNING: Final = "cargo-audit:allowed-warning"
@@ -27,9 +34,24 @@ ALLOWED_TOOLS: Final = frozenset({AUDIT_IGNORE, AUDIT_WARNING, DENY_IGNORE})
 PDF_ADVISORY: Final = "RUSTSEC-2026-0192"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)  # noqa: SLOTS_OK
 class ExceptionRecord:
     """One governed advisory exception."""
+
+    __slots__ = (
+        "advisory",
+        "crate",
+        "versions",
+        "tools",
+        "dependency_path",
+        "feature",
+        "exposure",
+        "owner",
+        "expires",
+        "remediation",
+        "feature_gated",
+        "default_graph",
+    )
 
     advisory: str
     crate: str
@@ -171,13 +193,13 @@ def cargo_deny_ban_skips(path: Path) -> frozenset[str]:
         if not isinstance(values, list):
             raise CheckError(f"{path}: [bans].{key} must be a list when present")
         for value in values:
-            match value:
-                case str(crate):
-                    skipped.add(crate)
-                case {"crate": str(crate)}:
-                    skipped.add(crate)
-                case _:
-                    raise CheckError(f"{path}: [bans].{key} contains an unsupported entry")
+            if isinstance(value, str):
+                skipped.add(value)
+                continue
+            if isinstance(value, dict) and isinstance(value.get("crate"), str):
+                skipped.add(value["crate"])
+                continue
+            raise CheckError(f"{path}: [bans].{key} contains an unsupported entry")
     return frozenset(skipped)
 
 
