@@ -196,7 +196,6 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
             "known_blockers": blockers,
             "last_verification": last_verification,
             "last_handoff": last_handoff,
-            "recent_issue_updates": recent_issue_updates,
             "git_state": git_state,
             "suggested_next_action": suggested_next_action,
         });
@@ -242,7 +241,6 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
         "known_blockers": blockers,
         "last_verification": last_verification,
         "last_handoff": last_handoff,
-        "recent_issue_updates": recent_issue_updates,
         "git_state": git_state,
         "suggested_next_action": suggested_next_action,
         "token_estimate": 0,

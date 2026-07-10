@@ -253,10 +253,15 @@ mod tests {
         assert_eq!(result["workspace"], "test_empty_ws");
         assert!(result["recent_decisions"].as_array().unwrap().is_empty());
         assert!(result["known_blockers"].as_array().unwrap().is_empty());
-        assert!(result["recent_issue_updates"]
-            .as_array()
-            .unwrap()
-            .is_empty());
+        // Contract (#183): `active_issues` is the canonical field for issue
+        // updates. The former duplicate alias `recent_issue_updates` must be
+        // absent — the response carries this collection under exactly one key.
+        assert!(result["active_issues"].as_array().unwrap().is_empty());
+        assert!(
+            result.get("recent_issue_updates").is_none(),
+            "recent_issue_updates must not be present (duplicate of active_issues): {}",
+            result
+        );
         assert!(result.get("token_estimate").is_some());
         let suggestion = result["suggested_next_action"].as_str().unwrap();
         assert!(
@@ -311,6 +316,38 @@ mod tests {
             suggestion.to_lowercase().contains("blocker"),
             "got: {}",
             suggestion
+        );
+    }
+
+    #[test]
+    fn test_harness_status_issue_updates_single_field() {
+        // Contract (#183): an issue_update record surfaces under `active_issues`
+        // only. The response must not duplicate it under `recent_issue_updates`.
+        let ctx = test_ctx();
+        let ws = "test_issue_updates_ws";
+        handle_harness_record(
+            &ctx,
+            json!({
+                "kind": "issue_update",
+                "summary": "Investigated flaky test",
+                "issue_number": 42,
+                "workspace": ws,
+            }),
+        );
+        let result = handle_harness_status(&ctx, json!({"workspace": ws}));
+        assert!(
+            result.get("error").is_none(),
+            "unexpected error: {}",
+            result
+        );
+        let active = result["active_issues"].as_array().unwrap();
+        assert_eq!(active.len(), 1, "expected 1 active issue, got: {}", result);
+        assert_eq!(active[0]["issue_number"], 42);
+        assert_eq!(active[0]["summary"], "Investigated flaky test");
+        assert!(
+            result.get("recent_issue_updates").is_none(),
+            "recent_issue_updates must not be present (duplicate of active_issues): {}",
+            result
         );
     }
 
