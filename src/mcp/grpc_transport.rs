@@ -16,6 +16,7 @@
 //! - Streaming events are sourced from `RealtimeManager::subscribe()` and
 //!   pushed through a `tokio_stream::wrappers::BroadcastStream`.
 
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -279,21 +280,17 @@ impl McpService for GrpcMcpService {
 
 /// Start the gRPC server.
 ///
-/// Binds to `0.0.0.0:{port}` and serves until an error occurs or the process
+/// Binds to `addr` and serves until an error occurs or the process
 /// is interrupted. Mirrors the signature of `serve_http()` in `http_transport`.
 pub async fn serve_grpc(
     handler: Arc<dyn McpHandler>,
-    port: u16,
+    addr: SocketAddr,
     api_key: Option<String>,
     realtime: Option<RealtimeManager>,
 ) -> crate::error::Result<()> {
-    let addr = format!("0.0.0.0:{port}")
-        .parse::<std::net::SocketAddr>()
-        .map_err(|e| crate::error::EngramError::Internal(e.to_string()))?;
-
     let service = GrpcMcpService::new(handler, api_key, realtime);
 
-    tracing::info!(port = port, "gRPC transport listening");
+    tracing::info!("gRPC transport listening on {}", addr);
 
     Server::builder()
         .add_service(McpServiceServer::new(service))

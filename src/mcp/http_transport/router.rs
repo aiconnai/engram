@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::env;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -165,7 +166,7 @@ pub(super) fn build_router(
 // Public entry-point
 // ---------------------------------------------------------------------------
 
-/// Start the axum HTTP server on `0.0.0.0:{port}`.
+/// Start the axum HTTP server on `addr`.
 ///
 /// The server will run until the process is terminated.
 ///
@@ -173,7 +174,7 @@ pub(super) fn build_router(
 ///   When `None`, the `/v1/events` endpoint returns `503 Service Unavailable`.
 pub async fn serve_http(
     handler: Arc<dyn McpHandler>,
-    port: u16,
+    addr: SocketAddr,
     api_key: Option<String>,
     realtime: Option<RealtimeManager>,
     http_rate_limit_rps: u64,
@@ -189,8 +190,7 @@ pub async fn serve_http(
         http_rate_limit_key,
     );
 
-    let addr = format!("0.0.0.0:{port}");
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("HTTP transport listening on {}", addr);
     axum::serve(listener, app).await?;
     Ok(())

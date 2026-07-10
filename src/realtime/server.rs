@@ -163,8 +163,7 @@ pub struct RealtimeServer {
 
 impl RealtimeServer {
     /// Create a new WebSocket server
-    pub fn new(manager: RealtimeManager, port: u16) -> Self {
-        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    pub fn new(manager: RealtimeManager, addr: SocketAddr) -> Self {
         Self { manager, addr }
     }
 

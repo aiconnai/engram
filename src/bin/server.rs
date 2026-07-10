@@ -2,6 +2,7 @@
 //!
 //! Run with: engram-server
 
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use clap::Parser;
@@ -140,6 +141,10 @@ struct Args {
     #[arg(long, env = "ENGRAM_WS_PORT", default_value = "0")]
     ws_port: u16,
 
+    /// WebSocket bind address for real-time events
+    #[arg(long, env = "ENGRAM_WS_BIND_ADDRESS", default_value = "127.0.0.1")]
+    ws_bind_address: IpAddr,
+
     /// Transport mode: stdio (default), http, or both
     #[arg(long, env = "ENGRAM_TRANSPORT", value_enum, default_value = "stdio")]
     transport: TransportMode,
@@ -147,6 +152,10 @@ struct Args {
     /// HTTP transport port (used when --transport is http or both)
     #[arg(long, env = "ENGRAM_HTTP_PORT", default_value = "3100")]
     http_port: u16,
+
+    /// HTTP transport bind address
+    #[arg(long, env = "ENGRAM_HTTP_BIND_ADDRESS", default_value = "127.0.0.1")]
+    http_bind_address: IpAddr,
 
     /// API key for HTTP transport authentication (optional)
     #[arg(long, env = "ENGRAM_HTTP_API_KEY")]
@@ -168,6 +177,11 @@ struct Args {
     #[cfg(feature = "grpc")]
     #[arg(long, env = "ENGRAM_GRPC_PORT", default_value = "50051")]
     grpc_port: u16,
+
+    /// gRPC transport bind address
+    #[cfg(feature = "grpc")]
+    #[arg(long, env = "ENGRAM_GRPC_BIND_ADDRESS", default_value = "127.0.0.1")]
+    grpc_bind_address: IpAddr,
 
     /// API key for gRPC transport authentication (optional Bearer token)
     #[cfg(feature = "grpc")]
@@ -781,17 +795,18 @@ fn main() -> Result<()> {
         );
     }
 
+    let ws_addr = SocketAddr::new(args.ws_bind_address, args.ws_port);
+
     // Start WebSocket server in background if ws_port > 0.
     // Clone the manager so it can also be shared with the HTTP transport SSE endpoint.
     if args.ws_port > 0 {
         if let Some(ref manager) = realtime_manager {
             let ws_manager = manager.clone();
-            let ws_port = args.ws_port;
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
                 rt.block_on(async {
-                    let ws_server = RealtimeServer::new(ws_manager, ws_port);
-                    tracing::info!("WebSocket server starting on port {}...", ws_port);
+                    let ws_server = RealtimeServer::new(ws_manager, ws_addr);
+                    tracing::info!("WebSocket server starting on {}...", ws_addr);
                     if let Err(e) = ws_server.start().await {
                         tracing::error!("WebSocket server error: {}", e);
                     }
@@ -814,12 +829,13 @@ fn main() -> Result<()> {
             server.run()?;
         }
         TransportMode::Http => {
+            let http_addr = SocketAddr::new(args.http_bind_address, args.http_port);
             let rt = tokio::runtime::Runtime::new()
                 .map_err(|e| engram::error::EngramError::Internal(e.to_string()))?;
             rt.block_on(async {
                 http_transport::serve_http(
                     handler,
-                    args.http_port,
+                    http_addr,
                     args.http_api_key,
                     realtime_manager,
                     args.http_rate_limit_rps,
@@ -832,7 +848,7 @@ fn main() -> Result<()> {
         }
         TransportMode::Both => {
             let http_handler = handler.clone();
-            let http_port = args.http_port;
+            let http_addr = SocketAddr::new(args.http_bind_address, args.http_port);
             let http_api_key = args.http_api_key.clone();
             let http_realtime = realtime_manager.clone();
 
@@ -842,7 +858,7 @@ fn main() -> Result<()> {
                 rt.block_on(async {
                     if let Err(e) = http_transport::serve_http(
                         http_handler,
-                        http_port,
+                        http_addr,
                         http_api_key,
                         http_realtime,
                         args.http_rate_limit_rps,
@@ -863,17 +879,13 @@ fn main() -> Result<()> {
         TransportMode::Grpc => {
             use engram::mcp::grpc_transport;
 
+            let grpc_addr = SocketAddr::new(args.grpc_bind_address, args.grpc_port);
             let rt = tokio::runtime::Runtime::new()
                 .map_err(|e| engram::error::EngramError::Internal(e.to_string()))?;
             rt.block_on(async {
-                grpc_transport::serve_grpc(
-                    handler,
-                    args.grpc_port,
-                    args.grpc_api_key,
-                    realtime_manager,
-                )
-                .await
-                .map_err(|e| engram::error::EngramError::Internal(e.to_string()))
+                grpc_transport::serve_grpc(handler, grpc_addr, args.grpc_api_key, realtime_manager)
+                    .await
+                    .map_err(|e| engram::error::EngramError::Internal(e.to_string()))
             })?;
         }
     }

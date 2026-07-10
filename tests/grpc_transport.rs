@@ -146,7 +146,7 @@ async fn start_server(api_key: Option<String>) -> SocketAddr {
         let api_key_clone = api_key.clone();
 
         let server =
-            tokio::spawn(async move { serve_grpc(handler, port, api_key_clone, None).await });
+            tokio::spawn(async move { serve_grpc(handler, addr, api_key_clone, None).await });
 
         for _ in 0..20 {
             if server.is_finished() {
