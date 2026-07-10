@@ -10,7 +10,7 @@ use serde::Deserialize;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
-use super::{check_bearer, AppState};
+use super::{authenticate_transport_principal, principal_can_read_workspace, AppState};
 use crate::realtime::{EventType, RealtimeEvent};
 
 // ---------------------------------------------------------------------------
@@ -122,12 +122,16 @@ pub(super) async fn handle_events(
     headers: HeaderMap,
     Query(query): Query<EventsQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
-    // Auth check
-    if let Some(ref expected) = state.api_key {
-        if !check_bearer(&headers, expected) {
+    let principal = match authenticate_transport_principal(&state.api_key, &headers) {
+        Ok(principal) => principal,
+        Err(_) => {
             state.metrics.on_events_request(true, false);
             return Err(StatusCode::UNAUTHORIZED);
         }
+    };
+    if !principal_can_read_workspace(&principal, query.workspace.as_deref()) {
+        state.metrics.on_events_request(true, false);
+        return Err(StatusCode::FORBIDDEN);
     }
 
     // If realtime is not enabled, return 503.

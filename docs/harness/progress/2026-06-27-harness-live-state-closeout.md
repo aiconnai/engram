@@ -139,6 +139,33 @@ A follow-up independent review returned `REVIEW_VERDICT: PASS` for the stale-rev
 
 A second follow-up independent review returned `REVIEW_VERDICT: PASS` for the dirty-probe and SPEC gate-label fixes. The dirty probe now uses `docs/harness/check-live-state-dirty-probe.untracked`, which is not ignored by `.gitignore`; `SPEC.md` now names `engram-10-of-10-live-state` in the expected post gate. The authoritative artifact is `docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md`.
 
+## 2026-07-10 — Engram 10/10 Wave 2 Task 11: fail-closed HTTP listeners
+
+### Domain change
+
+- Public HTTP and SSE listeners refuse startup without an API key.
+- Loopback HTTP retains anonymous development access.
+- Bearer authentication and principal authorization precede rate limiting and
+  MCP dispatch for requests, notifications, and SSE subscriptions.
+- The HTTP contract distinguishes authentication failures (`401`) from scope
+  or workspace authorization failures (`403`).
+
+### Verification
+
+- `cargo test http_transport --lib` — PASS.
+- `cargo test --test http_transport_security -- --nocapture` — PASS against
+  real `engram-server` processes.
+- `cargo clippy -p engram-core --all-targets -- -D warnings` — PASS.
+- `cargo fmt --all -- --check` — PASS.
+- `bash docs/harness/bin/doctor.sh` — PASS.
+- Manual real-binary HTTP/SSE QA observed loopback anonymous `200`, public
+  no-key refusal before bind, keyed missing/wrong bearer `401`, valid MCP
+  initialize `200`, missing SSE bearer `401`, and valid SSE `200` with
+  `text/event-stream`.
+
+Detailed command receipts are recorded in the orchestrator-owned Task 11
+evidence file under `.omo/evidence/`.
+
 ## 2026-07-12 — Harness Contract workflow YAML repair
 
 - The `main` push after PR #187 produced a zero-job failure for

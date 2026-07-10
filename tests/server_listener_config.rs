@@ -151,7 +151,7 @@ fn http_listener_defaults_to_loopback_and_accepts_explicit_public_bind_address()
     assert_http_health(default_port);
     drop(default_process);
 
-    // Given: a caller explicitly requests a non-loopback bind address.
+    // Given: an authenticated caller explicitly requests a non-loopback bind address.
     let explicit_port = pick_loopback_port();
     let mut explicit_process = ServerProcess::spawn(
         &[
@@ -159,6 +159,8 @@ fn http_listener_defaults_to_loopback_and_accepts_explicit_public_bind_address()
             "http",
             "--http-bind-address",
             "0.0.0.0",
+            "--http-api-key",
+            "listener-config-test-key",
             "--http-port",
             &explicit_port.to_string(),
         ],
@@ -180,11 +182,14 @@ fn http_listener_defaults_to_loopback_and_accepts_explicit_public_bind_address()
 #[test]
 fn http_bind_address_env_is_parsed_before_socket_startup() {
     let _guard = listener_config_test_guard();
-    // Given: an HTTP transport configured via environment instead of CLI.
+    // Given: an authenticated HTTP transport configured via environment instead of CLI.
     let port = pick_loopback_port();
     let mut process = ServerProcess::spawn(
         &["--transport", "http", "--http-port", &port.to_string()],
-        &[("ENGRAM_HTTP_BIND_ADDRESS", "0.0.0.0")],
+        &[
+            ("ENGRAM_HTTP_BIND_ADDRESS", "0.0.0.0"),
+            ("ENGRAM_HTTP_API_KEY", "listener-config-test-key"),
+        ],
     )
     .expect("spawn HTTP server from env bind address");
 

@@ -7,9 +7,10 @@ use axum::{
     Json,
 };
 
-use super::super::protocol::{McpRequest, McpResponse};
+use super::super::permission::permission_denial_for_principal;
+use super::super::protocol::{methods, McpRequest, McpResponse};
 use super::rate_limit::{is_rate_limit_allowed, rate_limited_response};
-use super::{check_bearer, AppState, MICROSECONDS_PER_MILLISECOND};
+use super::{authenticate_transport_principal, AppState, MICROSECONDS_PER_MILLISECOND};
 
 pub(super) async fn handle_mcp(
     State(state): State<AppState>,
@@ -30,21 +31,18 @@ pub(super) async fn handle_mcp(
 
     let mut decision = "success";
     let mut is_unauthorized = false;
+    let mut is_forbidden = false;
     let mut is_rate_limited = false;
     let mut include_retry_after = false;
 
-    let (status, response_payload) = if let Some(ref expected) = state.api_key {
-        if !check_bearer(&headers, expected) {
+    let principal = authenticate_transport_principal(&state.api_key, &headers);
+    let (status, response_payload) = match principal {
+        Err(_) => {
             is_unauthorized = true;
             decision = "unauthorized";
-            let status = if is_notification {
-                StatusCode::ACCEPTED
-            } else {
-                StatusCode::UNAUTHORIZED
-            };
 
             (
-                status,
+                StatusCode::UNAUTHORIZED,
                 if is_notification {
                     serde_json::Value::Null
                 } else {
@@ -63,13 +61,37 @@ pub(super) async fn handle_mcp(
                     })
                 },
             )
-        } else if !is_rate_limit_allowed(&state, &headers).await {
-            is_rate_limited = true;
-            decision = "rate_limited";
-            include_retry_after = true;
-            rate_limited_response(request.id, is_notification)
-        } else {
-            if is_notification {
+        }
+        Ok(principal) => {
+            if let Some(denial) = permission_denial_for_http_request(&request, &principal) {
+                is_forbidden = true;
+                decision = "forbidden";
+                (
+                    StatusCode::FORBIDDEN,
+                    if is_notification {
+                        serde_json::Value::Null
+                    } else {
+                        serde_json::to_value(McpResponse::error(
+                            request.id.clone(),
+                            -32003,
+                            denial.to_string(),
+                        ))
+                        .unwrap_or_else(|e| {
+                            tracing::error!(
+                                error = %e,
+                                route = %uri.path(),
+                                "failed to serialize forbidden response"
+                            );
+                            serde_json::Value::Null
+                        })
+                    },
+                )
+            } else if !is_rate_limit_allowed(&state, &headers).await {
+                is_rate_limited = true;
+                decision = "rate_limited";
+                include_retry_after = true;
+                rate_limited_response(request.id, is_notification)
+            } else if is_notification {
                 (StatusCode::ACCEPTED, serde_json::Value::Null)
             } else {
                 let response = state.handler.handle_request(request);
@@ -82,28 +104,10 @@ pub(super) async fn handle_mcp(
                 )
             }
         }
-    } else if !is_rate_limit_allowed(&state, &headers).await {
-        is_rate_limited = true;
-        decision = "rate_limited";
-        include_retry_after = true;
-        rate_limited_response(request.id, is_notification)
-    } else if is_notification {
-        decision = "success";
-        (StatusCode::ACCEPTED, serde_json::Value::Null)
-    } else {
-        let response = state.handler.handle_request(request);
-        decision = "success";
-        (
-            StatusCode::OK,
-            serde_json::to_value(response).unwrap_or_else(|e| {
-                tracing::error!(error = %e, route = %uri.path(), "failed to serialize MCP response");
-                serde_json::Value::Null
-            }),
-        )
     };
 
     state.metrics.on_mcp_request_complete(
-        !is_unauthorized && !is_rate_limited,
+        !is_unauthorized && !is_forbidden && !is_rate_limited,
         is_unauthorized,
         is_rate_limited,
         request_started.elapsed(),
@@ -115,7 +119,7 @@ pub(super) async fn handle_mcp(
         (status, Json(response_payload)).into_response()
     };
 
-    if is_rate_limited || is_unauthorized {
+    if is_rate_limited || is_unauthorized || is_forbidden {
         tracing::warn!(
             route = %uri.path(),
             status = %status,
@@ -136,4 +140,25 @@ pub(super) async fn handle_mcp(
     }
 
     response
+}
+
+fn permission_denial_for_http_request(
+    request: &McpRequest,
+    principal: &crate::auth::TransportPrincipal,
+) -> Option<serde_json::Value> {
+    if request.method != methods::CALL_TOOL {
+        return None;
+    }
+
+    let tool_name = request
+        .params
+        .get("name")
+        .and_then(|value| value.as_str())?;
+    let requested_workspace = request
+        .params
+        .get("arguments")
+        .and_then(|arguments| arguments.get("workspace"))
+        .and_then(|workspace| workspace.as_str());
+
+    permission_denial_for_principal(tool_name, principal, requested_workspace)
 }

@@ -12,9 +12,9 @@ use std::sync::{
 use std::time::Duration;
 
 use axum::http::HeaderMap;
-use subtle::ConstantTimeEq;
 
 use super::protocol::McpHandler;
+use crate::auth::{Permission, ResourceType, TransportPrincipal, TransportPrincipalError};
 use crate::realtime::RealtimeManager;
 
 mod events;
@@ -179,18 +179,41 @@ struct AppState {
 // Auth helpers
 // ---------------------------------------------------------------------------
 
-/// Return `true` when the `Authorization: Bearer <token>` header matches the
-/// expected key.
+#[cfg(test)]
 fn check_bearer(headers: &HeaderMap, expected: &str) -> bool {
-    headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| {
-            v.strip_prefix("Bearer ")
-                .map(|token| bool::from(token.as_bytes().ct_eq(expected.as_bytes())))
-                .unwrap_or(false)
-        })
-        .unwrap_or(false)
+    authenticate_transport_principal(&Some(expected.to_string()), headers).is_ok()
+}
+
+fn normalize_api_key(api_key: Option<String>) -> Option<String> {
+    api_key.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn authenticate_transport_principal(
+    api_key: &Option<String>,
+    headers: &HeaderMap,
+) -> Result<TransportPrincipal, TransportPrincipalError> {
+    match api_key {
+        Some(expected) => TransportPrincipal::from_process_bearer(
+            headers.get("authorization").and_then(|v| v.to_str().ok()),
+            expected,
+        ),
+        None => Ok(TransportPrincipal::anonymous_loopback()),
+    }
+}
+
+fn principal_can_read_workspace(
+    principal: &TransportPrincipal,
+    requested_workspace: Option<&str>,
+) -> bool {
+    principal.has_permission(Permission::Read, ResourceType::Memory)
+        && principal.allows_workspace(requested_workspace)
 }
 
 #[cfg(test)]

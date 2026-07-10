@@ -13,6 +13,19 @@
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
+## Engram 10/10 Wave 2 — HTTP listener security (Task 11)
+
+- Public HTTP/SSE listeners now fail closed at startup unless an API key is
+  configured; anonymous development access remains available on loopback.
+- Bearer authentication and principal authorization run before rate limiting
+  and MCP dispatch, including JSON-RPC notifications and SSE subscriptions.
+- Authentication failures return `401`; authenticated principals without the
+  required scope or workspace permission return `403`.
+- Contract coverage includes real `engram-server` processes for loopback
+  compatibility, public no-key refusal, keyed MCP requests, and keyed SSE.
+- Evidence is recorded in the orchestrator-owned Task 11 evidence and report
+  files under `.omo/` (outside this committed worktree).
+
 ## Sprint ativa
 
 - **Harness maintenance — live-state closeout**
