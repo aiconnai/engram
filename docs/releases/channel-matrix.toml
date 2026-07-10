@@ -1,0 +1,145 @@
+[matrix]
+schema_version = 1
+observed_utc = "2026-07-10T08:41:33Z"
+max_staleness_days = 30
+repository = "aiconnai/engram"
+core_version = "0.22.0"
+core_tag = "v0.22.0"
+latest_released_tag = "v0.21.2"
+versioning_policy = "Core, Python SDK, and TypeScript SDK version independently. SDK releases must state the core API/MCP range they were tested against; core releases do not imply SDK package publication."
+rollback_limitation = "Tags, GitHub releases, crates.io, PyPI, npm, and Homebrew installs are externally visible. Prefer forward fixes; rollback may require yanking/deprecating packages and a new release rather than deleting history."
+human_gate = "A human release owner must approve the matrix, dry-runs, and changelog section before any tag, publish, or Homebrew tap write."
+
+[[channels]]
+id = "core"
+kind = "local_file"
+local_source = "Cargo.toml"
+local_version = "0.22.0"
+expected_status = "prepared"
+observed_version = "0.22.0"
+owner = "release owner"
+dry_run_command = "cargo package --allow-dirty --no-verify"
+publish_command = "cargo publish --dry-run first, then cargo publish only after human gate"
+rollback = "Revert repository policy/code before publish; after publish, use a forward patch or cargo yank when appropriate."
+human_gate = true
+
+[[channels]]
+id = "git_tag"
+kind = "git_tag"
+target = "v0.22.0"
+expected_present = false
+observed_latest = "v0.21.2"
+owner = "release owner"
+dry_run_command = "git ls-remote --tags https://github.com/aiconnai/engram.git refs/tags/v0.22.0"
+publish_command = "git tag -a v0.22.0 -m 'v0.22.0' && git push origin v0.22.0"
+rollback = "Do not delete public tags casually; coordinate a forward fix or documented tag correction."
+human_gate = true
+
+[[channels]]
+id = "github_release"
+kind = "github_release"
+target = "v0.22.0"
+expected_present = false
+observed_latest = "v0.21.2"
+owner = "release owner"
+dry_run_command = "gh release view v0.22.0 --repo aiconnai/engram --json tagName,isDraft,isPrerelease,publishedAt"
+publish_command = "GitHub Actions release workflow from reviewed tag; do not use generated notes."
+rollback = "Published releases may be edited, but assets/checksums and downstream Homebrew formula may already be consumed."
+human_gate = true
+
+[[channels]]
+id = "crates_io"
+kind = "cargo_registry"
+package = "engram-core"
+local_version = "0.22.0"
+expected_status = "lagging"
+observed_version = "0.21.1"
+owner = "Rust release owner"
+dry_run_command = "cargo publish --dry-run"
+publish_command = "cargo publish"
+rollback = "crates.io versions are immutable; use cargo yank or publish a forward patch."
+human_gate = true
+
+[[channels]]
+id = "pypi"
+kind = "pypi_registry"
+package = "engram-client"
+local_source = "sdks/python/pyproject.toml"
+local_version = "0.5.0"
+expected_status = "independent_lagging"
+observed_version = "0.4.0"
+owner = "Python SDK release owner"
+dry_run_command = "cd sdks/python && python3 -m build && twine check dist/*"
+publish_command = "cd sdks/python && twine upload dist/*"
+rollback = "PyPI files are immutable; yank the release or publish a forward fix."
+human_gate = true
+
+[[channels]]
+id = "npm"
+kind = "npm_registry"
+package = "engram-client"
+local_source = "sdks/typescript/package.json"
+local_version = "0.5.0"
+expected_status = "independent_lagging"
+observed_version = "0.3.0"
+owner = "TypeScript SDK release owner"
+dry_run_command = "cd sdks/typescript && npm pack --dry-run"
+publish_command = "cd sdks/typescript && npm publish --access public"
+rollback = "npm unpublish is time-limited and disruptive; prefer deprecate or forward patch."
+human_gate = true
+
+[[channels]]
+id = "homebrew"
+kind = "homebrew_formula"
+package = "aiconnai/engram/engram"
+expected_status = "released_previous"
+observed_version = "0.21.2"
+owner = "Homebrew tap owner"
+dry_run_command = "brew info --json=v2 aiconnai/engram/engram"
+publish_command = "GitHub release workflow updates aiconnai/homebrew-engram only when HOMEBREW_TAP_TOKEN is configured."
+rollback = "Formula consumers may have installed the artifact; update formula forward or coordinate tap revert with checksums."
+human_gate = true
+
+[[channels]]
+id = "docs"
+kind = "documentation"
+local_source = "docs/GETTING_STARTED.md"
+expected_status = "pre_release_example_only"
+observed_version = "v0.22.0"
+owner = "documentation owner"
+dry_run_command = "grep -n 'VERSION=v0.22.0' docs/GETTING_STARTED.md README.md"
+publish_command = "Docs merge only after release channel matrix and human gate; docs do not publish binaries."
+rollback = "Revert docs claim or clarify channel lag; docs rollback cannot unship external artifacts."
+human_gate = true
+
+[[channels]]
+id = "changelog"
+kind = "changelog"
+local_source = "CHANGELOG.md"
+expected_status = "section_prepared"
+observed_version = "0.22.0"
+owner = "release notes owner"
+dry_run_command = ".github/scripts/extract-release-notes.sh v0.22.0 CHANGELOG.md /tmp/engram-release-notes.md"
+publish_command = "GitHub release workflow uses CHANGELOG.md section through extract-release-notes.sh."
+rollback = "Fix changelog in git before release; after release, edit notes with an audit trail or publish a follow-up."
+human_gate = true
+
+[[sdk_compatibility]]
+sdk = "python"
+package = "engram-client"
+local_version = "0.5.0"
+observed_registry_version = "0.4.0"
+compatible_core_min = "0.20.0"
+compatible_core_max = "0.22.x"
+compatibility_basis = "Async SDK public methods and MCP/HTTP JSON-RPC wrappers tested against the 0.20.x through 0.22.0 tool/API shape."
+publish_with_core = false
+
+[[sdk_compatibility]]
+sdk = "typescript"
+package = "engram-client"
+local_version = "0.5.0"
+observed_registry_version = "0.3.0"
+compatible_core_min = "0.20.0"
+compatible_core_max = "0.22.x"
+compatibility_basis = "Typed client wrappers target the stable MCP/HTTP JSON-RPC surface and may release independently from core binaries."
+publish_with_core = false
