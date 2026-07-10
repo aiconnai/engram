@@ -1,0 +1,425 @@
+{
+  "version": "transport-security-contract-v1",
+  "required_row_ids": [
+    "TSC-STDIO-LOCAL-DEFAULT",
+    "TSC-HTTP-LOOPBACK-NO-KEY-ALLOWED",
+    "TSC-HTTP-PUBLIC-NO-KEY-REFUSED",
+    "TSC-HTTP-PUBLIC-KEY-MISSING-401",
+    "TSC-HTTP-PUBLIC-KEY-INVALID-401",
+    "TSC-HTTP-PUBLIC-KEY-VALID-OK",
+    "TSC-SSE-PUBLIC-KEY-MISSING-401",
+    "TSC-SSE-PUBLIC-NO-REALTIME-503",
+    "TSC-WS-DEFAULT-OFF",
+    "TSC-WS-PUBLIC-NO-PROXY-BLOCKED",
+    "TSC-WS-PUBLIC-TRUSTED-PROXY-ALLOWED",
+    "TSC-GRPC-PUBLIC-NO-KEY-REFUSED",
+    "TSC-GRPC-PUBLIC-KEY-MISSING-UNAUTHENTICATED",
+    "TSC-GRPC-PUBLIC-KEY-INVALID-UNAUTHENTICATED",
+    "TSC-GRPC-PUBLIC-KEY-VALID-OK",
+    "TSC-PROXY-SPOOFED-DIRECT-IGNORED",
+    "TSC-PROXY-TRUSTED-ACCEPTED",
+    "TSC-TOKEN-SCOPE-MALFORMED-FAIL-CLOSED",
+    "TSC-TOKEN-SCOPE-OVERBROAD-FAIL-CLOSED"
+  ],
+  "rows": [
+    {
+      "id": "TSC-STDIO-LOCAL-DEFAULT",
+      "transport": "stdio",
+      "surface": "engram-server --transport stdio",
+      "threat_model_row": "TM-STDIO",
+      "bind": { "mode": "local_process", "address": "stdio", "public": false },
+      "auth": {
+        "server_key": "not_applicable",
+        "client_credential": "not_applicable",
+        "scope": "not_applicable",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "success", "status": "stdio local session" },
+      "failure": {
+        "kind": "none",
+        "signal": "process exit or client disconnect only",
+        "must_not": "must not infer network trust from local stdio compatibility"
+      },
+      "rollback": "return to stdio-only startup and remove network flags",
+      "references": ["docs/security/THREAT_MODEL.md#TM-STDIO", "src/bin/server.rs"]
+    },
+    {
+      "id": "TSC-HTTP-LOOPBACK-NO-KEY-ALLOWED",
+      "transport": "http_mcp",
+      "surface": "POST /mcp loopback compatibility",
+      "threat_model_row": "TM-HTTP-MCP",
+      "bind": { "mode": "loopback", "address": "127.0.0.1", "public": false },
+      "auth": {
+        "server_key": "absent",
+        "client_credential": "missing",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "success", "status": "200 OK" },
+      "failure": {
+        "kind": "none",
+        "signal": "local compatibility path remains open only on loopback",
+        "must_not": "must not describe loopback as authenticated"
+      },
+      "rollback": "remove HTTP transport and keep stdio local clients",
+      "references": ["docs/MCP_AUTH.md", "src/mcp/http_transport/router.rs"]
+    },
+    {
+      "id": "TSC-HTTP-PUBLIC-NO-KEY-REFUSED",
+      "transport": "http_mcp",
+      "surface": "POST /mcp public bind without configured key",
+      "threat_model_row": "TM-HTTP-MCP",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "absent",
+        "client_credential": "missing",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "refused", "request": "not_applicable", "status": "startup refused" },
+      "failure": {
+        "kind": "startup_refused",
+        "signal": "public HTTP bind without ENGRAM_HTTP_API_KEY is rejected before serving",
+        "must_not": "must not serve unauthenticated MCP tools on a non-loopback listener"
+      },
+      "rollback": "remove public HTTP bind or configure ENGRAM_HTTP_API_KEY",
+      "references": ["docs/security/THREAT_MODEL.md#TM-HTTP-MCP", "docs/MCP_AUTH.md"]
+    },
+    {
+      "id": "TSC-HTTP-PUBLIC-KEY-MISSING-401",
+      "transport": "http_mcp",
+      "surface": "POST /mcp public bind with missing Authorization header",
+      "threat_model_row": "TM-HTTP-MCP",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "missing",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "unauthorized", "status": "401 Unauthorized" },
+      "failure": {
+        "kind": "unauthorized",
+        "signal": "mcp_http_request decision=unauthorized",
+        "must_not": "must not consume rate-limit tokens or log token values"
+      },
+      "rollback": "stop HTTP transport or rotate the configured API key",
+      "references": ["docs/MCP_AUTH.md", "src/mcp/http_transport/mcp_handler.rs"]
+    },
+    {
+      "id": "TSC-HTTP-PUBLIC-KEY-INVALID-401",
+      "transport": "http_mcp",
+      "surface": "POST /mcp public bind with wrong bearer token",
+      "threat_model_row": "TM-HTTP-MCP",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "invalid",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "unauthorized", "status": "401 Unauthorized" },
+      "failure": {
+        "kind": "unauthorized",
+        "signal": "mcp_http_request decision=unauthorized",
+        "must_not": "must not reveal whether a token prefix matched"
+      },
+      "rollback": "stop HTTP transport or rotate the configured API key",
+      "references": ["docs/MCP_AUTH.md", "src/mcp/http_transport/mcp_handler.rs"]
+    },
+    {
+      "id": "TSC-HTTP-PUBLIC-KEY-VALID-OK",
+      "transport": "http_mcp",
+      "surface": "POST /mcp public bind with matching bearer token",
+      "threat_model_row": "TM-HTTP-MCP",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "valid",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "success", "status": "200 OK" },
+      "failure": {
+        "kind": "none",
+        "signal": "authorized request reaches MCP handler",
+        "must_not": "must not log bearer token material"
+      },
+      "rollback": "stop HTTP transport or return to stdio-only startup",
+      "references": ["docs/MCP_AUTH.md", "src/mcp/http_transport/mcp_handler.rs"]
+    },
+    {
+      "id": "TSC-SSE-PUBLIC-KEY-MISSING-401",
+      "transport": "sse_events",
+      "surface": "GET /v1/events public bind with missing Authorization header",
+      "threat_model_row": "TM-SSE-EVENTS",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "missing",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "unauthorized", "status": "401 Unauthorized" },
+      "failure": {
+        "kind": "unauthorized",
+        "signal": "events_requests_unauthorized_total increments",
+        "must_not": "must not stream realtime metadata before bearer auth"
+      },
+      "rollback": "disable realtime or remove public HTTP transport",
+      "references": ["docs/MCP_AUTH.md", "src/mcp/http_transport/events.rs"]
+    },
+    {
+      "id": "TSC-SSE-PUBLIC-NO-REALTIME-503",
+      "transport": "sse_events",
+      "surface": "GET /v1/events public bind when realtime manager is absent",
+      "threat_model_row": "TM-SSE-EVENTS",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "valid",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "service_unavailable", "status": "503 Service Unavailable" },
+      "failure": {
+        "kind": "service_unavailable",
+        "signal": "events_requests_no_realtime_total increments",
+        "must_not": "must not fabricate an event stream when realtime is disabled"
+      },
+      "rollback": "disable /v1/events routing or configure realtime deliberately",
+      "references": ["docs/security/THREAT_MODEL.md#TM-SSE-EVENTS", "src/mcp/http_transport/events.rs"]
+    },
+    {
+      "id": "TSC-WS-DEFAULT-OFF",
+      "transport": "websocket",
+      "surface": "ENGRAM_WS_PORT default",
+      "threat_model_row": "TM-WS-UPGRADES-EVENTS",
+      "bind": { "mode": "disabled", "address": "none", "public": false },
+      "auth": {
+        "server_key": "not_applicable",
+        "client_credential": "not_applicable",
+        "scope": "not_applicable",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "disabled", "request": "not_applicable", "status": "listener disabled" },
+      "failure": {
+        "kind": "disabled",
+        "signal": "ENGRAM_WS_PORT=0 leaves no WS listener",
+        "must_not": "must not enable WebSocket as a side effect of HTTP startup"
+      },
+      "rollback": "set ENGRAM_WS_PORT=0",
+      "references": ["docs/security/THREAT_MODEL.md#TM-WS-UPGRADES-EVENTS", "src/bin/server.rs", "src/realtime/server.rs"]
+    },
+    {
+      "id": "TSC-WS-PUBLIC-NO-PROXY-BLOCKED",
+      "transport": "websocket",
+      "surface": "/ws public listener without authenticated trusted proxy",
+      "threat_model_row": "TM-WS-UPGRADES-EVENTS",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "absent",
+        "client_credential": "missing",
+        "scope": "not_applicable",
+        "proxy_trust": "missing_trusted_proxy"
+      },
+      "expected": { "startup": "refused", "request": "proxy_blocked", "status": "release blocked" },
+      "failure": {
+        "kind": "proxy_required",
+        "signal": "review evidence rejects unauthenticated public WS bind",
+        "must_not": "must not expose realtime events on public WS without proxy auth or first-party auth"
+      },
+      "rollback": "set ENGRAM_WS_PORT=0 or put the listener behind an authenticated trusted proxy",
+      "references": ["docs/security/THREAT_MODEL.md#TM-WS-UPGRADES-EVENTS", "src/realtime/server.rs"]
+    },
+    {
+      "id": "TSC-WS-PUBLIC-TRUSTED-PROXY-ALLOWED",
+      "transport": "websocket",
+      "surface": "/ws public listener behind authenticated trusted proxy",
+      "threat_model_row": "TM-WS-UPGRADES-EVENTS",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "not_applicable",
+        "client_credential": "valid",
+        "scope": "proxy_authenticated",
+        "proxy_trust": "trusted_proxy"
+      },
+      "expected": { "startup": "allowed", "request": "proxy_accepted", "status": "proxy authenticated upgrade" },
+      "failure": {
+        "kind": "none",
+        "signal": "proxy access logs prove authenticated upgrade before WS server",
+        "must_not": "must not trust direct client headers as proxy authentication"
+      },
+      "rollback": "set ENGRAM_WS_PORT=0 or remove the public proxy route",
+      "references": ["docs/security/THREAT_MODEL.md#TM-WS-UPGRADES-EVENTS", "src/realtime/server.rs"]
+    },
+    {
+      "id": "TSC-GRPC-PUBLIC-NO-KEY-REFUSED",
+      "transport": "grpc",
+      "surface": "feature-enabled gRPC public bind without configured key",
+      "threat_model_row": "TM-GRPC",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "absent",
+        "client_credential": "missing",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "refused", "request": "not_applicable", "status": "startup refused" },
+      "failure": {
+        "kind": "startup_refused",
+        "signal": "public gRPC bind without ENGRAM_GRPC_API_KEY is rejected before serving",
+        "must_not": "must not serve unauthenticated gRPC MCP on a non-loopback listener"
+      },
+      "rollback": "disable grpc feature or configure ENGRAM_GRPC_API_KEY",
+      "references": ["docs/security/THREAT_MODEL.md#TM-GRPC", "src/mcp/grpc_transport.rs"]
+    },
+    {
+      "id": "TSC-GRPC-PUBLIC-KEY-MISSING-UNAUTHENTICATED",
+      "transport": "grpc",
+      "surface": "feature-enabled gRPC public bind with missing authorization metadata",
+      "threat_model_row": "TM-GRPC",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "missing",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "unauthenticated", "status": "UNAUTHENTICATED" },
+      "failure": {
+        "kind": "unauthenticated",
+        "signal": "tonic Status::unauthenticated for missing Bearer token",
+        "must_not": "must not invoke MCP handler before metadata auth"
+      },
+      "rollback": "disable grpc feature or rotate the configured API key",
+      "references": ["docs/MCP_AUTH.md", "src/mcp/grpc_transport.rs"]
+    },
+    {
+      "id": "TSC-GRPC-PUBLIC-KEY-INVALID-UNAUTHENTICATED",
+      "transport": "grpc",
+      "surface": "feature-enabled gRPC public bind with wrong bearer token",
+      "threat_model_row": "TM-GRPC",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "invalid",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "unauthenticated", "status": "UNAUTHENTICATED" },
+      "failure": {
+        "kind": "unauthenticated",
+        "signal": "tonic Status::unauthenticated for invalid Bearer token",
+        "must_not": "must not log token values or token prefixes"
+      },
+      "rollback": "disable grpc feature or rotate the configured API key",
+      "references": ["docs/MCP_AUTH.md", "src/mcp/grpc_transport.rs"]
+    },
+    {
+      "id": "TSC-GRPC-PUBLIC-KEY-VALID-OK",
+      "transport": "grpc",
+      "surface": "feature-enabled gRPC public bind with matching bearer token",
+      "threat_model_row": "TM-GRPC",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "valid",
+        "scope": "process_wide",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "success", "status": "OK" },
+      "failure": {
+        "kind": "none",
+        "signal": "authorized gRPC metadata reaches MCP handler",
+        "must_not": "must not log bearer token material"
+      },
+      "rollback": "disable grpc feature or return to stdio/http",
+      "references": ["docs/MCP_AUTH.md", "src/mcp/grpc_transport.rs"]
+    },
+    {
+      "id": "TSC-PROXY-SPOOFED-DIRECT-IGNORED",
+      "transport": "http_mcp",
+      "surface": "rate-limit identity headers from direct untrusted client",
+      "threat_model_row": "TM-PROXY-IP",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "spoofed_proxy_header",
+        "scope": "process_wide",
+        "proxy_trust": "untrusted_direct"
+      },
+      "expected": { "startup": "allowed", "request": "proxy_ignored", "status": "fallback identity" },
+      "failure": {
+        "kind": "proxy_spoof_ignored",
+        "signal": "rate-limit bucket uses direct connection metadata or configured trusted proxy only",
+        "must_not": "must not grant authority to x-forwarded-for from an untrusted direct client"
+      },
+      "rollback": "remove proxy-header keying and key only on direct connection metadata",
+      "references": ["docs/security/THREAT_MODEL.md#TM-PROXY-IP", "src/mcp/http_transport/rate_limit.rs"]
+    },
+    {
+      "id": "TSC-PROXY-TRUSTED-ACCEPTED",
+      "transport": "http_mcp",
+      "surface": "rate-limit identity headers from configured trusted proxy",
+      "threat_model_row": "TM-PROXY-IP",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "valid",
+        "scope": "process_wide",
+        "proxy_trust": "trusted_proxy"
+      },
+      "expected": { "startup": "allowed", "request": "proxy_accepted", "status": "trusted proxy identity" },
+      "failure": {
+        "kind": "none",
+        "signal": "proxy audit logs bind the forwarded identity to a trusted hop",
+        "must_not": "must not accept proxy identity without configured trust"
+      },
+      "rollback": "remove proxy-header keying and key only on direct connection metadata",
+      "references": ["docs/security/THREAT_MODEL.md#TM-PROXY-IP", "docs/MCP_AUTH.md"]
+    },
+    {
+      "id": "TSC-TOKEN-SCOPE-MALFORMED-FAIL-CLOSED",
+      "transport": "http_mcp",
+      "surface": "future scoped token parser receives malformed scope claim",
+      "threat_model_row": "TM-TOKEN-SCOPES",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "malformed_scope",
+        "scope": "malformed",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "fail_closed", "status": "401 Unauthorized" },
+      "failure": {
+        "kind": "fail_closed",
+        "signal": "auth failure recorded without token value logging",
+        "must_not": "must not coerce malformed scope into process-wide access"
+      },
+      "rollback": "remove scoped-token rollout and rotate the process-wide token",
+      "references": ["docs/security/THREAT_MODEL.md#TM-TOKEN-SCOPES", "docs/MCP_AUTH.md"]
+    },
+    {
+      "id": "TSC-TOKEN-SCOPE-OVERBROAD-FAIL-CLOSED",
+      "transport": "grpc",
+      "surface": "future scoped token parser receives overbroad scope claim",
+      "threat_model_row": "TM-TOKEN-SCOPES",
+      "bind": { "mode": "public", "address": "0.0.0.0", "public": true },
+      "auth": {
+        "server_key": "configured",
+        "client_credential": "overbroad_scope",
+        "scope": "overbroad",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "fail_closed", "status": "UNAUTHENTICATED" },
+      "failure": {
+        "kind": "fail_closed",
+        "signal": "gRPC auth failure recorded without token value logging",
+        "must_not": "must not coerce overbroad scope into process-wide access"
+      },
+      "rollback": "remove scoped-token rollout and rotate the process-wide token",
+      "references": ["docs/security/THREAT_MODEL.md#TM-TOKEN-SCOPES", "src/mcp/grpc_transport.rs"]
+    }
+  ]
+}
