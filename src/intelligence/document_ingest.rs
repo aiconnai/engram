@@ -20,6 +20,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::time::Instant;
 
@@ -33,6 +34,12 @@ use crate::types::{CreateMemoryInput, ListOptions, MemoryType};
 
 /// Maximum file size in bytes (10 MB default)
 pub const DEFAULT_MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Maximum number of pages accepted by optional PDF ingestion.
+const DEFAULT_MAX_PDF_PAGES: usize = 200;
+
+/// Maximum UTF-8 text bytes emitted by optional PDF ingestion.
+const DEFAULT_MAX_PDF_TEXT_BYTES: usize = 2 * 1024 * 1024;
 
 /// Default chunk size in characters
 pub const DEFAULT_CHUNK_SIZE: usize = 1200;
@@ -115,7 +122,7 @@ pub struct IngestResult {
 }
 
 /// A section extracted from a document
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DocumentSection {
     /// Section path (e.g., "Security > Key Rotation")
     pub section_path: String,
@@ -144,6 +151,63 @@ pub struct DocumentChunk {
     pub page: Option<usize>,
     /// SHA-256 hash of chunk content
     pub chunk_hash: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PdfExtractionLimits {
+    max_input_bytes: usize,
+    max_pages: usize,
+    max_text_bytes: usize,
+}
+
+impl PdfExtractionLimits {
+    fn for_config(config: &IngestConfig) -> Self {
+        Self {
+            max_input_bytes: usize::try_from(config.max_file_size)
+                .unwrap_or(usize::MAX)
+                .min(DEFAULT_MAX_FILE_SIZE as usize),
+            max_pages: DEFAULT_MAX_PDF_PAGES,
+            max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
+        }
+    }
+}
+
+#[cfg(feature = "pdf")]
+struct BoundedPdfText {
+    value: String,
+    max_bytes: usize,
+    exceeded: bool,
+}
+
+#[cfg(feature = "pdf")]
+impl BoundedPdfText {
+    fn new(max_bytes: usize) -> Self {
+        Self {
+            value: String::new(),
+            max_bytes,
+            exceeded: false,
+        }
+    }
+}
+
+#[cfg(feature = "pdf")]
+impl std::io::Write for BoundedPdfText {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let next_len = self.value.len().checked_add(bytes.len());
+        if next_len.is_none_or(|length| length > self.max_bytes) {
+            self.exceeded = true;
+            return Err(std::io::Error::other("PDF extracted text limit exceeded"));
+        }
+
+        let text = std::str::from_utf8(bytes)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+        self.value.push_str(text);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 /// Document ingestor
@@ -191,14 +255,6 @@ impl<'a> DocumentIngestor<'a> {
         let metadata = fs::metadata(path)
             .map_err(|e| EngramError::Storage(format!("Failed to read file metadata: {}", e)))?;
 
-        if metadata.len() > config.max_file_size {
-            return Err(EngramError::InvalidInput(format!(
-                "File too large: {} bytes (max: {} bytes)",
-                metadata.len(),
-                config.max_file_size
-            )));
-        }
-
         // Determine format
         let format = config
             .format
@@ -207,9 +263,32 @@ impl<'a> DocumentIngestor<'a> {
                 EngramError::InvalidInput(format!("Unknown file format for: {}", path.display()))
             })?;
 
-        // Read file content
-        let content = fs::read(path)
+        let max_input_bytes = match format {
+            DocumentFormat::Markdown => config.max_file_size,
+            DocumentFormat::Pdf => config.max_file_size.min(DEFAULT_MAX_FILE_SIZE),
+        };
+        if metadata.len() > max_input_bytes {
+            return Err(EngramError::InvalidInput(format!(
+                "File too large: {} bytes (max: {} bytes)",
+                metadata.len(),
+                max_input_bytes
+            )));
+        }
+
+        // Read at most the configured limit plus one byte so growth after metadata stays bounded.
+        let file = fs::File::open(path)
+            .map_err(|e| EngramError::Storage(format!("Failed to open file: {}", e)))?;
+        let mut content = Vec::new();
+        file.take(max_input_bytes.saturating_add(1))
+            .read_to_end(&mut content)
             .map_err(|e| EngramError::Storage(format!("Failed to read file: {}", e)))?;
+        if u64::try_from(content.len()).map_or(true, |bytes| bytes > max_input_bytes) {
+            return Err(EngramError::InvalidInput(format!(
+                "File too large: {} bytes (max: {} bytes)",
+                content.len(),
+                max_input_bytes
+            )));
+        }
 
         // Compute document ID
         let doc_id = compute_hash(&content);
@@ -220,8 +299,9 @@ impl<'a> DocumentIngestor<'a> {
                 let text = String::from_utf8_lossy(&content);
                 extract_markdown_sections(&text)
             }
-            DocumentFormat::Pdf => extract_pdf_sections(&content)
-                .map_err(|e| EngramError::InvalidInput(format!("PDF extraction failed: {}", e)))?,
+            DocumentFormat::Pdf => {
+                extract_pdf_sections(&content, PdfExtractionLimits::for_config(&config))?
+            }
         };
 
         if sections.is_empty() {
@@ -495,37 +575,140 @@ fn heading_level_to_usize(level: HeadingLevel) -> usize {
 ///
 /// Requires the `pdf` feature to be enabled.
 #[cfg(feature = "pdf")]
-fn extract_pdf_sections(content: &[u8]) -> std::result::Result<Vec<DocumentSection>, String> {
-    let text = pdf_extract::extract_text_from_mem(content)
-        .map_err(|e| format!("PDF extraction failed: {}", e))?;
+fn extract_pdf_sections(
+    content: &[u8],
+    limits: PdfExtractionLimits,
+) -> Result<Vec<DocumentSection>> {
+    validate_pdf_input_bounds(content, limits)?;
+    super::pdf_worker::extract(content, limits.max_pages, limits.max_text_bytes)
+}
 
-    // Split by page markers if present, otherwise treat as single page
-    // pdf-extract may include form feed characters or page break markers
-    let pages: Vec<&str> = if text.contains('\x0C') {
-        text.split('\x0C').collect()
-    } else {
-        vec![&text]
-    };
+#[cfg(feature = "pdf")]
+fn contain_pdf_parser_unwind<T>(operation: impl FnOnce() -> Result<T>) -> Result<T> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation)).map_err(|_| {
+        EngramError::InvalidInput(
+            "PDF extraction failed: parser rejected malformed data".to_string(),
+        )
+    })?
+}
 
-    let sections: Vec<DocumentSection> = pages
-        .iter()
-        .enumerate()
-        .filter(|(_, page_text)| !page_text.trim().is_empty())
-        .map(|(i, page_text)| DocumentSection {
-            section_path: format!("Page {}", i + 1),
-            content: page_text.trim().to_string(),
-            page: Some(i + 1),
-            level: None,
-        })
-        .collect();
+#[cfg(feature = "pdf")]
+fn extract_pdf_sections_inner(
+    content: &[u8],
+    limits: PdfExtractionLimits,
+) -> Result<Vec<DocumentSection>> {
+    validate_pdf_input_bounds(content, limits)?;
+    let mut document = lopdf::Document::load_mem(content)
+        .map_err(|error| EngramError::InvalidInput(format!("PDF parsing failed: {error}")))?;
+    if document.is_encrypted() {
+        document.decrypt("").map_err(|error| {
+            EngramError::InvalidInput(format!("PDF decryption failed: {error}"))
+        })?;
+    }
+
+    let bounded_page_count = document.page_iter().take(limits.max_pages + 1).count();
+    if bounded_page_count > limits.max_pages {
+        return Err(EngramError::InvalidInput(format!(
+            "PDF page count exceeds limit: {} pages (max: {} pages)",
+            bounded_page_count, limits.max_pages
+        )));
+    }
+
+    let pages = document.get_pages();
+
+    let mut extracted_text_bytes = 0usize;
+    let mut sections = Vec::with_capacity(pages.len());
+    for (page_index, page_number) in pages.keys().enumerate() {
+        let mut page_text = BoundedPdfText::new(limits.max_text_bytes - extracted_text_bytes);
+        let extraction_result = {
+            let writer: &mut dyn std::io::Write = &mut page_text;
+            let mut output = pdf_extract::PlainTextOutput::new(writer);
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                pdf_extract::output_doc_page(&document, &mut output, *page_number)
+            }))
+        }
+        .map_err(|_| {
+            EngramError::InvalidInput(
+                "PDF extraction failed: parser rejected malformed page data".to_string(),
+            )
+        })?;
+        if page_text.exceeded {
+            return Err(EngramError::InvalidInput(format!(
+                "PDF extracted text exceeds limit: more than {} bytes",
+                limits.max_text_bytes
+            )));
+        }
+        extraction_result.map_err(|error| {
+            EngramError::InvalidInput(format!("PDF extraction failed: {error}"))
+        })?;
+
+        extracted_text_bytes = extracted_text_bytes
+            .checked_add(page_text.value.len())
+            .ok_or_else(|| {
+                EngramError::InvalidInput("PDF extracted text byte count overflow".to_string())
+            })?;
+        if extracted_text_bytes > limits.max_text_bytes {
+            return Err(EngramError::InvalidInput(format!(
+                "PDF extracted text exceeds limit: {} bytes (max: {} bytes)",
+                extracted_text_bytes, limits.max_text_bytes
+            )));
+        }
+
+        if !page_text.value.trim().is_empty() {
+            sections.push(DocumentSection {
+                section_path: format!("Page {}", page_index + 1),
+                content: page_text.value.trim().to_string(),
+                page: Some(page_index + 1),
+                level: None,
+            });
+        }
+    }
 
     Ok(sections)
 }
 
+#[cfg(feature = "pdf")]
+pub(crate) fn extract_pdf_sections_in_worker(
+    content: &[u8],
+    max_pages: usize,
+    max_text_bytes: usize,
+) -> Result<Vec<DocumentSection>> {
+    let limits = PdfExtractionLimits {
+        max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
+        max_pages,
+        max_text_bytes,
+    };
+    contain_pdf_parser_unwind(|| extract_pdf_sections_inner(content, limits))
+}
+
+#[cfg(feature = "pdf")]
+fn validate_pdf_input_bounds(content: &[u8], limits: PdfExtractionLimits) -> Result<()> {
+    if content.len() > limits.max_input_bytes {
+        return Err(EngramError::InvalidInput(format!(
+            "PDF too large: {} bytes (max: {} bytes)",
+            content.len(),
+            limits.max_input_bytes
+        )));
+    }
+
+    Ok(())
+}
+
 /// Stub for PDF extraction when the `pdf` feature is disabled
 #[cfg(not(feature = "pdf"))]
-fn extract_pdf_sections(_content: &[u8]) -> std::result::Result<Vec<DocumentSection>, String> {
-    Err("PDF extraction requires the 'pdf' feature to be enabled".to_string())
+fn extract_pdf_sections(
+    _content: &[u8],
+    limits: PdfExtractionLimits,
+) -> Result<Vec<DocumentSection>> {
+    let PdfExtractionLimits {
+        max_input_bytes,
+        max_pages,
+        max_text_bytes,
+    } = limits;
+    let _ = (max_input_bytes, max_pages, max_text_bytes);
+    Err(EngramError::InvalidInput(
+        "PDF extraction requires the 'pdf' feature to be enabled".to_string(),
+    ))
 }
 
 /// Create chunks from sections with overlap
@@ -769,5 +952,225 @@ Content for section 2.
 
         let err = ingestor.ingest_file(&file_path, config).unwrap_err();
         assert!(err.to_string().contains("PDF"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_parser_boundary_converts_pre_extraction_panic_to_typed_error() {
+        // Given: a third-party parser operation that panics before text extraction.
+        let parser_operation = || -> Result<Vec<DocumentSection>> { panic!("parser panic") };
+
+        // When: the operation runs through the parser containment boundary.
+        let err = contain_pdf_parser_unwind(parser_operation).unwrap_err();
+
+        // Then: unwinding is converted to a typed invalid-input error.
+        assert!(matches!(err, EngramError::InvalidInput(_)));
+        assert!(err.to_string().contains("malformed data"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_valid_fixture_extracts_bounded_page_when_pdf_feature_enabled() {
+        // Given: a deterministic one-page PDF fixture and the default PDF limits.
+        let pdf = include_bytes!("../../tests/fixtures/pdf/valid.pdf");
+
+        // When: the optional parser extracts sections through the bounded path.
+        let sections = extract_pdf_sections(
+            pdf,
+            PdfExtractionLimits {
+                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
+                max_pages: DEFAULT_MAX_PDF_PAGES,
+                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
+            },
+        )
+        .unwrap();
+
+        // Then: exactly one page is exposed with fixture text and page metadata.
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].page, Some(1));
+        assert!(sections[0].content.contains("Engram PDF fixture"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_two_page_fixture_preserves_page_boundaries() {
+        // Given: a deterministic two-page PDF fixture and the default PDF limits.
+        let pdf = include_bytes!("../../tests/fixtures/pdf/valid-two-pages.pdf");
+
+        // When: the optional parser extracts each real PDF page.
+        let sections = extract_pdf_sections(
+            pdf,
+            PdfExtractionLimits {
+                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
+                max_pages: DEFAULT_MAX_PDF_PAGES,
+                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
+            },
+        )
+        .unwrap();
+
+        // Then: both page texts and their page metadata remain separate.
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[0].page, Some(1));
+        assert_eq!(sections[1].page, Some(2));
+        assert!(sections[0].content.contains("page one"));
+        assert!(sections[1].content.contains("page two"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_malformed_fixture_returns_parser_error_when_pdf_feature_enabled() {
+        // Given: a deterministic malformed PDF fixture under all budget limits.
+        let pdf = include_bytes!("../../tests/fixtures/pdf/malformed.pdf");
+
+        // When: the bounded optional parser attempts extraction.
+        let err = extract_pdf_sections(
+            pdf,
+            PdfExtractionLimits {
+                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
+                max_pages: DEFAULT_MAX_PDF_PAGES,
+                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
+            },
+        )
+        .unwrap_err();
+
+        // Then: the parser failure is reported without a panic.
+        assert!(matches!(err, EngramError::InvalidInput(_)));
+        assert!(err.to_string().contains("PDF parsing failed"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_malformed_page_data_returns_error_without_unwinding() {
+        // Given: a parseable PDF fixture whose page omits required media-box data.
+        let pdf = include_bytes!("../../tests/fixtures/pdf/missing-mediabox.pdf");
+
+        // When: the optional extractor reaches malformed page data.
+        let result = std::panic::catch_unwind(|| {
+            extract_pdf_sections(
+                pdf,
+                PdfExtractionLimits {
+                    max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
+                    max_pages: DEFAULT_MAX_PDF_PAGES,
+                    max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
+                },
+            )
+        });
+
+        // Then: the library boundary contains the parser panic as a typed input error.
+        let err = result.expect("PDF extraction must not unwind").unwrap_err();
+        assert!(matches!(err, EngramError::InvalidInput(_)));
+        assert!(err.to_string().contains("malformed page data"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_over_budget_fixture_rejects_bytes_before_parser() {
+        // Given: a deterministic PDF fixture whose bytes exceed the configured input budget.
+        let pdf = include_bytes!("../../tests/fixtures/pdf/over-budget.pdf");
+        assert_eq!(pdf.len(), DEFAULT_MAX_FILE_SIZE as usize + 1);
+
+        // When: extraction starts with the documented default byte budget.
+        let err = extract_pdf_sections(
+            pdf,
+            PdfExtractionLimits {
+                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
+                max_pages: DEFAULT_MAX_PDF_PAGES,
+                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
+            },
+        )
+        .unwrap_err();
+
+        // Then: the pre-parser byte guard rejects it before pdf-extract runs.
+        assert!(matches!(err, EngramError::InvalidInput(_)));
+        assert!(err.to_string().contains("PDF too large"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_ingest_rejects_above_absolute_ceiling_with_relaxed_config() {
+        // Given: a PDF file one byte above the absolute ceiling and a larger caller limit.
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("over-budget.pdf");
+        fs::write(
+            &file_path,
+            include_bytes!("../../tests/fixtures/pdf/over-budget.pdf"),
+        )
+        .unwrap();
+        let storage = Storage::open_in_memory().unwrap();
+        let ingestor = DocumentIngestor::new(&storage);
+        let config = IngestConfig {
+            format: Some(DocumentFormat::Pdf),
+            max_file_size: DEFAULT_MAX_FILE_SIZE * 2,
+            ..IngestConfig::default()
+        };
+
+        // When: ingestion enters through the public file boundary.
+        let err = ingestor.ingest_file(&file_path, config).unwrap_err();
+
+        // Then: the fixed ceiling rejects the file before parser work begins.
+        assert!(err.to_string().contains("File too large"));
+        assert!(err.to_string().contains("10485760"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_absolute_input_ceiling_cannot_be_relaxed_by_config() {
+        // Given: a caller-configured limit above the fixed PDF parser ceiling.
+        let config = IngestConfig {
+            max_file_size: DEFAULT_MAX_FILE_SIZE * 2,
+            ..IngestConfig::default()
+        };
+
+        // When: parser limits are derived from the caller configuration.
+        let limits = PdfExtractionLimits::for_config(&config);
+
+        // Then: the fixed parser ceiling remains authoritative.
+        assert_eq!(limits.max_input_bytes, DEFAULT_MAX_FILE_SIZE as usize);
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_rejects_real_page_budget_before_text_extraction() {
+        // Given: a valid PDF fixture containing exactly one page over the default budget.
+        let pdf = include_bytes!("../../tests/fixtures/pdf/page-limit-plus-one.pdf");
+        let document = lopdf::Document::load_mem(pdf).unwrap();
+        assert_eq!(document.get_pages().len(), DEFAULT_MAX_PDF_PAGES + 1);
+
+        // When: extraction starts with the default page budget.
+        let err = extract_pdf_sections(
+            pdf,
+            PdfExtractionLimits {
+                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
+                max_pages: DEFAULT_MAX_PDF_PAGES,
+                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
+            },
+        )
+        .unwrap_err();
+
+        // Then: the parsed page guard rejects it before text extraction.
+        assert!(matches!(err, EngramError::InvalidInput(_)));
+        assert!(err.to_string().contains("PDF page count"));
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn pdf_rejects_extracted_text_budget_during_parser_output() {
+        // Given: a valid PDF fixture whose extracted text is one byte over the default budget.
+        let pdf = include_bytes!("../../tests/fixtures/pdf/text-limit-plus-one.pdf");
+
+        // When: page extraction writes through the bounded output buffer.
+        let err = extract_pdf_sections(
+            pdf,
+            PdfExtractionLimits {
+                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
+                max_pages: DEFAULT_MAX_PDF_PAGES,
+                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
+            },
+        )
+        .unwrap_err();
+
+        // Then: extraction stops with a typed text-limit error.
+        assert!(matches!(err, EngramError::InvalidInput(_)));
+        assert!(err.to_string().contains("PDF extracted text"));
     }
 }

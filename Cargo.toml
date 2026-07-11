@@ -74,6 +74,12 @@ name = "engram-agent"
 path = "src/bin/agent.rs"
 bench = false
 
+[[bin]]
+name = "engram-pdf-worker"
+path = "src/bin/pdf_worker.rs"
+required-features = ["pdf"]
+bench = false
+
 [features]
 default = ["cloud", "openai"]
 
@@ -92,7 +98,7 @@ multimodal = ["http-client", "dep:async-trait"]
 clip-embeddings = ["multimodal", "openai"]
 
 # PDF document ingestion
-pdf = ["dep:pdf-extract"]
+pdf = ["dep:cap", "dep:lopdf", "dep:pdf-extract", "dep:rlimit"]
 
 # Langfuse observability integration (Phase 3 - ENG-35)
 langfuse = ["http-client"]
@@ -245,7 +251,10 @@ tiktoken-rs = "0.5"
 
 # Document ingestion (RML-928)
 pulldown-cmark = "0.10"
+lopdf = { version = "0.42", default-features = false, features = ["wasm_js"], optional = true }
 pdf-extract = { version = "0.12", optional = true }
+cap = { version = "0.1", optional = true }
+rlimit = { version = "0.10", optional = true }
 
 # Async channels for embedding queue
 async-channel = "2.1"

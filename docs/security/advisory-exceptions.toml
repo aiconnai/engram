@@ -132,13 +132,15 @@ advisory = "RUSTSEC-2026-0192"
 crate = "ttf-parser"
 versions = ["0.25.1"]
 tools = ["cargo-audit:allowed-warning"]
+url = "https://github.com/harfbuzz/ttf-parser/issues/217"
 dependency_path = [
   "engram-core 0.22.0 -> pdf-extract 0.12.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
+  "engram-core 0.22.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
 ]
 feature = "pdf optional feature only"
-exposure = "Feature-gated PDF ingestion font parsing path; not present in the default non-PDF feature graph and not globally ignored in cargo-audit or cargo-deny."
+exposure = "Feature-gated PDF ingestion font parsing path; bounded by input bytes before parsing, page-tree traversal before text extraction, and extracted text bytes; not present in the default non-PDF feature graph and not globally ignored in cargo-audit or cargo-deny."
 owner = "supply-chain"
-expires = 2026-08-31
+expires = 2026-09-30
 remediation = "Track lopdf/pdf-extract migration to skrifa or a maintained parser; remove this governed warning when the PDF stack no longer depends on ttf-parser."
 feature_gated = true
 default_graph = false

@@ -1195,6 +1195,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f125eb85b84a24c36b02ed1d22c9dd8632f53b3cde6e4d23512f94021030003"
+
+[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1996,6 +2002,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum 0.7.9",
  "base64 0.21.7",
+ "cap",
  "chrono",
  "clap",
  "criterion",
@@ -2007,6 +2014,7 @@ dependencies = [
  "hex",
  "libc",
  "libsql",
+ "lopdf",
  "meilisearch-sdk",
  "ndarray 0.16.1",
  "notify",
@@ -2020,6 +2028,7 @@ dependencies = [
  "rand 0.8.6",
  "regex",
  "reqwest",
+ "rlimit",
  "rusqlite",
  "serde",
  "serde_json",
@@ -4725,6 +4734,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "rlimit"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7043b63bd0cd1aaa628e476b80e6d4023a3b50eb32789f2728908107bd0c793a"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
