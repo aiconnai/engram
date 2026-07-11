@@ -68,6 +68,14 @@ fn help_exposes_loopback_bind_address_defaults_and_stdio_transport_default() {
         "WS port flag missing: {stdout}"
     );
     assert!(
+        stdout.contains("--ws-auth-key"),
+        "WS auth key flag missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("ENGRAM_WS_AUTH_KEY"),
+        "WS auth key env missing: {stdout}"
+    );
+    assert!(
         stdout.contains("[default: 0]"),
         "WS disabled default missing: {stdout}"
     );
@@ -205,8 +213,108 @@ fn websocket_listener_uses_configured_loopback_address_when_enabled() {
         .wait_for_log(&format!("WebSocket server listening on 127.0.0.1:{port}"))
         .expect("websocket loopback log");
 
-    // Then: the listener accepts local TCP connections on that exact port.
-    TcpStream::connect(("127.0.0.1", port)).expect("connect to websocket listener");
+    // Then: the listener accepts a real local websocket handshake on that exact port.
+    assert_websocket_handshake(port, None, None, 101);
+}
+
+#[test]
+fn websocket_listener_requires_authorization_bearer_when_auth_key_is_configured() {
+    let _guard = listener_config_test_guard();
+    // Given: a websocket listener enabled with a process auth key.
+    let port = pick_loopback_port();
+    let secret = "ws-secret-for-real-client-qa";
+    let mut process = ServerProcess::spawn(
+        &["--ws-port", &port.to_string()],
+        &[
+            ("ENGRAM_WS_BIND_ADDRESS", "127.0.0.1"),
+            ("ENGRAM_WS_AUTH_KEY", secret),
+        ],
+    )
+    .expect("spawn authenticated websocket listener");
+
+    process
+        .wait_for_log(&format!("WebSocket server listening on 127.0.0.1:{port}"))
+        .expect("authenticated websocket log");
+
+    // When/Then: invalid or URL-carried credentials are rejected, while the
+    // Authorization: Bearer header completes the websocket upgrade.
+    assert_websocket_handshake(port, None, None, 401);
+    assert_websocket_handshake(port, Some("Bearer wrong-secret"), None, 401);
+    assert_websocket_handshake(port, None, Some("token=ws-secret-for-real-client-qa"), 401);
+    assert_websocket_handshake(port, Some("Bearer ws-secret-for-real-client-qa"), None, 101);
+
+    let stderr = process.stderr_snapshot();
+    assert!(
+        !stderr.contains(secret),
+        "websocket auth logs must not leak the configured secret: {stderr}"
+    );
+}
+
+#[test]
+fn websocket_listener_refuses_public_bind_without_auth_key() {
+    let _guard = listener_config_test_guard();
+    // Given: a websocket listener requested on a non-loopback address with no auth key.
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn(
+        &[
+            "--ws-bind-address",
+            "0.0.0.0",
+            "--ws-port",
+            &port.to_string(),
+        ],
+        &[],
+    )
+    .expect("spawn public websocket listener without auth");
+
+    // When: startup validates the listener contract.
+    process
+        .wait_for_log("refusing websocket listener on non-loopback address without auth key")
+        .expect("public unauthenticated websocket refusal log");
+
+    // Then: the websocket socket never opens.
+    assert!(
+        port_is_bindable(port),
+        "unauthenticated public websocket listener should not bind port {port}"
+    );
+}
+
+#[test]
+fn websocket_public_listener_requires_and_accepts_configured_bearer() {
+    let _guard = listener_config_test_guard();
+    // Given: a public websocket listener with an explicit process auth key.
+    let port = pick_loopback_port();
+    let secret = "public-ws-secret-for-real-client-qa";
+    let mut process = ServerProcess::spawn(
+        &[
+            "--ws-bind-address",
+            "0.0.0.0",
+            "--ws-port",
+            &port.to_string(),
+            "--ws-auth-key",
+            secret,
+        ],
+        &[],
+    )
+    .expect("spawn authenticated public websocket listener");
+
+    process
+        .wait_for_log(&format!("WebSocket server listening on 0.0.0.0:{port}"))
+        .expect("authenticated public websocket log");
+
+    // When/Then: an invalid bearer is rejected and the configured bearer upgrades.
+    assert_websocket_handshake(port, Some("Bearer wrong-secret"), None, 401);
+    assert_websocket_handshake(
+        port,
+        Some("Bearer public-ws-secret-for-real-client-qa"),
+        None,
+        101,
+    );
+
+    let stderr = process.stderr_snapshot();
+    assert!(
+        !stderr.contains(secret),
+        "public websocket logs must not leak the configured secret: {stderr}"
+    );
 }
 
 #[test]
@@ -479,6 +587,81 @@ fn http_get(port: u16, path: &str) -> Result<String, String> {
         .read_to_string(&mut response)
         .map_err(|err| err.to_string())?;
     Ok(response)
+}
+
+fn read_http_headers(mut stream: TcpStream) -> Result<String, String> {
+    let mut response = Vec::new();
+    let mut byte = [0_u8; 1];
+    while !response.ends_with(b"\r\n\r\n") {
+        let read = stream.read(&mut byte).map_err(|err| err.to_string())?;
+        if read == 0 {
+            break;
+        }
+        response.push(byte[0]);
+    }
+    String::from_utf8(response).map_err(|err| err.to_string())
+}
+
+fn assert_websocket_handshake(
+    port: u16,
+    authorization: Option<&str>,
+    query: Option<&str>,
+    expected_status: u16,
+) {
+    let deadline = Instant::now() + READY_TIMEOUT;
+    let mut last_observation = String::new();
+    while Instant::now() < deadline {
+        match websocket_handshake(port, authorization, query) {
+            Ok(response) => {
+                if let Some(status) = http_status_code(&response) {
+                    if status == expected_status {
+                        return;
+                    }
+                    last_observation =
+                        format!("status {status}, expected {expected_status}: {response}");
+                } else {
+                    last_observation = format!("missing status line: {response}");
+                }
+            }
+            Err(error) => last_observation = error,
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+    panic!("websocket handshake never returned {expected_status}: {last_observation}");
+}
+
+fn websocket_handshake(
+    port: u16,
+    authorization: Option<&str>,
+    query: Option<&str>,
+) -> Result<String, String> {
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|err| err.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .map_err(|err| err.to_string())?;
+    let path = query.map_or_else(|| "/ws".to_string(), |q| format!("/ws?{q}"));
+    write!(
+        stream,
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    )
+    .map_err(|err| err.to_string())?;
+    if let Some(value) = authorization {
+        write!(stream, "Authorization: {value}\r\n").map_err(|err| err.to_string())?;
+    }
+    write!(stream, "\r\n").map_err(|err| err.to_string())?;
+    stream.flush().map_err(|err| err.to_string())?;
+
+    read_http_headers(stream)
+}
+
+fn http_status_code(response: &str) -> Option<u16> {
+    response
+        .lines()
+        .next()?
+        .split_whitespace()
+        .nth(1)?
+        .parse()
+        .ok()
 }
 
 fn pick_loopback_port() -> u16 {

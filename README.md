@@ -286,6 +286,7 @@ server configured as usual.
 | `ENGRAM_HTTP_API_KEY` | Bearer token for the HTTP transport | - |
 | `ENGRAM_WS_PORT` | WebSocket server port (0 = disabled) | `0` |
 | `ENGRAM_WS_BIND_ADDRESS` | WebSocket server bind address | `127.0.0.1` |
+| `ENGRAM_WS_AUTH_KEY` | Bearer token for WebSocket upgrade authentication | - |
 | `ENGRAM_GRPC_PORT` | gRPC transport port (requires `--features grpc`) | `50051` |
 | `ENGRAM_GRPC_BIND_ADDRESS` | gRPC transport bind address (requires `--features grpc`) | `127.0.0.1` |
 | `ENGRAM_GRPC_API_KEY` | Bearer token for the gRPC transport | - |
@@ -336,7 +337,8 @@ model is downloaded explicitly and is not bundled into the binary.
 \* WebSocket event streaming is opt-in via `ENGRAM_WS_PORT`; HTTP, WebSocket,
 and gRPC network listeners bind `127.0.0.1` by default. Explicit public binds
 require the operator to configure the relevant bind-address variable and deploy
-the matching authentication or trusted-proxy controls. MCP stdio remains the
+the matching authentication control; public WebSocket binds require
+`ENGRAM_WS_AUTH_KEY` even behind a trusted proxy. MCP stdio remains the
 default agent interface.
 
 ---

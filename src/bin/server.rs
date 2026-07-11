@@ -145,6 +145,10 @@ struct Args {
     #[arg(long, env = "ENGRAM_WS_BIND_ADDRESS", default_value = "127.0.0.1")]
     ws_bind_address: IpAddr,
 
+    /// API key for WebSocket real-time events authentication (optional Bearer token)
+    #[arg(long, env = "ENGRAM_WS_AUTH_KEY")]
+    ws_auth_key: Option<String>,
+
     /// Transport mode: stdio (default), http, or both
     #[arg(long, env = "ENGRAM_TRANSPORT", value_enum, default_value = "stdio")]
     transport: TransportMode,
@@ -800,10 +804,12 @@ fn main() -> Result<()> {
     if args.ws_port > 0 {
         if let Some(ref manager) = realtime_manager {
             let ws_manager = manager.clone();
+            let ws_auth_key = args.ws_auth_key.clone();
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
                 rt.block_on(async {
-                    let ws_server = RealtimeServer::new(ws_manager, ws_addr);
+                    let ws_server =
+                        RealtimeServer::new(ws_manager, ws_addr).with_auth_key(ws_auth_key);
                     tracing::info!("WebSocket server starting on {}...", ws_addr);
                     if let Err(e) = ws_server.start().await {
                         tracing::error!("WebSocket server error: {}", e);

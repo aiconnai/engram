@@ -10,6 +10,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
     },
+    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
     Router,
@@ -19,10 +20,17 @@ use parking_lot::RwLock;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::auth::{TransportPrincipal, TransportPrincipalError};
+
 use super::events::{RealtimeEvent, SubscriptionFilter};
 
 /// Connection ID
 pub type ConnectionId = String;
+
+struct RealtimeClient {
+    filter: SubscriptionFilter,
+    principal: TransportPrincipal,
+}
 
 /// Default maximum number of events retained in the replay ring buffer.
 const DEFAULT_MAX_BUFFERED_EVENTS: usize = 500;
@@ -39,8 +47,8 @@ const DEFAULT_MAX_BUFFERED_EVENTS: usize = 500;
 pub struct RealtimeManager {
     /// Broadcast channel for live delivery
     tx: broadcast::Sender<RealtimeEvent>,
-    /// Connected clients with their filters
-    clients: Arc<RwLock<HashMap<ConnectionId, SubscriptionFilter>>>,
+    /// Connected clients with their filters and authenticated principals
+    clients: Arc<RwLock<HashMap<ConnectionId, RealtimeClient>>>,
     /// Monotonically-increasing sequence counter (starts at 1)
     next_seq_id: Arc<AtomicU64>,
     /// In-memory ring buffer for replay
@@ -123,7 +131,19 @@ impl RealtimeManager {
 
     /// Register a new client
     pub fn register_client(&self, id: ConnectionId, filter: SubscriptionFilter) {
-        self.clients.write().insert(id, filter);
+        self.register_client_with_principal(id, filter, TransportPrincipal::anonymous_loopback());
+    }
+
+    /// Register a new client with its authenticated principal
+    pub fn register_client_with_principal(
+        &self,
+        id: ConnectionId,
+        filter: SubscriptionFilter,
+        principal: TransportPrincipal,
+    ) {
+        self.clients
+            .write()
+            .insert(id, RealtimeClient { filter, principal });
     }
 
     /// Unregister a client
@@ -133,7 +153,25 @@ impl RealtimeManager {
 
     /// Get client filter
     pub fn get_client_filter(&self, id: &str) -> Option<SubscriptionFilter> {
-        self.clients.read().get(id).cloned()
+        self.clients
+            .read()
+            .get(id)
+            .map(|client| client.filter.clone())
+    }
+
+    /// Update a connected client's subscription without replacing its principal
+    pub fn update_client_filter(&self, id: &str, filter: SubscriptionFilter) {
+        if let Some(client) = self.clients.write().get_mut(id) {
+            client.filter = filter;
+        }
+    }
+
+    /// Get client principal
+    pub fn get_client_principal(&self, id: &str) -> Option<TransportPrincipal> {
+        self.clients
+            .read()
+            .get(id)
+            .map(|client| client.principal.clone())
     }
 }
 
@@ -159,25 +197,55 @@ impl Clone for RealtimeManager {
 pub struct RealtimeServer {
     manager: RealtimeManager,
     addr: SocketAddr,
+    auth_key: Option<String>,
+}
+
+#[derive(Clone)]
+struct RealtimeServerState {
+    manager: RealtimeManager,
+    auth_key: Option<String>,
 }
 
 impl RealtimeServer {
     /// Create a new WebSocket server
     pub fn new(manager: RealtimeManager, addr: SocketAddr) -> Self {
-        Self { manager, addr }
+        Self {
+            manager,
+            addr,
+            auth_key: None,
+        }
+    }
+
+    /// Attach a process auth key required for WebSocket upgrades
+    pub fn with_auth_key(mut self, auth_key: Option<String>) -> Self {
+        self.auth_key = auth_key;
+        self
     }
 
     /// Build the router
     pub fn router(manager: RealtimeManager) -> Router {
+        Self::router_with_auth(manager, None)
+    }
+
+    fn router_with_auth(manager: RealtimeManager, auth_key: Option<String>) -> Router {
+        let state = RealtimeServerState { manager, auth_key };
         Router::new()
             .route("/ws", get(ws_handler))
             .route("/health", get(health_handler))
-            .with_state(manager)
+            .with_state(state)
     }
 
     /// Start the server
     pub async fn start(self) -> std::io::Result<()> {
-        let app = Self::router(self.manager);
+        if !self.addr.ip().is_loopback() && self.auth_key.as_deref().is_none_or(str::is_empty) {
+            let message = "refusing websocket listener on non-loopback address without auth key";
+            tracing::warn!(target = "engram::realtime", %message);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                message,
+            ));
+        }
+        let app = Self::router_with_auth(self.manager, self.auth_key);
 
         tracing::info!("WebSocket server listening on {}", self.addr);
 
@@ -189,10 +257,10 @@ impl RealtimeServer {
 }
 
 /// Health check endpoint
-async fn health_handler(State(manager): State<RealtimeManager>) -> impl IntoResponse {
+async fn health_handler(State(state): State<RealtimeServerState>) -> impl IntoResponse {
     serde_json::json!({
         "status": "ok",
-        "clients": manager.client_count(),
+        "clients": state.manager.client_count(),
     })
     .to_string()
 }
@@ -200,17 +268,45 @@ async fn health_handler(State(manager): State<RealtimeManager>) -> impl IntoResp
 /// WebSocket upgrade handler
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    State(manager): State<RealtimeManager>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, manager))
+    headers: HeaderMap,
+    State(state): State<RealtimeServerState>,
+) -> axum::response::Response {
+    let principal = match websocket_principal(&headers, state.auth_key.as_deref()) {
+        Ok(principal) => principal,
+        Err(error) => {
+            tracing::warn!(
+                target = "engram::realtime",
+                reason = %error,
+                "websocket auth rejected"
+            );
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+    };
+    ws.on_upgrade(move |socket| handle_socket(socket, state.manager, principal))
+        .into_response()
+}
+
+fn websocket_principal(
+    headers: &HeaderMap,
+    auth_key: Option<&str>,
+) -> Result<TransportPrincipal, TransportPrincipalError> {
+    match auth_key {
+        Some(expected) => {
+            let authorization = headers
+                .get(AUTHORIZATION)
+                .and_then(|value| value.to_str().ok());
+            TransportPrincipal::from_process_bearer(authorization, expected)
+        }
+        None => Ok(TransportPrincipal::anonymous_loopback()),
+    }
 }
 
 /// Handle an individual WebSocket connection
-async fn handle_socket(socket: WebSocket, manager: RealtimeManager) {
+async fn handle_socket(socket: WebSocket, manager: RealtimeManager, principal: TransportPrincipal) {
     let connection_id = Uuid::new_v4().to_string();
     let filter = SubscriptionFilter::default();
 
-    manager.register_client(connection_id.clone(), filter.clone());
+    manager.register_client_with_principal(connection_id.clone(), filter.clone(), principal);
     tracing::info!("Client connected: {}", connection_id);
 
     let (mut sender, mut receiver) = socket.split();
@@ -242,7 +338,7 @@ async fn handle_socket(socket: WebSocket, manager: RealtimeManager) {
                 Message::Text(text) => {
                     // Try to parse as filter update
                     if let Ok(new_filter) = serde_json::from_str::<SubscriptionFilter>(&text) {
-                        mgr.register_client(conn_id.clone(), new_filter);
+                        mgr.update_client_filter(&conn_id, new_filter);
                         tracing::debug!("Updated filter for client {}", conn_id);
                     }
                 }
@@ -278,6 +374,89 @@ mod tests {
 
         manager.unregister_client("test");
         assert_eq!(manager.client_count(), 0);
+    }
+
+    #[test]
+    fn authenticated_principal_survives_subscription_filter_updates() {
+        // Given: an authenticated websocket connection registered with the manager.
+        let manager = RealtimeManager::new();
+        let principal =
+            TransportPrincipal::from_process_bearer(Some("Bearer secret"), "secret").unwrap();
+        manager.register_client_with_principal(
+            "authenticated".to_string(),
+            SubscriptionFilter::default(),
+            principal,
+        );
+
+        // When: the connected client changes its event subscription filter.
+        manager.update_client_filter(
+            "authenticated",
+            SubscriptionFilter {
+                event_types: Some(vec![super::super::events::EventType::MemoryCreated]),
+                memory_ids: None,
+                tags: None,
+            },
+        );
+
+        // Then: the connection retains the authenticated process principal.
+        let attached = manager
+            .get_client_principal("authenticated")
+            .expect("authenticated principal remains attached");
+        assert!(attached.has_permission(
+            crate::auth::Permission::Admin,
+            crate::auth::ResourceType::System
+        ));
+    }
+
+    #[tokio::test]
+    async fn authenticated_handshake_attaches_process_principal() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        // Given: a real loopback websocket listener with process bearer auth.
+        let manager = RealtimeManager::new();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = RealtimeServer::router_with_auth(manager.clone(), Some("secret".to_string()));
+        let server = tokio::spawn(async move { axum::serve(listener, app).await });
+        let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+
+        // When: a client completes the upgrade with the configured bearer.
+        client
+            .write_all(
+                format!(
+                    "GET /ws HTTP/1.1\r\nHost: {address}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nAuthorization: Bearer secret\r\n\r\n"
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut response = Vec::new();
+        while !response.ends_with(b"\r\n\r\n") {
+            response.push(client.read_u8().await.unwrap());
+        }
+
+        // Then: the upgraded connection is registered with its process principal.
+        assert!(String::from_utf8(response)
+            .unwrap()
+            .starts_with("HTTP/1.1 101"));
+        for _ in 0..100 {
+            if manager.client_count() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let clients = manager.clients.read();
+        let attached = &clients
+            .values()
+            .next()
+            .expect("upgraded client is registered")
+            .principal;
+        assert!(attached.has_permission(
+            crate::auth::Permission::Admin,
+            crate::auth::ResourceType::System
+        ));
+
+        server.abort();
     }
 
     #[test]
