@@ -148,6 +148,170 @@ async fn loopback_anonymous_principal_rejects_private_workspace_before_rate_limi
 }
 
 #[tokio::test]
+async fn loopback_anonymous_principal_rejects_global_search_before_dispatch() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let app = test_app_with_handler(
+        Arc::new(CountingMcpHandler {
+            calls: Arc::clone(&calls),
+        }),
+        None,
+        0,
+        0,
+    );
+
+    let response = app
+        .oneshot(json_rpc_tool_call_request(
+            "/v1/mcp",
+            None,
+            "memory_search",
+            json!({"query": "secret", "global": true}),
+        ))
+        .await
+        .expect("request should be handled");
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn loopback_anonymous_principal_rejects_omitted_workspace_before_dispatch() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let app = test_app_with_handler(
+        Arc::new(CountingMcpHandler {
+            calls: Arc::clone(&calls),
+        }),
+        None,
+        0,
+        0,
+    );
+
+    let response = app
+        .oneshot(json_rpc_tool_call_request(
+            "/v1/mcp",
+            None,
+            "memory_search",
+            json!({"query": "secret"}),
+        ))
+        .await
+        .expect("request should be handled");
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn loopback_anonymous_principal_rejects_workspace_array_before_dispatch() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let app = test_app_with_handler(
+        Arc::new(CountingMcpHandler {
+            calls: Arc::clone(&calls),
+        }),
+        None,
+        0,
+        0,
+    );
+
+    let response = app
+        .oneshot(json_rpc_tool_call_request(
+            "/v1/mcp",
+            None,
+            "memory_search",
+            json!({"query": "secret", "workspaces": ["default", "private"]}),
+        ))
+        .await
+        .expect("request should be handled");
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn loopback_anonymous_principal_rejects_nested_workspace_before_dispatch() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let app = test_app_with_handler(
+        Arc::new(CountingMcpHandler {
+            calls: Arc::clone(&calls),
+        }),
+        None,
+        0,
+        0,
+    );
+
+    let response = app
+        .oneshot(json_rpc_tool_call_request(
+            "/v1/mcp",
+            None,
+            "memory_search",
+            json!({"query": "secret", "filters": {"workspace": "private"}}),
+        ))
+        .await
+        .expect("request should be handled");
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn loopback_anonymous_principal_rejects_scope_nested_in_array_before_dispatch() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let app = test_app_with_handler(
+        Arc::new(CountingMcpHandler {
+            calls: Arc::clone(&calls),
+        }),
+        None,
+        0,
+        0,
+    );
+
+    let response = app
+        .oneshot(json_rpc_tool_call_request(
+            "/v1/mcp",
+            None,
+            "memory_search",
+            json!({"query": "secret", "filters": [{"global": true}, {"workspace": "private"}]}),
+        ))
+        .await
+        .expect("request should be handled");
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn keyed_principal_preserves_global_workspace_array_and_nested_dispatch() {
+    for arguments in [
+        json!({"query": "secret"}),
+        json!({"query": "secret", "global": true}),
+        json!({"query": "secret", "workspaces": ["default", "private"]}),
+        json!({"query": "secret", "filters": {"workspace": "private"}}),
+        json!({"query": "secret", "filters": [{"global": true}, {"workspace": "private"}]}),
+    ] {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let app = test_app_with_handler(
+            Arc::new(CountingMcpHandler {
+                calls: Arc::clone(&calls),
+            }),
+            Some("secret-key"),
+            0,
+            0,
+        );
+
+        let response = app
+            .oneshot(json_rpc_tool_call_request(
+                "/v1/mcp",
+                Some("secret-key"),
+                "memory_search",
+                arguments,
+            ))
+            .await
+            .expect("request should be handled");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[tokio::test]
 async fn malformed_bearer_returns_401_before_rate_limit_or_dispatch() {
     let calls = Arc::new(AtomicUsize::new(0));
     let app = test_app_with_handler(

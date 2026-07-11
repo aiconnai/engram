@@ -29,7 +29,10 @@ use tokio_stream::{Stream, StreamExt};
 use tonic::{metadata::MetadataMap, transport::Server, Request, Response, Status};
 
 use super::methods;
-use super::permission::permission_denial_for_principal;
+use super::permission::{
+    allows_all_workspaces, permission_denial_for_principal, requested_workspaces,
+    requests_all_workspaces,
+};
 use super::protocol::{McpHandler, McpRequest, McpResponse};
 use crate::auth::{TransportPrincipal, TransportPrincipalError};
 use crate::realtime::{EventType, RealtimeManager};
@@ -155,43 +158,6 @@ fn authorize_request(principal: &TransportPrincipal, request: &McpRequest) -> Re
     Ok(())
 }
 
-fn requested_workspaces(params: &serde_json::Value) -> Vec<&str> {
-    let mut workspaces = Vec::new();
-    collect_requested_workspaces(params, &mut workspaces);
-    workspaces
-}
-
-fn collect_requested_workspaces<'a>(value: &'a serde_json::Value, workspaces: &mut Vec<&'a str>) {
-    let Some(object) = value.as_object() else {
-        return;
-    };
-
-    for (key, child) in object {
-        if matches!(key.as_str(), "workspace" | "workspaces") {
-            collect_workspace_values(child, workspaces);
-        } else {
-            collect_requested_workspaces(child, workspaces);
-        }
-    }
-}
-
-fn collect_workspace_values<'a>(value: &'a serde_json::Value, workspaces: &mut Vec<&'a str>) {
-    match value {
-        serde_json::Value::String(workspace) => workspaces.push(workspace),
-        serde_json::Value::Array(items) => {
-            for item in items {
-                collect_workspace_values(item, workspaces);
-            }
-        }
-        serde_json::Value::Object(object) => {
-            for child in object.values() {
-                collect_workspace_values(child, workspaces);
-            }
-        }
-        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
-    }
-}
-
 fn is_anonymous_default_list(tool_name: &str, params: &serde_json::Value) -> bool {
     if tool_name != "memory_list" {
         return false;
@@ -207,21 +173,6 @@ fn is_anonymous_default_list(tool_name: &str, params: &serde_json::Value) -> boo
     params.len() == 2
         && arguments.len() == 1
         && arguments.get("workspace").and_then(|value| value.as_str()) == Some("default")
-}
-
-fn requests_all_workspaces(params: &serde_json::Value) -> bool {
-    let Some(object) = params.as_object() else {
-        return false;
-    };
-
-    object.iter().any(|(key, value)| {
-        (key == "global" && value.as_bool() == Some(true)) || requests_all_workspaces(value)
-    })
-}
-
-fn allows_all_workspaces(principal: &TransportPrincipal) -> bool {
-    !matches!(principal, TransportPrincipal::AnonymousLoopback(_))
-        && principal.allows_workspace(None)
 }
 
 #[allow(clippy::result_large_err)]

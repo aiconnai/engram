@@ -7,7 +7,10 @@ use axum::{
     Json,
 };
 
-use super::super::permission::permission_denial_for_principal;
+use super::super::permission::{
+    allows_all_workspaces, permission_denial_for_principal, requested_workspaces,
+    requests_all_workspaces,
+};
 use super::super::protocol::{methods, McpRequest, McpResponse};
 use super::rate_limit::{is_rate_limit_allowed, rate_limited_response};
 use super::{authenticate_transport_principal, AppState, MICROSECONDS_PER_MILLISECOND};
@@ -154,11 +157,35 @@ fn permission_denial_for_http_request(
         .params
         .get("name")
         .and_then(|value| value.as_str())?;
-    let requested_workspace = request
-        .params
-        .get("arguments")
-        .and_then(|arguments| arguments.get("workspace"))
-        .and_then(|workspace| workspace.as_str());
+    let requested_workspaces = requested_workspaces(&request.params);
+    if let Some(denial) = requested_workspaces.iter().find_map(|workspace| {
+        permission_denial_for_principal(tool_name, principal, Some(workspace))
+    }) {
+        return Some(denial);
+    }
 
-    permission_denial_for_principal(tool_name, principal, requested_workspace)
+    if requests_all_workspaces(&request.params) && !allows_all_workspaces(principal) {
+        return Some(workspace_scope_denial(tool_name));
+    }
+
+    if requested_workspaces.is_empty()
+        && matches!(
+            principal,
+            crate::auth::TransportPrincipal::AnonymousLoopback(_)
+        )
+    {
+        return Some(workspace_scope_denial(tool_name));
+    }
+
+    permission_denial_for_principal(tool_name, principal, requested_workspaces.first().copied())
+}
+
+fn workspace_scope_denial(tool_name: &str) -> serde_json::Value {
+    serde_json::json!({
+        "error": {
+            "code": "permission_denied",
+            "tool": tool_name,
+            "message": "permission denied"
+        }
+    })
 }

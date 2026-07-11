@@ -73,6 +73,73 @@ fn loopback_no_key_preserves_local_anonymous_mcp() {
 }
 
 #[test]
+fn loopback_anonymous_memory_search_rejects_cross_workspace_shapes() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn(&[
+        "--transport",
+        "http",
+        "--http-bind-address",
+        "127.0.0.1",
+        "--http-port",
+        &port.to_string(),
+    ])
+    .expect("spawn loopback HTTP server without key");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("loopback HTTP readiness");
+
+    for arguments in [
+        json!({"query": "secret"}),
+        json!({"query": "secret", "global": true}),
+        json!({"query": "secret", "workspaces": ["default", "private"]}),
+        json!({"query": "secret", "filters": {"workspace": "private"}}),
+        json!({"query": "secret", "filters": [{"global": true}, {"workspace": "private"}]}),
+    ] {
+        let response = http_post_json(port, "/v1/mcp", tool_call_request(arguments), None)
+            .expect("anonymous memory_search request");
+        assert_eq!(response.status, 403, "response: {}", response.raw);
+    }
+}
+
+#[test]
+fn keyed_memory_search_preserves_cross_workspace_shapes() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn(&[
+        "--transport",
+        "http",
+        "--http-bind-address",
+        "127.0.0.1",
+        "--http-port",
+        &port.to_string(),
+        "--http-api-key",
+        "secret-key",
+    ])
+    .expect("spawn loopback HTTP server with key");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("loopback HTTP readiness");
+
+    for arguments in [
+        json!({"query": "secret"}),
+        json!({"query": "secret", "global": true}),
+        json!({"query": "secret", "workspaces": ["default", "private"]}),
+        json!({"query": "secret", "filters": {"workspace": "private"}}),
+        json!({"query": "secret", "filters": [{"global": true}, {"workspace": "private"}]}),
+    ] {
+        let response = http_post_json(
+            port,
+            "/v1/mcp",
+            tool_call_request(arguments),
+            Some("secret-key"),
+        )
+        .expect("keyed memory_search request");
+        assert_eq!(response.status, 200, "response: {}", response.raw);
+    }
+}
+
+#[test]
 fn public_http_with_key_authenticates_mcp_and_sse() {
     let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
     let port = pick_loopback_port();
@@ -299,6 +366,15 @@ fn initialize_request() -> serde_json::Value {
             "capabilities": {},
             "clientInfo": {"name": "http-security-test", "version": "0.0.0"}
         }
+    })
+}
+
+fn tool_call_request(arguments: serde_json::Value) -> serde_json::Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {"name": "memory_search", "arguments": arguments}
     })
 }
 

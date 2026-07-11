@@ -143,6 +143,64 @@ pub fn permission_denial_for_principal(
     None
 }
 
+pub(crate) fn requested_workspaces(params: &Value) -> Vec<&str> {
+    let mut workspaces = Vec::new();
+    collect_requested_workspaces(params, &mut workspaces);
+    workspaces
+}
+
+fn collect_requested_workspaces<'a>(value: &'a Value, workspaces: &mut Vec<&'a str>) {
+    match value {
+        Value::Object(object) => {
+            for (key, child) in object {
+                if matches!(key.as_str(), "workspace" | "workspaces") {
+                    collect_workspace_values(child, workspaces);
+                } else {
+                    collect_requested_workspaces(child, workspaces);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_requested_workspaces(item, workspaces);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+}
+
+fn collect_workspace_values<'a>(value: &'a Value, workspaces: &mut Vec<&'a str>) {
+    match value {
+        Value::String(workspace) => workspaces.push(workspace),
+        Value::Array(items) => {
+            for item in items {
+                collect_workspace_values(item, workspaces);
+            }
+        }
+        Value::Object(object) => {
+            for child in object.values() {
+                collect_workspace_values(child, workspaces);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+}
+
+pub(crate) fn requests_all_workspaces(params: &Value) -> bool {
+    match params {
+        Value::Object(object) => object.iter().any(|(key, value)| {
+            (key == "global" && value.as_bool() == Some(true)) || requests_all_workspaces(value)
+        }),
+        Value::Array(items) => items.iter().any(requests_all_workspaces),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => false,
+    }
+}
+
+pub(crate) fn allows_all_workspaces(principal: &TransportPrincipal) -> bool {
+    !matches!(principal, TransportPrincipal::AnonymousLoopback(_))
+        && principal.allows_workspace(None)
+}
+
 fn principal_allows_mode(principal: &TransportPrincipal, required: PermissionMode) -> bool {
     let permissions = &principal.auth_context().permissions;
     match required {
