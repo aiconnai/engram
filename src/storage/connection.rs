@@ -68,13 +68,20 @@ impl Storage {
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
             | OpenFlags::SQLITE_OPEN_CREATE
             | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+        #[cfg(unix)]
+        let flags = flags | OpenFlags::SQLITE_OPEN_NOFOLLOW;
 
         let conn = if config.db_path == ":memory:" {
             Connection::open_in_memory()?
         } else {
+            ensure_filesystem_database_supported()?;
             let db_path = Path::new(&config.db_path);
             prepare_database_path(db_path)?;
-            Connection::open_with_flags(&config.db_path, flags)?
+            #[cfg(unix)]
+            prepare_database_file(db_path)?;
+            #[cfg(unix)]
+            let db_path = database_open_path(db_path)?;
+            Connection::open_with_flags(db_path, flags)?
         };
 
         // Configure based on storage mode (RML-874, RML-900)
@@ -425,6 +432,19 @@ impl Storage {
     }
 }
 
+#[cfg(unix)]
+fn ensure_filesystem_database_supported() -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn ensure_filesystem_database_supported() -> Result<()> {
+    Err(crate::error::EngramError::Storage(
+        "filesystem SQLite databases require atomic no-follow support; use ':memory:' on this platform"
+            .to_string(),
+    ))
+}
+
 impl StoragePool {
     /// Create a connection pool with the specified size
     pub fn new(config: StorageConfig, pool_size: usize) -> Result<Self> {
@@ -517,6 +537,59 @@ fn prepare_database_parent(parent: &Path) -> Result<()> {
         warn_if_parent_is_permissive(parent)?;
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn prepare_database_file(db_path: &Path) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let opened = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .mode(SQLITE_FILE_MODE)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(db_path);
+
+    let file = match opened {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            open_sqlite_artifact_no_follow(db_path).map_err(|open_err| {
+                if open_err.raw_os_error() == Some(libc::ELOOP) {
+                    EngramError::Storage(format!(
+                        "refusing to open symlink SQLite database '{}'",
+                        db_path.display()
+                    ))
+                } else {
+                    open_err.into()
+                }
+            })?
+        }
+        Err(err) => return Err(err.into()),
+    };
+
+    if !file.metadata()?.is_file() {
+        return Err(EngramError::Storage(format!(
+            "refusing to open non-regular SQLite database '{}'",
+            db_path.display()
+        )));
+    }
+    restrict_open_regular_file_permissions(&file)
+}
+
+#[cfg(unix)]
+fn database_open_path(db_path: &Path) -> Result<PathBuf> {
+    let parent = db_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let file_name = db_path.file_name().ok_or_else(|| {
+        EngramError::Storage(format!(
+            "SQLite database path '{}' has no file name",
+            db_path.display()
+        ))
+    })?;
+    Ok(parent.canonicalize()?.join(file_name))
 }
 
 #[cfg(not(unix))]
@@ -699,14 +772,24 @@ mod tests {
 
     #[cfg(not(unix))]
     #[test]
-    fn non_unix_database_path_setup_remains_supported_without_posix_modes() {
+    fn non_unix_filesystem_database_fails_closed_without_no_follow_support() {
         let temp = tempfile::tempdir().unwrap();
         let db_path = temp.path().join("engram-owned").join("memory.db");
+        let err = match Storage::open(StorageConfig {
+            db_path: db_path.to_string_lossy().into_owned(),
+            storage_mode: StorageMode::Local,
+            cloud_uri: None,
+            encrypt_cloud: false,
+            confidence_half_life_days: 30.0,
+            auto_sync: false,
+            sync_debounce_ms: 5000,
+        }) {
+            Ok(_) => panic!("filesystem database unexpectedly opened"),
+            Err(err) => err,
+        };
 
-        prepare_database_path(&db_path).unwrap();
-        restrict_sqlite_artifact_permissions(&db_path).unwrap();
-
-        assert!(db_path.parent().unwrap().is_dir());
+        assert!(err.to_string().contains("atomic no-follow support"));
+        assert!(!db_path.parent().unwrap().exists());
     }
 
     #[cfg(unix)]
@@ -771,6 +854,50 @@ mod tests {
 
         let target_mode = std::fs::metadata(&target).unwrap().permissions().mode() & 0o777;
         assert_eq!(target_mode, 0o644);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_database_symlink_is_rejected_before_sqlite_mutates_target() {
+        use sha2::{Digest, Sha256};
+
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("target.db");
+        let db_path = temp.path().join("memory.db");
+        let conn = Connection::open(&target).unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=DELETE;
+             CREATE TABLE sentinel (value TEXT NOT NULL);
+             INSERT INTO sentinel VALUES ('unchanged');",
+        )
+        .unwrap();
+        drop(conn);
+        let target_sha_before = Sha256::digest(std::fs::read(&target).unwrap());
+        std::os::unix::fs::symlink(&target, &db_path).unwrap();
+
+        let err = match Storage::open(file_config(&db_path)) {
+            Ok(_) => panic!("database symlink unexpectedly opened"),
+            Err(err) => err,
+        };
+
+        assert!(
+            err.to_string()
+                .contains("refusing to open symlink SQLite database"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(
+            Sha256::digest(std::fs::read(&target).unwrap()),
+            target_sha_before
+        );
+        let conn = Connection::open(&target).unwrap();
+        let journal_mode: String = conn
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
+        let sentinel: String = conn
+            .query_row("SELECT value FROM sentinel", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(journal_mode, "delete");
+        assert_eq!(sentinel, "unchanged");
     }
 
     #[cfg(unix)]

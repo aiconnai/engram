@@ -1,5 +1,17 @@
 # Progress Log — Harness live-state closeout
 
+## Engram 10/10 Wave 2 closure — 2026-07-11
+
+Tasks 11–16 are represented by `bbd49fc`, `fc37fff`, `73f4959`, `bc05e81`,
+`815d1af`, and `ce292ac`. Barrier findings were remediated by `72bdf0b`
+(WebSocket peer-task cancellation) and `92734bc` (isolated PDF worker release
+packaging). The final SQLite remediation uses a no-follow open boundary before
+SQLite configuration; its regression proves the symlink target hash, DELETE
+journal mode, and sentinel row remain unchanged. Non-Unix platforms fail
+closed for filesystem databases when an equivalent atomic no-follow boundary
+is unavailable, while `:memory:` remains supported. Detailed command evidence
+is kept in the orchestrator-owned `.omo/evidence/` Wave 2 records.
+
 **Sprint**: Harness maintenance — live-state closeout
 **Task**: harness-live-state-closeout — close completed bootstrap sprint metadata
 **Date started**: 2026-06-27

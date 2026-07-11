@@ -13,6 +13,21 @@
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
+## Engram 10/10 Wave 2 — security closure
+
+- Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
+  security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud
+  key identity), `815d1af` (SQLite permissions), and `ce292ac` (bounded PDF
+  parsing).
+- Barrier remediation landed as `72bdf0b` (structured WebSocket peer-task
+  cleanup) and `92734bc` (release packaging for the isolated PDF worker).
+- The SQLite follow-up rejects a database symlink before SQLite opens it,
+  preserving the target database bytes, journal mode, and sentinel data. The
+  regression and runtime evidence are recorded with the Wave 2 barrier
+  evidence under `.omo/evidence/`. Platforms without the Unix atomic
+  no-follow boundary fail closed for filesystem databases and retain
+  `:memory:` support.
+
 ## Engram 10/10 Wave 2 — HTTP listener security (Task 11)
 
 - Public HTTP/SSE listeners now fail closed at startup unless an API key is
