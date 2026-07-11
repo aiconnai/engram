@@ -26,6 +26,18 @@
 - Evidence is recorded in the orchestrator-owned Task 11 evidence and report
   files under `.omo/` (outside this committed worktree).
 
+## Engram 10/10 Wave 2 — WebSocket peer cleanup
+
+- WebSocket connections now use structured peer-task cancellation: whichever
+  send/receive task finishes first aborts and awaits the blocked peer before
+  client registration cleanup returns.
+- Deterministic regressions cover client disconnect, outbound send failure,
+  and coordinator cancellation, preventing detached tasks on every ownership
+  path.
+- Targeted realtime tests, listener configuration tests, authenticated and
+  anonymous real WebSocket handshakes, Clippy, formatting, and harness doctor
+  pass on the Wave 2 cleanup worktree.
+
 ## Sprint ativa
 
 - **Harness maintenance — live-state closeout**

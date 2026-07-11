@@ -315,7 +315,7 @@ async fn handle_socket(socket: WebSocket, manager: RealtimeManager, principal: T
     // Task to forward events to client
     let conn_id = connection_id.clone();
     let mgr = manager.clone();
-    let send_task = tokio::spawn(async move {
+    let send_task = AbortOnDropTask::new(tokio::spawn(async move {
         while let Ok(event) = rx.recv().await {
             // Check if event matches client's filter
             if let Some(filter) = mgr.get_client_filter(&conn_id) {
@@ -327,12 +327,12 @@ async fn handle_socket(socket: WebSocket, manager: RealtimeManager, principal: T
                 }
             }
         }
-    });
+    }));
 
     // Task to handle incoming messages from client
     let conn_id = connection_id.clone();
     let mgr = manager.clone();
-    let recv_task = tokio::spawn(async move {
+    let recv_task = AbortOnDropTask::new(tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             match msg {
                 Message::Text(text) => {
@@ -348,21 +348,126 @@ async fn handle_socket(socket: WebSocket, manager: RealtimeManager, principal: T
                 _ => {}
             }
         }
-    });
+    }));
 
-    // Wait for either task to finish
-    tokio::select! {
-        _ = send_task => {}
-        _ = recv_task => {}
-    }
+    await_peer_tasks(send_task, recv_task).await;
 
     manager.unregister_client(&connection_id);
     tracing::info!("Client disconnected: {}", connection_id);
 }
 
+struct AbortOnDropTask {
+    handle: tokio::task::JoinHandle<()>,
+}
+
+impl AbortOnDropTask {
+    fn new(handle: tokio::task::JoinHandle<()>) -> Self {
+        Self { handle }
+    }
+
+    async fn abort_and_wait(&mut self) {
+        self.handle.abort();
+        let _ = (&mut self.handle).await;
+    }
+}
+
+impl Drop for AbortOnDropTask {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+async fn await_peer_tasks(mut send_task: AbortOnDropTask, mut recv_task: AbortOnDropTask) {
+    tokio::select! {
+        _ = &mut send_task.handle => {
+            recv_task.abort_and_wait().await;
+        }
+        _ = &mut recv_task.handle => {
+            send_task.abort_and_wait().await;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TaskDropSignal(Arc<std::sync::atomic::AtomicBool>);
+
+    impl Drop for TaskDropSignal {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn disconnect_cancels_blocked_send_peer() {
+        // Given: a send peer blocked waiting for an event and a completed receive peer.
+        let send_dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let send_signal = TaskDropSignal(send_dropped.clone());
+        let send_task = AbortOnDropTask::new(tokio::spawn(async move {
+            let _signal = send_signal;
+            std::future::pending::<()>().await;
+        }));
+        let recv_task = AbortOnDropTask::new(tokio::spawn(async {}));
+
+        // When: the receive peer observes the client disconnect.
+        await_peer_tasks(send_task, recv_task).await;
+
+        // Then: the blocked send peer is cancelled and awaited before cleanup returns.
+        assert!(send_dropped.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn send_failure_cancels_blocked_receive_peer() {
+        // Given: a completed send peer and a receive peer blocked waiting for client input.
+        let recv_dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let recv_signal = TaskDropSignal(recv_dropped.clone());
+        let send_task = AbortOnDropTask::new(tokio::spawn(async {}));
+        let recv_task = AbortOnDropTask::new(tokio::spawn(async move {
+            let _signal = recv_signal;
+            std::future::pending::<()>().await;
+        }));
+
+        // When: the send peer stops after its websocket write fails.
+        await_peer_tasks(send_task, recv_task).await;
+
+        // Then: the blocked receive peer is cancelled and awaited before cleanup returns.
+        assert!(recv_dropped.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn coordinator_cancellation_aborts_both_peers() {
+        // Given: two live peer tasks owned by a connection coordinator.
+        let send_dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let recv_dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let send_signal = TaskDropSignal(send_dropped.clone());
+        let recv_signal = TaskDropSignal(recv_dropped.clone());
+        let send_task = AbortOnDropTask::new(tokio::spawn(async move {
+            let _signal = send_signal;
+            std::future::pending::<()>().await;
+        }));
+        let recv_task = AbortOnDropTask::new(tokio::spawn(async move {
+            let _signal = recv_signal;
+            std::future::pending::<()>().await;
+        }));
+        let coordinator = tokio::spawn(await_peer_tasks(send_task, recv_task));
+        tokio::task::yield_now().await;
+
+        // When: the connection coordinator is cancelled before either peer finishes.
+        coordinator.abort();
+        let _ = coordinator.await;
+        for _ in 0..100 {
+            if send_dropped.load(Ordering::SeqCst) && recv_dropped.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        // Then: ownership cancellation aborts both peer tasks instead of detaching them.
+        assert!(send_dropped.load(Ordering::SeqCst));
+        assert!(recv_dropped.load(Ordering::SeqCst));
+    }
 
     #[test]
     fn test_realtime_manager() {
