@@ -44,6 +44,7 @@ observed_latest = "v0.21.2"
 owner = "release owner"
 dry_run_command = "gh release view v0.22.0 --repo aiconnai/engram --json tagName,isDraft,isPrerelease,publishedAt"
 publish_command = "GitHub Actions release workflow from reviewed tag; do not use generated notes."
+pdf_support = "Release archives for Linux and macOS contain engram-server, engram-cli, and sibling engram-pdf-worker."
 rollback = "Published releases may be edited, but assets/checksums and downstream Homebrew formula may already be consumed."
 human_gate = true
 
@@ -57,6 +58,7 @@ observed_version = "0.21.1"
 owner = "Rust release owner"
 dry_run_command = "cargo publish --dry-run"
 publish_command = "cargo publish"
+pdf_support = "Opt-in: cargo install engram-core --features pdf installs the feature-gated engram-pdf-worker."
 rollback = "crates.io versions are immutable; use cargo yank or publish a forward patch."
 human_gate = true
 
@@ -97,6 +99,7 @@ observed_version = "0.21.2"
 owner = "Homebrew tap owner"
 dry_run_command = "brew info --json=v2 aiconnai/engram/engram"
 publish_command = "GitHub release workflow updates aiconnai/homebrew-engram only when HOMEBREW_TAP_TOKEN is configured."
+pdf_support = "Release workflow inserts and verifies bin.install for engram-pdf-worker before writing the formula."
 rollback = "Formula consumers may have installed the artifact; update formula forward or coordinate tap revert with checksums."
 human_gate = true
 

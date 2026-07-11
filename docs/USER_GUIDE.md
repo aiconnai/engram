@@ -21,6 +21,13 @@ From crates.io:
 cargo install engram-core
 ```
 
+To enable PDF ingestion from crates.io, install the feature-gated worker with
+the server and CLI:
+
+```bash
+cargo install engram-core --features pdf
+```
+
 From this repository:
 
 ```bash
@@ -35,6 +42,12 @@ Verify the install:
 engram-server --version
 engram-cli --version
 ```
+
+PDF ingestion requires `engram-pdf-worker` in the same directory as the
+running Engram executable. Official GitHub release archives and the Homebrew
+formula ship it on Linux and macOS. Custom library deployments must package the
+matching worker themselves. Missing workers and platforms without enforceable
+resource limits fail closed; Engram never falls back to in-process PDF parsing.
 
 ## 2. Choose Where Memories Live
 
