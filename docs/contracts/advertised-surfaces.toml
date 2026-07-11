@@ -31,7 +31,7 @@ engram_server_default_transports = ["stdio", "http", "both"]
 engram_server_feature_transports = ["grpc"]
 http_auth_env = "ENGRAM_HTTP_API_KEY"
 pdf_worker_distribution = "sibling-binary"
-pdf_worker_supported_platforms = ["linux", "macos"]
+pdf_worker_supported_platforms = ["linux"]
 pdf_worker_unsupported_platform_behavior = "fail-closed"
 pdf_worker_docker_support = "not-advertised"
 

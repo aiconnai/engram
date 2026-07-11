@@ -16,9 +16,9 @@ cd engram
 cargo install --path .
 ```
 
-This installs `engram-server` and `engram-cli`. PDF ingestion is optional; to
-enable it, install the `pdf` feature, which also installs the required isolated
-worker:
+This installs `engram-server` and `engram-cli`. PDF ingestion is optional and
+currently supported only on Linux; to enable it there, install the `pdf`
+feature, which also installs the required isolated worker:
 
 ```bash
 cargo install --path . --features pdf
@@ -28,9 +28,9 @@ cargo install --path . --features pdf
 
 Download platform archives from [GitHub Releases](https://github.com/aiconnai/engram/releases).
 Release artifacts are tarballs named `engram-vX.Y.Z-<target>.tar.gz` and
-contain `engram-server`, `engram-cli`, and `engram-pdf-worker`. Keep all three
-in the same directory. The server deliberately fails PDF ingestion closed if
-the worker is absent.
+contain `engram-server` and `engram-cli`. Linux archives also contain
+`engram-pdf-worker`; keep all three in the same directory to use PDF ingestion.
+The server deliberately fails PDF ingestion closed if the worker is absent.
 
 ```bash
 # Replace VERSION and TARGET with the release tag and platform target you need.
@@ -50,7 +50,9 @@ sudo mv engram-pdf-worker /usr/local/bin/
 brew install aiconnai/engram/engram
 ```
 
-GitHub and Homebrew PDF support is available on Linux and macOS. The worker is
+GitHub PDF support is available on Linux. PDF ingestion fails closed on macOS
+because macOS does not provide the hard process memory boundary required by
+Engram's parser threat model. The Linux worker is
 a project-owned subprocess with bounded input, output, memory, CPU, file
 descriptors, and wall time. Platforms without enforceable worker resource
 limits reject PDF extraction rather than parsing in the server process.

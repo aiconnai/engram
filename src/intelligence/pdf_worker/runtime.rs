@@ -94,7 +94,19 @@ fn apply_memory_limit() -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 fn apply_memory_limit() -> Result<(), String> {
-    Ok(())
+    Err(
+        "PDF extraction is unavailable on macOS because a hard process memory limit cannot be enforced"
+            .to_string(),
+    )
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    #[test]
+    fn macos_pdf_worker_fails_closed_without_hard_memory_limit() {
+        let error = super::apply_memory_limit().expect_err("macOS must fail closed");
+        assert!(error.contains("hard process memory limit"));
+    }
 }
 
 #[cfg(not(unix))]

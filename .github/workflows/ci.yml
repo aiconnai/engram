@@ -525,4 +525,10 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/engram-server
             target/${{ matrix.target }}/release/engram-cli
+      - name: Upload PDF worker artifact
+        if: contains(matrix.target, '-linux-')
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: engram-pdf-worker-${{ matrix.target }}
+          path: |
             target/${{ matrix.target }}/release/engram-pdf-worker

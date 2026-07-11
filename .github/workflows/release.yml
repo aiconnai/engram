@@ -114,7 +114,11 @@ jobs:
         run: |
           ARCHIVE="engram-${RELEASE_VERSION}-${{ matrix.target }}.tar.gz"
           cd target/${{ matrix.target }}/release
-          tar -czf "../../../${ARCHIVE}" engram-server engram-cli engram-pdf-worker
+          if [[ "${{ matrix.target }}" == *-linux-* ]]; then
+            tar -czf "../../../${ARCHIVE}" engram-server engram-cli engram-pdf-worker
+          else
+            tar -czf "../../../${ARCHIVE}" engram-server engram-cli
+          fi
           cd ../../..
           shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256"
 
@@ -230,10 +234,10 @@ jobs:
           sed -i "/x86_64-unknown-linux-gnu/{ n; s/sha256 \".*\"/sha256 \"${X86_64_LINUX}\"/ }" Formula/engram.rb
 
           python3 ../engram-source/.github/scripts/ensure-pdf-worker-homebrew.py Formula/engram.rb
-          grep -F 'bin.install "engram-pdf-worker"' Formula/engram.rb >/dev/null || {
-            echo "worker install entry was not created" >&2
+          if grep -F 'bin.install "engram-pdf-worker"' Formula/engram.rb >/dev/null; then
+            echo "macOS formula must not install unsupported PDF worker" >&2
             exit 1
-          }
+          fi
 
           echo "Updated formula:"
           cat Formula/engram.rb

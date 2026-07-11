@@ -29,14 +29,15 @@ RELEASE = "\n".join(
         f"        run: {MODULE.RELEASE_BUILD}",
         "      - name: Package (Unix)",
         "        run: |",
-        f"          {MODULE.RELEASE_ARCHIVE}",
+        '          if [[ "${{ matrix.target }}" == *-linux-* ]]; then',
+        f"            {MODULE.RELEASE_ARCHIVE}",
+        '            tar -czf "../../../${ARCHIVE}" engram-server engram-cli',
         "      - name: Update formula",
         "        if: steps.homebrew-token.outputs.available == 'true'",
         "        run: |",
         f"          {MODULE.HOMEBREW_UPDATE_COMMAND}",
-        f"          {MODULE.HOMEBREW_ASSERT}",
-        '            echo "worker install entry was not created" >&2',
-        "          }",
+        "          if grep -F 'bin.install \"engram-pdf-worker\"' Formula/engram.rb >/dev/null; then",
+        '            echo "macOS formula must not install unsupported PDF worker" >&2',
     )
 )
 CI = "\n".join(
@@ -46,7 +47,8 @@ CI = "\n".join(
         "    steps:",
         "      - name: Build release",
         f"        run: {MODULE.RELEASE_BUILD}",
-        "      - name: Upload artifacts",
+        "      - name: Upload PDF worker artifact",
+        "        if: contains(matrix.target, '-linux-')",
         "        with:",
         "          path: |",
         f"            {MODULE.CI_WORKER_PATH}",
@@ -65,7 +67,7 @@ INVENTORY = "\n".join(
         "[cli]",
         'binaries = ["engram-server", "engram-cli", "engram-pdf-worker"]',
         'pdf_worker_distribution = "sibling-binary"',
-        'pdf_worker_supported_platforms = ["linux", "macos"]',
+        'pdf_worker_supported_platforms = ["linux"]',
         'pdf_worker_unsupported_platform_behavior = "fail-closed"',
         'pdf_worker_docker_support = "not-advertised"',
     )
@@ -136,10 +138,10 @@ class PdfWorkerPackagingContractTests(unittest.TestCase):
         release.write_text(release.read_text(encoding="utf-8").replace(MODULE.VERSION_GUARD, 'if [[ ! "$RELEASE_VERSION" =~ ^v.*$ ]]; then'), encoding="utf-8")
         self.assertTrue(any("Validate release version" in item for item in MODULE.missing_contracts(self.root)))
 
-    def test_missing_homebrew_install_fails(self) -> None:
-        release = self.root / ".github/workflows/release.yml"
-        release.write_text(release.read_text(encoding="utf-8").replace(MODULE.HOMEBREW_INSTALL, ""), encoding="utf-8")
-        self.assertTrue(any("Update formula" in item for item in MODULE.missing_contracts(self.root)))
+    def test_macos_worker_upload_fails(self) -> None:
+        ci = self.root / ".github/workflows/ci.yml"
+        ci.write_text(ci.read_text(encoding="utf-8").replace("        if: contains(matrix.target, '-linux-')\n", ""), encoding="utf-8")
+        self.assertTrue(any("Upload PDF worker artifact" in item for item in MODULE.missing_contracts(self.root)))
 
     def test_worker_inventory_in_wrong_table_fails(self) -> None:
         inventory = self.root / "docs/contracts/advertised-surfaces.toml"
@@ -158,13 +160,13 @@ class PdfWorkerPackagingContractTests(unittest.TestCase):
         (self.root / "docs/contracts/advertised-surfaces.toml").write_text('[cli]\nbinaries = [\n', encoding="utf-8")
         self.assertTrue(any("advertised-surfaces.toml: invalid contract value" in item for item in MODULE.missing_contracts(self.root)))
 
-    def test_homebrew_updater_inserts_worker_after_cli(self) -> None:
+    def test_homebrew_updater_removes_worker(self) -> None:
         formula = self.root / "Formula/engram.rb"
         formula.parent.mkdir(parents=True, exist_ok=True)
-        formula.write_text('def install\n  bin.install "engram-server"\n  bin.install "engram-cli"\nend\n', encoding="utf-8")
+        formula.write_text('def install\n  bin.install "engram-server"\n  bin.install "engram-cli"\n  bin.install "engram-pdf-worker"\nend\n', encoding="utf-8")
         updater = SCRIPT.parent.parent / ".github/scripts/ensure-pdf-worker-homebrew.py"
         subprocess.run(["python3", str(updater), str(formula)], check=True)
-        self.assertIn('  bin.install "engram-pdf-worker"\n', formula.read_text(encoding="utf-8"))
+        self.assertNotIn('bin.install "engram-pdf-worker"', formula.read_text(encoding="utf-8"))
 
     def test_homebrew_updater_rejects_unknown_formula_shape(self) -> None:
         formula = self.root / "Formula/engram.rb"

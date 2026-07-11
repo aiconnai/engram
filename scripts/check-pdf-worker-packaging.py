@@ -9,9 +9,7 @@ from pathlib import Path
 RELEASE_BUILD = "cargo build --release --target ${{ matrix.target }} --features pdf --bin engram-server --bin engram-cli --bin engram-pdf-worker"
 RELEASE_ARCHIVE = 'tar -czf "../../../${ARCHIVE}" engram-server engram-cli engram-pdf-worker'
 CI_WORKER_PATH = "target/${{ matrix.target }}/release/engram-pdf-worker"
-HOMEBREW_INSTALL = 'bin.install "engram-pdf-worker"'
 HOMEBREW_UPDATE_COMMAND = "python3 ../engram-source/.github/scripts/ensure-pdf-worker-homebrew.py Formula/engram.rb"
-HOMEBREW_ASSERT = "grep -F 'bin.install \"engram-pdf-worker\"' Formula/engram.rb >/dev/null || {"
 VERSION_GUARD = 'if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then'
 
 
@@ -104,7 +102,11 @@ def missing_contracts(root: Path) -> list[str]:
     if release is not None:
         require_step_lines(missing, release_path, release, "Validate release version", (f"          {VERSION_GUARD}",))
         require_step_lines(missing, release_path, release, "Build release binaries", (f"        run: {RELEASE_BUILD}",))
-        require_step_lines(missing, release_path, release, "Package (Unix)", (f"          {RELEASE_ARCHIVE}",))
+        require_step_lines(missing, release_path, release, "Package (Unix)", (
+            "          if [[ \"${{ matrix.target }}\" == *-linux-* ]]; then",
+            f"            {RELEASE_ARCHIVE}",
+            '            tar -czf "../../../${ARCHIVE}" engram-server engram-cli',
+        ))
         require_step_lines(
             missing,
             release_path,
@@ -112,8 +114,8 @@ def missing_contracts(root: Path) -> list[str]:
             "Update formula",
             (
                 f"          {HOMEBREW_UPDATE_COMMAND}",
-                f"          {HOMEBREW_ASSERT}",
-                '            echo "worker install entry was not created" >&2',
+                "          if grep -F 'bin.install \"engram-pdf-worker\"' Formula/engram.rb >/dev/null; then",
+                '            echo "macOS formula must not install unsupported PDF worker" >&2',
             ),
             "        if: steps.homebrew-token.outputs.available == 'true'",
         )
@@ -122,7 +124,14 @@ def missing_contracts(root: Path) -> list[str]:
     ci = read_contract(root, ci_path, missing)
     if ci is not None:
         require_step_lines(missing, ci_path, ci, "Build release", (f"        run: {RELEASE_BUILD}",))
-        require_step_lines(missing, ci_path, ci, "Upload artifacts", (f"            {CI_WORKER_PATH}",))
+        require_step_lines(
+            missing,
+            ci_path,
+            ci,
+            "Upload PDF worker artifact",
+            (f"            {CI_WORKER_PATH}",),
+            "        if: contains(matrix.target, '-linux-')",
+        )
 
     cargo_path = "Cargo.toml"
     cargo = read_contract(root, cargo_path, missing)
@@ -152,7 +161,7 @@ def missing_contracts(root: Path) -> list[str]:
                     missing.append(f"{inventory_path}: [cli].binaries missing engram-pdf-worker")
                 expected = {
                     "pdf_worker_distribution": "sibling-binary",
-                    "pdf_worker_supported_platforms": ["linux", "macos"],
+                    "pdf_worker_supported_platforms": ["linux"],
                     "pdf_worker_unsupported_platform_behavior": "fail-closed",
                     "pdf_worker_docker_support": "not-advertised",
                 }
