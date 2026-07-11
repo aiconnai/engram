@@ -6,11 +6,20 @@
 use parking_lot::Mutex;
 use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
+#[cfg(unix)]
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::migrations::run_migrations;
+#[cfg(unix)]
+use crate::error::EngramError;
 use crate::error::Result;
 use crate::types::{CompactOp, CompactReport, StorageConfig, StorageMode};
+
+#[cfg(unix)]
+const SQLITE_FILE_MODE: u32 = 0o600;
+#[cfg(unix)]
+const ENGRAM_OWNED_DIR_MODE: u32 = 0o700;
 
 /// Storage engine wrapping SQLite with connection pooling
 pub struct Storage {
@@ -32,6 +41,7 @@ impl Storage {
 
         // Run migrations
         run_migrations(&conn)?;
+        Self::reassert_sqlite_artifact_permissions_for_config(&config)?;
 
         Ok(Self {
             config,
@@ -62,15 +72,14 @@ impl Storage {
         let conn = if config.db_path == ":memory:" {
             Connection::open_in_memory()?
         } else {
-            // Ensure parent directory exists
-            if let Some(parent) = Path::new(&config.db_path).parent() {
-                std::fs::create_dir_all(parent)?;
-            }
+            let db_path = Path::new(&config.db_path);
+            prepare_database_path(db_path)?;
             Connection::open_with_flags(&config.db_path, flags)?
         };
 
         // Configure based on storage mode (RML-874, RML-900)
         Self::configure_pragmas(&conn, config.storage_mode)?;
+        Self::reassert_sqlite_artifact_permissions_for_config(config)?;
 
         Ok(conn)
     }
@@ -123,8 +132,11 @@ impl Storage {
     where
         F: FnOnce(&Connection) -> Result<T>,
     {
-        let conn = self.conn.lock();
-        f(&conn)
+        let result = {
+            let conn = self.conn.lock();
+            f(&conn)
+        };
+        self.reassert_sqlite_artifact_permissions_after(result)
     }
 
     /// Execute a function with a transaction
@@ -132,11 +144,15 @@ impl Storage {
     where
         F: FnOnce(&Connection) -> Result<T>,
     {
-        let mut conn = self.conn.lock();
-        let tx = conn.transaction()?;
-        let result = f(&tx)?;
-        tx.commit()?;
-        Ok(result)
+        let result = {
+            let mut conn = self.conn.lock();
+            let tx = conn.transaction()?;
+            match f(&tx) {
+                Ok(result) => tx.commit().map(|_| result).map_err(Into::into),
+                Err(err) => Err(err),
+            }
+        };
+        self.reassert_sqlite_artifact_permissions_after(result)
     }
 
     /// Get current storage mode
@@ -179,6 +195,7 @@ impl Storage {
             let conn = self.conn.lock();
             conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
         }
+        self.reassert_sqlite_artifact_permissions()?;
         Ok(())
     }
 
@@ -197,6 +214,8 @@ impl Storage {
     pub fn vacuum(&self) -> Result<()> {
         let conn = self.conn.lock();
         conn.execute_batch("VACUUM;")?;
+        drop(conn);
+        self.reassert_sqlite_artifact_permissions()?;
         Ok(())
     }
 
@@ -355,6 +374,11 @@ impl Storage {
         }
         operations.push(vacuum);
 
+        if apply {
+            drop(conn);
+            self.reassert_sqlite_artifact_permissions()?;
+        }
+
         Ok(CompactReport {
             applied: apply,
             db_size_bytes,
@@ -375,6 +399,30 @@ impl Storage {
     pub fn config(&self) -> &StorageConfig {
         &self.config
     }
+
+    fn reassert_sqlite_artifact_permissions_after<T>(&self, result: Result<T>) -> Result<T> {
+        match result {
+            Ok(value) => {
+                self.reassert_sqlite_artifact_permissions()?;
+                Ok(value)
+            }
+            Err(err) => {
+                let _ = self.reassert_sqlite_artifact_permissions();
+                Err(err)
+            }
+        }
+    }
+
+    fn reassert_sqlite_artifact_permissions(&self) -> Result<()> {
+        Self::reassert_sqlite_artifact_permissions_for_config(&self.config)
+    }
+
+    fn reassert_sqlite_artifact_permissions_for_config(config: &StorageConfig) -> Result<()> {
+        if config.db_path == ":memory:" {
+            return Ok(());
+        }
+        restrict_sqlite_artifact_permissions(Path::new(&config.db_path))
+    }
 }
 
 impl StoragePool {
@@ -392,6 +440,7 @@ impl StoragePool {
             let conn = first.lock();
             run_migrations(&conn)?;
         }
+        Storage::reassert_sqlite_artifact_permissions_for_config(&config)?;
 
         Ok(Self {
             config,
@@ -411,9 +460,21 @@ impl StoragePool {
     where
         F: FnOnce(&Connection) -> Result<T>,
     {
-        let conn_arc = self.get();
-        let conn = conn_arc.lock();
-        f(&conn)
+        let result = {
+            let conn_arc = self.get();
+            let conn = conn_arc.lock();
+            f(&conn)
+        };
+        match result {
+            Ok(value) => {
+                Storage::reassert_sqlite_artifact_permissions_for_config(&self.config)?;
+                Ok(value)
+            }
+            Err(err) => {
+                let _ = Storage::reassert_sqlite_artifact_permissions_for_config(&self.config);
+                Err(err)
+            }
+        }
     }
 
     /// Get configuration
@@ -431,9 +492,159 @@ impl Clone for Storage {
     }
 }
 
+/// Prepare the database path before SQLite opens it.
+///
+/// On Unix, missing Engram-owned parent directories are created as `0700`.
+/// Existing parent directories are never recursively chmodded; if the direct
+/// parent is permissive, Engram emits an actionable warning and leaves it
+/// unchanged. On non-Unix platforms, Rust's standard library does not expose
+/// POSIX mode bits, so this only creates missing directories and file-mode
+/// hardening below is a no-op.
+fn prepare_database_path(db_path: &Path) -> Result<()> {
+    if let Some(parent) = db_path.parent().filter(|path| !path.as_os_str().is_empty()) {
+        prepare_database_parent(parent)?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn prepare_database_parent(parent: &Path) -> Result<()> {
+    let parent_existed = parent.exists();
+    if !parent_existed {
+        create_dir_all_restrictive(parent)?;
+    }
+    if parent_existed {
+        warn_if_parent_is_permissive(parent)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn prepare_database_parent(parent: &Path) -> Result<()> {
+    std::fs::create_dir_all(parent)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn create_dir_all_restrictive(dir: &Path) -> Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+
+    if dir.exists() {
+        return Ok(());
+    }
+
+    if let Some(parent) = dir.parent().filter(|path| !path.as_os_str().is_empty()) {
+        create_dir_all_restrictive(parent)?;
+    }
+
+    match std::fs::DirBuilder::new()
+        .mode(ENGRAM_OWNED_DIR_MODE)
+        .create(dir)
+    {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
+
+#[cfg(unix)]
+fn warn_if_parent_is_permissive(parent: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mode = std::fs::metadata(parent)?.permissions().mode() & 0o777;
+    if mode & 0o077 != 0 {
+        tracing::warn!(
+            path = %parent.display(),
+            mode = %format_args!("{mode:03o}"),
+            "Database parent directory is accessible by group or others; Engram will not chmod \
+             pre-existing directories recursively. Move the database under an Engram-owned \
+             private directory or run `chmod 700` on the parent directory."
+        );
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn restrict_sqlite_artifact_permissions(db_path: &Path) -> Result<()> {
+    for path in sqlite_artifact_paths(db_path) {
+        match open_sqlite_artifact_no_follow(&path) {
+            Ok(file) => restrict_open_regular_file_permissions(&file)?,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) if err.raw_os_error() == Some(libc::ELOOP) => {
+                return Err(EngramError::Storage(format!(
+                    "refusing to chmod symlink SQLite artifact '{}'",
+                    path.display()
+                )));
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn open_sqlite_artifact_no_follow(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+}
+
+#[cfg(unix)]
+fn restrict_open_regular_file_permissions(file: &std::fs::File) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Ok(());
+    }
+
+    let current = metadata.permissions().mode() & 0o777;
+    let restricted = current & SQLITE_FILE_MODE;
+    if restricted != current {
+        file.set_permissions(std::fs::Permissions::from_mode(restricted))?;
+    }
+
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn restrict_sqlite_artifact_permissions(_db_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sqlite_artifact_paths(db_path: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::with_capacity(3);
+    paths.push(db_path.to_path_buf());
+    for suffix in ["-wal", "-shm"] {
+        let mut path = db_path.as_os_str().to_os_string();
+        path.push(suffix);
+        paths.push(PathBuf::from(path));
+    }
+    paths
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
+    #[cfg(unix)]
+    fn file_config(db_path: &Path) -> StorageConfig {
+        StorageConfig {
+            db_path: db_path.to_string_lossy().into_owned(),
+            storage_mode: StorageMode::Local,
+            cloud_uri: None,
+            encrypt_cloud: false,
+            confidence_half_life_days: 30.0,
+            auto_sync: false,
+            sync_debounce_ms: 5000,
+        }
+    }
 
     #[test]
     fn test_open_in_memory() {
@@ -484,5 +695,176 @@ mod tests {
         // Can't actually open this path in tests, but we can test detection
         let path = config.db_path.to_lowercase();
         assert!(path.contains("dropbox"));
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn non_unix_database_path_setup_remains_supported_without_posix_modes() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("engram-owned").join("memory.db");
+
+        prepare_database_path(&db_path).unwrap();
+        restrict_sqlite_artifact_permissions(&db_path).unwrap();
+
+        assert!(db_path.parent().unwrap().is_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_new_database_parent_and_sqlite_artifacts_are_restrictive() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("engram-owned").join("memory.db");
+        let storage = Storage::open(file_config(&db_path)).unwrap();
+
+        let parent_mode = std::fs::metadata(db_path.parent().unwrap())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(parent_mode, 0o700);
+
+        storage
+            .with_connection(|conn| {
+                conn.execute_batch(
+                    "CREATE TABLE permission_probe (id INTEGER PRIMARY KEY, value TEXT);
+                     INSERT INTO permission_probe (value) VALUES ('ok');",
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        assert_sqlite_artifact_modes(&db_path, 0o600);
+
+        storage.checkpoint().unwrap();
+        assert_sqlite_artifact_modes(&db_path, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_existing_stricter_file_mode_is_preserved() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("strict.db");
+        std::fs::write(&db_path, b"not a sqlite db").unwrap();
+        std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o400)).unwrap();
+
+        restrict_sqlite_artifact_permissions(&db_path).unwrap();
+
+        let mode = std::fs::metadata(&db_path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o400);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_symlink_artifact_is_rejected_without_chmodding_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("memory.db");
+        let target = temp.path().join("target");
+        let wal_path = Path::new(&format!("{}-wal", db_path.display())).to_path_buf();
+
+        std::fs::write(&db_path, b"not a sqlite db").unwrap();
+        std::fs::write(&target, b"target").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::os::unix::fs::symlink(&target, &wal_path).unwrap();
+
+        let err = restrict_sqlite_artifact_permissions(&db_path).unwrap_err();
+        assert!(err.to_string().contains("refusing to chmod symlink"));
+
+        let target_mode = std::fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(target_mode, 0o644);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_path_replacement_after_open_cannot_redirect_chmod() {
+        let temp = tempfile::tempdir().unwrap();
+        let artifact_path = temp.path().join("memory.db");
+        let opened_inode_path = temp.path().join("opened-memory.db");
+        let symlink_target = temp.path().join("unrelated-target");
+
+        std::fs::write(&artifact_path, b"opened inode").unwrap();
+        std::fs::set_permissions(&artifact_path, std::fs::Permissions::from_mode(0o666)).unwrap();
+        std::fs::write(&symlink_target, b"unrelated target").unwrap();
+        std::fs::set_permissions(&symlink_target, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        let opened_artifact = open_sqlite_artifact_no_follow(&artifact_path).unwrap();
+        std::fs::rename(&artifact_path, &opened_inode_path).unwrap();
+        std::os::unix::fs::symlink(&symlink_target, &artifact_path).unwrap();
+
+        restrict_open_regular_file_permissions(&opened_artifact).unwrap();
+
+        let opened_inode_mode = std::fs::metadata(&opened_inode_path)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(opened_inode_mode, 0o600);
+
+        let target_mode = std::fs::metadata(&symlink_target)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(target_mode, 0o644);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_existing_permissive_parent_stays_unchanged_and_warns() {
+        #[derive(Clone)]
+        struct CapturedWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+        impl std::io::Write for CapturedWriter {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let shared_parent = temp.path().join("shared-parent");
+        std::fs::create_dir(&shared_parent).unwrap();
+        std::fs::set_permissions(&shared_parent, std::fs::Permissions::from_mode(0o777)).unwrap();
+
+        let logs = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let writer_logs = logs.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::WARN)
+            .with_writer(move || CapturedWriter(writer_logs.clone()))
+            .without_time()
+            .finish();
+
+        let db_path = shared_parent.join("memory.db");
+        tracing::subscriber::with_default(subscriber, || {
+            Storage::open(file_config(&db_path)).unwrap();
+        });
+
+        let parent_mode = std::fs::metadata(&shared_parent)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(parent_mode, 0o777);
+
+        let captured = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+        assert!(captured.contains("Database parent directory"));
+        assert!(captured.contains("chmod 700"));
+    }
+
+    #[cfg(unix)]
+    fn assert_sqlite_artifact_modes(db_path: &Path, expected_mode: u32) {
+        for path in [
+            db_path.to_path_buf(),
+            Path::new(&format!("{}-wal", db_path.display())).to_path_buf(),
+            Path::new(&format!("{}-shm", db_path.display())).to_path_buf(),
+        ] {
+            if path.exists() {
+                let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+                assert_eq!(mode, expected_mode, "{} has wrong mode", path.display());
+            }
+        }
     }
 }
