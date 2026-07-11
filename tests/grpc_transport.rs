@@ -11,6 +11,7 @@
 #![cfg(feature = "grpc")]
 
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "langfuse")]
 use std::sync::OnceLock;
@@ -24,11 +25,13 @@ use tonic::{Code, Request};
 use engram::embedding::{create_embedder, EmbeddingCache};
 use engram::mcp::grpc_transport::proto::mcp_service_client::McpServiceClient;
 use engram::mcp::grpc_transport::proto::McpRequest as ProtoRequest;
+use engram::mcp::grpc_transport::proto::SubscribeRequest;
 use engram::mcp::grpc_transport::serve_grpc;
 use engram::mcp::{
     get_tool_definitions, handlers, methods, InitializeResult, McpHandler, McpRequest, McpResponse,
     ServerCapabilities, ToolsCapability, MCP_PROTOCOL_VERSION,
 };
+use engram::realtime::RealtimeManager;
 use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
 use engram::storage::Storage;
 use engram::types::EmbeddingConfig;
@@ -139,14 +142,24 @@ fn pick_free_port() -> u16 {
 ///
 /// The server runs for the lifetime of the test process.
 async fn start_server(api_key: Option<String>) -> SocketAddr {
+    start_server_with_realtime(api_key, None).await
+}
+
+async fn start_server_with_realtime(
+    api_key: Option<String>,
+    realtime: Option<RealtimeManager>,
+) -> SocketAddr {
     for _ in 0..10 {
         let port = pick_free_port();
         let addr: SocketAddr = format!("127.0.0.1:{port}").parse().expect("valid addr");
         let handler: Arc<dyn McpHandler> = Arc::new(TestHandler::new());
         let api_key_clone = api_key.clone();
+        let realtime_clone = realtime.clone();
 
         let server =
-            tokio::spawn(async move { serve_grpc(handler, addr, api_key_clone, None).await });
+            tokio::spawn(
+                async move { serve_grpc(handler, addr, api_key_clone, realtime_clone).await },
+            );
 
         for _ in 0..20 {
             if server.is_finished() {
@@ -184,6 +197,15 @@ fn req(id: &str, method: &str, params: Value) -> ProtoRequest {
         method: method.to_string(),
         params_json: serde_json::to_string(&params).unwrap_or_default(),
     }
+}
+
+fn bearer_req(id: &str, method: &str, params: Value) -> Request<ProtoRequest> {
+    let mut request = Request::new(req(id, method, params));
+    request.metadata_mut().insert(
+        "authorization",
+        MetadataValue::from_static("Bearer secret-token"),
+    );
+    request
 }
 
 // ---------------------------------------------------------------------------
@@ -265,11 +287,11 @@ async fn scenario_b_tools_list_returns_tools() {
 
 #[tokio::test]
 async fn scenario_c_memory_create_returns_id() {
-    let addr = start_server(None).await;
+    let addr = start_server(Some("secret-token".to_string())).await;
     let mut client = connect(addr).await;
 
     let resp = client
-        .call(Request::new(req(
+        .call(bearer_req(
             "3",
             methods::CALL_TOOL,
             json!({
@@ -279,7 +301,7 @@ async fn scenario_c_memory_create_returns_id() {
                     "memory_type": "note"
                 }
             }),
-        )))
+        ))
         .await
         .expect("call memory_create")
         .into_inner();
@@ -310,12 +332,12 @@ async fn scenario_c_memory_create_returns_id() {
 #[tokio::test]
 async fn scenario_d_memory_search_returns_results() {
     // Use a fresh server with a pre-created memory
-    let addr = start_server(None).await;
+    let addr = start_server(Some("secret-token".to_string())).await;
     let mut client = connect(addr).await;
 
     // Create a memory first
     client
-        .call(Request::new(req(
+        .call(bearer_req(
             "seed",
             methods::CALL_TOOL,
             json!({
@@ -325,13 +347,13 @@ async fn scenario_d_memory_search_returns_results() {
                     "memory_type": "note"
                 }
             }),
-        )))
+        ))
         .await
         .expect("seed memory");
 
     // Now search for it
     let resp = client
-        .call(Request::new(req(
+        .call(bearer_req(
             "4",
             methods::CALL_TOOL,
             json!({
@@ -340,7 +362,7 @@ async fn scenario_d_memory_search_returns_results() {
                     "query": "gRPC test content alpha"
                 }
             }),
-        )))
+        ))
         .await
         .expect("call memory_search")
         .into_inner();
@@ -419,17 +441,436 @@ async fn scenario_f_correct_token_succeeds() {
     assert_eq!(resp.into_inner().id, "6");
 }
 
+#[tokio::test]
+async fn scenario_h_malformed_token_is_unauthenticated() {
+    let addr = start_server(Some("secret-token".to_string())).await;
+    let mut client = connect(addr).await;
+
+    let mut request = Request::new(req("8", methods::LIST_TOOLS, json!({})));
+    request.metadata_mut().insert(
+        "authorization",
+        MetadataValue::from_static("Basic secret-token"),
+    );
+
+    let err = client
+        .call(request)
+        .await
+        .expect_err("malformed token should fail");
+
+    assert_eq!(err.code(), Code::Unauthenticated);
+}
+
+#[tokio::test]
+async fn scenario_i_wrong_token_is_unauthenticated() {
+    let addr = start_server(Some("secret-token".to_string())).await;
+    let mut client = connect(addr).await;
+
+    let mut request = Request::new(req("9", methods::LIST_TOOLS, json!({})));
+    request.metadata_mut().insert(
+        "authorization",
+        MetadataValue::from_static("Bearer wrong-token"),
+    );
+
+    let err = client
+        .call(request)
+        .await
+        .expect_err("wrong token should fail");
+
+    assert_eq!(err.code(), Code::Unauthenticated);
+}
+
+#[tokio::test]
+async fn scenario_j_loopback_no_key_allows_default_read_tool() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let resp = client
+        .call(Request::new(req(
+            "10",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_list",
+                "arguments": {
+                    "workspace": "default"
+                }
+            }),
+        )))
+        .await
+        .expect("loopback anonymous read tool should succeed")
+        .into_inner();
+
+    assert_eq!(resp.id, "10");
+}
+
+#[tokio::test]
+async fn scenario_j2_loopback_empty_key_uses_no_key_compatibility() {
+    let addr = start_server(Some(String::new())).await;
+    let mut client = connect(addr).await;
+
+    let resp = client
+        .call(Request::new(req(
+            "10-empty",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_list",
+                "arguments": {
+                    "workspace": "default"
+                }
+            }),
+        )))
+        .await
+        .expect("an empty configured key should behave as no key on loopback")
+        .into_inner();
+
+    assert_eq!(resp.id, "10-empty");
+}
+
+#[tokio::test]
+async fn scenario_k_loopback_no_key_rejects_private_workspace() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "11",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_list",
+                "arguments": {
+                    "workspace": "private"
+                }
+            }),
+        )))
+        .await
+        .expect_err("anonymous loopback must not read private workspaces");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_k2_loopback_no_key_rejects_nested_filter_workspace() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "11-filter",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_list",
+                "arguments": {
+                    "filter": {
+                        "workspace": {"eq": "private"}
+                    }
+                }
+            }),
+        )))
+        .await
+        .expect_err("anonymous loopback must not bypass scope through an advanced filter");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_k3_loopback_no_key_rejects_implicit_all_workspace_search() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "11-implicit",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_search",
+                "arguments": {"query": "private"}
+            }),
+        )))
+        .await
+        .expect_err("anonymous loopback must not search without an explicit workspace");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_k4_loopback_no_key_rejects_malformed_scoped_list() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "11-malformed",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_list",
+                "arguments": {
+                    "workspace": "default",
+                    "sort_order": "bogus"
+                }
+            }),
+        )))
+        .await
+        .expect_err("malformed arguments must not erase the authorized workspace");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_k5_loopback_no_key_rejects_resource_read() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "11-resource",
+            methods::READ_RESOURCE,
+            json!({"uri": "engram://memory/1"}),
+        )))
+        .await
+        .expect_err("anonymous loopback must not bypass workspace scope through resources/read");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_k6_loopback_no_key_rejects_call_without_tool_name() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "11-missing-name",
+            methods::CALL_TOOL,
+            json!({"arguments": {"workspace": "default"}}),
+        )))
+        .await
+        .expect_err("anonymous tools/call without a string name must fail closed");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_l_loopback_no_key_rejects_private_workspaces_array() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "12",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_search",
+                "arguments": {
+                    "query": "anything",
+                    "workspaces": ["private"]
+                }
+            }),
+        )))
+        .await
+        .expect_err("anonymous loopback must not bypass scope with workspaces[]");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_m_loopback_no_key_rejects_global_workspace() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "13",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_search",
+                "arguments": {
+                    "query": "anything",
+                    "global": true
+                }
+            }),
+        )))
+        .await
+        .expect_err("anonymous loopback must not search all workspaces");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_n_loopback_no_key_rejects_write_scope() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .call(Request::new(req(
+            "14",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_create",
+                "arguments": {
+                    "content": "anonymous write should not dispatch",
+                    "memory_type": "note",
+                    "workspace": "default"
+                }
+            }),
+        )))
+        .await
+        .expect_err("anonymous loopback must not write");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_o_stream_rejects_private_workspace_before_realtime() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .subscribe(Request::new(SubscribeRequest {
+            event_types: Vec::new(),
+            workspace: "private".to_string(),
+        }))
+        .await
+        .expect_err("stream auth must reject private workspace before realtime lookup");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_p_anonymous_stream_rejects_unfiltered_workspace_before_realtime() {
+    let addr = start_server(None).await;
+    let mut client = connect(addr).await;
+
+    let err = client
+        .subscribe(Request::new(SubscribeRequest {
+            event_types: Vec::new(),
+            workspace: String::new(),
+        }))
+        .await
+        .expect_err("anonymous stream must not bypass workspace scope with an empty filter");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+}
+
+#[tokio::test]
+async fn scenario_p2_authenticated_stream_accepts_default_workspace() {
+    let addr = start_server_with_realtime(
+        Some("secret-token".to_string()),
+        Some(RealtimeManager::new()),
+    )
+    .await;
+    let mut client = connect(addr).await;
+    let mut request = Request::new(SubscribeRequest {
+        event_types: Vec::new(),
+        workspace: "default".to_string(),
+    });
+    request.metadata_mut().insert(
+        "authorization",
+        MetadataValue::from_static("Bearer secret-token"),
+    );
+
+    client
+        .subscribe(request)
+        .await
+        .expect("authenticated default-workspace stream should be accepted");
+}
+
+#[tokio::test]
+async fn scenario_q_public_bind_without_key_refuses_before_accept() {
+    let port = pick_free_port();
+    let addr: SocketAddr = format!("0.0.0.0:{port}").parse().expect("valid addr");
+    let handler: Arc<dyn McpHandler> = Arc::new(TestHandler::new());
+
+    let result = tokio::time::timeout(
+        tokio::time::Duration::from_millis(200),
+        serve_grpc(handler, addr, None, None),
+    )
+    .await;
+
+    let err = match result {
+        Ok(Err(err)) => err,
+        Ok(Ok(())) => panic!("public unauthenticated gRPC bind unexpectedly exited OK"),
+        Err(_) => panic!("public unauthenticated gRPC bind did not fail before accept"),
+    };
+
+    assert!(
+        err.to_string().contains("non-loopback"),
+        "error should explain non-loopback auth requirement, got: {err}"
+    );
+
+    assert!(
+        tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_err(),
+        "server must not accept connections after refusing startup"
+    );
+}
+
+#[derive(Clone)]
+struct CountingHandler {
+    calls: Arc<AtomicUsize>,
+}
+
+impl McpHandler for CountingHandler {
+    fn handle_request(&self, request: McpRequest) -> McpResponse {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        McpResponse::success(request.id, json!({"reached_handler": true}))
+    }
+}
+
+#[tokio::test]
+async fn scenario_r_invalid_scope_never_reaches_dispatch() {
+    let port = pick_free_port();
+    let addr: SocketAddr = format!("127.0.0.1:{port}").parse().expect("valid addr");
+    let calls = Arc::new(AtomicUsize::new(0));
+    let handler: Arc<dyn McpHandler> = Arc::new(CountingHandler {
+        calls: Arc::clone(&calls),
+    });
+
+    let server = tokio::spawn(async move { serve_grpc(handler, addr, None, None).await });
+    for _ in 0..20 {
+        if tokio::net::TcpStream::connect(addr).await.is_ok() {
+            break;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(25)).await;
+    }
+
+    let mut client = connect(addr).await;
+    let err = client
+        .call(Request::new(req(
+            "15",
+            methods::CALL_TOOL,
+            json!({
+                "name": "memory_create",
+                "arguments": {
+                    "content": "must not dispatch",
+                    "memory_type": "note",
+                    "workspace": "default"
+                }
+            }),
+        )))
+        .await
+        .expect_err("invalid scope should fail before handler");
+
+    assert_eq!(err.code(), Code::PermissionDenied);
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "handler must not be called for invalid scope"
+    );
+
+    server.abort();
+}
+
 // ---------------------------------------------------------------------------
 // Scenario g: Unknown method → error response (not a transport error)
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn scenario_g_unknown_method_returns_error_response() {
-    let addr = start_server(None).await;
+    let addr = start_server(Some("secret-token".to_string())).await;
     let mut client = connect(addr).await;
 
     let resp = client
-        .call(Request::new(req("7", "unknown/method/xyz", json!({}))))
+        .call(bearer_req("7", "unknown/method/xyz", json!({})))
         .await
         .expect("transport should succeed even for unknown method")
         .into_inner();
