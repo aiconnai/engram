@@ -1,24 +1,40 @@
 //! Cloud storage backends (S3, R2, GCS, Azure)
 
+use aws_config::BehaviorVersion;
+use aws_sdk_s3::Client as S3Client;
+use std::collections::HashMap;
 use std::path::Path;
 
-use aws_config::BehaviorVersion;
-use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::Client as S3Client;
-
-use super::encryption::{decrypt_data_with_provider, encrypt_data_with_provider};
+use super::encryption::{
+    decrypt_data_with_provider, decrypt_data_with_provider_for_key_id, encrypt_data_with_provider,
+    is_versioned_encrypted_payload,
+};
 use super::key_config::{CloudKeyProvider, ConfiguredCloudKeyProvider};
 use crate::error::{EngramError, Result};
 
+pub(super) const ENCRYPTION_KEY_ID_METADATA: &str = "engram-key-id";
+pub(super) const ENCRYPTION_FORMAT_VERSION_METADATA: &str = "engram-key-format-version";
+const ENCRYPTION_ALGORITHM_METADATA: &str = "engram-key-algorithm";
+const OBJECT_FORMAT_METADATA: &str = "engram-object-format";
+const PLAINTEXT_OBJECT_FORMAT: &str = "sqlite-plaintext-v1";
+const SQLITE_HEADER: &[u8; 16] = b"SQLite format 3\0";
+
 /// Cloud storage abstraction
 pub struct CloudStorage {
-    client: S3Client,
+    backend: CloudBackend,
     bucket: String,
     key: String,
     encrypt: bool,
     key_provider: Option<ConfiguredCloudKeyProvider>,
 }
 
+#[path = "cloud_backend.rs"]
+mod backend;
+#[path = "cloud_encryption_policy.rs"]
+mod encryption_policy;
+#[cfg(test)]
+use backend::InMemoryCloudStore;
+use backend::{CloudBackend, CloudObject, UploadCondition};
 impl CloudStorage {
     /// Create from S3-compatible URI (s3://bucket/path/to/file.db)
     pub async fn from_uri(uri: &str, encrypt: bool) -> Result<Self> {
@@ -47,7 +63,7 @@ impl CloudStorage {
         };
 
         Ok(Self {
-            client,
+            backend: CloudBackend::S3(client),
             bucket,
             key,
             encrypt,
@@ -69,26 +85,33 @@ impl CloudStorage {
             .map(CloudKeyProvider::rotation_metadata)
     }
 
-    /// Upload local file to cloud
+    /// Upload a local file with conditional replacement.
+    ///
+    /// Existing objects are read and validated before replacement, so callers
+    /// need `HeadObject`, `GetObject`, and conditional `PutObject` permission.
     pub async fn upload(&self, local_path: &Path) -> Result<u64> {
+        let condition = self.ensure_remote_object_is_replaceable().await?;
         let data = tokio::fs::read(local_path).await?;
         let size = data.len() as u64;
 
-        let body = if self.encrypt {
-            let encrypted = self.encrypt_data(&data)?;
-            ByteStream::from(encrypted)
+        let (body, metadata) = if self.encrypt {
+            (
+                self.encrypt_data(&data)?,
+                self.encryption_object_metadata()?,
+            )
         } else {
-            ByteStream::from(data)
+            (
+                data,
+                HashMap::from([(
+                    OBJECT_FORMAT_METADATA.to_string(),
+                    PLAINTEXT_OBJECT_FORMAT.to_string(),
+                )]),
+            )
         };
 
-        self.client
-            .put_object()
-            .bucket(&self.bucket)
-            .key(&self.key)
-            .body(body)
-            .send()
-            .await
-            .map_err(|e| EngramError::CloudStorage(e.to_string()))?;
+        self.backend
+            .put_object(&self.bucket, &self.key, body, metadata, condition)
+            .await?;
 
         tracing::info!(
             "Uploaded {} bytes to s3://{}/{}",
@@ -101,26 +124,20 @@ impl CloudStorage {
 
     /// Download from cloud to local file
     pub async fn download(&self, local_path: &Path) -> Result<u64> {
-        let response = self
-            .client
-            .get_object()
-            .bucket(&self.bucket)
-            .key(&self.key)
-            .send()
-            .await
-            .map_err(|e| EngramError::CloudStorage(e.to_string()))?;
-
-        let data = response
-            .body
-            .collect()
-            .await
-            .map_err(|e| EngramError::CloudStorage(e.to_string()))?
-            .into_bytes();
+        let object = self.backend.get_object(&self.bucket, &self.key).await?;
 
         let decrypted = if self.encrypt {
-            self.decrypt_data(&data)?
+            self.decrypt_encrypted_object(&object)?
+        } else if Self::has_encryption_identity(&object) {
+            return self.reject_encryption_audit(
+                "encrypted cloud object requires an encryption key; refusing ciphertext download in plaintext mode",
+            );
+        } else if !Self::is_known_plaintext_object(&object) {
+            return self.reject_encryption_audit(
+                "remote cloud object format is unidentified; refusing ciphertext fallback in plaintext mode",
+            );
         } else {
-            data.to_vec()
+            object.body
         };
 
         let size = decrypted.len() as u64;
@@ -143,73 +160,61 @@ impl CloudStorage {
 
     /// Check if remote file exists
     pub async fn exists(&self) -> Result<bool> {
-        match self
-            .client
-            .head_object()
-            .bucket(&self.bucket)
-            .key(&self.key)
-            .send()
-            .await
-        {
-            Ok(_) => Ok(true),
-            Err(e) => {
-                let service_error = e.into_service_error();
-                if service_error.is_not_found() {
-                    Ok(false)
-                } else {
-                    Err(EngramError::CloudStorage(service_error.to_string()))
-                }
-            }
-        }
+        self.backend.object_exists(&self.bucket, &self.key).await
     }
 
     /// Get remote file metadata
     pub async fn metadata(&self) -> Result<CloudMetadata> {
-        let response = self
-            .client
-            .head_object()
-            .bucket(&self.bucket)
-            .key(&self.key)
-            .send()
-            .await
-            .map_err(|e| EngramError::CloudStorage(e.to_string()))?;
+        let object = self.backend.head_object(&self.bucket, &self.key).await?;
 
         Ok(CloudMetadata {
-            size: response.content_length().unwrap_or(0) as u64,
-            last_modified: response.last_modified().map(|dt| dt.to_string()),
-            etag: response.e_tag().map(String::from),
+            size: object.size,
+            last_modified: object.last_modified,
+            etag: object.etag,
         })
     }
 
     /// Delete remote file
     pub async fn delete(&self) -> Result<()> {
-        self.client
-            .delete_object()
-            .bucket(&self.bucket)
-            .key(&self.key)
-            .send()
-            .await
-            .map_err(|e| EngramError::CloudStorage(e.to_string()))?;
-
-        Ok(())
+        self.backend.delete_object(&self.bucket, &self.key).await
     }
 
-    fn encrypt_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let provider = self.configured_key_provider()?;
-        encrypt_data_with_provider(provider, data)
+    #[cfg(test)]
+    fn test_fixture(
+        bucket: &str,
+        key: &str,
+        key_provider: ConfiguredCloudKeyProvider,
+        store: InMemoryCloudStore,
+    ) -> Self {
+        Self {
+            backend: CloudBackend::Fixture(store),
+            bucket: bucket.to_string(),
+            key: key.to_string(),
+            encrypt: true,
+            key_provider: Some(key_provider),
+        }
     }
 
-    fn decrypt_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let provider = self.configured_key_provider()?;
-        decrypt_data_with_provider(provider, data)
+    #[cfg(test)]
+    fn test_fixture_without_provider(bucket: &str, key: &str, store: InMemoryCloudStore) -> Self {
+        Self {
+            backend: CloudBackend::Fixture(store),
+            bucket: bucket.to_string(),
+            key: key.to_string(),
+            encrypt: true,
+            key_provider: None,
+        }
     }
 
-    fn configured_key_provider(&self) -> Result<&ConfiguredCloudKeyProvider> {
-        self.key_provider.as_ref().ok_or_else(|| {
-            EngramError::Encryption(
-                "cloud encryption requires a configured durable key provider".to_string(),
-            )
-        })
+    #[cfg(test)]
+    fn test_fixture_plaintext(bucket: &str, key: &str, store: InMemoryCloudStore) -> Self {
+        Self {
+            backend: CloudBackend::Fixture(store),
+            bucket: bucket.to_string(),
+            key: key.to_string(),
+            encrypt: false,
+            key_provider: None,
+        }
     }
 }
 
@@ -239,56 +244,5 @@ pub fn derive_key_from_passphrase(passphrase: &str, salt: &[u8]) -> Result<Vec<u
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_derive_key_deterministic() {
-        let passphrase = "hunter2";
-        let salt = b"abcdefghijklmnop";
-        let key1 = derive_key_from_passphrase(passphrase, salt).unwrap();
-        let key2 = derive_key_from_passphrase(passphrase, salt).unwrap();
-        assert_eq!(key1, key2, "same passphrase+salt must yield same key");
-    }
-
-    #[test]
-    fn test_derive_key_different_salt() {
-        let passphrase = "hunter2";
-        let salt1 = b"abcdefghijklmnop";
-        let salt2 = b"pqrstuvwxyz12345";
-        let key1 = derive_key_from_passphrase(passphrase, salt1).unwrap();
-        let key2 = derive_key_from_passphrase(passphrase, salt2).unwrap();
-        assert_ne!(key1, key2, "different salts must yield different keys");
-    }
-
-    #[test]
-    fn test_derive_key_length() {
-        let key = derive_key_from_passphrase("secret", b"saltysalt12345678").unwrap();
-        assert_eq!(key.len(), 32, "key must be 32 bytes");
-    }
-
-    #[test]
-    fn missing_configured_key_fails_before_encrypted_write() {
-        // Given: an encrypted storage instance without a provider.
-        let sdk_config = aws_config::SdkConfig::builder()
-            .behavior_version(BehaviorVersion::latest())
-            .build();
-        let storage = CloudStorage {
-            client: S3Client::new(&sdk_config),
-            bucket: "bucket".to_string(),
-            key: "path.db".to_string(),
-            encrypt: true,
-            key_provider: None,
-        };
-
-        // When: encryption is attempted before an upload body is built.
-        let error = storage
-            .encrypt_data(b"db bytes")
-            .expect_err("missing provider must fail");
-
-        // Then: the failure is explicit and contains no payload bytes.
-        let message = error.to_string();
-        assert!(message.contains("configured durable key provider"));
-        assert!(!message.contains("db bytes"));
-    }
-}
+#[path = "cloud_tests.rs"]
+mod tests;

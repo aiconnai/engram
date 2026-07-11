@@ -5,16 +5,22 @@
 //! - `ENGRAM_CLOUD_ENCRYPTION_KEY`: base64 or hex encoded 32-byte key material.
 //! - `ENGRAM_CLOUD_ENCRYPTION_KEY_FILE`: path to a file containing the same
 //!   encoded key material.
+//! - `ENGRAM_CLOUD_ENCRYPTION_PREVIOUS_KEY`: optional previous key material for
+//!   a controlled read-old/write-new rotation window.
+//! - `ENGRAM_CLOUD_ENCRYPTION_PREVIOUS_KEY_FILE`: file-backed form of the
+//!   optional previous key.
 //!
 //! The key bytes are never printed by Debug or error output. The stable key ID
 //! is derived from SHA-256(key bytes) and is safe to use as rotation metadata.
 
 use std::env;
+#[path = "key_material.rs"]
+mod key_material;
+use key_material::{derive_key_id, parse_encoded_key};
+
 use std::fmt;
 use std::path::PathBuf;
 
-use base64::Engine;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 use zeroize::Zeroizing;
 
@@ -22,6 +28,8 @@ use crate::error::EngramError;
 
 pub const KEY_ENV: &str = "ENGRAM_CLOUD_ENCRYPTION_KEY";
 pub const KEY_FILE_ENV: &str = "ENGRAM_CLOUD_ENCRYPTION_KEY_FILE";
+pub const PREVIOUS_KEY_ENV: &str = "ENGRAM_CLOUD_ENCRYPTION_PREVIOUS_KEY";
+pub const PREVIOUS_KEY_FILE_ENV: &str = "ENGRAM_CLOUD_ENCRYPTION_PREVIOUS_KEY_FILE";
 pub const PREVIOUS_KEY_ID_ENV: &str = "ENGRAM_CLOUD_ENCRYPTION_PREVIOUS_KEY_ID";
 pub const KEY_BYTES_LEN: usize = 32;
 
@@ -87,6 +95,7 @@ pub trait CloudKeyProvider {
 
 pub struct ConfiguredCloudKeyProvider {
     active_key: CloudEncryptionKey,
+    previous_key: Option<CloudEncryptionKey>,
     rotation_metadata: CloudKeyRotationMetadata,
 }
 
@@ -101,7 +110,16 @@ impl ConfiguredCloudKeyProvider {
             (None, None) => return Err(KeyConfigError::MissingSource),
         };
 
-        let previous_key_id = match env::var(PREVIOUS_KEY_ID_ENV) {
+        let previous_inline_key = read_optional_env_value(PREVIOUS_KEY_ENV)?;
+        let previous_key_file_env = env::var_os(PREVIOUS_KEY_FILE_ENV);
+        let previous_key_value = match (previous_inline_key, previous_key_file_env) {
+            (Some(_inline), Some(_)) => return Err(KeyConfigError::AmbiguousPreviousSources),
+            (Some(value), None) => Some(EncodedKeyMaterial::Inline(value)),
+            (None, Some(path)) => Some(EncodedKeyMaterial::File(PathBuf::from(path))),
+            (None, None) => None,
+        };
+
+        let previous_key_id_hint = match env::var(PREVIOUS_KEY_ID_ENV) {
             Ok(value) => {
                 let trimmed = value.trim();
                 if trimmed.is_empty() {
@@ -113,7 +131,10 @@ impl ConfiguredCloudKeyProvider {
             Err(_) => None,
         };
 
-        Self::from_material(key_value, previous_key_id)
+        match previous_key_value {
+            Some(previous) => Self::from_material_with_previous(key_value, previous),
+            None => Self::from_material(key_value, previous_key_id_hint),
+        }
     }
 
     pub fn from_material(
@@ -132,8 +153,51 @@ impl ConfiguredCloudKeyProvider {
 
         Ok(Self {
             active_key,
+            previous_key: None,
             rotation_metadata,
         })
+    }
+
+    pub fn from_material_with_previous(
+        material: EncodedKeyMaterial,
+        previous_material: EncodedKeyMaterial,
+    ) -> Result<Self, KeyConfigError> {
+        let raw = material.read_redacted()?;
+        let bytes = parse_encoded_key(raw.as_str())?;
+        let active_key = CloudEncryptionKey::new(bytes);
+        let previous_raw = previous_material.read_redacted()?;
+        let previous_bytes = parse_encoded_key(previous_raw.as_str())?;
+        let previous_key = CloudEncryptionKey::new(previous_bytes);
+        let rotation_metadata = CloudKeyRotationMetadata {
+            format_version: 1,
+            algorithm: "AES-256-GCM",
+            active_key_id: active_key.id().as_str().to_string(),
+            previous_key_id: Some(previous_key.id().as_str().to_string()),
+        };
+
+        Ok(Self {
+            active_key,
+            previous_key: Some(previous_key),
+            rotation_metadata,
+        })
+    }
+
+    pub(super) fn key_for_id(&self, key_id: &str) -> Option<&CloudEncryptionKey> {
+        if self.active_key.id().as_str() == key_id {
+            return Some(&self.active_key);
+        }
+
+        self.previous_key
+            .as_ref()
+            .filter(|key| key.id().as_str() == key_id)
+    }
+
+    pub(super) fn can_decrypt_key_id(&self, key_id: &str) -> bool {
+        self.key_for_id(key_id).is_some()
+    }
+
+    pub(super) fn previous_key(&self) -> Option<&CloudEncryptionKey> {
+        self.previous_key.as_ref()
     }
 }
 
@@ -177,7 +241,11 @@ impl EncodedKeyMaterial {
 }
 
 fn read_optional_key_env_value() -> Result<Option<Zeroizing<String>>, KeyConfigError> {
-    match env::var(KEY_ENV) {
+    read_optional_env_value(KEY_ENV)
+}
+
+fn read_optional_env_value(name: &str) -> Result<Option<Zeroizing<String>>, KeyConfigError> {
+    match env::var(name) {
         Ok(value) => Ok(Some(Zeroizing::new(value))),
         Err(env::VarError::NotPresent) => Ok(None),
         Err(env::VarError::NotUnicode(_)) => Err(KeyConfigError::MalformedKey),
@@ -195,6 +263,10 @@ pub enum KeyConfigError {
         "cloud encryption key source is ambiguous; set only one of {KEY_ENV} or {KEY_FILE_ENV}"
     )]
     AmbiguousSources,
+    #[error(
+        "previous cloud encryption key source is ambiguous; set only one of {PREVIOUS_KEY_ENV} or {PREVIOUS_KEY_FILE_ENV}"
+    )]
+    AmbiguousPreviousSources,
     #[error("cloud encryption key file could not be read at {path_display}: {source}")]
     ReadFile {
         path_display: String,
@@ -210,55 +282,4 @@ impl From<KeyConfigError> for EngramError {
     fn from(value: KeyConfigError) -> Self {
         EngramError::Config(value.to_string())
     }
-}
-
-fn derive_key_id(bytes: &[u8; KEY_BYTES_LEN]) -> CloudKeyId {
-    let digest = Sha256::digest(bytes);
-    CloudKeyId(format!("sha256:{}", hex::encode(&digest[..16])))
-}
-
-fn parse_encoded_key(raw: &str) -> Result<Zeroizing<[u8; KEY_BYTES_LEN]>, KeyConfigError> {
-    let trimmed = raw.trim();
-    if let Some(value) = trimmed.strip_prefix("base64:") {
-        decode_exact_key(decode_base64(value)?)
-    } else if let Some(value) = trimmed.strip_prefix("hex:") {
-        decode_exact_key(decode_hex(value)?)
-    } else {
-        parse_unprefixed_key(trimmed)
-    }
-}
-
-fn parse_unprefixed_key(raw: &str) -> Result<Zeroizing<[u8; KEY_BYTES_LEN]>, KeyConfigError> {
-    if let Ok(decoded) = decode_base64(raw) {
-        if decoded.len() == KEY_BYTES_LEN {
-            return decode_exact_key(decoded);
-        }
-    }
-
-    decode_exact_key(decode_hex(raw)?)
-}
-
-fn decode_exact_key(
-    decoded: Zeroizing<Vec<u8>>,
-) -> Result<Zeroizing<[u8; KEY_BYTES_LEN]>, KeyConfigError> {
-    if decoded.len() != KEY_BYTES_LEN {
-        return Err(KeyConfigError::MalformedKey);
-    }
-
-    let mut bytes = Zeroizing::new([0u8; KEY_BYTES_LEN]);
-    bytes.copy_from_slice(&decoded);
-    Ok(bytes)
-}
-
-fn decode_base64(raw: &str) -> Result<Zeroizing<Vec<u8>>, KeyConfigError> {
-    base64::engine::general_purpose::STANDARD
-        .decode(raw)
-        .map(Zeroizing::new)
-        .map_err(|_| KeyConfigError::MalformedKey)
-}
-
-fn decode_hex(raw: &str) -> Result<Zeroizing<Vec<u8>>, KeyConfigError> {
-    hex::decode(raw)
-        .map(Zeroizing::new)
-        .map_err(|_| KeyConfigError::MalformedKey)
 }

@@ -21,6 +21,8 @@ fn inline_material(value: String) -> EncodedKeyMaterial {
 fn clear_key_env() {
     env::remove_var(KEY_ENV);
     env::remove_var(KEY_FILE_ENV);
+    env::remove_var(PREVIOUS_KEY_ENV);
+    env::remove_var(PREVIOUS_KEY_FILE_ENV);
     env::remove_var(PREVIOUS_KEY_ID_ENV);
 }
 
@@ -201,6 +203,30 @@ fn env_config_loads_key_file_and_previous_key_metadata() {
         provider.rotation_metadata().previous_key_id.as_deref(),
         Some("sha256:previous")
     );
+    clear_key_env();
+}
+
+#[test]
+fn env_config_loads_previous_key_for_controlled_rotation() {
+    let _guard = ENV_LOCK.lock().expect("key env test lock is not poisoned");
+    // Given: active and previous key material are configured for a rotation window.
+    clear_key_env();
+    env::set_var(KEY_ENV, test_key_hex());
+    let previous_material = format!("hex:{}", hex::encode([8u8; KEY_BYTES_LEN]));
+    env::set_var(PREVIOUS_KEY_ENV, &previous_material);
+
+    // When: the provider is reconstructed from process configuration.
+    let provider = ConfiguredCloudKeyProvider::from_env().expect("rotation config loads");
+    let previous_key_id = provider
+        .rotation_metadata()
+        .previous_key_id
+        .as_deref()
+        .expect("previous key id is derived");
+
+    // Then: the previous key is readable while the active key remains the write key.
+    assert!(provider.key_for_id(previous_key_id).is_some());
+    assert_ne!(previous_key_id, provider.active_key().id().as_str());
+    assert!(!format!("{provider:?}").contains(&hex::encode([8u8; KEY_BYTES_LEN])));
     clear_key_env();
 }
 
