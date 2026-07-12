@@ -8,7 +8,7 @@
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T07:40:59Z)` |
-| Last commit | `72732d359e2444ab7fb07f3cdce4db620972ba0a` |
+| Last commit | `0700cb989f565a74411166fb351aa1777ca1e532` |
 | Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -35,6 +35,9 @@
   adding scanner allowlists.
 - The salt helper returns `OsRng::gen()` directly and independently regenerates
   the second salt, avoiding static initialization patterns flagged by CodeQL.
+- Linux descriptor-bound SQLite opens now retain the strict numeric
+  `/proc/self/fd/<fd>` alias instead of resolving back to a mutable pathname;
+  independent review confirmed that path/parent replacement protections remain.
 - Exact CI Clippy, clean-tree Gitleaks, focused storage/cloud/WS/listener tests,
   formatting, doctor, diff-check, and independent review passed locally.
 
