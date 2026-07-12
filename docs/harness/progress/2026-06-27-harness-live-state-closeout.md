@@ -66,3 +66,13 @@ predicate follow-up:
   now resolves to the Sonnet PASS artifact, not a prompt-only pre-gate copy.
 - `rtk bash docs/harness/bin/sensors.sh` — PASS after final metadata updates,
   full canonical gate, timestamp `2026-06-27T15:07:07Z`, `duration_sec=29`.
+
+## 2026-07-12 — Harness Contract workflow YAML repair
+
+- The `main` push after PR #187 produced a zero-job failure for
+  `.github/workflows/harness-contract.yml`.
+- A local YAML parser reproduced the syntax error at the unquoted `PR_TITLE`
+  expression because its fallback contains `merge-group: no PR title`.
+- Quoted the complete expression without changing its runtime behavior.
+- Ruby YAML parse, harness doctor, fallback title policy, and quick sensors all
+  passed. Independent Sonnet review returned `REVIEW_VERDICT: PASS`.
