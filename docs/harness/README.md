@@ -85,10 +85,14 @@ No GitHub, o merge em `main` exige estes **required status checks**:
   Commits). O `doctor.sh` **não** faz parte deste gate required — ele permanece
   local/advisory.
 
-`Security Audit` e `Cargo Deny` rodam nos PRs como sinais **advisory** (ainda não
-bloqueiam merge; ver baseline em [`GATES.md`](./GATES.md)). Code review automático
-(Copilot / terceiros) é **sinal extra, não autoritativo**: por si só não bloqueia
-o merge enquanto não expuser um status check confiável.
+`Test (ubuntu-latest)` depende do job PR-visible `Security Gate`, que agrega
+Cargo Audit, Cargo Deny, a política de exceções, CodeQL, Semgrep, Gitleaks e
+AgentShield. Assim, qualquer falha constituinte bloqueia transitivamente um
+contexto já required sem uma escrita automatizada em branch protection.
+
+Code review automático (Copilot / terceiros) é **sinal extra, não
+autoritativo**: por si só não bloqueia o merge enquanto não expuser um status
+check confiável.
 
 ## Estrutura
 

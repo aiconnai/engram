@@ -12,29 +12,21 @@ permissions:
 
 jobs:
   scan:
-    name: Semgrep (optional)
+    name: Semgrep
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Run Semgrep
         run: |
-          set +e
           docker run --rm \
             -v "${{ github.workspace }}:/src" \
-            returntocorp/semgrep:latest \
-            semgrep --config p/ci --sarif --output /src/semgrep.sarif /src
-          EXIT_CODE=$?
-          set -e
-
-          if [ "$EXIT_CODE" -gt 1 ]; then
-            exit $EXIT_CODE
-          fi
+            returntocorp/semgrep:1.129.0 \
+            semgrep --config p/ci --error --sarif --output /src/semgrep.sarif /src
 
       - name: Upload SARIF result
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@1ad29ea4a422cce9a242a9fae469541dcd08addc # v4
         with:
           sarif_file: semgrep.sarif
           category: semgrep
