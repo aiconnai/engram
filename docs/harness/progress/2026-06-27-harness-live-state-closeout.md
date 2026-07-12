@@ -197,6 +197,16 @@ A second follow-up independent review returned `REVIEW_VERDICT: PASS` for the di
 Detailed command receipts are recorded in the orchestrator-owned Task 11
 evidence file under `.omo/evidence/`.
 
+## 2026-07-12 — PR #189 CI remediation
+
+- Fixed three Linux Clippy errors in the descriptor-bound SQLite VFS using
+  platform-gated imports and checked device-id comparison.
+- Replaced four hard-coded cryptographic test salts and two fixed WebSocket
+  handshake nonces with runtime `OsRng` values.
+- No scanner allowlist, dependency, public API, lockfile, or `unsafe` surface
+  was added. Focused tests, exact CI Clippy, clean-tree Gitleaks, doctor,
+  formatting, diff-check, and independent review passed.
+
 ## 2026-07-12 — Harness Contract workflow YAML repair
 
 - The `main` push after PR #187 produced a zero-job failure for

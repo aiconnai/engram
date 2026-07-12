@@ -8,7 +8,7 @@
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T07:40:59Z)` |
-| Last commit | `98b844680ee569df5f9254e7f5e2e9e51e59c900` |
+| Last commit | `19d56256eea6f1617530e7b78c138aa141ea4f94` |
 | Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -25,6 +25,16 @@
   `docs/harness/reviews/2026-07-12-engram-10-of-10-wave2-v2-post.md`.
 - No tag, release, real publish, or other publication occurred. The Cargo
   publication check was dry-run only.
+
+### PR #189 CI remediation
+
+- Cleared the Linux Clippy portability findings without weakening the SQLite
+  descriptor/path identity checks.
+- Replaced hard-coded test salts and WebSocket handshake nonces with runtime
+  `OsRng` values, removing four CodeQL alerts and two Gitleaks findings without
+  adding scanner allowlists.
+- Exact CI Clippy, clean-tree Gitleaks, focused storage/cloud/WS/listener tests,
+  formatting, doctor, diff-check, and independent review passed locally.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud
