@@ -894,14 +894,7 @@ mod descriptor_vfs {
 
         match context.bound_path(path) {
             Some(BoundPath::Main) => match validate_current_main_path(context, path) {
-                Ok(()) => {
-                    let delegated_flags = if is_dev_fd_path(path) {
-                        flags & !ffi::SQLITE_OPEN_NOFOLLOW
-                    } else {
-                        flags
-                    };
-                    delegate_x_open(context, z_name, file, delegated_flags, out_flags)
-                }
+                Ok(()) => delegate_x_open(context, z_name, file, flags, out_flags),
                 Err(_) => ffi::SQLITE_CANTOPEN,
             },
             Some(BoundPath::Sidecar(name)) => {
@@ -1064,13 +1057,6 @@ mod descriptor_vfs {
             return false;
         };
         !stem.is_empty() && stem.iter().all(u8::is_ascii_digit)
-    }
-
-    fn is_dev_fd_path(path: &[u8]) -> bool {
-        let Some(fd) = path.strip_prefix(b"/dev/fd/") else {
-            return false;
-        };
-        !fd.is_empty() && fd.iter().all(u8::is_ascii_digit)
     }
 
     unsafe fn context(vfs: *mut ffi::sqlite3_vfs) -> Option<&'static DescriptorVfsContext> {
@@ -1347,14 +1333,8 @@ mod descriptor_vfs {
         let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
         let rc = unsafe {
             // SAFETY: `path` is NUL-terminated and `stat` points to valid
-            // uninitialized memory. Descriptor aliases must be followed so
-            // the identity check applies to the held regular file; ordinary
-            // paths use lstat(2) to keep rejecting symlinks.
-            if is_dev_fd_path(path.to_bytes()) {
-                libc::stat(path.as_ptr(), stat.as_mut_ptr())
-            } else {
-                libc::lstat(path.as_ptr(), stat.as_mut_ptr())
-            }
+            // uninitialized memory for lstat(2) to fill.
+            libc::lstat(path.as_ptr(), stat.as_mut_ptr())
         };
         if rc != 0 {
             return Err(std::io::Error::last_os_error());
@@ -1463,21 +1443,6 @@ mod descriptor_vfs {
                 path.display()
             ))
         })
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::is_dev_fd_path;
-
-        #[test]
-        fn recognizes_only_numeric_dev_fd_aliases() {
-            assert!(is_dev_fd_path(b"/dev/fd/7"));
-            assert!(is_dev_fd_path(b"/dev/fd/123"));
-            assert!(!is_dev_fd_path(b"/dev/fd/"));
-            assert!(!is_dev_fd_path(b"/dev/fd/7-wal"));
-            assert!(!is_dev_fd_path(b"/dev/fd/not-a-fd"));
-            assert!(!is_dev_fd_path(b"/tmp/database.db"));
-        }
     }
 }
 
