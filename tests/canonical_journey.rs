@@ -31,23 +31,35 @@ fn canonical_real_binary_journey_over_stdio_and_authenticated_http() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    run_journey(Transport::Stdio);
-    run_journey(Transport::Http);
+    let state = tempfile::tempdir().expect("create shared canonical journey state");
+    let db_path = state.path().join("canonical-journey.db");
+
+    let stdio_id = run_journey(Transport::Stdio, &db_path, None);
+    run_journey(Transport::Http, &db_path, Some(stdio_id));
+
+    let state_path = state.path().to_path_buf();
+    drop(state);
+    assert!(!state_path.exists(), "shared journey state was not removed");
 }
 
-fn run_journey(transport: Transport) {
+fn run_journey(transport: Transport, db_path: &Path, existing_id: Option<i64>) -> i64 {
     let config = RealServerConfig::from_cargo_bin();
     let api_key = config.api_key().to_string();
     // Keep every public Todo 10 harness contract exercised by this integration target so
     // target-scoped Clippy sees the shared support module as fully used.
     let _bad_config_contract =
         RealServerConfig::from_cargo_bin().with_executable(bad_executable_path());
+    let _managed_stdio_contract = RealServer::start_stdio;
+    let _managed_stdio_in_contract = RealServer::start_stdio_in;
+    let _managed_http_contract = RealServer::start_http;
     let mut server = match transport {
-        Transport::Stdio => RealServer::start_stdio(config).expect("start canonical stdio server"),
-        Transport::Http => RealServer::start_http(config).expect("start canonical HTTP server"),
+        Transport::Stdio => RealServer::start_stdio_at(config, db_path.to_path_buf())
+            .expect("start canonical stdio server"),
+        Transport::Http => RealServer::start_http_at(config, db_path.to_path_buf())
+            .expect("start canonical HTTP server"),
     };
     let temp_path = server.temp_path().to_path_buf();
-    assert!(server.db_path().starts_with(&temp_path));
+    assert_eq!(server.db_path(), db_path);
 
     let initialized = request(&mut server, &transport, initialize_request(1));
     assert_eq!(initialized["result"]["protocolVersion"], "2025-11-25");
@@ -55,6 +67,11 @@ fn run_journey(transport: Transport) {
     let tools = request(&mut server, &transport, tools_list_request(2));
     for name in fixture_tools() {
         assert_has_tool(&tools, &name);
+    }
+
+    if let Some(id) = existing_id {
+        let persisted = call(&mut server, &transport, 12, "memory_get", json!({"id": id}));
+        assert_eq!(persisted["content"], UPDATED);
     }
 
     let created = call(
@@ -148,18 +165,22 @@ fn run_journey(transport: Transport) {
 
     let cleanup = server.shutdown_and_verify();
     assert!(cleanup.child_id > 0);
+    assert_eq!(cleanup.temp_path, temp_path);
     assert_eq!(cleanup.port.is_some(), matches!(transport, Transport::Http));
     assert!(
-        cleanup.temp_removed,
-        "temp state remained at {}",
-        cleanup.temp_path.display()
+        !cleanup.temp_removed,
+        "server must not remove caller-owned shared state"
     );
     assert!(
         cleanup.port_released.unwrap_or(true),
         "HTTP port was not released"
     );
     assert!(!cleanup.redacted_stderr.contains(&api_key));
-    assert!(!temp_path.exists());
+    assert!(
+        temp_path.exists(),
+        "shared state disappeared before both transports completed"
+    );
+    id
 }
 
 fn request(server: &mut RealServer, transport: &Transport, value: Value) -> Value {

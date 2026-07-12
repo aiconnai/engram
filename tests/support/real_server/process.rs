@@ -41,6 +41,19 @@ impl RealServer {
 
     pub fn start_stdio_in(config: RealServerConfig, temp_dir: TempDir) -> Result<Self, StartError> {
         let db_path = temp_dir.path().join("stdio-memories.db");
+        Self::start_stdio_with_state(config, db_path, Some(temp_dir))
+    }
+
+    #[allow(dead_code)] // Shared support is compiled independently by tests that do not reuse state.
+    pub fn start_stdio_at(config: RealServerConfig, db_path: PathBuf) -> Result<Self, StartError> {
+        Self::start_stdio_with_state(config, db_path, None)
+    }
+
+    fn start_stdio_with_state(
+        config: RealServerConfig,
+        db_path: PathBuf,
+        temp_dir: Option<TempDir>,
+    ) -> Result<Self, StartError> {
         let mut command = base_command(&config, &db_path);
         command.arg("--transport").arg("stdio");
         command
@@ -63,7 +76,7 @@ impl RealServer {
 
         Ok(Self {
             child,
-            temp_dir: Some(temp_dir),
+            temp_dir,
             db_path,
             api_key: config.api_key,
             port: None,
@@ -77,6 +90,19 @@ impl RealServer {
     pub fn start_http(config: RealServerConfig) -> Result<Self, StartError> {
         let temp_dir = tempfile::tempdir().map_err(start_error)?;
         let db_path = temp_dir.path().join("http-memories.db");
+        Self::start_http_with_state(config, db_path, Some(temp_dir))
+    }
+
+    #[allow(dead_code)] // Shared support is compiled independently by tests that do not reuse state.
+    pub fn start_http_at(config: RealServerConfig, db_path: PathBuf) -> Result<Self, StartError> {
+        Self::start_http_with_state(config, db_path, None)
+    }
+
+    fn start_http_with_state(
+        config: RealServerConfig,
+        db_path: PathBuf,
+        temp_dir: Option<TempDir>,
+    ) -> Result<Self, StartError> {
         let port = pick_loopback_port().map_err(start_error)?;
         let mut command = base_command(&config, &db_path);
         command
@@ -99,7 +125,7 @@ impl RealServer {
         let executable = config.executable().to_path_buf();
         let mut server = Self {
             child,
-            temp_dir: Some(temp_dir),
+            temp_dir,
             db_path,
             api_key: config.api_key,
             port: Some(port),
@@ -113,10 +139,10 @@ impl RealServer {
     }
 
     pub fn temp_path(&self) -> &Path {
-        self.temp_dir
-            .as_ref()
-            .expect("server temp dir should be present while running")
-            .path()
+        self.temp_dir.as_ref().map_or_else(
+            || self.db_path.parent().expect("database path has a parent"),
+            TempDir::path,
+        )
     }
 
     pub fn db_path(&self) -> &Path {
@@ -147,11 +173,8 @@ impl RealServer {
     pub fn shutdown_and_verify(mut self) -> CleanupReport {
         let child_id = self.child.id();
         let port = self.port;
-        let temp_path = self
-            .temp_dir
-            .as_ref()
-            .map(|dir| dir.path().to_path_buf())
-            .expect("server temp dir should be present before shutdown");
+        let temp_path = self.temp_path().to_path_buf();
+        let owns_temp_dir = self.temp_dir.is_some();
         let redacted_stderr = stop_child_and_redact_stderr(
             &mut self.child,
             &mut self.stderr_thread,
@@ -159,7 +182,7 @@ impl RealServer {
             &self.api_key,
         );
         drop(self.temp_dir.take());
-        let temp_removed = wait_until(CLEANUP_TIMEOUT, || !temp_path.exists());
+        let temp_removed = owns_temp_dir && wait_until(CLEANUP_TIMEOUT, || !temp_path.exists());
         let port_released = port.map(|p| wait_until(CLEANUP_TIMEOUT, || port_is_bindable(p)));
         CleanupReport {
             child_id,
