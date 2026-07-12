@@ -12,6 +12,25 @@ closed for filesystem databases when an equivalent atomic no-follow boundary
 is unavailable, while `:memory:` remains supported. Detailed command evidence
 is kept in the orchestrator-owned `.omo/evidence/` Wave 2 records.
 
+### Final barrier and independent review — 2026-07-12
+
+- Candidate `98b844680ee569df5f9254e7f5e2e9e51e59c900`, based on
+  `9b832146a3c3cc326aaa9e12d0e72de679e7f75f`, passed Wave 2 barrier v4.
+- All 21 barrier gates passed without exclusions. Evidence is immutable under
+  `.omo/evidence/wave-2-integration-barrier-v4.md`, with raw receipts and a
+  SHA-256 manifest in the sibling directory.
+- Independent review v2 reran storage Unix (7/7), HTTP security (5/5), listener
+  configuration (9/9), gRPC (25/25), and PDF worker (1/1), then returned
+  `REVIEW_VERDICT: PASS` in
+  `docs/harness/reviews/2026-07-12-engram-10-of-10-wave2-v2-post.md`.
+- The previous independent-review FAIL remains preserved in orchestration
+  history; the v2 artifact supersedes its verdict only for the remediated SHA.
+- FreeBSD/OpenBSD were not run on this macOS host. Their shared `/dev/fd`
+  recognition logic has unit coverage, and this remains a non-blocking runtime
+  limitation rather than inferred platform proof.
+- No push, tag, release, or real publication occurred during barrier/review.
+  `cargo publish` was invoked only with `--dry-run`.
+
 **Sprint**: Harness maintenance — live-state closeout
 **Task**: harness-live-state-closeout — close completed bootstrap sprint metadata
 **Date started**: 2026-06-27

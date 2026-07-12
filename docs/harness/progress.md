@@ -7,13 +7,24 @@
 | Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
-| Last sensors | `2026-07-10 — status=pass (mode=full; timestamp 2026-07-10T00:27:38Z)` |
-| Last commit | `843fd520cbd0eb4c2b1885fe11c997198beb2ca1` |
+| Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T07:40:59Z)` |
+| Last commit | `98b844680ee569df5f9254e7f5e2e9e51e59c900` |
 | Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
 ## Engram 10/10 Wave 2 — security closure
+
+- **Status**: closed on candidate `98b8446`, based on `origin/main` `9b83214`.
+- Barrier v4 passed all 21 required and focused gates without exclusions; the
+  immutable receipts and SHA-256 manifest are under
+  `.omo/evidence/wave-2-integration-barrier-v4.md` and its sibling directory.
+- Independent review v2 passed after verifying the Unix storage remediation and
+  focused transport/PDF suites. The earlier FAIL remains historical evidence;
+  this PASS is recorded separately in
+  `docs/harness/reviews/2026-07-12-engram-10-of-10-wave2-v2-post.md`.
+- No tag, release, real publish, or other publication occurred. The Cargo
+  publication check was dry-run only.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud
