@@ -8,14 +8,15 @@
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T07:40:59Z)` |
-| Last commit | `0700cb989f565a74411166fb351aa1777ca1e532` |
+| Last commit | `2272d6c8796945068d019a8116ae6bc569f361cf` |
 | Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
-## Engram 10/10 Wave 2 — security closure
+## Engram 10/10 Wave 2 — security integration with SQLite deferral
 
-- **Status**: closed on candidate `98b8446`, based on `origin/main` `9b83214`.
+- **Status**: partially integrated; atomic descriptor-bound SQLite opening is
+  deferred to a dedicated follow-up.
 - Barrier v4 passed all 21 required and focused gates without exclusions; the
   immutable receipts and SHA-256 manifest are under
   `.omo/evidence/wave-2-integration-barrier-v4.md` and its sibling directory.
@@ -26,18 +27,28 @@
 - No tag, release, real publish, or other publication occurred. The Cargo
   publication check was dry-run only.
 
+### Superseding SQLite scope correction
+
+- Subsequent Linux CI proved the descriptor-bound VFS candidate could not open
+  the database through the stock SQLite Unix VFS. Two replacement designs were
+  rejected: pathname aliases retained a regular-file TOCTOU, while transient
+  hardlinks either broke pools or the stock VFS locking protocol.
+- Commits `ef02ee7`, `98b8446`, and `0700cb9` were reverted. The earlier
+  restrictive permissions and pre-open symlink rejection remain in scope.
+- The barrier v4 and review v2 remain immutable historical evidence for the
+  pre-CI candidate, but no longer constitute proof that atomic descriptor-bound
+  opening is complete. That work requires a dedicated native shim or audited
+  VFS implementation with Linux/macOS/BSD ABI and locking coverage.
+
 ### PR #189 CI remediation
 
-- Cleared the Linux Clippy portability findings without weakening the SQLite
-  descriptor/path identity checks.
+- Cleared the Linux Clippy portability findings in the historical
+  descriptor-bound candidate; those VFS changes were subsequently reverted.
 - Replaced hard-coded test salts and WebSocket handshake nonces with runtime
   `OsRng` values, removing four CodeQL alerts and two Gitleaks findings without
   adding scanner allowlists.
 - The salt helper returns `OsRng::gen()` directly and independently regenerates
   the second salt, avoiding static initialization patterns flagged by CodeQL.
-- Linux descriptor-bound SQLite opens now retain the strict numeric
-  `/proc/self/fd/<fd>` alias instead of resolving back to a mutable pathname;
-  independent review confirmed that path/parent replacement protections remain.
 - Exact CI Clippy, clean-tree Gitleaks, focused storage/cloud/WS/listener tests,
   formatting, doctor, diff-check, and independent review passed locally.
 

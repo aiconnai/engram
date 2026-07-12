@@ -1,21 +1,27 @@
 # Progress Log — Harness live-state closeout
 
-## Engram 10/10 Wave 2 closure — 2026-07-11
+## Historical Wave 2 closure candidate — superseded 2026-07-12
+
+> **Superseded:** this section records the pre-CI candidate only. The
+> descriptor-bound SQLite implementation and its follow-ups were later
+> reverted; see "Descriptor-bound SQLite follow-up deferred" below. Wave 2 is
+> not fully closed by this candidate.
 
 Tasks 11–16 are represented by `bbd49fc`, `fc37fff`, `73f4959`, `bc05e81`,
 `815d1af`, and `ce292ac`. Barrier findings were remediated by `72bdf0b`
 (WebSocket peer-task cancellation) and `92734bc` (isolated PDF worker release
-packaging). The final SQLite remediation uses a no-follow open boundary before
+packaging). The candidate SQLite remediation used a no-follow open boundary before
 SQLite configuration; its regression proves the symlink target hash, DELETE
 journal mode, and sentinel row remain unchanged. Non-Unix platforms fail
 closed for filesystem databases when an equivalent atomic no-follow boundary
 is unavailable, while `:memory:` remains supported. Detailed command evidence
 is kept in the orchestrator-owned `.omo/evidence/` Wave 2 records.
 
-### Final barrier and independent review — 2026-07-12
+### Historical barrier and independent review — 2026-07-12
 
 - Candidate `98b844680ee569df5f9254e7f5e2e9e51e59c900`, based on
-  `9b832146a3c3cc326aaa9e12d0e72de679e7f75f`, passed Wave 2 barrier v4.
+  `9b832146a3c3cc326aaa9e12d0e72de679e7f75f`, passed the pre-CI Wave 2 barrier
+  v4; Linux CI later invalidated its SQLite completion claim.
 - All 21 barrier gates passed without exclusions. Evidence is immutable under
   `.omo/evidence/wave-2-integration-barrier-v4.md`, with raw receipts and a
   SHA-256 manifest in the sibling directory.
@@ -25,9 +31,8 @@ is kept in the orchestrator-owned `.omo/evidence/` Wave 2 records.
   `docs/harness/reviews/2026-07-12-engram-10-of-10-wave2-v2-post.md`.
 - The previous independent-review FAIL remains preserved in orchestration
   history; the v2 artifact supersedes its verdict only for the remediated SHA.
-- FreeBSD/OpenBSD were not run on this macOS host. Their shared `/dev/fd`
-  recognition logic has unit coverage, and this remains a non-blocking runtime
-  limitation rather than inferred platform proof.
+- FreeBSD/OpenBSD were not run on this macOS host. The reverted `/dev/fd`
+  recognition logic therefore provides no current platform proof.
 - No push, tag, release, or real publication occurred during barrier/review.
   `cargo publish` was invoked only with `--dry-run`.
 
@@ -206,6 +211,19 @@ evidence file under `.omo/evidence/`.
 - No scanner allowlist, dependency, public API, lockfile, or `unsafe` surface
   was added. Focused tests, exact CI Clippy, clean-tree Gitleaks, doctor,
   formatting, diff-check, and independent review passed.
+
+## 2026-07-12 — Descriptor-bound SQLite follow-up deferred
+
+- Linux CI invalidated the descriptor-alias implementation despite earlier
+  macOS and focused gate evidence.
+- Pathname and hardlink alternatives were reviewed and rejected because they
+  could not simultaneously prove race freedom, pool compatibility, cleanup,
+  and stock SQLite locking behavior.
+- Reverted the descriptor-bound VFS and both follow-up patches. Restrictive
+  database permissions and pre-open symlink rejection remain.
+- Wave 2 is not recorded as fully closed; atomic descriptor-bound opening moves
+  to a dedicated native-shim or audited-VFS follow-up with cross-platform ABI
+  and locking tests.
 
 ## 2026-07-12 — Harness Contract workflow YAML repair
 
