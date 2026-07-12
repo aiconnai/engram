@@ -1,0 +1,27 @@
+{
+  "schema_version": "engram.retrieval-corpus.v1",
+  "name": "engram-synthetic-representative",
+  "version": "1.0.0",
+  "license": "CC0-1.0",
+  "source": "Synthetic corpus authored for Engram; no private data or PII.",
+  "deterministic_seed": 20260712,
+  "memories": [
+    {"key":"exact-rust","workspace":"alpha","content":"The Rust release checklist requires cargo clippy before submission."},
+    {"key":"synonym-auth","workspace":"alpha","content":"Authentication login uses bearer credentials; the access token is rotated monthly."},
+    {"key":"fuzzy-backup","workspace":"alpha","content":"The backup procedure stores encrypted snapshots in cold storage."},
+    {"key":"temporal-july","workspace":"alpha","content":"On 2026-07-04 the Atlas migration decision moved indexing to Friday."},
+    {"key":"identity-alice","workspace":"alpha","content":"Alice Nguyen owns the incident response runbook and escalation policy."},
+    {"key":"distractor-coffee","workspace":"alpha","content":"The office coffee order includes decaf beans and paper filters."},
+    {"key":"distractor-ui","workspace":"alpha","content":"The dashboard color palette uses cobalt and neutral gray."},
+    {"key":"workspace-secret","workspace":"beta","content":"Orchid launch cipher is restricted to the beta workspace."},
+    {"key":"workspace-alpha-distractor","workspace":"alpha","content":"Orchid flowers appear in the lobby artwork, without launch information."}
+  ],
+  "queries": [
+    {"key":"exact","query":"Rust release checklist","workspace":"alpha","relevance":{"exact-rust":3}},
+    {"key":"synonym","query":"login credential","workspace":"alpha","relevance":{"synonym-auth":3}},
+    {"key":"typo-fuzzy","query":"bakcup procedure","workspace":"alpha","fuzzy":true,"relevance":{"fuzzy-backup":3}},
+    {"key":"temporal","query":"2026-07-04 Atlas migration","workspace":"alpha","relevance":{"temporal-july":3}},
+    {"key":"identity","query":"Alice Nguyen incident response","workspace":"alpha","relevance":{"identity-alice":3}},
+    {"key":"workspace-isolation","query":"Orchid launch cipher","workspace":"beta","relevance":{"workspace-secret":3},"forbidden_workspaces":["alpha"]}
+  ]
+}
