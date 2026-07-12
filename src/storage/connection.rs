@@ -895,7 +895,7 @@ mod descriptor_vfs {
         match context.bound_path(path) {
             Some(BoundPath::Main) => match validate_current_main_path(context, path) {
                 Ok(()) => {
-                    let delegated_flags = if is_descriptor_fd_path(path) {
+                    let delegated_flags = if is_dev_fd_path(path) {
                         flags & !ffi::SQLITE_OPEN_NOFOLLOW
                     } else {
                         flags
@@ -1040,8 +1040,7 @@ mod descriptor_vfs {
                 b"-shm".as_slice(),
                 b"-journal".as_slice(),
             ] {
-                if self.is_main_path_sidecar(path, suffix) || is_descriptor_fd_sidecar(path, suffix)
-                {
+                if self.is_main_path_sidecar(path, suffix) || is_dev_fd_sidecar(path, suffix) {
                     let mut name = self.main_file_name.clone();
                     name.extend_from_slice(suffix);
                     return Some(BoundPath::Sidecar(name));
@@ -1057,15 +1056,18 @@ mod descriptor_vfs {
         }
     }
 
-    fn is_descriptor_fd_sidecar(path: &[u8], suffix: &[u8]) -> bool {
-        path.strip_suffix(suffix).is_some_and(is_descriptor_fd_path)
+    fn is_dev_fd_sidecar(path: &[u8], suffix: &[u8]) -> bool {
+        let Some(stem) = path
+            .strip_prefix(b"/dev/fd/")
+            .and_then(|rest| rest.strip_suffix(suffix))
+        else {
+            return false;
+        };
+        !stem.is_empty() && stem.iter().all(u8::is_ascii_digit)
     }
 
-    fn is_descriptor_fd_path(path: &[u8]) -> bool {
-        let Some(fd) = path
-            .strip_prefix(b"/dev/fd/")
-            .or_else(|| path.strip_prefix(b"/proc/self/fd/"))
-        else {
+    fn is_dev_fd_path(path: &[u8]) -> bool {
+        let Some(fd) = path.strip_prefix(b"/dev/fd/") else {
             return false;
         };
         !fd.is_empty() && fd.iter().all(u8::is_ascii_digit)
@@ -1348,7 +1350,7 @@ mod descriptor_vfs {
             // uninitialized memory. Descriptor aliases must be followed so
             // the identity check applies to the held regular file; ordinary
             // paths use lstat(2) to keep rejecting symlinks.
-            if is_descriptor_fd_path(path.to_bytes()) {
+            if is_dev_fd_path(path.to_bytes()) {
                 libc::stat(path.as_ptr(), stat.as_mut_ptr())
             } else {
                 libc::lstat(path.as_ptr(), stat.as_mut_ptr())
@@ -1402,7 +1404,7 @@ mod descriptor_vfs {
 
     #[cfg(target_os = "linux")]
     fn current_path_for_fd(fd: RawFd) -> Result<PathBuf> {
-        Ok(PathBuf::from(format!("/proc/self/fd/{fd}")))
+        std::fs::read_link(format!("/proc/self/fd/{fd}")).map_err(Into::into)
     }
 
     #[cfg(all(
@@ -1465,19 +1467,16 @@ mod descriptor_vfs {
 
     #[cfg(test)]
     mod tests {
-        use super::is_descriptor_fd_path;
+        use super::is_dev_fd_path;
 
         #[test]
         fn recognizes_only_numeric_dev_fd_aliases() {
-            assert!(is_descriptor_fd_path(b"/dev/fd/7"));
-            assert!(is_descriptor_fd_path(b"/dev/fd/123"));
-            assert!(is_descriptor_fd_path(b"/proc/self/fd/7"));
-            assert!(!is_descriptor_fd_path(b"/dev/fd/"));
-            assert!(!is_descriptor_fd_path(b"/proc/self/fd/"));
-            assert!(!is_descriptor_fd_path(b"/dev/fd/7-wal"));
-            assert!(!is_descriptor_fd_path(b"/proc/self/fd/7-wal"));
-            assert!(!is_descriptor_fd_path(b"/dev/fd/not-a-fd"));
-            assert!(!is_descriptor_fd_path(b"/tmp/database.db"));
+            assert!(is_dev_fd_path(b"/dev/fd/7"));
+            assert!(is_dev_fd_path(b"/dev/fd/123"));
+            assert!(!is_dev_fd_path(b"/dev/fd/"));
+            assert!(!is_dev_fd_path(b"/dev/fd/7-wal"));
+            assert!(!is_dev_fd_path(b"/dev/fd/not-a-fd"));
+            assert!(!is_dev_fd_path(b"/tmp/database.db"));
         }
     }
 }
