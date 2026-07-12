@@ -1,4 +1,5 @@
 use super::*;
+use rand::RngCore;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use tracing_subscriber::fmt::MakeWriter;
@@ -42,28 +43,36 @@ impl CapturedLogs {
     }
 }
 
+fn random_salt() -> [u8; 16] {
+    let mut salt = [0u8; 16];
+    rand::rngs::OsRng.fill_bytes(&mut salt);
+    salt
+}
+
 #[test]
 fn test_derive_key_deterministic() {
     let passphrase = "hunter2";
-    let salt = b"abcdefghijklmnop";
-    let key1 = derive_key_from_passphrase(passphrase, salt).unwrap();
-    let key2 = derive_key_from_passphrase(passphrase, salt).unwrap();
+    let salt = random_salt();
+    let key1 = derive_key_from_passphrase(passphrase, &salt).unwrap();
+    let key2 = derive_key_from_passphrase(passphrase, &salt).unwrap();
     assert_eq!(key1, key2, "same passphrase+salt must yield same key");
 }
 
 #[test]
 fn test_derive_key_different_salt() {
     let passphrase = "hunter2";
-    let salt1 = b"abcdefghijklmnop";
-    let salt2 = b"pqrstuvwxyz12345";
-    let key1 = derive_key_from_passphrase(passphrase, salt1).unwrap();
-    let key2 = derive_key_from_passphrase(passphrase, salt2).unwrap();
+    let salt1 = random_salt();
+    let mut salt2 = salt1;
+    salt2[0] ^= 1;
+    let key1 = derive_key_from_passphrase(passphrase, &salt1).unwrap();
+    let key2 = derive_key_from_passphrase(passphrase, &salt2).unwrap();
     assert_ne!(key1, key2, "different salts must yield different keys");
 }
 
 #[test]
 fn test_derive_key_length() {
-    let key = derive_key_from_passphrase("secret", b"saltysalt12345678").unwrap();
+    let salt = random_salt();
+    let key = derive_key_from_passphrase("secret", &salt).unwrap();
     assert_eq!(key.len(), 32, "key must be 32 bytes");
 }
 

@@ -391,6 +391,8 @@ async fn await_peer_tasks(mut send_task: AbortOnDropTask, mut recv_task: AbortOn
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine as _;
+    use rand::RngCore;
 
     struct TaskDropSignal(Arc<std::sync::atomic::AtomicBool>);
 
@@ -524,12 +526,15 @@ mod tests {
         let app = RealtimeServer::router_with_auth(manager.clone(), Some("secret".to_string()));
         let server = tokio::spawn(async move { axum::serve(listener, app).await });
         let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+        let mut nonce = [0_u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut nonce);
+        let websocket_key = base64::engine::general_purpose::STANDARD.encode(nonce);
 
         // When: a client completes the upgrade with the configured bearer.
         client
             .write_all(
                 format!(
-                    "GET /ws HTTP/1.1\r\nHost: {address}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nAuthorization: Bearer secret\r\n\r\n"
+                    "GET /ws HTTP/1.1\r\nHost: {address}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: {websocket_key}\r\nAuthorization: Bearer secret\r\n\r\n"
                 )
                 .as_bytes(),
             )

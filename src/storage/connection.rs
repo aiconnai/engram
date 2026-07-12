@@ -675,10 +675,24 @@ mod descriptor_vfs {
     use super::{restrict_open_regular_file_permissions, SQLITE_FILE_MODE};
     use crate::error::{EngramError, Result};
     use rusqlite::ffi;
-    use std::ffi::{CStr, CString, OsString};
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos"
+    ))]
+    use std::ffi::OsString;
+    use std::ffi::{CStr, CString};
     use std::fs::{File, OpenOptions};
     use std::os::raw::{c_char, c_int, c_void};
-    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    use std::os::unix::ffi::OsStrExt;
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos"
+    ))]
+    use std::os::unix::ffi::OsStringExt;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
     use std::path::{Path, PathBuf};
@@ -1352,10 +1366,17 @@ mod descriptor_vfs {
         if (stat.st_mode & libc::S_IFMT) != libc::S_IFREG {
             return Err(std::io::Error::from_raw_os_error(libc::EINVAL));
         }
-        if stat.st_dev as u64 != context.main_dev || stat.st_ino != context.main_ino {
+        if !device_id_matches(stat.st_dev, context.main_dev) || stat.st_ino != context.main_ino {
             return Err(std::io::Error::from_raw_os_error(libc::EACCES));
         }
         Ok(())
+    }
+
+    fn device_id_matches<T>(actual: T, expected: u64) -> bool
+    where
+        u64: TryFrom<T>,
+    {
+        u64::try_from(actual).is_ok_and(|actual| actual == expected)
     }
 
     #[cfg(any(

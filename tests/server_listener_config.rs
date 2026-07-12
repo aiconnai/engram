@@ -11,6 +11,8 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use base64::Engine as _;
+use rand::RngCore;
 use serde_json::json;
 use tempfile::TempDir;
 
@@ -645,9 +647,12 @@ fn websocket_handshake(
         .set_read_timeout(Some(Duration::from_secs(2)))
         .map_err(|err| err.to_string())?;
     let path = query.map_or_else(|| "/ws".to_string(), |q| format!("/ws?{q}"));
+    let mut nonce = [0_u8; 16];
+    rand::rngs::OsRng.fill_bytes(&mut nonce);
+    let websocket_key = base64::engine::general_purpose::STANDARD.encode(nonce);
     write!(
         stream,
-        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: {websocket_key}\r\n"
     )
     .map_err(|err| err.to_string())?;
     if let Some(value) = authorization {
