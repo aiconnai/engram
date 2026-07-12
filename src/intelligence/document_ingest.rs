@@ -974,16 +974,10 @@ Content for section 2.
         // Given: a deterministic one-page PDF fixture and the default PDF limits.
         let pdf = include_bytes!("../../tests/fixtures/pdf/valid.pdf");
 
-        // When: the optional parser extracts sections through the bounded path.
-        let sections = extract_pdf_sections(
-            pdf,
-            PdfExtractionLimits {
-                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
-                max_pages: DEFAULT_MAX_PDF_PAGES,
-                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
-            },
-        )
-        .unwrap();
+        // When: the in-worker parser path extracts sections through the bounded path.
+        let sections =
+            extract_pdf_sections_in_worker(pdf, DEFAULT_MAX_PDF_PAGES, DEFAULT_MAX_PDF_TEXT_BYTES)
+                .unwrap();
 
         // Then: exactly one page is exposed with fixture text and page metadata.
         assert_eq!(sections.len(), 1);
@@ -997,16 +991,10 @@ Content for section 2.
         // Given: a deterministic two-page PDF fixture and the default PDF limits.
         let pdf = include_bytes!("../../tests/fixtures/pdf/valid-two-pages.pdf");
 
-        // When: the optional parser extracts each real PDF page.
-        let sections = extract_pdf_sections(
-            pdf,
-            PdfExtractionLimits {
-                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
-                max_pages: DEFAULT_MAX_PDF_PAGES,
-                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
-            },
-        )
-        .unwrap();
+        // When: the in-worker parser path extracts each real PDF page.
+        let sections =
+            extract_pdf_sections_in_worker(pdf, DEFAULT_MAX_PDF_PAGES, DEFAULT_MAX_PDF_TEXT_BYTES)
+                .unwrap();
 
         // Then: both page texts and their page metadata remain separate.
         assert_eq!(sections.len(), 2);
@@ -1022,16 +1010,10 @@ Content for section 2.
         // Given: a deterministic malformed PDF fixture under all budget limits.
         let pdf = include_bytes!("../../tests/fixtures/pdf/malformed.pdf");
 
-        // When: the bounded optional parser attempts extraction.
-        let err = extract_pdf_sections(
-            pdf,
-            PdfExtractionLimits {
-                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
-                max_pages: DEFAULT_MAX_PDF_PAGES,
-                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
-            },
-        )
-        .unwrap_err();
+        // When: the bounded in-worker parser path attempts extraction.
+        let err =
+            extract_pdf_sections_in_worker(pdf, DEFAULT_MAX_PDF_PAGES, DEFAULT_MAX_PDF_TEXT_BYTES)
+                .unwrap_err();
 
         // Then: the parser failure is reported without a panic.
         assert!(matches!(err, EngramError::InvalidInput(_)));
@@ -1044,16 +1026,9 @@ Content for section 2.
         // Given: a parseable PDF fixture whose page omits required media-box data.
         let pdf = include_bytes!("../../tests/fixtures/pdf/missing-mediabox.pdf");
 
-        // When: the optional extractor reaches malformed page data.
+        // When: the in-worker extractor reaches malformed page data.
         let result = std::panic::catch_unwind(|| {
-            extract_pdf_sections(
-                pdf,
-                PdfExtractionLimits {
-                    max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
-                    max_pages: DEFAULT_MAX_PDF_PAGES,
-                    max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
-                },
-            )
+            extract_pdf_sections_in_worker(pdf, DEFAULT_MAX_PDF_PAGES, DEFAULT_MAX_PDF_TEXT_BYTES)
         });
 
         // Then: the library boundary contains the parser panic as a typed input error.
@@ -1137,15 +1112,9 @@ Content for section 2.
         assert_eq!(document.get_pages().len(), DEFAULT_MAX_PDF_PAGES + 1);
 
         // When: extraction starts with the default page budget.
-        let err = extract_pdf_sections(
-            pdf,
-            PdfExtractionLimits {
-                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
-                max_pages: DEFAULT_MAX_PDF_PAGES,
-                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
-            },
-        )
-        .unwrap_err();
+        let err =
+            extract_pdf_sections_in_worker(pdf, DEFAULT_MAX_PDF_PAGES, DEFAULT_MAX_PDF_TEXT_BYTES)
+                .unwrap_err();
 
         // Then: the parsed page guard rejects it before text extraction.
         assert!(matches!(err, EngramError::InvalidInput(_)));
@@ -1159,15 +1128,9 @@ Content for section 2.
         let pdf = include_bytes!("../../tests/fixtures/pdf/text-limit-plus-one.pdf");
 
         // When: page extraction writes through the bounded output buffer.
-        let err = extract_pdf_sections(
-            pdf,
-            PdfExtractionLimits {
-                max_input_bytes: DEFAULT_MAX_FILE_SIZE as usize,
-                max_pages: DEFAULT_MAX_PDF_PAGES,
-                max_text_bytes: DEFAULT_MAX_PDF_TEXT_BYTES,
-            },
-        )
-        .unwrap_err();
+        let err =
+            extract_pdf_sections_in_worker(pdf, DEFAULT_MAX_PDF_PAGES, DEFAULT_MAX_PDF_TEXT_BYTES)
+                .unwrap_err();
 
         // Then: extraction stops with a typed text-limit error.
         assert!(matches!(err, EngramError::InvalidInput(_)));
