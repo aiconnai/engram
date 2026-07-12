@@ -7,8 +7,8 @@
 | Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
-| Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T07:40:59Z)` |
-| Last commit | `2272d6c8796945068d019a8116ae6bc569f361cf` |
+| Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T16:16:31Z)` |
+| Last commit | `81be152c713230c082901899e6880579fcedabb3` |
 | Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -51,6 +51,17 @@
   the second salt, avoiding static initialization patterns flagged by CodeQL.
 - Exact CI Clippy, clean-tree Gitleaks, focused storage/cloud/WS/listener tests,
   formatting, doctor, diff-check, and independent review passed locally.
+
+## Engram 10/10 Wave 3 — execution started
+
+- PR #189 merged as `81be152c713230c082901899e6880579fcedabb3`; all
+  required checks were green before merge.
+- Todos 17–21 are the next dependency-ready lanes and are being executed on
+  isolated branches/worktrees for later integration and independent review.
+- Atomic descriptor-bound SQLite opening remains a separate deferred follow-up;
+  Wave 3 does not claim or silently absorb that work.
+- No tag, release, deployment, registry publication, or channel approval is in
+  scope for this wave.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud

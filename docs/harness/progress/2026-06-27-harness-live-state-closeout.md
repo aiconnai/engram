@@ -234,3 +234,13 @@ evidence file under `.omo/evidence/`.
 - Quoted the complete expression without changing its runtime behavior.
 - Ruby YAML parse, harness doctor, fallback title policy, and quick sensors all
   passed. Independent Sonnet review returned `REVIEW_VERDICT: PASS`.
+
+## 2026-07-12 — Wave 3 execution start
+
+- Verified PR #189 merged at
+  `81be152c713230c082901899e6880579fcedabb3` with required checks green.
+- Refreshed the canonical live-state commit and quick-sensor timestamp.
+- Started dependency-ready Todos 17–21 in isolated worktrees for later
+  integration and independent review.
+- Kept atomic descriptor-bound SQLite opening explicitly deferred and kept all
+  publication channels outside this wave.
