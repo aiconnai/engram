@@ -1305,3 +1305,13 @@ Verification so far:
 - MCP stdio smoke with `dry_run=false, confirm=true` created pending candidate
   `smoke-agent-writeback-candidate`; `dream_candidate_get` returned the pending
   `agent_writeback` candidate and its source.
+
+## Harness Contract workflow YAML repair — 2026-07-12
+
+- Fixed `.github/workflows/harness-contract.yml` after the post-merge push for
+  PR #187 produced a zero-job failure because an unquoted expression contained
+  the `merge-group: no PR title` scalar.
+- Quoted the complete `PR_TITLE` expression so the workflow remains valid YAML
+  while preserving the existing pull-request and merge-queue fallback behavior.
+- Verification: Ruby YAML parse PASS; harness doctor PASS; quick sensors PASS;
+  PR-title fallback PASS; independent Sonnet post-review PASS.

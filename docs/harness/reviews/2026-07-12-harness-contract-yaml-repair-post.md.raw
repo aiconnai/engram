@@ -1,0 +1,116 @@
+# Engram Harness — External Reviewer Prompt
+
+**Task**: harness-contract-yaml-repair
+**Mode**: post
+**Date (UTC)**: 2026-07-12
+
+## Instructions for the Reviewer
+
+You are acting as an independent senior engineer reviewing a diff for the engram project.
+You were NOT the implementer. Your job is to find real problems introduced by the change.
+
+Read the following documents (they are the source of truth for this review):
+
+- docs/harness/SPEC.md
+- docs/harness/INVARIANTS.md (process invariants — canonical)
+- docs/harness/WHAT_WE_DONT_DO.md (negative scope — no hidden expansion)
+- docs/harness/GATES.md (especially the fake-success patterns section)
+- docs/harness/CODE_REVIEW_POLICY.md (this policy)
+- docs/harness/security/anthropic-reference-harness.md (security boundary)
+- .claude/scan-extras.txt and .claude/fp-rules.txt (org-specific scan/triage tuning)
+- docs/harness/README.md (workflow)
+- Root INVARIANTS.md (data layer invariants for the memory system)
+
+Then review the diff below.
+
+Additional harness-specific requirements:
+- Compare scope against docs/harness/WHAT_WE_DONT_DO.md. Flag hidden scope creep, gate weakening, or product changes bundled into harness work.
+- Security boundary: flag autonomous Engram execution, implied sandboxing, credential mounts, network/egress expansion, or C/C++/ASAN pipeline import unless an ADR and explicit target contract are present.
+- Tuning files: ensure .claude/scan-extras.txt and .claude/fp-rules.txt augment scan/triage behavior without weakening core INVARIANTS/GATES/POLICY or adding blanket suppressions.
+- Review Canvas: if the diff is complex, verify that a matching docs/harness/canvas/YYYY-MM-DD-<task-id>.md exists and includes approaches considered, hot-path complexity, at least two edge cases, and a breakage-risk table.
+- Harness script changes under docs/harness/bin/* are process-critical. Inspect shell safety, path handling, parseability, read-only guarantees, and whether the script weakens any existing gate.
+
+## Key Fake-Success Patterns (hunt these actively)
+
+1. Tests green only because local-embeddings feature was used; CI Linux parity fails.
+2. MCP protocol / golden tests or generated reference (docs/MCP_TOOLS.md) is stale after tool changes.
+3. SCHEMA_VERSION bumped in migrations.rs but hardcoded test versions not updated.
+4. Clippy clean but unwrap/expect in hot MCP handler, storage, or hook paths.
+5. Snapshot/attestation tests pass but Merkle or crypto behavior changed.
+6. Hooks (session_end, post_tool_use, etc.) or intelligence modules changed without integration coverage.
+7. Harness doctor or sensors would have caught this but were not run.
+8. Progress docs (harness or active plan) not updated for a domain change.
+9. Cross-SDK (python/typescript) contract drift not reflected.
+10. Reviewer is being shown a self-referential or incomplete prompt (call it out).
+11. Security boundary drift: static/read-only default weakened, autonomous execution implied, missing ADR/sandbox/egress/target contract, credential mounts allowed, or Anthropic C/C++/ASAN pipeline imported as default.
+
+## Diff Under Review
+
+```diff
+diff --git a/.github/workflows/harness-contract.yml b/.github/workflows/harness-contract.yml
+index c9e2899..e65ec9b 100644
+--- a/.github/workflows/harness-contract.yml
++++ b/.github/workflows/harness-contract.yml
+@@ -49 +49 @@ jobs:
+-          PR_TITLE: ${{ github.event.pull_request.title || 'merge-group: no PR title' }}
++          PR_TITLE: "${{ github.event.pull_request.title || 'merge-group: no PR title' }}"
+diff --git a/docs/harness/.sensors-last b/docs/harness/.sensors-last
+index 55543ef..47b2eb8 100644
+--- a/docs/harness/.sensors-last
++++ b/docs/harness/.sensors-last
+@@ -4,4 +4,4 @@ doctor_status=pass
+-mode=full
+-timestamp=2026-07-10T00:27:38Z
+-duration_sec=89
+-ci=fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor
++mode=quick
++timestamp=2026-07-12T07:40:59Z
++duration_sec=30
++ci=cargo fmt + cargo check + pr-title-policy + harness doctor
+diff --git a/docs/harness/.sensors-log b/docs/harness/.sensors-log
+index aef242d..a2e3397 100644
+--- a/docs/harness/.sensors-log
++++ b/docs/harness/.sensors-log
+@@ -43,0 +44 @@
++{"schema_version":"sensors-log-v1","timestamp":"2026-07-12T07:40:59Z","tool":"sensors","mode":"quick","status":"pass","duration_sec":30,"ci_status":"pass","doctor_status":"pass","ci_command":"cargo fmt + cargo check + pr-title-policy + harness doctor","ci_steps":{},"exclusion":null,"artifacts":[{"path":"docs/harness/.sensors-last","kind":"sensors_last","format":"key_value"}]}
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index ae1e87f..fe5ebe6 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -1307,0 +1308,8 @@ Verification so far:
++
++## Harness Contract workflow YAML repair — 2026-07-12
++
++- Fixed `.github/workflows/harness-contract.yml` after the post-merge push for
++  PR #187 produced a zero-job failure because an unquoted expression contained
++  the `merge-group: no PR title` scalar.
++- Quoted the complete `PR_TITLE` expression so the workflow remains valid YAML
++  while preserving the existing pull-request and merge-queue fallback behavior.
+```
+
+## Previous Review Context (if any)
+
+(no previous review supplied for continuity)
+
+## Output Contract (strict)
+
+Your entire response must start with exactly one of:
+
+PASS <one-line summary of what was reviewed and why it is safe>
+
+or
+
+FAIL <one-line summary of the most important problem(s)>
+
+Then a short bullet list using [BLOCKER], [HIGH], [MED], [LOW].
+At most 3 substantive findings. Evidence and location required for each.
+If nothing substantive: exactly one bullet with [LOW] No issues found...
+
+Remember: you are the external reviewer. Be evidence-driven and skeptical.
+
+Machine-parseable verdict (required):
+Add exactly one line, anywhere in the response, beginning with:
+REVIEW_VERDICT: PASS <one-line summary>
+or
+REVIEW_VERDICT: FAIL <one-line summary>
+This line is required for hard post-gate enforcement.

@@ -46,7 +46,7 @@ jobs:
           # there is no PR title, so fall back to a safe non-empty placeholder —
           # pr-title-policy.sh exits 2 (usage error) on an EMPTY title, which
           # would otherwise break this required job on the merge queue.
-          PR_TITLE: ${{ github.event.pull_request.title || 'merge-group: no PR title' }}
+          PR_TITLE: "${{ github.event.pull_request.title || 'merge-group: no PR title' }}"
         run: bash docs/harness/bin/pr-title-policy.sh --title "$PR_TITLE"
 
   # ---------------------------------------------------------------------------
