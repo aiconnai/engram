@@ -3,6 +3,29 @@
 These examples show how Engram fits into common agent ecosystems without
 overstating support.
 
+## Deterministic smoke test
+
+From a clean checkout, run:
+
+```bash
+bash scripts/test-examples.sh
+```
+
+The aggregate test uses a disposable database and a loopback-only real Engram
+HTTP server. It never contacts an external service and requires no API keys.
+The ecosystem-specific Python packages are intentionally not installed: their
+dependency-free Engram adapters are syntax checked and exercised directly.
+
+| Family | Classification | Smoke coverage |
+| --- | --- | --- |
+| Rust library demos | Runnable | All Cargo examples compile |
+| Claude MCP | Runnable | Real `memory_create` and `memory_search` HTTP round trip |
+| Cursor MCP | Illustrative configuration | JSON block and stdio arguments validate |
+| CrewAI memory | Illustrative adapter sketch | SDK adapter imports/classes validate |
+| OpenAI Agents SDK | Runnable integration pattern | Dry run plus real Engram adapter round trip |
+| FastMCP server | Runnable integration pattern | Dry run plus real Engram adapter round trip |
+| LangGraph tool | Runnable integration pattern | Dry run plus real Engram adapter round trip |
+
 ## Native Examples
 
 - [Claude MCP](claude-mcp/) - configure Engram as a Claude Code MCP memory server.
