@@ -10810,7 +10810,7 @@ impl !core::panic::unwind_safe::RefUnwindSafe for engram::mcp::handlers::Handler
 impl !core::panic::unwind_safe::UnwindSafe for engram::mcp::handlers::HandlerContext
 pub fn engram::mcp::handlers::dispatch(&engram::mcp::handlers::HandlerContext, &str, serde_json::value::Value) -> serde_json::value::Value
 pub mod engram::mcp::http_transport
-pub async fn engram::mcp::http_transport::serve_http(alloc::sync::Arc<dyn engram::mcp::protocol::McpHandler>, u16, core::option::Option<alloc::string::String>, core::option::Option<engram::realtime::RealtimeManager>, u64, u64, core::option::Option<alloc::string::String>) -> core::result::Result<(), alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
+pub async fn engram::mcp::http_transport::serve_http(alloc::sync::Arc<dyn engram::mcp::protocol::McpHandler>, core::net::socket_addr::SocketAddr, core::option::Option<alloc::string::String>, core::option::Option<engram::realtime::RealtimeManager>, u64, u64, core::option::Option<alloc::string::String>) -> core::result::Result<(), alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
 pub mod engram::mcp::methods
 pub const engram::mcp::methods::CALL_TOOL: &str
 pub const engram::mcp::methods::GET_PROMPT: &str
@@ -11728,7 +11728,7 @@ impl !core::panic::unwind_safe::RefUnwindSafe for engram::realtime::RealtimeMana
 impl !core::panic::unwind_safe::UnwindSafe for engram::realtime::RealtimeManager
 pub struct engram::realtime::RealtimeServer
 impl engram::realtime::RealtimeServer
-pub fn engram::realtime::RealtimeServer::new(engram::realtime::RealtimeManager, u16) -> Self
+pub fn engram::realtime::RealtimeServer::new(engram::realtime::RealtimeManager, core::net::socket_addr::SocketAddr) -> Self
 pub fn engram::realtime::RealtimeServer::router(engram::realtime::RealtimeManager) -> axum::routing::Router
 pub async fn engram::realtime::RealtimeServer::start(self) -> std::io::error::Result<()>
 impl core::marker::Freeze for engram::realtime::RealtimeServer

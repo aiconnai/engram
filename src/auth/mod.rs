@@ -8,10 +8,12 @@
 
 mod permissions;
 mod tokens;
+mod transport_principal;
 mod users;
 
 pub use permissions::{Permission, PermissionSet, ResourceType};
 pub use tokens::{ApiKey, ApiKeyManager, TokenClaims};
+pub use transport_principal::{TransportPrincipal, TransportPrincipalError};
 pub use users::{User, UserId, UserManager};
 
 use crate::error::{EngramError, Result};

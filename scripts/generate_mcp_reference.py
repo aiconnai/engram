@@ -9,6 +9,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,102 @@ SCHEMA_RE = re.compile(
 )
 TIER_RE = re.compile(r"tier:\s*ToolTier::(?P<value>Essential|Standard|Advanced)")
 INCLUDE_RE = re.compile(r"=\s*include!\(\s*\"(?P<path>[^\"]+)\"\s*\)")
+
+LANGFUSE_TOOLS: Final = frozenset(
+    (
+        "langfuse_connect",
+        "langfuse_sync",
+        "langfuse_sync_status",
+        "langfuse_extract_patterns",
+        "memory_from_trace",
+    )
+)
+MEILISEARCH_TOOLS: Final = frozenset(
+    (
+        "meilisearch_search",
+        "meilisearch_reindex",
+        "meilisearch_status",
+        "meilisearch_config",
+    )
+)
+EMERGENT_GRAPH_TOOLS: Final = frozenset(
+    (
+        "memory_auto_link",
+        "memory_list_auto_links",
+        "memory_auto_link_stats",
+        "memory_cluster",
+        "memory_get_cluster",
+        "memory_list_clusters",
+    )
+)
+MULTIMODAL_TOOLS: Final = frozenset(
+    (
+        "memory_describe_image",
+        "memory_transcribe_audio",
+        "memory_capture_screenshot",
+        "memory_process_video",
+        "memory_list_media",
+        "memory_search_by_image",
+    )
+)
+DUCKDB_GRAPH_TOOLS: Final = frozenset(
+    ("memory_graph_path", "memory_temporal_snapshot", "memory_scope_snapshot")
+)
+DREAM_PHASE_TOOLS: Final = frozenset(
+    (
+        "dream_run_now",
+        "dream_create",
+        "dream_get",
+        "dream_list",
+        "dream_cancel",
+        "dream_archive",
+        "dream_candidates_list",
+        "dream_candidate_get",
+        "dream_candidate_review",
+        "dream_candidate_apply",
+        "memory_agent_writeback",
+        "dream_eval_run",
+    )
+)
+ATTESTATION_TOOLS: Final = frozenset(
+    (
+        "attestation_log",
+        "attestation_verify",
+        "attestation_chain_verify",
+        "attestation_list",
+    )
+)
+SNAPSHOT_TOOLS: Final = frozenset(("snapshot_create", "snapshot_load", "snapshot_inspect"))
+CORE_TOOLS: Final = frozenset(("discover_tools", "recent_activity", "memory_agent_contract"))
+FEATURE_GROUPS: Final = {
+    "langfuse": "feature.langfuse",
+    "meilisearch": "feature.meilisearch",
+    "emergent-graph": "feature.emergent_graph",
+    "multimodal": "feature.multimodal",
+    "duckdb-graph": "feature.duckdb_graph",
+    "dream-phase": "feature.dream",
+    "attestation": "feature.attestation",
+    "snapshot": "feature.snapshot",
+}
+PREFIX_GROUPS: Final = {
+    "identity": "identity",
+    "session": "session",
+    "workspace": "workspace",
+    "quality": "quality",
+    "salience": "quality",
+    "scope": "scope",
+    "temporal": "temporal",
+    "sync": "sync",
+    "agent": "agent",
+    "harness": "harness",
+    "lifecycle": "lifecycle",
+    "retention": "lifecycle",
+    "attestation": "portability",
+    "snapshot": "portability",
+    "embedding": "embedding",
+    "search": "search",
+    "pending": "admin",
+}
 
 
 def main() -> int:
@@ -278,146 +375,50 @@ def required_feature_summary(tool: Tool) -> str:
 
 
 def required_features(name: str) -> tuple[str, ...]:
-    match name:
-        case (
-            "langfuse_connect"
-            | "langfuse_sync"
-            | "langfuse_sync_status"
-            | "langfuse_extract_patterns"
-            | "memory_from_trace"
-        ):
-            return ("langfuse",)
-        case (
-            "meilisearch_search"
-            | "meilisearch_reindex"
-            | "meilisearch_status"
-            | "meilisearch_config"
-        ):
-            return ("meilisearch",)
-        case (
-            "memory_auto_link"
-            | "memory_list_auto_links"
-            | "memory_auto_link_stats"
-            | "memory_cluster"
-            | "memory_get_cluster"
-            | "memory_list_clusters"
-        ):
-            return ("emergent-graph",)
-        case "memory_sync_media":
-            return ("multimodal", "cloud")
-        case (
-            "memory_describe_image"
-            | "memory_transcribe_audio"
-            | "memory_capture_screenshot"
-            | "memory_process_video"
-            | "memory_list_media"
-            | "memory_search_by_image"
-        ):
-            return ("multimodal",)
-        case "memory_graph_path" | "memory_temporal_snapshot" | "memory_scope_snapshot":
-            return ("duckdb-graph",)
-        case (
-            "dream_run_now"
-            | "dream_create"
-            | "dream_get"
-            | "dream_list"
-            | "dream_cancel"
-            | "dream_archive"
-            | "dream_candidates_list"
-            | "dream_candidate_get"
-            | "dream_candidate_review"
-            | "dream_candidate_apply"
-            | "memory_agent_writeback"
-            | "dream_eval_run"
-        ):
-            return ("dream-phase",)
-        case (
-            "attestation_log"
-            | "attestation_verify"
-            | "attestation_chain_verify"
-            | "attestation_list"
-        ):
-            return ("attestation",)
-        case "snapshot_create" | "snapshot_load" | "snapshot_inspect":
-            return ("snapshot",)
-        case _:
-            return ()
+    if name in LANGFUSE_TOOLS:
+        return ("langfuse",)
+    if name in MEILISEARCH_TOOLS:
+        return ("meilisearch",)
+    if name in EMERGENT_GRAPH_TOOLS:
+        return ("emergent-graph",)
+    if name == "memory_sync_media":
+        return ("multimodal", "cloud")
+    if name in MULTIMODAL_TOOLS:
+        return ("multimodal",)
+    if name in DUCKDB_GRAPH_TOOLS:
+        return ("duckdb-graph",)
+    if name in DREAM_PHASE_TOOLS:
+        return ("dream-phase",)
+    if name in ATTESTATION_TOOLS:
+        return ("attestation",)
+    if name in SNAPSHOT_TOOLS:
+        return ("snapshot",)
+    return ()
 
 
 def tool_group(name: str) -> str:
     features = required_features(name)
     if features:
         feature = features[0]
-        match feature:
-            case "langfuse":
-                return "feature.langfuse"
-            case "meilisearch":
-                return "feature.meilisearch"
-            case "emergent-graph":
-                return "feature.emergent_graph"
-            case "multimodal":
-                return "feature.multimodal"
-            case "duckdb-graph":
-                return "feature.duckdb_graph"
-            case "dream-phase":
-                return "feature.dream"
-            case "attestation":
-                return "feature.attestation"
-            case "snapshot":
-                return "feature.snapshot"
-            case _:
-                return "feature.other"
+        return FEATURE_GROUPS.get(feature, "feature.other")
 
-    match name:
-        case "discover_tools" | "recent_activity" | "memory_agent_contract":
-            return "core"
-        case (
-            "context_seed"
-            | "context_record"
-            | "context_record_artifact"
-            | "context_get_artifact"
-            | "context_search"
-            | "context_build_bundle"
-            | "context_budget_check"
-        ):
-            return "context"
-        case _:
-            pass
+    if name in CORE_TOOLS:
+        return "core"
+    if name in {
+        "context_seed",
+        "context_record",
+        "context_record_artifact",
+        "context_get_artifact",
+        "context_search",
+        "context_build_bundle",
+        "context_budget_check",
+    }:
+        return "context"
 
     prefix = name.split("_", maxsplit=1)[0]
-    match prefix:
-        case "identity":
-            return "identity"
-        case "session":
-            return "session"
-        case "workspace":
-            return "workspace"
-        case "quality" | "salience":
-            return "quality"
-        case "scope":
-            return "scope"
-        case "temporal":
-            return "temporal"
-        case "sync":
-            return "sync"
-        case "agent":
-            return "agent"
-        case "harness":
-            return "harness"
-        case "lifecycle" | "retention":
-            return "lifecycle"
-        case "attestation" | "snapshot":
-            return "portability"
-        case "embedding":
-            return "embedding"
-        case "search":
-            return "search"
-        case "pending":
-            return "admin"
-        case "memory":
-            return memory_subgroup(name)
-        case _:
-            return "misc"
+    if prefix == "memory":
+        return memory_subgroup(name)
+    return PREFIX_GROUPS.get(prefix, "misc")
 
 
 def memory_subgroup(name: str) -> str:

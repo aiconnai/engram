@@ -4,7 +4,7 @@
 |-------|-------|
 | Project | `engram` |
 | Active sprint | `Harness maintenance — live-state closeout` |
-| Active task | `harness-live-state-closeout — close completed bootstrap sprint metadata` |
+| Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Started | `2026-06-27` |
 | Owner | `Ronaldo + agents (Claude Code + Claude Code Sonnet reviewer)` |
 | Active spec | `docs/harness/SPEC.md` |
@@ -35,10 +35,12 @@
   exigido pelo `doctor.sh`.
 - Registrar um novo log de progresso curto para esta tarefa de housekeeping.
 - Atualizar o metadata de último commit/review/sensores com evidência atual.
+- Adicionar `docs/harness/bin/check-live-state.sh` e `docs/harness/bin/test-check-live-state.sh` como exceção escopada para tornar o live state self-checking.
+- Registrar `docs/harness/canvas/2026-07-09-engram-10-of-10-live-state.md` para a mudança de script do harness.
 
 ### Fora de escopo
 
-- Mudanças em scripts do harness, gates, invariants, policy, workflows, MCP,
+- Mudanças em scripts do harness além da exceção explícita `check-live-state.sh`/`test-check-live-state.sh`; gates, invariants, policy, workflows, MCP,
   storage, SDKs ou código Rust.
 - Escolher ou iniciar um follow-up de produto; este closeout só deixa o estado
   canônico pronto para a próxima branch real.
@@ -48,7 +50,7 @@
 - `bash docs/harness/bin/bootstrap.sh`
 - `bash docs/harness/bin/doctor.sh`
 - `bash docs/harness/bin/sensors.sh quick`
-- `bash docs/harness/bin/review-gate.sh post harness-live-state-closeout`
+- `bash docs/harness/bin/review-gate.sh post engram-10-of-10-live-state`
 
 ## Sprint encerrada: Harness Engineering v0 — bootstrap & core gates
 

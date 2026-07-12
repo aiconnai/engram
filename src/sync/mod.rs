@@ -11,6 +11,12 @@
 mod cloud;
 pub mod conflict;
 #[cfg(feature = "cloud")]
+mod encryption;
+#[cfg(feature = "cloud")]
+pub mod key_config;
+#[cfg(all(test, feature = "cloud"))]
+mod key_config_tests;
+#[cfg(feature = "cloud")]
 mod worker;
 
 #[cfg(feature = "cloud")]

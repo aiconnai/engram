@@ -1,5 +1,8 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Mutex as StdMutex,
+};
 use std::time::Duration;
 
 use axum::body::Body;
@@ -22,8 +25,48 @@ impl McpHandler for TestMcpHandler {
     }
 }
 
+pub(super) struct CountingMcpHandler {
+    pub(super) calls: Arc<AtomicUsize>,
+}
+
+impl McpHandler for CountingMcpHandler {
+    fn handle_request(&self, request: McpRequest) -> McpResponse {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        McpResponse::success(request.id, json!({"ok": true}))
+    }
+}
+
 pub(super) fn json_rpc_request(path: &str, bearer: Option<&str>) -> Request<Body> {
     json_rpc_request_with_headers(path, bearer, &[])
+}
+
+pub(super) fn json_rpc_tool_call_request(
+    path: &str,
+    bearer: Option<&str>,
+    name: &str,
+    arguments: serde_json::Value,
+) -> Request<Body> {
+    let body = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": name,
+            "arguments": arguments
+        }
+    })
+    .to_string();
+
+    let mut builder = Request::builder()
+        .method("POST")
+        .uri(path)
+        .header("content-type", "application/json");
+
+    if let Some(token) = bearer {
+        builder = builder.header("authorization", format!("Bearer {token}"));
+    }
+
+    builder.body(Body::from(body)).unwrap()
 }
 
 pub(super) fn json_rpc_request_with_headers(
@@ -99,6 +142,23 @@ pub(super) fn test_app_with_rate_limits(
         http_rate_limit_rps,
         http_rate_limit_burst,
         http_rate_limit_key.map(str::to_string),
+    )
+}
+
+pub(super) fn test_app_with_handler(
+    handler: Arc<dyn McpHandler>,
+    api_key: Option<&str>,
+    http_rate_limit_rps: u64,
+    http_rate_limit_burst: u64,
+) -> Router {
+    let _guard = ENV_LOCK.lock().unwrap();
+    build_router(
+        handler,
+        api_key.map(str::to_string),
+        None,
+        http_rate_limit_rps,
+        http_rate_limit_burst,
+        None,
     )
 }
 

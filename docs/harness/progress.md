@@ -4,21 +4,126 @@
 |-------|-------|
 | Project | `engram` |
 | Active sprint | `Harness maintenance — live-state closeout` |
-| Active task | `harness-live-state-closeout — close completed bootstrap sprint metadata` |
+| Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
-| Last review | `2026-06-27 — pass: docs/harness/reviews/2026-06-27-harness-live-state-closeout-v2-post.md` |
-| Last sensors | `2026-06-27 — status=pass (full lane after live-state closeout; timestamp 2026-06-27T15:07:07Z)` |
-| Last commit | `1aa14e5` |
+| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
+| Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T07:40:59Z)` |
+| Last commit | `2272d6c8796945068d019a8116ae6bc569f361cf` |
+| Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
+
+## Engram 10/10 Wave 2 — security integration with SQLite deferral
+
+- **Status**: partially integrated; atomic descriptor-bound SQLite opening is
+  deferred to a dedicated follow-up.
+- Barrier v4 passed all 21 required and focused gates without exclusions; the
+  immutable receipts and SHA-256 manifest are under
+  `.omo/evidence/wave-2-integration-barrier-v4.md` and its sibling directory.
+- Independent review v2 passed after verifying the Unix storage remediation and
+  focused transport/PDF suites. The earlier FAIL remains historical evidence;
+  this PASS is recorded separately in
+  `docs/harness/reviews/2026-07-12-engram-10-of-10-wave2-v2-post.md`.
+- No tag, release, real publish, or other publication occurred. The Cargo
+  publication check was dry-run only.
+
+### Superseding SQLite scope correction
+
+- Subsequent Linux CI proved the descriptor-bound VFS candidate could not open
+  the database through the stock SQLite Unix VFS. Two replacement designs were
+  rejected: pathname aliases retained a regular-file TOCTOU, while transient
+  hardlinks either broke pools or the stock VFS locking protocol.
+- Commits `ef02ee7`, `98b8446`, and `0700cb9` were reverted. The earlier
+  restrictive permissions and pre-open symlink rejection remain in scope.
+- The barrier v4 and review v2 remain immutable historical evidence for the
+  pre-CI candidate, but no longer constitute proof that atomic descriptor-bound
+  opening is complete. That work requires a dedicated native shim or audited
+  VFS implementation with Linux/macOS/BSD ABI and locking coverage.
+
+### PR #189 CI remediation
+
+- Cleared the Linux Clippy portability findings in the historical
+  descriptor-bound candidate; those VFS changes were subsequently reverted.
+- Replaced hard-coded test salts and WebSocket handshake nonces with runtime
+  `OsRng` values, removing four CodeQL alerts and two Gitleaks findings without
+  adding scanner allowlists.
+- The salt helper returns `OsRng::gen()` directly and independently regenerates
+  the second salt, avoiding static initialization patterns flagged by CodeQL.
+- Exact CI Clippy, clean-tree Gitleaks, focused storage/cloud/WS/listener tests,
+  formatting, doctor, diff-check, and independent review passed locally.
+
+- Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
+  security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud
+  key identity), `815d1af` (SQLite permissions), and `ce292ac` (bounded PDF
+  parsing).
+- Barrier remediation landed as `72bdf0b` (structured WebSocket peer-task
+  cleanup) and `92734bc` (release packaging for the isolated PDF worker).
+- The SQLite follow-up rejects a database symlink before SQLite opens it,
+  preserving the target database bytes, journal mode, and sentinel data. The
+  regression and runtime evidence are recorded with the Wave 2 barrier
+  evidence under `.omo/evidence/`. Platforms without the Unix atomic
+  no-follow boundary fail closed for filesystem databases and retain
+  `:memory:` support.
+
+## Engram 10/10 Wave 2 — HTTP listener security (Task 11)
+
+- Public HTTP/SSE listeners now fail closed at startup unless an API key is
+  configured; anonymous development access remains available on loopback.
+- Bearer authentication and principal authorization run before rate limiting
+  and MCP dispatch, including JSON-RPC notifications and SSE subscriptions.
+- Authentication failures return `401`; authenticated principals without the
+  required scope or workspace permission return `403`.
+- Contract coverage includes real `engram-server` processes for loopback
+  compatibility, public no-key refusal, keyed MCP requests, and keyed SSE.
+- Evidence is recorded in the orchestrator-owned Task 11 evidence and report
+  files under `.omo/` (outside this committed worktree).
+
+## Engram 10/10 Wave 2 — WebSocket peer cleanup
+
+- WebSocket connections now use structured peer-task cancellation: whichever
+  send/receive task finishes first aborts and awaits the blocked peer before
+  client registration cleanup returns.
+- Deterministic regressions cover client disconnect, outbound send failure,
+  and coordinator cancellation, preventing detached tasks on every ownership
+  path.
+- Targeted realtime tests, listener configuration tests, authenticated and
+  anonymous real WebSocket handshakes, Clippy, formatting, and harness doctor
+  pass on the Wave 2 cleanup worktree.
 
 ## Sprint ativa
 
 - **Harness maintenance — live-state closeout**
 - **Log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)
 - **Status**: active — close stale live metadata after the completed bootstrap
-  sprint and the merged lifecycle predicate follow-up. Current `main` is
-  `1aa14e5`, and merged PR #108 commit `e156810` is contained in that history.
+  sprint and the merged lifecycle predicate follow-up. Execution HEAD for this live-state pass is
+  `843fd52` (`843fd520cbd0eb4c2b1885fe11c997198beb2ca1`); historical PR #108 commit `e156810` remains contained in main history.
+
+## Live-state self-check — 2026-07-10
+
+- **Execution HEAD**: `843fd520cbd0eb4c2b1885fe11c997198beb2ca1` (`843fd52`).
+- **Approved execution baseline**: `843fd520cbd0eb4c2b1885fe11c997198beb2ca1` (`843fd52`); this remains valid after later Wave 0 commits only when the checker can bind it to the current live-state review, Canvas, and snapshot commit metadata.
+- **Approved live-state snapshot commit**: `3586a40e7952a051181d162028927a40bd6292f6`; this commit is the direct child of the approved execution baseline and introduced the checker/test/Canvas/review artifacts.
+- **Sensor snapshot source**: `docs/harness/.sensors-last`, currently `status=pass`,
+  `mode=full`, `timestamp=2026-07-10T00:27:38Z`.
+- **Checker surface**: `rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md`.
+- **Checker status**: pass for current progress; stale fixtures containing the old
+  `1aa14e5` Last commit fail with remediation to use either current HEAD or the approved baseline bound to current review/Canvas/snapshot metadata.
+- **Dirty worktree handling**: the checker reports `worktree_status=dirty|clean`
+  explicitly as diagnostic output; dirty state is not treated as success or failure
+  because agents run it before and after staging/commit boundaries.
+
+### Required versus advisory workflow reconciliation
+
+| Check | Live GitHub API status | Workflow source | Current contract |
+|---|---|---|---|
+| `Format` | branch-required | `.github/workflows/ci.yml` | Required CI job running `cargo fmt --all -- --check`. |
+| `Clippy` | branch-required | `.github/workflows/ci.yml` | Required CI job running clippy with required feature set. |
+| `Test (ubuntu-latest)` | branch-required | `.github/workflows/ci.yml` | Required Ubuntu test job for lib/tests, binary tests, and WASM checks. |
+| `Documentation` | branch-required | `.github/workflows/ci.yml` | Required docs job covering MCP reference check and rustdoc. |
+| `Security Audit` | branch-required | `.github/workflows/ci.yml` | Live branch-protection API currently lists this context as required; do not treat older advisory prose as current truth. |
+| `Cargo Deny` | branch-required | `.github/workflows/ci.yml` | Live branch-protection API currently lists this context as required; do not treat older advisory prose as current truth. |
+| `Harness Contract` | not in `required_status_checks.contexts` | `.github/workflows/harness-contract.yml` | Workflow exists, but the live API receipt does not list it as a required context; do not infer required status from workflow text. |
+| `Harness Doctor Advisory` | advisory workflow job | `.github/workflows/harness-contract.yml` | Non-blocking `doctor.sh`; stays advisory and must not be inferred as required. |
 
 ## Sprint encerrada
 

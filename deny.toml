@@ -10,10 +10,10 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 unmaintained = "workspace"
 ignore = [
-    # 2026-06-12: rustls-webpki 0.103.x is patched in Cargo.lock. These
-    # advisory IDs still match older rustls 0.21/0.22 stacks pulled by current
-    # AWS SDK and libsql/hyper-rustls transitives; cargo update cannot lift
-    # them until those upstreams move to rustls-webpki 0.103+.
+    # Governed in docs/security/advisory-exceptions.toml and checked by
+    # scripts/check-security-exceptions.py. These are upstream-blocked
+    # rustls-webpki advisories in AWS SDK/libsql TLS stacks; do not add
+    # feature-gated PDF warnings here.
     "RUSTSEC-2026-0049",
     "RUSTSEC-2026-0098",
     "RUSTSEC-2026-0099",

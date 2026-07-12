@@ -29,6 +29,13 @@ jobs:
     name: Release Preflight
     runs-on: ubuntu-latest
     steps:
+      - name: Validate release version
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid release version"
+            exit 1
+          fi
+
       - name: Check release immutability
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -81,6 +88,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_VERSION }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -99,13 +108,17 @@ jobs:
           echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
 
       - name: Build release binaries
-        run: cargo build --release --target ${{ matrix.target }} --bin engram-server --bin engram-cli
+        run: cargo build --release --target ${{ matrix.target }} --features pdf --bin engram-server --bin engram-cli --bin engram-pdf-worker
 
       - name: Package (Unix)
         run: |
           ARCHIVE="engram-${RELEASE_VERSION}-${{ matrix.target }}.tar.gz"
           cd target/${{ matrix.target }}/release
-          tar -czf "../../../${ARCHIVE}" engram-server engram-cli
+          if [[ "${{ matrix.target }}" == *-linux-* ]]; then
+            tar -czf "../../../${ARCHIVE}" engram-server engram-cli engram-pdf-worker
+          else
+            tar -czf "../../../${ARCHIVE}" engram-server engram-cli
+          fi
           cd ../../..
           shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256"
 
@@ -123,6 +136,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_VERSION }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v7
@@ -176,6 +191,13 @@ jobs:
         with:
           path: artifacts
 
+      - name: Checkout Engram release source
+        if: steps.homebrew-token.outputs.available == 'true'
+        uses: actions/checkout@v6
+        with:
+          path: engram-source
+          ref: ${{ env.RELEASE_VERSION }}
+
       - name: Checkout homebrew-engram
         if: steps.homebrew-token.outputs.available == 'true'
         uses: actions/checkout@v6
@@ -187,7 +209,7 @@ jobs:
       - name: Update formula
         if: steps.homebrew-token.outputs.available == 'true'
         run: |
-          REF="${{ env.RELEASE_VERSION }}"
+          REF="$RELEASE_VERSION"
           VERSION="${REF#v}"
 
           # Read SHA256 hashes
@@ -211,13 +233,19 @@ jobs:
           # Linux x86_64
           sed -i "/x86_64-unknown-linux-gnu/{ n; s/sha256 \".*\"/sha256 \"${X86_64_LINUX}\"/ }" Formula/engram.rb
 
+          python3 ../engram-source/.github/scripts/ensure-pdf-worker-homebrew.py Formula/engram.rb
+          if grep -F 'bin.install "engram-pdf-worker"' Formula/engram.rb >/dev/null; then
+            echo "macOS formula must not install unsupported PDF worker" >&2
+            exit 1
+          fi
+
           echo "Updated formula:"
           cat Formula/engram.rb
 
       - name: Commit and push
         if: steps.homebrew-token.outputs.available == 'true'
         run: |
-          REF="${{ env.RELEASE_VERSION }}"
+          REF="$RELEASE_VERSION"
           cd homebrew-engram
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

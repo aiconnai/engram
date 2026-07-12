@@ -60,6 +60,8 @@ cargo check -p engram-wasm --target wasm32-unknown-unknown
 
 echo "==> [5/5] Documentation + generated MCP reference"
 ./scripts/generate-mcp-reference.sh --check
+python3 "$SCRIPT_DIR/test_check_pdf_worker_packaging.py"
+python3 "$SCRIPT_DIR/check-pdf-worker-packaging.py"
 RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features "$CI_REQUIRED_FEATURES" --no-deps --document-private-items
 
 echo

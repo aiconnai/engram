@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import tempfile
 import unittest
 import sys
@@ -12,8 +13,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import generate_mcp_reference as generator
 
+GENERATOR_PATH = Path(__file__).resolve().with_name("generate_mcp_reference.py")
+
 
 class McpReferenceGeneratorTests(unittest.TestCase):
+    def test_generator_source_parses_as_python39(self) -> None:
+        source = GENERATOR_PATH.read_text()
+
+        ast.parse(source, filename=str(GENERATOR_PATH), feature_version=(3, 9))
+
     def test_parse_tools_handles_field_order_and_annotations(self) -> None:
         source = """
 pub const TOOL_DEFINITIONS: &[ToolDef] = &[

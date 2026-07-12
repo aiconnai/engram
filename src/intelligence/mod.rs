@@ -41,6 +41,8 @@ pub mod lifecycle;
 pub mod memory_policy;
 pub mod memory_update;
 pub mod natural_language;
+#[cfg(feature = "pdf")]
+pub mod pdf_worker;
 pub mod proactive;
 pub mod project_context;
 pub mod quality;

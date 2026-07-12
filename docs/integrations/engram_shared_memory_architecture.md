@@ -240,6 +240,7 @@ Recommended runtime environment file:
 ENGRAM_DB_PATH=/var/lib/engram/hermes-memory.db
 ENGRAM_TRANSPORT=http
 ENGRAM_HTTP_PORT=3100
+ENGRAM_HTTP_BIND_ADDRESS=127.0.0.1
 ENGRAM_HTTP_API_KEY=replace_with_secure_token
 ENGRAM_EMBEDDING_MODEL=tfidf
 ENGRAM_HTTP_RATE_LIMIT_RPS=120
@@ -264,6 +265,7 @@ set +a
 ./target/release/engram-server \
   --transport http \
   --http-port "$ENGRAM_HTTP_PORT" \
+  --http-bind-address "$ENGRAM_HTTP_BIND_ADDRESS" \
   --http-api-key "$ENGRAM_HTTP_API_KEY" \
   --db-path "$ENGRAM_DB_PATH" \
   --embedding-model "$ENGRAM_EMBEDDING_MODEL"
@@ -285,6 +287,7 @@ WorkingDirectory=/opt/engram
 ExecStart=/opt/engram/target/release/engram-server \
   --transport http \
   --http-port ${ENGRAM_HTTP_PORT} \
+  --http-bind-address ${ENGRAM_HTTP_BIND_ADDRESS} \
   --http-api-key ${ENGRAM_HTTP_API_KEY} \
   --db-path ${ENGRAM_DB_PATH} \
   --embedding-model ${ENGRAM_EMBEDDING_MODEL}
@@ -299,7 +302,7 @@ WantedBy=multi-user.target
 
 Important:
 
-Current Engram HTTP transport binds `0.0.0.0:{port}`. Until Engram grows a `--http-bind` flag, protect the port with firewall, Tailscale ACLs, SSH tunneling, or a private reverse proxy. Do not expose `3100` publicly.
+Current Engram HTTP transport binds `127.0.0.1:{port}` by default. Keep that default for SSH tunnels and same-host reverse proxies. If an operator explicitly sets `ENGRAM_HTTP_BIND_ADDRESS=0.0.0.0` or another non-loopback address, the deployment must also configure `ENGRAM_HTTP_API_KEY` and place the listener behind firewall, Tailscale ACLs, SSH tunneling, or a private authenticated reverse proxy. Do not expose `3100` publicly without those controls.
 
 ## Phase 2: Secure Network Access
 

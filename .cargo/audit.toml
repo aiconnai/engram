@@ -1,20 +1,13 @@
 [advisories]
-# Pre-existing advisories in transitive dependencies. Keep this list narrow:
-# direct fixes must be applied in Cargo.lock first, and only upstream-blocked
-# transitives stay ignored here.
+# Governed in docs/security/advisory-exceptions.toml and checked by
+# scripts/check-security-exceptions.py. Keep this list narrow and do not add
+# feature-gated PDF warnings here.
 ignore = [
-    # rustls-webpki — multiple name-constraint advisories. Comes from old
-    # rustls pulled by the current AWS SDK and libsql/hyper-rustls stacks.
     "RUSTSEC-2026-0049",
     "RUSTSEC-2026-0098",
     "RUSTSEC-2026-0099",
     "RUSTSEC-2026-0104",
-
-    # quinn-proto — comes via libsql replication; not on the request path.
-    "RUSTSEC-2026-0037",
-
-    # Unmaintained crates — not vulnerabilities, just warnings.
-    "RUSTSEC-2025-0141",  # bincode 1.x
-    "RUSTSEC-2024-0436",  # paste
-    "RUSTSEC-2025-0134",  # rustls-pemfile
+    "RUSTSEC-2025-0141",
+    "RUSTSEC-2024-0436",
+    "RUSTSEC-2025-0134",
 ]

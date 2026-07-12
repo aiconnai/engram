@@ -483,6 +483,8 @@ jobs:
         with:
           shared-key: required-linux
       - run: ./scripts/generate-mcp-reference.sh --check
+      - run: python3 scripts/test_check_pdf_worker_packaging.py
+      - run: python3 scripts/check-pdf-worker-packaging.py
       - run: |
           source scripts/ci-required-features.env
           cargo doc --no-default-features --features "$CI_REQUIRED_FEATURES" --no-deps --document-private-items
@@ -514,7 +516,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build release
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} --features pdf --bin engram-server --bin engram-cli --bin engram-pdf-worker
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7.0.1
@@ -523,3 +525,10 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/engram-server
             target/${{ matrix.target }}/release/engram-cli
+      - name: Upload PDF worker artifact
+        if: contains(matrix.target, '-linux-')
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: engram-pdf-worker-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/engram-pdf-worker

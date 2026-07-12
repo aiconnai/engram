@@ -16,13 +16,21 @@ cd engram
 cargo install --path .
 ```
 
-This installs two binaries: `engram-server` and `engram-cli`.
+This installs `engram-server` and `engram-cli`. PDF ingestion is optional and
+currently supported only on Linux; to enable it there, install the `pdf`
+feature, which also installs the required isolated worker:
+
+```bash
+cargo install --path . --features pdf
+```
 
 ### Pre-built Binaries
 
 Download platform archives from [GitHub Releases](https://github.com/aiconnai/engram/releases).
 Release artifacts are tarballs named `engram-vX.Y.Z-<target>.tar.gz` and
-contain both `engram-server` and `engram-cli`.
+contain `engram-server` and `engram-cli`. Linux archives also contain
+`engram-pdf-worker`; keep all three in the same directory to use PDF ingestion.
+The server deliberately fails PDF ingestion closed if the worker is absent.
 
 ```bash
 # Replace VERSION and TARGET with the release tag and platform target you need.
@@ -31,7 +39,9 @@ TARGET=x86_64-unknown-linux-gnu
 curl -L "https://github.com/aiconnai/engram/releases/download/${VERSION}/engram-${VERSION}-${TARGET}.tar.gz" -o engram.tar.gz
 tar -xzf engram.tar.gz
 chmod +x engram-server engram-cli
+chmod +x engram-pdf-worker
 sudo mv engram-server engram-cli /usr/local/bin/
+sudo mv engram-pdf-worker /usr/local/bin/
 ```
 
 ### Homebrew (macOS)
@@ -40,10 +50,23 @@ sudo mv engram-server engram-cli /usr/local/bin/
 brew install aiconnai/engram/engram
 ```
 
+GitHub PDF support is available on Linux. PDF ingestion fails closed on macOS
+because macOS does not provide the hard process memory boundary required by
+Engram's parser threat model. The Linux worker is
+a project-owned subprocess with bounded input, output, memory, CPU, file
+descriptors, and wall time. Platforms without enforceable worker resource
+limits reject PDF extraction rather than parsing in the server process.
+
+Library embedders that enable the Cargo `pdf` feature must deploy the matching
+`engram-pdf-worker` beside their executable. The library does not fall back to
+in-process PDF parsing when the worker is missing or unsupported.
+
 ### Local Docker Build
 
 A Dockerfile is included for local builds. A public GHCR image is not verified
-as part of the current release channel.
+as part of the current release channel. This local image does not advertise or
+package the optional PDF worker; build and deploy the worker separately if you
+extend that image with the Cargo `pdf` feature.
 
 ```bash
 docker build -t engram:local .

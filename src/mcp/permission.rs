@@ -6,6 +6,7 @@
 use serde_json::{json, Value};
 
 use super::tools::TOOL_DEFINITIONS;
+use crate::auth::{Permission, PermissionSet, ResourceType, TransportPrincipal};
 
 const MODE_ENV: &str = "ENGRAM_PERMISSION_MODE";
 
@@ -127,6 +128,104 @@ fn permission_denied(tool_name: &str, current: PermissionMode, required: Permiss
     })
 }
 
+pub fn permission_denial_for_principal(
+    tool_name: &str,
+    principal: &TransportPrincipal,
+    requested_workspace: Option<&str>,
+) -> Option<Value> {
+    let required = required_mode(tool_name)?;
+    let current = principal_permission_mode(&principal.auth_context().permissions);
+    if !principal.allows_workspace(requested_workspace)
+        || !principal_allows_mode(principal, required)
+    {
+        return Some(permission_denied(tool_name, current, required));
+    }
+    None
+}
+
+pub(crate) fn requested_workspaces(params: &Value) -> Vec<&str> {
+    let mut workspaces = Vec::new();
+    collect_requested_workspaces(params, &mut workspaces);
+    workspaces
+}
+
+fn collect_requested_workspaces<'a>(value: &'a Value, workspaces: &mut Vec<&'a str>) {
+    match value {
+        Value::Object(object) => {
+            for (key, child) in object {
+                if matches!(key.as_str(), "workspace" | "workspaces") {
+                    collect_workspace_values(child, workspaces);
+                } else {
+                    collect_requested_workspaces(child, workspaces);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_requested_workspaces(item, workspaces);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+}
+
+fn collect_workspace_values<'a>(value: &'a Value, workspaces: &mut Vec<&'a str>) {
+    match value {
+        Value::String(workspace) => workspaces.push(workspace),
+        Value::Array(items) => {
+            for item in items {
+                collect_workspace_values(item, workspaces);
+            }
+        }
+        Value::Object(object) => {
+            for child in object.values() {
+                collect_workspace_values(child, workspaces);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+}
+
+pub(crate) fn requests_all_workspaces(params: &Value) -> bool {
+    match params {
+        Value::Object(object) => object.iter().any(|(key, value)| {
+            (key == "global" && value.as_bool() == Some(true)) || requests_all_workspaces(value)
+        }),
+        Value::Array(items) => items.iter().any(requests_all_workspaces),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => false,
+    }
+}
+
+pub(crate) fn allows_all_workspaces(principal: &TransportPrincipal) -> bool {
+    !matches!(principal, TransportPrincipal::AnonymousLoopback(_))
+        && principal.allows_workspace(None)
+}
+
+fn principal_allows_mode(principal: &TransportPrincipal, required: PermissionMode) -> bool {
+    let permissions = &principal.auth_context().permissions;
+    match required {
+        PermissionMode::ReadOnly => {
+            permissions.has_permission(Permission::Read, ResourceType::Memory)
+        }
+        PermissionMode::ScopedWrite => {
+            permissions.has_permission(Permission::Write, ResourceType::Memory)
+        }
+        PermissionMode::Maintenance | PermissionMode::Admin => {
+            permissions.has_permission(Permission::Admin, ResourceType::System)
+        }
+    }
+}
+
+fn principal_permission_mode(permissions: &PermissionSet) -> PermissionMode {
+    if permissions.has_permission(Permission::Admin, ResourceType::System) {
+        PermissionMode::Admin
+    } else if permissions.has_permission(Permission::Write, ResourceType::Memory) {
+        PermissionMode::ScopedWrite
+    } else {
+        PermissionMode::ReadOnly
+    }
+}
+
 fn invalid_permission_mode(tool_name: &str, raw: &str) -> Value {
     json!({
         "error": {
@@ -143,6 +242,20 @@ fn invalid_permission_mode(tool_name: &str, raw: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::{TokenClaims, UserId};
+    use chrono::Utc;
+
+    fn principal(namespace: Option<&str>, permissions: PermissionSet) -> TransportPrincipal {
+        TransportPrincipal::from_token_claims(TokenClaims {
+            user_id: UserId::from_string("user-1"),
+            key_id: "key-1".to_string(),
+            permissions,
+            namespace: namespace.map(str::to_string),
+            issued_at: Utc::now(),
+            expires_at: None,
+        })
+        .unwrap()
+    }
 
     #[test]
     fn classifies_representative_tools() {
@@ -180,5 +293,60 @@ mod tests {
             permission_denial_for_mode("lifecycle_run", PermissionMode::ScopedWrite).unwrap();
         assert_eq!(denial["error"]["code"], "permission_denied");
         assert_eq!(denial["error"]["required_mode"], "maintenance");
+    }
+
+    #[test]
+    fn stored_scope_allows_read_tool() {
+        let principal = principal(Some("alpha"), PermissionSet::read_only());
+
+        let denial = permission_denial_for_principal("memory_get", &principal, Some("alpha"));
+
+        assert!(denial.is_none());
+    }
+
+    #[test]
+    fn stored_scope_denies_write_tool() {
+        let principal = principal(Some("alpha"), PermissionSet::read_only());
+
+        let denial =
+            permission_denial_for_principal("memory_create", &principal, Some("alpha")).unwrap();
+
+        assert_eq!(denial["error"]["code"], "permission_denied");
+        assert_eq!(denial["error"]["required_mode"], "scoped_write");
+    }
+
+    #[test]
+    fn stored_scope_denies_workspace_mismatch() {
+        let principal = principal(Some("alpha"), PermissionSet::standard_user());
+
+        let denial =
+            permission_denial_for_principal("memory_create", &principal, Some("beta")).unwrap();
+
+        assert_eq!(denial["error"]["code"], "permission_denied");
+        assert_eq!(denial["error"]["current_mode"], "scoped_write");
+    }
+
+    #[test]
+    fn anonymous_loopback_allows_only_read_default_workspace() {
+        let principal = TransportPrincipal::anonymous_loopback();
+
+        let allowed = permission_denial_for_principal("memory_get", &principal, Some("default"));
+        let denied = permission_denial_for_principal("memory_create", &principal, Some("default"));
+        let private = permission_denial_for_principal("memory_get", &principal, Some("private"));
+
+        assert!(allowed.is_none());
+        assert!(denied.is_some());
+        assert!(private.is_some());
+    }
+
+    #[test]
+    fn principal_denial_helper_allows_read_and_denies_write() {
+        let principal = principal(Some("alpha"), PermissionSet::read_only());
+
+        let allowed = permission_denial_for_principal("memory_get", &principal, Some("alpha"));
+        let denied = permission_denial_for_principal("memory_create", &principal, Some("alpha"));
+
+        assert!(allowed.is_none());
+        assert!(denied.is_some());
     }
 }
