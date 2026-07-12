@@ -6,10 +6,10 @@
 //! interval so the graph stays consistent.
 //!
 //! This module is a thin facade over responsibility submodules:
-//! - [`types`] — DDL, edge/diff types, row mapping
-//! - [`edges`] — edge mutations (add / invalidate)
-//! - [`queries`] — point-in-time queries (snapshot, timeline)
-//! - [`analysis`] — contradiction detection and graph diffing
+//! - `types` — DDL, edge/diff types, row mapping
+//! - `edges` — edge mutations (add / invalidate)
+//! - `queries` — point-in-time queries (snapshot, timeline)
+//! - `analysis` — contradiction detection and graph diffing
 
 mod analysis;
 mod edges;
