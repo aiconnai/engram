@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use axum::{
-    extract::State,
+    extract::{ConnectInfo, State},
     http::{HeaderMap, StatusCode, Uri},
     response::{IntoResponse, Response},
     Json,
@@ -17,6 +17,7 @@ use super::{authenticate_transport_principal, AppState, MICROSECONDS_PER_MILLISE
 
 pub(super) async fn handle_mcp(
     State(state): State<AppState>,
+    connect_info: Option<ConnectInfo<std::net::SocketAddr>>,
     headers: HeaderMap,
     uri: Uri,
     Json(request): Json<McpRequest>,
@@ -89,7 +90,9 @@ pub(super) async fn handle_mcp(
                         })
                     },
                 )
-            } else if !is_rate_limit_allowed(&state, &headers).await {
+            } else if !is_rate_limit_allowed(&state, &headers, connect_info.map(|info| info.0))
+                .await
+            {
                 is_rate_limited = true;
                 decision = "rate_limited";
                 include_retry_after = true;

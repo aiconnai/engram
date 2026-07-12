@@ -191,6 +191,168 @@ fn public_http_with_key_authenticates_mcp_and_sse() {
     );
 }
 
+#[test]
+fn trusted_proxy_spoofed_forwarding_is_ignored_by_rate_key() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn(&[
+        "--transport",
+        "http",
+        "--http-port",
+        &port.to_string(),
+        "--http-api-key",
+        "secret-key",
+        "--http-rate-limit-rps",
+        "1",
+        "--http-rate-limit-burst",
+        "1",
+    ])
+    .expect("spawn server");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("readiness");
+
+    assert_eq!(
+        http_post_json_with_headers(
+            port,
+            "/mcp",
+            initialize_request(),
+            Some("secret-key"),
+            &[("X-Forwarded-For", "198.51.100.1")]
+        )
+        .unwrap()
+        .status,
+        200
+    );
+    assert_eq!(
+        http_post_json_with_headers(
+            port,
+            "/mcp",
+            initialize_request(),
+            Some("secret-key"),
+            &[("X-Forwarded-For", "198.51.100.2")]
+        )
+        .unwrap()
+        .status,
+        429
+    );
+}
+
+#[test]
+fn trusted_proxy_cidr_honors_and_normalizes_forwarded_chain() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn_with_env(
+        &[
+            "--transport",
+            "http",
+            "--http-port",
+            &port.to_string(),
+            "--http-api-key",
+            "secret-key",
+            "--http-rate-limit-rps",
+            "1",
+            "--http-rate-limit-burst",
+            "1",
+        ],
+        &[("ENGRAM_HTTP_TRUSTED_PROXIES", "127.0.0.0/8,10.0.0.0/8")],
+    )
+    .expect("spawn server");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("readiness");
+
+    assert_eq!(
+        http_post_json_with_headers(
+            port,
+            "/mcp",
+            initialize_request(),
+            Some("secret-key"),
+            &[("X-Forwarded-For", "198.51.100.1, 10.1.2.3")]
+        )
+        .unwrap()
+        .status,
+        200
+    );
+    assert_eq!(
+        http_post_json_with_headers(
+            port,
+            "/mcp",
+            initialize_request(),
+            Some("secret-key"),
+            &[("X-Forwarded-For", "198.51.100.2")]
+        )
+        .unwrap()
+        .status,
+        200
+    );
+    assert_eq!(
+        http_post_json_with_headers(
+            port,
+            "/mcp",
+            initialize_request(),
+            Some("secret-key"),
+            &[("X-Forwarded-For", "198.51.100.1")]
+        )
+        .unwrap()
+        .status,
+        429
+    );
+}
+
+#[test]
+fn trusted_proxy_malformed_or_overlong_chain_falls_back_to_peer() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn_with_env(
+        &[
+            "--transport",
+            "http",
+            "--http-port",
+            &port.to_string(),
+            "--http-api-key",
+            "secret-key",
+            "--http-rate-limit-rps",
+            "1",
+            "--http-rate-limit-burst",
+            "1",
+        ],
+        &[("ENGRAM_HTTP_TRUSTED_PROXIES", "127.0.0.0/8")],
+    )
+    .expect("spawn server");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("readiness");
+
+    assert_eq!(
+        http_post_json_with_headers(
+            port,
+            "/mcp",
+            initialize_request(),
+            Some("secret-key"),
+            &[("X-Forwarded-For", "not-an-ip")]
+        )
+        .unwrap()
+        .status,
+        200
+    );
+    let overlong = std::iter::repeat_n("198.51.100.1", 33)
+        .collect::<Vec<_>>()
+        .join(",");
+    assert_eq!(
+        http_post_json_with_headers(
+            port,
+            "/mcp",
+            initialize_request(),
+            Some("secret-key"),
+            &[("X-Forwarded-For", &overlong)]
+        )
+        .unwrap()
+        .status,
+        429
+    );
+}
+
 struct ServerProcess {
     child: Child,
     _temp_dir: TempDir,
@@ -200,9 +362,14 @@ struct ServerProcess {
 
 impl ServerProcess {
     fn spawn(args: &[&str]) -> std::io::Result<Self> {
+        Self::spawn_with_env(args, &[])
+    }
+
+    fn spawn_with_env(args: &[&str], env: &[(&str, &str)]) -> std::io::Result<Self> {
         let temp_dir = tempfile::tempdir()?;
         let mut command = base_command_in_tempdir(&temp_dir);
         command.args(args);
+        command.envs(env.iter().copied());
         command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -287,12 +454,26 @@ fn http_post_json(
     body: serde_json::Value,
     bearer: Option<&str>,
 ) -> Result<HttpResponse, String> {
+    http_post_json_with_headers(port, path, body, bearer, &[])
+}
+
+fn http_post_json_with_headers(
+    port: u16,
+    path: &str,
+    body: serde_json::Value,
+    bearer: Option<&str>,
+    headers: &[(&str, &str)],
+) -> Result<HttpResponse, String> {
     let body = body.to_string();
     let auth = bearer
         .map(|token| format!("Authorization: Bearer {token}\r\n"))
         .unwrap_or_default();
+    let extra_headers = headers
+        .iter()
+        .map(|(name, value)| format!("{name}: {value}\r\n"))
+        .collect::<String>();
     let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{auth}Connection: close\r\n\r\n{body}",
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{auth}{extra_headers}Connection: close\r\n\r\n{body}",
         body.len()
     );
     http_request(port, &request)
