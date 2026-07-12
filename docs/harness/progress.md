@@ -7,8 +7,8 @@
 | Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
-| Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T16:16:31Z)` |
-| Last commit | `81be152c713230c082901899e6880579fcedabb3` |
+| Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
+| Last commit | `a00b07e` |
 | Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -62,6 +62,15 @@
   Wave 3 does not claim or silently absorb that work.
 - No tag, release, deployment, registry publication, or channel approval is in
   scope for this wave.
+
+### Wave 3 integration result
+
+- Todos 17–21 are integrated on `feat/engram-10-of-10-wave3`.
+- HTTP trusted-proxy identity is explicit and bounded; the aggregate security
+  gate, canonical real-binary journey, frozen retrieval corpus, and example
+  smoke suite are executable and fail closed on their negative fixtures.
+- `make ci` and the full harness sensors passed on the integrated branch with
+  no exclusions.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud

@@ -244,3 +244,12 @@ evidence file under `.omo/evidence/`.
   integration and independent review.
 - Kept atomic descriptor-bound SQLite opening explicitly deferred and kept all
   publication channels outside this wave.
+
+## 2026-07-12 — Wave 3 integration
+
+- Integrated Todos 17–21 after isolated focused verification.
+- Added bounded trusted-proxy identity, the required aggregate security gate,
+  canonical stdio/HTTP real-binary journey, frozen retrieval-quality corpus,
+  and deterministic public-example smoke coverage.
+- `make ci` and full sensors passed without exclusions on the integrated
+  branch. Independent post-review was requested against `origin/main..HEAD`.
