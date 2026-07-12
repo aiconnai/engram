@@ -1,5 +1,5 @@
 use super::*;
-use rand::RngCore;
+use rand::Rng;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use tracing_subscriber::fmt::MakeWriter;
@@ -44,9 +44,7 @@ impl CapturedLogs {
 }
 
 fn random_salt() -> [u8; 16] {
-    let mut salt = [0u8; 16];
-    rand::rngs::OsRng.fill_bytes(&mut salt);
-    salt
+    rand::rngs::OsRng.gen()
 }
 
 #[test]
@@ -62,8 +60,10 @@ fn test_derive_key_deterministic() {
 fn test_derive_key_different_salt() {
     let passphrase = "hunter2";
     let salt1 = random_salt();
-    let mut salt2 = salt1;
-    salt2[0] ^= 1;
+    let mut salt2 = random_salt();
+    while salt2 == salt1 {
+        salt2 = random_salt();
+    }
     let key1 = derive_key_from_passphrase(passphrase, &salt1).unwrap();
     let key2 = derive_key_from_passphrase(passphrase, &salt2).unwrap();
     assert_ne!(key1, key2, "different salts must yield different keys");
