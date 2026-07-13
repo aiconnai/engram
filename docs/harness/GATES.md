@@ -85,6 +85,34 @@ Saídas JSON opt-in para scripts do harness devem seguir
 vocabulário de status estável, exit code preservado e nenhum segredo ou dump de
 ambiente. O output humano continua sendo o default.
 
+### Required aggregate security gate
+
+The PR-visible `Security Gate` job in `.github/workflows/ci.yml` aggregates
+Cargo Audit, Cargo Deny, governed exception-policy validation, CodeQL,
+Semgrep, Gitleaks, and AgentShield. Every constituent is release-blocking on a
+pull request: a failed or unexpectedly skipped constituent makes the aggregate
+red. Event-policy skips are neutral only when explicitly listed in
+`tests/fixtures/security_gate_matrix.json`; the current pull-request policy has
+no such skip.
+
+Branch protection itself is not changed by repository automation. Instead, the
+already-required `Test (ubuntu-latest)` job depends on `security-gate`, so a
+security failure blocks that required context transitively. Verify the live,
+read-only chain with:
+
+```bash
+gh api repos/aiconnai/engram/branches/main/protection/required_status_checks \
+  > .omo/evidence/task-18-required-contexts.json
+python3 scripts/check-security-gate.py \
+  --matrix tests/fixtures/security_gate_matrix.json \
+  --required-contexts .omo/evidence/task-18-required-contexts.json \
+  --workflow .github/workflows/ci.yml
+```
+
+The checker also exposes `--self-test-failure` and `--self-test-unrequired` to
+prove that a constituent failure or removal of the required-context dependency
+fails closed.
+
 ### PR Title Policy
 
 Wrapper: `bash docs/harness/bin/pr-title-policy.sh`

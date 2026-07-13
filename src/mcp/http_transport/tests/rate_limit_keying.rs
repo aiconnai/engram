@@ -40,7 +40,7 @@ async fn test_post_mcp_rate_limit_uses_custom_key_header() {
 }
 
 #[tokio::test]
-async fn test_post_mcp_rate_limit_uses_x_real_ip_fallback() {
+async fn test_post_mcp_rate_limit_ignores_unverified_x_real_ip() {
     let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, None);
 
     let first_ip = app
@@ -73,11 +73,11 @@ async fn test_post_mcp_rate_limit_uses_x_real_ip_fallback() {
         ))
         .await
         .expect("request should be handled");
-    assert_eq!(second_ip.status(), StatusCode::OK);
+    assert_eq!(second_ip.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
 #[tokio::test]
-async fn test_post_mcp_rate_limit_prefers_x_forwarded_for_over_x_real_ip() {
+async fn test_post_mcp_rate_limit_ignores_unverified_forwarding_headers() {
     let app = test_app_with_rate_limits(Some("secret-key"), 100, 1, None);
 
     let xff_first = app
@@ -122,7 +122,10 @@ async fn test_post_mcp_rate_limit_prefers_x_forwarded_for_over_x_real_ip() {
         ))
         .await
         .expect("request should be handled");
-    assert_eq!(different_xff_same_real_ip.status(), StatusCode::OK);
+    assert_eq!(
+        different_xff_same_real_ip.status(),
+        StatusCode::TOO_MANY_REQUESTS
+    );
 }
 
 #[tokio::test]
@@ -168,5 +171,5 @@ async fn test_post_mcp_rate_limit_empty_key_disables_header_keying() {
         ))
         .await
         .expect("request should be handled");
-    assert_eq!(tenant_b.status(), StatusCode::OK);
+    assert_eq!(tenant_b.status(), StatusCode::TOO_MANY_REQUESTS);
 }

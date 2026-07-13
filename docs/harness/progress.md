@@ -7,9 +7,9 @@
 | Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
-| Last sensors | `2026-07-12 — status=pass (mode=quick; timestamp 2026-07-12T07:40:59Z)` |
-| Last commit | `2272d6c8796945068d019a8116ae6bc569f361cf` |
-| Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
+| Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
+| Last commit | `962428a` |
+| Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
@@ -51,6 +51,39 @@
   the second salt, avoiding static initialization patterns flagged by CodeQL.
 - Exact CI Clippy, clean-tree Gitleaks, focused storage/cloud/WS/listener tests,
   formatting, doctor, diff-check, and independent review passed locally.
+
+## Engram 10/10 Wave 3 — execution started
+
+- PR #189 merged as `81be152c713230c082901899e6880579fcedabb3`; all
+  required checks were green before merge.
+- Todos 17–21 are the next dependency-ready lanes and are being executed on
+  isolated branches/worktrees for later integration and independent review.
+- Atomic descriptor-bound SQLite opening remains a separate deferred follow-up;
+  Wave 3 does not claim or silently absorb that work.
+- No tag, release, deployment, registry publication, or channel approval is in
+  scope for this wave.
+
+### Wave 3 integration result
+
+- Todos 17–21 are integrated on `feat/engram-10-of-10-wave3`.
+- HTTP trusted-proxy identity is explicit and bounded; the aggregate security
+  gate, canonical real-binary journey, frozen retrieval corpus, and example
+  smoke suite are executable and fail closed on their negative fixtures.
+- `make ci` and the full harness sensors passed on the integrated branch with
+  no exclusions.
+- Independent review found that the first canonical journey used separate
+  transport databases. Commit `4a70aa0` corrected the harness so stdio and
+  authenticated HTTP share one caller-owned isolated database; HTTP asserts
+  the record previously updated through stdio, and cleanup occurs only after
+  both transport lifecycles finish.
+- PR #191 CI exposed a removed Semgrep image tag in both the standalone and
+  aggregate security jobs. Both workflows now use the verified official
+  `semgrep/semgrep:1.169.0` image; scanner policy and failure behavior are
+  unchanged.
+- With the scanner restored, Semgrep identified 36 mutable action references
+  in four existing workflows. Those references are now pinned to resolved
+  commit SHAs while retaining version comments; the same `p/ci --error` scan
+  reports zero findings without ignores or exclusions.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud

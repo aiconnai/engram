@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "required_tools": [
+    "memory_create",
+    "memory_get",
+    "memory_list",
+    "memory_search",
+    "memory_update",
+    "memory_export",
+    "memory_export_markdown"
+  ],
+  "scenarios": [
+    "initialize-discover",
+    "create-get-list-search-update",
+    "export-read-back",
+    "workspace-isolation",
+    "wrong-bearer",
+    "clean-shutdown"
+  ],
+  "transports": ["stdio", "authenticated-http"]
+}

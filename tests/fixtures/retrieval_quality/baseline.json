@@ -1,0 +1,40 @@
+{
+  "schema_version": "engram.quality-baseline.v1",
+  "source_revision": "81be152c713230c082901899e6880579fcedabb3",
+  "generated_at": "2026-07-12T00:00:00Z",
+  "deterministic_seed": 20260712,
+  "corpus": {
+    "name": "engram-synthetic-representative",
+    "version": "1.0.0",
+    "fixture_path": "tests/fixtures/retrieval_quality/corpus.json",
+    "schema": {
+      "memory_fields": [
+        "key",
+        "workspace",
+        "content"
+      ],
+      "query_fields": [
+        "key",
+        "query",
+        "workspace",
+        "fuzzy",
+        "forbidden_workspaces"
+      ],
+      "relevance_fields": [
+        "memory_key",
+        "grade"
+      ]
+    },
+    "memory_count": 9,
+    "query_count": 6
+  },
+  "metrics": {
+    "recall@10": 1.0,
+    "mrr": 1.0,
+    "ndcg@10": 1.0
+  },
+  "benchmark_evidence": {
+    "criterion_baseline": "benches/results/benchmark_baseline.txt",
+    "dream_eval_runbook": "docs/DREAM_SNAPSHOT_EVALS.md"
+  }
+}

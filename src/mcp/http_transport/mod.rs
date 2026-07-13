@@ -21,6 +21,7 @@ mod events;
 mod mcp_handler;
 mod rate_limit;
 mod router;
+mod security_config;
 
 pub use router::serve_http;
 
@@ -173,6 +174,7 @@ struct AppState {
     realtime: Option<RealtimeManager>,
     rate_limiter: Option<Arc<tokio::sync::Mutex<RateLimiterState>>>,
     metrics: Arc<HttpTransportMetrics>,
+    security: security_config::HttpSecurityConfig,
 }
 
 // ---------------------------------------------------------------------------

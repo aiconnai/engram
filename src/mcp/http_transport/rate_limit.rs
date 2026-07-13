@@ -60,7 +60,11 @@ pub(super) fn rate_limited_response(
     )
 }
 
-pub(super) async fn is_rate_limit_allowed(state: &AppState, headers: &HeaderMap) -> bool {
+pub(super) async fn is_rate_limit_allowed(
+    state: &AppState,
+    headers: &HeaderMap,
+    peer: Option<std::net::SocketAddr>,
+) -> bool {
     let rate_limiter = match &state.rate_limiter {
         Some(rate_limiter) => rate_limiter,
         None => return true,
@@ -69,7 +73,7 @@ pub(super) async fn is_rate_limit_allowed(state: &AppState, headers: &HeaderMap)
     let now = Instant::now();
     let mut limiter = rate_limiter.lock().await;
     let config = limiter.config.clone();
-    let bucket_key = rate_limit_key(&config, headers);
+    let bucket_key = rate_limit_key(&config, headers, state.security.client_ip(peer, headers));
     let decision = apply_rate_limit(&mut limiter, bucket_key, now);
 
     state
@@ -147,7 +151,11 @@ pub(super) fn apply_rate_limit(
     }
 }
 
-fn rate_limit_key(config: &RateLimiterConfig, headers: &HeaderMap) -> String {
+fn rate_limit_key(
+    config: &RateLimiterConfig,
+    headers: &HeaderMap,
+    verified_ip: Option<std::net::IpAddr>,
+) -> String {
     if let Some(header_name) = config.key_header.as_deref() {
         if let Some(raw) = headers
             .get(header_name)
@@ -165,22 +173,7 @@ fn rate_limit_key(config: &RateLimiterConfig, headers: &HeaderMap) -> String {
         }
     }
 
-    if let Some(xff) = headers
-        .get("x-forwarded-for")
-        .and_then(|header| header.to_str().ok())
-        .and_then(|value| value.split(',').next())
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    {
-        return format!("ip:{xff}");
-    }
-
-    if let Some(ip) = headers
-        .get("x-real-ip")
-        .and_then(|header| header.to_str().ok())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
+    if let Some(ip) = verified_ip {
         return format!("ip:{ip}");
     }
 

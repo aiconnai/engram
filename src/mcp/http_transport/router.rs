@@ -20,6 +20,7 @@ use super::mcp_handler::handle_mcp;
 use super::rate_limit::{
     RateLimiterConfig, RateLimiterState, RATE_LIMIT_MAX_BUCKETS, RATE_LIMIT_STALE_AFTER_SECS,
 };
+use super::security_config::HttpSecurityConfig;
 use super::{normalize_api_key, AppState, HttpTransportMetrics};
 use crate::realtime::RealtimeManager;
 
@@ -150,6 +151,7 @@ pub(super) fn build_router(
         realtime,
         rate_limiter,
         metrics: Arc::new(HttpTransportMetrics::default()),
+        security: HttpSecurityConfig::from_env(),
     };
 
     let cors = build_cors_layer();
@@ -202,7 +204,11 @@ pub async fn serve_http(
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("HTTP transport listening on {}", addr);
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 

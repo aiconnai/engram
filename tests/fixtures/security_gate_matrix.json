@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "aggregate_job": "security-gate",
+  "required_dependency_job": "test",
+  "constituents": [
+    "audit",
+    "deny",
+    "security-exceptions",
+    "codeql-security",
+    "semgrep-security",
+    "gitleaks-security",
+    "agentshield-security"
+  ],
+  "allowed_skips_by_event": {
+    "pull_request": [],
+    "push": [],
+    "schedule": [],
+    "workflow_dispatch": [],
+    "not_applicable_fixture": ["semgrep-security"]
+  },
+  "scenarios": [
+    {
+      "name": "all-security-checks-pass",
+      "results": {
+        "audit": "success",
+        "deny": "success",
+        "security-exceptions": "success",
+        "codeql-security": "success",
+        "semgrep-security": "success",
+        "gitleaks-security": "success",
+        "agentshield-security": "success"
+      },
+      "allowed_skips": [],
+      "expected": "success"
+    },
+    {
+      "name": "legitimate-event-skip-is-neutral",
+      "event": "not_applicable_fixture",
+      "results": {
+        "audit": "success",
+        "deny": "success",
+        "security-exceptions": "success",
+        "codeql-security": "success",
+        "semgrep-security": "skipped",
+        "gitleaks-security": "success",
+        "agentshield-security": "success"
+      },
+      "allowed_skips": ["semgrep-security"],
+      "expected": "success"
+    }
+  ]
+}

@@ -62,8 +62,20 @@ Engram can enforce a token-bucket rate limit for MCP HTTP requests:
 - `--http-rate-limit-burst` / `ENGRAM_HTTP_RATE_LIMIT_BURST` (default: `240`)
 - `--http-rate-limit-key` / `ENGRAM_HTTP_RATE_LIMIT_KEY` (optional identity header)
 
-When the key is unset, bucket keys are derived from `x-forwarded-for`,
-then `x-real-ip`, then `ip:unknown`.
+When the key is unset, bucket keys use the TCP socket peer address. Forwarded
+identity is accepted only when that peer matches a CIDR in
+`ENGRAM_HTTP_TRUSTED_PROXIES` (comma-separated IPv4/IPv6 CIDRs). Engram then
+normalizes `X-Forwarded-For` from right to left across trusted hops. Malformed,
+empty, or overlong chains fall back to the socket peer. `X-Real-IP` is never
+trusted implicitly.
+
+Example for a loopback reverse proxy and a private proxy tier:
+
+```bash
+ENGRAM_HTTP_TRUSTED_PROXIES="127.0.0.0/8,10.0.0.0/8"
+```
+
+Leave the variable unset to disable trusted-proxy mode.
 
 When a key header is set, its value is used as the bucket identity key.
 
