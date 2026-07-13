@@ -76,6 +76,10 @@
   authenticated HTTP share one caller-owned isolated database; HTTP asserts
   the record previously updated through stdio, and cleanup occurs only after
   both transport lifecycles finish.
+- PR #191 CI exposed a removed Semgrep image tag in both the standalone and
+  aggregate security jobs. Both workflows now use the verified official
+  `semgrep/semgrep:1.169.0` image; scanner policy and failure behavior are
+  unchanged.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud

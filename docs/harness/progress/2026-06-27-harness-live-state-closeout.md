@@ -263,3 +263,10 @@ evidence file under `.omo/evidence/`.
   the record updated through stdio before final cleanup.
 - Focused canonical tests and Clippy passed; live-state metadata was refreshed
   before requesting the next immutable review.
+
+## 2026-07-13 — PR #191 Semgrep image remediation
+
+- Both Semgrep jobs failed before scanning because Docker Hub no longer served
+  `returntocorp/semgrep:1.129.0`.
+- Updated the standalone and aggregate jobs to the verified official immutable
+  tag `semgrep/semgrep:1.169.0`, without adding ignores or weakening `--error`.
