@@ -87,7 +87,7 @@
 
 ## Engram 10/10 Wave 4 — integrated implementation
 
-- **Integration HEAD**: `205cd67ee1473cc485082b2277961a40d3a1c4a7` on
+- **Integration HEAD**: `a840a20efb025b83c09c0b8b8b0517faaa55b353` on
   `feat/engram-10-of-10-wave4` (Todos 22–24, 26–27, 37–39 plus closeout
   docs and PDF packaging-contract alignment).
 - Todo 24 had two consecutive independent-review FAILs; both findings were
