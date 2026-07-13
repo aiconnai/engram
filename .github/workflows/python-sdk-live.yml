@@ -1,0 +1,46 @@
+name: Python SDK Live
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'sdks/python/**'
+      - 'scripts/test-python-sdk-live.sh'
+      - '.github/workflows/python-sdk-live.yml'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  push:
+    branches: [main]
+    paths:
+      - 'sdks/python/**'
+      - 'scripts/test-python-sdk-live.sh'
+      - '.github/workflows/python-sdk-live.yml'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-package-contract:
+    name: Python SDK installed-wheel live contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler python3-venv
+      - name: Run installed-wheel live contract
+        run: bash scripts/test-python-sdk-live.sh
+      - name: Run Python SDK unit suite
+        run: |
+          python3 -m venv .python-sdk-unit
+          .python-sdk-unit/bin/python -m pip install --quiet --upgrade pip
+          .python-sdk-unit/bin/python -m pip install --quiet -e 'sdks/python[dev]'
+          .python-sdk-unit/bin/python -m pytest sdks/python/tests -q

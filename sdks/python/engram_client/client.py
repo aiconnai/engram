@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from itertools import count
 from typing import Any
 
@@ -83,17 +84,75 @@ class EngramClient:
                 "arguments": params or {},
             },
         }
-        resp = await client.post("/v1/mcp", json=payload)
+        try:
+            resp = await client.post("/v1/mcp", json=payload)
+        except httpx.RequestError as exc:
+            raise EngramError(f"Engram request failed: {exc}") from exc
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as e:
             raise EngramError(
                 f"HTTP {e.response.status_code}: {e.response.text}"
             ) from e
-        result = resp.json()
+        try:
+            result = resp.json()
+        except ValueError as exc:
+            raise EngramError("Engram returned invalid JSON") from exc
+        if not isinstance(result, dict):
+            raise EngramError("Engram returned an invalid JSON-RPC response")
         if "error" in result:
-            raise EngramError(result["error"].get("message", "Unknown error"))
-        return result.get("result", {})
+            error = result["error"]
+            message = (
+                error.get("message", "Unknown error")
+                if isinstance(error, dict)
+                else error
+            )
+            raise EngramError(str(message))
+        return self._decode_tool_result(result.get("result", {}))
+
+    @staticmethod
+    def _decode_tool_result(result: Any) -> Any:
+        """Decode an MCP ``CallToolResult`` while preserving legacy responses."""
+        if not isinstance(result, dict) or not isinstance(result.get("content"), list):
+            return result
+
+        text = next(
+            (
+                block.get("text")
+                for block in result["content"]
+                if isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ),
+            None,
+        )
+        if text is None:
+            raise EngramError("Engram MCP response did not contain text content")
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError as exc:
+            if result.get("isError") is True:
+                raise EngramError(text) from exc
+            raise EngramError("Engram MCP response contained invalid JSON") from exc
+
+        if result.get("isError") is True:
+            error = (
+                decoded.get("error", decoded)
+                if isinstance(decoded, dict)
+                else decoded
+            )
+            raise EngramError(EngramClient._error_message(error))
+        if isinstance(decoded, dict) and "error" in decoded:
+            raise EngramError(EngramClient._error_message(decoded["error"]))
+        return decoded
+
+    @staticmethod
+    def _error_message(error: Any) -> str:
+        if isinstance(error, dict):
+            message = error.get("message")
+            if message is not None:
+                return str(message)
+        return str(error)
 
     # -- Memory CRUD --
 
@@ -172,7 +231,7 @@ class EngramClient:
         filter_: dict[str, Any] | None = None,
         sort_by: str | None = None,
         sort_order: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
         """List memories with optional filters.
 
         Advanced filtering is supported via the ``filter_`` parameter, which is
