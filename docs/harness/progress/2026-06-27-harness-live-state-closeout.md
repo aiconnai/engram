@@ -270,3 +270,7 @@ evidence file under `.omo/evidence/`.
   `returntocorp/semgrep:1.129.0`.
 - Updated the standalone and aggregate jobs to the verified official immutable
   tag `semgrep/semgrep:1.169.0`, without adding ignores or weakening `--error`.
+- The restored scanner then surfaced 36 pre-existing mutable GitHub Action
+  references across nightly, release, AgentShield loop, and harness-contract
+  workflows. Pinned each reference to its resolved commit SHA with a version
+  comment. The exact container scan now reports zero findings.

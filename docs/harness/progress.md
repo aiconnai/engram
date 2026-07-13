@@ -8,7 +8,7 @@
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
-| Last commit | `4a70aa0036cfe6e1877bdeafa4f36811f811205a` |
+| Last commit | `962428a` |
 | Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -80,6 +80,10 @@
   aggregate security jobs. Both workflows now use the verified official
   `semgrep/semgrep:1.169.0` image; scanner policy and failure behavior are
   unchanged.
+- With the scanner restored, Semgrep identified 36 mutable action references
+  in four existing workflows. Those references are now pinned to resolved
+  commit SHAs while retaining version comments; the same `p/ci --error` scan
+  reports zero findings without ignores or exclusions.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud
