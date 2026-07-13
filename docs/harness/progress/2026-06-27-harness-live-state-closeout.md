@@ -279,9 +279,19 @@ evidence file under `.omo/evidence/`.
 
 - Integrated Todos 22–24, 26–27, and 37–39 after focused verification and
   independent review; the human owner explicitly accepted the remediated Todo
-  24 SHA after its required two-FAIL escalation.
-- Dry-run run `29271674475` matched the requested SHA and failed closed because
-  the artifact smoke invoked unsupported `engram-server --version`.
-- Aligned the smoke with shipped contracts: server `--help`, CLI `--version`,
-  and a bounded PDF-worker protocol response. All external publication jobs
-  remained skipped and no publication approval was inferred.
+  24 SHA (`6a42f00…`) after its required two-FAIL escalation. Scope was
+  acceptance/integration only — not channel publication.
+- Dry-run run `29271674475` matched the pre-remediation candidate and failed
+  closed because the artifact smoke invoked unsupported `engram-server --version`.
+- Aligned the smoke with shipped contracts in `2cfab45`: server `--help`, CLI
+  `--version`, and a bounded PDF-worker protocol response.
+- Superseding workflow-dispatch dry-run `29286930522`
+  (`https://github.com/aiconnai/engram/actions/runs/29286930522`) completed
+  success on exact HEAD `2cfab4563d5da43932c1cc3aa6741eeea6b487ea`. Core
+  multi-target build, aggregate artifact verification, checksums, SBOMs,
+  signatures/provenance, and native smoke passed. GitHub Release and Homebrew
+  jobs were skipped. Tag, registry, release, Homebrew, and deploy writes: none.
+- No claim that v0.22.0 or any SDK package is published.
+- Atomic descriptor-bound SQLite opening remains deferred.
+- Canonical live-state `Last commit` refreshed to integration HEAD
+  `2cfab4563d5da43932c1cc3aa6741eeea6b487ea` during Wave 4 closeout.
