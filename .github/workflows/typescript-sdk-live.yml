@@ -1,0 +1,50 @@
+name: TypeScript SDK Live
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "sdks/typescript/**"
+      - "scripts/test-typescript-sdk-live.sh"
+      - ".github/workflows/typescript-sdk-live.yml"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  push:
+    branches: [main]
+    paths:
+      - "sdks/typescript/**"
+      - "scripts/test-typescript-sdk-live.sh"
+      - ".github/workflows/typescript-sdk-live.yml"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-contract:
+    name: Packed TypeScript SDK contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sdks/typescript/package-lock.json
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - name: Verify packed SDK against authenticated server
+        run: bash scripts/test-typescript-sdk-live.sh
+      - name: Reject wrong bearer
+        run: bash scripts/test-typescript-sdk-live.sh --self-test-wrong-bearer
+      - name: Reject missing endpoint
+        run: bash scripts/test-typescript-sdk-live.sh --self-test-missing-endpoint

@@ -2,6 +2,7 @@
   "name": "engram-client",
   "version": "0.5.0",
   "description": "TypeScript client for Engram Cloud - AI memory infrastructure",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -9,7 +10,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "vitest run",
+    "test": "vitest run src/index.test.ts",
     "test:watch": "vitest",
     "type-check": "tsc --noEmit",
     "prepublishOnly": "npm run build"
