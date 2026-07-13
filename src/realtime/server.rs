@@ -1,6 +1,6 @@
 //! WebSocket server for real-time updates
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -8,9 +8,9 @@ use std::sync::Arc;
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        Query, State,
     },
-    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
+    http::{header::AUTHORIZATION, header::ORIGIN, HeaderMap, StatusCode, Uri},
     response::IntoResponse,
     routing::get,
     Router,
@@ -21,6 +21,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::auth::{TransportPrincipal, TransportPrincipalError};
+use crate::types::normalize_workspace;
 
 use super::events::{RealtimeEvent, SubscriptionFilter};
 
@@ -30,10 +31,12 @@ pub type ConnectionId = String;
 struct RealtimeClient {
     filter: SubscriptionFilter,
     principal: TransportPrincipal,
+    workspace: String,
 }
 
 /// Default maximum number of events retained in the replay ring buffer.
 const DEFAULT_MAX_BUFFERED_EVENTS: usize = 500;
+const WS_ALLOWED_ORIGINS_ENV: &str = "ENGRAM_WS_ALLOWED_ORIGINS";
 
 /// Manages WebSocket connections and SSE subscriptions.
 ///
@@ -141,9 +144,28 @@ impl RealtimeManager {
         filter: SubscriptionFilter,
         principal: TransportPrincipal,
     ) {
-        self.clients
-            .write()
-            .insert(id, RealtimeClient { filter, principal });
+        self.try_register_client_with_principal(id, filter, principal, "default".to_string());
+    }
+
+    fn try_register_client_with_principal(
+        &self,
+        id: ConnectionId,
+        filter: SubscriptionFilter,
+        principal: TransportPrincipal,
+        workspace: String,
+    ) -> bool {
+        if !principal_can_subscribe(&principal, &workspace) {
+            return false;
+        }
+        self.clients.write().insert(
+            id,
+            RealtimeClient {
+                filter,
+                principal,
+                workspace,
+            },
+        );
+        true
     }
 
     /// Unregister a client
@@ -173,6 +195,12 @@ impl RealtimeManager {
             .get(id)
             .map(|client| client.principal.clone())
     }
+
+    fn client_matches_event(&self, id: &str, event: &RealtimeEvent) -> bool {
+        self.clients.read().get(id).is_some_and(|client| {
+            event.workspace() == Some(client.workspace.as_str()) && client.filter.matches(event)
+        })
+    }
 }
 
 impl Default for RealtimeManager {
@@ -198,12 +226,19 @@ pub struct RealtimeServer {
     manager: RealtimeManager,
     addr: SocketAddr,
     auth_key: Option<String>,
+    allowed_origins: Result<HashSet<String>, String>,
 }
 
 #[derive(Clone)]
 struct RealtimeServerState {
     manager: RealtimeManager,
     auth_key: Option<String>,
+    allowed_origins: Arc<HashSet<String>>,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct WebSocketQuery {
+    workspace: Option<String>,
 }
 
 impl RealtimeServer {
@@ -213,6 +248,9 @@ impl RealtimeServer {
             manager,
             addr,
             auth_key: None,
+            allowed_origins: parse_origin_allowlist(
+                std::env::var(WS_ALLOWED_ORIGINS_ENV).ok().as_deref(),
+            ),
         }
     }
 
@@ -228,7 +266,19 @@ impl RealtimeServer {
     }
 
     fn router_with_auth(manager: RealtimeManager, auth_key: Option<String>) -> Router {
-        let state = RealtimeServerState { manager, auth_key };
+        Self::router_with_security(manager, auth_key, HashSet::new())
+    }
+
+    fn router_with_security(
+        manager: RealtimeManager,
+        auth_key: Option<String>,
+        allowed_origins: HashSet<String>,
+    ) -> Router {
+        let state = RealtimeServerState {
+            manager,
+            auth_key,
+            allowed_origins: Arc::new(allowed_origins),
+        };
         Router::new()
             .route("/ws", get(ws_handler))
             .route("/health", get(health_handler))
@@ -245,7 +295,10 @@ impl RealtimeServer {
                 message,
             ));
         }
-        let app = Self::router_with_auth(self.manager, self.auth_key);
+        let allowed_origins = self
+            .allowed_origins
+            .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
+        let app = Self::router_with_security(self.manager, self.auth_key, allowed_origins);
 
         tracing::info!("WebSocket server listening on {}", self.addr);
 
@@ -269,6 +322,7 @@ async fn health_handler(State(state): State<RealtimeServerState>) -> impl IntoRe
 async fn ws_handler(
     ws: WebSocketUpgrade,
     headers: HeaderMap,
+    Query(query): Query<WebSocketQuery>,
     State(state): State<RealtimeServerState>,
 ) -> axum::response::Response {
     let principal = match websocket_principal(&headers, state.auth_key.as_deref()) {
@@ -282,8 +336,82 @@ async fn ws_handler(
             return StatusCode::UNAUTHORIZED.into_response();
         }
     };
-    ws.on_upgrade(move |socket| handle_socket(socket, state.manager, principal))
-        .into_response()
+
+    if !origin_is_allowed(&headers, &state.allowed_origins) {
+        tracing::warn!(target = "engram::realtime", "websocket origin rejected");
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let requested_workspace = match query.workspace.as_deref() {
+        Some(raw) => match normalize_workspace(raw) {
+            Ok(workspace) => workspace,
+            Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        },
+        None => "default".to_string(),
+    };
+    if !principal_can_subscribe(&principal, &requested_workspace) {
+        tracing::warn!(target = "engram::realtime", "websocket workspace rejected");
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    ws.on_upgrade(move |socket| {
+        handle_socket(socket, state.manager, principal, requested_workspace)
+    })
+    .into_response()
+}
+
+fn principal_can_subscribe(principal: &TransportPrincipal, workspace: &str) -> bool {
+    principal.allows_workspace(Some(workspace))
+        && principal.has_permission(
+            crate::auth::Permission::Read,
+            crate::auth::ResourceType::Memory,
+        )
+}
+
+fn origin_is_allowed(headers: &HeaderMap, allowed_origins: &HashSet<String>) -> bool {
+    let mut origins = headers.get_all(ORIGIN).iter();
+    let Some(origin) = origins.next() else {
+        return true;
+    };
+    if origins.next().is_some() {
+        return false;
+    }
+    let Ok(origin) = origin.to_str() else {
+        return false;
+    };
+    allowed_origins.contains(origin)
+}
+
+fn parse_origin_allowlist(raw: Option<&str>) -> Result<HashSet<String>, String> {
+    let Some(raw) = raw else {
+        return Ok(HashSet::new());
+    };
+
+    let mut origins = HashSet::new();
+    for entry in raw.split(',') {
+        let origin = entry.trim();
+        if origin.is_empty() || origin == "*" {
+            return Err(format!(
+                "{WS_ALLOWED_ORIGINS_ENV} must contain explicit origins without wildcards"
+            ));
+        }
+        let uri = origin
+            .parse::<Uri>()
+            .map_err(|_| format!("{WS_ALLOWED_ORIGINS_ENV} contains an invalid origin"))?;
+        if !matches!(uri.scheme_str(), Some("http" | "https"))
+            || uri
+                .authority()
+                .is_none_or(|authority| authority.as_str().contains('@'))
+            || uri.query().is_some()
+            || !matches!(uri.path(), "" | "/")
+        {
+            return Err(format!(
+                "{WS_ALLOWED_ORIGINS_ENV} origins must be scheme-and-authority values"
+            ));
+        }
+        origins.insert(origin.trim_end_matches('/').to_string());
+    }
+    Ok(origins)
 }
 
 fn websocket_principal(
@@ -302,11 +430,27 @@ fn websocket_principal(
 }
 
 /// Handle an individual WebSocket connection
-async fn handle_socket(socket: WebSocket, manager: RealtimeManager, principal: TransportPrincipal) {
+async fn handle_socket(
+    socket: WebSocket,
+    manager: RealtimeManager,
+    principal: TransportPrincipal,
+    workspace: String,
+) {
     let connection_id = Uuid::new_v4().to_string();
     let filter = SubscriptionFilter::default();
 
-    manager.register_client_with_principal(connection_id.clone(), filter.clone(), principal);
+    if !manager.try_register_client_with_principal(
+        connection_id.clone(),
+        filter.clone(),
+        principal,
+        workspace,
+    ) {
+        tracing::warn!(
+            target = "engram::realtime",
+            "websocket subscription rejected"
+        );
+        return;
+    }
     tracing::info!("Client connected: {}", connection_id);
 
     let (mut sender, mut receiver) = socket.split();
@@ -318,12 +462,10 @@ async fn handle_socket(socket: WebSocket, manager: RealtimeManager, principal: T
     let send_task = AbortOnDropTask::new(tokio::spawn(async move {
         while let Ok(event) = rx.recv().await {
             // Check if event matches client's filter
-            if let Some(filter) = mgr.get_client_filter(&conn_id) {
-                if filter.matches(&event) {
-                    let json = serde_json::to_string(&event).unwrap_or_default();
-                    if sender.send(Message::Text(json)).await.is_err() {
-                        break;
-                    }
+            if mgr.client_matches_event(&conn_id, &event) {
+                let json = serde_json::to_string(&event).unwrap_or_default();
+                if sender.send(Message::Text(json)).await.is_err() {
+                    break;
                 }
             }
         }
@@ -393,6 +535,74 @@ mod tests {
     use super::*;
     use base64::Engine as _;
     use rand::RngCore;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    async fn websocket_handshake(
+        manager: RealtimeManager,
+        path: &str,
+        auth_key: Option<&str>,
+        authorization: Option<&str>,
+        origin: Option<&str>,
+        allowed_origins: &[&str],
+    ) -> (
+        tokio::net::TcpStream,
+        String,
+        tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    ) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = RealtimeServer::router_with_security(
+            manager,
+            auth_key.map(str::to_string),
+            allowed_origins
+                .iter()
+                .map(|origin| (*origin).to_string())
+                .collect(),
+        );
+        let server = tokio::spawn(async move { axum::serve(listener, app).await });
+        let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+        let mut nonce = [0_u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut nonce);
+        let websocket_key = base64::engine::general_purpose::STANDARD.encode(nonce);
+        let authorization = authorization
+            .map(|value| format!("Authorization: {value}\r\n"))
+            .unwrap_or_default();
+        let origin = origin
+            .map(|value| format!("Origin: {value}\r\n"))
+            .unwrap_or_default();
+
+        client
+            .write_all(
+                format!(
+                    "GET {path} HTTP/1.1\r\nHost: {address}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: {websocket_key}\r\n{authorization}{origin}\r\n"
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut response = Vec::new();
+        while !response.ends_with(b"\r\n\r\n") {
+            response.push(client.read_u8().await.unwrap());
+        }
+
+        (client, String::from_utf8(response).unwrap(), server)
+    }
+
+    async fn read_server_text(client: &mut tokio::net::TcpStream) -> String {
+        let first = client.read_u8().await.unwrap();
+        assert_eq!(first & 0x0f, 1, "expected a text websocket frame");
+        let second = client.read_u8().await.unwrap();
+        assert_eq!(second & 0x80, 0, "server frames must not be masked");
+        let len = match second & 0x7f {
+            value @ 0..=125 => usize::from(value),
+            126 => usize::from(client.read_u16().await.unwrap()),
+            127 => usize::try_from(client.read_u64().await.unwrap()).unwrap(),
+            _ => unreachable!(),
+        };
+        let mut payload = vec![0; len];
+        client.read_exact(&mut payload).await.unwrap();
+        String::from_utf8(payload).unwrap()
+    }
 
     struct TaskDropSignal(Arc<std::sync::atomic::AtomicBool>);
 
@@ -517,8 +727,6 @@ mod tests {
 
     #[tokio::test]
     async fn authenticated_handshake_attaches_process_principal() {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
         // Given: a real loopback websocket listener with process bearer auth.
         let manager = RealtimeManager::new();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -567,6 +775,142 @@ mod tests {
         ));
 
         server.abort();
+    }
+
+    #[tokio::test]
+    async fn real_client_receives_only_its_authorized_workspace() {
+        let manager = RealtimeManager::new();
+        let (mut client, response, server) = websocket_handshake(
+            manager.clone(),
+            "/ws?workspace=default",
+            None,
+            None,
+            None,
+            &[],
+        )
+        .await;
+        assert!(response.starts_with("HTTP/1.1 101"));
+        for _ in 0..100 {
+            if manager.client_count() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        manager.broadcast(
+            RealtimeEvent::memory_created(1, "private sentinel".to_string())
+                .with_workspace("private"),
+        );
+        manager.broadcast(
+            RealtimeEvent::memory_created(2, "visible sentinel".to_string())
+                .with_workspace("default"),
+        );
+
+        let payload = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            read_server_text(&mut client),
+        )
+        .await
+        .expect("authorized workspace event must arrive");
+        assert!(payload.contains("visible sentinel"));
+        assert!(!payload.contains("private sentinel"));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn anonymous_client_cannot_subscribe_to_private_workspace() {
+        let manager = RealtimeManager::new();
+        let (_client, response, server) = websocket_handshake(
+            manager.clone(),
+            "/ws?workspace=private",
+            None,
+            None,
+            None,
+            &[],
+        )
+        .await;
+
+        assert!(response.starts_with("HTTP/1.1 403"));
+        assert_eq!(manager.client_count(), 0);
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn origin_allowlist_is_exact_and_missing_origin_is_non_browser() {
+        let allowed = "https://app.example.com";
+        let (_client, response, server) = websocket_handshake(
+            RealtimeManager::new(),
+            "/ws",
+            None,
+            None,
+            Some(allowed),
+            &[allowed],
+        )
+        .await;
+        assert!(response.starts_with("HTTP/1.1 101"));
+        server.abort();
+
+        let (_client, response, server) = websocket_handshake(
+            RealtimeManager::new(),
+            "/ws",
+            None,
+            None,
+            Some("https://evil.example.com"),
+            &[allowed],
+        )
+        .await;
+        assert!(response.starts_with("HTTP/1.1 403"));
+        server.abort();
+
+        let (_client, response, server) =
+            websocket_handshake(RealtimeManager::new(), "/ws", None, None, None, &[allowed]).await;
+        assert!(response.starts_with("HTTP/1.1 101"));
+        server.abort();
+    }
+
+    #[test]
+    fn origin_allowlist_rejects_wildcards_and_non_origins() {
+        assert!(parse_origin_allowlist(Some("*")).is_err());
+        assert!(parse_origin_allowlist(Some("app.example.com")).is_err());
+        assert!(parse_origin_allowlist(Some("https://app.example.com/path")).is_err());
+        assert_eq!(
+            parse_origin_allowlist(Some("https://app.example.com, https://admin.example.com/"))
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn scoped_principal_cannot_register_cross_workspace() {
+        use crate::auth::{PermissionSet, TokenClaims, UserId};
+        use chrono::Utc;
+
+        let manager = RealtimeManager::new();
+        let principal = TransportPrincipal::from_token_claims(TokenClaims {
+            user_id: UserId::from_string("user-1"),
+            key_id: "key-1".to_string(),
+            permissions: PermissionSet::read_only(),
+            namespace: Some("alpha".to_string()),
+            issued_at: Utc::now(),
+            expires_at: None,
+        })
+        .unwrap();
+        assert!(manager.try_register_client_with_principal(
+            "scoped".to_string(),
+            SubscriptionFilter::default(),
+            principal.clone(),
+            "alpha".to_string(),
+        ));
+
+        assert!(!manager.try_register_client_with_principal(
+            "cross-workspace".to_string(),
+            SubscriptionFilter::default(),
+            principal,
+            "beta".to_string(),
+        ));
+        assert!(manager.get_client_filter("scoped").is_some());
+        assert!(manager.get_client_filter("cross-workspace").is_none());
     }
 
     #[test]

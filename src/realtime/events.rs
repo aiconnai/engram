@@ -111,6 +111,31 @@ impl RealtimeEvent {
             })),
         }
     }
+
+    /// Attach the authoritative workspace used by realtime transports.
+    pub fn with_workspace(mut self, workspace: impl Into<String>) -> Self {
+        let workspace = workspace.into();
+        match self.data.as_mut() {
+            Some(serde_json::Value::Object(data)) => {
+                data.insert(
+                    "workspace".to_string(),
+                    serde_json::Value::String(workspace),
+                );
+            }
+            _ => {
+                self.data = Some(serde_json::json!({ "workspace": workspace }));
+            }
+        }
+        self
+    }
+
+    /// Return the authoritative event workspace, when the producer supplied one.
+    pub fn workspace(&self) -> Option<&str> {
+        self.data
+            .as_ref()
+            .and_then(|data| data.get("workspace"))
+            .and_then(serde_json::Value::as_str)
+    }
 }
 
 /// Truncate string for preview (UTF-8 safe)
