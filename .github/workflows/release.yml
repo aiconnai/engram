@@ -6,73 +6,142 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version tag to release (e.g. v0.6.1)"
+      dry_run:
+        description: "Build and attest the complete matrix without publishing"
+        required: true
+        default: true
+        type: boolean
+      sha:
+        description: "Exact commit SHA that this run must build"
         required: true
         type: string
+      version:
+        description: "Artifact version label (for example v0.22.0)"
+        required: false
+        default: "v0.22.0"
+        type: string
       overwrite_assets:
-        description: "Allow replacing assets when the GitHub Release already exists"
+        description: "Allow replacing assets on an existing GitHub Release"
         required: false
         default: false
         type: boolean
+      homebrew_only:
+        description: "Update Homebrew from an already verified GitHub Release"
+        required: false
+        default: false
+        type: boolean
+      tag:
+        description: "Exact protected release tag for a Homebrew-only run"
+        required: false
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
 
 jobs:
   preflight:
     name: Release Preflight
     runs-on: ubuntu-latest
+    outputs:
+      dry_run: ${{ steps.guard.outputs.dry_run }}
+      homebrew_only: ${{ steps.guard.outputs.homebrew_only }}
+      release_version: ${{ steps.guard.outputs.release_version }}
+      release_sha: ${{ steps.guard.outputs.release_sha }}
     steps:
-      - name: Validate release version
-        run: |
-          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Invalid release version"
-            exit 1
-          fi
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
 
-      - name: Check release immutability
+      - name: Validate event, ref, and SHA before any write
+        id: guard
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OVERWRITE_ASSETS: ${{ github.event.inputs.overwrite_assets || 'false' }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          INPUT_SHA: ${{ github.event.inputs.sha || github.sha }}
+          INPUT_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+          INPUT_HOMEBREW_ONLY: ${{ github.event.inputs.homebrew_only || 'false' }}
+          INPUT_TAG: ${{ github.event.inputs.tag || '' }}
+          INPUT_OVERWRITE: ${{ github.event.inputs.overwrite_assets || 'false' }}
         run: |
           set -euo pipefail
 
-          response_file="$(mktemp)"
-          status_code="$(
-            curl -sS \
-              -o "${response_file}" \
-              -w "%{http_code}" \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_VERSION}"
-          )"
+          if [[ ! "${INPUT_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::sha must be a full lowercase commit SHA"
+            exit 1
+          fi
+          if [[ "${INPUT_SHA}" != "${GITHUB_SHA}" ]]; then
+            echo "::error::supplied SHA does not match github.sha"
+            exit 1
+          fi
+          if [[ "$(git rev-parse HEAD)" != "${INPUT_SHA}" ]]; then
+            echo "::error::checked-out commit does not match supplied SHA"
+            exit 1
+          fi
+          if [[ ! "${INPUT_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must be an exact stable semver tag"
+            exit 1
+          fi
 
-          if [ "${status_code}" = "200" ]; then
-            if [ "${OVERWRITE_ASSETS}" = "true" ]; then
-              echo "::warning::Release ${RELEASE_VERSION} already exists; overwrite_assets=true allows asset replacement."
-            else
-              echo "::error::Release ${RELEASE_VERSION} already exists. Re-run with overwrite_assets=true only if replacing release assets and Homebrew checksums is intentional."
+          if [[ "${INPUT_DRY_RUN}" == "true" ]]; then
+            if [[ "${INPUT_HOMEBREW_ONLY}" == "true" || "${INPUT_OVERWRITE}" == "true" ]]; then
+              echo "::error::dry-run cannot request a write mode"
               exit 1
             fi
-          elif [ "${status_code}" = "404" ]; then
-            echo "Release ${RELEASE_VERSION} does not exist; continuing."
           else
-            echo "::error::Could not verify release ${RELEASE_VERSION}; GitHub API returned HTTP ${status_code}."
-            cat "${response_file}"
+            if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != "${INPUT_VERSION}" ]]; then
+              echo "::error::live release requires the exact version tag ref"
+              exit 1
+            fi
+            if [[ "$(git rev-list -n 1 "${INPUT_VERSION}^{commit}")" != "${INPUT_SHA}" ]]; then
+              echo "::error::tag, github.sha, and supplied SHA do not agree"
+              exit 1
+            fi
+          fi
+
+          if [[ "${INPUT_HOMEBREW_ONLY}" == "true" ]]; then
+            if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" || "${INPUT_TAG}" != "${INPUT_VERSION}" ]]; then
+              echo "::error::Homebrew writes require an explicit exact-tag dispatch"
+              exit 1
+            fi
+          elif [[ -n "${INPUT_TAG}" ]]; then
+            echo "::error::tag input is valid only for homebrew_only"
             exit 1
+          fi
+
+          {
+            echo "dry_run=${INPUT_DRY_RUN}"
+            echo "homebrew_only=${INPUT_HOMEBREW_ONLY}"
+            echo "release_version=${INPUT_VERSION}"
+            echo "release_sha=${INPUT_SHA}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Check GitHub Release immutability
+        if: steps.guard.outputs.dry_run == 'false' && steps.guard.outputs.homebrew_only == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OVERWRITE_ASSETS: ${{ github.event.inputs.overwrite_assets || 'false' }}
+          RELEASE_VERSION: ${{ steps.guard.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          if gh release view "${RELEASE_VERSION}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            if [[ "${OVERWRITE_ASSETS}" != "true" ]]; then
+              echo "::error::release already exists; overwrite was not explicitly approved"
+              exit 1
+            fi
           fi
 
   build:
     name: Build (${{ matrix.target }})
     needs: preflight
+    if: needs.preflight.outputs.homebrew_only == 'false'
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -89,7 +158,7 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: ${{ env.RELEASE_VERSION }}
+          ref: ${{ needs.preflight.outputs.release_sha }}
 
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
@@ -108,151 +177,175 @@ jobs:
           echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
 
       - name: Build release binaries
-        run: cargo build --release --target ${{ matrix.target }} --features pdf --bin engram-server --bin engram-cli --bin engram-pdf-worker
+        run: cargo build --locked --release --target ${{ matrix.target }} --features pdf --bin engram-server --bin engram-cli --bin engram-pdf-worker
 
-      - name: Package (Unix)
+      - name: Package deterministic archive and supply-chain evidence
+        env:
+          RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+          RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_TARGET: ${{ matrix.target }}
         run: |
-          ARCHIVE="engram-${RELEASE_VERSION}-${{ matrix.target }}.tar.gz"
-          cd target/${{ matrix.target }}/release
-          if [[ "${{ matrix.target }}" == *-linux-* ]]; then
-            tar -czf "../../../${ARCHIVE}" engram-server engram-cli engram-pdf-worker
-          else
-            tar -czf "../../../${ARCHIVE}" engram-server engram-cli
-          fi
-          cd ../../..
-          shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          set -euo pipefail
+          scripts/verify-release-artifacts.sh \
+            --create-bundle \
+            --binary-dir "target/${RELEASE_TARGET}/release" \
+            --output-dir release-bundle \
+            --target "${RELEASE_TARGET}" \
+            --version "${RELEASE_VERSION}" \
+            --sha "${RELEASE_SHA}" \
+            --ref "${RELEASE_REF}"
+          scripts/verify-release-artifacts.sh \
+            --artifact-dir release-bundle \
+            --expected-sha "${RELEASE_SHA}" \
+            --target "${RELEASE_TARGET}" \
+            --allow-untrusted-local
+          scripts/test-release-binary.sh \
+            --artifact-dir release-bundle \
+            --target "${RELEASE_TARGET}" \
+            --allow-cross
 
-      - name: Upload artifact
+      - name: Sign bundle with GitHub Actions identity
+        id: github-attestation
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: release-bundle/*
+          show-summary: false
+
+      - name: Bind and verify GitHub identity attestation
+        env:
+          RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+          RELEASE_TARGET: ${{ matrix.target }}
+          RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+          GITHUB_ATTESTATION_BUNDLE: ${{ steps.github-attestation.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          archive="release-bundle/engram-${RELEASE_VERSION}-${RELEASE_TARGET}.tar.gz"
+          cp "${GITHUB_ATTESTATION_BUNDLE}" "${archive}.github-attestation.sigstore.json"
+          scripts/verify-release-artifacts.sh \
+            --artifact-dir release-bundle \
+            --expected-sha "${RELEASE_SHA}" \
+            --target "${RELEASE_TARGET}"
+
+      - name: Upload attested artifact bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ${{ matrix.target }}
-          path: |
-            engram-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.tar.gz
-            engram-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.tar.gz.sha256
+          name: core-${{ matrix.target }}
+          if-no-files-found: error
+          path: release-bundle/
 
-  release:
-    name: Create Release
-    needs: build
+  dry-run-summary:
+    name: Verify dry-run matrix
+    needs: [preflight, build]
+    if: needs.preflight.outputs.dry_run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: ${{ env.RELEASE_VERSION }}
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
+          pattern: core-*
           path: artifacts
-
-      - name: Collect release files
+      - name: Verify exact matrix, checksums, SBOMs, signature, and provenance
+        run: scripts/verify-release-artifacts.sh --artifact-dir artifacts --expected-sha "${{ needs.preflight.outputs.release_sha }}"
+      - name: Assert dry-run cannot publish
         run: |
-          mkdir -p release
-          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' \) -exec cp {} release/ \;
-          echo "## SHA256 Checksums" > release/CHECKSUMS.md
-          echo '```' >> release/CHECKSUMS.md
-          cat release/*.sha256 >> release/CHECKSUMS.md
-          echo '```' >> release/CHECKSUMS.md
-          cat release/CHECKSUMS.md
-          .github/scripts/extract-release-notes.sh "${RELEASE_VERSION}" CHANGELOG.md release/RELEASE_NOTES.md
-          cat release/RELEASE_NOTES.md
+          test "${{ needs.preflight.outputs.dry_run }}" = true
+          test "${{ needs.preflight.outputs.homebrew_only }}" = false
+          echo "Dry-run complete: no tag, GitHub Release, registry, or Homebrew write was attempted."
 
+  release:
+    name: Create GitHub Release
+    needs: [preflight, build]
+    if: needs.preflight.outputs.dry_run == 'false' && needs.preflight.outputs.homebrew_only == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    environment: release-github
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: core-*
+          path: artifacts
+      - name: Verify all release inputs before publication
+        run: scripts/verify-release-artifacts.sh --artifact-dir artifacts --expected-sha "${{ needs.preflight.outputs.release_sha }}"
+      - name: Collect release files
+        env:
+          RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          mkdir release
+          find artifacts -type f -exec cp {} release/ \;
+          .github/scripts/extract-release-notes.sh "${RELEASE_VERSION}" CHANGELOG.md release/RELEASE_NOTES.md
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
-          tag_name: ${{ env.RELEASE_VERSION }}
+          tag_name: ${{ needs.preflight.outputs.release_version }}
           draft: false
           body_path: release/RELEASE_NOTES.md
-          files: |
-            release/*.tar.gz
-            release/*.sha256
+          overwrite_files: ${{ github.event.inputs.overwrite_assets || false }}
+          files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-homebrew:
     name: Update Homebrew Formula
-    needs: release
+    needs: preflight
+    if: needs.preflight.outputs.dry_run == 'false' && needs.preflight.outputs.homebrew_only == 'true'
     runs-on: ubuntu-latest
+    environment: release-homebrew
     env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
     steps:
-      - name: Check Homebrew token
-        id: homebrew-token
-        run: |
-          if [ -n "${HOMEBREW_TAP_TOKEN}" ]; then
-            echo "available=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "available=false" >> "${GITHUB_OUTPUT}"
-            echo "::notice::HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew formula update."
-          fi
-
-      - name: Download SHA256 files
-        if: steps.homebrew-token.outputs.available == 'true'
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          path: artifacts
-
-      - name: Checkout Engram release source
-        if: steps.homebrew-token.outputs.available == 'true'
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           path: engram-source
-          ref: ${{ env.RELEASE_VERSION }}
-
-      - name: Checkout homebrew-engram
-        if: steps.homebrew-token.outputs.available == 'true'
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - name: Require protected Homebrew credential
+        run: test -n "${HOMEBREW_TAP_TOKEN}"
+      - name: Download and verify the existing immutable GitHub Release
+        run: |
+          mkdir artifacts
+          gh release download "${RELEASE_VERSION}" --repo "${GITHUB_REPOSITORY}" --dir artifacts
+          engram-source/scripts/verify-github-release.sh \
+            --tag "${RELEASE_VERSION}" \
+            --sha "${RELEASE_SHA}" \
+            --artifact-dir artifacts
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           repository: aiconnai/homebrew-engram
           token: ${{ env.HOMEBREW_TAP_TOKEN }}
           path: homebrew-engram
-
-      - name: Update formula
-        if: steps.homebrew-token.outputs.available == 'true'
+      - name: Update the formula from verified checksums
         run: |
-          REF="$RELEASE_VERSION"
-          VERSION="${REF#v}"
-
-          # Read SHA256 hashes
-          ARM64_MAC=$(cat artifacts/aarch64-apple-darwin/*.sha256 | awk '{print $1}')
-          X86_64_MAC=$(cat artifacts/x86_64-apple-darwin/*.sha256 | awk '{print $1}')
-          ARM64_LINUX=$(cat artifacts/aarch64-unknown-linux-gnu/*.sha256 | awk '{print $1}')
-          X86_64_LINUX=$(cat artifacts/x86_64-unknown-linux-gnu/*.sha256 | awk '{print $1}')
-
+          set -euo pipefail
+          version="${RELEASE_VERSION#v}"
+          arm64_mac="$(awk '{print $1}' "artifacts/engram-${RELEASE_VERSION}-aarch64-apple-darwin.tar.gz.sha256")"
+          x86_64_mac="$(awk '{print $1}' "artifacts/engram-${RELEASE_VERSION}-x86_64-apple-darwin.tar.gz.sha256")"
+          arm64_linux="$(awk '{print $1}' "artifacts/engram-${RELEASE_VERSION}-aarch64-unknown-linux-gnu.tar.gz.sha256")"
+          x86_64_linux="$(awk '{print $1}' "artifacts/engram-${RELEASE_VERSION}-x86_64-unknown-linux-gnu.tar.gz.sha256")"
           cd homebrew-engram
-
-          # Update version
-          sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/engram.rb
-
-          # Update SHA256 hashes (replace any existing hash or placeholder)
-          # macOS arm64
-          sed -i "/aarch64-apple-darwin/{ n; s/sha256 \".*\"/sha256 \"${ARM64_MAC}\"/ }" Formula/engram.rb
-          # macOS x86_64
-          sed -i "/x86_64-apple-darwin/{ n; s/sha256 \".*\"/sha256 \"${X86_64_MAC}\"/ }" Formula/engram.rb
-          # Linux arm64
-          sed -i "/aarch64-unknown-linux-gnu/{ n; s/sha256 \".*\"/sha256 \"${ARM64_LINUX}\"/ }" Formula/engram.rb
-          # Linux x86_64
-          sed -i "/x86_64-unknown-linux-gnu/{ n; s/sha256 \".*\"/sha256 \"${X86_64_LINUX}\"/ }" Formula/engram.rb
-
+          sed -i "s/version \".*\"/version \"${version}\"/" Formula/engram.rb
+          sed -i "/aarch64-apple-darwin/{ n; s/sha256 \".*\"/sha256 \"${arm64_mac}\"/; }" Formula/engram.rb
+          sed -i "/x86_64-apple-darwin/{ n; s/sha256 \".*\"/sha256 \"${x86_64_mac}\"/; }" Formula/engram.rb
+          sed -i "/aarch64-unknown-linux-gnu/{ n; s/sha256 \".*\"/sha256 \"${arm64_linux}\"/; }" Formula/engram.rb
+          sed -i "/x86_64-unknown-linux-gnu/{ n; s/sha256 \".*\"/sha256 \"${x86_64_linux}\"/; }" Formula/engram.rb
           python3 ../engram-source/.github/scripts/ensure-pdf-worker-homebrew.py Formula/engram.rb
-          if grep -F 'bin.install "engram-pdf-worker"' Formula/engram.rb >/dev/null; then
-            echo "macOS formula must not install unsupported PDF worker" >&2
-            exit 1
-          fi
-
-          echo "Updated formula:"
-          cat Formula/engram.rb
-
-      - name: Commit and push
-        if: steps.homebrew-token.outputs.available == 'true'
+          git diff --check
+      - name: Commit and push the sole formula change
         run: |
-          REF="$RELEASE_VERSION"
+          set -euo pipefail
           cd homebrew-engram
+          test "$(git diff --name-only | tr -d '\n')" = "Formula/engram.rb"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/engram.rb
-          if git diff --cached --quiet; then
-            echo "No Homebrew formula changes"
-            exit 0
-          fi
-          git commit -m "chore: update engram to ${REF}"
+          git commit -m "chore: update engram to ${RELEASE_VERSION}"
           git push
