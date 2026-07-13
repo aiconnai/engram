@@ -304,5 +304,5 @@ evidence file under `.omo/evidence/`.
   multi-binary build, `verify-release-artifacts.sh` /
   `test-release-binary.sh` Linux-only worker packaging, and the Homebrew formula
   updater step. No publication path was opened.
-- Live-state `Last commit` is now `a840a20efb025b83c09c0b8b8b0517faaa55b353`.
+- Live-state `Last commit` is now `e17544af44dbfff8ec9b1351fdc19b90a2fdfc02`.
   Dry-run receipt `29286930522` remains bound to historical SHA `2cfab45…`.

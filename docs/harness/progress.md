@@ -8,7 +8,7 @@
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
-| Last commit | `a840a20efb025b83c09c0b8b8b0517faaa55b353` |
+| Last commit | `e17544af44dbfff8ec9b1351fdc19b90a2fdfc02` |
 | Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -87,7 +87,7 @@
 
 ## Engram 10/10 Wave 4 — integrated implementation
 
-- **Integration HEAD**: `a840a20efb025b83c09c0b8b8b0517faaa55b353` on
+- **Integration HEAD**: `e17544af44dbfff8ec9b1351fdc19b90a2fdfc02` on
   `feat/engram-10-of-10-wave4` (Todos 22–24, 26–27, 37–39 plus closeout
   docs and PDF packaging-contract alignment).
 - Todo 24 had two consecutive independent-review FAILs; both findings were
