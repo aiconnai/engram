@@ -2,6 +2,7 @@
 //!
 //! Provides push notifications for memory changes to connected clients.
 
+mod config;
 pub(crate) mod events;
 mod server;
 

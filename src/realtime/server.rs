@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
+        ws::{close_code, CloseFrame, Message, WebSocket, WebSocketUpgrade},
         Query, State,
     },
     http::{header::AUTHORIZATION, header::ORIGIN, HeaderMap, StatusCode, Uri},
@@ -15,14 +15,14 @@ use axum::{
     routing::get,
     Router,
 };
-use futures::{SinkExt, StreamExt};
 use parking_lot::RwLock;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 
 use crate::auth::{TransportPrincipal, TransportPrincipalError};
 use crate::types::normalize_workspace;
 
+use super::config::RealtimeConfig;
 use super::events::{RealtimeEvent, SubscriptionFilter};
 
 /// Connection ID
@@ -37,6 +37,80 @@ struct RealtimeClient {
 /// Default maximum number of events retained in the replay ring buffer.
 const DEFAULT_MAX_BUFFERED_EVENTS: usize = 500;
 const WS_ALLOWED_ORIGINS_ENV: &str = "ENGRAM_WS_ALLOWED_ORIGINS";
+
+const CLOSE_REASON_MESSAGE_TOO_LARGE: &str = "message exceeds configured byte limit";
+const CLOSE_REASON_READ_IDLE: &str = "read idle timeout";
+const WS_WRITE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const WS_CLOSE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Aggregate resource counters. They intentionally contain no principal,
+/// credential, workspace, or message data.
+#[derive(Default)]
+struct RealtimeMetrics {
+    active_connections: AtomicU64,
+    accepted_connections: AtomicU64,
+    connection_cap_rejections: AtomicU64,
+    oversized_messages: AtomicU64,
+    idle_disconnects: AtomicU64,
+    completed_disconnects: AtomicU64,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RealtimeMetricsSnapshot {
+    active_connections: u64,
+    accepted_connections: u64,
+    connection_cap_rejections: u64,
+    oversized_messages: u64,
+    idle_disconnects: u64,
+    completed_disconnects: u64,
+}
+
+impl RealtimeMetrics {
+    fn snapshot(&self) -> RealtimeMetricsSnapshot {
+        RealtimeMetricsSnapshot {
+            active_connections: self.active_connections.load(Ordering::Relaxed),
+            accepted_connections: self.accepted_connections.load(Ordering::Relaxed),
+            connection_cap_rejections: self.connection_cap_rejections.load(Ordering::Relaxed),
+            oversized_messages: self.oversized_messages.load(Ordering::Relaxed),
+            idle_disconnects: self.idle_disconnects.load(Ordering::Relaxed),
+            completed_disconnects: self.completed_disconnects.load(Ordering::Relaxed),
+        }
+    }
+}
+
+struct ActiveConnectionGuard {
+    metrics: Arc<RealtimeMetrics>,
+}
+
+struct RegisteredClientGuard {
+    manager: RealtimeManager,
+    connection_id: ConnectionId,
+}
+
+impl Drop for RegisteredClientGuard {
+    fn drop(&mut self) {
+        self.manager.unregister_client(&self.connection_id);
+    }
+}
+
+impl ActiveConnectionGuard {
+    fn new(metrics: Arc<RealtimeMetrics>) -> Self {
+        metrics.active_connections.fetch_add(1, Ordering::Relaxed);
+        metrics.accepted_connections.fetch_add(1, Ordering::Relaxed);
+        Self { metrics }
+    }
+}
+
+impl Drop for ActiveConnectionGuard {
+    fn drop(&mut self) {
+        self.metrics
+            .active_connections
+            .fetch_sub(1, Ordering::Relaxed);
+        self.metrics
+            .completed_disconnects
+            .fetch_add(1, Ordering::Relaxed);
+    }
+}
 
 /// Manages WebSocket connections and SSE subscriptions.
 ///
@@ -227,6 +301,7 @@ pub struct RealtimeServer {
     addr: SocketAddr,
     auth_key: Option<String>,
     allowed_origins: Result<HashSet<String>, String>,
+    config: Result<RealtimeConfig, String>,
 }
 
 #[derive(Clone)]
@@ -234,6 +309,9 @@ struct RealtimeServerState {
     manager: RealtimeManager,
     auth_key: Option<String>,
     allowed_origins: Arc<HashSet<String>>,
+    config: RealtimeConfig,
+    connection_slots: Arc<Semaphore>,
+    metrics: Arc<RealtimeMetrics>,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -251,6 +329,7 @@ impl RealtimeServer {
             allowed_origins: parse_origin_allowlist(
                 std::env::var(WS_ALLOWED_ORIGINS_ENV).ok().as_deref(),
             ),
+            config: RealtimeConfig::from_env(),
         }
     }
 
@@ -274,10 +353,29 @@ impl RealtimeServer {
         auth_key: Option<String>,
         allowed_origins: HashSet<String>,
     ) -> Router {
+        Self::router_with_resources(
+            manager,
+            auth_key,
+            allowed_origins,
+            RealtimeConfig::default(),
+            Arc::new(RealtimeMetrics::default()),
+        )
+    }
+
+    fn router_with_resources(
+        manager: RealtimeManager,
+        auth_key: Option<String>,
+        allowed_origins: HashSet<String>,
+        config: RealtimeConfig,
+        metrics: Arc<RealtimeMetrics>,
+    ) -> Router {
         let state = RealtimeServerState {
             manager,
             auth_key,
             allowed_origins: Arc::new(allowed_origins),
+            connection_slots: Arc::new(Semaphore::new(config.max_connections)),
+            config,
+            metrics,
         };
         Router::new()
             .route("/ws", get(ws_handler))
@@ -298,7 +396,16 @@ impl RealtimeServer {
         let allowed_origins = self
             .allowed_origins
             .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
-        let app = Self::router_with_security(self.manager, self.auth_key, allowed_origins);
+        let config = self
+            .config
+            .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
+        let app = Self::router_with_resources(
+            self.manager,
+            self.auth_key,
+            allowed_origins,
+            config,
+            Arc::new(RealtimeMetrics::default()),
+        );
 
         tracing::info!("WebSocket server listening on {}", self.addr);
 
@@ -314,6 +421,7 @@ async fn health_handler(State(state): State<RealtimeServerState>) -> impl IntoRe
     serde_json::json!({
         "status": "ok",
         "clients": state.manager.client_count(),
+        "resources": state.metrics.snapshot(),
     })
     .to_string()
 }
@@ -354,10 +462,42 @@ async fn ws_handler(
         return StatusCode::FORBIDDEN.into_response();
     }
 
-    ws.on_upgrade(move |socket| {
-        handle_socket(socket, state.manager, principal, requested_workspace)
-    })
-    .into_response()
+    let connection_permit = match state.connection_slots.clone().try_acquire_owned() {
+        Ok(permit) => permit,
+        Err(_) => {
+            state
+                .metrics
+                .connection_cap_rejections
+                .fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(
+                target = "engram::realtime",
+                "websocket connection cap reached"
+            );
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+    };
+
+    // Axum/tungstenite rejects declared frames above max+1 before allocating
+    // their payload. The one-byte margin lets the application return the
+    // documented 1009 close for the exact boundary regression.
+    let transport_limit = state.config.max_message_bytes.saturating_add(1);
+    let config = state.config.clone();
+    let metrics = state.metrics.clone();
+
+    ws.max_frame_size(transport_limit)
+        .max_message_size(transport_limit)
+        .on_upgrade(move |socket| {
+            handle_socket(
+                socket,
+                state.manager,
+                principal,
+                requested_workspace,
+                config,
+                metrics,
+                connection_permit,
+            )
+        })
+        .into_response()
 }
 
 fn principal_can_subscribe(principal: &TransportPrincipal, workspace: &str) -> bool {
@@ -431,10 +571,13 @@ fn websocket_principal(
 
 /// Handle an individual WebSocket connection
 async fn handle_socket(
-    socket: WebSocket,
+    mut socket: WebSocket,
     manager: RealtimeManager,
     principal: TransportPrincipal,
     workspace: String,
+    config: RealtimeConfig,
+    metrics: Arc<RealtimeMetrics>,
+    _connection_permit: OwnedSemaphorePermit,
 ) {
     let connection_id = Uuid::new_v4().to_string();
     let filter = SubscriptionFilter::default();
@@ -451,83 +594,96 @@ async fn handle_socket(
         );
         return;
     }
+    let _active_connection = ActiveConnectionGuard::new(metrics.clone());
+    let _registered_client = RegisteredClientGuard {
+        manager: manager.clone(),
+        connection_id: connection_id.clone(),
+    };
     tracing::info!("Client connected: {}", connection_id);
 
-    let (mut sender, mut receiver) = socket.split();
     let mut rx = manager.subscribe();
+    let idle = tokio::time::sleep(config.read_idle_timeout);
+    tokio::pin!(idle);
 
-    // Task to forward events to client
-    let conn_id = connection_id.clone();
-    let mgr = manager.clone();
-    let send_task = AbortOnDropTask::new(tokio::spawn(async move {
-        while let Ok(event) = rx.recv().await {
-            // Check if event matches client's filter
-            if mgr.client_matches_event(&conn_id, &event) {
-                let json = serde_json::to_string(&event).unwrap_or_default();
-                if sender.send(Message::Text(json)).await.is_err() {
+    loop {
+        tokio::select! {
+            incoming = socket.recv() => {
+                let Some(incoming) = incoming else {
                     break;
+                };
+                let msg = match incoming {
+                    Ok(msg) => msg,
+                    Err(error) => {
+                        tracing::debug!(target = "engram::realtime", %error, "websocket read failed");
+                        break;
+                    }
+                };
+                idle.as_mut().reset(tokio::time::Instant::now() + config.read_idle_timeout);
+                match msg {
+                    Message::Text(text) => {
+                        if text.len() > config.max_message_bytes {
+                            metrics.oversized_messages.fetch_add(1, Ordering::Relaxed);
+                            close_socket(&mut socket, close_code::SIZE, CLOSE_REASON_MESSAGE_TOO_LARGE).await;
+                            break;
+                        }
+                        if let Ok(new_filter) = serde_json::from_str::<SubscriptionFilter>(&text) {
+                            manager.update_client_filter(&connection_id, new_filter);
+                            tracing::debug!("Updated filter for client {}", connection_id);
+                        }
+                    }
+                    Message::Binary(payload) => {
+                        if payload.len() > config.max_message_bytes {
+                            metrics.oversized_messages.fetch_add(1, Ordering::Relaxed);
+                            close_socket(&mut socket, close_code::SIZE, CLOSE_REASON_MESSAGE_TOO_LARGE).await;
+                            break;
+                        }
+                    }
+                    Message::Close(_) => break,
+                    Message::Ping(payload) => {
+                        if !send_socket(&mut socket, Message::Pong(payload)).await {
+                            break;
+                        }
+                    }
+                    Message::Pong(_) => {}
                 }
             }
-        }
-    }));
-
-    // Task to handle incoming messages from client
-    let conn_id = connection_id.clone();
-    let mgr = manager.clone();
-    let recv_task = AbortOnDropTask::new(tokio::spawn(async move {
-        while let Some(Ok(msg)) = receiver.next().await {
-            match msg {
-                Message::Text(text) => {
-                    // Try to parse as filter update
-                    if let Ok(new_filter) = serde_json::from_str::<SubscriptionFilter>(&text) {
-                        mgr.update_client_filter(&conn_id, new_filter);
-                        tracing::debug!("Updated filter for client {}", conn_id);
+            event = rx.recv() => {
+                let Ok(event) = event else {
+                    break;
+                };
+                if manager.client_matches_event(&connection_id, &event) {
+                    let Ok(json) = serde_json::to_string(&event) else {
+                        continue;
+                    };
+                    if !send_socket(&mut socket, Message::Text(json)).await {
+                        break;
                     }
                 }
-                Message::Close(_) => {
-                    break;
-                }
-                _ => {}
+            }
+            () = &mut idle => {
+                metrics.idle_disconnects.fetch_add(1, Ordering::Relaxed);
+                close_socket(&mut socket, close_code::POLICY, CLOSE_REASON_READ_IDLE).await;
+                break;
             }
         }
-    }));
+    }
 
-    await_peer_tasks(send_task, recv_task).await;
-
-    manager.unregister_client(&connection_id);
     tracing::info!("Client disconnected: {}", connection_id);
 }
 
-struct AbortOnDropTask {
-    handle: tokio::task::JoinHandle<()>,
+async fn close_socket(socket: &mut WebSocket, code: u16, reason: &'static str) {
+    let close = socket.send(Message::Close(Some(CloseFrame {
+        code,
+        reason: reason.into(),
+    })));
+    let _ = tokio::time::timeout(WS_CLOSE_TIMEOUT, close).await;
 }
 
-impl AbortOnDropTask {
-    fn new(handle: tokio::task::JoinHandle<()>) -> Self {
-        Self { handle }
-    }
-
-    async fn abort_and_wait(&mut self) {
-        self.handle.abort();
-        let _ = (&mut self.handle).await;
-    }
-}
-
-impl Drop for AbortOnDropTask {
-    fn drop(&mut self) {
-        self.handle.abort();
-    }
-}
-
-async fn await_peer_tasks(mut send_task: AbortOnDropTask, mut recv_task: AbortOnDropTask) {
-    tokio::select! {
-        _ = &mut send_task.handle => {
-            recv_task.abort_and_wait().await;
-        }
-        _ = &mut recv_task.handle => {
-            send_task.abort_and_wait().await;
-        }
-    }
+async fn send_socket(socket: &mut WebSocket, message: Message) -> bool {
+    matches!(
+        tokio::time::timeout(WS_WRITE_TIMEOUT, socket.send(message)).await,
+        Ok(Ok(()))
+    )
 }
 
 #[cfg(test)]
@@ -588,6 +744,56 @@ mod tests {
         (client, String::from_utf8(response).unwrap(), server)
     }
 
+    async fn spawn_resource_server(
+        manager: RealtimeManager,
+        auth_key: Option<&str>,
+        config: RealtimeConfig,
+        metrics: Arc<RealtimeMetrics>,
+    ) -> (
+        SocketAddr,
+        tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    ) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = RealtimeServer::router_with_resources(
+            manager,
+            auth_key.map(str::to_string),
+            HashSet::new(),
+            config,
+            metrics,
+        );
+        let server = tokio::spawn(async move { axum::serve(listener, app).await });
+        (address, server)
+    }
+
+    async fn websocket_handshake_to(
+        address: SocketAddr,
+        path: &str,
+        authorization: Option<&str>,
+    ) -> (tokio::net::TcpStream, String) {
+        let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+        let mut nonce = [0_u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut nonce);
+        let websocket_key = base64::engine::general_purpose::STANDARD.encode(nonce);
+        let authorization = authorization
+            .map(|value| format!("Authorization: {value}\r\n"))
+            .unwrap_or_default();
+        client
+            .write_all(
+                format!(
+                    "GET {path} HTTP/1.1\r\nHost: {address}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: {websocket_key}\r\n{authorization}\r\n"
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut response = Vec::new();
+        while !response.ends_with(b"\r\n\r\n") {
+            response.push(client.read_u8().await.unwrap());
+        }
+        (client, String::from_utf8(response).unwrap())
+    }
+
     async fn read_server_text(client: &mut tokio::net::TcpStream) -> String {
         let first = client.read_u8().await.unwrap();
         assert_eq!(first & 0x0f, 1, "expected a text websocket frame");
@@ -604,81 +810,48 @@ mod tests {
         String::from_utf8(payload).unwrap()
     }
 
-    struct TaskDropSignal(Arc<std::sync::atomic::AtomicBool>);
-
-    impl Drop for TaskDropSignal {
-        fn drop(&mut self) {
-            self.0.store(true, Ordering::SeqCst);
-        }
+    async fn write_masked_text(client: &mut tokio::net::TcpStream, payload: &[u8]) {
+        assert!(payload.len() <= 125);
+        let mut mask = [0_u8; 4];
+        rand::rngs::OsRng.fill_bytes(&mut mask);
+        client.write_u8(0x81).await.unwrap();
+        client
+            .write_u8(0x80 | u8::try_from(payload.len()).unwrap())
+            .await
+            .unwrap();
+        client.write_all(&mask).await.unwrap();
+        let masked = payload
+            .iter()
+            .enumerate()
+            .map(|(index, byte)| byte ^ mask[index % mask.len()])
+            .collect::<Vec<_>>();
+        client.write_all(&masked).await.unwrap();
     }
 
-    #[tokio::test]
-    async fn disconnect_cancels_blocked_send_peer() {
-        // Given: a send peer blocked waiting for an event and a completed receive peer.
-        let send_dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let send_signal = TaskDropSignal(send_dropped.clone());
-        let send_task = AbortOnDropTask::new(tokio::spawn(async move {
-            let _signal = send_signal;
-            std::future::pending::<()>().await;
-        }));
-        let recv_task = AbortOnDropTask::new(tokio::spawn(async {}));
-
-        // When: the receive peer observes the client disconnect.
-        await_peer_tasks(send_task, recv_task).await;
-
-        // Then: the blocked send peer is cancelled and awaited before cleanup returns.
-        assert!(send_dropped.load(Ordering::SeqCst));
+    async fn read_server_close(client: &mut tokio::net::TcpStream) -> (u16, String) {
+        let first = client.read_u8().await.unwrap();
+        assert_eq!(first & 0x0f, 8, "expected a websocket close frame");
+        let second = client.read_u8().await.unwrap();
+        assert_eq!(second & 0x80, 0, "server frames must not be masked");
+        let len = usize::from(second & 0x7f);
+        assert!((2..=125).contains(&len));
+        let code = client.read_u16().await.unwrap();
+        let mut reason = vec![0; len - 2];
+        client.read_exact(&mut reason).await.unwrap();
+        (code, String::from_utf8(reason).unwrap())
     }
 
-    #[tokio::test]
-    async fn send_failure_cancels_blocked_receive_peer() {
-        // Given: a completed send peer and a receive peer blocked waiting for client input.
-        let recv_dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let recv_signal = TaskDropSignal(recv_dropped.clone());
-        let send_task = AbortOnDropTask::new(tokio::spawn(async {}));
-        let recv_task = AbortOnDropTask::new(tokio::spawn(async move {
-            let _signal = recv_signal;
-            std::future::pending::<()>().await;
-        }));
-
-        // When: the send peer stops after its websocket write fails.
-        await_peer_tasks(send_task, recv_task).await;
-
-        // Then: the blocked receive peer is cancelled and awaited before cleanup returns.
-        assert!(recv_dropped.load(Ordering::SeqCst));
-    }
-
-    #[tokio::test]
-    async fn coordinator_cancellation_aborts_both_peers() {
-        // Given: two live peer tasks owned by a connection coordinator.
-        let send_dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let recv_dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let send_signal = TaskDropSignal(send_dropped.clone());
-        let recv_signal = TaskDropSignal(recv_dropped.clone());
-        let send_task = AbortOnDropTask::new(tokio::spawn(async move {
-            let _signal = send_signal;
-            std::future::pending::<()>().await;
-        }));
-        let recv_task = AbortOnDropTask::new(tokio::spawn(async move {
-            let _signal = recv_signal;
-            std::future::pending::<()>().await;
-        }));
-        let coordinator = tokio::spawn(await_peer_tasks(send_task, recv_task));
-        tokio::task::yield_now().await;
-
-        // When: the connection coordinator is cancelled before either peer finishes.
-        coordinator.abort();
-        let _ = coordinator.await;
-        for _ in 0..100 {
-            if send_dropped.load(Ordering::SeqCst) && recv_dropped.load(Ordering::SeqCst) {
-                break;
+    async fn wait_for_active(metrics: &RealtimeMetrics, expected: u64) {
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                if metrics.active_connections.load(Ordering::Relaxed) == expected {
+                    break;
+                }
+                tokio::task::yield_now().await;
             }
-            tokio::task::yield_now().await;
-        }
-
-        // Then: ownership cancellation aborts both peer tasks instead of detaching them.
-        assert!(send_dropped.load(Ordering::SeqCst));
-        assert!(recv_dropped.load(Ordering::SeqCst));
+        })
+        .await
+        .expect("active websocket gauge must converge");
     }
 
     #[test]
@@ -865,6 +1038,101 @@ mod tests {
         let (_client, response, server) =
             websocket_handshake(RealtimeManager::new(), "/ws", None, None, None, &[allowed]).await;
         assert!(response.starts_with("HTTP/1.1 101"));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn connection_cap_rejects_cap_plus_one_and_cleanup_restores_gauge() {
+        let manager = RealtimeManager::new();
+        let metrics = Arc::new(RealtimeMetrics::default());
+        let config = RealtimeConfig {
+            max_connections: 1,
+            max_message_bytes: 1024,
+            read_idle_timeout: std::time::Duration::from_secs(5),
+        };
+        let (address, server) = spawn_resource_server(manager, None, config, metrics.clone()).await;
+
+        let (first, response) = websocket_handshake_to(address, "/ws", None).await;
+        assert!(response.starts_with("HTTP/1.1 101"));
+        wait_for_active(&metrics, 1).await;
+
+        let (_second, response) = websocket_handshake_to(address, "/ws", None).await;
+        assert!(response.starts_with("HTTP/1.1 503"));
+        assert_eq!(metrics.connection_cap_rejections.load(Ordering::Relaxed), 1);
+
+        drop(first);
+        wait_for_active(&metrics, 0).await;
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.accepted_connections, 1);
+        assert_eq!(snapshot.completed_disconnects, 1);
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn oversized_message_closes_with_1009_without_disturbing_healthy_client() {
+        let manager = RealtimeManager::new();
+        let metrics = Arc::new(RealtimeMetrics::default());
+        let config = RealtimeConfig {
+            max_connections: 2,
+            max_message_bytes: 8,
+            read_idle_timeout: std::time::Duration::from_secs(5),
+        };
+        let (address, server) =
+            spawn_resource_server(manager.clone(), Some("secret"), config, metrics.clone()).await;
+        let (mut oversized, response) =
+            websocket_handshake_to(address, "/ws", Some("Bearer secret")).await;
+        assert!(response.starts_with("HTTP/1.1 101"));
+        let (mut healthy, response) =
+            websocket_handshake_to(address, "/ws", Some("Bearer secret")).await;
+        assert!(response.starts_with("HTTP/1.1 101"));
+        wait_for_active(&metrics, 2).await;
+
+        write_masked_text(&mut oversized, b"123456789").await;
+        let (code, reason) = read_server_close(&mut oversized).await;
+        assert_eq!(code, close_code::SIZE);
+        assert_eq!(reason, CLOSE_REASON_MESSAGE_TOO_LARGE);
+        wait_for_active(&metrics, 1).await;
+        assert_eq!(metrics.oversized_messages.load(Ordering::Relaxed), 1);
+
+        manager.broadcast(
+            RealtimeEvent::memory_created(7, "healthy stream".to_string())
+                .with_workspace("default"),
+        );
+        let payload = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            read_server_text(&mut healthy),
+        )
+        .await
+        .expect("healthy authenticated stream remains available");
+        assert!(payload.contains("healthy stream"));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn idle_client_closes_with_1008_and_records_cleanup_metrics() {
+        let metrics = Arc::new(RealtimeMetrics::default());
+        let config = RealtimeConfig {
+            max_connections: 1,
+            max_message_bytes: 1024,
+            read_idle_timeout: std::time::Duration::from_millis(30),
+        };
+        let (address, server) =
+            spawn_resource_server(RealtimeManager::new(), None, config, metrics.clone()).await;
+        let (mut client, response) = websocket_handshake_to(address, "/ws", None).await;
+        assert!(response.starts_with("HTTP/1.1 101"));
+
+        let (code, reason) = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            read_server_close(&mut client),
+        )
+        .await
+        .expect("idle client must be disconnected");
+        assert_eq!(code, close_code::POLICY);
+        assert_eq!(reason, CLOSE_REASON_READ_IDLE);
+        wait_for_active(&metrics, 0).await;
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.idle_disconnects, 1);
+        assert_eq!(snapshot.completed_disconnects, 1);
         server.abort();
     }
 

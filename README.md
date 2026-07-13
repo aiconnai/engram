@@ -288,6 +288,9 @@ server configured as usual.
 | `ENGRAM_WS_BIND_ADDRESS` | WebSocket server bind address | `127.0.0.1` |
 | `ENGRAM_WS_AUTH_KEY` | Bearer token for WebSocket upgrade authentication | - |
 | `ENGRAM_WS_ALLOWED_ORIGINS` | Comma-separated exact browser origins allowed for WebSocket upgrades (no wildcard) | - |
+| `ENGRAM_WS_MAX_CONNECTIONS` | Maximum simultaneous upgraded WebSocket connections | `128` |
+| `ENGRAM_WS_MAX_MESSAGE_BYTES` | Maximum bytes in one inbound WebSocket frame or message | `65536` |
+| `ENGRAM_WS_READ_IDLE_TIMEOUT_SECONDS` | Maximum post-handshake silence between inbound frames | `60` |
 | `ENGRAM_GRPC_PORT` | gRPC transport port (requires `--features grpc`) | `50051` |
 | `ENGRAM_GRPC_BIND_ADDRESS` | gRPC transport bind address (requires `--features grpc`) | `127.0.0.1` |
 | `ENGRAM_GRPC_API_KEY` | Bearer token for the gRPC transport | - |
@@ -343,7 +346,12 @@ the matching authentication control; public WebSocket binds require
 default agent interface. WebSocket subscriptions select one workspace with
 `/ws?workspace=<name>` (default: `default`); browser clients must send an Origin
 listed exactly in `ENGRAM_WS_ALLOWED_ORIGINS`, while non-browser clients may
-omit the Origin header.
+omit the Origin header. Resource limits default to 128 simultaneous connections,
+64 KiB per inbound frame/message, and a 60-second read-idle timeout. A saturated
+listener rejects the upgrade with HTTP `503`; oversized clients close with
+WebSocket code `1009`, and read-idle clients close with code `1008`. Aggregate
+resource counters are exposed by the WebSocket listener's `/health` response;
+they never include principals, credentials, workspaces, or message content.
 
 ---
 
