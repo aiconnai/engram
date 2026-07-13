@@ -6,9 +6,9 @@
 | Active sprint | `Harness maintenance — live-state closeout` |
 | Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
-| Last review | `2026-07-13 — pass: docs/harness/reviews/2026-07-13-engram-10-of-10-wave4-post.md` |
+| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-13 — status=pass (mode=full; timestamp 2026-07-13T23:20:58Z)` |
-| Last commit | `15c5847344c66bcff547d80675e4b6da40f25ecd` |
+| Last commit | `a0404587d8f552edc5ea649da1e2206dc17802c5` |
 | Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -104,6 +104,7 @@
   Release and Homebrew jobs were **skipped**. No tag, registry, release,
   Homebrew, or deploy write occurred. No claim that v0.22.0 or any SDK is
   published.
+- Independent Wave 4 review: `docs/harness/reviews/2026-07-13-engram-10-of-10-wave4-post.md` (`REVIEW_VERDICT: PASS`).
 - Closeout then aligned `scripts/check-pdf-worker-packaging.py` with the Wave 4
   release workflow so `make ci` fails closed only on real packaging regressions.
 - Atomic descriptor-bound SQLite opening remains deferred (stock VFS could not
