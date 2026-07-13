@@ -1,0 +1,273 @@
+name: SDK Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "SDK channel to build or publish"
+        required: true
+        default: all
+        type: choice
+        options: [all, python, npm]
+      dry_run:
+        description: "Build and verify packages without registry access"
+        required: true
+        default: true
+        type: boolean
+      sha:
+        description: "Exact commit SHA that this run must build"
+        required: true
+        type: string
+      publish:
+        description: "Request one protected registry write"
+        required: true
+        default: false
+        type: boolean
+      tag:
+        description: "Exact protected core release tag for a publish run"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  preflight:
+    name: SDK Release Preflight
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.guard.outputs.channel }}
+      dry_run: ${{ steps.guard.outputs.dry_run }}
+      publish: ${{ steps.guard.outputs.publish }}
+      release_sha: ${{ steps.guard.outputs.release_sha }}
+      release_tag: ${{ steps.guard.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+      - name: Validate event, ref, channel, and SHA before registry access
+        id: guard
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_SHA: ${{ inputs.sha }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+          INPUT_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]] || { echo "::error::SDK releases require explicit dispatch"; exit 1; }
+          [[ "${INPUT_CHANNEL}" =~ ^(all|python|npm)$ ]] || { echo "::error::invalid SDK channel"; exit 1; }
+          [[ "${INPUT_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full lowercase commit SHA"; exit 1; }
+          [[ "${INPUT_SHA}" == "${GITHUB_SHA}" ]] || { echo "::error::supplied SHA does not match github.sha"; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "${INPUT_SHA}" ]] || { echo "::error::checked-out commit does not match supplied SHA"; exit 1; }
+
+          if [[ "${INPUT_DRY_RUN}" == "true" ]]; then
+            [[ "${INPUT_PUBLISH}" == "false" ]] || { echo "::error::dry-run cannot publish"; exit 1; }
+            [[ -z "${INPUT_TAG}" ]] || { echo "::error::dry-run does not accept a release tag"; exit 1; }
+          else
+            [[ "${INPUT_PUBLISH}" == "true" ]] || { echo "::error::non-dry-run must explicitly request publish"; exit 1; }
+            [[ "${INPUT_CHANNEL}" != "all" ]] || { echo "::error::publish dispatch must select exactly one registry"; exit 1; }
+            [[ "${INPUT_TAG}" == "v0.22.0" ]] || { echo "::error::publish requires the approved v0.22.0 tag"; exit 1; }
+            [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == "${INPUT_TAG}" ]] || { echo "::error::publish requires the exact tag ref"; exit 1; }
+            [[ "$(git cat-file -t "${INPUT_TAG}")" == "tag" ]] || { echo "::error::publish requires an annotated tag object"; exit 1; }
+            git verify-tag "${INPUT_TAG}" >/dev/null || { echo "::error::publish requires a cryptographically signed tag"; exit 1; }
+            [[ "$(git rev-list -n 1 "${INPUT_TAG}^{commit}")" == "${INPUT_SHA}" ]] || { echo "::error::tag, github.sha, and supplied SHA do not agree"; exit 1; }
+            gh release view "${INPUT_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName --jq 'select(.isDraft == false and .isPrerelease == false and .tagName == "v0.22.0")' | grep -q . || {
+              echo "::error::approved immutable GitHub Release is missing"; exit 1;
+            }
+          fi
+          {
+            echo "channel=${INPUT_CHANNEL}"
+            echo "dry_run=${INPUT_DRY_RUN}"
+            echo "publish=${INPUT_PUBLISH}"
+            echo "release_sha=${INPUT_SHA}"
+            echo "release_tag=${INPUT_TAG}"
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Verify package names and target-version availability read-only
+        env:
+          CHANNEL: ${{ steps.guard.outputs.channel }}
+          DRY_RUN: ${{ steps.guard.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "${CHANNEL}" == "all" || "${CHANNEL}" == "python" ]]; then
+            python3 -c 'import json,urllib.request; payload=json.load(urllib.request.urlopen("https://pypi.org/pypi/engram-client/json",timeout=20)); assert payload.get("info",{}).get("name","").lower().replace("_","-")=="engram-client", "PyPI package-name verification failed"'
+            if [[ "${DRY_RUN}" == "false" ]] && curl --fail --silent --output /dev/null "https://pypi.org/pypi/engram-client/0.5.0/json"; then
+              echo "::error::PyPI version 0.5.0 already exists"
+              exit 1
+            fi
+          fi
+          if [[ "${CHANNEL}" == "all" || "${CHANNEL}" == "npm" ]]; then
+            test "$(npm view engram-client name)" = "engram-client"
+            if [[ "${DRY_RUN}" == "false" ]] && npm view engram-client@0.5.0 version >/dev/null 2>&1; then
+              echo "::error::npm version 0.5.0 already exists"
+              exit 1
+            fi
+          fi
+
+  build-python:
+    name: Build Python SDK
+    needs: preflight
+    if: needs.preflight.outputs.channel == 'all' || needs.preflight.outputs.channel == 'python'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - name: Build and check wheel and sdist
+        env:
+          RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check 'build>=1,<2' 'twine>=6,<7'
+          python3 -m build --outdir sdk-artifacts/python sdks/python
+          python3 -m twine check sdk-artifacts/python/*
+          scripts/verify-sdk-artifacts.sh --write-metadata python --artifact-dir sdk-artifacts/python --expected-sha "${RELEASE_SHA}"
+      - name: Verify installable Python package artifacts
+        run: scripts/verify-sdk-artifacts.sh --channel python --artifact-dir sdk-artifacts --expected-sha "${{ needs.preflight.outputs.release_sha }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-python
+          if-no-files-found: error
+          path: sdk-artifacts/python/
+
+  build-npm:
+    name: Build TypeScript SDK
+    needs: preflight
+    if: needs.preflight.outputs.channel == 'all' || needs.preflight.outputs.channel == 'npm'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: sdks/typescript/package-lock.json
+      - name: Build, test, and pack npm tarball
+        env:
+          RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          cd sdks/typescript
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run type-check
+          npm test
+          npm run build
+          mkdir -p ../../sdk-artifacts/npm
+          npm pack --pack-destination ../../sdk-artifacts/npm
+          cd ../..
+          scripts/verify-sdk-artifacts.sh --write-metadata npm --artifact-dir sdk-artifacts/npm --expected-sha "${RELEASE_SHA}"
+      - name: Verify installable npm package artifact
+        run: scripts/verify-sdk-artifacts.sh --channel npm --artifact-dir sdk-artifacts --expected-sha "${{ needs.preflight.outputs.release_sha }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-npm
+          if-no-files-found: error
+          path: sdk-artifacts/npm/
+
+  dry-run-summary:
+    name: Verify SDK dry-run
+    needs: [preflight, build-python, build-npm]
+    if: always() && needs.preflight.result == 'success' && needs.preflight.outputs.dry_run == 'true' && (needs.build-python.result == 'success' || needs.build-python.result == 'skipped') && (needs.build-npm.result == 'success' || needs.build-npm.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert dry-run terminal state
+        run: |
+          test "${{ needs.preflight.outputs.publish }}" = false
+          echo "Dry-run complete: no registry request was attempted."
+
+  publish-python:
+    name: Publish Python SDK
+    needs: [preflight, build-python]
+    if: needs.preflight.outputs.dry_run == 'false' && needs.preflight.outputs.publish == 'true' && needs.preflight.outputs.channel == 'python'
+    runs-on: ubuntu-latest
+    environment: release-pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - name: Revalidate protected tag and release after environment approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_SHA}" = "${RELEASE_SHA}"
+          test "${GITHUB_REF_TYPE}" = tag
+          test "${GITHUB_REF_NAME}" = "${RELEASE_TAG}"
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          test "$(git cat-file -t "${RELEASE_TAG}")" = tag
+          git verify-tag "${RELEASE_TAG}" >/dev/null
+          test "$(git rev-list -n 1 "${RELEASE_TAG}^{commit}")" = "${RELEASE_SHA}"
+          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName --jq 'select(.isDraft == false and .isPrerelease == false and .tagName == "v0.22.0")' | grep -q .
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: sdk-python
+          path: dist
+      - name: Reverify the exact candidate before registry access
+        run: scripts/verify-sdk-artifacts.sh --channel python --artifact-dir dist --expected-sha "${{ needs.preflight.outputs.release_sha }}"
+      - name: Prepare distributions only
+        run: |
+          mkdir -p dist/packages
+          find dist -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) -exec cp {} dist/packages/ \;
+      - name: Publish with PyPI trusted publishing
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          packages-dir: dist/packages/
+
+  publish-npm:
+    name: Publish TypeScript SDK
+    needs: [preflight, build-npm]
+    if: needs.preflight.outputs.dry_run == 'false' && needs.preflight.outputs.publish == 'true' && needs.preflight.outputs.channel == 'npm'
+    runs-on: ubuntu-latest
+    environment: release-npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - name: Revalidate protected tag and release after environment approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_SHA}" = "${RELEASE_SHA}"
+          test "${GITHUB_REF_TYPE}" = tag
+          test "${GITHUB_REF_NAME}" = "${RELEASE_TAG}"
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          test "$(git cat-file -t "${RELEASE_TAG}")" = tag
+          git verify-tag "${RELEASE_TAG}" >/dev/null
+          test "$(git rev-list -n 1 "${RELEASE_TAG}^{commit}")" = "${RELEASE_SHA}"
+          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName --jq 'select(.isDraft == false and .isPrerelease == false and .tagName == "v0.22.0")' | grep -q .
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: sdk-npm
+          path: dist
+      - name: Reverify the exact candidate before registry access
+        run: scripts/verify-sdk-artifacts.sh --channel npm --artifact-dir dist --expected-sha "${{ needs.preflight.outputs.release_sha }}"
+      - name: Publish exact verified tarball with npm trusted publishing
+        run: |
+          set -euo pipefail
+          tarball="$(find dist -maxdepth 1 -name '*.tgz' -print -quit)"
+          test -n "${tarball}"
+          npm publish "${tarball}" --access public --provenance
