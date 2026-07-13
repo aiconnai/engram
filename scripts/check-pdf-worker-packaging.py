@@ -6,11 +6,25 @@ import ast
 from pathlib import Path
 
 
-RELEASE_BUILD = "cargo build --release --target ${{ matrix.target }} --features pdf --bin engram-server --bin engram-cli --bin engram-pdf-worker"
+# CI still builds without --locked; the release workflow requires a locked graph.
+CI_RELEASE_BUILD = (
+    "cargo build --release --target ${{ matrix.target }} --features pdf "
+    "--bin engram-server --bin engram-cli --bin engram-pdf-worker"
+)
+RELEASE_BUILD = (
+    "cargo build --locked --release --target ${{ matrix.target }} --features pdf "
+    "--bin engram-server --bin engram-cli --bin engram-pdf-worker"
+)
+# Back-compat alias used by unit fixtures that still refer to RELEASE_BUILD.
+# Prefer the explicit CI_RELEASE_BUILD / RELEASE_BUILD names for new checks.
 RELEASE_ARCHIVE = 'tar -czf "../../../${ARCHIVE}" engram-server engram-cli engram-pdf-worker'
 CI_WORKER_PATH = "target/${{ matrix.target }}/release/engram-pdf-worker"
 HOMEBREW_UPDATE_COMMAND = "python3 ../engram-source/.github/scripts/ensure-pdf-worker-homebrew.py Formula/engram.rb"
-VERSION_GUARD = 'if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then'
+VERSION_GUARD = 'if [[ ! "${INPUT_VERSION}" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then'
+CREATE_BUNDLE = "scripts/verify-release-artifacts.sh \\"
+SMOKE_BINARIES = "scripts/test-release-binary.sh \\"
+LINUX_ONLY_WORKER_SHELL = '[[ "$target" == *-linux-* ]] && binaries+=(engram-pdf-worker)'
+LINUX_ONLY_WORKER_SMOKE = "[[ \"$target\" == *-linux-* ]] && expected+=(engram-pdf-worker)"
 
 
 def read_contract(root: Path, relative: str, missing: list[str]) -> str | None:
@@ -95,35 +109,64 @@ def require_step_lines(
             missing.append(f"{relative}: step {name}: {required}")
 
 
+def require_script_contains(missing: list[str], relative: str, text: str | None, needle: str) -> None:
+    if text is None:
+        return
+    if needle not in text:
+        missing.append(f"{relative}: missing required contract line: {needle}")
+
+
 def missing_contracts(root: Path) -> list[str]:
     missing: list[str] = []
     release_path = ".github/workflows/release.yml"
     release = read_contract(root, release_path, missing)
     if release is not None:
-        require_step_lines(missing, release_path, release, "Validate release version", (f"          {VERSION_GUARD}",))
-        require_step_lines(missing, release_path, release, "Build release binaries", (f"        run: {RELEASE_BUILD}",))
-        require_step_lines(missing, release_path, release, "Package (Unix)", (
-            "          if [[ \"${{ matrix.target }}\" == *-linux-* ]]; then",
-            f"            {RELEASE_ARCHIVE}",
-            '            tar -czf "../../../${ARCHIVE}" engram-server engram-cli',
-        ))
         require_step_lines(
             missing,
             release_path,
             release,
-            "Update formula",
-            (
-                f"          {HOMEBREW_UPDATE_COMMAND}",
-                "          if grep -F 'bin.install \"engram-pdf-worker\"' Formula/engram.rb >/dev/null; then",
-                '            echo "macOS formula must not install unsupported PDF worker" >&2',
-            ),
-            "        if: steps.homebrew-token.outputs.available == 'true'",
+            "Validate event, ref, and SHA before any write",
+            (f"          {VERSION_GUARD}",),
         )
+        require_step_lines(
+            missing,
+            release_path,
+            release,
+            "Build release binaries",
+            (f"        run: {RELEASE_BUILD}",),
+        )
+        require_step_lines(
+            missing,
+            release_path,
+            release,
+            "Package deterministic archive and supply-chain evidence",
+            (
+                f"          {CREATE_BUNDLE}",
+                f"          {SMOKE_BINARIES}",
+            ),
+        )
+        require_step_lines(
+            missing,
+            release_path,
+            release,
+            "Update the formula from verified checksums",
+            (f"          {HOMEBREW_UPDATE_COMMAND}",),
+        )
+
+    verifier_path = "scripts/verify-release-artifacts.sh"
+    verifier = read_contract(root, verifier_path, missing)
+    require_script_contains(missing, verifier_path, verifier, LINUX_ONLY_WORKER_SHELL)
+    require_script_contains(missing, verifier_path, verifier, "engram-pdf-worker")
+
+    smoke_path = "scripts/test-release-binary.sh"
+    smoke = read_contract(root, smoke_path, missing)
+    require_script_contains(missing, smoke_path, smoke, LINUX_ONLY_WORKER_SMOKE)
+    require_script_contains(missing, smoke_path, smoke, "engram-pdf-worker)")
 
     ci_path = ".github/workflows/ci.yml"
     ci = read_contract(root, ci_path, missing)
     if ci is not None:
-        require_step_lines(missing, ci_path, ci, "Build release", (f"        run: {RELEASE_BUILD}",))
+        require_step_lines(missing, ci_path, ci, "Build release", (f"        run: {CI_RELEASE_BUILD}",))
         require_step_lines(
             missing,
             ci_path,
