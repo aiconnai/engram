@@ -54,6 +54,33 @@ HTTP auth is evaluated before MCP request rate limiting. Unauthorized requests
 do not consume rate-limit tokens and should continue to return `401` even when a
 bucket for the same client identity is exhausted.
 
+## HTTP resource bounds
+
+MCP request bodies and the time spent establishing MCP/SSE responses are
+bounded by default:
+
+- `ENGRAM_HTTP_MAX_BODY_BYTES` (default: `1048576`, or 1 MiB)
+- `ENGRAM_HTTP_REQUEST_TIMEOUT_MS` (default: `30000`, or 30 seconds)
+
+Both settings must be positive integers. Invalid values and `0` fail closed to
+the documented safe defaults; there is no unlimited sentinel. Requests larger
+than the configured body limit return `413 Payload Too Large` before JSON
+parsing. Requests that do not complete within the configured lifetime return
+`408 Request Timeout`; MCP responses use JSON-RPC code `-32008` and message
+`Request Timeout`.
+
+Bearer authentication runs before request-body collection and parsing, so an
+unauthenticated oversized request returns `401`, not `413`. The timeout covers
+authentication, body collection, JSON extraction, and asynchronous response
+setup. Engram's current MCP handler trait is synchronous; once handler dispatch
+begins it cannot be safely preempted, so the deadline prevents slow/incomplete
+requests from reaching it rather than claiming unsafe cancellation. For
+`GET /v1/events`, the timeout covers authentication and SSE setup only; an
+established event stream remains long-lived and is governed by its
+keepalive/reconnection behavior. A notification that times out before parsing
+cannot yet be identified as a notification and receives the same stable
+JSON-RPC `-32008` timeout response; parsed notifications complete with `202`.
+
 ## Rate limiting (HTTP MCP)
 
 Engram can enforce a token-bucket rate limit for MCP HTTP requests:

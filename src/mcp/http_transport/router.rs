@@ -4,7 +4,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::http::HeaderValue;
+use axum::extract::{DefaultBodyLimit, Request};
+use axum::http::{HeaderValue, StatusCode};
+use axum::middleware::{self, Next};
 use axum::{
     extract::State,
     response::IntoResponse,
@@ -21,7 +23,7 @@ use super::rate_limit::{
     RateLimiterConfig, RateLimiterState, RATE_LIMIT_MAX_BUCKETS, RATE_LIMIT_STALE_AFTER_SECS,
 };
 use super::security_config::HttpSecurityConfig;
-use super::{normalize_api_key, AppState, HttpTransportMetrics};
+use super::{authenticate_transport_principal, normalize_api_key, AppState, HttpTransportMetrics};
 use crate::realtime::RealtimeManager;
 
 /// `GET /health` -- lightweight liveness / readiness probe.
@@ -145,24 +147,103 @@ pub(super) fn build_router(
         None
     };
 
+    let security = HttpSecurityConfig::from_env();
     let state = AppState {
         handler,
         api_key,
         realtime,
         rate_limiter,
         metrics: Arc::new(HttpTransportMetrics::default()),
-        security: HttpSecurityConfig::from_env(),
+        security,
     };
 
     let cors = build_cors_layer();
 
-    Router::new()
+    let mcp_routes = Router::new()
         .route("/mcp", post(handle_mcp))
         .route("/v1/mcp", post(handle_mcp))
-        .route("/health", get(handle_health))
+        .layer(DefaultBodyLimit::max(state.security.max_body_bytes))
+        // Authentication remains outside body collection/parsing. The timeout
+        // added below is outermost so it covers authentication as well.
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_mcp_auth,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_request_timeout,
+        ));
+
+    let event_routes = Router::new()
         .route("/v1/events", get(handle_events))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_sse_auth,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_request_timeout,
+        ));
+
+    Router::new()
+        .merge(mcp_routes)
+        .merge(event_routes)
+        .route("/health", get(handle_health))
         .layer(cors)
         .with_state(state)
+}
+
+async fn enforce_mcp_auth(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> axum::response::Response {
+    if authenticate_transport_principal(&state.api_key, request.headers()).is_err() {
+        state.metrics.on_mcp_preparse_unauthorized();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(super::super::protocol::McpResponse::error(
+                None,
+                -32001,
+                "Unauthorized".to_string(),
+            )),
+        )
+            .into_response();
+    }
+    next.run(request).await
+}
+
+async fn enforce_sse_auth(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> axum::response::Response {
+    if authenticate_transport_principal(&state.api_key, request.headers()).is_err() {
+        state.metrics.on_events_request(true, false);
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    next.run(request).await
+}
+
+async fn enforce_request_timeout(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> axum::response::Response {
+    let is_mcp = request.uri().path() == "/mcp" || request.uri().path() == "/v1/mcp";
+    match tokio::time::timeout(state.security.request_timeout, next.run(request)).await {
+        Ok(response) => response,
+        Err(_) if is_mcp => (
+            StatusCode::REQUEST_TIMEOUT,
+            Json(super::super::protocol::McpResponse::error(
+                None,
+                -32008,
+                "Request Timeout".to_string(),
+            )),
+        )
+            .into_response(),
+        Err(_) => StatusCode::REQUEST_TIMEOUT.into_response(),
+    }
 }
 
 // ---------------------------------------------------------------------------

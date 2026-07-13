@@ -192,6 +192,139 @@ fn public_http_with_key_authenticates_mcp_and_sse() {
 }
 
 #[test]
+fn http_body_limit_accepts_normal_body_and_rejects_limit_plus_one_before_parse() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn_with_env(
+        &[
+            "--transport",
+            "http",
+            "--http-port",
+            &port.to_string(),
+            "--http-api-key",
+            "secret-key",
+        ],
+        &[("ENGRAM_HTTP_MAX_BODY_BYTES", "256")],
+    )
+    .expect("spawn body-limited server");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("readiness");
+
+    let normal = http_post_json(port, "/mcp", initialize_request(), Some("secret-key"))
+        .expect("normal bounded request");
+    assert_eq!(normal.status, 200, "response: {}", normal.raw);
+
+    let notification = http_post_json(port, "/mcp", notification_request(), Some("secret-key"))
+        .expect("bounded notification");
+    assert_eq!(notification.status, 202, "response: {}", notification.raw);
+
+    let oversized =
+        http_post_raw(port, "/mcp", &[b'x'; 257], Some("secret-key")).expect("oversized request");
+    assert_eq!(oversized.status, 413, "response: {}", oversized.raw);
+}
+
+#[test]
+fn http_auth_rejects_oversized_body_before_collection_or_json_parse() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn_with_env(
+        &[
+            "--transport",
+            "http",
+            "--http-port",
+            &port.to_string(),
+            "--http-api-key",
+            "secret-key",
+        ],
+        &[("ENGRAM_HTTP_MAX_BODY_BYTES", "64")],
+    )
+    .expect("spawn authenticated body-limited server");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("readiness");
+
+    let response = http_post_raw(port, "/v1/mcp", &[b'x'; 65], None)
+        .expect("unauthenticated oversized request");
+    assert_eq!(response.status, 401, "response: {}", response.raw);
+}
+
+#[test]
+fn http_request_timeout_bounds_slow_body_setup_with_stable_response() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn_with_env(
+        &[
+            "--transport",
+            "http",
+            "--http-port",
+            &port.to_string(),
+            "--http-api-key",
+            "secret-key",
+        ],
+        &[("ENGRAM_HTTP_REQUEST_TIMEOUT_MS", "100")],
+    )
+    .expect("spawn request-timeout server");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("readiness");
+
+    let response = http_post_slow_partial_body(port, "/mcp", 64, b"{", "secret-key")
+        .expect("slow body should receive timeout response");
+    assert_eq!(response.status, 408, "response: {}", response.raw);
+    assert!(
+        response.body.contains("Request Timeout"),
+        "stable timeout body missing: {}",
+        response.raw
+    );
+
+    // Cancellation of the timed-out extraction must leave the listener healthy.
+    let healthy = http_post_json(port, "/mcp", initialize_request(), Some("secret-key"))
+        .expect("healthy request after timeout");
+    assert_eq!(healthy.status, 200, "response: {}", healthy.raw);
+}
+
+#[test]
+fn http_timeout_bounds_sse_setup_but_not_established_stream() {
+    let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
+    let port = pick_loopback_port();
+    let mut process = ServerProcess::spawn_with_env(
+        &[
+            "--transport",
+            "http",
+            "--http-port",
+            &port.to_string(),
+            "--http-api-key",
+            "secret-key",
+        ],
+        &[("ENGRAM_HTTP_REQUEST_TIMEOUT_MS", "100")],
+    )
+    .expect("spawn SSE timeout server");
+    process
+        .wait_for_log(&format!("HTTP transport listening on 127.0.0.1:{port}"))
+        .expect("readiness");
+
+    let mut stream = open_sse_stream(port, "secret-key").expect("authorized SSE setup");
+    thread::sleep(Duration::from_millis(250));
+    stream
+        .set_nonblocking(true)
+        .expect("set SSE stream nonblocking");
+    let mut chunk = [0_u8; 256];
+    loop {
+        match stream.read(&mut chunk) {
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+            Ok(0) => panic!("established SSE stream was closed by setup timeout"),
+            Ok(_) => continue,
+            Err(error) => panic!("unexpected SSE read error: {error}"),
+        }
+    }
+
+    let healthy = http_post_json(port, "/mcp", initialize_request(), Some("secret-key"))
+        .expect("healthy MCP request while SSE remains open");
+    assert_eq!(healthy.status, 200, "response: {}", healthy.raw);
+}
+
+#[test]
 fn trusted_proxy_spoofed_forwarding_is_ignored_by_rate_key() {
     let _guard = HTTP_SECURITY_TEST_LOCK.lock().expect("test lock");
     let port = pick_loopback_port();
@@ -479,6 +612,46 @@ fn http_post_json_with_headers(
     http_request(port, &request)
 }
 
+fn http_post_raw(
+    port: u16,
+    path: &str,
+    body: &[u8],
+    bearer: Option<&str>,
+) -> Result<HttpResponse, String> {
+    let auth = bearer
+        .map(|token| format!("Authorization: Bearer {token}\r\n"))
+        .unwrap_or_default();
+    let headers = format!(
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{auth}Connection: close\r\n\r\n",
+        body.len()
+    );
+    let mut request = headers.into_bytes();
+    request.extend_from_slice(body);
+    http_request_bytes(port, &request)
+}
+
+fn http_post_slow_partial_body(
+    port: u16,
+    path: &str,
+    content_length: usize,
+    partial_body: &[u8],
+    bearer: &str,
+) -> Result<HttpResponse, String> {
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|err| err.to_string())?;
+    stream
+        .set_read_timeout(Some(IO_TIMEOUT))
+        .map_err(|err| err.to_string())?;
+    let headers = format!(
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: {content_length}\r\nAuthorization: Bearer {bearer}\r\nConnection: close\r\n\r\n"
+    );
+    stream
+        .write_all(headers.as_bytes())
+        .and_then(|_| stream.write_all(partial_body))
+        .and_then(|_| stream.flush())
+        .map_err(|err| err.to_string())?;
+    read_http_response(&mut stream)
+}
+
 fn http_get(port: u16, path: &str, bearer: Option<&str>) -> Result<HttpResponse, String> {
     let auth = bearer
         .map(|token| format!("Authorization: Bearer {token}\r\n"))
@@ -488,16 +661,55 @@ fn http_get(port: u16, path: &str, bearer: Option<&str>) -> Result<HttpResponse,
     http_request(port, &request)
 }
 
-fn http_request(port: u16, request: &str) -> Result<HttpResponse, String> {
+fn open_sse_stream(port: u16, bearer: &str) -> Result<TcpStream, String> {
     let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|err| err.to_string())?;
     stream
         .set_read_timeout(Some(IO_TIMEOUT))
         .map_err(|err| err.to_string())?;
+    let request = format!(
+        "GET /v1/events HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {bearer}\r\nConnection: keep-alive\r\n\r\n"
+    );
     stream
         .write_all(request.as_bytes())
+        .and_then(|_| stream.flush())
         .map_err(|err| err.to_string())?;
+
+    let mut raw = Vec::new();
+    let mut byte = [0_u8; 1];
+    while !raw.ends_with(b"\r\n\r\n") {
+        stream
+            .read_exact(&mut byte)
+            .map_err(|err| err.to_string())?;
+        raw.push(byte[0]);
+        if raw.len() > 16 * 1024 {
+            return Err("SSE response headers exceeded 16 KiB".to_string());
+        }
+    }
+    let headers = String::from_utf8_lossy(&raw);
+    if !headers.starts_with("HTTP/1.1 200")
+        || !headers.to_ascii_lowercase().contains("text/event-stream")
+    {
+        return Err(format!("unexpected SSE response: {headers}"));
+    }
+    Ok(stream)
+}
+
+fn http_request(port: u16, request: &str) -> Result<HttpResponse, String> {
+    http_request_bytes(port, request.as_bytes())
+}
+
+fn http_request_bytes(port: u16, request: &[u8]) -> Result<HttpResponse, String> {
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|err| err.to_string())?;
+    stream
+        .set_read_timeout(Some(IO_TIMEOUT))
+        .map_err(|err| err.to_string())?;
+    stream.write_all(request).map_err(|err| err.to_string())?;
     stream.flush().map_err(|err| err.to_string())?;
 
+    read_http_response(&mut stream)
+}
+
+fn read_http_response(stream: &mut TcpStream) -> Result<HttpResponse, String> {
     let mut raw = String::new();
     let mut buf = [0_u8; 1024];
     loop {
@@ -547,6 +759,14 @@ fn initialize_request() -> serde_json::Value {
             "capabilities": {},
             "clientInfo": {"name": "http-security-test", "version": "0.0.0"}
         }
+    })
+}
+
+fn notification_request() -> serde_json::Value {
+    json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized",
+        "params": {}
     })
 }
 

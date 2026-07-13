@@ -68,6 +68,13 @@ struct HttpTransportMetricsSnapshot {
 }
 
 impl HttpTransportMetrics {
+    fn on_mcp_preparse_unauthorized(&self) {
+        self.mcp_requests_total.fetch_add(1, Ordering::Relaxed);
+        self.mcp_requests_completed.fetch_add(1, Ordering::Relaxed);
+        self.mcp_unauthorized_total.fetch_add(1, Ordering::Relaxed);
+        self.mcp_failed_total.fetch_add(1, Ordering::Relaxed);
+    }
+
     fn on_mcp_request_start(&self, is_notification: bool) {
         self.mcp_requests_total.fetch_add(1, Ordering::Relaxed);
         if is_notification {
