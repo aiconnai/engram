@@ -6,9 +6,9 @@
 | Active sprint | `Harness maintenance — live-state closeout` |
 | Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
-| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
-| Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
-| Last commit | `e17544af44dbfff8ec9b1351fdc19b90a2fdfc02` |
+| Last review | `2026-07-13 — pass: docs/harness/reviews/2026-07-13-engram-10-of-10-wave4-post.md` |
+| Last sensors | `2026-07-13 — status=pass (mode=full; timestamp 2026-07-13T23:20:58Z)` |
+| Last commit | `15c5847344c66bcff547d80675e4b6da40f25ecd` |
 | Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
