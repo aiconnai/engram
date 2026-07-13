@@ -287,11 +287,22 @@ evidence file under `.omo/evidence/`.
   `--version`, and a bounded PDF-worker protocol response.
 - Superseding workflow-dispatch dry-run `29286930522`
   (`https://github.com/aiconnai/engram/actions/runs/29286930522`) completed
-  success on exact HEAD `2cfab4563d5da43932c1cc3aa6741eeea6b487ea`. Core
+  success on exact SHA `2cfab4563d5da43932c1cc3aa6741eeea6b487ea`. Core
   multi-target build, aggregate artifact verification, checksums, SBOMs,
   signatures/provenance, and native smoke passed. GitHub Release and Homebrew
   jobs were skipped. Tag, registry, release, Homebrew, and deploy writes: none.
 - No claim that v0.22.0 or any SDK package is published.
 - Atomic descriptor-bound SQLite opening remains deferred.
-- Canonical live-state `Last commit` refreshed to integration HEAD
-  `2cfab4563d5da43932c1cc3aa6741eeea6b487ea` during Wave 4 closeout.
+- Canonical live-state `Last commit` was first refreshed to `2cfab45…` during
+  Wave 4 closeout, then advanced again after packaging-contract alignment.
+
+## 2026-07-13 — Wave 4 PDF packaging contract alignment
+
+- `make ci` failed closed because `scripts/check-pdf-worker-packaging.py` still
+  required the pre-Wave-4 release.yml step names and inline tar packaging.
+- Aligned the checker and unit suite with the attested release workflow: locked
+  multi-binary build, `verify-release-artifacts.sh` /
+  `test-release-binary.sh` Linux-only worker packaging, and the Homebrew formula
+  updater step. No publication path was opened.
+- Live-state `Last commit` is now `205cd67ee1473cc485082b2277961a40d3a1c4a7`.
+  Dry-run receipt `29286930522` remains bound to historical SHA `2cfab45…`.

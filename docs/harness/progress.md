@@ -8,7 +8,7 @@
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
-| Last commit | `2cfab4563d5da43932c1cc3aa6741eeea6b487ea` |
+| Last commit | `205cd67ee1473cc485082b2277961a40d3a1c4a7` |
 | Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -87,8 +87,9 @@
 
 ## Engram 10/10 Wave 4 — integrated implementation
 
-- **Integration HEAD**: `2cfab4563d5da43932c1cc3aa6741eeea6b487ea` on
-  `feat/engram-10-of-10-wave4` (Todos 22–24, 26–27, 37–39).
+- **Integration HEAD**: `205cd67ee1473cc485082b2277961a40d3a1c4a7` on
+  `feat/engram-10-of-10-wave4` (Todos 22–24, 26–27, 37–39 plus closeout
+  docs and PDF packaging-contract alignment).
 - Todo 24 had two consecutive independent-review FAILs; both findings were
   remediated in `6a42f008c012428396257a66c0cb830ae2d4cd88`. Per invariant 11 the
   human owner responded `autorizado`, scoped only to accepting/integrating that
@@ -97,12 +98,14 @@
   the binary smoke assumed `engram-server --version`. Remediation `2cfab45`
   uses server `--help`, CLI `--version`, and a bounded empty-input PDF-worker
   protocol smoke.
-- Superseding dry-run `29286930522` completed **success** on exact HEAD
+- Superseding dry-run `29286930522` completed **success** on exact SHA
   `2cfab4563d5da43932c1cc3aa6741eeea6b487ea`: four-target builds, checksums,
   SBOMs, signatures/provenance, and native artifact smoke passed. GitHub
   Release and Homebrew jobs were **skipped**. No tag, registry, release,
   Homebrew, or deploy write occurred. No claim that v0.22.0 or any SDK is
   published.
+- Closeout then aligned `scripts/check-pdf-worker-packaging.py` with the Wave 4
+  release workflow so `make ci` fails closed only on real packaging regressions.
 - Atomic descriptor-bound SQLite opening remains deferred (stock VFS could not
   satisfy race freedom, pool compatibility, cleanup, and locking across
   Linux/macOS/BSD without a native shim or audited VFS).
