@@ -253,3 +253,13 @@ evidence file under `.omo/evidence/`.
   and deterministic public-example smoke coverage.
 - `make ci` and full sensors passed without exclusions on the integrated
   branch. Independent post-review was requested against `origin/main..HEAD`.
+
+## 2026-07-13 — Wave 3 shared-state review remediation
+
+- Independent review proved the initial canonical journey created separate
+  temporary databases for stdio and HTTP.
+- Commit `4a70aa0` moved database ownership to the caller, runs both transports
+  sequentially against the same isolated database, and verifies through HTTP
+  the record updated through stdio before final cleanup.
+- Focused canonical tests and Clippy passed; live-state metadata was refreshed
+  before requesting the next immutable review.

@@ -8,8 +8,8 @@
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
-| Last commit | `a00b07e` |
-| Last live-state check | `2026-07-10 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
+| Last commit | `4a70aa0036cfe6e1877bdeafa4f36811f811205a` |
+| Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
 
@@ -71,6 +71,11 @@
   smoke suite are executable and fail closed on their negative fixtures.
 - `make ci` and the full harness sensors passed on the integrated branch with
   no exclusions.
+- Independent review found that the first canonical journey used separate
+  transport databases. Commit `4a70aa0` corrected the harness so stdio and
+  authenticated HTTP share one caller-owned isolated database; HTTP asserts
+  the record previously updated through stdio, and cleanup occurs only after
+  both transport lifecycles finish.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud
