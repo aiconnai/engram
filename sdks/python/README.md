@@ -12,6 +12,19 @@ Python client for [Engram Cloud](https://github.com/aiconnai/engram-cloud) - AI 
 pip install engram-client
 ```
 
+## Testing the local package
+
+From the Engram repository root, run:
+
+```bash
+bash scripts/test-python-sdk-live.sh
+```
+
+The script builds a wheel, installs it in an isolated virtual environment, and
+tests the public async client against a disposable authenticated Engram HTTP
+server. It uses only loopback networking and temporary state; no published
+package, external service, or API credential is required.
+
 ## Quick Start
 
 ```python

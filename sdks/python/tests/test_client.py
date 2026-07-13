@@ -126,6 +126,73 @@ class TestMCPCall:
             await mock_client._mcp_call("memory_get", {"id": "invalid"})
 
     @pytest.mark.asyncio
+    async def test_mcp_call_decodes_call_tool_content(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": '{"id":123,"content":"live response"}',
+                    }
+                ]
+            },
+        }
+        mock_client._client.post.return_value = mock_response
+
+        result = await mock_client._mcp_call("memory_get", {"id": 123})
+
+        assert result == {"id": 123, "content": "live response"}
+
+    @pytest.mark.asyncio
+    async def test_mcp_call_decodes_tool_error(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "content": [
+                    {"type": "text", "text": '{"error":"Memory 999 not found"}'}
+                ]
+            },
+        }
+        mock_client._client.post.return_value = mock_response
+
+        with pytest.raises(EngramError, match="Memory 999 not found"):
+            await mock_client._mcp_call("memory_get", {"id": 999})
+
+    @pytest.mark.asyncio
+    async def test_mcp_call_preserves_plain_text_tool_error(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "content": [{"type": "text", "text": "permission denied"}],
+                "isError": True,
+            },
+        }
+        mock_client._client.post.return_value = mock_response
+
+        with pytest.raises(EngramError, match="permission denied"):
+            await mock_client._mcp_call("memory_list", {})
+
+    @pytest.mark.asyncio
+    async def test_mcp_call_wraps_transport_error(self, mock_client):
+        request = httpx.Request("POST", "https://test.engram.dev/v1/mcp")
+        mock_client._client.post.side_effect = httpx.ConnectError(
+            "connection refused", request=request
+        )
+
+        with pytest.raises(EngramError, match="Engram request failed"):
+            await mock_client._mcp_call("memory_list", {})
+
+    @pytest.mark.asyncio
     async def test_mcp_call_increments_id(self, mock_client, mock_response):
         mock_client._client.post.return_value = mock_response
 
