@@ -12,6 +12,10 @@
     "TSC-WS-DEFAULT-OFF",
     "TSC-WS-PUBLIC-NO-PROXY-BLOCKED",
     "TSC-WS-PUBLIC-TRUSTED-PROXY-ALLOWED",
+    "TSC-WS-DEFAULT-WORKSPACE-ALLOWED",
+    "TSC-WS-CROSS-WORKSPACE-FORBIDDEN",
+    "TSC-WS-ORIGIN-ALLOWED",
+    "TSC-WS-ORIGIN-FORBIDDEN",
     "TSC-GRPC-PUBLIC-NO-KEY-REFUSED",
     "TSC-GRPC-PUBLIC-KEY-MISSING-UNAUTHENTICATED",
     "TSC-GRPC-PUBLIC-KEY-INVALID-UNAUTHENTICATED",
@@ -251,6 +255,90 @@
         "must_not": "must not trust direct client headers as proxy authentication"
       },
       "rollback": "set ENGRAM_WS_PORT=0 or remove the public proxy route",
+      "references": ["docs/security/THREAT_MODEL.md#TM-WS-UPGRADES-EVENTS", "src/realtime/server.rs"]
+    },
+    {
+      "id": "TSC-WS-DEFAULT-WORKSPACE-ALLOWED",
+      "transport": "websocket",
+      "surface": "/ws loopback subscription with omitted workspace",
+      "threat_model_row": "TM-WS-UPGRADES-EVENTS",
+      "bind": { "mode": "loopback", "address": "127.0.0.1", "public": false },
+      "auth": {
+        "server_key": "absent",
+        "client_credential": "missing",
+        "scope": "default_workspace_read",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "success", "status": "101 Switching Protocols" },
+      "failure": {
+        "kind": "none",
+        "signal": "subscription is registered only for the default workspace",
+        "must_not": "must not serialize events from any other workspace"
+      },
+      "rollback": "set ENGRAM_WS_PORT=0",
+      "references": ["docs/security/THREAT_MODEL.md#TM-WS-UPGRADES-EVENTS", "src/realtime/server.rs"]
+    },
+    {
+      "id": "TSC-WS-CROSS-WORKSPACE-FORBIDDEN",
+      "transport": "websocket",
+      "surface": "/ws?workspace=private from anonymous loopback principal",
+      "threat_model_row": "TM-WS-UPGRADES-EVENTS",
+      "bind": { "mode": "loopback", "address": "127.0.0.1", "public": false },
+      "auth": {
+        "server_key": "absent",
+        "client_credential": "missing",
+        "scope": "unauthorized_workspace",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "forbidden", "status": "403 Forbidden" },
+      "failure": {
+        "kind": "workspace_scope_denied",
+        "signal": "upgrade is rejected before client registration",
+        "must_not": "must not create an unfiltered subscription or serialize a private event"
+      },
+      "rollback": "set ENGRAM_WS_PORT=0; never remove workspace filtering",
+      "references": ["docs/security/THREAT_MODEL.md#TM-WS-UPGRADES-EVENTS", "src/realtime/server.rs"]
+    },
+    {
+      "id": "TSC-WS-ORIGIN-ALLOWED",
+      "transport": "websocket",
+      "surface": "/ws browser handshake with exact allowed Origin",
+      "threat_model_row": "TM-WS-UPGRADES-EVENTS",
+      "bind": { "mode": "loopback", "address": "127.0.0.1", "public": false },
+      "auth": {
+        "server_key": "absent",
+        "client_credential": "missing",
+        "scope": "default_workspace_read",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "success", "status": "101 Switching Protocols" },
+      "failure": {
+        "kind": "none",
+        "signal": "Origin exactly matches ENGRAM_WS_ALLOWED_ORIGINS",
+        "must_not": "must not treat suffix, prefix, or wildcard matches as equivalent"
+      },
+      "rollback": "remove the browser origin from the allowlist or set ENGRAM_WS_PORT=0",
+      "references": ["docs/security/THREAT_MODEL.md#TM-WS-UPGRADES-EVENTS", "src/realtime/server.rs"]
+    },
+    {
+      "id": "TSC-WS-ORIGIN-FORBIDDEN",
+      "transport": "websocket",
+      "surface": "/ws browser handshake with disallowed Origin",
+      "threat_model_row": "TM-WS-UPGRADES-EVENTS",
+      "bind": { "mode": "loopback", "address": "127.0.0.1", "public": false },
+      "auth": {
+        "server_key": "absent",
+        "client_credential": "missing",
+        "scope": "default_workspace_read",
+        "proxy_trust": "not_applicable"
+      },
+      "expected": { "startup": "allowed", "request": "forbidden", "status": "403 Forbidden" },
+      "failure": {
+        "kind": "origin_denied",
+        "signal": "upgrade is rejected before client registration",
+        "must_not": "must not subscribe or serialize an event for a disallowed browser origin"
+      },
+      "rollback": "set ENGRAM_WS_PORT=0; never replace the explicit allowlist with wildcard",
       "references": ["docs/security/THREAT_MODEL.md#TM-WS-UPGRADES-EVENTS", "src/realtime/server.rs"]
     },
     {
