@@ -8,7 +8,7 @@
 | Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
 | Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
-| Last commit | `962428a` |
+| Last commit | `1958ed55db890d9e679a666426be0ba7c57b12ac` |
 | Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
@@ -84,6 +84,18 @@
   in four existing workflows. Those references are now pinned to resolved
   commit SHAs while retaining version comments; the same `p/ci --error` scan
   reports zero findings without ignores or exclusions.
+
+## Engram 10/10 Wave 4 — integrated implementation
+
+- Todos 22–24, 26–27, 37–39 are integrated on
+  `feat/engram-10-of-10-wave4`; Todo 24's two-review escalation was explicitly
+  accepted by the human owner for its remediated SHA only.
+- Release dry-run `29271674475` failed closed before publication because the
+  binary smoke assumed `engram-server --version`, which is not part of the
+  server CLI contract. The smoke now uses `--help` for the server, `--version`
+  for the CLI, and a bounded empty-input protocol check for the PDF worker.
+- GitHub Release, registry, Homebrew, tag, and deployment write paths remained
+  skipped; no publication-channel approval was granted.
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud

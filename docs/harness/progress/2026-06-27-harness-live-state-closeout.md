@@ -274,3 +274,14 @@ evidence file under `.omo/evidence/`.
   references across nightly, release, AgentShield loop, and harness-contract
   workflows. Pinned each reference to its resolved commit SHA with a version
   comment. The exact container scan now reports zero findings.
+
+## 2026-07-13 — Wave 4 integration and release dry-run remediation
+
+- Integrated Todos 22–24, 26–27, and 37–39 after focused verification and
+  independent review; the human owner explicitly accepted the remediated Todo
+  24 SHA after its required two-FAIL escalation.
+- Dry-run run `29271674475` matched the requested SHA and failed closed because
+  the artifact smoke invoked unsupported `engram-server --version`.
+- Aligned the smoke with shipped contracts: server `--help`, CLI `--version`,
+  and a bounded PDF-worker protocol response. All external publication jobs
+  remained skipped and no publication approval was inferred.

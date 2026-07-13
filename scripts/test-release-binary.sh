@@ -55,7 +55,25 @@ expected=(engram-server engram-cli)
 [[ "$target" == *-linux-* ]] && expected+=(engram-pdf-worker)
 for binary in "${expected[@]}"; do
   [[ -x "$tmp/$binary" ]] || die "missing executable: $binary"
-  output="$("$tmp/$binary" --version 2>&1)" || die "$binary --version failed"
-  [[ -n "$output" ]] || die "$binary --version returned empty output"
+  case "$binary" in
+    engram-cli)
+      output="$("$tmp/$binary" --version 2>&1)" || die "$binary --version failed"
+      [[ -n "$output" ]] || die "$binary --version returned empty output"
+      ;;
+    engram-server)
+      output="$("$tmp/$binary" --help 2>&1)" || die "$binary --help failed"
+      [[ "$output" == *"Usage:"* ]] || die "$binary --help returned unexpected output"
+      ;;
+    engram-pdf-worker)
+      output="$("$tmp/$binary" --max-pages 1 --max-text-bytes 1024 </dev/null 2>&1)" \
+        || die "$binary protocol smoke failed"
+      printf '%s' "$output" | python3 -c '
+import json, sys
+response = json.load(sys.stdin)
+if not isinstance(response.get("sections"), list) or "error" not in response:
+    raise SystemExit("unexpected PDF worker response")
+' || die "$binary protocol smoke returned unexpected output"
+      ;;
+  esac
 done
 echo "test-release-binary: PASS ($target)"
