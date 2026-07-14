@@ -2,38 +2,20 @@
 
 from __future__ import annotations
 
-import json
 from itertools import count
 from typing import Any
 
+from .errors import EngramError
+from .mcp_result import post_tool_call
+
 import httpx
 
-
-class EngramError(Exception):
-    """Custom exception for Engram client errors."""
-
-    pass
+# Re-export for callers that historically imported from client.
+__all__ = ["EngramClient", "EngramError"]
 
 
 class EngramClient:
-    """Client for the Engram Cloud REST API.
-
-    Usage:
-        client = EngramClient(
-            base_url="https://your-engram-cloud.fly.dev",
-            api_key="ek_...",
-            tenant="my-tenant",
-        )
-
-        # Create a memory
-        memory = client.create("User prefers dark mode", tags=["prefs"])
-
-        # Search
-        results = client.search("user preferences")
-
-        # List
-        memories = client.list(limit=10)
-    """
+    """Async Engram Cloud client over authenticated MCP-HTTP."""
 
     def __init__(
         self,
@@ -68,91 +50,17 @@ class EngramClient:
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
 
-    # -- MCP-over-HTTP helpers --
-
     async def _mcp_call(self, method: str, params: dict[str, Any] | None = None) -> Any:
         """Execute an MCP tool call over HTTP."""
         client = self._client
         if client is None:
             raise EngramError("EngramClient is closed")
-        payload = {
-            "jsonrpc": "2.0",
-            "id": next(self._id_counter),
-            "method": "tools/call",
-            "params": {
-                "name": method,
-                "arguments": params or {},
-            },
-        }
-        try:
-            resp = await client.post("/v1/mcp", json=payload)
-        except httpx.RequestError as exc:
-            raise EngramError(f"Engram request failed: {exc}") from exc
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            raise EngramError(
-                f"HTTP {e.response.status_code}: {e.response.text}"
-            ) from e
-        try:
-            result = resp.json()
-        except ValueError as exc:
-            raise EngramError("Engram returned invalid JSON") from exc
-        if not isinstance(result, dict):
-            raise EngramError("Engram returned an invalid JSON-RPC response")
-        if "error" in result:
-            error = result["error"]
-            message = (
-                error.get("message", "Unknown error")
-                if isinstance(error, dict)
-                else error
-            )
-            raise EngramError(str(message))
-        return self._decode_tool_result(result.get("result", {}))
-
-    @staticmethod
-    def _decode_tool_result(result: Any) -> Any:
-        """Decode an MCP ``CallToolResult`` while preserving legacy responses."""
-        if not isinstance(result, dict) or not isinstance(result.get("content"), list):
-            return result
-
-        text = next(
-            (
-                block.get("text")
-                for block in result["content"]
-                if isinstance(block, dict)
-                and block.get("type") == "text"
-                and isinstance(block.get("text"), str)
-            ),
-            None,
+        return await post_tool_call(
+            client,
+            request_id=next(self._id_counter),
+            method=method,
+            params=params,
         )
-        if text is None:
-            raise EngramError("Engram MCP response did not contain text content")
-        try:
-            decoded = json.loads(text)
-        except json.JSONDecodeError as exc:
-            if result.get("isError") is True:
-                raise EngramError(text) from exc
-            raise EngramError("Engram MCP response contained invalid JSON") from exc
-
-        if result.get("isError") is True:
-            error = (
-                decoded.get("error", decoded)
-                if isinstance(decoded, dict)
-                else decoded
-            )
-            raise EngramError(EngramClient._error_message(error))
-        if isinstance(decoded, dict) and "error" in decoded:
-            raise EngramError(EngramClient._error_message(decoded["error"]))
-        return decoded
-
-    @staticmethod
-    def _error_message(error: Any) -> str:
-        if isinstance(error, dict):
-            message = error.get("message")
-            if message is not None:
-                return str(message)
-        return str(error)
 
     # -- Memory CRUD --
 

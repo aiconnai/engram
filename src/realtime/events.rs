@@ -42,8 +42,8 @@ pub struct RealtimeEvent {
 }
 
 impl RealtimeEvent {
-    /// Create a memory created event
-    pub fn memory_created(id: MemoryId, preview: String) -> Self {
+    /// Create a memory created event with an authoritative workspace.
+    pub fn memory_created(id: MemoryId, preview: String, workspace: impl Into<String>) -> Self {
         Self {
             seq_id: None,
             event_type: EventType::MemoryCreated,
@@ -51,12 +51,16 @@ impl RealtimeEvent {
             memory_id: Some(id),
             preview: Some(truncate(&preview, 100)),
             changes: None,
-            data: None,
+            data: Some(serde_json::json!({ "workspace": workspace.into() })),
         }
     }
 
-    /// Create a memory updated event
-    pub fn memory_updated(id: MemoryId, changes: Vec<String>) -> Self {
+    /// Create a memory updated event with an authoritative workspace.
+    pub fn memory_updated(
+        id: MemoryId,
+        changes: Vec<String>,
+        workspace: impl Into<String>,
+    ) -> Self {
         Self {
             seq_id: None,
             event_type: EventType::MemoryUpdated,
@@ -64,12 +68,12 @@ impl RealtimeEvent {
             memory_id: Some(id),
             preview: None,
             changes: Some(changes),
-            data: None,
+            data: Some(serde_json::json!({ "workspace": workspace.into() })),
         }
     }
 
-    /// Create a memory deleted event
-    pub fn memory_deleted(id: MemoryId) -> Self {
+    /// Create a memory deleted event with an authoritative workspace.
+    pub fn memory_deleted(id: MemoryId, workspace: impl Into<String>) -> Self {
         Self {
             seq_id: None,
             event_type: EventType::MemoryDeleted,
@@ -77,7 +81,7 @@ impl RealtimeEvent {
             memory_id: Some(id),
             preview: None,
             changes: None,
-            data: None,
+            data: Some(serde_json::json!({ "workspace": workspace.into() })),
         }
     }
 
@@ -110,23 +114,6 @@ impl RealtimeEvent {
                 "error": error,
             })),
         }
-    }
-
-    /// Attach the authoritative workspace used by realtime transports.
-    pub fn with_workspace(mut self, workspace: impl Into<String>) -> Self {
-        let workspace = workspace.into();
-        match self.data.as_mut() {
-            Some(serde_json::Value::Object(data)) => {
-                data.insert(
-                    "workspace".to_string(),
-                    serde_json::Value::String(workspace),
-                );
-            }
-            _ => {
-                self.data = Some(serde_json::json!({ "workspace": workspace }));
-            }
-        }
-        self
     }
 
     /// Return the authoritative event workspace, when the producer supplied one.

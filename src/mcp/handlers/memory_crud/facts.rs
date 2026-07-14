@@ -98,10 +98,11 @@ pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
                 fuzzy.add_to_vocabulary(&memory.content);
             }
             if let Some(ref manager) = ctx.realtime {
-                manager.broadcast(
-                    RealtimeEvent::memory_created(memory.id, memory.content.clone())
-                        .with_workspace(memory.workspace.clone()),
-                );
+                manager.broadcast(RealtimeEvent::memory_created(
+                    memory.id,
+                    memory.content.clone(),
+                    memory.workspace.clone(),
+                ));
             }
             json!({"id": memory.id, "created": true})
         }
@@ -238,10 +239,11 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
             }
             for memory in &memories {
                 if let Some(ref manager) = ctx.realtime {
-                    manager.broadcast(
-                        RealtimeEvent::memory_created(memory.id, memory.content.clone())
-                            .with_workspace(memory.workspace.clone()),
-                    );
+                    manager.broadcast(RealtimeEvent::memory_created(
+                        memory.id,
+                        memory.content.clone(),
+                        memory.workspace.clone(),
+                    ));
                 }
             }
             let ids: Vec<i64> = memories.iter().map(|m| m.id).collect();

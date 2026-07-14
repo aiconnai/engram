@@ -27,19 +27,33 @@ impl Default for HttpSecurityConfig {
 }
 
 impl HttpSecurityConfig {
-    pub(super) fn from_env() -> Self {
+    /// Load HTTP resource limits from the environment.
+    ///
+    /// Missing variables keep documented safe defaults. Present but invalid,
+    /// zero, or over-maximum values fail closed (same policy as WebSocket
+    /// resource configuration).
+    pub(super) fn from_env() -> Result<Self, String> {
         let trusted_proxies = std::env::var(TRUSTED_PROXIES_ENV)
             .ok()
             .map(|value| Self::parse_trusted_proxies(&value))
             .unwrap_or_default();
-        let max_body_bytes = parse_positive_env(MAX_BODY_BYTES_ENV, DEFAULT_MAX_BODY_BYTES, 0);
-        let request_timeout_ms =
-            parse_positive_env(REQUEST_TIMEOUT_MS_ENV, DEFAULT_REQUEST_TIMEOUT_MS, 0);
-        Self {
+        let max_body_bytes = parse_positive_env(
+            MAX_BODY_BYTES_ENV,
+            DEFAULT_MAX_BODY_BYTES,
+            0,
+            DEFAULT_MAX_BODY_BYTES.saturating_mul(64),
+        )?;
+        let request_timeout_ms = parse_positive_env(
+            REQUEST_TIMEOUT_MS_ENV,
+            DEFAULT_REQUEST_TIMEOUT_MS,
+            0,
+            3_600_000,
+        )?;
+        Ok(Self {
             trusted_proxies,
             max_body_bytes,
             request_timeout: std::time::Duration::from_millis(request_timeout_ms),
-        }
+        })
     }
 
     fn parse_trusted_proxies(value: &str) -> Vec<IpCidr> {
@@ -99,34 +113,33 @@ impl HttpSecurityConfig {
     }
 }
 
-fn parse_positive_env<T>(name: &str, default: T, zero: T) -> T
+fn parse_positive_env<T>(name: &str, default: T, zero: T, maximum: T) -> Result<T, String>
 where
-    T: Copy + std::fmt::Display + std::str::FromStr + PartialOrd,
+    T: Copy + std::fmt::Display + std::str::FromStr + PartialEq + PartialOrd + Default,
     <T as std::str::FromStr>::Err: std::fmt::Display,
 {
     let value = match std::env::var(name) {
         Ok(value) => value,
-        Err(_) => return default,
+        Err(_) => return Ok(default),
     };
-    parse_positive_value(name, &value, default, zero)
+    parse_positive_value(name, &value, zero, maximum)
 }
 
-fn parse_positive_value<T>(name: &str, value: &str, default: T, zero: T) -> T
+fn parse_positive_value<T>(name: &str, value: &str, zero: T, maximum: T) -> Result<T, String>
 where
-    T: Copy + std::fmt::Display + std::str::FromStr + PartialOrd,
+    T: Copy + std::fmt::Display + std::str::FromStr + PartialEq + PartialOrd + Default,
     <T as std::str::FromStr>::Err: std::fmt::Display,
 {
-    match value.parse::<T>() {
-        Ok(parsed) if parsed > zero => parsed,
-        Ok(_) => {
-            tracing::warn!(env = name, value = %value, default = %default, "HTTP resource limit must be positive; using safe default");
-            default
-        }
-        Err(error) => {
-            tracing::warn!(env = name, value = %value, default = %default, error = %error, "invalid HTTP resource limit; using safe default");
-            default
-        }
+    let parsed = value
+        .parse::<T>()
+        .map_err(|error| format!("{name} must be a positive integer: {error}"))?;
+    if parsed == T::default() || parsed <= zero {
+        return Err(format!("{name} must be greater than zero"));
     }
+    if parsed > maximum {
+        return Err(format!("{name} must not exceed {maximum}"));
+    }
+    Ok(parsed)
 }
 
 #[cfg(test)]
@@ -144,15 +157,11 @@ mod tests {
     }
 
     #[test]
-    fn zero_and_invalid_values_keep_safe_defaults() {
-        assert_eq!(
-            parse_positive_value("TEST", "0", DEFAULT_MAX_BODY_BYTES, 0),
-            DEFAULT_MAX_BODY_BYTES
-        );
-        assert_eq!(
-            parse_positive_value("TEST", "unbounded", DEFAULT_REQUEST_TIMEOUT_MS, 0),
-            DEFAULT_REQUEST_TIMEOUT_MS
-        );
+    fn zero_and_invalid_values_fail_closed() {
+        assert!(parse_positive_value("TEST", "0", 0_usize, 64).is_err());
+        assert!(parse_positive_value("TEST", "unbounded", 0_u64, 100).is_err());
+        assert!(parse_positive_value("TEST", "65", 0_usize, 64).is_err());
+        assert_eq!(parse_positive_value("TEST", "32", 0_usize, 64).unwrap(), 32);
     }
 }
 

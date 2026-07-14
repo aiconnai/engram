@@ -89,10 +89,11 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
         Ok(memory) => {
             ctx.search_cache.invalidate_for_memory(memory.id);
             if let Some(ref manager) = ctx.realtime {
-                manager.broadcast(
-                    RealtimeEvent::memory_updated(memory.id, changes)
-                        .with_workspace(memory.workspace.clone()),
-                );
+                manager.broadcast(RealtimeEvent::memory_updated(
+                    memory.id,
+                    changes,
+                    memory.workspace.clone(),
+                ));
             }
             json!(memory)
         }
@@ -145,9 +146,7 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                     ctx.search_cache.invalidate_for_memory(deleted_id);
                     if let (Some(manager), Some(workspace)) = (&ctx.realtime, workspace.as_deref())
                     {
-                        manager.broadcast(
-                            RealtimeEvent::memory_deleted(deleted_id).with_workspace(workspace),
-                        );
+                        manager.broadcast(RealtimeEvent::memory_deleted(deleted_id, workspace));
                     }
                 }
                 let count = deleted_ids.len();
@@ -184,9 +183,7 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
             Ok((deleted_id, workspace)) => {
                 ctx.search_cache.invalidate_for_memory(deleted_id);
                 if let (Some(manager), Some(workspace)) = (&ctx.realtime, workspace.as_deref()) {
-                    manager.broadcast(
-                        RealtimeEvent::memory_deleted(deleted_id).with_workspace(workspace),
-                    );
+                    manager.broadcast(RealtimeEvent::memory_deleted(deleted_id, workspace));
                 }
                 json!({"deleted": deleted_id})
             }

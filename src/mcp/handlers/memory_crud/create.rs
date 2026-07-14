@@ -116,10 +116,11 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
             ctx.search_cache
                 .invalidate_for_workspace(Some(memory.workspace.as_str()));
             if let Some(ref manager) = ctx.realtime {
-                manager.broadcast(
-                    RealtimeEvent::memory_created(memory.id, memory.content.clone())
-                        .with_workspace(memory.workspace.clone()),
-                );
+                manager.broadcast(RealtimeEvent::memory_created(
+                    memory.id,
+                    memory.content.clone(),
+                    memory.workspace.clone(),
+                ));
             }
             json!(memory)
         }
@@ -301,10 +302,11 @@ pub fn context_seed(ctx: &HandlerContext, params: Value) -> Value {
 
             for memory in &batch.created {
                 if let Some(ref manager) = ctx.realtime {
-                    manager.broadcast(
-                        RealtimeEvent::memory_created(memory.id, memory.content.clone())
-                            .with_workspace(memory.workspace.clone()),
-                    );
+                    manager.broadcast(RealtimeEvent::memory_created(
+                        memory.id,
+                        memory.content.clone(),
+                        memory.workspace.clone(),
+                    ));
                 }
             }
 
