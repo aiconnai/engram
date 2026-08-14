@@ -100,7 +100,14 @@ pub(super) async fn handle_mcp(
             } else if is_notification {
                 (StatusCode::ACCEPTED, serde_json::Value::Null)
             } else {
-                let response = state.handler.handle_request(request);
+                let handler = state.handler.clone();
+                let request_id = request.id.clone();
+                let response = tokio::task::spawn_blocking(move || handler.handle_request(request))
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::error!(error = %e, route = %uri.path(), "MCP handler task failed or panicked");
+                        McpResponse::error(request_id, -32603, "Internal server error".to_string())
+                    });
                 (
                     StatusCode::OK,
                     serde_json::to_value(response).unwrap_or_else(|e| {
