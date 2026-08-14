@@ -274,3 +274,35 @@ evidence file under `.omo/evidence/`.
   references across nightly, release, AgentShield loop, and harness-contract
   workflows. Pinned each reference to its resolved commit SHA with a version
   comment. The exact container scan now reports zero findings.
+
+## 2026-07-13 — Wave 4 integration and release dry-run remediation
+
+- Integrated Todos 22–24, 26–27, and 37–39 after focused verification and
+  independent review; the human owner explicitly accepted the remediated Todo
+  24 SHA (`6a42f00…`) after its required two-FAIL escalation. Scope was
+  acceptance/integration only — not channel publication.
+- Dry-run run `29271674475` matched the pre-remediation candidate and failed
+  closed because the artifact smoke invoked unsupported `engram-server --version`.
+- Aligned the smoke with shipped contracts in `2cfab45`: server `--help`, CLI
+  `--version`, and a bounded PDF-worker protocol response.
+- Superseding workflow-dispatch dry-run `29286930522`
+  (`https://github.com/aiconnai/engram/actions/runs/29286930522`) completed
+  success on exact SHA `2cfab4563d5da43932c1cc3aa6741eeea6b487ea`. Core
+  multi-target build, aggregate artifact verification, checksums, SBOMs,
+  signatures/provenance, and native smoke passed. GitHub Release and Homebrew
+  jobs were skipped. Tag, registry, release, Homebrew, and deploy writes: none.
+- No claim that v0.22.0 or any SDK package is published.
+- Atomic descriptor-bound SQLite opening remains deferred.
+- Canonical live-state `Last commit` was first refreshed to `2cfab45…` during
+  Wave 4 closeout, then advanced again after packaging-contract alignment.
+
+## 2026-07-13 — Wave 4 PDF packaging contract alignment
+
+- `make ci` failed closed because `scripts/check-pdf-worker-packaging.py` still
+  required the pre-Wave-4 release.yml step names and inline tar packaging.
+- Aligned the checker and unit suite with the attested release workflow: locked
+  multi-binary build, `verify-release-artifacts.sh` /
+  `test-release-binary.sh` Linux-only worker packaging, and the Homebrew formula
+  updater step. No publication path was opened.
+- Live-state `Last commit` is now `e17544af44dbfff8ec9b1351fdc19b90a2fdfc02`.
+  Dry-run receipt `29286930522` remains bound to historical SHA `2cfab45…`.

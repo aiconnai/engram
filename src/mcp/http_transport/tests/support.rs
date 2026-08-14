@@ -12,6 +12,7 @@ use serde_json::json;
 
 use super::super::rate_limit::{RateLimiterConfig, RateLimiterState};
 use super::super::router::build_router;
+use super::super::security_config::HttpSecurityConfig;
 use crate::mcp::protocol::{McpHandler, McpRequest, McpResponse};
 
 // Serialize CORS env var mutation in tests via a shared mutex.
@@ -142,7 +143,9 @@ pub(super) fn test_app_with_rate_limits(
         http_rate_limit_rps,
         http_rate_limit_burst,
         http_rate_limit_key.map(str::to_string),
+        Some(HttpSecurityConfig::default()),
     )
+    .expect("test router")
 }
 
 pub(super) fn test_app_with_handler(
@@ -159,7 +162,9 @@ pub(super) fn test_app_with_handler(
         http_rate_limit_rps,
         http_rate_limit_burst,
         None,
+        Some(HttpSecurityConfig::default()),
     )
+    .expect("test router")
 }
 
 pub(super) fn test_rate_limiter_state(

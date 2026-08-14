@@ -1,5 +1,5 @@
 [matrix]
-schema_version = 1
+schema_version = 2
 observed_utc = "2026-07-10T08:41:33Z"
 max_staleness_days = 30
 repository = "aiconnai/engram"
@@ -72,7 +72,10 @@ expected_status = "independent_lagging"
 observed_version = "0.4.0"
 owner = "Python SDK release owner"
 dry_run_command = "cd sdks/python && python3 -m build && twine check dist/*"
-publish_command = "cd sdks/python && twine upload dist/*"
+publish_command = "Protected sdk-release.yml python dispatch using PyPI trusted publishing only after exact tag/SHA approval."
+workflow = ".github/workflows/sdk-release.yml"
+approval_environment = "release-pypi"
+trusted_publishing = "GitHub OIDC"
 rollback = "PyPI files are immutable; yank the release or publish a forward fix."
 human_gate = true
 
@@ -86,7 +89,10 @@ expected_status = "independent_lagging"
 observed_version = "0.3.0"
 owner = "TypeScript SDK release owner"
 dry_run_command = "cd sdks/typescript && npm pack --dry-run"
-publish_command = "cd sdks/typescript && npm publish --access public"
+publish_command = "Protected sdk-release.yml npm dispatch using npm trusted publishing and provenance only after exact tag/SHA approval."
+workflow = ".github/workflows/sdk-release.yml"
+approval_environment = "release-npm"
+trusted_publishing = "GitHub OIDC with npm provenance"
 rollback = "npm unpublish is time-limited and disruptive; prefer deprecate or forward patch."
 human_gate = true
 
@@ -135,6 +141,7 @@ observed_registry_version = "0.4.0"
 compatible_core_min = "0.20.0"
 compatible_core_max = "0.22.x"
 compatibility_basis = "Async SDK public methods and MCP/HTTP JSON-RPC wrappers tested against the 0.20.x through 0.22.0 tool/API shape."
+verification_command = "bash scripts/test-python-sdk-live.sh"
 publish_with_core = false
 
 [[sdk_compatibility]]
@@ -145,4 +152,5 @@ observed_registry_version = "0.3.0"
 compatible_core_min = "0.20.0"
 compatible_core_max = "0.22.x"
 compatibility_basis = "Typed client wrappers target the stable MCP/HTTP JSON-RPC surface and may release independently from core binaries."
+verification_command = "bash scripts/test-typescript-sdk-live.sh"
 publish_with_core = false

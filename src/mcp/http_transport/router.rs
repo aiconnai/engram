@@ -4,7 +4,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::http::HeaderValue;
+use axum::extract::{DefaultBodyLimit, Request};
+use axum::http::{HeaderValue, StatusCode};
+use axum::middleware::{self, Next};
 use axum::{
     extract::State,
     response::IntoResponse,
@@ -21,7 +23,7 @@ use super::rate_limit::{
     RateLimiterConfig, RateLimiterState, RATE_LIMIT_MAX_BUCKETS, RATE_LIMIT_STALE_AFTER_SECS,
 };
 use super::security_config::HttpSecurityConfig;
-use super::{normalize_api_key, AppState, HttpTransportMetrics};
+use super::{authenticate_transport_principal, normalize_api_key, AppState, HttpTransportMetrics};
 use crate::realtime::RealtimeManager;
 
 /// `GET /health` -- lightweight liveness / readiness probe.
@@ -120,7 +122,8 @@ pub(super) fn build_router(
     http_rate_limit_rps: u64,
     http_rate_limit_burst: u64,
     http_rate_limit_key: Option<String>,
-) -> Router {
+    security: Option<HttpSecurityConfig>,
+) -> Result<Router, String> {
     let api_key = normalize_api_key(api_key);
     let rate_limiter = if http_rate_limit_rps > 0 && http_rate_limit_burst > 0 {
         let key_header = http_rate_limit_key.and_then(|value| {
@@ -145,24 +148,129 @@ pub(super) fn build_router(
         None
     };
 
+    let security = match security {
+        Some(security) => security,
+        None => HttpSecurityConfig::from_env()?,
+    };
     let state = AppState {
         handler,
         api_key,
         realtime,
         rate_limiter,
         metrics: Arc::new(HttpTransportMetrics::default()),
-        security: HttpSecurityConfig::from_env(),
+        security,
     };
 
     let cors = build_cors_layer();
 
-    Router::new()
+    let mcp_routes = Router::new()
         .route("/mcp", post(handle_mcp))
         .route("/v1/mcp", post(handle_mcp))
-        .route("/health", get(handle_health))
+        .layer(DefaultBodyLimit::max(state.security.max_body_bytes))
+        // Authentication remains outside body collection/parsing. The timeout
+        // added below is outermost so it covers authentication as well.
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_auth_mcp,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_request_timeout,
+        ));
+
+    let event_routes = Router::new()
         .route("/v1/events", get(handle_events))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_auth_sse,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_request_timeout,
+        ));
+
+    Ok(Router::new()
+        .merge(mcp_routes)
+        .merge(event_routes)
+        .route("/health", get(handle_health))
         .layer(cors)
-        .with_state(state)
+        .with_state(state))
+}
+
+/// Shared principal gate; MCP and SSE only differ in unauthorized response shape.
+async fn enforce_auth(
+    state: AppState,
+    request: Request,
+    unauthorized: impl FnOnce(&AppState) -> axum::response::Response,
+    next: Next,
+) -> axum::response::Response {
+    if authenticate_transport_principal(&state.api_key, request.headers()).is_err() {
+        return unauthorized(&state);
+    }
+    next.run(request).await
+}
+
+async fn enforce_auth_mcp(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> axum::response::Response {
+    enforce_auth(
+        state,
+        request,
+        |state| {
+            state.metrics.on_mcp_preparse_unauthorized();
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(super::super::protocol::McpResponse::error(
+                    None,
+                    -32001,
+                    "Unauthorized".to_string(),
+                )),
+            )
+                .into_response()
+        },
+        next,
+    )
+    .await
+}
+
+async fn enforce_auth_sse(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> axum::response::Response {
+    enforce_auth(
+        state,
+        request,
+        |state| {
+            state.metrics.on_events_request(true, false);
+            StatusCode::UNAUTHORIZED.into_response()
+        },
+        next,
+    )
+    .await
+}
+
+async fn enforce_request_timeout(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> axum::response::Response {
+    let is_mcp = request.uri().path() == "/mcp" || request.uri().path() == "/v1/mcp";
+    match tokio::time::timeout(state.security.request_timeout, next.run(request)).await {
+        Ok(response) => response,
+        Err(_) if is_mcp => (
+            StatusCode::REQUEST_TIMEOUT,
+            Json(super::super::protocol::McpResponse::error(
+                None,
+                -32008,
+                "Request Timeout".to_string(),
+            )),
+        )
+            .into_response(),
+        Err(_) => StatusCode::REQUEST_TIMEOUT.into_response(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +308,9 @@ pub async fn serve_http(
         http_rate_limit_rps,
         http_rate_limit_burst,
         http_rate_limit_key,
-    );
+        None,
+    )
+    .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("HTTP transport listening on {}", addr);

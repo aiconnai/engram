@@ -89,7 +89,11 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
         Ok(memory) => {
             ctx.search_cache.invalidate_for_memory(memory.id);
             if let Some(ref manager) = ctx.realtime {
-                manager.broadcast(RealtimeEvent::memory_updated(memory.id, changes));
+                manager.broadcast(RealtimeEvent::memory_updated(
+                    memory.id,
+                    changes,
+                    memory.workspace.clone(),
+                ));
             }
             json!(memory)
         }
@@ -133,15 +137,16 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                     },
                 );
             }
-            Ok(chain)
+            Ok((chain, workspace))
         });
 
         match result {
-            Ok(deleted_ids) => {
+            Ok((deleted_ids, workspace)) => {
                 for &deleted_id in &deleted_ids {
                     ctx.search_cache.invalidate_for_memory(deleted_id);
-                    if let Some(ref manager) = ctx.realtime {
-                        manager.broadcast(RealtimeEvent::memory_deleted(deleted_id));
+                    if let (Some(manager), Some(workspace)) = (&ctx.realtime, workspace.as_deref())
+                    {
+                        manager.broadcast(RealtimeEvent::memory_deleted(deleted_id, workspace));
                     }
                 }
                 let count = deleted_ids.len();
@@ -171,14 +176,14 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                     dry_run: false,
                 },
             );
-            Ok(id)
+            Ok((id, workspace))
         });
 
         match result {
-            Ok(deleted_id) => {
+            Ok((deleted_id, workspace)) => {
                 ctx.search_cache.invalidate_for_memory(deleted_id);
-                if let Some(ref manager) = ctx.realtime {
-                    manager.broadcast(RealtimeEvent::memory_deleted(deleted_id));
+                if let (Some(manager), Some(workspace)) = (&ctx.realtime, workspace.as_deref()) {
+                    manager.broadcast(RealtimeEvent::memory_deleted(deleted_id, workspace));
                 }
                 json!({"deleted": deleted_id})
             }

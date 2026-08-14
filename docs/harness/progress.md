@@ -3,15 +3,27 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Harness maintenance — live-state closeout` |
-| Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
-| Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
+| Active sprint | `Agent harness hardening v1 — governance` |
+| Active task | `agent-harness-hardening-v1 — authorize trust boundaries and phased rollout` |
+| Active plan | `docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
-| Last sensors | `2026-07-12 — status=pass (mode=full; timestamp 2026-07-12T17:04:23Z)` |
-| Last commit | `962428a` |
+| Last sensors | `2026-07-13 — status=pass (mode=full; timestamp 2026-07-13T23:20:58Z)` |
+| Last commit | `a0404587d8f552edc5ea649da1e2206dc17802c5` |
 | Last live-state check | `2026-07-13 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
+
+## Agent harness hardening v1 — Wave 0 governance
+
+- **Status**: active — governance proposal only; no autonomous runner or
+  executable policy migration is authorized before ADR acceptance.
+- **Plan**: [`progress/2026-07-21-agent-harness-hardening-v1.md`](./progress/2026-07-21-agent-harness-hardening-v1.md)
+- **ADR**: [`../decisions/2026-07-21-agent-harness-hardening-v1.md`](../decisions/2026-07-21-agent-harness-hardening-v1.md)
+- **Canvas and reference intake**: [`canvas/2026-07-21-agent-harness-hardening-v1.md`](./canvas/2026-07-21-agent-harness-hardening-v1.md)
+- Work is isolated on `feat/harness-hardening-v1`; unrelated dirt in the
+  source checkout is not part of this task.
+- Wave 0 deliberately leaves scripts, workflows, review parsing, sensors, and
+  product code unchanged so the previous gates remain authoritative.
 
 ## Engram 10/10 Wave 2 — security integration with SQLite deferral
 
@@ -84,6 +96,32 @@
   in four existing workflows. Those references are now pinned to resolved
   commit SHAs while retaining version comments; the same `p/ci --error` scan
   reports zero findings without ignores or exclusions.
+
+## Engram 10/10 Wave 4 — integrated implementation
+
+- **Integration HEAD**: `e17544af44dbfff8ec9b1351fdc19b90a2fdfc02` on
+  `feat/engram-10-of-10-wave4` (Todos 22–24, 26–27, 37–39 plus closeout
+  docs and PDF packaging-contract alignment).
+- Todo 24 had two consecutive independent-review FAILs; both findings were
+  remediated in `6a42f008c012428396257a66c0cb830ae2d4cd88`. Per invariant 11 the
+  human owner responded `autorizado`, scoped only to accepting/integrating that
+  remediated SHA — not publication approval for any channel.
+- First release dry-run `29271674475` failed closed before publication because
+  the binary smoke assumed `engram-server --version`. Remediation `2cfab45`
+  uses server `--help`, CLI `--version`, and a bounded empty-input PDF-worker
+  protocol smoke.
+- Superseding dry-run `29286930522` completed **success** on exact SHA
+  `2cfab4563d5da43932c1cc3aa6741eeea6b487ea`: four-target builds, checksums,
+  SBOMs, signatures/provenance, and native artifact smoke passed. GitHub
+  Release and Homebrew jobs were **skipped**. No tag, registry, release,
+  Homebrew, or deploy write occurred. No claim that v0.22.0 or any SDK is
+  published.
+- Independent Wave 4 review: `docs/harness/reviews/2026-07-13-engram-10-of-10-wave4-post.md` (`REVIEW_VERDICT: PASS`).
+- Closeout then aligned `scripts/check-pdf-worker-packaging.py` with the Wave 4
+  release workflow so `make ci` fails closed only on real packaging regressions.
+- Atomic descriptor-bound SQLite opening remains deferred (stock VFS could not
+  satisfy race freedom, pool compatibility, cleanup, and locking across
+  Linux/macOS/BSD without a native shim or audited VFS).
 
 - Tasks 11–16 landed as `bbd49fc` (HTTP fail-closed), `fc37fff` (gRPC
   security), `73f4959` (WebSocket authentication), `bc05e81` (durable cloud

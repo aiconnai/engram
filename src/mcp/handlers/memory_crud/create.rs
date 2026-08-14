@@ -119,6 +119,7 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
                 manager.broadcast(RealtimeEvent::memory_created(
                     memory.id,
                     memory.content.clone(),
+                    memory.workspace.clone(),
                 ));
             }
             json!(memory)
@@ -304,6 +305,7 @@ pub fn context_seed(ctx: &HandlerContext, params: Value) -> Value {
                     manager.broadcast(RealtimeEvent::memory_created(
                         memory.id,
                         memory.content.clone(),
+                        memory.workspace.clone(),
                     ));
                 }
             }

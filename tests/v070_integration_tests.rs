@@ -315,7 +315,7 @@ fn test_sse_event_type_serialization() {
     // Verify RealtimeEvent can serialize to JSON (used by SSE handler)
     use engram::realtime::RealtimeEvent;
 
-    let event = RealtimeEvent::memory_created(42, "test content".to_string());
+    let event = RealtimeEvent::memory_created(42, "test content".to_string(), "default");
     let serialized = serde_json::to_string(&event).expect("event should serialize");
     assert!(serialized.contains("memory_created"));
     assert!(serialized.contains("42"));

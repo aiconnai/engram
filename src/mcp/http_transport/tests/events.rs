@@ -9,7 +9,7 @@ use crate::realtime::{EventType, RealtimeEvent};
 
 #[test]
 fn test_sse_event_serialization() {
-    let event = RealtimeEvent::memory_created(42, "hello world".to_string());
+    let event = RealtimeEvent::memory_created(42, "hello world".to_string(), "default");
     let json = serde_json::to_string(&event).unwrap();
     assert!(json.contains("\"type\":\"memory_created\""));
     assert!(json.contains("\"memory_id\":42"));
@@ -135,8 +135,8 @@ fn test_event_type_filter_matches() {
         memory_ids: None,
         tags: None,
     };
-    let created = RealtimeEvent::memory_created(1, "test".to_string());
-    let deleted = RealtimeEvent::memory_deleted(1);
+    let created = RealtimeEvent::memory_created(1, "test".to_string(), "default");
+    let deleted = RealtimeEvent::memory_deleted(1, "default");
     assert!(filter.matches(&created));
     assert!(!filter.matches(&deleted));
 }
@@ -205,7 +205,11 @@ fn test_realtime_event_to_sse_with_seq_id() {
 
     let manager = RealtimeManager::new();
     let _rx = manager.subscribe();
-    manager.broadcast(RealtimeEvent::memory_created(1, "hello".to_string()));
+    manager.broadcast(RealtimeEvent::memory_created(
+        1,
+        "hello".to_string(),
+        "default",
+    ));
 
     let buffered = manager.get_events_after(0);
     assert_eq!(buffered.len(), 1);
@@ -223,7 +227,7 @@ fn test_realtime_event_to_sse_with_seq_id() {
 #[test]
 fn test_realtime_event_to_sse_without_seq_id_no_id_field() {
     // Events with seq_id = None should still build an SSE event (no id field).
-    let event = RealtimeEvent::memory_created(5, "no id".to_string());
+    let event = RealtimeEvent::memory_created(5, "no id".to_string(), "default");
     assert!(event.seq_id.is_none());
     let sse = realtime_event_to_sse(&event);
     let _ = sse; // should not panic
@@ -240,7 +244,11 @@ fn test_replay_events_after_last_id() {
 
     // Broadcast 5 events
     for i in 1..=5i64 {
-        manager.broadcast(RealtimeEvent::memory_created(i, format!("ev{i}")));
+        manager.broadcast(RealtimeEvent::memory_created(
+            i,
+            format!("ev{i}"),
+            "default",
+        ));
     }
 
     // Simulate Last-Event-Id: 3 — client missed events 4 and 5

@@ -118,6 +118,8 @@ jobs:
     needs: [fmt, clippy, security-gate]
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
         with:
           targets: wasm32-unknown-unknown
@@ -144,6 +146,12 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
+      - name: Enforce retrieval and performance budgets
+        run: >-
+          python3 scripts/check-quality-budgets.py
+          --budgets docs/quality/budgets.json
+          --retrieval tests/fixtures/retrieval_quality/baseline.json
+          --criterion benches/results/benchmark_results.txt
       - name: Test library and integration tests
         run: |
           source scripts/ci-required-features.env
@@ -504,7 +512,7 @@ jobs:
   bench:
     name: Benchmark Regression Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
       pull-requests: write
@@ -513,15 +521,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
 
-      - name: Run benchmarks (Criterion JSON output)
-        run: cargo bench -- --output-format bencher | tee bench-output.txt
+      - name: Run benchmarks (Criterion bencher output)
+        shell: bash
+        run: |
+          set -o pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            cargo bench --bench entity_extraction -- --output-format bencher
+          else
+            cargo bench -- --output-format bencher
+          fi | tee bench-output.txt
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1
         # Tolerate missing gh-pages branch on first run / forks. The raw
         # criterion artifacts still upload via the next step, so PR authors
         # can inspect benchmark output even before history is established.
-        continue-on-error: true
+        continue-on-error: ${{ github.event_name != 'pull_request' }}
         with:
           name: Engram Performance
           tool: cargo

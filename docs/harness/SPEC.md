@@ -3,13 +3,13 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Harness maintenance — live-state closeout` |
-| Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
-| Started | `2026-06-27` |
+| Active sprint | `Agent harness hardening v1 — governance` |
+| Active task | `agent-harness-hardening-v1 — authorize trust boundaries and phased rollout` |
+| Started | `2026-07-21` |
 | Owner | `Ronaldo + agents (Claude Code + Claude Code Sonnet reviewer)` |
 | Active spec | `docs/harness/SPEC.md` |
-| Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
-| Tracker | Harness housekeeping after PR #108 / current main `1aa14e5` |
+| Active plan | `docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md` |
+| Tracker | Operator-authorized harness hardening; Wave 0 governance only |
 
 ## Escopo da sprint ativa
 
@@ -19,7 +19,36 @@
 > - Standards gerais: [`../../STANDARDS.md`](../../STANDARDS.md)
 > - Erros & lições: [`../../ERRORS_AND_LESSONS.md`](../../ERRORS_AND_LESSONS.md)
 
-## Tarefa ativa: Harness maintenance — live-state closeout
+## Tarefa ativa: Agent harness hardening v1 — Wave 0 governance
+
+- **Branch**: `feat/harness-hardening-v1`
+- **Progress log**: [`progress/2026-07-21-agent-harness-hardening-v1.md`](./progress/2026-07-21-agent-harness-hardening-v1.md)
+- **Status**: active — governance proposal prepared; ADR acceptance and
+  pre-change independent review remain required before executable hardening.
+
+### Em escopo
+
+- Proposed trust-boundary ADR, active plan, Review Canvas, and external-reference intake.
+- Synchronized `SPEC.md` and `progress.md` live-state routing.
+- Independent review under the existing pre-change gates.
+
+### Fora de escopo
+
+- Executable runner, schemas, validators, sandbox adapter, review-parser
+  migration, merge gate, CI/workflow changes, model routing, deployment, and
+  production access.
+- Rust, MCP, storage, SDK, dependency, or product behavior changes.
+
+### Gates esperados
+
+- `bash docs/harness/bin/bootstrap.sh`
+- `bash docs/harness/bin/doctor.sh`
+- `bash docs/harness/bin/sensors.sh`
+- `git diff --check`
+- `bash docs/harness/bin/review-gate.sh post agent-harness-hardening-v1`
+- Human acceptance of the ADR
+
+## Tarefa anterior: Harness maintenance — live-state closeout
 
 - **Branch**: `chore/harness-live-state`
 - **Progress log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)

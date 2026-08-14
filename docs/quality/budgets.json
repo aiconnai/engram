@@ -1,0 +1,65 @@
+{
+  "schema_version": "engram.quality-budgets.v1",
+  "retrieval": {
+    "baseline_path": "tests/fixtures/retrieval_quality/baseline.json",
+    "floors": {
+      "recall@10": 1.0,
+      "mrr": 1.0,
+      "ndcg@10": 1.0
+    }
+  },
+  "criterion": {
+    "maximum_regression_ratio": 1.15,
+    "baseline_source_path": "benches/results/benchmark_baseline.txt",
+    "hot_paths": {
+      "entity_extractor_new/default": {
+        "baseline_value": 4.9578,
+        "baseline_unit": "ms"
+      },
+      "entity_extraction/extract_mixed": {
+        "baseline_value": 17.144,
+        "baseline_unit": "us"
+      }
+    }
+  },
+  "baseline_update": {
+    "source_revision": "81be152c713230c082901899e6880579fcedabb3",
+    "reviewer": "Wave 3 independent post-review",
+    "rationale": "Promote the measured deterministic Todo 20 retrieval metrics and the existing Criterion evidence into reviewed local engineering floors.",
+    "evidence": [
+      "tests/fixtures/retrieval_quality/baseline.json",
+      "benches/results/benchmark_baseline.txt",
+      "benches/results/benchmark_results.txt"
+    ],
+    "before_metrics": {
+      "recall@10": 1.0,
+      "mrr": 1.0,
+      "ndcg@10": 1.0
+    },
+    "after_metrics": {
+      "recall@10": 1.0,
+      "mrr": 1.0,
+      "ndcg@10": 1.0
+    },
+    "before_criterion": {
+      "entity_extractor_new/default": {
+        "baseline_value": 4.9578,
+        "baseline_unit": "ms"
+      },
+      "entity_extraction/extract_mixed": {
+        "baseline_value": 17.144,
+        "baseline_unit": "us"
+      }
+    },
+    "after_criterion": {
+      "entity_extractor_new/default": {
+        "baseline_value": 4.9578,
+        "baseline_unit": "ms"
+      },
+      "entity_extraction/extract_mixed": {
+        "baseline_value": 17.144,
+        "baseline_unit": "us"
+      }
+    }
+  }
+}

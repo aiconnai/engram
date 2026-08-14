@@ -5,34 +5,17 @@ from __future__ import annotations
 from itertools import count
 from typing import Any
 
+from .errors import EngramError
+from .mcp_result import post_tool_call
+
 import httpx
 
-
-class EngramError(Exception):
-    """Custom exception for Engram client errors."""
-
-    pass
+# Re-export for callers that historically imported from client.
+__all__ = ["EngramClient", "EngramError"]
 
 
 class EngramClient:
-    """Client for the Engram Cloud REST API.
-
-    Usage:
-        client = EngramClient(
-            base_url="https://your-engram-cloud.fly.dev",
-            api_key="ek_...",
-            tenant="my-tenant",
-        )
-
-        # Create a memory
-        memory = client.create("User prefers dark mode", tags=["prefs"])
-
-        # Search
-        results = client.search("user preferences")
-
-        # List
-        memories = client.list(limit=10)
-    """
+    """Async Engram Cloud client over authenticated MCP-HTTP."""
 
     def __init__(
         self,
@@ -67,33 +50,17 @@ class EngramClient:
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
 
-    # -- MCP-over-HTTP helpers --
-
     async def _mcp_call(self, method: str, params: dict[str, Any] | None = None) -> Any:
         """Execute an MCP tool call over HTTP."""
         client = self._client
         if client is None:
             raise EngramError("EngramClient is closed")
-        payload = {
-            "jsonrpc": "2.0",
-            "id": next(self._id_counter),
-            "method": "tools/call",
-            "params": {
-                "name": method,
-                "arguments": params or {},
-            },
-        }
-        resp = await client.post("/v1/mcp", json=payload)
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            raise EngramError(
-                f"HTTP {e.response.status_code}: {e.response.text}"
-            ) from e
-        result = resp.json()
-        if "error" in result:
-            raise EngramError(result["error"].get("message", "Unknown error"))
-        return result.get("result", {})
+        return await post_tool_call(
+            client,
+            request_id=next(self._id_counter),
+            method=method,
+            params=params,
+        )
 
     # -- Memory CRUD --
 
@@ -172,7 +139,7 @@ class EngramClient:
         filter_: dict[str, Any] | None = None,
         sort_by: str | None = None,
         sort_order: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
         """List memories with optional filters.
 
         Advanced filtering is supported via the ``filter_`` parameter, which is

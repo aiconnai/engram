@@ -101,6 +101,7 @@ pub fn memory_ingest_fact(ctx: &HandlerContext, params: Value) -> Value {
                 manager.broadcast(RealtimeEvent::memory_created(
                     memory.id,
                     memory.content.clone(),
+                    memory.workspace.clone(),
                 ));
             }
             json!({"id": memory.id, "created": true})
@@ -241,6 +242,7 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
                     manager.broadcast(RealtimeEvent::memory_created(
                         memory.id,
                         memory.content.clone(),
+                        memory.workspace.clone(),
                     ));
                 }
             }

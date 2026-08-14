@@ -1,0 +1,390 @@
+You are an independent read-only senior reviewer. Review ONLY the staged Wave 0 governance diff below against the repository policies: docs/harness/INVARIANTS.md, WHAT_WE_DONT_DO.md, GATES.md, CODE_REVIEW_POLICY.md, security/anthropic-reference-harness.md, and REFERENCE_INTAKE.md. Check scope, self-approval, sandbox/credential/network boundaries, reference intake, SPEC/progress synchronization, rollback, and whether executable work remains blocked until ADR acceptance. Ignore pre-existing product code. Do not edit files. First line exactly PASS <summary> or FAIL <summary>. Include exactly one REVIEW_VERDICT: PASS|FAIL <summary> line. Findings use [BLOCKER]/[HIGH]/[MED]/[LOW].
+
+STAGED DIFF:
+diff --git a/docs/decisions/2026-07-21-agent-harness-hardening-v1.md b/docs/decisions/2026-07-21-agent-harness-hardening-v1.md
+new file mode 100644
+index 0000000..6b37df9
+--- /dev/null
++++ b/docs/decisions/2026-07-21-agent-harness-hardening-v1.md
+@@ -0,0 +1,129 @@
++# ADR: Agent harness hardening v1
++
++- **Status:** Proposed — requires human acceptance and a dedicated governance PR
++- **Date:** 2026-07-21
++- **Decision owner:** Ronaldo
++- **Review basis:** The pre-change Engram harness gates and review contract
++
++## Context
++
++The current harness provides deterministic Rust/CI sensors, live-state checks,
++review artifacts, and operational history. It does not yet provide a trusted
++task runner whose evidence is bound to an exact candidate commit. In
++particular, operational sensor records and agent-writable memory are useful
++telemetry, but are not merge authorization.
++
++The operator supplied the *Agent Harness Hardening Specification* v1.0 as an
++implementation blueprint. Engram will adapt its trust-boundary principles
++without treating that document, its example model names, or its example
++commands as authoritative over local invariants.
++
++## Decision
++
++Engram will add the hardening capability in separately reviewed phases. This
++ADR authorizes governance design only. It does **not** authorize autonomous
++execution, production access, deployment, merge, or a host-only fallback.
++
++### Trust boundaries
++
++| Component | Code writes | Trusted evidence | Merge authority |
++|---|---:|---:|---:|
++| Writer adapter | Task-scoped worktree only | No | No |
++| Reviewer | No | No | No |
++| Trusted runner | Controls isolated run | Local candidate evidence | No |
++| CI | No discretionary edits | CI evidence | Policy input only |
++| Merge gate | No | Reads trusted evidence | No direct mutation |
++| Human owner | Through a new revision | Approval record | Yes |
++
++### Trusted computing base
++
++The TCB is limited to the manifest validator, approved-check registry, sandbox
++adapter, runner, scope checker, evidence recorder, structured-review validator,
++merge-policy evaluator, and protected CI configuration. The writer must not be
++able to modify the active copies of these components.
++
++### Isolation and target contract
++
++- A Git worktree is revision isolation, **not** a security sandbox.
++- Writer execution requires a reviewed sandbox adapter. The first supported
++  adapter should be a pinned container image with network disabled, no
++  credential mounts, a read-only manifest/policy mount, only the task worktree
++  writable, dropped capabilities, `no-new-privileges`, and process/resource
++  caps.
++- If required isolation is unavailable, execution fails closed. There is no
++  silent host-execution fallback.
++- The runner executes only fixed argument vectors selected by approved check
++  IDs. It never uses `bash -c`, `sh -c`, `eval`, or model-authored predicates.
++- Initial runner tests use a fake writer. Enabling a real coding-agent adapter
++  requires a later approved task and evidence that the sandbox contract holds.
++
++### Credentials and network
++
++- Network is disabled by default. Allowlisted egress requires explicit task and
++  policy authorization and is recorded in evidence.
++- Ambient developer credentials, `HOME`, SSH agent sockets, Git askpass,
++  provider tokens, cloud credentials, cookies, and production secrets are not
++  inherited by writer processes.
++- Any unavoidable credential is short-lived, task-scoped, brokered explicitly,
++  and absent from prompts and logs.
++
++### Evidence and review
++
++- `.sensors-last` and `.sensors-log` remain operational telemetry.
++- Trusted evidence is a separate immutable or content-addressed bundle bound to
++  base SHA, candidate SHA, tree hash, policy version, exact argv, exit status,
++  time bounds, toolchain, environment, log hashes, and recorder identity.
++- Evidence is created outside the writer-writable tree and only after a
++  committed-tree verification run.
++- Every byte change creates a new candidate SHA and invalidates earlier test
++  and review evidence.
++- New review artifacts will migrate to strict SHA-bound JSON. Historical
++  marker-based reviews remain historical records but will never satisfy the
++  future merge gate.
++- The marker-based gate remains the approving gate for this ADR and its Wave 0
++  governance PR; the harness must not approve its own replacement.
++
++### Merge and production authority
++
++The merge evaluator is read-only and deterministic. High-risk, critical,
++security, authentication, migration, infrastructure, CI/policy, test-weakening,
++and production-boundary changes require human approval. Deployment and
++production mutation remain outside this decision.
++
++## Phased rollout
++
++1. **Wave 0 — governance:** this ADR, active plan, Canvas, reference intake,
++   and synchronized live-state metadata.
++2. **Wave 1 — contracts:** strict JSON task/evidence/review schemas,
++   dependency-free semantic validators, and adversarial fixtures.
++3. **Wave 2 — runner MVP:** fake-writer execution through the approved sandbox,
++   scope enforcement, post-commit verification, and external evidence bundle.
++4. **Wave 3 — structured review:** compatibility migration followed by
++   fail-closed SHA-bound review.
++5. **Wave 4 — merge-policy CI:** read-only merge decision over trusted CI
++   artifacts and exact PR head.
++
++Each wave starts from a clean branch after the prior wave is accepted. A wave
++may not inherit evidence or approval from an older candidate SHA.
++
++## Failure and rollback
++
++- Invalid input, unavailable isolation, timeout, unknown state, missing log,
++  missing reviewer, scope violation, or evidence mismatch is a failure.
++- Rollback for governance changes is a normal revert to the previous policy.
++- Rollback for later implementation waves disables the new policy version and
++  restores the last accepted pre-change gate; it never converts incomplete new
++  evidence into a pass.
++
++## Consequences
++
++The rollout is slower than adding a shell loop, but it minimizes false-green
++outcomes and prevents a writer from manufacturing completion. Container
++availability becomes an explicit prerequisite rather than an implicit host
++fallback.
++
++## Acceptance
++
++This ADR becomes **Accepted** only after the owner explicitly approves it and
++the dedicated Wave 0 PR passes bootstrap, doctor, full sensors, diff checks,
++and independent review using the pre-change gates.
+diff --git a/docs/harness/SPEC.md b/docs/harness/SPEC.md
+index 170e35c..45bd275 100644
+--- a/docs/harness/SPEC.md
++++ b/docs/harness/SPEC.md
+@@ -3,13 +3,13 @@
+ | Field | Value |
+ |-------|-------|
+ | Project | `engram` |
+-| Active sprint | `Harness maintenance — live-state closeout` |
+-| Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
+-| Started | `2026-06-27` |
++| Active sprint | `Agent harness hardening v1 — governance` |
++| Active task | `agent-harness-hardening-v1 — authorize trust boundaries and phased rollout` |
++| Started | `2026-07-21` |
+ | Owner | `Ronaldo + agents (Claude Code + Claude Code Sonnet reviewer)` |
+ | Active spec | `docs/harness/SPEC.md` |
+-| Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
+-| Tracker | Harness housekeeping after PR #108 / current main `1aa14e5` |
++| Active plan | `docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md` |
++| Tracker | Operator-authorized harness hardening; Wave 0 governance only |
+ 
+ ## Escopo da sprint ativa
+ 
+@@ -19,7 +19,36 @@
+ > - Standards gerais: [`../../STANDARDS.md`](../../STANDARDS.md)
+ > - Erros & lições: [`../../ERRORS_AND_LESSONS.md`](../../ERRORS_AND_LESSONS.md)
+ 
+-## Tarefa ativa: Harness maintenance — live-state closeout
++## Tarefa ativa: Agent harness hardening v1 — Wave 0 governance
++
++- **Branch**: `feat/harness-hardening-v1`
++- **Progress log**: [`progress/2026-07-21-agent-harness-hardening-v1.md`](./progress/2026-07-21-agent-harness-hardening-v1.md)
++- **Status**: active — governance proposal prepared; ADR acceptance and
++  pre-change independent review remain required before executable hardening.
++
++### Em escopo
++
++- Proposed trust-boundary ADR, active plan, Review Canvas, and external-reference intake.
++- Synchronized `SPEC.md` and `progress.md` live-state routing.
++- Independent review under the existing pre-change gates.
++
++### Fora de escopo
++
++- Executable runner, schemas, validators, sandbox adapter, review-parser
++  migration, merge gate, CI/workflow changes, model routing, deployment, and
++  production access.
++- Rust, MCP, storage, SDK, dependency, or product behavior changes.
++
++### Gates esperados
++
++- `bash docs/harness/bin/bootstrap.sh`
++- `bash docs/harness/bin/doctor.sh`
++- `bash docs/harness/bin/sensors.sh`
++- `git diff --check`
++- `bash docs/harness/bin/review-gate.sh post agent-harness-hardening-v1`
++- Human acceptance of the ADR
++
++## Tarefa anterior: Harness maintenance — live-state closeout
+ 
+ - **Branch**: `chore/harness-live-state`
+ - **Progress log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)
+diff --git a/docs/harness/canvas/2026-07-21-agent-harness-hardening-v1.md b/docs/harness/canvas/2026-07-21-agent-harness-hardening-v1.md
+new file mode 100644
+index 0000000..09d0af5
+--- /dev/null
++++ b/docs/harness/canvas/2026-07-21-agent-harness-hardening-v1.md
+@@ -0,0 +1,68 @@
++# Review Canvas: agent-harness-hardening-v1
++
++Date: 2026-07-21  
++Owner: Ronaldo + agents  
++Scope: Wave 0 governance for a SHA-bound, isolated agent harness.
++
++## Trigger
++
++| Trigger | Evidence |
++|---|---|
++| Harness policy change | The proposal affects trust, review, evidence, runtime, and merge boundaries. |
++| Future autonomous execution | Invariant 23 requires ADR, sandbox, egress, credential, and target contracts first. |
++| External blueprint | The operator supplied a detailed specification with volatile product/model references. |
++
++## Approaches considered
++
++| Approach | Decision | Reason |
++|---|---|---|
++| Implement runner immediately in the current checkout | Rejected | Current active scope excludes it; checkout is dirty; no accepted sandbox ADR exists. |
++| Treat worktree isolation as a sandbox | Rejected | Worktrees do not restrict credentials, processes, filesystem reach, or network. |
++| Land governance first, then isolated phases | Accepted | Preserves previous-gate review and makes each trust-boundary change independently reversible. |
++| Replace current sensors/reviews in one change | Rejected | Would let the replacement participate in approving itself and break historical compatibility. |
++
++## Hot-path complexity
++
++| Path | Time impact | Space impact | Notes |
++|---|---|---|---|
++| Wave 0 bootstrap/doctor | Negligible | Five Markdown files | No executable path changes. |
++| Future validation | Linear in manifest/artifact size | Bounded fixtures | Strict semantic validation, not runtime Markdown parsing. |
++| Future verification | Dominated by existing `make ci` | Content-addressed logs | Post-commit rerun is intentionally mandatory. |
++
++## Edge cases
++
++| Edge case | Required handling |
++|---|---|
++| Pass evidence exists for SHA A and one byte changes to SHA B | Refuse merge; regenerate all evidence and review. |
++| Required container/sandbox is unavailable | Fail closed; never fall back to host execution. |
++| Rename crosses from allowed to protected path | Evaluate old and new names; block without explicit authorization. |
++| Reviewer returns prose containing PASS or reviews an older SHA | Structured validator refuses it. |
++| Writer creates a fake evidence file in its worktree | Ignore it; trusted recorder writes outside writer authority. |
++| Network-off task requests a new domain during execution | Stop; authority cannot expand mid-run. |
++
++## Breakage risk
++
++| Risk | Impact | Mitigation | Verification |
++|---|---|---|---|
++| New policy approves itself | Invalid governance | Wave 0 uses pre-change gates; parser migration is later | Independent legacy post-review |
++| Operational telemetry is mistaken for merge proof | Stale or forged success | Keep sensors unchanged and define a separate evidence artifact | Wave 1 semantic tests |
++| Sandbox claim is weaker than reality | Credential/network exposure | Require pinned adapter and refuse unavailable isolation | Wave 2 adversarial tests |
++| Historical review compatibility becomes fail-open | Unreviewed merge | Compatibility can display history but never satisfy merge gate | Wave 3 fixtures |
++
++## External reference intake
++
++| Field | Evidence |
++|---|---|
++| Source identity | Operator-supplied *Agent Harness Hardening Specification*, version 1.0, dated 2026-07-18, read 2026-07-21. URLs listed in its source-reference section were not used as implementation authority in Wave 0. |
++| Source type | User-provided implementation blueprint and secondary synthesis. |
++| License boundary | License not stated. No text, prompts, scripts, or checklists are vendored as an external dependency; local wording and structure are independently adapted. |
++| Harness relevance | Governance, verifier, evidence, runtime control, security, review, and merge policy. |
++| Placement | ADR for trust decisions; active plan for sequencing; Canvas for risks and intake. Executable details are deferred to separately reviewed waves. |
++| Adaptation | Revision-specific evidence, bounded authority, no model-authored execution, fail-closed verification, and human production boundary. |
++| Exclusions | No model IDs, prices, CLI flags, unofficial auth patterns, router, swarm, cron writer, auto-merge, or production deployment is adopted. |
++| Verification | Wave 0 doctor, full sensors, diff check, pre-change independent review, and human acceptance. Volatile product claims must be re-verified from primary sources only when a later task depends on them. |
++
++## Decision
++
++Proceed with governance-only Wave 0. Do not add executable runner, schema,
++review-parser, workflow, or merge-gate changes until the ADR is accepted.
+diff --git a/docs/harness/progress.md b/docs/harness/progress.md
+index 978d70a..cbc965b 100644
+--- a/docs/harness/progress.md
++++ b/docs/harness/progress.md
+@@ -3,9 +3,9 @@
+ | Field | Value |
+ |-------|-------|
+ | Project | `engram` |
+-| Active sprint | `Harness maintenance — live-state closeout` |
+-| Active task | `engram-10-of-10-live-state — make harness live state truthful and self-checking` |
+-| Active plan | `docs/harness/progress/2026-06-27-harness-live-state-closeout.md` |
++| Active sprint | `Agent harness hardening v1 — governance` |
++| Active task | `agent-harness-hardening-v1 — authorize trust boundaries and phased rollout` |
++| Active plan | `docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md` |
+ | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
+ | Last sensors | `2026-07-13 — status=pass (mode=full; timestamp 2026-07-13T23:20:58Z)` |
+ | Last commit | `a0404587d8f552edc5ea649da1e2206dc17802c5` |
+@@ -13,6 +13,18 @@
+ 
+ > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.
+ 
++## Agent harness hardening v1 — Wave 0 governance
++
++- **Status**: active — governance proposal only; no autonomous runner or
++  executable policy migration is authorized before ADR acceptance.
++- **Plan**: [`progress/2026-07-21-agent-harness-hardening-v1.md`](./progress/2026-07-21-agent-harness-hardening-v1.md)
++- **ADR**: [`../decisions/2026-07-21-agent-harness-hardening-v1.md`](../decisions/2026-07-21-agent-harness-hardening-v1.md)
++- **Canvas and reference intake**: [`canvas/2026-07-21-agent-harness-hardening-v1.md`](./canvas/2026-07-21-agent-harness-hardening-v1.md)
++- Work is isolated on `feat/harness-hardening-v1`; unrelated dirt in the
++  source checkout is not part of this task.
++- Wave 0 deliberately leaves scripts, workflows, review parsing, sensors, and
++  product code unchanged so the previous gates remain authoritative.
++
+ ## Engram 10/10 Wave 2 — security integration with SQLite deferral
+ 
+ - **Status**: partially integrated; atomic descriptor-bound SQLite opening is
+diff --git a/docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md b/docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md
+new file mode 100644
+index 0000000..d9934e5
+--- /dev/null
++++ b/docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md
+@@ -0,0 +1,75 @@
++# Agent harness hardening v1 — Wave 0 governance plan
++
++## Objective
++
++Authorize a bounded, auditable path from the existing Engram harness to
++revision-specific trusted evidence without letting the new harness approve its
++own policy changes.
++
++## Scope of this wave
++
++- Add the proposed trust-boundary ADR.
++- Record the Review Canvas and external-reference intake.
++- Make this plan the active harness task in `SPEC.md` and `progress.md`.
++- Preserve the existing review parser, sensors, workflows, scripts, and product
++  behavior unchanged.
++
++## Explicitly out of scope
++
++- Task/evidence/review schema implementation.
++- Runner, sandbox adapter, scope checker, evidence recorder, or merge gate.
++- Workflow or branch-protection changes.
++- Model routing, subagent runtime, deployment, auto-merge, or production access.
++- Changes to Rust, MCP, storage, SDKs, dependencies, or tests.
++
++## Protected files authorized in Wave 0
++
++- `docs/harness/SPEC.md`
++- `docs/harness/progress.md`
++- `docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md`
++- `docs/harness/canvas/2026-07-21-agent-harness-hardening-v1.md`
++- `docs/decisions/2026-07-21-agent-harness-hardening-v1.md`
++- Immutable prompt/review artifacts under `docs/harness/reviews/` for this task
++
++No executable harness or CI file is authorized by this wave.
++
++## Sequence
++
++1. Land and human-accept Wave 0 under the previous gates.
++2. Start Wave 1 on a new clean branch with strict JSON contracts and validators.
++3. Prove validators against adversarial fixtures before adding execution.
++4. Add a fake-writer runner behind a required sandbox adapter.
++5. Migrate review consumers together; never allow legacy compatibility to
++   produce merge-eligible evidence.
++6. Add the read-only merge-policy job only after trusted CI artifact flow is
++   defined and tested.
++
++## Phase acceptance matrix
++
++| Phase | Required proof | Must remain impossible |
++|---|---|---|
++| Wave 0 | doctor, full sensors, pre-change independent review, human ADR acceptance | Autonomous execution |
++| Wave 1 | malformed/wrong-SHA/path/cap/check-ID fixtures fail closed | Agent-authored trusted evidence |
++| Wave 2 | fake writer, sandbox refusal tests, post-commit evidence, scope adversarial tests | Host fallback or free-form shell |
++| Wave 3 | exact SHA/policy matching and unavailable reviewer refusal | Marker/prose pass accepted for merge |
++| Wave 4 | exact PR-head CI artifact validation and human-risk rules | Direct merge/deploy mutation |
++
++## Rollback
++
++Wave 0 is reverted as one governance revision. Later waves are separately
++revertible and must retain the previous accepted gate until the replacement has
++independent evidence.
++
++## Required Wave 0 gates
++
++- `bash docs/harness/bin/bootstrap.sh`
++- `bash docs/harness/bin/doctor.sh`
++- `bash docs/harness/bin/sensors.sh`
++- `git diff --check`
++- `bash docs/harness/bin/review-gate.sh post agent-harness-hardening-v1`
++- Human acceptance of the ADR and merge decision
++
++## Status
++
++Implementation prepared on an isolated clean worktree. ADR remains proposed;
++no autonomous runner or executable policy change is authorized yet.
