@@ -144,3 +144,19 @@ expires = 2026-09-30
 remediation = "Track lopdf/pdf-extract migration to skrifa or a maintained parser; remove this governed warning when the PDF stack no longer depends on ttf-parser."
 feature_gated = true
 default_graph = false
+
+[[exceptions]]
+advisory = "RUSTSEC-2026-0235"
+crate = "rkyv"
+versions = ["0.7.46"]
+tools = ["cargo-audit:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> duckdb 1.4.4 -> rust_decimal 1.40.0 -> rkyv 0.7.46",
+]
+feature = "duckdb-graph optional feature only"
+exposure = "Unmaintained rkyv 0.7.x serialization in optional duckdb/rust_decimal dependency tree; Engram does not deserialize untrusted rkyv archives."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Track duckdb/rust_decimal migration to rkyv 0.8+; remove the cargo-audit ignore once Cargo.lock no longer contains vulnerable rkyv versions."
+feature_gated = true
+default_graph = false
