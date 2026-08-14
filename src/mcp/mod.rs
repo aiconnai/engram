@@ -10,6 +10,7 @@ pub mod permission;
 pub mod prompts;
 pub mod protocol;
 pub mod resources;
+pub mod shutdown;
 #[path = "tools/mod.rs"]
 pub mod tools;
 
@@ -21,4 +22,5 @@ pub use protocol::{
     ToolsCapability, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
 };
 pub use resources::{list_resources, read_resource};
+pub use shutdown::shutdown_signal;
 pub use tools::{get_tool_definitions, get_tool_definitions_tiered, TOOL_DEFINITIONS};
