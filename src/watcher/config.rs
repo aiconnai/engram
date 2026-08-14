@@ -117,6 +117,15 @@ fn default_exclude_patterns() -> Vec<String> {
         "about:".to_string(),
         "chrome://".to_string(),
         "chrome-extension://".to_string(),
+        "moz-extension://".to_string(),
+        "accounts.google.com".to_string(),
+        "login".to_string(),
+        "signin".to_string(),
+        "auth".to_string(),
+        "password".to_string(),
+        "passwords".to_string(),
+        "vault".to_string(),
+        "bank".to_string(),
     ]
 }
 
@@ -180,8 +189,8 @@ pub struct WatcherConfig {
     #[serde(default)]
     pub watched_directories: Vec<PathBuf>,
 
-    /// Whether to track browser history (default: true).
-    #[serde(default = "default_true")]
+    /// Whether to track browser history (default: false).
+    #[serde(default)]
     pub browser_history_enabled: bool,
 
     /// Whether to track active application focus events (default: false).
@@ -224,7 +233,7 @@ impl Default for WatcherConfig {
     fn default() -> Self {
         Self {
             watched_directories: Vec::new(),
-            browser_history_enabled: default_true(),
+            browser_history_enabled: false,
             app_focus_enabled: false,
             poll_interval_secs: default_poll_interval(),
             engram_url: default_engram_url(),
@@ -285,7 +294,7 @@ mod tests {
     fn test_default_config_values() {
         let cfg = WatcherConfig::default();
         assert!(cfg.watched_directories.is_empty());
-        assert!(cfg.browser_history_enabled);
+        assert!(!cfg.browser_history_enabled);
         assert!(!cfg.app_focus_enabled);
         assert_eq!(cfg.poll_interval_secs, 300);
         assert_eq!(cfg.engram_url, "http://localhost:3000");
@@ -321,7 +330,7 @@ mod tests {
         let cfg: WatcherConfig = toml::from_str(toml_str).expect("should parse");
         assert_eq!(cfg.watched_directories, vec![PathBuf::from("/data")]);
         assert_eq!(cfg.poll_interval_secs, 120);
-        assert!(cfg.browser_history_enabled);
+        assert!(!cfg.browser_history_enabled);
     }
 
     #[test]
