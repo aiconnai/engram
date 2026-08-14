@@ -349,3 +349,10 @@ jobs:
           git add Formula/engram.rb
           git commit -m "chore: update engram to ${RELEASE_VERSION}"
           git push
+      - name: Verify the published Homebrew formula installs and runs
+        run: |
+          set -euo pipefail
+          version="${RELEASE_VERSION#v}"
+          engram-source/scripts/verify-homebrew-release.sh \
+            --version "${version}" \
+            --disposable-prefix

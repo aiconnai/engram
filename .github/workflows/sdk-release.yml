@@ -225,6 +225,10 @@ jobs:
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           packages-dir: dist/packages/
+      - name: Verify the published PyPI release is installable
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+        run: scripts/verify-pypi-release.sh --package engram-client --version "${RELEASE_TAG#v}"
 
   publish-npm:
     name: Publish TypeScript SDK
@@ -271,3 +275,7 @@ jobs:
           tarball="$(find dist -maxdepth 1 -name '*.tgz' -print -quit)"
           test -n "${tarball}"
           npm publish "${tarball}" --access public --provenance
+      - name: Verify the published npm release is installable
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+        run: scripts/verify-npm-release.sh --package engram-client --version "${RELEASE_TAG#v}"
