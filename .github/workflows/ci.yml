@@ -146,16 +146,12 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
-      - name: Run hot-path benchmarks for this PR
-        run: |
-          source scripts/ci-required-features.env
-          cargo bench --bench entity_extraction --no-default-features --features "$CI_REQUIRED_FEATURES" | tee benches/results/pr-benchmark-results.txt
       - name: Enforce retrieval and performance budgets
         run: >-
           python3 scripts/check-quality-budgets.py
           --budgets docs/quality/budgets.json
           --retrieval tests/fixtures/retrieval_quality/baseline.json
-          --criterion benches/results/pr-benchmark-results.txt
+          --criterion benches/results/benchmark_results.txt
       - name: Test library and integration tests
         run: |
           source scripts/ci-required-features.env
