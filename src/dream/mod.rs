@@ -217,7 +217,7 @@ pub fn run_once_workspace(
 ///
 /// Acquires the system-wide advisory lock first; if another instance holds
 /// it, returns a `DreamReport` with an error entry and no workspaces
-/// processed. The lock is released via [`DreamLockGuard`] on every exit
+/// processed. The lock is released via `DreamLockGuard` on every exit
 /// path, including panic-unwind.
 pub fn run_once_all(storage: &Storage, config: &DreamConfig) -> DreamReport {
     let started_at = Utc::now();
