@@ -282,7 +282,10 @@ impl McpService for GrpcMcpService {
 
         let handler_req = proto_to_handler_request(request.into_inner());
         authorize_request(&principal, &handler_req)?;
-        let handler_resp = self.handler.handle_request(handler_req);
+        let handler = self.handler.clone();
+        let handler_resp = tokio::task::spawn_blocking(move || handler.handle_request(handler_req))
+            .await
+            .map_err(|e| Status::internal(format!("MCP handler task failed or panicked: {e}")))?;
         let proto_resp = handler_to_proto_response(handler_resp);
         Ok(Response::new(proto_resp))
     }
