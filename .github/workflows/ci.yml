@@ -120,12 +120,6 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
-      - name: Enforce retrieval and performance budgets
-        run: >-
-          python3 scripts/check-quality-budgets.py
-          --budgets docs/quality/budgets.json
-          --retrieval tests/fixtures/retrieval_quality/baseline.json
-          --criterion benches/results/benchmark_results.txt
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
         with:
           targets: wasm32-unknown-unknown
@@ -152,6 +146,16 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
+      - name: Run hot-path benchmarks for this PR
+        run: |
+          source scripts/ci-required-features.env
+          cargo bench --bench entity_extraction --no-default-features --features "$CI_REQUIRED_FEATURES" | tee benches/results/pr-benchmark-results.txt
+      - name: Enforce retrieval and performance budgets
+        run: >-
+          python3 scripts/check-quality-budgets.py
+          --budgets docs/quality/budgets.json
+          --retrieval tests/fixtures/retrieval_quality/baseline.json
+          --criterion benches/results/pr-benchmark-results.txt
       - name: Test library and integration tests
         run: |
           source scripts/ci-required-features.env
