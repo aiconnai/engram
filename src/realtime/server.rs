@@ -347,7 +347,9 @@ impl RealtimeServer {
         tracing::info!("WebSocket server listening on {}", self.addr);
 
         let listener = tokio::net::TcpListener::bind(self.addr).await?;
-        axum::serve(listener, app).await?;
+        axum::serve(listener, app)
+            .with_graceful_shutdown(crate::mcp::shutdown_signal())
+            .await?;
 
         Ok(())
     }

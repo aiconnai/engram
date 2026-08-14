@@ -411,7 +411,7 @@ pub async fn serve_grpc(
 
     Server::builder()
         .add_service(service)
-        .serve(addr)
+        .serve_with_shutdown(addr, crate::mcp::shutdown_signal())
         .await
         .map_err(|e| crate::error::EngramError::Internal(e.to_string()))?;
 
