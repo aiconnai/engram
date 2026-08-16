@@ -50,7 +50,7 @@
 - Create: `src/intelligence/lifecycle.rs`
 - Modify: `src/intelligence/mod.rs`
 
-- [ ] **Step 1.1: Create `src/intelligence/lifecycle.rs` with config defaults**
+- [x] **Step 1.1: Create `src/intelligence/lifecycle.rs` with config defaults**
 
 Add:
 
@@ -82,7 +82,7 @@ impl Default for LifecycleConfig {
 
 Do not place this config in `SalienceConfig`.
 
-- [ ] **Step 1.2: Add `normalized_importance`**
+- [x] **Step 1.2: Add `normalized_importance`**
 
 In the same file:
 
@@ -96,7 +96,7 @@ pub fn normalized_importance(value: f32) -> f32 {
 }
 ```
 
-- [ ] **Step 1.3: Add `decide_lifecycle_state`**
+- [x] **Step 1.3: Add `decide_lifecycle_state`**
 
 In the same file:
 
@@ -133,7 +133,7 @@ pub fn decide_lifecycle_state(
 }
 ```
 
-- [ ] **Step 1.4: Export the lifecycle module**
+- [x] **Step 1.4: Export the lifecycle module**
 
 In `src/intelligence/mod.rs`, add `pub mod lifecycle;` and re-export:
 
@@ -143,7 +143,7 @@ pub use lifecycle::{decide_lifecycle_state, normalized_importance, LifecycleConf
 
 Place exports near other public intelligence exports.
 
-- [ ] **Step 1.5: Add pure unit tests for the predicate table**
+- [x] **Step 1.5: Add pure unit tests for the predicate table**
 
 In `src/intelligence/lifecycle.rs`, under `#[cfg(test)]`, add a helper that builds a `Memory` with controllable `importance`, `created_at`, `last_accessed_at`, and `lifecycle_state`. Cover these cases exactly:
 
@@ -166,7 +166,7 @@ In `src/intelligence/lifecycle.rs`, under `#[cfg(test)]`, add a helper that buil
 | Already archived | current `Archived`, any idle | `Archived` |
 | Missing `last_accessed_at` | `None`, created_at drives idle | per expected age |
 
-- [ ] **Step 1.6: Verify Task 1**
+- [x] **Step 1.6: Verify Task 1**
 
 ```bash
 rtk cargo test intelligence::lifecycle --lib
@@ -182,7 +182,7 @@ Expected: lifecycle unit tests pass; formatting is clean.
 **Files:**
 - Modify: `src/mcp/handlers/lifecycle.rs`
 
-- [ ] **Step 2.1: Import canonical lifecycle functions**
+- [x] **Step 2.1: Import canonical lifecycle functions**
 
 Add imports from `crate::intelligence`:
 
@@ -192,7 +192,7 @@ use crate::intelligence::{decide_lifecycle_state, LifecycleConfig};
 
 Keep `LifecycleState` from `crate::types`.
 
-- [ ] **Step 2.2: Replace `min_importance` parsing with `LifecycleConfig` parsing**
+- [x] **Step 2.2: Replace `min_importance` parsing with `LifecycleConfig` parsing**
 
 Inside `lifecycle_run`, parse:
 
@@ -203,7 +203,7 @@ Inside `lifecycle_run`, parse:
 
 Accept `min_importance` if present only as deprecated/no-op compatibility; do not use it to filter or decide.
 
-- [ ] **Step 2.3: Replace stale/archive candidate SQL with one permissive candidate query**
+- [x] **Step 2.3: Replace stale/archive candidate SQL with one permissive candidate query**
 
 Use a single query that selects all non-deleted non-archived candidates in the workspace:
 
@@ -219,11 +219,11 @@ WHERE valid_to IS NULL
 
 Must not filter on `importance`, `access_count`, `created_at`, or `expires_at`. If any cheap time/expiration pre-filter is added later, it must be proven more permissive than `decide_lifecycle_state`; do not add it in this implementation.
 
-- [ ] **Step 2.4: Convert rows into `Memory` values or a local equivalent**
+- [x] **Step 2.4: Convert rows into `Memory` values or a local equivalent**
 
 Prefer constructing `Memory` so `decide_lifecycle_state(&memory, now, &cfg)` is used exactly. Parse dates using existing repo patterns (`DateTime::parse_from_rfc3339(...).with_timezone(&Utc)`). If a row has NULL/unknown lifecycle, treat it as `LifecycleState::Active`.
 
-- [ ] **Step 2.5: Compute transitions in memory and preserve dry-run/apply parity**
+- [x] **Step 2.5: Compute transitions in memory and preserve dry-run/apply parity**
 
 For each candidate:
 
@@ -234,11 +234,11 @@ For each candidate:
 
 Direct `Active -> Archived` is allowed when `decide_lifecycle_state` returns `Archived`.
 
-- [ ] **Step 2.6: Preserve enrichment events for apply mode only**
+- [x] **Step 2.6: Preserve enrichment events for apply mode only**
 
 Keep event type `lifecycle_transition`, `triggered_by: "lifecycle_run"`, and outcome `{"new_state": "stale"}` or `{"new_state": "archived"}`. Emit only for applied transitions, not for dry-run.
 
-- [ ] **Step 2.7: Update `lifecycle_config` handler**
+- [x] **Step 2.7: Update `lifecycle_config` handler**
 
 In `src/mcp/handlers/lifecycle.rs`, update `lifecycle_config` to return only lifecycle config fields:
 
@@ -250,7 +250,7 @@ In `src/mcp/handlers/lifecycle.rs`, update `lifecycle_config` to return only lif
 
 Remove `min_importance` and `min_access_count` from response. If input includes them, ignore them; do not echo them.
 
-- [ ] **Step 2.8: Add handler tests for lifecycle_run**
+- [x] **Step 2.8: Add handler tests for lifecycle_run**
 
 In `src/mcp/handlers/lifecycle.rs` tests, add/replace tests for:
 
@@ -262,7 +262,7 @@ In `src/mcp/handlers/lifecycle.rs` tests, add/replace tests for:
 
 Use the existing `test_lifecycle_run_emits_enrichment_event` setup style as the template.
 
-- [ ] **Step 2.9: Verify Task 2**
+- [x] **Step 2.9: Verify Task 2**
 
 ```bash
 rtk cargo test mcp::handlers::lifecycle --lib
@@ -278,7 +278,7 @@ Expected: lifecycle handler tests pass, including enrichment event test.
 - Modify: `src/intelligence/salience.rs`
 - Modify: `src/mcp/handlers/quality.rs`
 
-- [ ] **Step 3.1: Stop `run_salience_decay_in_workspace` from updating lifecycle**
+- [x] **Step 3.1: Stop `run_salience_decay_in_workspace` from updating lifecycle**
 
 Remove the block in `src/intelligence/salience.rs` that executes:
 
@@ -288,11 +288,11 @@ UPDATE memories SET lifecycle_state = ?, updated_at = ? WHERE id = ?
 
 Keep salience score calculation and `salience_history` insertion behavior.
 
-- [ ] **Step 3.2: Keep `DecayResult` shape but make lifecycle counts zero**
+- [x] **Step 3.2: Keep `DecayResult` shape but make lifecycle counts zero**
 
 For compatibility, keep `marked_stale` and `suggested_archive` fields in `DecayResult`, but make them represent state transitions performed by salience decay. Since salience decay is now score-only, they must remain `0` in apply and dry-run.
 
-- [ ] **Step 3.3: Delegate `SalienceScore.suggested_state` to canonical predicate**
+- [x] **Step 3.3: Delegate `SalienceScore.suggested_state` to canonical predicate**
 
 In `SalienceCalculator::calculate`, replace the legacy `self.suggest_lifecycle_state(memory, score, now)` call with:
 
@@ -302,15 +302,15 @@ let suggested_state = decide_lifecycle_state(memory, now, &LifecycleConfig::defa
 
 Import `decide_lifecycle_state` and `LifecycleConfig`. The salience score still computes `score`; it no longer owns lifecycle decision logic.
 
-- [ ] **Step 3.4: Remove or rewrite `suggest_lifecycle_state` tests**
+- [x] **Step 3.4: Remove or rewrite `suggest_lifecycle_state` tests**
 
 The test at `src/intelligence/salience.rs:965` currently validates the old score-gated predicate. Replace it with a parity test: a memory passed through `SalienceCalculator::calculate` must have `score.suggested_state == decide_lifecycle_state(memory, now-ish, &LifecycleConfig::default())`. Use dates stable enough that the day boundary cannot flake; prefer constructing `now` and helper APIs if needed.
 
-- [ ] **Step 3.5: Update salience_decay_run handler response wording if needed**
+- [x] **Step 3.5: Update salience_decay_run handler response wording if needed**
 
 In `src/mcp/handlers/quality.rs`, ensure `salience_decay_run` does not claim lifecycle states were updated. If it surfaces `marked_stale` / `suggested_archive`, those values should be `0` and docs should explain salience decay is score/history-only.
 
-- [ ] **Step 3.6: Verify Task 3**
+- [x] **Step 3.6: Verify Task 3**
 
 ```bash
 rtk cargo test intelligence::salience --lib
@@ -326,11 +326,11 @@ Expected: salience tests pass; salience decay no longer writes lifecycle.
 **Files:**
 - Modify: `src/mcp/handlers/memory_policy.rs`
 
-- [ ] **Step 4.1: Remove lifecycle target calculation**
+- [x] **Step 4.1: Remove lifecycle target calculation**
 
 In `decay_candidates`, change `lifecycle_target` so it is always `None`. Keep current policy score fields (`new_salience_score`, `new_retention_score`, `new_retrieval_priority`) unchanged.
 
-- [ ] **Step 4.2: Remove apply-mode lifecycle UPDATE**
+- [x] **Step 4.2: Remove apply-mode lifecycle UPDATE**
 
 In `memory_decay`, remove the block that executes raw SQL:
 
@@ -344,11 +344,11 @@ WHERE id = ?2
 
 Keep `upsert_policy_record` and `emit_policy_event`.
 
-- [ ] **Step 4.3: Keep compatibility response fields but make lifecycle updates zero**
+- [x] **Step 4.3: Keep compatibility response fields but make lifecycle updates zero**
 
 Keep `lifecycle_updates` in the JSON response if tests/clients expect it, but set it to `0` and update `concern` to say only policy scores are updated.
 
-- [ ] **Step 4.4: Add regression test**
+- [x] **Step 4.4: Add regression test**
 
 Add a handler test that creates an Active memory whose decayed retention would previously cross `< 0.25`, runs `memory_decay(dry_run=false)`, and asserts:
 
@@ -356,7 +356,7 @@ Add a handler test that creates an Active memory whose decayed retention would p
 - `lifecycle_state` remains `active`;
 - response `lifecycle_updates == 0`.
 
-- [ ] **Step 4.5: Verify Task 4**
+- [x] **Step 4.5: Verify Task 4**
 
 ```bash
 rtk cargo test mcp::handlers::memory_policy --lib
@@ -371,7 +371,7 @@ Expected: policy score tests pass and lifecycle state remains unchanged.
 **Files:**
 - Modify: `src/mcp/handlers/summarize.rs`
 
-- [ ] **Step 5.1: Filter candidates to already Archived rows**
+- [x] **Step 5.1: Filter candidates to already Archived rows**
 
 In `memory_archive_old`, candidate filtering currently checks age, importance, access count, and type but no lifecycle state. Add an explicit check:
 
@@ -381,11 +381,11 @@ m.lifecycle_state == LifecycleState::Archived
 
 Import `LifecycleState` if needed. This is required; simply removing the final update would still summarize active rows via the old divergent predicate.
 
-- [ ] **Step 5.2: Remove final lifecycle UPDATE**
+- [x] **Step 5.2: Remove final lifecycle UPDATE**
 
 Delete the `conn.execute("UPDATE memories SET lifecycle_state = 'archived' ...")` block. After `create_memory(conn, &input)` succeeds, count the row as compressed/summarized without updating the original lifecycle.
 
-- [ ] **Step 5.3: Rename response and event wording**
+- [x] **Step 5.3: Rename response and event wording**
 
 Change response keys from archive semantics to compression semantics:
 
@@ -394,14 +394,14 @@ Change response keys from archive semantics to compression semantics:
 
 For compatibility, only keep old keys if existing protocol tests require them, and if kept, mark them deprecated in docs. Event outcome should not be `{"new_state": "archived"}`; use `{"compressed": true, "summary_created": true}` or equivalent.
 
-- [ ] **Step 5.4: Add regression tests**
+- [x] **Step 5.4: Add regression tests**
 
 Add tests that:
 
 1. create an old, low-importance, low-access Active memory and run `memory_archive_old(dry_run=false)`; assert no summary is created and lifecycle remains Active;
 2. create an old, low-importance, low-access Archived memory and run apply; assert a Summary is created and original remains Archived.
 
-- [ ] **Step 5.5: Verify Task 5**
+- [x] **Step 5.5: Verify Task 5**
 
 ```bash
 rtk cargo test mcp::handlers::summarize --lib
@@ -417,7 +417,7 @@ Expected: summarize handler tests pass; `memory_archive_old` no longer archives 
 - Modify: `src/storage/queries/retention.rs`
 - Modify: `src/bin/server.rs`
 
-- [ ] **Step 6.1: Change `compress_old_memories` candidate SQL to already Archived rows**
+- [x] **Step 6.1: Change `compress_old_memories` candidate SQL to already Archived rows**
 
 In `src/storage/queries/retention.rs`, change:
 
@@ -433,11 +433,11 @@ AND COALESCE(m.lifecycle_state, 'active') = 'archived'
 
 Keep `valid_to IS NULL`, expiration, type exclusions, and batch limit.
 
-- [ ] **Step 6.2: Remove lifecycle UPDATE from `compress_old_memories`**
+- [x] **Step 6.2: Remove lifecycle UPDATE from `compress_old_memories`**
 
 Delete the `UPDATE memories SET lifecycle_state = 'archived' ...` call inside `compress_old_memories`. Count a candidate only when summary creation succeeds.
 
-- [ ] **Step 6.3: Rename local variables and comments**
+- [x] **Step 6.3: Rename local variables and comments**
 
 Rename `archived` local counter to `compressed`. Update comments and doc comment:
 
@@ -446,7 +446,7 @@ Rename `archived` local counter to `compressed`. Update comments and doc comment
 
 Keep function name for compatibility unless the codebase already supports a safe rename.
 
-- [ ] **Step 6.4: Keep retention max-count and auto-delete unchanged**
+- [x] **Step 6.4: Keep retention max-count and auto-delete unchanged**
 
 Do not change:
 
@@ -455,7 +455,7 @@ Do not change:
 
 Those are domain writers/visibility changes accepted by the spec.
 
-- [ ] **Step 6.5: Update server scheduler log wording**
+- [x] **Step 6.5: Update server scheduler log wording**
 
 In `src/bin/server.rs`, change:
 
@@ -471,7 +471,7 @@ tracing::info!("Compression scheduler compressed {} archived memories", compress
 
 Do not remove the scheduler; it remains optional and disabled by default.
 
-- [ ] **Step 6.6: Add retention query tests**
+- [x] **Step 6.6: Add retention query tests**
 
 Add tests for `compress_old_memories` that prove:
 
@@ -482,7 +482,7 @@ Add tests for `compress_old_memories` that prove:
 
 Place tests in the existing storage query test area (`src/storage/queries/tests.rs`) if that is where query tests live; otherwise add a local `#[cfg(test)]` module in `retention.rs` following repo convention.
 
-- [ ] **Step 6.7: Verify Task 6**
+- [x] **Step 6.7: Verify Task 6**
 
 ```bash
 rtk cargo test retention --lib
@@ -500,7 +500,7 @@ Expected: retention tests pass; no compression path archives Active/Stale rows.
 - Modify: `tests/mcp_protocol_tests.rs`
 - Regenerate: `docs/MCP_TOOLS.md`
 
-- [ ] **Step 7.1: Update `memory_decay` metadata**
+- [x] **Step 7.1: Update `memory_decay` metadata**
 
 In both registry files, change the description/schema text for `memory_decay` so it says:
 
@@ -508,7 +508,7 @@ In both registry files, change the description/schema text for `memory_decay` so
 - does not transition `lifecycle_state`;
 - use `lifecycle_run` for lifecycle transitions.
 
-- [ ] **Step 7.2: Update `memory_archive_old` metadata**
+- [x] **Step 7.2: Update `memory_archive_old` metadata**
 
 In both registry files, change the description/schema text for `memory_archive_old` so it says:
 
@@ -518,19 +518,19 @@ In both registry files, change the description/schema text for `memory_archive_o
 
 Update `min_access_count` wording if it remains: it is now a compression eligibility filter for already-Archived rows, not an archival filter.
 
-- [ ] **Step 7.3: Update `salience_decay_run` metadata**
+- [x] **Step 7.3: Update `salience_decay_run` metadata**
 
 In both registry files, change `salience_decay_run` text so it says score/history decay only and explicitly does not update lifecycle state.
 
-- [ ] **Step 7.4: Update `lifecycle_run` metadata**
+- [x] **Step 7.4: Update `lifecycle_run` metadata**
 
 Remove `min_importance` from `lifecycle_run` input schema if compatibility allows. If compatibility requires accepting it, leave handler compatibility but remove it from public schema or mark it deprecated/no-op. It must not be described as a candidate-selection filter.
 
-- [ ] **Step 7.5: Update `lifecycle_config` metadata and handler schema**
+- [x] **Step 7.5: Update `lifecycle_config` metadata and handler schema**
 
 Remove `min_importance` and `min_access_count` from `lifecycle_config` public schema and docs. Add `hard_idle_cap_days` and `max_importance_mult` if the tool is meant to describe lifecycle config. Keep `stale_days` and `archive_days`.
 
-- [ ] **Step 7.6: Update MCP protocol tests**
+- [x] **Step 7.6: Update MCP protocol tests**
 
 Run protocol tests first to see failures:
 
@@ -540,7 +540,7 @@ rtk cargo test --test mcp_protocol_tests
 
 Update expected schemas/descriptions in `tests/mcp_protocol_tests.rs` only to match the intentional public contract changes above. Do not weaken unrelated checks.
 
-- [ ] **Step 7.7: Regenerate MCP reference**
+- [x] **Step 7.7: Regenerate MCP reference**
 
 ```bash
 rtk ./scripts/generate-mcp-reference.sh
@@ -549,7 +549,7 @@ rtk ./scripts/generate-mcp-reference.sh --check
 
 Expected: first command writes `docs/MCP_TOOLS.md`; second command exits 0.
 
-- [ ] **Step 7.8: Verify Task 7**
+- [x] **Step 7.8: Verify Task 7**
 
 ```bash
 rtk cargo test --test mcp_protocol_tests
@@ -565,7 +565,7 @@ Expected: protocol tests pass; generated reference is up to date.
 **Files:**
 - Modify: relevant existing test modules in `src/mcp/handlers/lifecycle.rs`, `src/intelligence/salience.rs`, `src/mcp/handlers/memory_policy.rs`, `src/mcp/handlers/summarize.rs`, `src/storage/queries/tests.rs`
 
-- [ ] **Step 8.1: Add a grep-based regression check to the plan execution notes**
+- [x] **Step 8.1: Add a grep-based regression check to the plan execution notes**
 
 After implementation, run:
 
@@ -586,15 +586,15 @@ Expected remaining lifecycle writers:
 
 No remaining lifecycle writes in `run_salience_decay`, `memory_decay`, `memory_archive_old`, or `compress_old_memories`.
 
-- [ ] **Step 8.2: Add dry-run/apply parity test for lifecycle**
+- [x] **Step 8.2: Add dry-run/apply parity test for lifecycle**
 
 If not already covered in Task 2, assert dry-run reports exactly the same IDs/target states that apply mode changes on a fresh DB clone/fixture.
 
-- [ ] **Step 8.3: Add retention auto-delete boundary test**
+- [x] **Step 8.3: Add retention auto-delete boundary test**
 
 Create a memory old by `created_at`, run `lifecycle_run` so it becomes Archived, assert `valid_to` remains NULL. Then configure/apply retention `auto_delete_after_days`, assert `valid_to` becomes non-NULL. This documents that deletion is explicit retention policy, not lifecycle cap behavior.
 
-- [ ] **Step 8.4: Verify Task 8**
+- [x] **Step 8.4: Verify Task 8**
 
 ```bash
 rtk cargo test lifecycle --lib
@@ -613,7 +613,7 @@ Expected: all targeted regression tests pass.
 **Files:**
 - No additional source edits unless earlier verification finds a real bug.
 
-- [ ] **Step 9.1: Format and lint**
+- [x] **Step 9.1: Format and lint**
 
 ```bash
 rtk cargo fmt --check
@@ -622,7 +622,7 @@ rtk cargo clippy --all-targets --all-features -- -D warnings
 
 Expected: both exit 0. If clippy fails on preexisting unrelated issues, capture exact output and do not hide it.
 
-- [ ] **Step 9.2: Run core tests**
+- [x] **Step 9.2: Run core tests**
 
 ```bash
 rtk cargo test
@@ -630,7 +630,7 @@ rtk cargo test
 
 Expected: exits 0. If full test runtime is too high, run the targeted tests from Tasks 1-8 plus `rtk make ci` if that is the repo's current CI lane.
 
-- [ ] **Step 9.3: Run MCP reference and harness checks**
+- [x] **Step 9.3: Run MCP reference and harness checks**
 
 ```bash
 rtk ./scripts/generate-mcp-reference.sh --check
@@ -640,7 +640,7 @@ rtk bash docs/harness/bin/sensors.sh
 
 Expected: all pass. If `sensors.sh` is too slow or fails for a known optional dependency, document the exact known-issue path before using an exclusion.
 
-- [ ] **Step 9.4: Run final lifecycle writer inventory**
+- [x] **Step 9.4: Run final lifecycle writer inventory**
 
 ```bash
 rtk rg -n "SET lifecycle_state|UPDATE memories SET lifecycle_state|update_memory_lifecycle_state\(" src
@@ -648,7 +648,7 @@ rtk rg -n "SET lifecycle_state|UPDATE memories SET lifecycle_state|update_memory
 
 Expected: output contains only canonical/domain/helper/test write sites listed in Step 8.1. Explicitly inspect any new line before declaring success.
 
-- [ ] **Step 9.5: Manual QA gate through MCP handler surface**
+- [x] **Step 9.5: Manual QA gate through MCP handler surface**
 
 Drive the behavior through handlers, not only unit tests. Add or use an existing handler test/harness that creates memories and invokes:
 
@@ -667,7 +667,7 @@ Expected observations:
 - retention auto-delete changes `valid_to` only after explicit retention apply;
 - archived memories remain excluded from search through existing search filters.
 
-- [ ] **Step 9.6: Prepare implementation review artifact**
+- [x] **Step 9.6: Prepare implementation review artifact**
 
 After implementation and local verification, run the repo review gate appropriate for post-implementation:
 

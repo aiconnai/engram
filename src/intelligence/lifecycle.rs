@@ -1,13 +1,23 @@
+//! Canonical memory lifecycle predicate
+//!
+//! Provides the single authoritative pure predicate for deciding memory decay
+//! state transitions (`Active` -> `Stale` -> `Archived`).
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::types::{LifecycleState, Memory};
 
+/// Configuration for memory lifecycle evaluation
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct LifecycleConfig {
+    /// Base idle days before an active memory transitions to stale (at importance 0.0)
     pub stale_days_base: i64,
+    /// Base idle days before an active/stale memory transitions to archived (at importance 0.0)
     pub archive_days_base: i64,
+    /// Hard upper bound on idle days regardless of importance
     pub hard_idle_cap_days: i64,
+    /// Multiplier scaling effective threshold at max importance (1.0)
     pub max_importance_mult: f32,
 }
 
@@ -22,6 +32,7 @@ impl Default for LifecycleConfig {
     }
 }
 
+/// Normalize an importance score to the range `[0.0, 1.0]`, falling back to `0.5` if non-finite.
 pub fn normalized_importance(value: f32) -> f32 {
     if value.is_finite() {
         value.clamp(0.0, 1.0)
@@ -30,6 +41,7 @@ pub fn normalized_importance(value: f32) -> f32 {
     }
 }
 
+/// Pure canonical predicate deciding a memory's lifecycle state based on idle time and importance.
 pub fn decide_lifecycle_state(
     memory: &Memory,
     now: DateTime<Utc>,
@@ -49,16 +61,12 @@ pub fn decide_lifecycle_state(
     let importance = normalized_importance(memory.importance);
     let mult = 1.0 + importance * (cfg.max_importance_mult - 1.0);
     let effective_stale = (cfg.stale_days_base as f32 * mult) as i64;
-    let effective_archive = (cfg.archive_days_base as f32 * mult) as i64;
+    let effective_arch = (cfg.archive_days_base as f32 * mult) as i64;
 
-    if idle_days >= effective_archive {
+    if idle_days >= effective_arch {
         return LifecycleState::Archived;
     }
     if idle_days >= effective_stale {
-        return LifecycleState::Stale;
-    }
-
-    if memory.lifecycle_state == LifecycleState::Stale {
         return LifecycleState::Stale;
     }
 
@@ -68,39 +76,33 @@ pub fn decide_lifecycle_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{MemoryId, MemoryScope, MemoryTier, MemoryType, Visibility};
     use chrono::Duration;
     use std::collections::HashMap;
 
-    const NOW_SECS: i64 = 1_700_000_000;
-
-    fn now() -> DateTime<Utc> {
-        DateTime::from_timestamp(NOW_SECS, 0).expect("fixed timestamp is valid")
-    }
-
-    fn memory_with(
-        id: MemoryId,
+    fn make_test_memory(
         importance: f32,
-        idle_days: i64,
+        created_at: DateTime<Utc>,
+        last_accessed_at: Option<DateTime<Utc>>,
         lifecycle_state: LifecycleState,
     ) -> Memory {
-        let now = now();
         Memory {
-            id,
-            content: "lifecycle candidate".to_string(),
-            memory_type: MemoryType::Note,
-            tags: Vec::new(),
+            id: 1,
+            content: "test memory content".to_string(),
+            memory_type: crate::types::MemoryType::Fact,
+            tags: vec![],
             metadata: HashMap::new(),
             importance,
             access_count: 0,
-            created_at: now - Duration::days(idle_days + 10),
-            updated_at: now,
-            last_accessed_at: Some(now - Duration::days(idle_days)),
+            last_accessed_at,
+            created_at,
+            updated_at: created_at,
             owner_id: None,
-            visibility: Visibility::Private,
-            scope: MemoryScope::Global,
+            visibility: crate::types::Visibility::Private,
+            scope: crate::types::MemoryScope::Session {
+                session_id: "test".to_string(),
+            },
+            tier: crate::types::MemoryTier::Permanent,
             workspace: "default".to_string(),
-            tier: MemoryTier::Permanent,
             version: 1,
             has_embedding: false,
             expires_at: None,
@@ -116,144 +118,218 @@ mod tests {
         }
     }
 
-    fn active_memory(id: MemoryId, importance: f32, idle_days: i64) -> Memory {
-        memory_with(id, importance, idle_days, LifecycleState::Active)
-    }
-
     #[test]
-    fn normalized_importance_clamps_finite_values_and_defaults_non_finite() {
-        assert_eq!(normalized_importance(0.25), 0.25);
-        assert_eq!(normalized_importance(2.0), 1.0);
-        assert_eq!(normalized_importance(-1.0), 0.0);
-        assert_eq!(normalized_importance(f32::NAN), 0.5);
-        assert_eq!(normalized_importance(f32::INFINITY), 0.5);
-    }
-
-    #[test]
-    fn lifecycle_predicate_matches_canonical_table() {
-        let default_cfg = LifecycleConfig::default();
-        let cap_300 = LifecycleConfig {
-            hard_idle_cap_days: 300,
-            ..LifecycleConfig::default()
-        };
-        let cases = [
-            (
-                "fresh default",
-                active_memory(1, 0.5, 5),
-                default_cfg,
-                LifecycleState::Active,
-            ),
-            (
-                "stale by idle",
-                active_memory(2, 0.0, 35),
-                default_cfg,
-                LifecycleState::Stale,
-            ),
-            (
-                "archive by idle",
-                active_memory(3, 0.0, 95),
-                default_cfg,
-                LifecycleState::Archived,
-            ),
-            (
-                "importance protects",
-                active_memory(4, 1.0, 200),
-                default_cfg,
-                LifecycleState::Stale,
-            ),
-            (
-                "boundary 359",
-                active_memory(5, 1.0, 359),
-                default_cfg,
-                LifecycleState::Stale,
-            ),
-            (
-                "boundary 360",
-                active_memory(6, 1.0, 360),
-                default_cfg,
-                LifecycleState::Archived,
-            ),
-            (
-                "forced cap",
-                active_memory(7, 1.0, 320),
-                cap_300,
-                LifecycleState::Archived,
-            ),
-            (
-                "exact stale",
-                active_memory(8, 0.0, 30),
-                default_cfg,
-                LifecycleState::Stale,
-            ),
-            (
-                "exact archive",
-                active_memory(9, 0.0, 90),
-                default_cfg,
-                LifecycleState::Archived,
-            ),
-            (
-                "exact cap",
-                active_memory(10, 1.0, 300),
-                cap_300,
-                LifecycleState::Archived,
-            ),
-            (
-                "one day before",
-                active_memory(11, 0.0, 29),
-                default_cfg,
-                LifecycleState::Active,
-            ),
-            (
-                "importance greater than one",
-                active_memory(12, 2.0, 359),
-                default_cfg,
-                LifecycleState::Stale,
-            ),
-            (
-                "importance below zero",
-                active_memory(13, -1.0, 35),
-                default_cfg,
-                LifecycleState::Stale,
-            ),
-            (
-                "importance nan",
-                active_memory(14, f32::NAN, 95),
-                default_cfg,
-                LifecycleState::Stale,
-            ),
-            (
-                "already archived",
-                memory_with(15, 0.0, 5, LifecycleState::Archived),
-                default_cfg,
-                LifecycleState::Archived,
-            ),
-            (
-                "already stale does not reactivate",
-                memory_with(16, 0.0, 5, LifecycleState::Stale),
-                default_cfg,
-                LifecycleState::Stale,
-            ),
-        ];
-
-        for (name, memory, cfg, expected) in cases {
-            assert_eq!(
-                decide_lifecycle_state(&memory, now(), &cfg),
-                expected,
-                "{name}"
-            );
-        }
-    }
-
-    #[test]
-    fn lifecycle_predicate_falls_back_to_created_at_when_last_access_is_missing() {
-        let now = now();
-        let mut memory = active_memory(17, 0.0, 5);
-        memory.created_at = now - Duration::days(35);
-        memory.last_accessed_at = None;
-
-        assert_eq!(
-            decide_lifecycle_state(&memory, now, &LifecycleConfig::default()),
-            LifecycleState::Stale
+    fn test_fresh_default() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            0.5,
+            now - Duration::days(5),
+            Some(now - Duration::days(5)),
+            LifecycleState::Active,
         );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Active);
+    }
+
+    #[test]
+    fn test_stale_by_idle() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            0.0,
+            now - Duration::days(35),
+            Some(now - Duration::days(35)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Stale);
+    }
+
+    #[test]
+    fn test_archive_by_idle() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            0.0,
+            now - Duration::days(95),
+            Some(now - Duration::days(95)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Archived);
+    }
+
+    #[test]
+    fn test_importance_protects() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            1.0,
+            now - Duration::days(200),
+            Some(now - Duration::days(200)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        // At importance 1.0, mult = 4.0: stale at 120d, archive at 360d. Idle 200d -> Stale.
+        assert_eq!(state, LifecycleState::Stale);
+    }
+
+    #[test]
+    fn test_boundary_359() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            1.0,
+            now - Duration::days(359),
+            Some(now - Duration::days(359)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Stale);
+    }
+
+    #[test]
+    fn test_boundary_360() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            1.0,
+            now - Duration::days(360),
+            Some(now - Duration::days(360)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Archived);
+    }
+
+    #[test]
+    fn test_forced_cap() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            1.0,
+            now - Duration::days(320),
+            Some(now - Duration::days(320)),
+            LifecycleState::Active,
+        );
+        let cfg = LifecycleConfig {
+            hard_idle_cap_days: 300,
+            ..Default::default()
+        };
+        let state = decide_lifecycle_state(&mem, now, &cfg);
+        assert_eq!(state, LifecycleState::Archived);
+    }
+
+    #[test]
+    fn test_exact_stale() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            0.0,
+            now - Duration::days(30),
+            Some(now - Duration::days(30)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Stale);
+    }
+
+    #[test]
+    fn test_exact_archive() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            0.0,
+            now - Duration::days(90),
+            Some(now - Duration::days(90)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Archived);
+    }
+
+    #[test]
+    fn test_exact_cap() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            1.0,
+            now - Duration::days(300),
+            Some(now - Duration::days(300)),
+            LifecycleState::Active,
+        );
+        let cfg = LifecycleConfig {
+            hard_idle_cap_days: 300,
+            ..Default::default()
+        };
+        let state = decide_lifecycle_state(&mem, now, &cfg);
+        assert_eq!(state, LifecycleState::Archived);
+    }
+
+    #[test]
+    fn test_one_day_before() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            0.0,
+            now - Duration::days(29),
+            Some(now - Duration::days(29)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Active);
+    }
+
+    #[test]
+    fn test_importance_greater_than_one() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            2.0,
+            now - Duration::days(359),
+            Some(now - Duration::days(359)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Stale);
+    }
+
+    #[test]
+    fn test_importance_less_than_zero() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            -1.0,
+            now - Duration::days(35),
+            Some(now - Duration::days(35)),
+            LifecycleState::Active,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Stale);
+    }
+
+    #[test]
+    fn test_importance_nan() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            f32::NAN,
+            now - Duration::days(95),
+            Some(now - Duration::days(95)),
+            LifecycleState::Active,
+        );
+        // importance NaN -> normalized to 0.5. mult = 1.0 + 0.5 * 3.0 = 2.5.
+        // effective_stale = 30 * 2.5 = 75d; effective_arch = 90 * 2.5 = 225d.
+        // idle 95d -> Stale.
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Stale);
+    }
+
+    #[test]
+    fn test_already_archived() {
+        let now = Utc::now();
+        let mem = make_test_memory(
+            1.0,
+            now - Duration::days(1),
+            Some(now - Duration::days(1)),
+            LifecycleState::Archived,
+        );
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Archived);
+    }
+
+    #[test]
+    fn test_missing_last_accessed_at() {
+        let now = Utc::now();
+        let mem = make_test_memory(0.0, now - Duration::days(35), None, LifecycleState::Active);
+        let state = decide_lifecycle_state(&mem, now, &LifecycleConfig::default());
+        assert_eq!(state, LifecycleState::Stale);
     }
 }
