@@ -2,6 +2,7 @@
 use serde_json::{json, Value};
 
 use super::super::HandlerContext;
+use crate::mcp::error::ToolError;
 use crate::realtime::RealtimeEvent;
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
@@ -12,7 +13,7 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
 
     let input: CreateMemoryInput = match serde_json::from_value(params) {
         Ok(i) => i,
-        Err(e) => return json!({"error": e.to_string()}),
+        Err(e) => return ToolError::invalid_params(e.to_string()).into_value(),
     };
 
     // Semantic deduplication
@@ -33,14 +34,15 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
                 if let Ok(Some((existing, similarity))) = similar_result {
                     match input.dedup_mode {
                         DedupMode::Reject => {
-                            return json!({
-                                "error": format!(
-                                    "Similar memory detected (id={}, similarity={:.3}). Use dedup_mode='allow' to create anyway.",
-                                    existing.id, similarity
-                                ),
+                            return ToolError::conflict(format!(
+                                "Similar memory detected (id={}, similarity={:.3}). Use dedup_mode='allow' to create anyway.",
+                                existing.id, similarity
+                            ))
+                            .with_details(json!({
                                 "existing_id": existing.id,
                                 "similarity": similarity
-                            });
+                            }))
+                            .into_value();
                         }
                         DedupMode::Skip => {
                             return json!(existing);
@@ -281,7 +283,8 @@ pub fn context_seed(ctx: &HandlerContext, params: Value) -> Value {
     }
 
     if inputs.is_empty() {
-        return json!({"error": "facts must contain at least one non-empty content"});
+        return ToolError::invalid_params("facts must contain at least one non-empty content")
+            .into_value();
     }
 
     let result = ctx
@@ -318,7 +321,7 @@ pub fn context_seed(ctx: &HandlerContext, params: Value) -> Value {
                 "failed": batch.failed
             })
         }
-        Err(e) => json!({"error": e.to_string()}),
+        Err(e) => ToolError::from(e).into_value(),
     }
 }
 
@@ -327,7 +330,7 @@ pub fn memory_create_daily(ctx: &HandlerContext, params: Value) -> Value {
 
     let content = match params.get("content").and_then(|v| v.as_str()) {
         Some(c) => c.to_string(),
-        None => return json!({"error": "content is required"}),
+        None => return ToolError::missing_argument("content").into_value(),
     };
 
     let memory_type = params
@@ -391,7 +394,7 @@ pub fn memory_create_daily(ctx: &HandlerContext, params: Value) -> Value {
             let memory = create_memory(conn, &input)?;
             Ok(json!(memory))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_create_episodic(ctx: &HandlerContext, params: Value) -> Value {
@@ -400,15 +403,18 @@ pub fn memory_create_episodic(ctx: &HandlerContext, params: Value) -> Value {
 
     let content = match params.get("content").and_then(|v| v.as_str()) {
         Some(c) => c.to_string(),
-        None => return json!({"error": "content is required"}),
+        None => return ToolError::missing_argument("content").into_value(),
     };
 
     let event_time = match params.get("event_time").and_then(|v| v.as_str()) {
         Some(s) => match DateTime::parse_from_rfc3339(s) {
             Ok(dt) => Some(dt.with_timezone(&chrono::Utc)),
-            Err(e) => return json!({"error": format!("Invalid event_time format: {}", e)}),
+            Err(e) => {
+                return ToolError::invalid_params(format!("Invalid event_time format: {}", e))
+                    .into_value()
+            }
         },
-        None => return json!({"error": "event_time is required for episodic memories"}),
+        None => return ToolError::missing_argument("event_time").into_value(),
     };
 
     let event_duration_seconds = params
@@ -462,7 +468,7 @@ pub fn memory_create_episodic(ctx: &HandlerContext, params: Value) -> Value {
             let memory = create_memory(conn, &input)?;
             Ok(json!(memory))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_create_procedural(ctx: &HandlerContext, params: Value) -> Value {
@@ -470,12 +476,12 @@ pub fn memory_create_procedural(ctx: &HandlerContext, params: Value) -> Value {
 
     let content = match params.get("content").and_then(|v| v.as_str()) {
         Some(c) => c.to_string(),
-        None => return json!({"error": "content is required"}),
+        None => return ToolError::missing_argument("content").into_value(),
     };
 
     let trigger_pattern = match params.get("trigger_pattern").and_then(|v| v.as_str()) {
         Some(p) => Some(p.to_string()),
-        None => return json!({"error": "trigger_pattern is required for procedural memories"}),
+        None => return ToolError::missing_argument("trigger_pattern").into_value(),
     };
 
     let tags: Vec<String> = params
@@ -526,7 +532,7 @@ pub fn memory_create_procedural(ctx: &HandlerContext, params: Value) -> Value {
             let memory = create_memory(conn, &input)?;
             Ok(json!(memory))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_create_section(ctx: &HandlerContext, params: Value) -> Value {
@@ -534,7 +540,7 @@ pub fn memory_create_section(ctx: &HandlerContext, params: Value) -> Value {
 
     let title = match params.get("title").and_then(|v| v.as_str()) {
         Some(t) => t,
-        None => return json!({"error": "title is required"}),
+        None => return ToolError::missing_argument("title").into_value(),
     };
 
     let content = params.get("content").and_then(|v| v.as_str()).unwrap_or("");
@@ -547,7 +553,7 @@ pub fn memory_create_section(ctx: &HandlerContext, params: Value) -> Value {
             let memory = create_section_memory(conn, title, content, parent_id, level, workspace)?;
             Ok(json!(memory))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
@@ -555,7 +561,7 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
 
     let memories = match params.get("memories").and_then(|v| v.as_array()) {
         Some(arr) => arr,
-        None => return json!({"error": "memories array is required"}),
+        None => return ToolError::missing_argument("memories").into_value(),
     };
 
     let inputs: Vec<CreateMemoryInput> = memories
@@ -564,7 +570,7 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
         .collect();
 
     if inputs.is_empty() {
-        return json!({"error": "No valid memory inputs provided"});
+        return ToolError::invalid_params("No valid memory inputs provided").into_value();
     }
 
     ctx.storage
@@ -572,5 +578,5 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
             let result = create_memory_batch(conn, &inputs)?;
             Ok(json!(result))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }

@@ -528,6 +528,6 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         // ── Model Routing (RFC 0011) ─────────────────────────────────────────
         "model_routing_status" => model_routing::model_routing_status(ctx, params),
 
-        _ => json!({"error": format!("Unknown tool: {}", tool_name)}),
+        _ => crate::mcp::error::ToolError::tool_not_found(tool_name).into_value(),
     }
 }

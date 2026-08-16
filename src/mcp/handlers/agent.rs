@@ -6,13 +6,14 @@
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::mcp::error::ToolError;
 
 pub fn agent_register(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::agent_registry::{register_agent, RegisterAgentInput};
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id.to_string(),
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     let display_name = params
@@ -59,7 +60,7 @@ pub fn agent_register(ctx: &HandlerContext, params: Value) -> Value {
             let agent = register_agent(conn, &input)?;
             Ok(json!(agent))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn agent_deregister(ctx: &HandlerContext, params: Value) -> Value {
@@ -67,7 +68,7 @@ pub fn agent_deregister(ctx: &HandlerContext, params: Value) -> Value {
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id,
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     ctx.storage
@@ -75,7 +76,7 @@ pub fn agent_deregister(ctx: &HandlerContext, params: Value) -> Value {
             let found = deregister_agent(conn, agent_id)?;
             Ok(json!({"success": found, "agent_id": agent_id}))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn agent_heartbeat(ctx: &HandlerContext, params: Value) -> Value {
@@ -83,7 +84,7 @@ pub fn agent_heartbeat(ctx: &HandlerContext, params: Value) -> Value {
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id,
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     ctx.storage
@@ -91,27 +92,22 @@ pub fn agent_heartbeat(ctx: &HandlerContext, params: Value) -> Value {
             let agent = heartbeat_agent(conn, agent_id)?;
             match agent {
                 Some(a) => Ok(json!(a)),
-                None => Ok(json!({"error": "agent not found", "agent_id": agent_id})),
+                None => Ok(ToolError::not_found("agent", agent_id).into_value()),
             }
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn agent_list(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::storage::agent_registry::list_agents;
+    use crate::storage::agent_registry::{get_agents_in_namespace, list_agents};
 
     let status = params.get("status").and_then(|v| v.as_str());
     let namespace = params.get("namespace").and_then(|v| v.as_str());
 
     ctx.storage
         .with_connection(|conn| {
-            // When namespace is provided, get agents in that namespace then
-            // apply status filter client-side (storage query only returns active).
             if let Some(ns) = namespace {
-                use crate::storage::agent_registry::get_agents_in_namespace;
                 let mut agents = if status == Some("inactive") {
-                    // get_agents_in_namespace hard-codes active, so for inactive
-                    // we fetch all via list_agents and filter by namespace.
                     list_agents(conn, Some("inactive"))?
                         .into_iter()
                         .filter(|a| a.namespaces.iter().any(|n| n == ns))
@@ -128,7 +124,7 @@ pub fn agent_list(ctx: &HandlerContext, params: Value) -> Value {
                 Ok(json!({"agents": agents, "count": agents.len()}))
             }
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn agent_get(ctx: &HandlerContext, params: Value) -> Value {
@@ -136,7 +132,7 @@ pub fn agent_get(ctx: &HandlerContext, params: Value) -> Value {
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id,
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     ctx.storage
@@ -144,10 +140,10 @@ pub fn agent_get(ctx: &HandlerContext, params: Value) -> Value {
             let agent = get_agent(conn, agent_id)?;
             match agent {
                 Some(a) => Ok(json!(a)),
-                None => Ok(json!({"error": "agent not found", "agent_id": agent_id})),
+                None => Ok(ToolError::not_found("agent", agent_id).into_value()),
             }
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn agent_capabilities(ctx: &HandlerContext, params: Value) -> Value {
@@ -155,7 +151,7 @@ pub fn agent_capabilities(ctx: &HandlerContext, params: Value) -> Value {
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id,
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     let capabilities: Vec<String> = match params.get("capabilities").and_then(|v| v.as_array()) {
@@ -163,7 +159,7 @@ pub fn agent_capabilities(ctx: &HandlerContext, params: Value) -> Value {
             .iter()
             .filter_map(|v| v.as_str().map(String::from))
             .collect(),
-        None => return json!({"error": "capabilities array is required"}),
+        None => return ToolError::missing_argument("capabilities").into_value(),
     };
 
     ctx.storage
@@ -171,10 +167,10 @@ pub fn agent_capabilities(ctx: &HandlerContext, params: Value) -> Value {
             let agent = update_agent_capabilities(conn, agent_id, &capabilities)?;
             match agent {
                 Some(a) => Ok(json!(a)),
-                None => Ok(json!({"error": "agent not found", "agent_id": agent_id})),
+                None => Ok(ToolError::not_found("agent", agent_id).into_value()),
             }
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Grant an agent access to a scope path.
@@ -183,12 +179,12 @@ pub fn memory_grant_access(ctx: &HandlerContext, params: Value) -> Value {
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id.to_string(),
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     let scope_path = match params.get("scope_path").and_then(|v| v.as_str()) {
         Some(p) => p.to_string(),
-        None => return json!({"error": "scope_path is required"}),
+        None => return ToolError::missing_argument("scope_path").into_value(),
     };
 
     let permissions = params
@@ -213,7 +209,7 @@ pub fn memory_grant_access(ctx: &HandlerContext, params: Value) -> Value {
             )?;
             Ok(json!(grant))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Revoke an agent's access to a scope path.
@@ -222,12 +218,12 @@ pub fn memory_revoke_access(ctx: &HandlerContext, params: Value) -> Value {
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id,
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     let scope_path = match params.get("scope_path").and_then(|v| v.as_str()) {
         Some(p) => p,
-        None => return json!({"error": "scope_path is required"}),
+        None => return ToolError::missing_argument("scope_path").into_value(),
     };
 
     ctx.storage
@@ -235,7 +231,7 @@ pub fn memory_revoke_access(ctx: &HandlerContext, params: Value) -> Value {
             let revoked = revoke_scope_access(conn, agent_id, scope_path)?;
             Ok(json!({"success": revoked, "agent_id": agent_id, "scope_path": scope_path}))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// List all scope grants for a given agent.
@@ -244,7 +240,7 @@ pub fn memory_list_grants(ctx: &HandlerContext, params: Value) -> Value {
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id,
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     ctx.storage
@@ -252,7 +248,7 @@ pub fn memory_list_grants(ctx: &HandlerContext, params: Value) -> Value {
             let grants = list_grants_for_agent(conn, agent_id)?;
             Ok(json!({"grants": grants, "count": grants.len(), "agent_id": agent_id}))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Check whether an agent has access to a scope path.
@@ -261,12 +257,12 @@ pub fn memory_check_access(ctx: &HandlerContext, params: Value) -> Value {
 
     let agent_id = match params.get("agent_id").and_then(|v| v.as_str()) {
         Some(id) => id,
-        None => return json!({"error": "agent_id is required"}),
+        None => return ToolError::missing_argument("agent_id").into_value(),
     };
 
     let scope_path = match params.get("scope_path").and_then(|v| v.as_str()) {
         Some(p) => p,
-        None => return json!({"error": "scope_path is required"}),
+        None => return ToolError::missing_argument("scope_path").into_value(),
     };
 
     let permissions = params
@@ -284,7 +280,7 @@ pub fn memory_check_access(ctx: &HandlerContext, params: Value) -> Value {
                 "permissions": permissions
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 #[cfg(test)]

@@ -331,5 +331,9 @@ fn test_mcp_dispatch_unknown_tool_returns_error() {
     let ctx = test_ctx();
     let result = handlers::dispatch(&ctx, "nonexistent_tool", json!({}));
     assert!(result.get("error").is_some());
-    assert!(result["error"].as_str().unwrap().contains("Unknown tool"));
+    let err_msg = result["error"]
+        .as_str()
+        .or_else(|| result["error"]["message"].as_str())
+        .expect("error message");
+    assert!(err_msg.contains("Unknown tool"));
 }
