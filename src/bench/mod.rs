@@ -5,6 +5,7 @@
 //! - LongMemEval: 5-dimension memory evaluation
 //! - MemBench: CRUD throughput and search quality
 
+pub mod concurrency;
 pub mod locomo;
 pub mod longmemeval;
 pub mod membench;
@@ -142,6 +143,7 @@ pub fn default_suite() -> BenchmarkSuite {
         num_memories: 100,
         num_queries: 20,
     }));
+    suite.add(Box::new(concurrency::ConcurrencyBenchmark::default()));
     suite
 }
 

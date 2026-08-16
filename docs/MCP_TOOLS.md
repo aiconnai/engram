@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **283**
+Total tools: **284**
 
 ## Summary
 
@@ -211,6 +211,7 @@ Total tools: **283**
 | `memory_capture_screenshot` | advanced | feature.multimodal | multimodal | readOnlyHint | none |
 | `memory_describe_image` | advanced | feature.multimodal | multimodal | readOnlyHint | `image_path` |
 | `memory_list_media` | standard | feature.multimodal | multimodal | readOnlyHint | none |
+| `memory_ingest_media` | standard | memory.core | always | mutating (no MCP hints) | `media_path` |
 | `memory_process_video` | advanced | feature.multimodal | multimodal | mutating (no MCP hints) | `video_path` |
 | `memory_transcribe_audio` | advanced | feature.multimodal | multimodal | readOnlyHint | `audio_path` |
 | `agent_register` | advanced | agent | always | mutating (no MCP hints) | `agent_id` |
@@ -3467,6 +3468,25 @@ List media assets stored in the media_assets table, optionally filtered by type 
 |-------|------|----------|---------|
 | `media_type` | `string` | no | Filter by media type: "image", "audio", or "video". Omit for all types. |
 | `limit` | `integer` | no | Maximum number of assets to return (default: 50). |
+
+### `memory_ingest_media`
+
+Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `media_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `media_path` | `string` | yes | Path to the local media file to ingest (image, audio, or video) |
+| `content` | `string` | no | Optional text summary, title, or contextual notes for the memory |
+| `media_type` | `string` | no | Media type (inferred from file extension if auto or omitted) Default: `auto`. Allowed: `image`, `audio`, `video`, `auto`. |
+| `workspace` | `string` | no | Workspace to store the media memory in (default: 'default') |
+| `tags` | `array` | no | Tags to apply to the created memory Items: `string`. |
+| `importance` | `number` | no | Importance score (0.0 to 1.0) Minimum: `0`. Maximum: `1`. |
 
 ### `memory_process_video`
 

@@ -21,7 +21,8 @@ pub(crate) fn required_features(name: &str) -> &'static [&'static str] {
         | "memory_capture_screenshot"
         | "memory_process_video"
         | "memory_list_media"
-        | "memory_search_by_image" => &["multimodal"],
+        | "memory_search_by_image"
+        | "memory_ingest_media" => &["multimodal"],
         "memory_graph_path" | "memory_temporal_snapshot" | "memory_scope_snapshot" => {
             &["duckdb-graph"]
         }

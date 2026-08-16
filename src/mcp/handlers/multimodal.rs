@@ -534,6 +534,146 @@ pub fn memory_sync_media(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+// ── memory_ingest_media ───────────────────────────────────────────────────────
+
+/// Ingest and analyze a media asset (image, audio, or video) into a durable memory.
+#[cfg(feature = "multimodal")]
+pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::storage::queries::create_memory;
+    use crate::types::{CreateMemoryInput, MemoryType};
+    use sha2::{Digest, Sha256};
+
+    let media_path = match params
+        .get("media_path")
+        .or_else(|| params.get("path"))
+        .or_else(|| params.get("file_path"))
+        .and_then(|v| v.as_str())
+    {
+        Some(p) => p.to_string(),
+        None => return json!({"error": "media_path is required"}),
+    };
+
+    let validated_path = match validate_media_path(&media_path) {
+        Ok(p) => p,
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+
+    let file_bytes = match std::fs::read(&validated_path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return json!({"error": format!("Failed to read media file '{}': {}", media_path, e)})
+        }
+    };
+
+    let file_size = file_bytes.len() as i64;
+    let mut hasher = Sha256::new();
+    hasher.update(&file_bytes);
+    let file_hash = format!("{:x}", hasher.finalize());
+
+    let mime_type = infer_mime_type(&media_path);
+    let explicit_type = params.get("media_type").and_then(|v| v.as_str());
+    let media_type_str = match explicit_type {
+        Some("image") | Some("audio") | Some("video") => explicit_type.unwrap().to_string(),
+        _ => {
+            if mime_type.starts_with("image/") {
+                "image".to_string()
+            } else if mime_type.starts_with("audio/") {
+                "audio".to_string()
+            } else if mime_type.starts_with("video/") {
+                "video".to_string()
+            } else {
+                "image".to_string()
+            }
+        }
+    };
+
+    let memory_type = match media_type_str.as_str() {
+        "image" => MemoryType::Image,
+        "audio" => MemoryType::Audio,
+        "video" => MemoryType::Video,
+        _ => MemoryType::Note,
+    };
+
+    let workspace = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let tags: Vec<String> = params
+        .get("tags")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let importance = params
+        .get("importance")
+        .and_then(|v| v.as_f64())
+        .map(|f| f as f32);
+
+    let default_content = format!("[Media: {} ({})] {}", media_type_str, mime_type, media_path);
+    let content = params
+        .get("content")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&default_content)
+        .to_string();
+
+    let media_url = format!("local://{}", media_path);
+
+    let res = ctx.storage.with_transaction(|conn| {
+        let input = CreateMemoryInput {
+            content,
+            memory_type,
+            tags,
+            workspace: workspace.clone(),
+            importance,
+            media_url: Some(media_url.clone()),
+            ..Default::default()
+        };
+
+        let memory = create_memory(conn, &input)?;
+
+        conn.execute(
+            "INSERT INTO media_assets (
+                memory_id, media_type, file_hash, file_path, file_size, mime_type
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(file_hash) DO UPDATE SET
+                memory_id = excluded.memory_id,
+                file_path = excluded.file_path,
+                file_size = excluded.file_size,
+                mime_type = excluded.mime_type",
+            rusqlite::params![
+                memory.id,
+                media_type_str,
+                file_hash,
+                media_path,
+                file_size,
+                mime_type
+            ],
+        )?;
+
+        let asset_id: i64 = conn.last_insert_rowid();
+
+        Ok(json!({
+            "memory_id": memory.id,
+            "asset_id": asset_id,
+            "media_type": media_type_str,
+            "media_url": media_url,
+            "file_hash": file_hash,
+            "file_size": file_size,
+            "mime_type": mime_type,
+            "workspace": memory.workspace,
+            "created_at": memory.created_at
+        }))
+    });
+
+    res.unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Validate a user-supplied media file path.
@@ -598,9 +738,24 @@ fn infer_mime_type(path: &str) -> String {
         "webp" => "image/webp",
         "bmp" => "image/bmp",
         "tiff" | "tif" => "image/tiff",
-        _ => "image/png", // default fallback
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "m4a" => "audio/m4a",
+        "flac" => "audio/flac",
+        "mp4" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" => "video/webm",
+        "mkv" => "video/x-matroska",
+        "avi" => "video/x-msvideo",
+        _ => "application/octet-stream",
     }
     .to_string()
+}
+
+#[cfg(not(feature = "multimodal"))]
+pub fn memory_ingest_media(_ctx: &HandlerContext, _params: Value) -> Value {
+    json!({"error": "memory_ingest_media requires the `multimodal` feature"})
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -794,7 +949,10 @@ mod tests {
         assert_eq!(infer_mime_type("anim.gif"), "image/gif");
         assert_eq!(infer_mime_type("pic.webp"), "image/webp");
         assert_eq!(infer_mime_type("scan.tiff"), "image/tiff");
-        assert_eq!(infer_mime_type("unknown.xyz"), "image/png");
+        assert_eq!(infer_mime_type("audio.mp3"), "audio/mpeg");
+        assert_eq!(infer_mime_type("audio.wav"), "audio/wav");
+        assert_eq!(infer_mime_type("video.mp4"), "video/mp4");
+        assert_eq!(infer_mime_type("unknown.xyz"), "application/octet-stream");
     }
 
     // ── T4: memory_search_by_image tests ─────────────────────────────────────
@@ -838,5 +996,34 @@ mod tests {
             result.is_object(),
             "handler should always return a JSON object"
         );
+    }
+
+    #[test]
+    fn test_memory_ingest_media_roundtrip() {
+        let ctx = make_ctx();
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_file = temp_dir.path().join("test_sample.png");
+        std::fs::write(&temp_file, b"fake png bytes 12345").expect("write temp file");
+
+        let res = memory_ingest_media(
+            &ctx,
+            json!({
+                "media_path": temp_file.to_string_lossy(),
+                "content": "Diagram of cognitive architecture",
+                "tags": ["diagram", "architecture"],
+                "importance": 0.9,
+                "workspace": "research"
+            }),
+        );
+
+        assert!(
+            res.get("error").is_none(),
+            "ingest should succeed: {:?}",
+            res
+        );
+        assert!(res["memory_id"].as_i64().is_some());
+        assert_eq!(res["media_type"].as_str(), Some("image"));
+        assert_eq!(res["mime_type"].as_str(), Some("image/png"));
+        assert_eq!(res["workspace"].as_str(), Some("research"));
     }
 }

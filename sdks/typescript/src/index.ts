@@ -215,6 +215,60 @@ export interface BlockCreateOptions {
   maxTokens?: number;
 }
 
+// -- Consolidated Facades (Phase 3c) --
+
+export interface LifecycleUpdateOptions {
+  action?:
+    | "promote"
+    | "promote_permanent"
+    | "decay"
+    | "expire"
+    | "score"
+    | "explain"
+    | "transition"
+    | "restore";
+  canonicalTier?: boolean;
+  ttlSeconds?: number;
+  state?: "active" | "stale" | "archived" | "purged";
+  reason?: string;
+  persist?: boolean;
+  workspace?: string;
+  dryRun?: boolean;
+}
+
+export interface GraphQueryOptions {
+  action?:
+    | "relations"
+    | "traverse"
+    | "path"
+    | "entities"
+    | "search_entities"
+    | "stats"
+    | "export";
+  id?: number;
+  fromId?: number;
+  toId?: number;
+  depth?: number;
+  maxDepth?: number;
+  edgeType?: string;
+  edgeTypes?: string[];
+  direction?: "both" | "outgoing" | "incoming";
+  includeEntities?: boolean;
+  query?: string;
+  format?: "html" | "json";
+}
+
+export interface GraphMutateOptions {
+  action?: "link" | "unlink" | "extract_entities";
+  fromId?: number;
+  toId?: number;
+  id?: number;
+  edgeType?: string;
+  strength?: number;
+  sourceContext?: string;
+  pinned?: boolean;
+}
+
 // -- Temporal Graph --
 
 export interface TemporalCreateOptions {
@@ -988,6 +1042,67 @@ export class EngramClient {
 
   async federationSyncStatus(): Promise<unknown> {
     return this.mcpCall("memory_federation_sync_status", {});
+  }
+
+  // -- Consolidated Facades (Phase 3c) --
+
+  /**
+   * Update or transition a memory's lifecycle state, reinforcement score, or TTL.
+   */
+  async lifecycleUpdate(
+    id: number,
+    options?: LifecycleUpdateOptions
+  ): Promise<unknown> {
+    const params: Record<string, unknown> = { id };
+    if (options?.action !== undefined) params.action = options.action;
+    if (options?.canonicalTier !== undefined)
+      params.canonical_tier = options.canonicalTier;
+    if (options?.ttlSeconds !== undefined)
+      params.ttl_seconds = options.ttlSeconds;
+    if (options?.state !== undefined) params.state = options.state;
+    if (options?.reason !== undefined) params.reason = options.reason;
+    if (options?.persist !== undefined) params.persist = options.persist;
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    if (options?.dryRun !== undefined) params.dry_run = options.dryRun;
+    return this.mcpCall("memory_lifecycle_update", params);
+  }
+
+  /**
+   * Query the knowledge graph: relations, paths, multi-hop traversal, entity search, or export.
+   */
+  async graphQuery(options?: GraphQueryOptions): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (options?.action !== undefined) params.action = options.action;
+    if (options?.id !== undefined) params.id = options.id;
+    if (options?.fromId !== undefined) params.from_id = options.fromId;
+    if (options?.toId !== undefined) params.to_id = options.toId;
+    if (options?.depth !== undefined) params.depth = options.depth;
+    if (options?.maxDepth !== undefined) params.max_depth = options.maxDepth;
+    if (options?.edgeType !== undefined) params.edge_type = options.edgeType;
+    if (options?.edgeTypes !== undefined) params.edge_types = options.edgeTypes;
+    if (options?.direction !== undefined) params.direction = options.direction;
+    if (options?.includeEntities !== undefined)
+      params.include_entities = options.includeEntities;
+    if (options?.query !== undefined) params.query = options.query;
+    if (options?.format !== undefined) params.format = options.format;
+    return this.mcpCall("graph_query", params);
+  }
+
+  /**
+   * Mutate the knowledge graph: link memories, remove cross-references, or extract entities.
+   */
+  async graphMutate(options?: GraphMutateOptions): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (options?.action !== undefined) params.action = options.action;
+    if (options?.fromId !== undefined) params.from_id = options.fromId;
+    if (options?.toId !== undefined) params.to_id = options.toId;
+    if (options?.id !== undefined) params.id = options.id;
+    if (options?.edgeType !== undefined) params.edge_type = options.edgeType;
+    if (options?.strength !== undefined) params.strength = options.strength;
+    if (options?.sourceContext !== undefined)
+      params.source_context = options.sourceContext;
+    if (options?.pinned !== undefined) params.pinned = options.pinned;
+    return this.mcpCall("graph_mutate", params);
   }
 }
 

@@ -3316,7 +3316,26 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
-    // 10. memory_process_video
+    // 10. memory_ingest_media
+    ToolDef {
+        name: "memory_ingest_media",
+        description: "Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "media_path": {"type": "string", "description": "Path to the local media file to ingest (image, audio, or video)"},
+                "content": {"type": "string", "description": "Optional text summary, title, or contextual notes for the memory"},
+                "media_type": {"type": "string", "enum": ["image", "audio", "video", "auto"], "default": "auto", "description": "Media type (inferred from file extension if auto or omitted)"},
+                "workspace": {"type": "string", "description": "Workspace to store the media memory in (default: 'default')"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags to apply to the created memory"},
+                "importance": {"type": "number", "minimum": 0, "maximum": 1, "description": "Importance score (0.0 to 1.0)"}
+            },
+            "required": ["media_path"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
+    // 11. memory_process_video
     ToolDef {
         name: "memory_process_video",
         description: "Process a video file: extract metadata and keyframe descriptions via the configured vision provider, and create a memory record for the result.",
