@@ -580,6 +580,42 @@ pub fn retention_policy_apply(ctx: &HandlerContext, params: Value) -> Value {
     }
 }
 
+/// Unified facade for memory lifecycle mutations: promotion, decay, expiration, and scoring.
+pub fn memory_lifecycle_update(ctx: &HandlerContext, params: Value) -> Value {
+    let action = params
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or("promote");
+
+    match action {
+        "promote" => super::memory_policy::memory_promote(ctx, params),
+        "promote_permanent" | "permanent" => {
+            let mut p = params;
+            if let Value::Object(ref mut map) = p {
+                map.insert("canonical_tier".to_string(), json!(true));
+            }
+            super::memory_policy::memory_promote(ctx, p)
+        }
+        "decay" => super::memory_policy::memory_decay(ctx, params),
+        "expire" | "set_expiration" => super::memory_crud::set_expiration(ctx, params),
+        "score" => super::memory_policy::memory_score(ctx, params),
+        "explain" => super::memory_policy::memory_explain(ctx, params),
+        "transition" | "set_state" | "set_lifecycle" => memory_set_lifecycle(ctx, params),
+        "restore" => {
+            let mut p = params;
+            if let Value::Object(ref mut map) = p {
+                map.insert("state".to_string(), json!("active"));
+            }
+            memory_set_lifecycle(ctx, p)
+        }
+        other => json!({
+            "error": format!(
+                "unsupported lifecycle action '{other}': expected 'promote', 'promote_permanent', 'decay', 'expire', 'score', 'explain', 'transition', or 'restore'"
+            )
+        }),
+    }
+}
+
 #[cfg(test)]
 mod lifecycle_tests {
     use super::*;

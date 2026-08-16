@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **280**
+Total tools: **283**
 
 ## Summary
 
@@ -48,6 +48,7 @@ Total tools: **280**
 | `workspace_delete` | advanced | workspace | always | destructiveHint | `workspace` |
 | `memory_create_daily` | standard | memory.core | always | mutating (no MCP hints) | `content` |
 | `memory_score` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
+| `memory_lifecycle_update` | essential | memory.lifecycle | always | mutating (no MCP hints) | `id` |
 | `memory_promote` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
 | `memory_decay` | standard | memory.lifecycle | always | mutating (no MCP hints) | none |
 | `memory_explain` | standard | memory.core | always | readOnlyHint | `id` |
@@ -158,6 +159,8 @@ Total tools: **280**
 | `memory_detect_updates` | standard | memory.admin | always | readOnlyHint | `content` |
 | `memory_explain_search` | standard | memory.search | always | readOnlyHint | `results` |
 | `memory_suggest_acquisitions` | standard | memory.admin | always | readOnlyHint | none |
+| `graph_query` | essential | misc | always | readOnlyHint | none |
+| `graph_mutate` | standard | misc | always | mutating (no MCP hints) | none |
 | `memory_link` | standard | memory.graph | always | mutating (no MCP hints) | `from_id`, `to_id` |
 | `memory_unlink` | standard | memory.graph | always | mutating (no MCP hints) | `from_id`, `to_id` |
 | `memory_related` | standard | memory.search | always | readOnlyHint | `id` |
@@ -902,6 +905,26 @@ Compute deterministic memory policy scores for a memory. When persist=true, upse
 |-------|------|----------|---------|
 | `id` | `integer` | yes | Memory ID to score |
 | `persist` | `boolean` | no | Persist the computed policy score to memory_policy Default: `false`. |
+
+### `memory_lifecycle_update`
+
+Unified facade for memory lifecycle mutations: promote a memory or reinforce its policy, promote to permanent canonical tier, decay policy scores, set expiration TTL, or score policy components.
+
+- Tier: `essential`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to mutate lifecycle state for |
+| `action` | `string` | no | Lifecycle action to perform: promote (reinforce policy), promote_permanent (promote to canonical permanent tier), decay (policy decay), expire (set TTL), score (evaluate policy), explain (audit score), transition (manual state transition), restore (restore to active) Default: `promote`. Allowed: `promote`, `promote_permanent`, `decay`, `expire`, `score`, `explain`, `transition`, `restore`. |
+| `canonical_tier` | `boolean` | no | When action='promote' and canonical_tier=true, promotes to permanent canonical tier Default: `false`. |
+| `ttl_seconds` | `integer` | no | Time-to-live in seconds when action='expire' |
+| `state` | `string` | no | Target lifecycle state when action='transition' Allowed: `active`, `stale`, `archived`, `purged`. |
+| `reason` | `string` | no | Audit reason or explanation for the transition or reconciliation |
+| `persist` | `boolean` | no | When action='score', whether to persist the evaluated policy Default: `false`. |
 
 ### `memory_promote`
 
@@ -2631,6 +2654,52 @@ Analyse knowledge gaps in a workspace and suggest new memories to create.
 |-------|------|----------|---------|
 | `workspace` | `string` | no | Workspace to analyse (default: "default"). |
 | `limit` | `integer` | no | Maximum number of suggestions to return (default: 10). |
+
+### `graph_query`
+
+Unified facade for querying the knowledge graph: retrieve related memories/neighborhood, find path between memories, traverse multi-hop graph relations, list linked entities, search entities, or export graph visualization.
+
+- Tier: `essential`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `action` | `string` | no | Graph query action to execute Default: `relations`. Allowed: `relations`, `traverse`, `path`, `entities`, `search_entities`, `stats`, `export`. |
+| `id` | `integer` | no | Source memory ID (used for relations, traverse, entities, or start node) |
+| `from_id` | `integer` | no | Starting memory ID (when action='path') |
+| `to_id` | `integer` | no | Target memory ID (when action='path') |
+| `depth` | `integer` | no | Traversal depth for multi-hop neighborhood or traversal Default: `1`. |
+| `max_depth` | `integer` | no | Maximum path search depth (when action='path') Default: `5`. |
+| `edge_type` | `string` | no | Filter by specific edge type |
+| `edge_types` | `array` | no | Filter by list of edge types Items: `string`. |
+| `direction` | `string` | no | Traversal direction Default: `both`. Allowed: `both`, `outgoing`, `incoming`. |
+| `include_entities` | `boolean` | no | Include shared entity connections in traversal Default: `false`. |
+| `query` | `string` | no | Entity search query (when action='search_entities') |
+| `format` | `string` | no | Graph export format (when action='export') Default: `html`. Allowed: `html`, `json`. |
+
+### `graph_mutate`
+
+Unified facade for mutating the knowledge graph: create cross-references, remove cross-references, or extract and link named entities.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `action` | `string` | no | Graph mutation action to perform: link (create edge), unlink (delete edge), extract_entities (extract and link entities) Default: `link`. Allowed: `link`, `unlink`, `extract_entities`. |
+| `from_id` | `integer` | no | Source memory ID (when action='link' or 'unlink') |
+| `to_id` | `integer` | no | Target memory ID (when action='link' or 'unlink') |
+| `id` | `integer` | no | Memory ID to extract entities from (when action='extract_entities') |
+| `edge_type` | `string` | no | Default: `related_to`. Allowed: `related_to`, `supersedes`, `contradicts`, `implements`, `extends`, `references`, `derived_from`, `depends_on`, `blocks`, `follows_up`. |
+| `strength` | `number` | no | Relationship strength (0.0 to 1.0) Minimum: `0`. Maximum: `1`. |
+| `source_context` | `string` | no | Reason or context for why this link exists |
+| `pinned` | `boolean` | no | Exempt link from confidence decay Default: `false`. |
 
 ### `memory_link`
 
