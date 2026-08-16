@@ -219,3 +219,35 @@ fn memory_retrieval_populates_open_items_decisions_and_sorted_source_ids() {
         vec![issue_id, decision_id, todo_id]
     );
 }
+
+#[test]
+fn topic_digest_enriches_handoff_packet_with_goal_memories() {
+    let storage = Storage::open_in_memory().expect("in-memory storage");
+    let goal_doc_id = seed_memory(
+        &storage,
+        "digest-workspace",
+        "Architecture overview for Context Rotation and Session Handoff",
+        MemoryType::Note,
+    );
+
+    let packet = build_session_handoff(
+        &storage,
+        SessionHandoffRequest {
+            workspace: Some("digest-workspace".to_string()),
+            current_goal: Some("Context Rotation".to_string()),
+            include_digest: true,
+            persist: false,
+            ..SessionHandoffRequest::default()
+        },
+    )
+    .expect("handoff packet with digest");
+
+    assert!(packet.source_memory_ids.contains(&goal_doc_id));
+    assert!(packet
+        .open_items
+        .iter()
+        .any(|item| item.source_memory_id == Some(goal_doc_id)));
+    assert!(packet
+        .copy_block
+        .contains("Architecture overview for Context Rotation"));
+}

@@ -291,3 +291,38 @@ fn test_prepared_context_serialization() {
     assert!(json.contains("token_count"));
     assert!(json.contains("groups_count"));
 }
+
+#[test]
+fn test_session_handoff_cli_pipeline() {
+    let storage = engram::Storage::open_in_memory().expect("in-memory storage");
+    let packet = engram::intelligence::build_session_handoff(
+        &storage,
+        engram::intelligence::SessionHandoffRequest {
+            workspace: Some("cli-workspace".to_string()),
+            current_goal: Some("Test CLI handoff pipeline".to_string()),
+            files_touched: vec!["src/bin/cli/session.rs".to_string()],
+            decisions_made: vec!["Support rich flags on CLI".to_string()],
+            tests_run: vec!["cargo test integration_rtk".to_string()],
+            next_steps: vec!["Verify JSON output".to_string()],
+            persist: true,
+            ..Default::default()
+        },
+    )
+    .expect("handoff packet");
+
+    assert_eq!(packet.workspace, "cli-workspace");
+    assert_eq!(
+        packet.current_goal.as_deref(),
+        Some("Test CLI handoff pipeline")
+    );
+    assert!(packet
+        .copy_block
+        .contains("# Continue this work in a new AI session"));
+    assert!(packet.copy_block.contains("src/bin/cli/session.rs"));
+    assert!(packet.copy_block.contains("Support rich flags on CLI"));
+    assert!(packet.checkpoint_id.is_some());
+
+    let json_str = serde_json::to_string_pretty(&packet).expect("serialize packet");
+    assert!(json_str.contains("cli-workspace"));
+    assert!(json_str.contains("Test CLI handoff pipeline"));
+}

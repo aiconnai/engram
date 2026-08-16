@@ -2,7 +2,9 @@ use super::operational_context::attach_operational_context;
 use super::persistence::persist_checkpoint;
 use super::privacy::strip_private_content;
 use super::render::render_copy_block;
-use super::retrieval::{collect_open_items, collect_recent_decisions, push_source_ids};
+use super::retrieval::{
+    collect_open_items, collect_recent_decisions, collect_topic_digest_items, push_source_ids,
+};
 use super::types::{HandoffItem, SessionHandoffPacket, SessionHandoffRequest};
 use crate::error::Result;
 use crate::intelligence::session_indexing::list_sessions;
@@ -61,6 +63,33 @@ pub fn build_session_handoff(
         Err(err) => packet
             .warnings
             .push(format!("Decision retrieval failed: {err}")),
+    }
+
+    if request.include_digest {
+        if let Some(query) = request
+            .current_goal
+            .as_deref()
+            .or(request.summary.as_deref())
+        {
+            match collect_topic_digest_items(storage, &packet.workspace, query) {
+                Ok(mut digest_items) => {
+                    digest_items.retain(|item| {
+                        !packet
+                            .open_items
+                            .iter()
+                            .any(|existing| existing.source_memory_id == item.source_memory_id)
+                            && !packet
+                                .decisions
+                                .iter()
+                                .any(|existing| existing.source_memory_id == item.source_memory_id)
+                    });
+                    packet.open_items.extend(digest_items);
+                }
+                Err(err) => packet
+                    .warnings
+                    .push(format!("Topic digest retrieval failed: {err}")),
+            }
+        }
     }
 
     attach_operational_context(storage, &request, &mut packet);
