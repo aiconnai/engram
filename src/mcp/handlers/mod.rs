@@ -410,6 +410,8 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_list_media" => multimodal::memory_list_media(ctx, params),
         #[cfg(feature = "multimodal")]
         "memory_search_by_image" => multimodal::memory_search_by_image(ctx, params),
+        #[cfg(feature = "multimodal")]
+        "memory_ingest_media" => multimodal::memory_ingest_media(ctx, params),
 
         // ── Retrieval excellence ─────────────────────────────────────────────
         "memory_cache_stats" => retrieval::memory_cache_stats(ctx, params),

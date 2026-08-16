@@ -961,3 +961,108 @@ class EngramClient:
     async def federation_sync_status(self) -> dict[str, Any]:
         """Get the synchronization status for all federation peers."""
         return await self._mcp_call("memory_federation_sync_status", {})
+
+    # -- Consolidated Facades (Phase 3c) --
+
+    async def lifecycle_update(
+        self,
+        id: int,
+        *,
+        action: str = "promote",
+        canonical_tier: bool | None = None,
+        ttl_seconds: int | None = None,
+        state: str | None = None,
+        reason: str | None = None,
+        persist: bool | None = None,
+        workspace: str | None = None,
+        dry_run: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update or transition a memory's lifecycle state, reinforcement score, or TTL."""
+        params: dict[str, Any] = {"id": id, "action": action}
+        if canonical_tier is not None:
+            params["canonical_tier"] = canonical_tier
+        if ttl_seconds is not None:
+            params["ttl_seconds"] = ttl_seconds
+        if state is not None:
+            params["state"] = state
+        if reason is not None:
+            params["reason"] = reason
+        if persist is not None:
+            params["persist"] = persist
+        if workspace is not None:
+            params["workspace"] = workspace
+        if dry_run is not None:
+            params["dry_run"] = dry_run
+        return await self._mcp_call("memory_lifecycle_update", params)
+
+    async def graph_query(
+        self,
+        *,
+        action: str = "relations",
+        id: int | None = None,
+        from_id: int | None = None,
+        to_id: int | None = None,
+        depth: int | None = None,
+        max_depth: int | None = None,
+        edge_type: str | None = None,
+        edge_types: list[str] | None = None,
+        direction: str | None = None,
+        include_entities: bool | None = None,
+        query: str | None = None,
+        format: str | None = None,
+    ) -> dict[str, Any]:
+        """Query the knowledge graph: relations, paths, multi-hop traversal, entity search, or export."""
+        params: dict[str, Any] = {"action": action}
+        if id is not None:
+            params["id"] = id
+        if from_id is not None:
+            params["from_id"] = from_id
+        if to_id is not None:
+            params["to_id"] = to_id
+        if depth is not None:
+            params["depth"] = depth
+        if max_depth is not None:
+            params["max_depth"] = max_depth
+        if edge_type is not None:
+            params["edge_type"] = edge_type
+        if edge_types is not None:
+            params["edge_types"] = edge_types
+        if direction is not None:
+            params["direction"] = direction
+        if include_entities is not None:
+            params["include_entities"] = include_entities
+        if query is not None:
+            params["query"] = query
+        if format is not None:
+            params["format"] = format
+        return await self._mcp_call("graph_query", params)
+
+    async def graph_mutate(
+        self,
+        *,
+        action: str = "link",
+        from_id: int | None = None,
+        to_id: int | None = None,
+        id: int | None = None,
+        edge_type: str | None = None,
+        strength: float | None = None,
+        source_context: str | None = None,
+        pinned: bool | None = None,
+    ) -> dict[str, Any]:
+        """Mutate the knowledge graph: link memories, remove cross-references, or extract entities."""
+        params: dict[str, Any] = {"action": action}
+        if from_id is not None:
+            params["from_id"] = from_id
+        if to_id is not None:
+            params["to_id"] = to_id
+        if id is not None:
+            params["id"] = id
+        if edge_type is not None:
+            params["edge_type"] = edge_type
+        if strength is not None:
+            params["strength"] = strength
+        if source_context is not None:
+            params["source_context"] = source_context
+        if pinned is not None:
+            params["pinned"] = pinned
+        return await self._mcp_call("graph_mutate", params)

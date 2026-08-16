@@ -5,8 +5,8 @@
 use clap::{Parser, Subcommand};
 
 use engram::bench::{
-    locomo::LocomoBenchmark, longmemeval::LongMemEvalBenchmark, membench::MemBenchmark,
-    BenchmarkSuite,
+    concurrency::ConcurrencyBenchmark, locomo::LocomoBenchmark, longmemeval::LongMemEvalBenchmark,
+    membench::MemBenchmark, BenchmarkSuite,
 };
 
 #[derive(Parser)]
@@ -22,7 +22,7 @@ struct Cli {
 enum Commands {
     /// Run benchmark(s)
     Run {
-        /// Which suite to run: locomo, longmem, membench, or all
+        /// Which suite to run: locomo, longmem, membench, concurrency, or all
         #[arg(long, default_value = "all")]
         suite: String,
 
@@ -64,6 +64,7 @@ fn main() {
             println!("  locomo       Multi-session conversation memory (precision, recall, F1)");
             println!("  longmem      5-dimension evaluation (retention, temporal, update, multi-hop, contradiction)");
             println!("  membench     CRUD throughput and search quality (create/get/search per-sec, NDCG@10, MRR)");
+            println!("  concurrency  Multi-threaded stress (read/write ops/sec, cache contention, p50/p95/p99 latency)");
             println!("  all          Run all benchmarks with default settings");
         }
 
@@ -100,6 +101,9 @@ fn main() {
                         num_queries,
                     }));
                 }
+                "concurrency" => {
+                    bench_suite.add(Box::new(ConcurrencyBenchmark::default()));
+                }
                 "all" => {
                     // Use the default suite with CLI-overridden sizes
                     bench_suite.add(Box::new(LocomoBenchmark {
@@ -111,10 +115,11 @@ fn main() {
                         num_memories,
                         num_queries,
                     }));
+                    bench_suite.add(Box::new(ConcurrencyBenchmark::default()));
                 }
                 other => {
                     eprintln!(
-                        "Unknown suite: '{}'. Use: locomo, longmem, membench, all",
+                        "Unknown suite: '{}'. Use: locomo, longmem, membench, concurrency, all",
                         other
                     );
                     std::process::exit(1);

@@ -64,7 +64,8 @@ pub(crate) fn tool_feature_available(name: &str) -> bool {
         | "memory_capture_screenshot"
         | "memory_process_video"
         | "memory_list_media"
-        | "memory_search_by_image" => cfg!(feature = "multimodal"),
+        | "memory_search_by_image"
+        | "memory_ingest_media" => cfg!(feature = "multimodal"),
 
         // duckdb-graph feature
         "memory_graph_path" | "memory_temporal_snapshot" | "memory_scope_snapshot" => {
