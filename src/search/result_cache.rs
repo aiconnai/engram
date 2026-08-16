@@ -26,6 +26,12 @@ pub struct CacheFilterParams {
     /// When true, this is a global (cross-workspace) search. Distinguishes
     /// from a workspace-unfiltered non-global search in the cache key.
     pub global: bool,
+    /// Reranking strategy (e.g. "none", "heuristic", "multi_signal")
+    #[serde(default)]
+    pub rerank_strategy: Option<String>,
+    /// Whether policy-based reranking is applied
+    #[serde(default)]
+    pub policy_rerank: bool,
 }
 
 /// A cached search result entry
@@ -131,6 +137,8 @@ pub struct SearchResultCache {
 #[derive(Debug, Default)]
 pub struct CacheStats {
     pub hits: AtomicU64,
+    pub exact_hits: AtomicU64,
+    pub semantic_hits: AtomicU64,
     pub misses: AtomicU64,
     pub invalidations: AtomicU64,
     pub evictions: AtomicU64,
@@ -154,6 +162,8 @@ impl CacheStats {
 pub struct CacheStatsResponse {
     pub entries: usize,
     pub hits: u64,
+    pub exact_hits: u64,
+    pub semantic_hits: u64,
     pub misses: u64,
     pub hit_rate: f64,
     pub invalidations: u64,
@@ -216,50 +226,90 @@ impl SearchResultCache {
         dot / (norm_a.sqrt() * norm_b.sqrt())
     }
 
-    /// Try to get cached results for a query
+    /// Fast-path exact query match lookup (Tier 1).
+    ///
+    /// Checks for a cached result with exact query hash match without
+    /// requiring an embedding vector.
+    pub fn get_exact(&self, query: &str, filters: &CacheFilterParams) -> Option<Vec<SearchResult>> {
+        let query_hash = Self::hash_query(query);
+        let cache_key = Self::cache_key(query_hash, filters);
+
+        if let Some(entry) = self.entries.get(&cache_key) {
+            if !entry.is_expired(Duration::from_secs(self.config.ttl_seconds)) {
+                entry.record_hit();
+                self.stats.hits.fetch_add(1, Ordering::Relaxed);
+                self.stats.exact_hits.fetch_add(1, Ordering::Relaxed);
+                return Some(entry.results.clone());
+            } else {
+                drop(entry);
+                self.entries.remove(&cache_key);
+            }
+        }
+        None
+    }
+
+    /// Semantic similarity match lookup (Tier 2).
+    ///
+    /// Scans cached entries with identical filter parameters and evaluates cosine
+    /// similarity against `query_embedding`. Returns results from the highest-similarity
+    /// matching entry exceeding `current_threshold`.
+    pub fn get_semantic(
+        &self,
+        query_embedding: &[f32],
+        filters: &CacheFilterParams,
+    ) -> Option<Vec<SearchResult>> {
+        let threshold = self.current_threshold();
+        let mut best_similarity = -1.0_f32;
+        let mut best_entry: Option<Arc<CachedSearchResult>> = None;
+
+        for entry in self.entries.iter() {
+            if entry.filter_params != *filters {
+                continue;
+            }
+
+            if entry.is_expired(Duration::from_secs(self.config.ttl_seconds)) {
+                continue;
+            }
+
+            if let Some(ref cached_embedding) = entry.query_embedding {
+                let similarity = Self::cosine_similarity(query_embedding, cached_embedding);
+                if similarity >= threshold && similarity > best_similarity {
+                    best_similarity = similarity;
+                    best_entry = Some(Arc::clone(entry.value()));
+                }
+            }
+        }
+
+        if let Some(entry) = best_entry {
+            entry.record_hit();
+            self.stats.hits.fetch_add(1, Ordering::Relaxed);
+            self.stats.semantic_hits.fetch_add(1, Ordering::Relaxed);
+            return Some(entry.results.clone());
+        }
+
+        None
+    }
+
+    /// Try to get cached results for a query.
+    ///
+    /// If `query_embedding` is `None`, performs an exact match lookup.
+    /// If `query_embedding` is provided, performs exact match first, falling
+    /// back to semantic cosine similarity lookup above `current_threshold`.
     pub fn get(
         &self,
         query: &str,
         query_embedding: Option<&[f32]>,
         filters: &CacheFilterParams,
     ) -> Option<Vec<SearchResult>> {
-        let query_hash = Self::hash_query(query);
-        let cache_key = Self::cache_key(query_hash, filters);
-
-        // First try exact match
-        if let Some(entry) = self.entries.get(&cache_key) {
-            if !entry.is_expired(Duration::from_secs(self.config.ttl_seconds)) {
-                entry.record_hit();
-                self.stats.hits.fetch_add(1, Ordering::Relaxed);
-                return Some(entry.results.clone());
-            } else {
-                // Remove expired entry
-                drop(entry);
-                self.entries.remove(&cache_key);
-            }
+        // Fast path: exact match
+        if let Some(results) = self.get_exact(query, filters) {
+            return Some(results);
         }
 
-        // Try similarity-based lookup if we have an embedding
+        // Semantic path if embedding provided
         if let Some(embedding) = query_embedding {
-            let threshold = self.current_threshold();
-
-            for entry in self.entries.iter() {
-                if entry.filter_params != *filters {
-                    continue;
-                }
-
-                if entry.is_expired(Duration::from_secs(self.config.ttl_seconds)) {
-                    continue;
-                }
-
-                if let Some(ref cached_embedding) = entry.query_embedding {
-                    let similarity = Self::cosine_similarity(embedding, cached_embedding);
-                    if similarity >= threshold {
-                        entry.record_hit();
-                        self.stats.hits.fetch_add(1, Ordering::Relaxed);
-                        return Some(entry.results.clone());
-                    }
-                }
+            if let Some(results) = self.get_semantic(embedding, filters) {
+                return Some(results);
             }
         }
 
@@ -385,6 +435,8 @@ impl SearchResultCache {
         CacheStatsResponse {
             entries: self.entries.len(),
             hits: self.stats.hits.load(Ordering::Relaxed),
+            exact_hits: self.stats.exact_hits.load(Ordering::Relaxed),
+            semantic_hits: self.stats.semantic_hits.load(Ordering::Relaxed),
             misses: self.stats.misses.load(Ordering::Relaxed),
             hit_rate: self.stats.hit_rate(),
             invalidations: self.stats.invalidations.load(Ordering::Relaxed),
@@ -591,5 +643,115 @@ mod tests {
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.hits, 2);
         assert!(stats.hit_rate > 0.6);
+    }
+
+    #[test]
+    fn test_get_exact_short_circuits_without_embedding() {
+        let cache = SearchResultCache::new(AdaptiveCacheConfig::default());
+        let results = vec![make_test_result(42, "exact hit", 0.95)];
+
+        cache.put(
+            "exact search query",
+            Some(vec![0.1, 0.2, 0.3]),
+            CacheFilterParams::default(),
+            results.clone(),
+        );
+
+        // Exact match via get_exact
+        let exact = cache.get_exact("exact search query", &CacheFilterParams::default());
+        assert!(exact.is_some());
+        assert_eq!(exact.unwrap()[0].memory.id, 42);
+
+        let stats = cache.stats();
+        assert_eq!(stats.exact_hits, 1);
+        assert_eq!(stats.semantic_hits, 0);
+        assert_eq!(stats.hits, 1);
+    }
+
+    #[test]
+    fn test_get_semantic_similarity_threshold() {
+        let cache = SearchResultCache::new(AdaptiveCacheConfig {
+            similarity_threshold: 0.92,
+            ..Default::default()
+        });
+
+        let stored_embedding = vec![1.0, 0.0, 0.0, 0.0];
+        let results = vec![make_test_result(99, "semantic hit", 0.88)];
+
+        cache.put(
+            "original concept",
+            Some(stored_embedding),
+            CacheFilterParams::default(),
+            results,
+        );
+
+        // Similar query embedding (cos sim ≈ 0.9998)
+        let similar_embedding = vec![1.0, 0.01, 0.0, 0.0];
+        let semantic = cache.get_semantic(&similar_embedding, &CacheFilterParams::default());
+        assert!(semantic.is_some());
+        assert_eq!(semantic.unwrap()[0].memory.id, 99);
+
+        // Dissimilar query embedding (cos sim = 0.0)
+        let dissimilar_embedding = vec![0.0, 1.0, 0.0, 0.0];
+        let missed = cache.get_semantic(&dissimilar_embedding, &CacheFilterParams::default());
+        assert!(missed.is_none());
+
+        let stats = cache.stats();
+        assert_eq!(stats.semantic_hits, 1);
+        assert_eq!(stats.exact_hits, 0);
+    }
+
+    #[test]
+    fn test_cache_filter_params_rerank_isolation() {
+        let cache = SearchResultCache::new(AdaptiveCacheConfig::default());
+        let results1 = vec![make_test_result(1, "heuristic", 0.9)];
+        let results2 = vec![make_test_result(2, "multi_signal", 0.95)];
+
+        let filters1 = CacheFilterParams {
+            rerank_strategy: Some("heuristic".to_string()),
+            policy_rerank: false,
+            ..Default::default()
+        };
+        let filters2 = CacheFilterParams {
+            rerank_strategy: Some("multi_signal".to_string()),
+            policy_rerank: true,
+            ..Default::default()
+        };
+
+        cache.put("same query", None, filters1.clone(), results1);
+        cache.put("same query", None, filters2.clone(), results2);
+
+        let got1 = cache.get_exact("same query", &filters1);
+        let got2 = cache.get_exact("same query", &filters2);
+
+        assert!(got1.is_some());
+        assert!(got2.is_some());
+        assert_eq!(got1.unwrap()[0].memory.id, 1);
+        assert_eq!(got2.unwrap()[0].memory.id, 2);
+    }
+
+    #[test]
+    fn test_adaptive_threshold_bounds() {
+        let cache = SearchResultCache::new(AdaptiveCacheConfig {
+            similarity_threshold: 0.92,
+            min_threshold: 0.85,
+            max_threshold: 0.98,
+            adaptive_enabled: true,
+            ..Default::default()
+        });
+
+        let filters = CacheFilterParams::default();
+
+        // 20 negative feedback adjustments should hit the 0.98 ceiling
+        for _ in 0..20 {
+            cache.record_feedback("query", &filters, false);
+        }
+        assert!((cache.current_threshold() - 0.98).abs() < 1e-4);
+
+        // 30 positive feedback adjustments should hit the 0.85 floor
+        for _ in 0..30 {
+            cache.record_feedback("query", &filters, true);
+        }
+        assert!((cache.current_threshold() - 0.85).abs() < 1e-4);
     }
 }
