@@ -2550,6 +2550,97 @@ fn test_memory_create_emits_audit_event() {
 }
 
 #[test]
+fn test_enrichment_audit_pipeline_full_lifecycle_and_batch_query() {
+    let handler = TestHandler::new();
+
+    // 1. Create a memory
+    let create_req = make_request(
+        1310,
+        "tools/call",
+        json!({
+            "name": "memory_create",
+            "arguments": {"content": "Initial pipeline memory", "memory_type": "decision"}
+        }),
+    );
+    let create_resp = handler.handle_request(create_req);
+    let text = create_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let created: Value = serde_json::from_str(&text).unwrap();
+    let memory_id = created["id"].as_i64().unwrap();
+
+    // 2. Update memory (creates version)
+    let update_req = make_request(
+        1311,
+        "tools/call",
+        json!({
+            "name": "memory_update",
+            "arguments": {"id": memory_id, "content": "Updated pipeline memory content"}
+        }),
+    );
+    let update_resp = handler.handle_request(update_req);
+    assert!(update_resp.error.is_none());
+
+    // 3. Set lifecycle state
+    let lifecycle_req = make_request(
+        1312,
+        "tools/call",
+        json!({
+            "name": "memory_set_lifecycle",
+            "arguments": {"id": memory_id, "state": "active", "reason": "Pipeline audit activation"}
+        }),
+    );
+    let lifecycle_resp = handler.handle_request(lifecycle_req);
+    assert!(lifecycle_resp.error.is_none());
+
+    // 4. Query memory_enrichment_timeline with snapshots
+    let timeline_req = make_request(
+        1313,
+        "tools/call",
+        json!({
+            "name": "memory_enrichment_timeline",
+            "arguments": {"memory_id": memory_id, "include_snapshots": true}
+        }),
+    );
+    let timeline_resp = handler.handle_request(timeline_req);
+    let timeline_text = timeline_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let timeline_data: Value = serde_json::from_str(&timeline_text).unwrap();
+    let events = timeline_data["events"].as_array().expect("events array");
+    assert!(
+        events.len() >= 3,
+        "Expected at least 3 events (create, update, lifecycle), got {}",
+        events.len()
+    );
+
+    // 5. Query memory_enrichment_audit filtering by event_type
+    let audit_req = make_request(
+        1314,
+        "tools/call",
+        json!({
+            "name": "memory_enrichment_audit",
+            "arguments": {"event_type": "lifecycle_transition", "memory_id": memory_id}
+        }),
+    );
+    let audit_resp = handler.handle_request(audit_req);
+    let audit_text = audit_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let audit_data: Value = serde_json::from_str(&audit_text).unwrap();
+    let audit_events = audit_data["events"].as_array().expect("audit events array");
+    assert!(
+        audit_events
+            .iter()
+            .all(|e| e["event_type"].as_str() == Some("lifecycle_transition")),
+        "Filtered audit events must only contain lifecycle_transition"
+    );
+}
+
+#[test]
 fn test_tools_list_includes_context_get_artifact() {
     let handler = TestHandler::new();
     let req = make_request(132, "tools/list", json!({}));
