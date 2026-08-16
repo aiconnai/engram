@@ -15,6 +15,7 @@ use super::impls_maintenance;
 use super::impls_query;
 use super::impls_relations;
 
+#[allow(deprecated)]
 impl StorageBackend for TursoBackend {
     fn create_memory(&self, input: CreateMemoryInput) -> Result<Memory> {
         impls_crud::create_memory(self, input)

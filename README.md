@@ -333,8 +333,8 @@ model is downloaded explicitly and is not bundled into the binary.
 │  • Optional Meilisearch backend for scaled deployments          │
 ├─────────────────────────────────────────────────────────────────┤
 │                     Storage Layer                               │
-│  • SQLite + WAL  • Turso/libSQL  • Connection pooling           │
-│  • Optional S3/R2 sync with AES-256 encryption                  │
+│  • SQLite + WAL (local-first)  • Connection pooling             │
+│  • S3/R2 Snapshot Attestation & Cloud Sync                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

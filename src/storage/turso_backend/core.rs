@@ -44,6 +44,10 @@ use crate::storage::backend::SyncResult;
 pub(super) const MEMORY_COLUMNS: &str = "id, content, memory_type, importance, access_count, created_at, updated_at, last_accessed_at, owner_id, visibility, version, has_embedding, metadata, scope_type, scope_id, workspace, tier, expires_at, content_hash, event_time, event_duration_seconds, trigger_pattern, procedure_success_count, procedure_failure_count, summary_of_id, lifecycle_state";
 
 /// Turso/libSQL storage backend configuration
+#[deprecated(
+    since = "0.22.0",
+    note = "Turso backend is scheduled for sunset in v0.24.0. Use SQLite WAL + S3/R2 snapshot sync for cloud synchronization."
+)]
 #[derive(Debug, Clone)]
 pub struct TursoConfig {
     /// Turso database URL (e.g., "libsql://your-db.turso.io")
@@ -58,6 +62,7 @@ pub struct TursoConfig {
     pub sync_on_startup: bool,
 }
 
+#[allow(deprecated)]
 impl Default for TursoConfig {
     fn default() -> Self {
         Self {
@@ -74,6 +79,11 @@ impl Default for TursoConfig {
 ///
 /// Implements the `StorageBackend` trait using libSQL (Turso's fork of SQLite)
 /// with support for embedded replicas and cloud sync.
+#[deprecated(
+    since = "0.22.0",
+    note = "Turso backend is scheduled for sunset in v0.24.0. Use SQLite WAL + S3/R2 snapshot sync for cloud synchronization."
+)]
+#[allow(deprecated)]
 pub struct TursoBackend {
     pub(super) db: Database,
     pub(super) conn: Arc<RwLock<Connection>>,
@@ -81,6 +91,7 @@ pub struct TursoBackend {
     pub(super) schema_initialized: bool,
 }
 
+#[allow(deprecated)]
 impl TursoBackend {
     /// Create a new Turso backend connected to Turso cloud
     ///
