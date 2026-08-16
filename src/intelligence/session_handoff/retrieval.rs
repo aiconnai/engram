@@ -50,6 +50,39 @@ pub(super) fn collect_recent_decisions(
     })
 }
 
+pub(super) fn collect_topic_digest_items(
+    storage: &Storage,
+    workspace: &str,
+    query: &str,
+) -> Result<Vec<HandoffItem>> {
+    let clean_query = query.trim();
+    if clean_query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let pattern = format!("%{clean_query}%");
+    storage.with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, content, memory_type \
+             FROM memories \
+             WHERE workspace = ?1 \
+               AND content LIKE ?2 \
+               AND (lifecycle_state IS NULL OR lifecycle_state != 'archived') \
+             ORDER BY importance DESC, created_at DESC \
+             LIMIT 15",
+        )?;
+        let items = stmt
+            .query_map(rusqlite::params![workspace, pattern], |row| {
+                let id: i64 = row.get(0)?;
+                let content: String = row.get(1)?;
+                let memory_type: String = row.get(2)?;
+                Ok(memory_item(id, content, &format!("digest_{memory_type}")))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(items)
+    })
+}
+
 pub(super) fn push_source_ids(packet: &mut SessionHandoffPacket) {
     let mut ids = packet
         .open_items
