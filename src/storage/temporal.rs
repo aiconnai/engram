@@ -7,7 +7,8 @@
 //! - Time-range queries
 
 use crate::error::{EngramError, Result};
-use crate::types::{CrossReference, EdgeType, Memory, MemoryScope, MemoryTier, Visibility};
+use crate::storage::queries::{load_tags, memory_from_row};
+use crate::types::{CrossReference, EdgeType, Memory};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -175,63 +176,22 @@ impl<'a> TemporalQueryEngine<'a> {
 
     /// Get current memory by ID
     fn get_current_memory(&self, memory_id: i64) -> Result<Option<Memory>> {
-        self.conn
+        let memory: Option<Memory> = self
+            .conn
             .query_row(
-                r#"
-                SELECT id, content, type, importance, access_count, created_at, updated_at,
-                       last_accessed_at, owner_id, visibility, version, has_embedding
-                FROM memories
-                WHERE id = ?1
-                "#,
+                "SELECT * FROM memories WHERE id = ?1",
                 params![memory_id],
-                |row| {
-                    let memory_type_str: String = row.get(2)?;
-                    let visibility_str: String = row.get(9)?;
-
-                    Ok(Memory {
-                        id: row.get(0)?,
-                        content: row.get(1)?,
-                        memory_type: memory_type_str.parse().unwrap_or_default(),
-                        tags: vec![], // Will be filled separately
-                        metadata: HashMap::new(),
-                        importance: row.get(3)?,
-                        access_count: row.get(4)?,
-                        created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(5)?)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                        updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(6)?)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                        last_accessed_at: row
-                            .get::<_, Option<String>>(7)?
-                            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                            .map(|dt| dt.with_timezone(&Utc)),
-                        owner_id: row.get(8)?,
-                        visibility: match visibility_str.as_str() {
-                            "shared" => Visibility::Shared,
-                            "public" => Visibility::Public,
-                            _ => Visibility::Private,
-                        },
-                        scope: MemoryScope::Global,
-                        workspace: "default".to_string(),
-                        tier: MemoryTier::Permanent,
-                        version: row.get(10)?,
-                        has_embedding: row.get(11)?,
-                        expires_at: None,
-                        content_hash: None,
-                        event_time: None,
-                        event_duration_seconds: None,
-                        trigger_pattern: None,
-                        procedure_success_count: 0,
-                        procedure_failure_count: 0,
-                        summary_of_id: None,
-                        lifecycle_state: crate::types::LifecycleState::Active,
-                        media_url: None,
-                    })
-                },
+                memory_from_row,
             )
             .optional()
-            .map_err(EngramError::from)
+            .map_err(EngramError::from)?;
+
+        let Some(mut memory) = memory else {
+            return Ok(None);
+        };
+
+        memory.tags = load_tags(self.conn, memory.id).unwrap_or_default();
+        Ok(Some(memory))
     }
 
     /// Query memories within a time range
@@ -265,8 +225,7 @@ impl<'a> TemporalQueryEngine<'a> {
 
         let sql = format!(
             r#"
-            SELECT id, content, type, importance, access_count, created_at, updated_at,
-                   last_accessed_at, owner_id, visibility, version, has_embedding
+            SELECT *
             FROM memories
             WHERE {}
             ORDER BY created_at DESC
@@ -282,54 +241,16 @@ impl<'a> TemporalQueryEngine<'a> {
 
         let mut stmt = self.conn.prepare(&sql)?;
         let memories = stmt
-            .query_map(params_refs.as_slice(), |row| {
-                let memory_type_str: String = row.get(2)?;
-                let visibility_str: String = row.get(9)?;
-
-                Ok(Memory {
-                    id: row.get(0)?,
-                    content: row.get(1)?,
-                    memory_type: memory_type_str.parse().unwrap_or_default(),
-                    tags: vec![],
-                    metadata: HashMap::new(),
-                    importance: row.get(3)?,
-                    access_count: row.get(4)?,
-                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(5)?)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(6)?)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    last_accessed_at: row
-                        .get::<_, Option<String>>(7)?
-                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                        .map(|dt| dt.with_timezone(&Utc)),
-                    owner_id: row.get(8)?,
-                    visibility: match visibility_str.as_str() {
-                        "shared" => Visibility::Shared,
-                        "public" => Visibility::Public,
-                        _ => Visibility::Private,
-                    },
-                    scope: MemoryScope::Global, // Temporal queries default to global
-                    workspace: "default".to_string(),
-                    tier: MemoryTier::Permanent,
-                    version: row.get(10)?,
-                    has_embedding: row.get(11)?,
-                    expires_at: None,   // Temporal queries don't track expiration
-                    content_hash: None, // Temporal queries don't track content hash
-                    event_time: None,
-                    event_duration_seconds: None,
-                    trigger_pattern: None,
-                    procedure_success_count: 0,
-                    procedure_failure_count: 0,
-                    summary_of_id: None,
-                    lifecycle_state: crate::types::LifecycleState::Active,
-                    media_url: None,
-                })
-            })?
+            .query_map(params_refs.as_slice(), memory_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
-        Ok(memories)
+        let mut hydrated = Vec::with_capacity(memories.len());
+        for mut memory in memories {
+            memory.tags = load_tags(self.conn, memory.id).unwrap_or_default();
+            hydrated.push(memory);
+        }
+
+        Ok(hydrated)
     }
 
     /// Get cross-references valid at a specific point in time
@@ -582,5 +503,51 @@ mod tests {
         let options = TemporalQueryOptions::time_range(start, end);
         assert_eq!(options.created_after, Some(start));
         assert_eq!(options.created_before, Some(end));
+    }
+
+    #[test]
+    fn test_temporal_query_engine_database_queries() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::storage::migrations::run_migrations(&conn).unwrap();
+
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            r#"
+            INSERT INTO memories (
+                id, content, memory_type, importance, access_count,
+                created_at, updated_at, owner_id, visibility, version,
+                has_embedding, metadata, workspace, tier
+            ) VALUES (
+                1, 'Test content', 'note', 0.8, 1,
+                ?1, ?1, 'user1', 'private', 1,
+                0, '{}', 'default', 'permanent'
+            )
+            "#,
+            params![now],
+        )
+        .unwrap();
+
+        let engine = TemporalQueryEngine::new(&conn);
+
+        // 1. Test get_current_memory
+        let current = engine.get_current_memory(1).unwrap();
+        assert!(current.is_some());
+        let mem = current.unwrap();
+        assert_eq!(mem.id, 1);
+        assert_eq!(mem.content, "Test content");
+        assert_eq!(mem.memory_type, crate::types::MemoryType::Note);
+
+        // 2. Test get_memory_at
+        let at = engine.get_memory_at(1, Utc::now()).unwrap();
+        assert!(at.is_some());
+        let temp_mem = at.unwrap();
+        assert_eq!(temp_mem.memory.id, 1);
+        assert!(temp_mem.is_current);
+
+        // 3. Test query_time_range
+        let range_opts = TemporalQueryOptions::default();
+        let range_results = engine.query_time_range(&range_opts, 10).unwrap();
+        assert_eq!(range_results.len(), 1);
+        assert_eq!(range_results[0].id, 1);
     }
 }

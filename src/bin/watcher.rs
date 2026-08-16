@@ -27,12 +27,10 @@
 
 use std::path::PathBuf;
 use std::sync::mpsc as stdmpsc;
-use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
 use clap::Parser;
-use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use engram::watcher::{
@@ -202,7 +200,7 @@ fn start_fs_watcher(
 fn start_browser_watcher(
     config: &WatcherConfig,
     tx: tokio::sync::mpsc::UnboundedSender<(String, &'static str, Vec<String>)>,
-    shutdown_rx: Arc<Mutex<tokio::sync::watch::Receiver<bool>>>,
+    mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) {
     if !config.browser.enabled {
         info!("Browser watcher disabled — skipping");
@@ -220,10 +218,7 @@ fn start_browser_watcher(
 
         loop {
             // Wait one interval before the first poll so we don't race startup.
-            let shutdown = {
-                let mut rx = shutdown_rx.lock().await;
-                tokio::time::timeout(poll_interval, rx.changed()).await
-            };
+            let shutdown = tokio::time::timeout(poll_interval, shutdown_rx.changed()).await;
 
             if shutdown.is_ok() {
                 info!("Browser watcher received shutdown signal");
@@ -252,7 +247,7 @@ fn start_browser_watcher(
 fn start_app_focus_watcher(
     config: &WatcherConfig,
     tx: tokio::sync::mpsc::UnboundedSender<(String, &'static str, Vec<String>)>,
-    shutdown_rx: Arc<Mutex<tokio::sync::watch::Receiver<bool>>>,
+    mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) {
     if !config.app_focus.enabled {
         info!("App focus watcher disabled — skipping");
@@ -268,10 +263,7 @@ fn start_app_focus_watcher(
         info!(?poll_interval, "App focus watcher started");
 
         loop {
-            let shutdown = {
-                let mut rx = shutdown_rx.lock().await;
-                tokio::time::timeout(poll_interval, rx.changed()).await
-            };
+            let shutdown = tokio::time::timeout(poll_interval, shutdown_rx.changed()).await;
 
             if shutdown.is_ok() {
                 info!("App focus watcher received shutdown signal");
@@ -354,13 +346,12 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel::<(String, &'static str, Vec<String>)>();
 
     // Shutdown watch channel: broadcast `true` to all tasks when Ctrl-C fires.
-    let (shutdown_tx, shutdown_rx_base) = tokio::sync::watch::channel(false);
-    let shutdown_rx = Arc::new(Mutex::new(shutdown_rx_base));
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     // Start individual watchers.
     let fs_stop_tx = start_fs_watcher(&config, event_tx.clone());
-    start_browser_watcher(&config, event_tx.clone(), Arc::clone(&shutdown_rx));
-    start_app_focus_watcher(&config, event_tx.clone(), Arc::clone(&shutdown_rx));
+    start_browser_watcher(&config, event_tx.clone(), shutdown_rx.clone());
+    start_app_focus_watcher(&config, event_tx.clone(), shutdown_rx.clone());
 
     // Drop the last producer reference held by main so the channel closes
     // naturally when all watcher tasks finish.

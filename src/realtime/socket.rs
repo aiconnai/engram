@@ -98,16 +98,27 @@ pub(super) async fn handle_socket(
                 }
             }
             event = rx.recv() => {
-                let Ok(event) = event else {
-                    break;
-                };
-                if manager.client_matches_event(&connection_id, &event) {
-                    let Ok(json) = serde_json::to_string(&event) else {
-                        continue;
-                    };
-                    if !send_socket(&mut socket, Message::Text(json)).await {
-                        break;
+                match event {
+                    Ok(event) => {
+                        if manager.client_matches_event(&connection_id, &event) {
+                            let Ok(json) = serde_json::to_string(&event) else {
+                                continue;
+                            };
+                            if !send_socket(&mut socket, Message::Text(json)).await {
+                                break;
+                            }
+                        }
                     }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!(
+                            target = "engram::realtime",
+                            connection_id = %connection_id,
+                            skipped,
+                            "websocket client lagged behind broadcast channel"
+                        );
+                        continue;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
             () = &mut idle => {
