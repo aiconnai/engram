@@ -1,5 +1,3 @@
-//! Search tool handlers.
-
 use std::collections::HashMap;
 
 use serde_json::{json, Value};
@@ -7,6 +5,7 @@ use serde_json::{json, Value};
 use crate::intelligence::memory_policy::{
     blend_retrieval_priority, extract_features, score_policy, PolicyFeatureInput,
 };
+use crate::mcp::error::ToolError;
 use crate::search::{hybrid_search, RerankConfig, RerankStrategy, Reranker};
 use crate::storage::queries::get_policy_record;
 use crate::types::*;
@@ -338,7 +337,7 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                 }
             }
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn search_suggest(ctx: &HandlerContext, params: Value) -> Value {
@@ -353,7 +352,7 @@ pub fn memory_search_by_identity(ctx: &HandlerContext, params: Value) -> Value {
 
     let identity = match params.get("identity").and_then(|v| v.as_str()) {
         Some(i) => i,
-        None => return json!({"error": "identity is required"}),
+        None => return ToolError::missing_argument("identity").into_value(),
     };
 
     let workspace = params.get("workspace").and_then(|v| v.as_str());
@@ -367,7 +366,7 @@ pub fn memory_search_by_identity(ctx: &HandlerContext, params: Value) -> Value {
             let memories = search_by_identity(conn, identity, workspace, limit)?;
             Ok(json!({"memories": memories}))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_session_search(ctx: &HandlerContext, params: Value) -> Value {
@@ -375,7 +374,7 @@ pub fn memory_session_search(ctx: &HandlerContext, params: Value) -> Value {
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q,
-        None => return json!({"error": "query is required"}),
+        None => return ToolError::missing_argument("query").into_value(),
     };
 
     let session_id = params.get("session_id").and_then(|v| v.as_str());
@@ -390,7 +389,7 @@ pub fn memory_session_search(ctx: &HandlerContext, params: Value) -> Value {
             let memories = search_sessions(conn, query, session_id, workspace, limit)?;
             Ok(json!({"memories": memories}))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn find_duplicates(ctx: &HandlerContext, params: Value) -> Value {
@@ -410,7 +409,7 @@ pub fn find_duplicates(ctx: &HandlerContext, params: Value) -> Value {
                 "duplicates": duplicates
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn find_semantic_duplicates(ctx: &HandlerContext, params: Value) -> Value {
@@ -433,7 +432,7 @@ pub fn find_semantic_duplicates(ctx: &HandlerContext, params: Value) -> Value {
                 "duplicates": duplicates
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn search_cache_feedback(ctx: &HandlerContext, params: Value) -> Value {
@@ -441,12 +440,12 @@ pub fn search_cache_feedback(ctx: &HandlerContext, params: Value) -> Value {
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q,
-        None => return json!({"error": "query is required"}),
+        None => return ToolError::missing_argument("query").into_value(),
     };
 
     let positive = match params.get("positive").and_then(|v| v.as_bool()) {
         Some(p) => p,
-        None => return json!({"error": "positive is required"}),
+        None => return ToolError::missing_argument("positive").into_value(),
     };
 
     let workspace = params
@@ -494,7 +493,7 @@ pub fn memory_explain_search(_ctx: &HandlerContext, params: Value) -> Value {
     let results = match params.get("results").and_then(|v| v.as_array()) {
         Some(arr) => arr,
         None => {
-            return json!({"error": "results array is required (each with memory_id, bm25, vector, fuzzy, recency, importance, final_score, and optional rerank_score)"})
+            return ToolError::invalid_params("results array is required (each with memory_id, bm25, vector, fuzzy, recency, importance, final_score, and optional rerank_score)").into_value();
         }
     };
 
@@ -548,12 +547,12 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q,
-        None => return json!({"error": "query is required"}),
+        None => return ToolError::missing_argument("query").into_value(),
     };
 
     let memory_id = match params.get("memory_id").and_then(|v| v.as_i64()) {
         Some(id) => id,
-        None => return json!({"error": "memory_id is required"}),
+        None => return ToolError::missing_argument("memory_id").into_value(),
     };
 
     // Accept both legacy aliases (helpful/not_helpful) and canonical names
@@ -568,7 +567,7 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
         Some("outdated") => (FeedbackSignal::Outdated, "outdated"),
         Some("conflict") => (FeedbackSignal::Conflict, "conflict"),
         _ => {
-            return json!({"error": "signal must be 'helpful'/'useful', 'not_helpful'/'irrelevant', 'outdated', or 'conflict'"});
+            return ToolError::invalid_params("signal must be 'helpful'/'useful', 'not_helpful'/'irrelevant', 'outdated', or 'conflict'").into_value();
         }
     };
 
@@ -624,7 +623,7 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
 
             Ok(result)
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_feedback_stats(ctx: &HandlerContext, params: Value) -> Value {
@@ -637,7 +636,7 @@ pub fn memory_feedback_stats(ctx: &HandlerContext, params: Value) -> Value {
             let stats = feedback_stats(conn, workspace)?;
             Ok(json!(stats))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_explain_utility(ctx: &HandlerContext, params: Value) -> Value {
@@ -645,7 +644,7 @@ pub fn memory_explain_utility(ctx: &HandlerContext, params: Value) -> Value {
 
     let memory_id = match params.get("memory_id").and_then(|v| v.as_i64()) {
         Some(id) => id,
-        None => return json!({"error": "memory_id is required"}),
+        None => return ToolError::missing_argument("memory_id").into_value(),
     };
 
     ctx.storage
@@ -654,7 +653,7 @@ pub fn memory_explain_utility(ctx: &HandlerContext, params: Value) -> Value {
             let explanation = tracker.explain_utility(conn, memory_id)?;
             Ok(json!(explanation))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 // ── Compact Search + Expand ──────────────────────────────────────────────────
@@ -671,7 +670,7 @@ pub fn memory_explain_utility(ctx: &HandlerContext, params: Value) -> Value {
 pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q,
-        None => return json!({"error": "query is required"}),
+        None => return ToolError::missing_argument("query").into_value(),
     };
 
     let mut options: SearchOptions = serde_json::from_value(params.clone()).unwrap_or_default();
@@ -740,7 +739,7 @@ pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
                 "count": compact.len()
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Return recently created or updated memories for discovery.
@@ -859,7 +858,7 @@ pub fn recent_activity(ctx: &HandlerContext, params: Value) -> Value {
                 "workspace": workspace_owned
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Fetch full Memory objects for a list of IDs.
@@ -875,7 +874,7 @@ pub fn memory_expand(ctx: &HandlerContext, params: Value) -> Value {
 
     let ids: Vec<i64> = match params.get("ids").and_then(|v| v.as_array()) {
         Some(arr) => arr.iter().filter_map(|v| v.as_i64()).collect(),
-        None => return json!({"error": "ids array is required"}),
+        None => return ToolError::missing_argument("ids").into_value(),
     };
 
     let requested = ids.len();
@@ -899,5 +898,5 @@ pub fn memory_expand(ctx: &HandlerContext, params: Value) -> Value {
                 "requested": requested
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }

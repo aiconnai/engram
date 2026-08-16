@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 
 use super::super::HandlerContext;
 use super::strip_private_content;
+use crate::mcp::error::ToolError;
 use crate::realtime::RealtimeEvent;
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
@@ -10,6 +11,9 @@ use crate::types::*;
 
 pub fn memory_get(ctx: &HandlerContext, params: Value) -> Value {
     let id = params.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+    if id <= 0 {
+        return ToolError::missing_argument("id").into_value();
+    }
     let do_strip = params
         .get("strip_private")
         .and_then(|v| v.as_bool())
@@ -27,7 +31,7 @@ pub fn memory_get(ctx: &HandlerContext, params: Value) -> Value {
             }
             Ok(json!(memory))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Variant of `memory_get` that always strips `<private>…</private>` sections.
@@ -35,6 +39,9 @@ pub fn memory_get(ctx: &HandlerContext, params: Value) -> Value {
 /// Equivalent to calling `memory_get` with `strip_private: true`.
 pub fn memory_get_public(ctx: &HandlerContext, params: Value) -> Value {
     let id = params.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+    if id <= 0 {
+        return ToolError::missing_argument("id").into_value();
+    }
     ctx.storage
         .with_connection(|conn| {
             let mut memory = get_memory(conn, id)?;
@@ -46,14 +53,17 @@ pub fn memory_get_public(ctx: &HandlerContext, params: Value) -> Value {
             memory.content = strip_private_content(&memory.content);
             Ok(json!(memory))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
     let id = params.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+    if id <= 0 {
+        return ToolError::missing_argument("id").into_value();
+    }
     let input: UpdateMemoryInput = match serde_json::from_value(params.clone()) {
         Ok(i) => i,
-        Err(e) => return json!({"error": e.to_string()}),
+        Err(e) => return ToolError::invalid_params(e.to_string()).into_value(),
     };
 
     let mut changes = Vec::new();
@@ -107,7 +117,7 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
             }
             json!(memory)
         }
-        Err(e) => json!({"error": e.to_string()}),
+        Err(e) => ToolError::from(e).into_value(),
     }
 }
 
@@ -115,6 +125,9 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::collect_supersedes_chain;
 
     let id = params.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+    if id <= 0 {
+        return ToolError::missing_argument("id").into_value();
+    }
     let cascade_chain = params
         .get("cascade_chain")
         .and_then(|v| v.as_bool())
@@ -162,7 +175,7 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                 let count = deleted_ids.len();
                 json!({"deleted_ids": deleted_ids, "count": count})
             }
-            Err(e) => json!({"error": e.to_string()}),
+            Err(e) => ToolError::from(e).into_value(),
         }
     } else {
         let result = ctx.storage.with_transaction(|conn| {
@@ -197,7 +210,7 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
                 }
                 json!({"deleted": deleted_id})
             }
-            Err(e) => json!({"error": e.to_string()}),
+            Err(e) => ToolError::from(e).into_value(),
         }
     }
 }
@@ -209,7 +222,7 @@ pub fn memory_list(ctx: &HandlerContext, params: Value) -> Value {
             let memories = list_memories(conn, &options)?;
             Ok(json!(memories))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
@@ -218,11 +231,11 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
 
     let ids: Vec<i64> = match params.get("ids").and_then(|v| v.as_array()) {
         Some(arr) => arr.iter().filter_map(|v| v.as_i64()).collect(),
-        None => return json!({"error": "ids array is required"}),
+        None => return ToolError::missing_argument("ids").into_value(),
     };
 
     if ids.is_empty() {
-        return json!({"error": "No valid IDs provided"});
+        return ToolError::invalid_params("No valid IDs provided").into_value();
     }
 
     let cascade_chain = params
@@ -246,13 +259,13 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
                 let result = delete_memory_batch(conn, &expanded)?;
                 Ok(json!(result))
             })
-            .unwrap_or_else(|e| json!({"error": e.to_string()}))
+            .unwrap_or_else(|e| ToolError::from(e).into_value())
     } else {
         ctx.storage
             .with_connection(|conn| {
                 let result = delete_memory_batch(conn, &ids)?;
                 Ok(json!(result))
             })
-            .unwrap_or_else(|e| json!({"error": e.to_string()}))
+            .unwrap_or_else(|e| ToolError::from(e).into_value())
     }
 }

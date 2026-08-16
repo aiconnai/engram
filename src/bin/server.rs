@@ -454,7 +454,7 @@ impl McpHandler for EngramHandler {
                     self.trigger_hook(engram::hooks::LifecycleHook::PostToolUse, ctx);
                 }
 
-                let tool_result = ToolCallResult::json(&result);
+                let tool_result = ToolCallResult::from_tool_output(&result);
                 McpResponse::success(request.id, json!(tool_result))
             }
             methods::LIST_RESOURCES => {

@@ -116,16 +116,8 @@ pub fn permission_denial_from_env(tool_name: &str) -> Option<Value> {
 }
 
 fn permission_denied(tool_name: &str, current: PermissionMode, required: PermissionMode) -> Value {
-    json!({
-        "error": {
-            "code": "permission_denied",
-            "tool": tool_name,
-            "current_mode": current.as_str(),
-            "required_mode": required.as_str(),
-            "message": format!("{tool_name} requires {} mode", required.as_str()),
-            "audit_id": null
-        }
-    })
+    crate::mcp::error::ToolError::permission_denied(tool_name, current.as_str(), required.as_str())
+        .into_value()
 }
 
 pub fn permission_denial_for_principal(

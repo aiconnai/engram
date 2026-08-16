@@ -523,9 +523,13 @@ fn mcp_mock_parity_scenarios_match_fixture_contract() {
                     steps[0]["tool"].as_str().expect("unknown tool name"),
                     steps[0]["arguments"].clone(),
                 );
+                let err_msg = result["error"]
+                    .as_str()
+                    .or_else(|| result["error"]["message"].as_str())
+                    .unwrap_or("");
                 normalized.push(json!({
                     "name": name,
-                    "error": result["error"].as_str().unwrap_or("")
+                    "error": err_msg
                 }));
             }
             other => panic!("unhandled mock parity scenario: {other}"),

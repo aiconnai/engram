@@ -355,6 +355,17 @@ impl ToolCallResult {
         Self::text(text)
     }
 
+    /// Create a result from tool output value, automatically tagging error responses.
+    pub fn from_tool_output(value: &Value) -> Self {
+        let is_err = value.get("error").is_some()
+            || value.get("status").and_then(|v| v.as_str()) == Some("error");
+        let text = serde_json::to_string_pretty(value).unwrap_or_default();
+        Self {
+            content: vec![ToolContent::Text { text }],
+            is_error: if is_err { Some(true) } else { None },
+        }
+    }
+
     /// Create an error result
     pub fn error(message: impl Into<String>) -> Self {
         Self {

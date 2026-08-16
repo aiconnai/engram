@@ -370,7 +370,8 @@ mod tests {
             .find("pub fn dispatch")
             .expect("dispatch fn present");
         let d_end = mod_src[d_start..]
-            .find(r#"_ => json!({"error": format!("Unknown tool"#)
+            .find("tool_not_found")
+            .or_else(|| mod_src[d_start..].find(r#"_ => json!({"error": format!("Unknown tool"#))
             .map(|i| d_start + i)
             .expect("dispatch catch-all present");
         let mut dispatch: BTreeSet<&str> = BTreeSet::new();
