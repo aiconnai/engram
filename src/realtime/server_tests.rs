@@ -670,3 +670,33 @@ fn test_clone_shares_buffer() {
     let replayed = cloned.get_events_after(0);
     assert_eq!(replayed.len(), 1);
 }
+
+#[tokio::test]
+async fn lagged_client_survives_broadcast_overflow_and_receives_subsequent_events() {
+    let manager = RealtimeManager::new();
+    let (mut client, response, _server) =
+        websocket_handshake(manager.clone(), "/ws", None, None, None, &[]).await;
+    assert!(response.starts_with("HTTP/1.1 101"));
+
+    // Broadcast 1200 events rapidly to exceed the 1000-capacity broadcast buffer
+    for i in 1..=1200 {
+        manager.broadcast(RealtimeEvent::memory_created(
+            i,
+            format!("memory_{i}"),
+            "default",
+        ));
+    }
+
+    // Now send a final distinct event
+    manager.broadcast(RealtimeEvent::memory_created(
+        1201,
+        "sentinel_event".to_string(),
+        "default",
+    ));
+
+    // The client socket must still be open and actively receiving events
+    let text = read_server_text(&mut client).await;
+    let event: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(event["type"], "memory_created");
+    assert!(event["memory_id"].as_i64().is_some());
+}
