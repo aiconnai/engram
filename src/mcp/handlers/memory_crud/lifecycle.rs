@@ -64,7 +64,12 @@ pub fn memory_boost(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
-            let memory = boost_memory(conn, id, boost_amount, duration_seconds)?;
+            let mut memory = boost_memory(conn, id, boost_amount, duration_seconds)?;
+            if let Ok(Some(new_stability)) =
+                crate::intelligence::stability::record_reinforcement(conn, id, chrono::Utc::now())
+            {
+                memory.stability = new_stability;
+            }
             Ok(json!(memory))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))

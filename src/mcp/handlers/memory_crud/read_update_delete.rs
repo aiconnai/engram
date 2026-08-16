@@ -17,6 +17,11 @@ pub fn memory_get(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_connection(|conn| {
             let mut memory = get_memory(conn, id)?;
+            if let Ok(Some(new_stability)) =
+                crate::intelligence::stability::record_reinforcement(conn, id, chrono::Utc::now())
+            {
+                memory.stability = new_stability;
+            }
             if do_strip {
                 memory.content = strip_private_content(&memory.content);
             }
@@ -33,6 +38,11 @@ pub fn memory_get_public(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_connection(|conn| {
             let mut memory = get_memory(conn, id)?;
+            if let Ok(Some(new_stability)) =
+                crate::intelligence::stability::record_reinforcement(conn, id, chrono::Utc::now())
+            {
+                memory.stability = new_stability;
+            }
             memory.content = strip_private_content(&memory.content);
             Ok(json!(memory))
         })

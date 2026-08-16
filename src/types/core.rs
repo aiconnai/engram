@@ -78,6 +78,9 @@ pub struct Memory {
     /// Lifecycle state for memory management (active, stale, archived)
     #[serde(default)]
     pub lifecycle_state: LifecycleState,
+    /// Memory stability factor earned through spaced reinforcement [1.0, 4.0]
+    #[serde(default = "default_stability")]
+    pub stability: f32,
     /// URL or local path to the primary media asset (for Image/Audio/Video memories)
     /// Format: local:///path/to/file or https://... or s3://...
     pub media_url: Option<String>,
@@ -197,5 +200,9 @@ pub(crate) fn default_confidence() -> f32 {
 }
 
 pub(crate) fn default_strength() -> f32 {
+    1.0
+}
+
+pub(crate) fn default_stability() -> f32 {
     1.0
 }

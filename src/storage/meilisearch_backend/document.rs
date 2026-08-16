@@ -38,6 +38,7 @@ pub struct MeilisearchMemory {
     pub procedure_failure_count: i32,
     pub summary_of_id: Option<i64>,
     pub lifecycle_state: String,
+    pub stability: Option<f32>,
 }
 
 impl From<&Memory> for MeilisearchMemory {
@@ -70,6 +71,7 @@ impl From<&Memory> for MeilisearchMemory {
             procedure_failure_count: m.procedure_failure_count,
             summary_of_id: m.summary_of_id,
             lifecycle_state: m.lifecycle_state.to_string(),
+            stability: Some(m.stability),
         }
     }
 }
@@ -129,6 +131,7 @@ pub(super) fn build_memory_from_doc(doc: MeilisearchMemory) -> Memory {
         procedure_failure_count: doc.procedure_failure_count,
         summary_of_id: doc.summary_of_id,
         lifecycle_state: doc.lifecycle_state.parse().unwrap_or_default(),
+        stability: doc.stability.unwrap_or(1.0),
         media_url: None,
     }
 }
@@ -197,6 +200,7 @@ pub(super) fn build_memory_from_input(
         procedure_failure_count: 0,
         summary_of_id: input.summary_of_id,
         lifecycle_state: LifecycleState::Active,
+        stability: 1.0,
         media_url: None,
     })
 }

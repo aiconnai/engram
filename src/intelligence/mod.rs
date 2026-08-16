@@ -50,6 +50,7 @@ pub mod salience;
 pub mod session_context;
 pub mod session_handoff;
 pub mod session_indexing;
+pub mod stability;
 pub mod suggestions;
 pub mod synthesis;
 
@@ -123,6 +124,10 @@ pub use fact_extraction::{
 };
 
 pub use lifecycle::{decide_lifecycle_state, normalized_importance, LifecycleConfig};
+pub use stability::{
+    calculate_next_stability, record_reinforcement, MAX_REINFORCEMENTS_PER_24H,
+    MIN_REINFORCEMENT_IMPORTANCE, SPACING_INTERVAL_SECONDS, STABILITY_CEILING, STABILITY_FLOOR,
+};
 
 // Phase 9: Context Quality (ENG-48 to ENG-66)
 pub use context_quality::{
