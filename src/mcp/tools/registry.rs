@@ -664,6 +664,30 @@
         tier: ToolTier::Standard,
     },
     ToolDef {
+        name: "memory_lifecycle_update",
+        description: "Unified facade for memory lifecycle mutations: promote a memory or reinforce its policy, promote to permanent canonical tier, decay policy scores, set expiration TTL, or score policy components.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "description": "Memory ID to mutate lifecycle state for"},
+                "action": {
+                    "type": "string",
+                    "enum": ["promote", "promote_permanent", "decay", "expire", "score", "explain", "transition", "restore"],
+                    "default": "promote",
+                    "description": "Lifecycle action to perform: promote (reinforce policy), promote_permanent (promote to canonical permanent tier), decay (policy decay), expire (set TTL), score (evaluate policy), explain (audit score), transition (manual state transition), restore (restore to active)"
+                },
+                "canonical_tier": {"type": "boolean", "default": false, "description": "When action='promote' and canonical_tier=true, promotes to permanent canonical tier"},
+                "ttl_seconds": {"type": "integer", "description": "Time-to-live in seconds when action='expire'"},
+                "state": {"type": "string", "enum": ["active", "stale", "archived", "purged"], "description": "Target lifecycle state when action='transition'"},
+                "reason": {"type": "string", "description": "Audit reason or explanation for the transition or reconciliation"},
+                "persist": {"type": "boolean", "default": false, "description": "When action='score', whether to persist the evaluated policy"}
+            },
+            "required": ["id"]
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Essential,
+    },
+    ToolDef {
         name: "memory_promote",
         description: "Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.",
         schema: r#"{
@@ -2477,6 +2501,60 @@
         tier: ToolTier::Standard,
     },
 // MCP tool definitions by domain.
+
+    // Knowledge Graph Facades
+    ToolDef {
+        name: "graph_query",
+        description: "Unified facade for querying the knowledge graph: retrieve related memories/neighborhood, find path between memories, traverse multi-hop graph relations, list linked entities, search entities, or export graph visualization.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["relations", "traverse", "path", "entities", "search_entities", "stats", "export"],
+                    "default": "relations",
+                    "description": "Graph query action to execute"
+                },
+                "id": {"type": "integer", "description": "Source memory ID (used for relations, traverse, entities, or start node)"},
+                "from_id": {"type": "integer", "description": "Starting memory ID (when action='path')"},
+                "to_id": {"type": "integer", "description": "Target memory ID (when action='path')"},
+                "depth": {"type": "integer", "default": 1, "description": "Traversal depth for multi-hop neighborhood or traversal"},
+                "max_depth": {"type": "integer", "default": 5, "description": "Maximum path search depth (when action='path')"},
+                "edge_type": {"type": "string", "description": "Filter by specific edge type"},
+                "edge_types": {"type": "array", "items": {"type": "string"}, "description": "Filter by list of edge types"},
+                "direction": {"type": "string", "enum": ["both", "outgoing", "incoming"], "default": "both", "description": "Traversal direction"},
+                "include_entities": {"type": "boolean", "default": false, "description": "Include shared entity connections in traversal"},
+                "query": {"type": "string", "description": "Entity search query (when action='search_entities')"},
+                "format": {"type": "string", "enum": ["html", "json"], "default": "html", "description": "Graph export format (when action='export')"}
+            }
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Essential,
+    },
+    ToolDef {
+        name: "graph_mutate",
+        description: "Unified facade for mutating the knowledge graph: create cross-references, remove cross-references, or extract and link named entities.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["link", "unlink", "extract_entities"],
+                    "default": "link",
+                    "description": "Graph mutation action to perform: link (create edge), unlink (delete edge), extract_entities (extract and link entities)"
+                },
+                "from_id": {"type": "integer", "description": "Source memory ID (when action='link' or 'unlink')"},
+                "to_id": {"type": "integer", "description": "Target memory ID (when action='link' or 'unlink')"},
+                "id": {"type": "integer", "description": "Memory ID to extract entities from (when action='extract_entities')"},
+                "edge_type": {"type": "string", "enum": ["related_to", "supersedes", "contradicts", "implements", "extends", "references", "derived_from", "depends_on", "blocks", "follows_up"], "default": "related_to"},
+                "strength": {"type": "number", "minimum": 0, "maximum": 1, "description": "Relationship strength (0.0 to 1.0)"},
+                "source_context": {"type": "string", "description": "Reason or context for why this link exists"},
+                "pinned": {"type": "boolean", "default": false, "description": "Exempt link from confidence decay"}
+            }
+        }"#,
+        annotations: ToolAnnotations::mutating(),
+        tier: ToolTier::Standard,
+    },
 
     // Cross-references
     ToolDef {

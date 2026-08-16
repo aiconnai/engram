@@ -109,5 +109,5 @@ To protect existing workflows in Claude Code, Cursor, Codex, and SDK integration
 ## 6. Implementation Milestones
 
 - **Phase 3a (Complete)**: Architectural Specification, Catalog Inventory, and Tiering Formalization.
-- **Phase 3b**: Facade Implementation in `src/mcp/tools/mod.rs` with underlying alias routing.
+- **Phase 3b (Complete)**: Facade Implementation (`memory_lifecycle_update`, `graph_query`, `graph_mutate`) with underlying alias routing and contract test coverage.
 - **Phase 3c**: SDK Client ergonomics update in TypeScript and Python SDKs.

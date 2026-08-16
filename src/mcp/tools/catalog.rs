@@ -95,6 +95,7 @@ pub(crate) fn tool_group(name: &str) -> &'static str {
         "temporal" => "temporal",
         "sync" => "sync",
         "agent" => "agent",
+        "graph" => "memory.graph",
         "harness" => "harness",
         "lifecycle" | "retention" => "lifecycle",
         "attestation" | "snapshot" => "portability",

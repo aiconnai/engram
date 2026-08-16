@@ -376,3 +376,45 @@ pub fn entity_stats(ctx: &HandlerContext, _params: Value) -> Value {
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
+
+/// Unified facade for knowledge graph queries: relations, traversal, path finding, and entities.
+pub fn graph_query(ctx: &HandlerContext, params: Value) -> Value {
+    let action = params
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or("relations");
+
+    match action {
+        "relations" | "related" | "neighborhood" => memory_related(ctx, params),
+        "traverse" => memory_traverse(ctx, params),
+        "path" | "find_path" => find_path(ctx, params),
+        "entities" | "get_entities" => get_entities(ctx, params),
+        "search_entities" => search_entities(ctx, params),
+        "stats" | "entity_stats" => entity_stats(ctx, params),
+        "export" | "export_graph" => export_graph(ctx, params),
+        other => json!({
+            "error": format!(
+                "unsupported graph query action '{other}': expected 'relations', 'traverse', 'path', 'entities', 'search_entities', 'stats', or 'export'"
+            )
+        }),
+    }
+}
+
+/// Unified facade for knowledge graph mutations: linking, unlinking, and entity extraction.
+pub fn graph_mutate(ctx: &HandlerContext, params: Value) -> Value {
+    let action = params
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or("link");
+
+    match action {
+        "link" | "create_crossref" => memory_link(ctx, params),
+        "unlink" | "delete_crossref" => memory_unlink(ctx, params),
+        "extract_entities" | "extract" => extract_entities(ctx, params),
+        other => json!({
+            "error": format!(
+                "unsupported graph mutation action '{other}': expected 'link', 'unlink', or 'extract_entities'"
+            )
+        }),
+    }
+}

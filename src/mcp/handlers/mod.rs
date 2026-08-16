@@ -142,6 +142,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_decay" => memory_policy::memory_decay(ctx, params),
         "memory_explain" => memory_policy::memory_explain(ctx, params),
         "memory_reconcile_conflict" => memory_policy::memory_reconcile_conflict(ctx, params),
+        "memory_lifecycle_update" => lifecycle::memory_lifecycle_update(ctx, params),
 
         // ── Search ───────────────────────────────────────────────────────────
         "memory_search" => search::memory_search(ctx, params),
@@ -172,6 +173,8 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "search_cache_clear" => search::search_cache_clear(ctx, params),
 
         // ── Graph ────────────────────────────────────────────────────────────
+        "graph_query" => graph::graph_query(ctx, params),
+        "graph_mutate" => graph::graph_mutate(ctx, params),
         "memory_link" => graph::memory_link(ctx, params),
         "memory_unlink" => graph::memory_unlink(ctx, params),
         "memory_related" => graph::memory_related(ctx, params),
