@@ -155,9 +155,7 @@ jobs:
       - name: Test library and integration tests
         run: |
           source scripts/ci-required-features.env
-          export CARGO_BUILD_JOBS=1
-
-          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests -- --test-threads=1
+          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests
 
       - name: Test binary unit tests
         run: |
@@ -284,8 +282,7 @@ jobs:
         with:
           shared-key: extended-linux
       - run: |
-          export CARGO_BUILD_JOBS=1
-          cargo test --profile ci --all-features --lib --tests -- --test-threads=1
+          cargo test --profile ci --all-features --lib --tests
 
   backend-smoke:
     name: Backend Smoke Tests

@@ -732,21 +732,21 @@ run_ci_step "clippy" "clippy" env $CI_REQUIRED_FEATURES_ENV cargo clippy --all-t
 if [ "$CI_STATUS" = "pass" ]; then
   # shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
   run_ci_step "test_lib" "test_lib" \
-    env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
-    cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --lib --tests -- --test-threads=1 || CI_STATUS="fail"
+    env $CI_REQUIRED_FEATURES_ENV \
+    cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --lib --tests || CI_STATUS="fail"
 fi
 
 if [ "$CI_STATUS" = "pass" ]; then
   # shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
   run_ci_step "test_integration" "test_integration" \
-    env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
+    env $CI_REQUIRED_FEATURES_ENV \
     cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --bin engram-server || CI_STATUS="fail"
 fi
 
 if [ "$CI_STATUS" = "pass" ]; then
   # shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
   run_ci_step "test_integration_watch" "test_integration_watch" \
-    env CARGO_BUILD_JOBS=1 $CI_REQUIRED_FEATURES_ENV \
+    env $CI_REQUIRED_FEATURES_ENV \
     cargo test --profile ci --no-default-features $CI_FEATURE_ARGS --bin engram-watcher || CI_STATUS="fail"
 fi
 
