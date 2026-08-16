@@ -69,8 +69,11 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         _ => RerankStrategy::Heuristic,
     };
 
-    let query_embedding = ctx.embedder.embed(query).ok();
-    let embedding_ref = query_embedding.as_deref();
+    let effective_rerank_strategy = if rerank_enabled && rerank_strategy != RerankStrategy::None {
+        Some(format!("{:?}", rerank_strategy))
+    } else {
+        None
+    };
 
     let cache_filters = CacheFilterParams {
         workspace: options.workspace.clone(),
@@ -80,15 +83,20 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         include_transcripts: options.include_transcripts,
         tags: options.tags.clone(),
         global,
+        rerank_strategy: effective_rerank_strategy,
+        policy_rerank,
     };
 
     let skip_cache = params
         .get("skip_cache")
         .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+        .unwrap_or(false)
+        || options.explain
+        || (policy_rerank && policy_explain);
 
-    if !skip_cache && !rerank_enabled && !policy_rerank {
-        if let Some(cached_results) = ctx.search_cache.get(query, embedding_ref, &cache_filters) {
+    // Tier 1 Fast Path: Exact query match without embedding overhead
+    if !skip_cache {
+        if let Some(cached_results) = ctx.search_cache.get_exact(query, &cache_filters) {
             if global {
                 let results_with_ws: Vec<Value> = cached_results
                     .iter()
@@ -101,9 +109,54 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                         })
                     })
                     .collect();
-                return json!({"results": results_with_ws, "cached": true});
+                return json!(results_with_ws);
             }
-            return json!({"results": cached_results, "cached": true});
+            return json!(cached_results
+                .iter()
+                .map(|r| {
+                    json!({
+                        "memory": r.memory,
+                        "score": r.score,
+                        "match_info": r.match_info
+                    })
+                })
+                .collect::<Vec<_>>());
+        }
+    }
+
+    // Generate query embedding for similarity matching and hybrid search
+    let query_embedding = ctx.embedder.embed(query).ok();
+    let embedding_ref = query_embedding.as_deref();
+
+    // Tier 2 Fast Path: Semantic similarity matching above adaptive threshold
+    if !skip_cache {
+        if let Some(emb) = embedding_ref {
+            if let Some(cached_results) = ctx.search_cache.get_semantic(emb, &cache_filters) {
+                if global {
+                    let results_with_ws: Vec<Value> = cached_results
+                        .iter()
+                        .map(|r| {
+                            json!({
+                                "memory": r.memory,
+                                "score": r.score,
+                                "match_info": r.match_info,
+                                "workspace": r.memory.workspace
+                            })
+                        })
+                        .collect();
+                    return json!(results_with_ws);
+                }
+                return json!(cached_results
+                    .iter()
+                    .map(|r| {
+                        json!({
+                            "memory": r.memory,
+                            "score": r.score,
+                            "match_info": r.match_info
+                        })
+                    })
+                    .collect::<Vec<_>>());
+            }
         }
     }
 
@@ -117,15 +170,6 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_connection(|conn| {
             let mut results = hybrid_search(conn, query, embedding_ref, &options, &search_config)?;
-
-            if !rerank_enabled && !skip_cache && !policy_rerank {
-                ctx.search_cache.put(
-                    query,
-                    query_embedding.clone(),
-                    cache_filters.clone(),
-                    results.clone(),
-                );
-            }
 
             let mut policy_info_by_memory_id = HashMap::new();
             if policy_rerank {
@@ -185,6 +229,23 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                 let reranker = Reranker::with_config(config);
                 let reranked = reranker.rerank(results, query, Some(conn));
 
+                if !skip_cache {
+                    let cacheable_results: Vec<SearchResult> = reranked
+                        .iter()
+                        .map(|r| SearchResult {
+                            memory: r.result.memory.clone(),
+                            score: r.rerank_info.final_score,
+                            match_info: r.result.match_info.clone(),
+                        })
+                        .collect();
+                    ctx.search_cache.put(
+                        query,
+                        query_embedding.clone(),
+                        cache_filters.clone(),
+                        cacheable_results,
+                    );
+                }
+
                 if options.explain {
                     Ok(json!({
                         "results": reranked.iter().map(|r| {
@@ -228,42 +289,53 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                         })
                         .collect::<Vec<_>>()))
                 }
-            } else if global {
-                // For global search without reranking, add top-level workspace field
-                Ok(json!(results
-                    .iter()
-                    .map(|r| {
-                        let mut obj = json!({
-                            "memory": r.memory,
-                            "score": r.score,
-                            "match_info": r.match_info,
-                            "workspace": r.memory.workspace
-                        });
-                        if policy_rerank && policy_explain {
-                            if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
-                                obj["policy"] = policy.to_json();
-                            }
-                        }
-                        obj
-                    })
-                    .collect::<Vec<_>>()))
             } else {
-                Ok(json!(results
-                    .iter()
-                    .map(|r| {
-                        let mut obj = json!({
-                            "memory": r.memory,
-                            "score": r.score,
-                            "match_info": r.match_info
-                        });
-                        if policy_rerank && policy_explain {
-                            if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
-                                obj["policy"] = policy.to_json();
+                if !skip_cache {
+                    ctx.search_cache.put(
+                        query,
+                        query_embedding.clone(),
+                        cache_filters.clone(),
+                        results.clone(),
+                    );
+                }
+
+                if global {
+                    // For global search without reranking, add top-level workspace field
+                    Ok(json!(results
+                        .iter()
+                        .map(|r| {
+                            let mut obj = json!({
+                                "memory": r.memory,
+                                "score": r.score,
+                                "match_info": r.match_info,
+                                "workspace": r.memory.workspace
+                            });
+                            if policy_rerank && policy_explain {
+                                if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
+                                    obj["policy"] = policy.to_json();
+                                }
                             }
-                        }
-                        obj
-                    })
-                    .collect::<Vec<_>>()))
+                            obj
+                        })
+                        .collect::<Vec<_>>()))
+                } else {
+                    Ok(json!(results
+                        .iter()
+                        .map(|r| {
+                            let mut obj = json!({
+                                "memory": r.memory,
+                                "score": r.score,
+                                "match_info": r.match_info
+                            });
+                            if policy_rerank && policy_explain {
+                                if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
+                                    obj["policy"] = policy.to_json();
+                                }
+                            }
+                            obj
+                        })
+                        .collect::<Vec<_>>()))
+                }
             }
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
