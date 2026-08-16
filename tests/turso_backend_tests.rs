@@ -6,6 +6,7 @@
 //! Run with: cargo test --test turso_backend_tests --features turso
 
 #![cfg(feature = "turso")]
+#![allow(deprecated)]
 
 use std::collections::HashMap;
 

@@ -192,6 +192,7 @@ pub(super) fn schema_version(backend: &TursoBackend) -> Result<i32> {
     })
 }
 
+#[allow(deprecated)]
 impl TransactionalBackend for TursoBackend {
     fn with_transaction<F, T>(&self, _f: F) -> Result<T>
     where
@@ -253,6 +254,7 @@ impl TransactionalBackend for TursoBackend {
     }
 }
 
+#[allow(deprecated)]
 impl CloudSyncBackend for TursoBackend {
     fn push(&self) -> Result<SyncResult> {
         let rt = tokio::runtime::Handle::try_current()

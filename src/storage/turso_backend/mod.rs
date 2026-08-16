@@ -1,30 +1,21 @@
+#![allow(deprecated)]
+
 //! Turso/libSQL implementation of the StorageBackend trait (Phase 6 - ENG-54)
 //!
-//! This module provides a Turso/libSQL-based storage backend that implements
-//! the `StorageBackend` trait, enabling distributed SQLite with edge replicas.
+//! # Deprecation Notice
 //!
-//! # Features
+//! The Turso backend is **deprecated** as of v0.22.0 and scheduled for sunset
+//! in v0.24.0 (see `docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md`).
+//!
+//! Engram's canonical architecture uses local SQLite with WAL mode and S3/R2
+//! snapshot attestation for cloud persistence.
+//!
+//! # Features (Historical / Experimental)
 //!
 //! - **Embedded replicas**: Local SQLite with sync to Turso cloud
 //! - **Edge-native**: Sub-millisecond reads from local replica
 //! - **Sync on demand**: Push/pull changes to cloud
 //! - **Compatible schema**: Same migrations as SQLite backend
-//!
-//! # Usage
-//!
-//! ```rust,ignore
-//! use engram::storage::TursoBackend;
-//!
-//! // Connect to Turso cloud with embedded replica
-//! let backend = TursoBackend::new(
-//!     "libsql://your-db.turso.io",
-//!     "your-auth-token",
-//!     Some("/path/to/local/replica.db"),
-//! ).await?;
-//!
-//! // Or use local-only mode (no cloud sync)
-//! let backend = TursoBackend::local_only("/path/to/db.sqlite").await?;
-//! ```
 
 mod core;
 mod impls;

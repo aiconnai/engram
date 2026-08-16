@@ -181,4 +181,5 @@ pub use temporal::{
     MemorySnapshot, StateDiff, TemporalMemory, TemporalQueryEngine, TemporalQueryOptions,
 };
 #[cfg(feature = "turso")]
+#[allow(deprecated)]
 pub use turso_backend::{TursoBackend, TursoConfig};

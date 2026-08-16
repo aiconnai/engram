@@ -126,8 +126,8 @@ The open-source core supports multiple pluggable storage backends:
 
 | Backend | Feature flag | Use case |
 |---------|-------------|----------|
-| **SQLite** (default) | *(always on)* | Primary embedded store; BM25 FTS via SQLite FTS5 |
-| **Turso / libSQL** | `turso` | Distributed SQLite for cloud deployments (Phase 6 / ENG-54) |
+| **SQLite** (default) | *(always on)* | Primary embedded store; BM25 FTS via SQLite FTS5; S3/R2 Snapshot Attestation for cloud sync |
+| **Turso / libSQL** | `turso` | *Deprecated* (sunset in v0.24.0; see `docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md`) |
 | **Meilisearch** | `meilisearch` | Full-text search complement/replacement for SQLite FTS (Phase 7 / ENG-58) |
 | **Image Storage** | `cloud` | R2 or local storage for multimodal memory assets (`media_url` on memories, v34) |
 
