@@ -384,7 +384,7 @@ mod tests {
         assert_eq!(embedding.len(), 384);
     }
 
-    #[cfg(not(feature = "local-embeddings"))]
+    #[cfg(not(feature = "onnx-embed"))]
     #[test]
     fn test_local_embedder_requires_feature_when_disabled() {
         let config = EmbeddingConfig {
@@ -402,7 +402,7 @@ mod tests {
         assert!(msg.contains("ENGRAM_EMBEDDING_MODEL=local"), "{msg}");
     }
 
-    #[cfg(not(feature = "local-embeddings"))]
+    #[cfg(not(feature = "onnx-embed"))]
     #[test]
     fn test_onnx_alias_requires_feature_when_disabled() {
         let config = EmbeddingConfig {
@@ -418,5 +418,23 @@ mod tests {
 
         assert!(msg.contains("local-embeddings"), "{msg}");
         assert!(msg.contains("ENGRAM_EMBEDDING_MODEL=local"), "{msg}");
+    }
+
+    #[cfg(feature = "onnx-embed")]
+    #[test]
+    fn test_local_embedder_errors_with_download_instructions_when_model_missing() {
+        let config = EmbeddingConfig {
+            model: "local".to_string(),
+            model_path: Some("/tmp/nonexistent-engram-test-model-path".to_string()),
+            ..EmbeddingConfig::default()
+        };
+
+        let err = match create_embedder(&config) {
+            Ok(_) => panic!("missing model should return config error"),
+            Err(err) => err,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("model.onnx"), "{msg}");
+        assert!(msg.contains("engram-cli model download"), "{msg}");
     }
 }
