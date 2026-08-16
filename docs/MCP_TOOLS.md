@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **284**
+Total tools: **285**
 
 ## Summary
 
@@ -296,6 +296,7 @@ Total tools: **284**
 | `memory_synthesis` | standard | memory.admin | always | readOnlyHint | `content_a`, `content_b` |
 | `memory_utility_score` | standard | memory.lifecycle | always | readOnlyHint | `id` |
 | `memory_replay_at_time` | advanced | memory.admin | always | readOnlyHint | `memory_id`, `timestamp` |
+| `model_routing_status` | standard | misc | always | readOnlyHint | none |
 
 ## Tools
 
@@ -4950,3 +4951,19 @@ Replay one memory as it existed at a given RFC3339 timestamp and optionally retu
 | `include_failed` | `boolean` | no | Whether to include failed enrichment events. Default: `false`. |
 | `include_dry_runs` | `boolean` | no | Whether to include dry-run events. Default: `false`. |
 | `event_limit` | `integer` | no | Max number of events to include in replay trail (default 50, max 200). |
+
+### `model_routing_status`
+
+Inspect active model provider availability, embedding dimensions, reranker health, and local vs cloud routing status.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `model` | `string` | no | Optional provider name to inspect (e.g. tfidf, onnx, openai). |
+| `embedding_model` | `string` | no | Optional specific model ID. |
+| `dimensions` | `integer` | no | Optional dimension configuration. |
