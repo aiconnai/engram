@@ -40,6 +40,7 @@ fn create_test_memories() -> Vec<Memory> {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: engram::types::LifecycleState::default(),
+            stability: 1.0,
             media_url: None,
         },
         Memory {
@@ -69,6 +70,7 @@ fn create_test_memories() -> Vec<Memory> {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: engram::types::LifecycleState::default(),
+            stability: 1.0,
             media_url: None,
         },
         Memory {
@@ -98,6 +100,7 @@ fn create_test_memories() -> Vec<Memory> {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: engram::types::LifecycleState::default(),
+            stability: 1.0,
             media_url: None,
         },
         Memory {
@@ -127,6 +130,7 @@ fn create_test_memories() -> Vec<Memory> {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: engram::types::LifecycleState::default(),
+            stability: 1.0,
             media_url: None,
         },
         Memory {
@@ -156,6 +160,7 @@ fn create_test_memories() -> Vec<Memory> {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: engram::types::LifecycleState::default(),
+            stability: 1.0,
             media_url: None,
         },
     ]

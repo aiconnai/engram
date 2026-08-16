@@ -335,6 +335,7 @@ fn test_build_memory_from_doc_roundtrip() {
         procedure_failure_count: 0,
         summary_of_id: None,
         lifecycle_state: "active".to_string(),
+        stability: Some(1.0),
     };
 
     let memory = build_memory_from_doc(doc);
@@ -352,4 +353,5 @@ fn test_build_memory_from_doc_roundtrip() {
     assert!(matches!(memory.scope, MemoryScope::Global));
     assert_eq!(memory.visibility, Visibility::Private);
     assert_eq!(memory.lifecycle_state, LifecycleState::Active);
+    assert_eq!(memory.stability, 1.0);
 }

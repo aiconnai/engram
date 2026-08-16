@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::error::{EngramError, Result};
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 45;
+pub const SCHEMA_VERSION: i32 = 46;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -211,6 +211,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 45 {
         migrate_v45(conn)?;
+    }
+
+    if current_version < 46 {
+        migrate_v46(conn)?;
     }
 
     Ok(())
@@ -2517,6 +2521,52 @@ fn migrate_v45(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_v46(conn: &Connection) -> Result<()> {
+    tracing::info!("Migration v46: Adding memory stability and reinforcements table...");
+
+    // Add stability column to memories table if memories table exists
+    let memories_table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='memories'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count > 0)
+        .unwrap_or(false);
+
+    if memories_table_exists {
+        let column_exists: bool = conn
+            .prepare("PRAGMA table_info(memories)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .any(|col| col == "stability");
+
+        if !column_exists {
+            conn.execute(
+                "ALTER TABLE memories ADD COLUMN stability REAL NOT NULL DEFAULT 1.0",
+                [],
+            )?;
+        }
+    }
+
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS memory_reinforcements (
+            memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+            reinforced_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reinforcements_mem_time
+            ON memory_reinforcements(memory_id, reinforced_at);
+
+        INSERT INTO schema_version (version) VALUES (46);
+        "#,
+    )?;
+
+    tracing::info!("Migration v46 complete: memory stability and reinforcements table created");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2538,12 +2588,12 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 45);
+        assert_eq!(version, 46);
     }
 
     #[test]
     fn test_schema_version_constant() {
-        assert_eq!(SCHEMA_VERSION, 45);
+        assert_eq!(SCHEMA_VERSION, 46);
     }
 
     #[test]
@@ -2698,7 +2748,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 45, "should reach v45 after full migration");
+        assert_eq!(version, 46, "should reach v46 after full migration");
 
         // Verify both new tables exist
         let auto_links_exists: i32 = conn
@@ -3034,7 +3084,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query schema version");
-        assert_eq!(version, 45);
+        assert_eq!(version, 46);
 
         let retained: i64 = conn
             .query_row(
@@ -3073,6 +3123,38 @@ mod tests {
             [],
         )
         .expect("v45 should accept new agent_writeback kind after rebuild");
+    }
+
+    #[test]
+    fn test_v46_stability_and_reinforcements() {
+        let conn = in_memory_conn();
+
+        // Verify memories table has stability column with default 1.0
+        conn.execute(
+            "INSERT INTO memories (content, memory_type, importance, visibility, metadata, valid_from)
+             VALUES ('stability test', 'note', 0.5, 'private', '{}', CURRENT_TIMESTAMP)",
+            [],
+        )
+        .expect("insert memory");
+
+        let stability: f32 = conn
+            .query_row(
+                "SELECT stability FROM memories WHERE content = 'stability test'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query stability column");
+        assert_eq!(stability, 1.0);
+
+        // Verify memory_reinforcements table exists
+        let reinforcements_table_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='memory_reinforcements'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query memory_reinforcements table");
+        assert_eq!(reinforcements_table_exists, 1);
     }
 
     #[test]

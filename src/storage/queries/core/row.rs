@@ -70,6 +70,9 @@ pub fn memory_from_row(row: &Row) -> rusqlite::Result<Memory> {
     // media_url column (additive, nullable — with fallback for older schema versions)
     let media_url: Option<String> = row.get("media_url").unwrap_or(None);
 
+    // stability column (additive, default 1.0 — with fallback for older schema versions)
+    let stability: f32 = row.get("stability").unwrap_or(1.0);
+
     Ok(Memory {
         id,
         content,
@@ -113,6 +116,7 @@ pub fn memory_from_row(row: &Row) -> rusqlite::Result<Memory> {
         procedure_failure_count,
         summary_of_id,
         lifecycle_state,
+        stability,
         media_url,
     })
 }

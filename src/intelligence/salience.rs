@@ -221,13 +221,16 @@ impl SalienceCalculator {
         }
     }
 
-    /// Calculate recency score using exponential decay
+    /// Calculate recency score using exponential decay modulated by stability
     fn calculate_recency(&self, memory: &Memory, now: DateTime<Utc>) -> f32 {
         let last_access = memory.last_accessed_at.unwrap_or(memory.created_at);
         let days_since_access = (now - last_access).num_hours() as f32 / 24.0;
 
-        // Exponential decay: score = 0.5^(days / half_life)
-        let decay = 0.5_f32.powf(days_since_access / self.config.recency_half_life_days);
+        let stability = memory.stability.clamp(1.0, 4.0);
+        let effective_half_life = self.config.recency_half_life_days * stability;
+
+        // Exponential decay: score = 0.5^(days / effective_half_life)
+        let decay = 0.5_f32.powf(days_since_access / effective_half_life);
 
         decay.clamp(0.0, 1.0)
     }
@@ -305,55 +308,65 @@ pub fn run_salience_decay_in_workspace(
     let now = Utc::now();
     let now_str = now.to_rfc3339();
     // Get all non-archived memories
-    let memories: Vec<(MemoryId, f32, i32, String, String, Option<String>, String)> =
-        if let Some(workspace) = workspace {
-            let mut stmt = conn.prepare(
-                "SELECT id, content, memory_type, importance, access_count,
+    let memories: Vec<(
+        MemoryId,
+        f32,
+        i32,
+        String,
+        String,
+        Option<String>,
+        String,
+        f32,
+    )> = if let Some(workspace) = workspace {
+        let mut stmt = conn.prepare(
+            "SELECT id, content, memory_type, importance, access_count,
                         created_at, updated_at, last_accessed_at, lifecycle_state,
-                        workspace, tier
+                        workspace, tier, COALESCE(stability, 1.0)
                  FROM memories
                  WHERE lifecycle_state != 'archived'
                  AND (expires_at IS NULL OR expires_at > ?)
                  AND workspace = ?",
-            )?;
+        )?;
 
-            let rows = stmt.query_map(params![now_str, workspace], |row| {
-                Ok((
-                    row.get::<_, MemoryId>(0)?,
-                    row.get::<_, f32>(3)?,            // importance
-                    row.get::<_, i32>(4)?,            // access_count
-                    row.get::<_, String>(5)?,         // created_at
-                    row.get::<_, String>(6)?,         // updated_at
-                    row.get::<_, Option<String>>(7)?, // last_accessed_at
-                    row.get::<_, String>(8)?,         // lifecycle_state
-                ))
-            })?;
+        let rows = stmt.query_map(params![now_str, workspace], |row| {
+            Ok((
+                row.get::<_, MemoryId>(0)?,
+                row.get::<_, f32>(3)?,            // importance
+                row.get::<_, i32>(4)?,            // access_count
+                row.get::<_, String>(5)?,         // created_at
+                row.get::<_, String>(6)?,         // updated_at
+                row.get::<_, Option<String>>(7)?, // last_accessed_at
+                row.get::<_, String>(8)?,         // lifecycle_state
+                row.get::<_, f32>(11)?,           // stability
+            ))
+        })?;
 
-            rows.collect::<std::result::Result<Vec<_>, _>>()?
-        } else {
-            let mut stmt = conn.prepare(
-                "SELECT id, content, memory_type, importance, access_count,
+        rows.collect::<std::result::Result<Vec<_>, _>>()?
+    } else {
+        let mut stmt = conn.prepare(
+            "SELECT id, content, memory_type, importance, access_count,
                         created_at, updated_at, last_accessed_at, lifecycle_state,
-                        workspace, tier
+                        workspace, tier, COALESCE(stability, 1.0)
                  FROM memories
                  WHERE lifecycle_state != 'archived'
                  AND (expires_at IS NULL OR expires_at > ?)",
-            )?;
+        )?;
 
-            let rows = stmt.query_map(params![now_str], |row| {
-                Ok((
-                    row.get::<_, MemoryId>(0)?,
-                    row.get::<_, f32>(3)?,            // importance
-                    row.get::<_, i32>(4)?,            // access_count
-                    row.get::<_, String>(5)?,         // created_at
-                    row.get::<_, String>(6)?,         // updated_at
-                    row.get::<_, Option<String>>(7)?, // last_accessed_at
-                    row.get::<_, String>(8)?,         // lifecycle_state
-                ))
-            })?;
+        let rows = stmt.query_map(params![now_str], |row| {
+            Ok((
+                row.get::<_, MemoryId>(0)?,
+                row.get::<_, f32>(3)?,            // importance
+                row.get::<_, i32>(4)?,            // access_count
+                row.get::<_, String>(5)?,         // created_at
+                row.get::<_, String>(6)?,         // updated_at
+                row.get::<_, Option<String>>(7)?, // last_accessed_at
+                row.get::<_, String>(8)?,         // lifecycle_state
+                row.get::<_, f32>(11)?,           // stability
+            ))
+        })?;
 
-            rows.collect::<std::result::Result<Vec<_>, _>>()?
-        };
+        rows.collect::<std::result::Result<Vec<_>, _>>()?
+    };
 
     let mut processed = 0i64;
     let marked_stale = 0i64;
@@ -368,6 +381,7 @@ pub fn run_salience_decay_in_workspace(
         _updated_at_str,
         last_accessed_str,
         _current_state,
+        stability,
     ) in memories
     {
         // Parse dates
@@ -381,10 +395,11 @@ pub fn run_salience_decay_in_workspace(
                 .ok()
         });
 
-        // Calculate recency
+        // Calculate recency modulated by stability
         let last_access = last_accessed_at.unwrap_or(created_at);
         let days_since_access = (now - last_access).num_hours() as f32 / 24.0;
-        let recency = 0.5_f32.powf(days_since_access / config.recency_half_life_days);
+        let effective_half_life = config.recency_half_life_days * stability.clamp(1.0, 4.0);
+        let recency = 0.5_f32.powf(days_since_access / effective_half_life);
 
         // Calculate frequency
         let count = access_count.max(0) as f32;
@@ -446,7 +461,7 @@ pub fn get_memory_salience_with_feedback(
 ) -> Result<Option<SalienceScore>> {
     let row = conn.query_row(
         "SELECT importance, access_count, created_at, updated_at,
-                last_accessed_at, lifecycle_state
+                last_accessed_at, lifecycle_state, COALESCE(stability, 1.0)
          FROM memories WHERE id = ?",
         params![memory_id],
         |row| {
@@ -457,6 +472,7 @@ pub fn get_memory_salience_with_feedback(
                 row.get::<_, String>(3)?,
                 row.get::<_, Option<String>>(4)?,
                 row.get::<_, String>(5)?,
+                row.get::<_, f32>(6)?,
             ))
         },
     );
@@ -469,6 +485,7 @@ pub fn get_memory_salience_with_feedback(
             _updated_at_str,
             last_accessed_str,
             lifecycle_str,
+            stability,
         )) => {
             let now = Utc::now();
             let calculator = SalienceCalculator::new(config.clone());
@@ -513,6 +530,7 @@ pub fn get_memory_salience_with_feedback(
                 procedure_failure_count: 0,
                 summary_of_id: None,
                 lifecycle_state,
+                stability,
                 media_url: None,
             };
 
@@ -608,7 +626,7 @@ pub fn get_salience_stats_in_workspace(
 
     let rows = if let Some(workspace) = workspace {
         let mut stmt = conn.prepare(
-            "SELECT importance, access_count, created_at, last_accessed_at, lifecycle_state
+            "SELECT importance, access_count, created_at, last_accessed_at, lifecycle_state, COALESCE(stability, 1.0)
              FROM memories
              WHERE (expires_at IS NULL OR expires_at > ?)
              AND workspace = ?",
@@ -620,12 +638,13 @@ pub fn get_salience_stats_in_workspace(
                 row.get::<_, String>(2)?,
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, String>(4)?,
+                row.get::<_, f32>(5)?,
             ))
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()?
     } else {
         let mut stmt = conn.prepare(
-            "SELECT importance, access_count, created_at, last_accessed_at, lifecycle_state
+            "SELECT importance, access_count, created_at, last_accessed_at, lifecycle_state, COALESCE(stability, 1.0)
              FROM memories
              WHERE (expires_at IS NULL OR expires_at > ?)",
         )?;
@@ -636,12 +655,14 @@ pub fn get_salience_stats_in_workspace(
                 row.get::<_, String>(2)?,
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, String>(4)?,
+                row.get::<_, f32>(5)?,
             ))
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()?
     };
 
-    for (importance, access_count, created_at_str, last_accessed_str, state_str) in rows {
+    for (importance, access_count, created_at_str, last_accessed_str, state_str, stability) in rows
+    {
         // Calculate score
         let created_at = DateTime::parse_from_rfc3339(&created_at_str)
             .map(|dt| dt.with_timezone(&Utc))
@@ -653,7 +674,8 @@ pub fn get_salience_stats_in_workspace(
             .unwrap_or(created_at);
 
         let days_since_access = (now - last_access).num_hours() as f32 / 24.0;
-        let recency = 0.5_f32.powf(days_since_access / config.recency_half_life_days);
+        let effective_half_life = config.recency_half_life_days * stability.clamp(1.0, 4.0);
+        let recency = 0.5_f32.powf(days_since_access / effective_half_life);
 
         let count = access_count.max(0) as f32;
         let frequency = if count <= 0.0 {
@@ -830,6 +852,7 @@ mod tests {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: LifecycleState::Active,
+            stability: 1.0,
             media_url: None,
         }
     }
@@ -1020,5 +1043,26 @@ mod tests {
 
         // Min salience should be enforced
         assert!(score_worst.score >= 0.05, "Min salience should be enforced");
+    }
+
+    #[test]
+    fn test_stability_extends_recency_half_life() {
+        let calculator = SalienceCalculator::default();
+        let now = Utc::now();
+
+        // Memory accessed exactly 14 days ago with base stability (1.0) -> recency = 0.5^(14 / 14) = 0.5
+        let mut base_mem = create_test_memory(1, 0.5, 5, 0);
+        base_mem.last_accessed_at = Some(now - chrono::Duration::days(14));
+        base_mem.stability = 1.0;
+        let base_recency = calculator.calculate_recency(&base_mem, now);
+        assert!((base_recency - 0.5).abs() < 1e-4);
+
+        // Memory accessed exactly 14 days ago with max stability (4.0) -> recency = 0.5^(14 / 56) = 0.5^0.25 ≈ 0.8409
+        let mut stable_mem = create_test_memory(2, 0.5, 5, 0);
+        stable_mem.last_accessed_at = Some(now - chrono::Duration::days(14));
+        stable_mem.stability = 4.0;
+        let stable_recency = calculator.calculate_recency(&stable_mem, now);
+        assert!(stable_recency > base_recency);
+        assert!((stable_recency - 0.5_f32.powf(14.0 / 56.0)).abs() < 1e-4);
     }
 }

@@ -42,6 +42,7 @@ fn main() {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: Default::default(),
+            stability: 1.0,
             media_url: None,
         },
         Memory {
@@ -71,6 +72,7 @@ fn main() {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: Default::default(),
+            stability: 1.0,
             media_url: None,
         },
         Memory {
@@ -100,6 +102,7 @@ fn main() {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: Default::default(),
+            stability: 1.0,
             media_url: None,
         },
         Memory {
@@ -129,6 +132,7 @@ fn main() {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: Default::default(),
+            stability: 1.0,
             media_url: None,
         },
         Memory {
@@ -158,6 +162,7 @@ fn main() {
             procedure_failure_count: 0,
             summary_of_id: None,
             lifecycle_state: Default::default(),
+            stability: 1.0,
             media_url: None,
         },
     ];

@@ -13,7 +13,7 @@ pub(super) fn get_memory_internal(
                 visibility, version, has_embedding, metadata,
                 scope_type, scope_id, workspace, tier, expires_at, content_hash,
                 event_time, event_duration_seconds, trigger_pattern, procedure_success_count,
-                procedure_failure_count, summary_of_id, lifecycle_state, media_url
+                procedure_failure_count, summary_of_id, lifecycle_state, media_url, stability
          FROM memories
          WHERE id = ? AND valid_to IS NULL
            AND (expires_at IS NULL OR expires_at > ?)",

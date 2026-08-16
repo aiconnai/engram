@@ -606,7 +606,16 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
             let processor = FeedbackProcessor::new().with_consolidator(consolidator);
             let (new_score, scheduled) = processor.process_feedback(memory_id, signal_str, conn)?;
 
-            // 3. Return enriched response
+            // 3. Spacing-effect stability reinforcement on positive signal
+            if feedback_signal == FeedbackSignal::Useful {
+                let _ = crate::intelligence::stability::record_reinforcement(
+                    conn,
+                    memory_id,
+                    chrono::Utc::now(),
+                );
+            }
+
+            // 4. Return enriched response
             let mut result = json!(fb);
             if let Some(obj) = result.as_object_mut() {
                 obj.insert("utility_score_after".to_string(), json!(new_score));
