@@ -18,17 +18,17 @@ clippy:
 
 test:
     # Mirrors the core of the required ubuntu test job (lib + integration loop)
-    CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --lib --tests -- --test-threads=1
-    CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --bin engram-server
-    CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --bin engram-watcher
+    cargo test --profile ci --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --lib --tests
+    cargo test --profile ci --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --bin engram-server
+    cargo test --profile ci --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --bin engram-watcher
 
 full-feature-check:
     cargo clippy --all-targets --all-features -- -D warnings
-    CARGO_BUILD_JOBS=1 cargo test --profile ci --all-features --lib --tests -- --test-threads=1
+    cargo test --profile ci --all-features --lib --tests
 
 backend-smoke:
-    CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
-    CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
+    cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
+    cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
 
 docs:
     ./scripts/generate-mcp-reference.sh --check

@@ -30,19 +30,19 @@ clippy:
 
 .PHONY: test
 test:
-	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --lib --tests -- --test-threads=1
-	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-server
-	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-watcher
+	cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --lib --tests
+	cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-server
+	cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-watcher
 
 .PHONY: full-feature-check
 full-feature-check:
 	cargo clippy --all-targets --all-features -- -D warnings
-	CARGO_BUILD_JOBS=1 cargo test --profile ci --all-features --lib --tests -- --test-threads=1
+	cargo test --profile ci --all-features --lib --tests
 
 .PHONY: backend-smoke
 backend-smoke:
-	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
-	CARGO_BUILD_JOBS=1 cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
+	cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
+	cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
 
 .PHONY: docs
 docs:

@@ -30,13 +30,12 @@ cargo clippy --all-targets --no-default-features --features "$CI_REQUIRED_FEATUR
 
 echo "==> [3/5] Core tests (lib + integration, matching required GitHub CI job)"
 # Mirrors the required "Test (ubuntu-latest)" job as closely as practical for local work.
-export CARGO_BUILD_JOBS=1
-cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests -- --test-threads=1
+cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests
 
 if [[ "$CI_RUN_FULL_FEATURES" == "1" ]]; then
   echo "==> Optional full feature checks"
   run_optional cargo clippy --all-targets --all-features -- -D warnings
-  run_optional cargo test --profile ci --all-features --lib --tests -- --test-threads=1
+  run_optional cargo test --profile ci --all-features --lib --tests
 fi
 
 if [[ "$CI_RUN_BACKEND_SMOKE" == "1" ]]; then

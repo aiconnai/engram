@@ -18,7 +18,7 @@ Ele executa (em ordem):
 |---|--------|---------------------|----------------|
 | 1 | fmt | `cargo fmt --all -- --check` (exit 0) | block; rodar `cargo fmt --all` |
 | 2 | clippy | `cargo clippy --all-targets --no-default-features $CI_REQUIRED_FEATURE_ARGS -- -D warnings` | block; fix warnings |
-| 3 | test_lib | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --lib --tests -- --test-threads=1` | block; investigar flakiness ou feature drift |
+| 3 | test_lib | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --lib --tests` | block; investigar flakiness ou feature drift |
 | 4 | test_integration | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --bin engram-server` | block; investigar regressão ou flakiness de integração |
 | 5 | test_integration_watch | `cargo test --profile ci --no-default-features $CI_REQUIRED_FEATURE_ARGS --bin engram-watcher` | block; investigar regressão ou flakiness de integração |
 | 6 | wasm_target | `rustup target list --installed | grep -qx "wasm32-unknown-unknown"` | block; instalar `wasm32-unknown-unknown` |
