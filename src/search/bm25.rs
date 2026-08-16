@@ -238,9 +238,10 @@ pub fn bm25_search_complete_with_scope_path(
         let (mut memory, score) = row?;
         memory.tags = load_tags(conn, memory.id)?;
 
-        // BM25 returns negative scores (closer to 0 = better)
-        // Normalize to positive 0-1 range
-        let normalized_score = 1.0 / (1.0 + score.abs());
+        // SQLite FTS5 bm25() returns negative scores where more negative = stronger match (e.g. -10.0 is stronger than -0.1).
+        // Since all returned rows matched the FTS index, map matched results into [0.5, 1.0) monotonically,
+        // ensuring even low-IDF / single-document matches pass minimum score filters while preserving ranking.
+        let normalized_score = 0.5 + 0.5 * (score.abs() / (1.0 + score.abs()));
 
         let matched_terms = if explain {
             extract_matched_terms(query, &memory.content)
@@ -615,5 +616,28 @@ mod tests {
     fn test_generate_highlights_no_match() {
         let highlights = generate_highlights("xyz", "Hello world");
         assert!(highlights.is_empty());
+    }
+
+    #[test]
+    fn test_bm25_score_normalization_monotonicity() {
+        // SQLite FTS5 returns negative raw scores where more negative = stronger match
+        let strong_match_raw: f32 = -10.0;
+        let moderate_match_raw: f32 = -2.0;
+        let weak_match_raw: f32 = -0.1;
+        let zero_idf_raw: f32 = 0.0;
+
+        let norm = |s: f32| 0.5 + 0.5 * (s.abs() / (1.0 + s.abs()));
+
+        let strong_norm = norm(strong_match_raw);
+        let moderate_norm = norm(moderate_match_raw);
+        let weak_norm = norm(weak_match_raw);
+        let zero_norm = norm(zero_idf_raw);
+
+        // Stronger matches must produce strictly higher normalized scores
+        assert!(strong_norm > moderate_norm);
+        assert!(moderate_norm > weak_norm);
+        assert!(weak_norm > zero_norm);
+        assert_eq!(zero_norm, 0.5);
+        assert!(strong_norm > 0.95);
     }
 }

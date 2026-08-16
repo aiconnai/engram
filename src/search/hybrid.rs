@@ -16,14 +16,13 @@ use crate::storage::filter::{parse_filter, SqlBuilder};
 use crate::storage::queries::{load_tags, memory_from_row};
 use crate::types::{MatchInfo, Memory, MemoryId, SearchOptions, SearchResult, SearchStrategy};
 
-/// Apply project context boost to a memory's score if it matches the current project path
 fn apply_project_context_boost(memory: &Memory, score: f32, config: &SearchConfig) -> f32 {
     if let Some(ref project_path) = config.project_context_path {
         // Check if memory is a project context memory matching the current path
         if memory.tags.contains(&"project-context".to_string()) {
             if let Some(memory_path) = memory.metadata.get("project_path") {
                 if memory_path.as_str() == Some(project_path.as_str()) {
-                    return score + config.project_context_boost;
+                    return score * (1.0 + config.project_context_boost);
                 }
             }
         }
@@ -475,6 +474,14 @@ fn rrf_hybrid_search(
         }
     }
 
+    // Re-sort after applying project context boost and truncate to requested limit
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    results.truncate(limit as usize);
+
     Ok(results)
 }
 
@@ -492,5 +499,61 @@ mod tests {
 
         // First rank should have higher score
         assert!(score1 > score2);
+    }
+
+    #[test]
+    fn test_project_context_boost_multiplicative() {
+        use super::*;
+        let memory = Memory {
+            id: 1,
+            content: "Some content".to_string(),
+            memory_type: crate::types::MemoryType::Note,
+            importance: 0.5,
+            tags: vec!["project-context".to_string()],
+            access_count: 0,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_accessed_at: None,
+            owner_id: None,
+            visibility: crate::types::Visibility::Private,
+            version: 1,
+            has_embedding: false,
+            metadata: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "project_path".to_string(),
+                    serde_json::json!("/path/to/repo"),
+                );
+                m
+            },
+            scope: crate::types::MemoryScope::Global,
+            workspace: "default".to_string(),
+            tier: crate::types::MemoryTier::Permanent,
+            expires_at: None,
+            content_hash: None,
+            event_time: None,
+            event_duration_seconds: None,
+            trigger_pattern: None,
+            procedure_success_count: 0,
+            procedure_failure_count: 0,
+            summary_of_id: None,
+            lifecycle_state: crate::types::LifecycleState::Active,
+            media_url: None,
+        };
+
+        let config = SearchConfig {
+            project_context_path: Some("/path/to/repo".to_string()),
+            project_context_boost: 0.2, // 20% boost
+            ..Default::default()
+        };
+
+        let base_score = 0.0164;
+        let boosted = apply_project_context_boost(&memory, base_score, &config);
+
+        // Boosted score should be base_score * 1.2
+        let expected = base_score * 1.2;
+        assert!((boosted - expected).abs() < 1e-6);
+        assert!(boosted > base_score);
+        assert!(boosted < base_score * 1.5);
     }
 }
