@@ -90,7 +90,7 @@ fn test_markdown_portability_export_and_import_roundtrip() {
 
     let temp_dir = tempfile::tempdir().expect("tempdir");
 
-    // 2. Export to Markdown
+    // 2. Export to Markdown with different groupings
     let export_report = export_markdown(
         &ctx.storage,
         &ExportOptions {
@@ -99,9 +99,33 @@ fn test_markdown_portability_export_and_import_roundtrip() {
             workspace: Some("portability_test".to_string()),
         },
     )
-    .expect("export markdown");
+    .expect("export markdown type grouping");
 
     assert_eq!(export_report.files_written, 3); // 2 memories + index overview
+
+    let temp_ws_dir = tempfile::tempdir().expect("temp ws dir");
+    let export_ws_report = export_markdown(
+        &ctx.storage,
+        &ExportOptions {
+            output_dir: temp_ws_dir.path().to_path_buf(),
+            grouping: ExportGrouping::Workspace,
+            workspace: Some("portability_test".to_string()),
+        },
+    )
+    .expect("export markdown workspace grouping");
+    assert_eq!(export_ws_report.files_written, 3);
+
+    let temp_entity_dir = tempfile::tempdir().expect("temp entity dir");
+    let export_entity_report = export_markdown(
+        &ctx.storage,
+        &ExportOptions {
+            output_dir: temp_entity_dir.path().to_path_buf(),
+            grouping: ExportGrouping::Entity,
+            workspace: Some("portability_test".to_string()),
+        },
+    )
+    .expect("export markdown entity grouping");
+    assert_eq!(export_entity_report.files_written, 3);
 
     // 3. Dry-run import
     let dry_run_report = import_markdown(

@@ -25,6 +25,7 @@ pub enum ExportGrouping {
     Day,
     Workspace,
     Type,
+    Entity,
 }
 
 impl std::str::FromStr for ExportGrouping {
@@ -36,8 +37,9 @@ impl std::str::FromStr for ExportGrouping {
             "day" => Ok(Self::Day),
             "workspace" | "project" => Ok(Self::Workspace),
             "type" => Ok(Self::Type),
+            "entity" | "tag" => Ok(Self::Entity),
             _ => Err(EngramError::InvalidInput(format!(
-                "Unknown export grouping: '{s}'. Expected flat, day, workspace, or type."
+                "Unknown export grouping: '{s}'. Expected flat, day, workspace, type, or entity."
             ))),
         }
     }
@@ -113,8 +115,9 @@ pub fn export_markdown(storage: &Storage, opts: &ExportOptions) -> Result<Export
     let group_str = match opts.grouping {
         ExportGrouping::Flat => "flat",
         ExportGrouping::Day => "day",
-        ExportGrouping::Workspace => "flat",
+        ExportGrouping::Workspace => "workspace",
         ExportGrouping::Type => "type",
+        ExportGrouping::Entity => "entity",
     };
 
     let val = handler_export(
