@@ -11,6 +11,7 @@ mod interactive;
 mod maintenance;
 #[cfg(feature = "onnx-embed")]
 mod model;
+mod portability;
 mod session;
 #[cfg(feature = "snapshot")]
 mod snapshot;
@@ -55,6 +56,8 @@ fn main() -> Result<()> {
         Commands::Stats => core::stats(&storage)?,
         Commands::Session { action } => session::handle(&storage, action)?,
         Commands::Maintenance { action } => maintenance::handle(&storage, action)?,
+        Commands::Export { action } => portability::handle_export(&storage, action)?,
+        Commands::Import { action } => portability::handle_import(&storage, action)?,
         Commands::Graph {
             format,
             output,

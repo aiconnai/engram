@@ -116,6 +116,16 @@ pub(crate) enum Commands {
     },
     /// Interactive mode
     Interactive,
+    /// Export memories to Markdown or other formats
+    Export {
+        #[command(subcommand)]
+        action: crate::portability::ExportAction,
+    },
+    /// Import memories from Markdown files
+    Import {
+        #[command(subcommand)]
+        action: crate::portability::ImportAction,
+    },
     /// Manage local embedding models
     #[cfg(feature = "onnx-embed")]
     Model {

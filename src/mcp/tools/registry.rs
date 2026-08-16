@@ -4855,4 +4855,28 @@
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Advanced,
     },
+    // Model Routing (RFC 0011)
+    ToolDef {
+        name: "model_routing_status",
+        description: "Inspect active model provider availability, embedding dimensions, reranker health, and local vs cloud routing status.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "model": {
+                    "type": "string",
+                    "description": "Optional provider name to inspect (e.g. tfidf, onnx, openai)."
+                },
+                "embedding_model": {
+                    "type": "string",
+                    "description": "Optional specific model ID."
+                },
+                "dimensions": {
+                    "type": "integer",
+                    "description": "Optional dimension configuration."
+                }
+            }
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
 ]

@@ -26,7 +26,9 @@ pub mod intelligence;
 pub mod mcp;
 #[cfg(feature = "multimodal")]
 pub mod multimodal;
+pub mod portability;
 pub mod realtime;
+pub mod routing;
 pub mod search;
 #[cfg(feature = "snapshot")]
 pub mod snapshot;

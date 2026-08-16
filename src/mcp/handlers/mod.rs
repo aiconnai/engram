@@ -40,6 +40,7 @@ pub mod markdown_export;
 pub mod memory_crud;
 pub mod memory_policy;
 pub mod misc;
+pub mod model_routing;
 pub mod pending_injections;
 pub mod project_context;
 pub mod quality;
@@ -523,6 +524,9 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_temporal_snapshot" => duckdb_graph::handle_memory_temporal_snapshot(ctx, params),
         #[cfg(feature = "duckdb-graph")]
         "memory_scope_snapshot" => duckdb_graph::handle_memory_scope_snapshot(ctx, params),
+
+        // ── Model Routing (RFC 0011) ─────────────────────────────────────────
+        "model_routing_status" => model_routing::model_routing_status(ctx, params),
 
         _ => json!({"error": format!("Unknown tool: {}", tool_name)}),
     }
