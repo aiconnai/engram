@@ -227,8 +227,9 @@ pub fn memory_list(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::storage::delete_memory_batch;
-    use crate::storage::queries::collect_supersedes_chain;
+    use crate::storage::queries::{
+        collect_supersedes_chain, get_memory, BatchDeleteResult, BatchError,
+    };
 
     let ids: Vec<i64> = match params.get("ids").and_then(|v| v.as_array()) {
         Some(arr) => arr.iter().filter_map(|v| v.as_i64()).collect(),
@@ -239,30 +240,30 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
         return ToolError::invalid_params("No valid IDs provided").into_value();
     }
 
-    let total = ids.len() as u64;
-    ctx.reporter().step(
-        0,
-        total,
-        format!("Starting batch deletion of {total} memories"),
-    );
-
     let cascade_chain = params
         .get("cascade_chain")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let result = if cascade_chain {
-        ctx.storage.with_transaction(|conn| {
+    let initial_count = ids.len() as u64;
+    ctx.reporter().step(
+        0,
+        initial_count,
+        format!("Starting batch deletion of {initial_count} memories"),
+    );
+
+    let result = ctx.storage.with_transaction(|conn| {
+        let target_ids: Vec<i64> = if cascade_chain {
             let mut expanded: Vec<i64> = Vec::new();
             let mut seen = std::collections::HashSet::new();
             for (i, &id) in ids.iter().enumerate() {
                 ctx.reporter().step(
                     (i + 1) as u64,
-                    total,
+                    initial_count,
                     format!(
                         "Resolving supersedes chain for memory {id} ({}/{})",
                         i + 1,
-                        total
+                        initial_count
                     ),
                 );
                 let chain = collect_supersedes_chain(conn, id)?;
@@ -272,21 +273,76 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
                     }
                 }
             }
-            delete_memory_batch(conn, &expanded)
-        })
-    } else {
-        ctx.storage.with_connection(|conn| {
-            let result = delete_memory_batch(conn, &ids)?;
-            Ok(result)
-        })
-    };
+            expanded
+        } else {
+            ids.clone()
+        };
+
+        // Capture workspaces before deletion
+        let workspaces: Vec<(i64, Option<String>)> = target_ids
+            .iter()
+            .map(|&id| (id, get_memory(conn, id).ok().map(|m| m.workspace)))
+            .collect();
+
+        let total_work = target_ids.len() as u64;
+        let mut deleted = Vec::new();
+        let mut failed = Vec::new();
+
+        for (index, &id) in target_ids.iter().enumerate() {
+            let step_num = (index + 1) as u64;
+            match delete_memory(conn, id) {
+                Ok(()) => {
+                    ctx.reporter().step(
+                        step_num,
+                        total_work,
+                        format!("Deleted memory {id} ({step_num}/{total_work})"),
+                    );
+                    deleted.push(id);
+                }
+                Err(e) => {
+                    ctx.reporter().step(
+                        step_num,
+                        total_work,
+                        format!("Failed deleting memory {id} ({step_num}/{total_work}): {e}"),
+                    );
+                    failed.push(BatchError {
+                        index,
+                        id: Some(id),
+                        error: e.to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok((
+            BatchDeleteResult {
+                total_deleted: deleted.len(),
+                total_failed: failed.len(),
+                deleted,
+                failed,
+            },
+            workspaces,
+            total_work,
+        ))
+    });
 
     match result {
-        Ok(res) => {
+        Ok((res, workspaces, total_work)) => {
             ctx.reporter().complete(
-                total,
+                total_work,
                 format!("Successfully deleted {} memories", res.total_deleted),
             );
+
+            // Invalidate search cache and broadcast realtime events for deleted items
+            for (id, workspace) in workspaces {
+                if res.deleted.contains(&id) {
+                    ctx.search_cache.invalidate_for_memory(id);
+                    if let (Some(manager), Some(ws)) = (&ctx.realtime, workspace.as_deref()) {
+                        manager.broadcast(RealtimeEvent::memory_deleted(id, ws));
+                    }
+                }
+            }
+
             json!(res)
         }
         Err(e) => ToolError::from(e).into_value(),
