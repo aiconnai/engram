@@ -8,6 +8,7 @@ pub mod grpc_transport;
 pub mod handlers;
 pub mod http_transport;
 pub mod permission;
+pub mod progress;
 pub mod prompts;
 pub mod protocol;
 pub mod resources;
@@ -26,3 +27,8 @@ pub use protocol::{
 pub use resources::{list_resources, read_resource};
 pub use shutdown::shutdown_signal;
 pub use tools::{get_tool_definitions, get_tool_definitions_tiered, TOOL_DEFINITIONS};
+
+pub use progress::{
+    extract_progress_token, ChannelProgressReporter, NoopProgressReporter, ProgressNotification,
+    ProgressReporter, ProgressReporterExt, ProgressToken,
+};

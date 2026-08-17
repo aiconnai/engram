@@ -309,11 +309,8 @@ mod tests {
             #[cfg(feature = "meilisearch")]
             meili_sync_interval: 300,
             #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Builder::new_current_thread()
-                    .build()
-                    .unwrap(),
-            ),
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+            progress_reporter: None,
         }
     }
 

@@ -249,10 +249,17 @@ struct EngramHandler {
     /// Lifecycle hooks (Phase L - ENG-78). None unless `enable_hooks()` is called.
     #[cfg(feature = "hooks")]
     hook_manager: Option<Arc<engram::hooks::HookManager>>,
+    /// Sender for progress notifications emitted during tool calls.
+    /// The receiver is owned by the transport loop (stdio or HTTP).
+    progress_tx: std::sync::mpsc::Sender<engram::mcp::ProgressNotification>,
 }
 
 impl EngramHandler {
-    fn new(storage: Storage, embedder: Arc<dyn engram::embedding::Embedder>) -> Self {
+    fn new(
+        storage: Storage,
+        embedder: Arc<dyn engram::embedding::Embedder>,
+        progress_tx: std::sync::mpsc::Sender<engram::mcp::ProgressNotification>,
+    ) -> Self {
         Self {
             storage,
             embedder,
@@ -275,6 +282,7 @@ impl EngramHandler {
             ),
             #[cfg(feature = "hooks")]
             hook_manager: None,
+            progress_tx,
         }
     }
 
@@ -342,8 +350,14 @@ impl EngramHandler {
 
     /// Build a `HandlerContext` from this handler's shared state and delegate
     /// to the domain-module dispatch function.
-    fn handle_tool_call(&self, name: &str, params: Value) -> Value {
-        let ctx = self.make_context();
+    fn handle_tool_call(
+        &self,
+        name: &str,
+        params: Value,
+        progress_reporter: Option<Arc<dyn engram::mcp::ProgressReporter>>,
+    ) -> Value {
+        let mut ctx = self.make_context();
+        ctx.progress_reporter = progress_reporter;
         handlers::dispatch(&ctx, name, params)
     }
 
@@ -365,6 +379,7 @@ impl EngramHandler {
             meili_sync_interval: self.meili_sync_interval,
             #[cfg(feature = "langfuse")]
             langfuse_runtime: self.langfuse_runtime.clone(),
+            progress_reporter: None,
         }
     }
 }
@@ -443,7 +458,17 @@ impl McpHandler for EngramHandler {
                     .cloned()
                     .unwrap_or(json!({}));
 
-                let result = self.handle_tool_call(name, arguments);
+                // Extract progress token from _meta if present.
+                let progress_token = engram::mcp::extract_progress_token(&request.params);
+                let progress_reporter: Option<Arc<dyn engram::mcp::ProgressReporter>> =
+                    progress_token.map(|token| {
+                        Arc::new(engram::mcp::ChannelProgressReporter::from_sender(
+                            token,
+                            self.progress_tx.clone(),
+                        )) as Arc<dyn engram::mcp::ProgressReporter>
+                    });
+
+                let result = self.handle_tool_call(name, arguments, progress_reporter);
 
                 #[cfg(feature = "hooks")]
                 {
@@ -652,12 +677,13 @@ fn main() -> Result<()> {
     // hook wiring lands (see issue #11). For now we still construct
     // `EngramHandler` directly since that's the type that implements
     // `McpHandler`.
+    let (progress_tx, progress_rx) = std::sync::mpsc::channel();
     #[allow(unused_mut)]
-    let mut handler_state = EngramHandler::new(storage.clone(), embedder.clone());
+    let mut handler_state = EngramHandler::new(storage.clone(), embedder.clone(), progress_tx);
     #[cfg(feature = "hooks")]
     handler_state.enable_hooks();
     let handler = Arc::new(handler_state);
-    let server = McpServer::new(handler.clone());
+    let server = McpServer::new(handler.clone(), progress_rx);
 
     // Start background cleanup thread if enabled
     if args.cleanup_interval_seconds > 0 {
@@ -904,6 +930,7 @@ mod tests {
     fn test_handler() -> EngramHandler {
         let storage = Storage::open_in_memory().unwrap();
         let embedder = create_embedder(&EmbeddingConfig::default()).unwrap();
+        let (progress_tx, _progress_rx) = std::sync::mpsc::channel();
         EngramHandler {
             storage: storage.clone(),
             search_cache: Arc::new(engram::search::result_cache::SearchResultCache::new(
@@ -926,6 +953,7 @@ mod tests {
             meili_sync_interval: 300,
             #[cfg(feature = "hooks")]
             hook_manager: None,
+            progress_tx,
         }
     }
 
@@ -945,6 +973,7 @@ mod tests {
                 "path": file_path.to_string_lossy(),
                 "format": "md"
             }),
+            None,
         );
         assert!(first.get("error").is_none(), "first ingest error: {first}");
         assert!(
@@ -961,6 +990,7 @@ mod tests {
                 "path": file_path.to_string_lossy(),
                 "format": "md"
             }),
+            None,
         );
         assert!(
             second.get("error").is_none(),

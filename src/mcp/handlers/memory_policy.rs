@@ -425,6 +425,7 @@ mod tests {
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
             langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+            progress_reporter: None,
         }
     }
 

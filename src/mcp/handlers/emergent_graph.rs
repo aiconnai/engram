@@ -274,6 +274,7 @@ mod tests {
             langfuse_runtime: Arc::new(
                 tokio::runtime::Runtime::new().expect("Failed to create langfuse runtime"),
             ),
+            progress_reporter: None,
         }
     }
 

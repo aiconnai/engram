@@ -98,10 +98,9 @@ fn create_ephemeral_context(storage: Storage) -> HandlerContext {
         meili_sync_interval: 300,
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(
-            tokio::runtime::Builder::new_current_thread()
-                .build()
-                .expect("langfuse runtime"),
+            tokio::runtime::Runtime::new().expect("Failed to create langfuse runtime"),
         ),
+        progress_reporter: None,
     }
 }
 

@@ -69,6 +69,7 @@ impl TestHandler {
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
             langfuse_runtime: test_langfuse_runtime(),
+            progress_reporter: None,
         };
         Self { storage, ctx }
     }

@@ -27,6 +27,7 @@ pub(super) fn ctx() -> crate::mcp::handlers::HandlerContext {
                 .build()
                 .unwrap(),
         ),
+        progress_reporter: None,
     }
 }
 
