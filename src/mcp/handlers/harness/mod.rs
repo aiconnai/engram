@@ -88,8 +88,9 @@ mod tests {
             langfuse_runtime: Arc::new(
                 tokio::runtime::Builder::new_current_thread()
                     .build()
-                    .unwrap(),
+                    .expect("langfuse runtime"),
             ),
+            progress_reporter: None,
         }
     }
 

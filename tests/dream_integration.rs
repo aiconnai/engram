@@ -107,6 +107,7 @@ fn test_handler_context(
         meili_sync_interval: 60,
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+        progress_reporter: None,
     }
 }
 
@@ -140,6 +141,7 @@ fn test_mcp_tool_dream_run_now() {
         meili_sync_interval: 60,
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+        progress_reporter: None,
     };
 
     let result = dispatch(&ctx, "dream_run_now", json!({}));
@@ -193,6 +195,7 @@ fn test_mcp_dream_candidate_review_and_apply() {
         meili_sync_interval: 60,
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+        progress_reporter: None,
     };
 
     let create = dispatch(

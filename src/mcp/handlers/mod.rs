@@ -9,6 +9,7 @@ use parking_lot::Mutex;
 use serde_json::{json, Value};
 
 use crate::embedding::EmbeddingCache;
+use crate::mcp::progress::{NoopProgressReporter, ProgressReporter};
 use crate::realtime::RealtimeManager;
 use crate::search::{FuzzyEngine, SearchConfig, SearchResultCache};
 use crate::storage::Storage;
@@ -90,6 +91,20 @@ pub struct HandlerContext {
     /// Dedicated Tokio runtime for Langfuse async calls (feature-gated).
     #[cfg(feature = "langfuse")]
     pub langfuse_runtime: Arc<tokio::runtime::Runtime>,
+
+    /// Optional progress reporter for streaming progress notifications.
+    /// When `None`, progress events are silently discarded.
+    pub progress_reporter: Option<Arc<dyn ProgressReporter>>,
+}
+
+impl HandlerContext {
+    /// Access the progress reporter, returning a no-op reporter if none is set.
+    pub fn reporter(&self) -> &dyn ProgressReporter {
+        match self.progress_reporter {
+            Some(ref r) => r.as_ref(),
+            None => &NoopProgressReporter,
+        }
+    }
 }
 
 /// Route a tool call to the appropriate domain handler.

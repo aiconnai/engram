@@ -11,6 +11,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
 use super::{authenticate_transport_principal, principal_can_read_workspace, AppState};
+use crate::mcp::progress::ProgressNotification;
 use crate::realtime::{EventType, RealtimeEvent};
 
 // ---------------------------------------------------------------------------
@@ -95,6 +96,16 @@ pub(super) fn realtime_event_to_sse(event: &RealtimeEvent) -> Event {
         sse = sse.id(format!("{id}"));
     }
     sse
+}
+
+/// Convert a `ProgressNotification` into an SSE `Event` with event type `progress`.
+///
+/// The full JSON-RPC notification is placed in the `data:` field so that SSE
+/// clients can parse it identically to the stdio transport wire format.
+#[allow(dead_code)]
+pub(super) fn progress_to_sse(notification: &ProgressNotification) -> Event {
+    let data = serde_json::to_string(notification).unwrap_or_else(|_| "{}".to_string());
+    Event::default().event("progress").data(data)
 }
 
 /// `GET /v1/events` — resumable Server-Sent Events stream of `RealtimeEvent`s.

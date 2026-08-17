@@ -74,6 +74,10 @@ where
     H: McpHandler,
 {
     handler: H,
+    /// Receiver for progress notifications emitted during handler execution.
+    /// Drained after each `handle_request` call and written to stdout before
+    /// the final response.
+    progress_rx: std::sync::mpsc::Receiver<crate::mcp::progress::ProgressNotification>,
 }
 
 /// Trait for handling MCP requests
@@ -88,9 +92,15 @@ impl<T: McpHandler> McpHandler for std::sync::Arc<T> {
 }
 
 impl<H: McpHandler> McpServer<H> {
-    /// Create a new MCP server
-    pub fn new(handler: H) -> Self {
-        Self { handler }
+    /// Create a new MCP server with a progress notification receiver.
+    pub fn new(
+        handler: H,
+        progress_rx: std::sync::mpsc::Receiver<crate::mcp::progress::ProgressNotification>,
+    ) -> Self {
+        Self {
+            handler,
+            progress_rx,
+        }
     }
 
     /// Run the server, reading from stdin and writing to stdout
@@ -118,6 +128,17 @@ impl<H: McpHandler> McpServer<H> {
                             // produce a response. Process for side effects only.
                             let is_notification = request.id.is_none();
                             let response = self.handler.handle_request(request);
+
+                            // Drain any progress notifications emitted during handling.
+                            // These are written as interleaved JSON-RPC notifications
+                            // before the final response.
+                            while let Ok(progress) = self.progress_rx.try_recv() {
+                                if let Ok(json) = serde_json::to_string(&progress) {
+                                    let _ = writeln!(writer, "{}", json);
+                                    let _ = writer.flush();
+                                }
+                            }
+
                             if is_notification {
                                 continue;
                             }
@@ -155,6 +176,8 @@ pub mod methods {
     pub const READ_RESOURCE: &str = "resources/read";
     pub const LIST_PROMPTS: &str = "prompts/list";
     pub const GET_PROMPT: &str = "prompts/get";
+    /// Progress notification method (MCP 2025-11-25).
+    pub const PROGRESS: &str = "notifications/progress";
 }
 
 /// Current MCP protocol version supported by this server
