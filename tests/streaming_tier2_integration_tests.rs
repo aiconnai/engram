@@ -195,8 +195,8 @@ fn test_context_seed_emits_step_progress() {
     let notifications: Vec<ProgressNotification> = rx.try_iter().collect();
     assert_eq!(
         notifications.len(),
-        3,
-        "Expected 3 notifications: start, step, complete"
+        2,
+        "Expected 2 notifications: start, complete"
     );
 
     assert_eq!(notifications[0].params.progress, 0);
@@ -210,15 +210,77 @@ fn test_context_seed_emits_step_progress() {
 
     assert_eq!(notifications[1].params.progress, 3);
     assert_eq!(notifications[1].params.total, Some(3));
-
-    assert_eq!(notifications[2].params.progress, 3);
-    assert_eq!(notifications[2].params.total, Some(3));
-    assert!(notifications[2]
+    assert!(notifications[1]
         .params
         .message
         .as_deref()
         .unwrap()
         .contains("Context seed completed: 3 created, 0 failed"));
+}
+
+#[test]
+fn test_memory_create_batch_handles_partial_failure_with_accurate_progress() {
+    let (tx, rx) = mpsc::channel::<ProgressNotification>();
+    let token = ProgressToken::String("partial-fail".into());
+    let reporter = Arc::new(ChannelProgressReporter::from_sender(token.clone(), tx));
+
+    let ctx = create_test_context(Some(reporter));
+
+    let memories = vec![
+        json!({"content": "Valid item 1"}),
+        json!({"invalid_field_only": 123}), // Missing required content
+        json!({"content": "Valid item 2"}),
+    ];
+
+    let result = dispatch(&ctx, "memory_create_batch", json!({ "memories": memories }));
+
+    assert_eq!(
+        result.get("total_created").and_then(|v| v.as_u64()),
+        Some(2)
+    );
+    assert_eq!(result.get("total_failed").and_then(|v| v.as_u64()), Some(1));
+
+    let notifications: Vec<ProgressNotification> = rx.try_iter().collect();
+    assert_eq!(notifications.len(), 5, "Expected: start, 3 steps, complete");
+
+    for n in &notifications {
+        assert_eq!(n.params.progress_token, token);
+    }
+
+    assert_eq!(notifications[0].params.progress, 0);
+    assert_eq!(notifications[0].params.total, Some(3));
+
+    assert_eq!(notifications[1].params.progress, 1);
+    assert!(notifications[1]
+        .params
+        .message
+        .as_deref()
+        .unwrap()
+        .contains("Created batch memory 1/3"));
+
+    assert_eq!(notifications[2].params.progress, 2);
+    assert!(notifications[2]
+        .params
+        .message
+        .as_deref()
+        .unwrap()
+        .contains("Failed deserializing batch item 2/3"));
+
+    assert_eq!(notifications[3].params.progress, 3);
+    assert!(notifications[3]
+        .params
+        .message
+        .as_deref()
+        .unwrap()
+        .contains("Created batch memory 3/3"));
+
+    assert_eq!(notifications[4].params.progress, 3);
+    assert!(notifications[4]
+        .params
+        .message
+        .as_deref()
+        .unwrap()
+        .contains("Batch creation completed: 2 created, 1 failed"));
 }
 
 #[test]

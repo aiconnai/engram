@@ -200,10 +200,15 @@ pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
 }
 
 /// Compute the squared Euclidean distance between two vectors: $\sum (a_i - b_i)^2$.
+///
+/// Returns `0.0` if both vectors are empty, and `f32::INFINITY` if lengths differ.
 #[inline]
 pub fn euclidean_distance_squared(a: &[f32], b: &[f32]) -> f32 {
     let len = a.len();
-    if len != b.len() || len == 0 {
+    if len != b.len() {
+        return f32::INFINITY;
+    }
+    if len == 0 {
         return 0.0;
     }
 
@@ -259,10 +264,10 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
 
 /// In-place $L_2$ normalize a vector: $v \leftarrow v / ||v||_2$.
 ///
-/// If norm is zero, vector is left unchanged.
+/// If norm is zero, subnormal, or non-finite, vector is left unchanged.
 pub fn l2_normalize(v: &mut [f32]) {
     let norm = l2_norm(v);
-    if norm > 0.0 {
+    if norm.is_finite() && norm > f32::EPSILON {
         let inv = 1.0 / norm;
         for x in v.iter_mut() {
             *x *= inv;

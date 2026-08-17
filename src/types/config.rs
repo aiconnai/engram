@@ -109,7 +109,6 @@ pub enum DedupMode {
 
 /// Input for creating a new memory
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
 pub struct CreateMemoryInput {
     pub content: String,
     #[serde(default, alias = "type")]
