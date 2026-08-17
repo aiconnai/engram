@@ -1,4 +1,4 @@
-import { BaseResource } from "./base";
+import { BaseResource } from "./base.js";
 import type {
   AddKnowledgeOptions,
   CoactivationReportOptions,
@@ -9,7 +9,7 @@ import type {
   TemporalCreateOptions,
   TemporalInvalidateOptions,
   TemporalSnapshotOptions,
-} from "../types";
+} from "../types.js";
 
 export class GraphResource extends BaseResource {
   /**

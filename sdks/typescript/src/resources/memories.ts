@@ -1,15 +1,15 @@
-import { BaseResource } from "./base";
+import { BaseResource } from "./base.js";
 import type {
-  CreateDailyOptions,
-  CreateOptions,
   CompressForContextOptions,
   ConsolidateOptions,
+  CreateDailyOptions,
+  CreateOptions,
   ListOptions,
   MemoryReplayAtTimeOptions,
   SentimentTimelineOptions,
   UpdateOptions,
   UtilityScoreOptions,
-} from "../types";
+} from "../types.js";
 
 export class MemoriesResource extends BaseResource {
   /**

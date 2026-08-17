@@ -9,7 +9,7 @@ import {
   ContextResource,
   AuthResource,
   AdminResource,
-} from "./index";
+} from "./index.js";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);

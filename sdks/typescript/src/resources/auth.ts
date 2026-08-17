@@ -1,10 +1,10 @@
-import { BaseResource } from "./base";
+import { BaseResource } from "./base.js";
 import type {
   CheckAccessOptions,
   CreateIdentityOptions,
   GrantAccessOptions,
   ScopeListOptions,
-} from "../types";
+} from "../types.js";
 
 export class AuthResource extends BaseResource {
   /**

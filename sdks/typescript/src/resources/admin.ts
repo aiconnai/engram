@@ -1,4 +1,4 @@
-import { BaseResource } from "./base";
+import { BaseResource } from "./base.js";
 import type {
   AgentStartOptions,
   CacheClearOptions,
@@ -10,7 +10,7 @@ import type {
   LifecycleUpdateOptions,
   ProactiveScanOptions,
   SuggestAcquisitionOptions,
-} from "../types";
+} from "../types.js";
 
 export class AdminResource extends BaseResource {
   /**

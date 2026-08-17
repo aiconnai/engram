@@ -21,9 +21,9 @@
  *   const directResults = await client.search("user preferences");
  */
 
-export { EngramClient } from "./client";
-export { EngramError } from "./errors";
-export { CouncilSkill, type CouncilClient } from "./council";
+export { EngramClient } from "./client.js";
+export { EngramError } from "./errors.js";
+export { CouncilSkill, type CouncilClient } from "./council.js";
 
 export {
   AdminResource,
@@ -34,7 +34,7 @@ export {
   MemoriesResource,
   SearchResource,
   type McpCaller,
-} from "./resources";
+} from "./resources/index.js";
 
 export type {
   AddKnowledgeOptions,
@@ -83,4 +83,4 @@ export type {
   TemporalSnapshotOptions,
   UpdateOptions,
   UtilityScoreOptions,
-} from "./types";
+} from "./types.js";

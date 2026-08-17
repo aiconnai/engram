@@ -2,7 +2,7 @@ import type {
   CouncilSkillAskOptions,
   CouncilSkillOptions,
   MemoryCouncilOptions,
-} from "./types";
+} from "./types.js";
 
 export interface CouncilClient {
   memoryCouncil(

@@ -1,4 +1,4 @@
-import { EngramError } from "./errors";
+import { EngramError } from "./errors.js";
 import {
   AdminResource,
   AuthResource,
@@ -9,7 +9,7 @@ import {
   createSearchCallable,
   type McpCaller,
   type SearchCallableResource,
-} from "./resources";
+} from "./resources/index.js";
 import type {
   AddKnowledgeOptions,
   AgentStartOptions,
@@ -23,6 +23,8 @@ import type {
   CoactivationReportOptions,
   CompressForContextOptions,
   ConsolidateOptions,
+  CouncilSkillAskOptions,
+  CouncilSkillOptions,
   CreateDailyOptions,
   CreateIdentityOptions,
   CreateOptions,
@@ -55,7 +57,7 @@ import type {
   TemporalSnapshotOptions,
   UpdateOptions,
   UtilityScoreOptions,
-} from "./types";
+} from "./types.js";
 
 export class EngramClient implements McpCaller {
   private readonly baseUrl: string;

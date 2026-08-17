@@ -1,4 +1,4 @@
-import { BaseResource } from "./base";
+import { BaseResource } from "./base.js";
 import type {
   BlockCreateOptions,
   BlockEditOptions,
@@ -8,7 +8,7 @@ import type {
   FactGraphOptions,
   ListFactsOptions,
   PromptTemplateOptions,
-} from "../types";
+} from "../types.js";
 
 export class ContextResource extends BaseResource {
   /**

@@ -1,9 +1,9 @@
-import { BaseResource } from "./base";
+import { BaseResource } from "./base.js";
 import type {
   FeedbackStatsOptions,
   MemoryCouncilOptions,
   SearchOptions,
-} from "../types";
+} from "../types.js";
 
 export class SearchResource extends BaseResource {
   /**
