@@ -172,6 +172,61 @@ fn test_memory_delete_batch_emits_step_progress() {
 }
 
 #[test]
+fn test_memory_delete_batch_with_cascade_chain_emits_progress() {
+    let (tx, rx) = mpsc::channel::<ProgressNotification>();
+    let token = ProgressToken::String("cascade-del".into());
+    let reporter = Arc::new(ChannelProgressReporter::from_sender(token, tx));
+
+    let ctx = create_test_context(Some(reporter));
+
+    let create_res = dispatch(
+        &ctx,
+        "memory_create_batch",
+        json!({
+            "memories": [
+                {"content": "Cascade root memory"},
+                {"content": "Other memory"}
+            ]
+        }),
+    );
+    let created_arr = create_res
+        .get("created")
+        .and_then(|v| v.as_array())
+        .unwrap();
+    let ids: Vec<i64> = created_arr
+        .iter()
+        .filter_map(|m| m.get("id").and_then(|v| v.as_i64()))
+        .collect();
+
+    let _: Vec<_> = rx.try_iter().collect();
+
+    let del_res = dispatch(
+        &ctx,
+        "memory_delete_batch",
+        json!({ "ids": ids, "cascade_chain": true }),
+    );
+    assert_eq!(
+        del_res.get("total_deleted").and_then(|v| v.as_u64()),
+        Some(2)
+    );
+
+    let notifications: Vec<ProgressNotification> = rx.try_iter().collect();
+    assert!(
+        notifications.len() >= 4,
+        "Expected start, resolve steps, and complete"
+    );
+    assert_eq!(notifications[0].params.progress, 0);
+    assert!(notifications
+        .last()
+        .unwrap()
+        .params
+        .message
+        .as_deref()
+        .unwrap()
+        .contains("Successfully deleted 2 memories"));
+}
+
+#[test]
 fn test_context_seed_emits_step_progress() {
     let (tx, rx) = mpsc::channel::<ProgressNotification>();
     let token = ProgressToken::String("seed-progress-token".to_string());
