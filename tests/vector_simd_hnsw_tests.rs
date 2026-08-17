@@ -106,6 +106,11 @@ fn test_euclidean_distance_kernels() {
 
     assert!((euclidean_distance_squared(&a, &b) - 25.0).abs() < 1e-5);
     assert!((euclidean_distance(&a, &b) - 5.0).abs() < 1e-5);
+
+    // Length mismatch must return INFINITY, not 0.0
+    assert!(euclidean_distance_squared(&a, &[1.0, 2.0]).is_infinite());
+    assert!(euclidean_distance(&a, &[1.0, 2.0]).is_infinite());
+    assert_eq!(euclidean_distance_squared(&[], &[]), 0.0);
 }
 
 #[test]
@@ -120,6 +125,11 @@ fn test_l2_normalization_and_norm() {
 
     let norm_copy = l2_normalized(&[10.0, 0.0]);
     assert_eq!(norm_copy, vec![1.0, 0.0]);
+
+    // Subnormal or zero norm vector should not panic or produce NaN
+    let mut zero_vec = vec![0.0, 0.0];
+    l2_normalize(&mut zero_vec);
+    assert_eq!(zero_vec, vec![0.0, 0.0]);
 }
 
 #[test]
@@ -153,6 +163,10 @@ fn test_hnsw_insertion_and_search_basic() {
     assert!(index.is_empty());
     assert_eq!(index.len(), 0);
 
+    // Mismatched dimension vector must be rejected cleanly
+    index.insert(99, &[1.0, 0.0]);
+    assert_eq!(index.len(), 0);
+
     index.insert(1, &[1.0, 0.0, 0.0, 0.0]);
     index.insert(2, &[0.0, 1.0, 0.0, 0.0]);
     index.insert(3, &[0.0, 0.0, 1.0, 0.0]);
@@ -162,6 +176,9 @@ fn test_hnsw_insertion_and_search_basic() {
     assert!(index.contains(&1));
     assert!(index.contains(&2));
     assert!(!index.contains(&999));
+
+    // Search with wrong dimension must return empty
+    assert!(index.search(&[1.0, 0.0], 2, None).is_empty());
 
     let query = [0.9, 0.1, 0.0, 0.0];
     let results = index.search(&query, 2, None);

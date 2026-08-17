@@ -8,7 +8,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::vector::{cosine_similarity, dot_product, VectorMetric};
+use super::vector::VectorMetric;
 
 /// Configuration parameters for HNSW index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,9 +98,7 @@ impl Eq for DistNode {}
 impl Ord for DistNode {
     fn cmp(&self, other: &Self) -> Ordering {
         // Reverse ordering for max-heap behavior on smallest distances
-        self.dist
-            .partial_cmp(&other.dist)
-            .unwrap_or(Ordering::Equal)
+        self.dist.total_cmp(&other.dist)
     }
 }
 
@@ -121,10 +119,7 @@ impl Eq for MinDistNode {}
 
 impl Ord for MinDistNode {
     fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .dist
-            .partial_cmp(&self.dist)
-            .unwrap_or(Ordering::Equal)
+        other.dist.total_cmp(&self.dist)
     }
 }
 
@@ -200,11 +195,75 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
 
     /// Insert a vector with its associated item ID into the HNSW index.
     ///
-    /// If the ID already exists, the old entry is updated in place with the new vector.
+    /// If the ID already exists, its coordinates are updated and its multi-layer
+    /// neighborhood is dynamically re-linked to preserve graph topology.
     pub fn insert(&mut self, id: Id, vector: &[f32]) {
+        if vector.len() != self.config.dim {
+            return;
+        }
+
         if let Some(&existing_idx) = self.id_to_idx.get(&id) {
-            // Update vector in-place
+            // Update vector and re-link its multi-layer neighborhood
             self.nodes[existing_idx].vector = vector.to_vec();
+            let node_level = self.nodes[existing_idx].neighbors.len().saturating_sub(1);
+            if let Some(entry) = self.entry_point {
+                let mut curr_obj = entry;
+                let mut curr_dist = self.dist_to_vec(vector, curr_obj);
+                let top_level = self.max_level;
+
+                if top_level > node_level {
+                    for level in ((node_level + 1)..=top_level).rev() {
+                        let mut changed = true;
+                        while changed {
+                            changed = false;
+                            for &neighbor_idx in &self.nodes[curr_obj].neighbors[level] {
+                                if neighbor_idx == existing_idx {
+                                    continue;
+                                }
+                                let d = self.dist_to_vec(vector, neighbor_idx);
+                                if d < curr_dist {
+                                    curr_dist = d;
+                                    curr_obj = neighbor_idx;
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let start_level = node_level.min(top_level);
+                let mut ep_vec = vec![curr_obj];
+
+                for level in (0..=start_level).rev() {
+                    let candidates = self.search_layer_internal(
+                        vector,
+                        &ep_vec,
+                        self.config.ef_construction,
+                        level,
+                    );
+                    let m_limit = if level == 0 {
+                        self.config.m_max0
+                    } else {
+                        self.config.m
+                    };
+
+                    let selected_neighbors = self.select_neighbors(&candidates, m_limit);
+                    let filtered_neighbors: Vec<usize> = selected_neighbors
+                        .into_iter()
+                        .filter(|&idx| idx != existing_idx)
+                        .collect();
+
+                    self.nodes[existing_idx].neighbors[level] = filtered_neighbors.clone();
+
+                    for &neighbor_idx in &filtered_neighbors {
+                        if !self.nodes[neighbor_idx].neighbors[level].contains(&existing_idx) {
+                            self.nodes[neighbor_idx].neighbors[level].push(existing_idx);
+                        }
+                    }
+
+                    ep_vec = candidates.into_iter().map(|cn| cn.idx).collect();
+                }
+            }
             return;
         }
 
@@ -277,23 +336,16 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
             for &neighbor_idx in &selected_neighbors {
                 self.nodes[neighbor_idx].neighbors[level].push(new_idx);
 
-                // Shrink neighbor's link list if it exceeds limit
+                // Shrink neighbor's link list if it exceeds limit without cloning full vectors
                 if self.nodes[neighbor_idx].neighbors[level].len() > m_limit {
-                    let neighbor_vec = self.nodes[neighbor_idx].vector.clone();
-                    let current_links = self.nodes[neighbor_idx].neighbors[level].clone();
-                    let mut candidate_dists: Vec<(usize, f32)> = current_links
-                        .into_iter()
-                        .map(|idx| {
-                            (
-                                idx,
-                                self.config
-                                    .metric
-                                    .distance(&neighbor_vec, &self.nodes[idx].vector),
-                            )
-                        })
+                    let metric = self.config.metric;
+                    let n_vec = &self.nodes[neighbor_idx].vector;
+                    let links = &self.nodes[neighbor_idx].neighbors[level];
+                    let mut candidate_dists: Vec<(usize, f32)> = links
+                        .iter()
+                        .map(|&idx| (idx, metric.distance(n_vec, &self.nodes[idx].vector)))
                         .collect();
-                    candidate_dists
-                        .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
+                    candidate_dists.sort_unstable_by(|a, b| a.1.total_cmp(&b.1));
                     candidate_dists.truncate(m_limit);
                     self.nodes[neighbor_idx].neighbors[level] =
                         candidate_dists.into_iter().map(|(idx, _)| idx).collect();
@@ -366,7 +418,7 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
     /// Select the best `m` neighbors from candidate list.
     fn select_neighbors(&self, candidates: &[DistNode], m: usize) -> Vec<usize> {
         let mut sorted = candidates.to_vec();
-        sorted.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap_or(Ordering::Equal));
+        sorted.sort_unstable_by(|a, b| a.dist.total_cmp(&b.dist));
         sorted.into_iter().take(m).map(|dn| dn.idx).collect()
     }
 
@@ -374,7 +426,7 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
     ///
     /// Returns candidates sorted from nearest to furthest.
     pub fn search(&self, query: &[f32], k: usize, ef: Option<usize>) -> Vec<HnswCandidate<Id>> {
-        if self.nodes.is_empty() || k == 0 {
+        if self.nodes.is_empty() || k == 0 || query.len() != self.config.dim {
             return Vec::new();
         }
 
@@ -408,15 +460,11 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
         // 2. Run beam search in layer 0 with ef
         let candidates = self.search_layer_internal(query, &[curr_obj], ef_val, 0);
 
-        // 3. Take top-k and construct results with normalized similarity scores
+        // 3. Take top-k and construct results with metric similarity scores
         let mut results = Vec::with_capacity(k.min(candidates.len()));
         for cn in candidates.into_iter().take(k) {
             let node = &self.nodes[cn.idx];
-            let similarity = match self.config.metric {
-                VectorMetric::Cosine => cosine_similarity(query, &node.vector).max(0.0),
-                VectorMetric::DotProduct => dot_product(query, &node.vector),
-                VectorMetric::Euclidean => 1.0 / (1.0 + cn.dist),
-            };
+            let similarity = self.config.metric.similarity(query, &node.vector);
 
             results.push(HnswCandidate {
                 id: node.id.clone(),

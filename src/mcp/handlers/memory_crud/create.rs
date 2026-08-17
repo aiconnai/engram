@@ -301,11 +301,6 @@ pub fn context_seed(ctx: &HandlerContext, params: Value) -> Value {
 
     match result {
         Ok(batch) => {
-            ctx.reporter().step(
-                batch.total_created as u64,
-                total_facts,
-                format!("Seeded {}/{} facts", batch.total_created, total_facts),
-            );
             ctx.reporter().complete(
                 total_facts,
                 format!(
@@ -586,16 +581,11 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
         None => return ToolError::missing_argument("memories").into_value(),
     };
 
-    let inputs: Vec<CreateMemoryInput> = memories
-        .iter()
-        .filter_map(|m| serde_json::from_value(m.clone()).ok())
-        .collect();
-
-    if inputs.is_empty() {
-        return ToolError::invalid_params("No valid memory inputs provided").into_value();
+    if memories.is_empty() {
+        return ToolError::invalid_params("memories array cannot be empty").into_value();
     }
 
-    let total = inputs.len() as u64;
+    let total = memories.len() as u64;
     ctx.reporter().step(
         0,
         total,
@@ -606,17 +596,40 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
         let mut created = Vec::new();
         let mut failed = Vec::new();
 
-        for (index, input) in inputs.iter().enumerate() {
-            match create_memory(conn, input) {
+        for (index, m) in memories.iter().enumerate() {
+            let step_num = (index + 1) as u64;
+            let input: CreateMemoryInput = match serde_json::from_value(m.clone()) {
+                Ok(inp) => inp,
+                Err(e) => {
+                    ctx.reporter().step(
+                        step_num,
+                        total,
+                        format!("Failed deserializing batch item {step_num}/{total}: {e}"),
+                    );
+                    failed.push(BatchError {
+                        index,
+                        id: None,
+                        error: format!("Invalid memory input: {e}"),
+                    });
+                    continue;
+                }
+            };
+
+            match create_memory(conn, &input) {
                 Ok(memory) => {
                     ctx.reporter().step(
-                        (index + 1) as u64,
+                        step_num,
                         total,
-                        format!("Created batch memory {}/{}", index + 1, total),
+                        format!("Created batch memory {step_num}/{total}"),
                     );
                     created.push(memory);
                 }
                 Err(e) => {
+                    ctx.reporter().step(
+                        step_num,
+                        total,
+                        format!("Failed creating batch item {step_num}/{total}: {e}"),
+                    );
                     failed.push(BatchError {
                         index,
                         id: None,
