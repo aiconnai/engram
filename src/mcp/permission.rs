@@ -135,6 +135,180 @@ pub fn permission_denial_for_principal(
     None
 }
 
+pub fn extract_requested_scopes(params: &Value) -> Vec<&str> {
+    let mut scopes = Vec::new();
+    collect_requested_scopes(params, &mut scopes);
+    scopes
+}
+
+fn collect_requested_scopes<'a>(value: &'a Value, scopes: &mut Vec<&'a str>) {
+    match value {
+        Value::Object(object) => {
+            for (key, child) in object {
+                if matches!(key.as_str(), "scope" | "scope_path") {
+                    if let Some(s) = child.as_str() {
+                        if !s.trim().is_empty() {
+                            scopes.push(s);
+                        }
+                    } else if let Some(arr) = child.as_array() {
+                        for item in arr {
+                            if let Some(s) = item.as_str() {
+                                if !s.trim().is_empty() {
+                                    scopes.push(s);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    collect_requested_scopes(child, scopes);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_requested_scopes(item, scopes);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+}
+
+pub fn extract_agent_id<'a>(
+    params: &'a Value,
+    principal: Option<&'a TransportPrincipal>,
+) -> Option<&'a str> {
+    if let Some(id) = params.get("agent_id").and_then(|v| v.as_str()) {
+        if !id.trim().is_empty() {
+            return Some(id);
+        }
+    }
+    principal.and_then(|p| {
+        let user_str = p.auth_context().user_id.as_str();
+        if !user_str.is_empty() && user_str != "system" && user_str != "anonymous" {
+            Some(user_str)
+        } else {
+            None
+        }
+    })
+}
+
+pub fn required_scope_permission(tool_name: &str) -> &'static str {
+    if ADMIN_TOOLS.contains(&tool_name) {
+        return "admin";
+    }
+    match required_mode(tool_name) {
+        Some(PermissionMode::Admin) | Some(PermissionMode::Maintenance) => "admin",
+        Some(PermissionMode::ScopedWrite) => "write",
+        Some(PermissionMode::ReadOnly) | None => "read",
+    }
+}
+
+pub fn check_scope_authorization(
+    conn: &rusqlite::Connection,
+    tool_name: &str,
+    params: &Value,
+    principal: Option<&TransportPrincipal>,
+) -> Option<Value> {
+    let agent_id = extract_agent_id(params, principal)?;
+    let scopes = extract_requested_scopes(params);
+    if scopes.is_empty() {
+        return None;
+    }
+
+    let required_perm = required_scope_permission(tool_name);
+    for scope in scopes {
+        // Global root or unparameterized scope does not require specific path grant
+        if scope.eq_ignore_ascii_case("global") {
+            continue;
+        }
+
+        match crate::storage::scope_grants::check_scope_access(conn, agent_id, scope, required_perm)
+        {
+            Ok(true) => continue,
+            Ok(false) => {
+                let current_mode = principal
+                    .map(|p| principal_permission_mode(&p.auth_context().permissions).as_str())
+                    .unwrap_or("unauthorized_scope");
+                return Some(
+                    crate::mcp::error::ToolError::permission_denied(
+                        tool_name,
+                        current_mode,
+                        required_perm,
+                    )
+                    .with_details(json!({
+                        "agent_id": agent_id,
+                        "scope": scope,
+                        "required_permission": required_perm,
+                        "reason": format!("Agent '{agent_id}' does not have '{required_perm}' access to scope '{scope}'")
+                    }))
+                    .into_value(),
+                );
+            }
+            Err(e) => {
+                return Some(crate::mcp::error::ToolError::from(e).into_value());
+            }
+        }
+    }
+
+    None
+}
+
+/// Central authorization guard checking:
+/// 1. Environment permission modes (ENGRAM_PERMISSION_MODE)
+/// 2. Transport principal modes and workspace boundaries
+/// 3. Hierarchical scope access grants (when connection and scope parameters are available)
+pub fn check_tool_authorization(
+    conn: Option<&rusqlite::Connection>,
+    tool_name: &str,
+    params: &Value,
+    principal: Option<&TransportPrincipal>,
+) -> Option<Value> {
+    // 1. Env-level permission mode
+    if let Some(denial) = permission_denial_from_env(tool_name) {
+        return Some(denial);
+    }
+
+    // 2. Principal workspace & permission mode
+    if let Some(p) = principal {
+        if requests_all_workspaces(params) && !allows_all_workspaces(p) {
+            return Some(permission_denied(
+                tool_name,
+                principal_permission_mode(&p.auth_context().permissions),
+                PermissionMode::Admin,
+            ));
+        }
+
+        let workspaces = requested_workspaces(params);
+        if workspaces.is_empty() {
+            if matches!(p, crate::auth::TransportPrincipal::AnonymousLoopback(_)) {
+                return Some(permission_denied(
+                    tool_name,
+                    principal_permission_mode(&p.auth_context().permissions),
+                    required_mode(tool_name).unwrap_or(PermissionMode::ReadOnly),
+                ));
+            }
+            if let Some(denial) = permission_denial_for_principal(tool_name, p, None) {
+                return Some(denial);
+            }
+        } else {
+            for ws in workspaces {
+                if let Some(denial) = permission_denial_for_principal(tool_name, p, Some(ws)) {
+                    return Some(denial);
+                }
+            }
+        }
+    }
+
+    // 3. Hierarchical scope access grant verification
+    if let Some(connection) = conn {
+        if let Some(denial) = check_scope_authorization(connection, tool_name, params, principal) {
+            return Some(denial);
+        }
+    }
+
+    None
+}
+
 pub(crate) fn requested_workspaces(params: &Value) -> Vec<&str> {
     let mut workspaces = Vec::new();
     collect_requested_workspaces(params, &mut workspaces);
