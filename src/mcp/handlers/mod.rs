@@ -111,7 +111,21 @@ impl HandlerContext {
 ///
 /// Returns the JSON value that should be placed in the MCP `ToolCallResult`.
 pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
-    if let Some(denial) = crate::mcp::permission::permission_denial_from_env(tool_name) {
+    let auth_denial = ctx
+        .storage
+        .with_connection(|conn| {
+            Ok(crate::mcp::permission::check_tool_authorization(
+                Some(conn),
+                tool_name,
+                &params,
+                None,
+            ))
+        })
+        .unwrap_or_else(|_| {
+            crate::mcp::permission::check_tool_authorization(None, tool_name, &params, None)
+        });
+
+    if let Some(denial) = auth_denial {
         return denial;
     }
 
