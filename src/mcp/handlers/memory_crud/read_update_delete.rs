@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use super::super::HandlerContext;
 use super::strip_private_content;
 use crate::mcp::error::ToolError;
+use crate::mcp::progress::ProgressReporterExt;
 use crate::realtime::RealtimeEvent;
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
@@ -238,34 +239,56 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
         return ToolError::invalid_params("No valid IDs provided").into_value();
     }
 
+    let total = ids.len() as u64;
+    ctx.reporter().step(
+        0,
+        total,
+        format!("Starting batch deletion of {total} memories"),
+    );
+
     let cascade_chain = params
         .get("cascade_chain")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    if cascade_chain {
-        ctx.storage
-            .with_transaction(|conn| {
-                let mut expanded: Vec<i64> = Vec::new();
-                let mut seen = std::collections::HashSet::new();
-                for &id in &ids {
-                    let chain = collect_supersedes_chain(conn, id)?;
-                    for chain_id in chain {
-                        if seen.insert(chain_id) {
-                            expanded.push(chain_id);
-                        }
+    let result = if cascade_chain {
+        ctx.storage.with_transaction(|conn| {
+            let mut expanded: Vec<i64> = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            for (i, &id) in ids.iter().enumerate() {
+                ctx.reporter().step(
+                    (i + 1) as u64,
+                    total,
+                    format!(
+                        "Resolving supersedes chain for memory {id} ({}/{})",
+                        i + 1,
+                        total
+                    ),
+                );
+                let chain = collect_supersedes_chain(conn, id)?;
+                for chain_id in chain {
+                    if seen.insert(chain_id) {
+                        expanded.push(chain_id);
                     }
                 }
-                let result = delete_memory_batch(conn, &expanded)?;
-                Ok(json!(result))
-            })
-            .unwrap_or_else(|e| ToolError::from(e).into_value())
+            }
+            delete_memory_batch(conn, &expanded)
+        })
     } else {
-        ctx.storage
-            .with_connection(|conn| {
-                let result = delete_memory_batch(conn, &ids)?;
-                Ok(json!(result))
-            })
-            .unwrap_or_else(|e| ToolError::from(e).into_value())
+        ctx.storage.with_connection(|conn| {
+            let result = delete_memory_batch(conn, &ids)?;
+            Ok(result)
+        })
+    };
+
+    match result {
+        Ok(res) => {
+            ctx.reporter().complete(
+                total,
+                format!("Successfully deleted {} memories", res.total_deleted),
+            );
+            json!(res)
+        }
+        Err(e) => ToolError::from(e).into_value(),
     }
 }

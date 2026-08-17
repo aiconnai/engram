@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 
 use super::super::HandlerContext;
 use crate::mcp::error::ToolError;
+use crate::mcp::progress::ProgressReporterExt;
 use crate::realtime::RealtimeEvent;
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
@@ -287,12 +288,32 @@ pub fn context_seed(ctx: &HandlerContext, params: Value) -> Value {
             .into_value();
     }
 
+    let total_facts = inputs.len() as u64;
+    ctx.reporter().step(
+        0,
+        total_facts,
+        format!("Starting context seed of {total_facts} facts"),
+    );
+
     let result = ctx
         .storage
         .with_transaction(|conn| create_memory_batch(conn, &inputs));
 
     match result {
         Ok(batch) => {
+            ctx.reporter().step(
+                batch.total_created as u64,
+                total_facts,
+                format!("Seeded {}/{} facts", batch.total_created, total_facts),
+            );
+            ctx.reporter().complete(
+                total_facts,
+                format!(
+                    "Context seed completed: {} created, {} failed",
+                    batch.total_created, batch.total_failed
+                ),
+            );
+
             ctx.search_cache
                 .invalidate_for_workspace(input.workspace.as_deref());
 
@@ -557,7 +578,8 @@ pub fn memory_create_section(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::storage::create_memory_batch;
+    use crate::storage::create_memory;
+    use crate::storage::queries::{BatchCreateResult, BatchError};
 
     let memories = match params.get("memories").and_then(|v| v.as_array()) {
         Some(arr) => arr,
@@ -573,10 +595,56 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
         return ToolError::invalid_params("No valid memory inputs provided").into_value();
     }
 
-    ctx.storage
-        .with_connection(|conn| {
-            let result = create_memory_batch(conn, &inputs)?;
-            Ok(json!(result))
+    let total = inputs.len() as u64;
+    ctx.reporter().step(
+        0,
+        total,
+        format!("Starting batch creation of {total} memories"),
+    );
+
+    let result = ctx.storage.with_transaction(|conn| {
+        let mut created = Vec::new();
+        let mut failed = Vec::new();
+
+        for (index, input) in inputs.iter().enumerate() {
+            match create_memory(conn, input) {
+                Ok(memory) => {
+                    ctx.reporter().step(
+                        (index + 1) as u64,
+                        total,
+                        format!("Created batch memory {}/{}", index + 1, total),
+                    );
+                    created.push(memory);
+                }
+                Err(e) => {
+                    failed.push(BatchError {
+                        index,
+                        id: None,
+                        error: e.to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(BatchCreateResult {
+            total_created: created.len(),
+            total_failed: failed.len(),
+            created,
+            failed,
         })
-        .unwrap_or_else(|e| ToolError::from(e).into_value())
+    });
+
+    match result {
+        Ok(batch) => {
+            ctx.reporter().complete(
+                total,
+                format!(
+                    "Batch creation completed: {} created, {} failed",
+                    batch.total_created, batch.total_failed
+                ),
+            );
+            json!(batch)
+        }
+        Err(e) => ToolError::from(e).into_value(),
+    }
 }
