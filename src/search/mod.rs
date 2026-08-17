@@ -15,6 +15,7 @@ mod bm25;
 pub mod explain;
 pub mod feedback;
 mod fuzzy;
+pub mod hnsw;
 mod hybrid;
 mod metadata;
 pub mod mmr;
@@ -22,6 +23,7 @@ mod rerank;
 pub mod result_cache;
 pub mod semantic_cache;
 pub mod utility;
+pub mod vector;
 
 #[cfg(feature = "neural-rerank")]
 pub mod neural_rerank;
@@ -30,11 +32,13 @@ pub use aggregation::*;
 pub use bm25::*;
 pub use explain::*;
 pub use fuzzy::*;
+pub use hnsw::*;
 pub use hybrid::*;
 pub use metadata::*;
 pub use mmr::*;
 pub use rerank::*;
 pub use result_cache::*;
+pub use vector::*;
 
 use crate::types::SearchStrategy;
 

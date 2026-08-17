@@ -235,30 +235,7 @@ impl SemanticCache {
 // Free-standing helpers (pub for testing / benchmarking)
 // ---------------------------------------------------------------------------
 
-/// Compute cosine similarity between two embedding vectors.
-///
-/// Returns `0.0` if either vector is empty or if the lengths differ.
-pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    if a.len() != b.len() || a.is_empty() {
-        return 0.0;
-    }
-
-    let mut dot = 0.0_f32;
-    let mut norm_a = 0.0_f32;
-    let mut norm_b = 0.0_f32;
-
-    for (x, y) in a.iter().zip(b.iter()) {
-        dot += x * y;
-        norm_a += x * x;
-        norm_b += y * y;
-    }
-
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 0.0;
-    }
-
-    dot / (norm_a.sqrt() * norm_b.sqrt())
-}
+pub use super::vector::cosine_similarity;
 
 /// Derive a `u64` bucket key from the first 8 floats of an embedding.
 ///

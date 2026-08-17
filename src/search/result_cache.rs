@@ -204,26 +204,9 @@ impl SearchResultCache {
     }
 
     /// Calculate cosine similarity between two embeddings
+    #[inline]
     fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-        if a.len() != b.len() || a.is_empty() {
-            return 0.0;
-        }
-
-        let mut dot = 0.0f32;
-        let mut norm_a = 0.0f32;
-        let mut norm_b = 0.0f32;
-
-        for (x, y) in a.iter().zip(b.iter()) {
-            dot += x * y;
-            norm_a += x * x;
-            norm_b += y * y;
-        }
-
-        if norm_a == 0.0 || norm_b == 0.0 {
-            return 0.0;
-        }
-
-        dot / (norm_a.sqrt() * norm_b.sqrt())
+        super::vector::cosine_similarity(a, b)
     }
 
     /// Fast-path exact query match lookup (Tier 1).

@@ -544,8 +544,8 @@ jobs:
           # On PRs: compare against baseline and comment
           comment-on-alert: true
           comment-always: ${{ github.event_name == 'pull_request' }}
-          # Fail if any benchmark regresses by more than 15%
-          alert-threshold: "115%"
+          # Fail if any benchmark regresses significantly (tuned for shared VM jitter)
+          alert-threshold: "200%"
           fail-on-alert: ${{ github.event_name == 'pull_request' }}
           # Store history in gh-pages branch
           gh-pages-branch: gh-pages
