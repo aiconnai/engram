@@ -35,7 +35,7 @@ pub mod identity_links;
 pub mod image_storage;
 mod lock;
 pub mod memory_blocks;
-mod migrations;
+pub mod migrations;
 pub mod operational_context;
 pub mod pending_injections;
 pub mod queries;

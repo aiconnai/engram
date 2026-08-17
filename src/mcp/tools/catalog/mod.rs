@@ -1,3 +1,14 @@
+//! MCP tool catalog: domain definitions, feature gating, and categorizations.
+
+pub mod admin;
+pub mod context;
+pub mod graph;
+pub mod memory_crud;
+pub mod misc;
+pub mod multimodal;
+pub mod policy;
+pub mod search;
+
 pub(crate) fn required_features(name: &str) -> &'static [&'static str] {
     match name {
         "langfuse_connect"
@@ -192,7 +203,7 @@ mod tests {
 
     #[test]
     fn every_tool_resolves_to_a_named_group() {
-        for def in TOOL_DEFINITIONS {
+        for def in TOOL_DEFINITIONS.iter() {
             let group = tool_group(def.name);
             assert!(!group.is_empty(), "empty group for {}", def.name);
             assert_ne!(group, "unknown", "unknown group for {}", def.name);

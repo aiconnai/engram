@@ -215,6 +215,16 @@ def required_match(pattern: re.Pattern[str], text: str, label: str) -> str:
 
 def extract_tool_definition_source(source: Path) -> str:
     text = source.read_text()
+    catalog_dir = source.parent / "catalog"
+    if catalog_dir.is_dir() and (catalog_dir / "memory_crud.rs").is_file():
+        parts = []
+        for mod in ["memory_crud", "search", "context", "graph", "policy", "admin", "multimodal", "misc"]:
+            mod_path = catalog_dir / f"{mod}.rs"
+            if mod_path.is_file():
+                parts.append(mod_path.read_text())
+        if parts:
+            return "\n".join(parts)
+
     definitions = text.find("pub const TOOL_DEFINITIONS")
     if definitions != -1:
         text = text[definitions:]
@@ -224,22 +234,21 @@ def extract_tool_definition_source(source: Path) -> str:
             return extract_tool_definition_source(include_path)
         return text
 
+    definitions = text.find("pub static TOOL_DEFINITIONS")
+    if definitions != -1:
+        return text
+
     text = text.lstrip()
     if text.startswith("&["):
+        return text
+
+    if "ToolDef {" in text:
         return text
 
     raise ValueError("missing TOOL_DEFINITIONS")
 
 
 def tool_blocks(text: str) -> list[str]:
-    definitions = text.find("pub const TOOL_DEFINITIONS")
-    if definitions == -1:
-        # For sources that are included directly as a slice literal (`&[ ... ]`).
-        if not text.startswith("&["):
-            raise ValueError("missing TOOL_DEFINITIONS")
-        # Keep whole text.
-    else:
-        text = text[definitions:]
     blocks: list[str] = []
     cursor = 0
     while True:
