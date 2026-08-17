@@ -22,117 +22,20 @@ Total tools: **285**
 | `memory_create_todo` | standard | memory.core | always | mutating (no MCP hints) | `content` |
 | `memory_create_issue` | standard | memory.core | always | mutating (no MCP hints) | `title` |
 | `memory_versions` | advanced | memory.admin | always | readOnlyHint | `id` |
-| `memory_set_expiration` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id`, `ttl_seconds` |
-| `memory_cleanup_expired` | standard | memory.lifecycle | always | destructiveHint | none |
-| `memory_stats` | standard | memory.admin | always | readOnlyHint | none |
-| `memory_export_graph` | standard | memory.admin | always | readOnlyHint | none |
-| `memory_scan_project` | advanced | memory.core | always | mutating (no MCP hints) | none |
-| `memory_get_project_context` | advanced | memory.core | always | readOnlyHint | none |
-| `memory_list_instruction_files` | advanced | memory.core | always | readOnlyHint | none |
-| `memory_ingest_document` | advanced | memory.core | always | mutating (no MCP hints) | `path` |
-| `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
-| `dream_create` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | none |
-| `dream_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
-| `dream_list` | advanced | feature.dream | dream-phase | readOnlyHint | none |
-| `dream_cancel` | advanced | feature.dream | dream-phase | idempotentHint | `id` |
-| `dream_archive` | advanced | feature.dream | dream-phase | idempotentHint | `id` |
-| `dream_candidates_list` | advanced | feature.dream | dream-phase | readOnlyHint | none |
-| `dream_candidate_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
-| `dream_candidate_review` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `id`, `review_state` |
-| `dream_candidate_apply` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `id` |
-| `memory_agent_writeback` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `proposed_content` |
-| `dream_eval_run` | advanced | feature.dream | dream-phase | readOnlyHint | none |
-| `workspace_list` | essential | workspace | always | readOnlyHint | none |
-| `workspace_stats` | standard | workspace | always | readOnlyHint | `workspace` |
-| `workspace_move` | standard | workspace | always | mutating (no MCP hints) | `id`, `workspace` |
-| `workspace_delete` | advanced | workspace | always | destructiveHint | `workspace` |
-| `memory_create_daily` | standard | memory.core | always | mutating (no MCP hints) | `content` |
-| `memory_score` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
-| `memory_lifecycle_update` | essential | memory.lifecycle | always | mutating (no MCP hints) | `id` |
-| `memory_promote` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
-| `memory_decay` | standard | memory.lifecycle | always | mutating (no MCP hints) | none |
-| `memory_explain` | standard | memory.core | always | readOnlyHint | `id` |
-| `memory_reconcile_conflict` | standard | memory.quality | always | mutating (no MCP hints) | `id`, `reason` |
-| `memory_promote_to_permanent` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
-| `embedding_cache_stats` | advanced | embedding | always | readOnlyHint | none |
-| `embedding_cache_clear` | advanced | embedding | always | destructiveHint | none |
-| `session_index` | standard | session | always | mutating (no MCP hints) | `messages`, `session_id` |
-| `session_index_delta` | standard | session | always | mutating (no MCP hints) | `messages`, `session_id` |
-| `session_get` | standard | session | always | readOnlyHint | `session_id` |
-| `session_list` | standard | session | always | readOnlyHint | none |
-| `session_delete` | standard | session | always | destructiveHint | `session_id` |
-| `identity_create` | standard | identity | always | mutating (no MCP hints) | `canonical_id`, `display_name` |
-| `identity_get` | standard | identity | always | readOnlyHint | `canonical_id` |
-| `identity_update` | standard | identity | always | mutating (no MCP hints) | `canonical_id` |
-| `identity_delete` | standard | identity | always | destructiveHint | `canonical_id` |
-| `identity_add_alias` | standard | identity | always | mutating (no MCP hints) | `alias`, `canonical_id` |
-| `identity_remove_alias` | advanced | identity | always | mutating (no MCP hints) | `alias` |
-| `identity_resolve` | standard | identity | always | readOnlyHint | `alias` |
-| `identity_list` | standard | identity | always | readOnlyHint | none |
-| `identity_search` | standard | identity | always | readOnlyHint | `query` |
-| `identity_link` | standard | identity | always | mutating (no MCP hints) | `canonical_id`, `memory_id` |
-| `identity_unlink` | advanced | identity | always | mutating (no MCP hints) | `canonical_id`, `memory_id` |
-| `memory_get_identities` | advanced | memory.core | always | readOnlyHint | `id` |
 | `memory_create_batch` | standard | memory.core | always | mutating (no MCP hints) | `memories` |
 | `memory_delete_batch` | standard | memory.core | always | destructiveHint | `ids` |
 | `memory_ingest_fact` | standard | memory.graph | always | mutating (no MCP hints) | `fact` |
 | `memory_ingest_fact_batch` | standard | memory.graph | always | mutating (no MCP hints) | `facts` |
-| `memory_tags` | standard | memory.admin | always | readOnlyHint | none |
-| `memory_tag_hierarchy` | advanced | memory.admin | always | readOnlyHint | none |
-| `memory_validate_tags` | advanced | memory.admin | always | readOnlyHint | none |
-| `memory_rebuild_embeddings` | advanced | memory.admin | always | idempotentHint | none |
-| `memory_rebuild_crossrefs` | advanced | memory.admin | always | idempotentHint | none |
-| `context_budget_check` | advanced | context | always | readOnlyHint | `budget`, `memory_ids`, `model` |
-| `pending_injections_count` | advanced | admin | always | readOnlyHint | none |
-| `pending_injections_cleanup` | advanced | admin | always | destructiveHint | none |
-| `memory_archive_old` | advanced | memory.lifecycle | always | mutating (no MCP hints) | none |
-| `memory_from_trace` | advanced | feature.langfuse | langfuse | mutating (no MCP hints) | `trace_id` |
-| `lifecycle_status` | standard | lifecycle | always | readOnlyHint | none |
-| `lifecycle_run` | standard | lifecycle | always | idempotentHint | none |
-| `memory_set_lifecycle` | advanced | memory.lifecycle | always | mutating (no MCP hints) | `id`, `state` |
-| `lifecycle_config` | advanced | lifecycle | always | readOnlyHint | none |
-| `retention_policy_set` | standard | lifecycle | always | mutating (no MCP hints) | `workspace` |
-| `retention_policy_get` | standard | lifecycle | always | readOnlyHint | `workspace` |
-| `retention_policy_list` | standard | lifecycle | always | readOnlyHint | none |
-| `retention_policy_delete` | advanced | lifecycle | always | destructiveHint | `workspace` |
-| `retention_policy_apply` | advanced | lifecycle | always | idempotentHint | none |
-| `salience_get` | advanced | quality | always | readOnlyHint | `id` |
-| `salience_set_importance` | advanced | quality | always | mutating (no MCP hints) | `id`, `importance` |
-| `salience_boost` | advanced | quality | always | mutating (no MCP hints) | `id` |
-| `salience_demote` | advanced | quality | always | mutating (no MCP hints) | `id` |
-| `salience_decay_run` | advanced | quality | always | mutating (no MCP hints) | none |
-| `salience_stats` | advanced | quality | always | readOnlyHint | none |
-| `salience_history` | advanced | quality | always | readOnlyHint | `id` |
-| `salience_top` | advanced | quality | always | readOnlyHint | none |
-| `quality_score` | standard | quality | always | readOnlyHint | `id` |
-| `quality_report` | standard | quality | always | readOnlyHint | none |
-| `quality_find_duplicates` | advanced | quality | always | readOnlyHint | none |
-| `quality_get_duplicates` | advanced | quality | always | readOnlyHint | none |
-| `quality_find_conflicts` | advanced | quality | always | readOnlyHint | `id` |
-| `quality_get_conflicts` | advanced | quality | always | readOnlyHint | none |
-| `quality_resolve_conflict` | advanced | quality | always | destructiveHint | `conflict_id`, `resolution` |
-| `quality_source_trust` | advanced | quality | always | readOnlyHint | `source_type` |
-| `quality_improve` | advanced | quality | always | mutating (no MCP hints) | `id` |
-| `memory_export_markdown` | advanced | memory.admin | always | readOnlyHint | `workspace` |
-| `memory_import_markdown` | advanced | memory.admin | always | mutating (no MCP hints) | `input_dir` |
-| `memory_block_create` | standard | memory.block | always | mutating (no MCP hints) | `name` |
-| `memory_block_get` | standard | memory.block | always | readOnlyHint | `name` |
-| `memory_block_edit` | standard | memory.block | always | mutating (no MCP hints) | `content`, `name` |
-| `memory_block_list` | standard | memory.block | always | readOnlyHint | none |
-| `memory_block_archive` | standard | memory.block | always | mutating (no MCP hints) | `name` |
-| `memory_block_history` | standard | memory.block | always | readOnlyHint | `name` |
-| `memory_cache_stats` | standard | memory.admin | always | readOnlyHint | none |
-| `memory_cache_clear` | advanced | memory.admin | always | mutating (no MCP hints) | none |
-| `memory_compress_for_context` | standard | memory.admin | always | readOnlyHint | `ids` |
-| `memory_embedding_migrate` | advanced | memory.admin | always | mutating (no MCP hints) | none |
-| `memory_embedding_providers` | standard | memory.admin | always | readOnlyHint | none |
-| `temporal_add_edge` | advanced | temporal | always | mutating (no MCP hints) | `from_id`, `relation`, `to_id`, `valid_from` |
-| `temporal_contradictions` | advanced | temporal | always | readOnlyHint | none |
-| `temporal_diff` | advanced | temporal | always | readOnlyHint | `t1`, `t2` |
-| `temporal_snapshot` | advanced | temporal | always | readOnlyHint | `timestamp` |
-| `temporal_timeline` | advanced | temporal | always | readOnlyHint | `from_id`, `to_id` |
-| `memory_enrichment_timeline` | standard | memory.admin | always | readOnlyHint | `memory_id` |
-| `memory_enrichment_audit` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_get_public` | advanced | memory.core | always | readOnlyHint | `id` |
+| `memory_get_full` | advanced | memory.core | always | readOnlyHint | `id` |
+| `memory_create_section` | standard | memory.core | always | mutating (no MCP hints) | `title` |
+| `memory_checkpoint` | standard | memory.session | always | mutating (no MCP hints) | `session_id`, `summary` |
+| `memory_create_episodic` | standard | memory.core | always | mutating (no MCP hints) | `content`, `event_time` |
+| `memory_create_procedural` | standard | memory.core | always | mutating (no MCP hints) | `content`, `trigger_pattern` |
+| `memory_get_timeline` | standard | memory.core | always | readOnlyHint | none |
+| `memory_get_procedures` | standard | memory.core | always | readOnlyHint | none |
+| `memory_record_procedure_outcome` | standard | memory.core | always | mutating (no MCP hints) | `id`, `success` |
+| `memory_list_compact` | essential | memory.core | always | readOnlyHint | none |
 | `memory_search` | standard | memory.search | always | readOnlyHint | `query` |
 | `memory_smart_retrieve` | essential | memory.search | always | readOnlyHint | `query` |
 | `memory_digest` | essential | memory.search | always | readOnlyHint | `topic` |
@@ -159,6 +62,47 @@ Total tools: **285**
 | `memory_detect_updates` | standard | memory.admin | always | readOnlyHint | `content` |
 | `memory_explain_search` | standard | memory.search | always | readOnlyHint | `results` |
 | `memory_suggest_acquisitions` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_scan_project` | advanced | memory.core | always | mutating (no MCP hints) | none |
+| `memory_get_project_context` | advanced | memory.core | always | readOnlyHint | none |
+| `memory_list_instruction_files` | advanced | memory.core | always | readOnlyHint | none |
+| `memory_ingest_document` | advanced | memory.core | always | mutating (no MCP hints) | `path` |
+| `session_index` | standard | session | always | mutating (no MCP hints) | `messages`, `session_id` |
+| `session_index_delta` | standard | session | always | mutating (no MCP hints) | `messages`, `session_id` |
+| `session_get` | standard | session | always | readOnlyHint | `session_id` |
+| `session_list` | standard | session | always | readOnlyHint | none |
+| `session_delete` | standard | session | always | destructiveHint | `session_id` |
+| `context_budget_check` | advanced | context | always | readOnlyHint | `budget`, `memory_ids`, `model` |
+| `pending_injections_count` | advanced | admin | always | readOnlyHint | none |
+| `pending_injections_cleanup` | advanced | admin | always | destructiveHint | none |
+| `session_context_create` | standard | session | always | mutating (no MCP hints) | `name` |
+| `session_context_add_memory` | advanced | session | always | mutating (no MCP hints) | `memory_id`, `session_id` |
+| `session_context_remove_memory` | advanced | session | always | mutating (no MCP hints) | `memory_id`, `session_id` |
+| `session_context_get` | standard | session | always | readOnlyHint | `session_id` |
+| `session_context_list` | standard | session | always | readOnlyHint | none |
+| `session_context_search` | standard | session | always | readOnlyHint | `query`, `session_id` |
+| `session_context_update_summary` | advanced | session | always | mutating (no MCP hints) | `session_id`, `summary` |
+| `session_context_end` | advanced | session | always | mutating (no MCP hints) | `session_id` |
+| `session_context_export` | advanced | session | always | readOnlyHint | `session_id` |
+| `memory_get_injection_prompt` | essential | memory.search | always | readOnlyHint | `query` |
+| `memory_observe_tool_use` | standard | memory.session | always | mutating (no MCP hints) | `tool_input`, `tool_name`, `tool_output` |
+| `memory_archive_tool_output` | standard | memory.lifecycle | always | mutating (no MCP hints) | `raw_output`, `tool_name` |
+| `memory_get_archived_output` | standard | memory.lifecycle | always | readOnlyHint | `archive_id` |
+| `memory_get_working_memory` | standard | memory.session | always | readOnlyHint | `session_id` |
+| `session_land` | essential | session | always | mutating (no MCP hints) | none |
+| `memory_build_context` | standard | memory.core | always | readOnlyHint | `query` |
+| `context_record` | standard | context | always | mutating (no MCP hints) | `event_type`, `session_id`, `source` |
+| `context_record_artifact` | standard | context | always | mutating (no MCP hints) | `kind` |
+| `context_get_artifact` | standard | context | always | readOnlyHint | `artifact_id`, `reason` |
+| `context_search` | standard | context | always | readOnlyHint | `query` |
+| `context_build_bundle` | standard | context | always | readOnlyHint | none |
+| `memory_prepare_context` | advanced | memory.core | always | readOnlyHint | `query` |
+| `memory_extract_facts` | standard | memory.graph | always | mutating (no MCP hints) | `memory_id` |
+| `memory_export_graph` | standard | memory.admin | always | readOnlyHint | none |
+| `temporal_add_edge` | advanced | temporal | always | mutating (no MCP hints) | `from_id`, `relation`, `to_id`, `valid_from` |
+| `temporal_contradictions` | advanced | temporal | always | readOnlyHint | none |
+| `temporal_diff` | advanced | temporal | always | readOnlyHint | `t1`, `t2` |
+| `temporal_snapshot` | advanced | temporal | always | readOnlyHint | `timestamp` |
+| `temporal_timeline` | advanced | temporal | always | readOnlyHint | `from_id`, `to_id` |
 | `graph_query` | essential | misc | always | readOnlyHint | none |
 | `graph_mutate` | standard | misc | always | mutating (no MCP hints) | none |
 | `memory_link` | standard | memory.graph | always | mutating (no MCP hints) | `from_id`, `to_id` |
@@ -187,7 +131,95 @@ Total tools: **285**
 | `memory_list_facts` | standard | memory.graph | always | readOnlyHint | none |
 | `memory_query_triplets` | standard | memory.graph | always | readOnlyHint | none |
 | `memory_reflect` | standard | memory.graph | always | readOnlyHint | `ids` |
+| `scope_get` | standard | scope | always | readOnlyHint | `memory_id` |
+| `scope_list` | standard | scope | always | readOnlyHint | none |
+| `scope_search` | standard | scope | always | readOnlyHint | `query`, `scope_path` |
+| `scope_set` | standard | scope | always | mutating (no MCP hints) | `memory_id`, `scope_path` |
+| `scope_tree` | standard | scope | always | readOnlyHint | none |
+| `memory_set_expiration` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id`, `ttl_seconds` |
+| `memory_cleanup_expired` | standard | memory.lifecycle | always | destructiveHint | none |
+| `memory_create_daily` | standard | memory.core | always | mutating (no MCP hints) | `content` |
+| `memory_score` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
+| `memory_lifecycle_update` | essential | memory.lifecycle | always | mutating (no MCP hints) | `id` |
+| `memory_promote` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
+| `memory_decay` | standard | memory.lifecycle | always | mutating (no MCP hints) | none |
+| `memory_explain` | standard | memory.core | always | readOnlyHint | `id` |
+| `memory_reconcile_conflict` | standard | memory.quality | always | mutating (no MCP hints) | `id`, `reason` |
+| `memory_promote_to_permanent` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id` |
+| `lifecycle_status` | standard | lifecycle | always | readOnlyHint | none |
+| `lifecycle_run` | standard | lifecycle | always | idempotentHint | none |
+| `memory_set_lifecycle` | advanced | memory.lifecycle | always | mutating (no MCP hints) | `id`, `state` |
+| `lifecycle_config` | advanced | lifecycle | always | readOnlyHint | none |
+| `retention_policy_set` | standard | lifecycle | always | mutating (no MCP hints) | `workspace` |
+| `retention_policy_get` | standard | lifecycle | always | readOnlyHint | `workspace` |
+| `retention_policy_list` | standard | lifecycle | always | readOnlyHint | none |
+| `retention_policy_delete` | advanced | lifecycle | always | destructiveHint | `workspace` |
+| `retention_policy_apply` | advanced | lifecycle | always | idempotentHint | none |
+| `salience_get` | advanced | quality | always | readOnlyHint | `id` |
+| `salience_set_importance` | advanced | quality | always | mutating (no MCP hints) | `id`, `importance` |
+| `salience_boost` | advanced | quality | always | mutating (no MCP hints) | `id` |
+| `salience_demote` | advanced | quality | always | mutating (no MCP hints) | `id` |
+| `salience_decay_run` | advanced | quality | always | mutating (no MCP hints) | none |
+| `salience_stats` | advanced | quality | always | readOnlyHint | none |
+| `salience_history` | advanced | quality | always | readOnlyHint | `id` |
+| `salience_top` | advanced | quality | always | readOnlyHint | none |
+| `quality_score` | standard | quality | always | readOnlyHint | `id` |
+| `quality_report` | standard | quality | always | readOnlyHint | none |
+| `quality_find_duplicates` | advanced | quality | always | readOnlyHint | none |
+| `quality_get_duplicates` | advanced | quality | always | readOnlyHint | none |
+| `quality_find_conflicts` | advanced | quality | always | readOnlyHint | `id` |
+| `quality_get_conflicts` | advanced | quality | always | readOnlyHint | none |
+| `quality_resolve_conflict` | advanced | quality | always | destructiveHint | `conflict_id`, `resolution` |
+| `quality_source_trust` | advanced | quality | always | readOnlyHint | `source_type` |
+| `quality_improve` | advanced | quality | always | mutating (no MCP hints) | `id` |
 | `memory_resolve_conflict` | standard | memory.quality | always | mutating (no MCP hints) | `conflict_id` |
+| `memory_boost` | standard | memory.core | always | mutating (no MCP hints) | `id` |
+| `memory_explain_utility` | standard | memory.admin | always | readOnlyHint | `memory_id` |
+| `memory_detect_conflicts` | standard | memory.quality | always | mutating (no MCP hints) | none |
+| `memory_feedback` | standard | memory.admin | always | mutating (no MCP hints) | `memory_id`, `query`, `signal` |
+| `memory_feedback_stats` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_utility_score` | standard | memory.lifecycle | always | readOnlyHint | `id` |
+| `memory_stats` | standard | memory.admin | always | readOnlyHint | none |
+| `workspace_list` | essential | workspace | always | readOnlyHint | none |
+| `workspace_stats` | standard | workspace | always | readOnlyHint | `workspace` |
+| `workspace_move` | standard | workspace | always | mutating (no MCP hints) | `id`, `workspace` |
+| `workspace_delete` | advanced | workspace | always | destructiveHint | `workspace` |
+| `embedding_cache_stats` | advanced | embedding | always | readOnlyHint | none |
+| `embedding_cache_clear` | advanced | embedding | always | destructiveHint | none |
+| `identity_create` | standard | identity | always | mutating (no MCP hints) | `canonical_id`, `display_name` |
+| `identity_get` | standard | identity | always | readOnlyHint | `canonical_id` |
+| `identity_update` | standard | identity | always | mutating (no MCP hints) | `canonical_id` |
+| `identity_delete` | standard | identity | always | destructiveHint | `canonical_id` |
+| `identity_add_alias` | standard | identity | always | mutating (no MCP hints) | `alias`, `canonical_id` |
+| `identity_remove_alias` | advanced | identity | always | mutating (no MCP hints) | `alias` |
+| `identity_resolve` | standard | identity | always | readOnlyHint | `alias` |
+| `identity_list` | standard | identity | always | readOnlyHint | none |
+| `identity_search` | standard | identity | always | readOnlyHint | `query` |
+| `identity_link` | standard | identity | always | mutating (no MCP hints) | `canonical_id`, `memory_id` |
+| `identity_unlink` | advanced | identity | always | mutating (no MCP hints) | `canonical_id`, `memory_id` |
+| `memory_get_identities` | advanced | memory.core | always | readOnlyHint | `id` |
+| `memory_tags` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_tag_hierarchy` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_validate_tags` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_rebuild_embeddings` | advanced | memory.admin | always | idempotentHint | none |
+| `memory_rebuild_crossrefs` | advanced | memory.admin | always | idempotentHint | none |
+| `memory_archive_old` | advanced | memory.lifecycle | always | mutating (no MCP hints) | none |
+| `memory_from_trace` | advanced | feature.langfuse | langfuse | mutating (no MCP hints) | `trace_id` |
+| `memory_export_markdown` | advanced | memory.admin | always | readOnlyHint | `workspace` |
+| `memory_import_markdown` | advanced | memory.admin | always | mutating (no MCP hints) | `input_dir` |
+| `memory_block_create` | standard | memory.block | always | mutating (no MCP hints) | `name` |
+| `memory_block_get` | standard | memory.block | always | readOnlyHint | `name` |
+| `memory_block_edit` | standard | memory.block | always | mutating (no MCP hints) | `content`, `name` |
+| `memory_block_list` | standard | memory.block | always | readOnlyHint | none |
+| `memory_block_archive` | standard | memory.block | always | mutating (no MCP hints) | `name` |
+| `memory_block_history` | standard | memory.block | always | readOnlyHint | `name` |
+| `memory_cache_stats` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_cache_clear` | advanced | memory.admin | always | mutating (no MCP hints) | none |
+| `memory_compress_for_context` | standard | memory.admin | always | readOnlyHint | `ids` |
+| `memory_embedding_migrate` | advanced | memory.admin | always | mutating (no MCP hints) | none |
+| `memory_embedding_providers` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_enrichment_timeline` | standard | memory.admin | always | readOnlyHint | `memory_id` |
+| `memory_enrichment_audit` | advanced | memory.admin | always | readOnlyHint | none |
 | `memory_sentiment_analyze` | standard | memory.admin | always | readOnlyHint | `id` |
 | `memory_sentiment_timeline` | standard | memory.admin | always | readOnlyHint | none |
 | `memory_sync_status` | advanced | memory.core | always | readOnlyHint | none |
@@ -205,6 +237,21 @@ Total tools: **285**
 | `memory_revoke_access` | advanced | memory.core | always | destructiveHint | `agent_id`, `scope_path` |
 | `memory_list_grants` | advanced | memory.core | always | readOnlyHint | `agent_id` |
 | `memory_check_access` | advanced | memory.core | always | readOnlyHint | `agent_id`, `scope_path` |
+| `memory_suggest_tags` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_auto_tag` | advanced | memory.admin | always | mutating (no MCP hints) | `id` |
+| `memory_soft_trim` | advanced | memory.core | always | readOnlyHint | `id` |
+| `memory_content_stats` | advanced | memory.admin | always | readOnlyHint | `id` |
+| `memory_export` | advanced | memory.admin | always | readOnlyHint | none |
+| `memory_import` | advanced | memory.admin | always | mutating (no MCP hints) | `data` |
+| `memory_summarize` | advanced | memory.core | always | mutating (no MCP hints) | `memory_ids` |
+| `memory_auto_consolidate` | advanced | memory.lifecycle | always | mutating (no MCP hints) | `action` |
+| `memory_consolidate_batch` | advanced | memory.lifecycle | always | destructiveHint | none |
+| `memory_consolidation_history` | advanced | memory.lifecycle | always | readOnlyHint | none |
+| `memory_compress` | advanced | memory.admin | always | readOnlyHint | `id` |
+| `memory_consolidate` | advanced | memory.lifecycle | always | mutating (no MCP hints) | none |
+| `memory_decompress` | standard | memory.admin | always | readOnlyHint | `id` |
+| `memory_synthesis` | standard | memory.admin | always | readOnlyHint | `content_a`, `content_b` |
+| `memory_replay_at_time` | advanced | memory.admin | always | readOnlyHint | `memory_id`, `timestamp` |
 | `memory_search_by_image` | advanced | feature.multimodal | multimodal | readOnlyHint | `image_path` |
 | `memory_upload_image` | advanced | memory.admin | always | mutating (no MCP hints) | `file_path`, `memory_id` |
 | `memory_migrate_images` | advanced | memory.admin | always | idempotentHint | none |
@@ -214,6 +261,18 @@ Total tools: **285**
 | `memory_ingest_media` | standard | memory.core | always | mutating (no MCP hints) | `media_path` |
 | `memory_process_video` | advanced | feature.multimodal | multimodal | mutating (no MCP hints) | `video_path` |
 | `memory_transcribe_audio` | advanced | feature.multimodal | multimodal | readOnlyHint | `audio_path` |
+| `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
+| `dream_create` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | none |
+| `dream_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
+| `dream_list` | advanced | feature.dream | dream-phase | readOnlyHint | none |
+| `dream_cancel` | advanced | feature.dream | dream-phase | idempotentHint | `id` |
+| `dream_archive` | advanced | feature.dream | dream-phase | idempotentHint | `id` |
+| `dream_candidates_list` | advanced | feature.dream | dream-phase | readOnlyHint | none |
+| `dream_candidate_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
+| `dream_candidate_review` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `id`, `review_state` |
+| `dream_candidate_apply` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `id` |
+| `memory_agent_writeback` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | `proposed_content` |
+| `dream_eval_run` | advanced | feature.dream | dream-phase | readOnlyHint | none |
 | `agent_register` | advanced | agent | always | mutating (no MCP hints) | `agent_id` |
 | `agent_deregister` | advanced | agent | always | destructiveHint | `agent_id` |
 | `agent_heartbeat` | advanced | agent | always | mutating (no MCP hints) | `agent_id` |
@@ -235,67 +294,8 @@ Total tools: **285**
 | `harness_status` | advanced | harness | always | readOnlyHint | none |
 | `harness_handoff` | advanced | harness | always | mutating (no MCP hints) | `current_goal`, `next_steps` |
 | `harness_verify` | advanced | harness | always | mutating (no MCP hints) | `command`, `exit_code`, `output_summary` |
-| `memory_suggest_tags` | advanced | memory.admin | always | readOnlyHint | none |
-| `memory_auto_tag` | advanced | memory.admin | always | mutating (no MCP hints) | `id` |
-| `session_context_create` | standard | session | always | mutating (no MCP hints) | `name` |
-| `session_context_add_memory` | advanced | session | always | mutating (no MCP hints) | `memory_id`, `session_id` |
-| `session_context_remove_memory` | advanced | session | always | mutating (no MCP hints) | `memory_id`, `session_id` |
-| `session_context_get` | standard | session | always | readOnlyHint | `session_id` |
-| `session_context_list` | standard | session | always | readOnlyHint | none |
-| `session_context_search` | standard | session | always | readOnlyHint | `query`, `session_id` |
-| `session_context_update_summary` | advanced | session | always | mutating (no MCP hints) | `session_id`, `summary` |
-| `session_context_end` | advanced | session | always | mutating (no MCP hints) | `session_id` |
-| `session_context_export` | advanced | session | always | readOnlyHint | `session_id` |
-| `memory_get_public` | advanced | memory.core | always | readOnlyHint | `id` |
-| `memory_get_injection_prompt` | essential | memory.search | always | readOnlyHint | `query` |
-| `memory_observe_tool_use` | standard | memory.session | always | mutating (no MCP hints) | `tool_input`, `tool_name`, `tool_output` |
-| `memory_archive_tool_output` | standard | memory.lifecycle | always | mutating (no MCP hints) | `raw_output`, `tool_name` |
-| `memory_get_archived_output` | standard | memory.lifecycle | always | readOnlyHint | `archive_id` |
-| `memory_get_working_memory` | standard | memory.session | always | readOnlyHint | `session_id` |
-| `session_land` | essential | session | always | mutating (no MCP hints) | none |
-| `memory_build_context` | standard | memory.core | always | readOnlyHint | `query` |
-| `context_record` | standard | context | always | mutating (no MCP hints) | `event_type`, `session_id`, `source` |
-| `context_record_artifact` | standard | context | always | mutating (no MCP hints) | `kind` |
-| `context_get_artifact` | standard | context | always | readOnlyHint | `artifact_id`, `reason` |
-| `context_search` | standard | context | always | readOnlyHint | `query` |
-| `context_build_bundle` | standard | context | always | readOnlyHint | none |
 | `recent_activity` | essential | core | always | readOnlyHint | none |
 | `discover_tools` | essential | core | always | readOnlyHint | none |
-| `memory_prepare_context` | advanced | memory.core | always | readOnlyHint | `query` |
-| `memory_extract_facts` | standard | memory.graph | always | mutating (no MCP hints) | `memory_id` |
-| `scope_get` | standard | scope | always | readOnlyHint | `memory_id` |
-| `scope_list` | standard | scope | always | readOnlyHint | none |
-| `scope_search` | standard | scope | always | readOnlyHint | `query`, `scope_path` |
-| `scope_set` | standard | scope | always | mutating (no MCP hints) | `memory_id`, `scope_path` |
-| `scope_tree` | standard | scope | always | readOnlyHint | none |
-| `memory_soft_trim` | advanced | memory.core | always | readOnlyHint | `id` |
-| `memory_list_compact` | essential | memory.core | always | readOnlyHint | none |
-| `memory_content_stats` | advanced | memory.admin | always | readOnlyHint | `id` |
-| `memory_export` | advanced | memory.admin | always | readOnlyHint | none |
-| `memory_import` | advanced | memory.admin | always | mutating (no MCP hints) | `data` |
-| `memory_create_section` | standard | memory.core | always | mutating (no MCP hints) | `title` |
-| `memory_checkpoint` | standard | memory.session | always | mutating (no MCP hints) | `session_id`, `summary` |
-| `memory_create_episodic` | standard | memory.core | always | mutating (no MCP hints) | `content`, `event_time` |
-| `memory_create_procedural` | standard | memory.core | always | mutating (no MCP hints) | `content`, `trigger_pattern` |
-| `memory_get_timeline` | standard | memory.core | always | readOnlyHint | none |
-| `memory_get_procedures` | standard | memory.core | always | readOnlyHint | none |
-| `memory_record_procedure_outcome` | standard | memory.core | always | mutating (no MCP hints) | `id`, `success` |
-| `memory_boost` | standard | memory.core | always | mutating (no MCP hints) | `id` |
-| `memory_explain_utility` | standard | memory.admin | always | readOnlyHint | `memory_id` |
-| `memory_summarize` | advanced | memory.core | always | mutating (no MCP hints) | `memory_ids` |
-| `memory_get_full` | advanced | memory.core | always | readOnlyHint | `id` |
-| `memory_auto_consolidate` | advanced | memory.lifecycle | always | mutating (no MCP hints) | `action` |
-| `memory_consolidate_batch` | advanced | memory.lifecycle | always | destructiveHint | none |
-| `memory_consolidation_history` | advanced | memory.lifecycle | always | readOnlyHint | none |
-| `memory_compress` | advanced | memory.admin | always | readOnlyHint | `id` |
-| `memory_consolidate` | advanced | memory.lifecycle | always | mutating (no MCP hints) | none |
-| `memory_decompress` | standard | memory.admin | always | readOnlyHint | `id` |
-| `memory_detect_conflicts` | standard | memory.quality | always | mutating (no MCP hints) | none |
-| `memory_feedback` | standard | memory.admin | always | mutating (no MCP hints) | `memory_id`, `query`, `signal` |
-| `memory_feedback_stats` | standard | memory.admin | always | readOnlyHint | none |
-| `memory_synthesis` | standard | memory.admin | always | readOnlyHint | `content_a`, `content_b` |
-| `memory_utility_score` | standard | memory.lifecycle | always | readOnlyHint | `id` |
-| `memory_replay_at_time` | advanced | memory.admin | always | readOnlyHint | `memory_id`, `timestamp` |
 | `model_routing_status` | standard | misc | always | readOnlyHint | none |
 
 ## Tools
@@ -495,803 +495,6 @@ Get version history for a memory
 |-------|------|----------|---------|
 | `id` | `integer` | yes | No description. |
 
-### `memory_set_expiration`
-
-Set or update the expiration time for a memory
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`, `ttl_seconds`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID |
-| `ttl_seconds` | `integer` | yes | Time-to-live in seconds from now. Use 0 to remove expiration (make permanent). |
-
-### `memory_cleanup_expired`
-
-Delete all expired memories. Typically called by a background job, but can be invoked manually.
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_stats`
-
-Get storage statistics
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_export_graph`
-
-Export knowledge graph visualization
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `format` | `string` | no | Default: `html`. Allowed: `html`, `json`. |
-| `max_nodes` | `integer` | no | Default: `500`. |
-| `focus_id` | `integer` | no | Center graph on this memory |
-
-### `memory_scan_project`
-
-Scan current directory for AI instruction files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) and ingest them as memories. Creates parent memory for each file and child memories for sections.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `path` | `string` | no | Directory to scan (defaults to current working directory) |
-| `scan_parents` | `boolean` | no | Also scan parent directories (security: disabled by default) Default: `false`. |
-| `extract_sections` | `boolean` | no | Create separate memories for each section Default: `true`. |
-
-### `memory_get_project_context`
-
-Get all project context memories for the current working directory. Returns instruction files and their sections.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `path` | `string` | no | Project path (defaults to current working directory) |
-| `include_sections` | `boolean` | no | Include section memories Default: `true`. |
-| `file_types` | `array` | no | Filter by file type (claude-md, cursorrules, etc.) Items: `string`. |
-
-### `memory_list_instruction_files`
-
-List AI instruction files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) in a directory without ingesting them. Returns file paths, types, and sizes for discovery purposes.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `path` | `string` | no | Directory to scan (defaults to current working directory) |
-| `scan_parents` | `boolean` | no | Also scan parent directories for instruction files Default: `false`. |
-
-### `memory_ingest_document`
-
-Ingest a document (PDF or Markdown) into memory. Extracts text, splits into chunks with overlap, and creates memories with deduplication.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `path`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `path` | `string` | yes | Local file path to the document |
-| `format` | `string` | no | Document format (auto-detect from extension if not specified) Default: `auto`. Allowed: `auto`, `md`, `pdf`. |
-| `chunk_size` | `integer` | no | Maximum characters per chunk Default: `1200`. |
-| `overlap` | `integer` | no | Overlap between chunks in characters Default: `200`. |
-| `max_file_size` | `integer` | no | Maximum file size in bytes (default 10MB) Default: `10485760`. |
-| `tags` | `array` | no | Additional tags to add to all chunks Items: `string`. |
-
-### `dream_run_now`
-
-Manually trigger the Dream Phase (background consolidation) across all workspaces. This process compresses old memories and identifies patterns while the agent is 'sleeping'.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: idempotentHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `dream_create`
-
-Create a reviewable dream snapshot job and optionally run deterministic candidate generation. Generated candidates are proposals, not canonical memories.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Default: `default`. |
-| `job_id` | `string` | no | Optional stable job id. Omit to generate one. |
-| `instructions` | `string` | no | No description. |
-| `run` | `boolean` | no | When true, run deterministic generation immediately. Default: `true`. |
-| `max_memories` | `integer` | no | Default: `50`. Minimum: `1`. |
-| `max_candidates` | `integer` | no | Default: `25`. Minimum: `1`. |
-| `summary_min_memories` | `integer` | no | Default: `2`. Minimum: `1`. |
-
-### `dream_get`
-
-Inspect one dream snapshot job.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `string` | yes | Dream job id |
-
-### `dream_list`
-
-List dream snapshot jobs by workspace and status.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | No description. |
-| `status` | `string` | no | Allowed: `pending`, `running`, `completed`, `failed`, `canceled`, `archived`. |
-| `limit` | `integer` | no | Default: `100`. Minimum: `1`. Maximum: `1000`. |
-
-### `dream_cancel`
-
-Cancel a pending or running dream snapshot job idempotently.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: idempotentHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `string` | yes | Dream job id |
-
-### `dream_archive`
-
-Archive a terminal dream snapshot job.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: idempotentHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `string` | yes | Dream job id |
-
-### `dream_candidates_list`
-
-List review candidates emitted by dream snapshot jobs. Results are proposals and are not canonical memory facts.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | No description. |
-| `job_id` | `string` | no | No description. |
-| `review_state` | `string` | no | Allowed: `pending`, `accepted`, `edited`, `rejected`, `applied`, `archived`. |
-| `limit` | `integer` | no | Default: `100`. Minimum: `1`. Maximum: `1000`. |
-
-### `dream_candidate_get`
-
-Inspect one dream candidate and its evidence sources.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `string` | yes | Dream candidate id |
-
-### `dream_candidate_review`
-
-Review a dream candidate by accepting, editing, rejecting, or archiving it. This does not mutate canonical memory.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`, `review_state`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `string` | yes | Dream candidate id |
-| `review_state` | `string` | yes | Allowed: `accepted`, `edited`, `rejected`, `archived`. |
-| `edited_content` | `string` | no | Reviewed replacement content when review_state is edited. |
-| `metadata_patch` | `object` | no | Optional review metadata merged into candidate metadata. |
-
-### `dream_candidate_apply`
-
-Apply an accepted or edited dream candidate to canonical memory. Requires confirm=true unless dry_run=true; repeated apply is idempotent.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `string` | yes | Dream candidate id |
-| `confirm` | `boolean` | no | Must be true for canonical mutation. Default: `false`. |
-| `dry_run` | `boolean` | no | Preview planned canonical mutation without applying. Default: `false`. |
-
-### `memory_agent_writeback`
-
-Create a pending agent-generated memory proposal as an agent_writeback dream candidate. Defaults to dry_run=true and never mutates canonical memory; review/apply still happens through dream_candidate_get/review/apply.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `proposed_content`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `proposed_content` | `string` | yes | Agent-generated memory content to propose for human/agent review. |
-| `workspace` | `string` | no | Workspace for the pending candidate. Default: `default`. |
-| `job_id` | `string` | no | Optional dream job id to group writeback candidates. Omit to generate one. |
-| `candidate_id` | `string` | no | Optional stable candidate id. Omit to generate one. |
-| `confidence` | `number` | no | Confidence in the proposed writeback. Default: `0.5`. Minimum: `0`. Maximum: `1`. |
-| `reason_codes` | `array` | no | Reason codes for the pending candidate. Defaults to agent_writeback. Items: `string`. |
-| `metadata` | `object` | no | Additional candidate metadata. Governance markers are added by Engram. |
-| `source_memory_ids` | `array` | no | Canonical memory ids that support this proposal. Items: `integer`. |
-| `evidence` | `array` | no | Additional non-memory evidence sources. At least one source_memory_ids entry or evidence item is required. Items: `object`. |
-| `dry_run` | `boolean` | no | Preview the pending candidate without writing dream_candidates. Default: `true`. |
-| `confirm` | `boolean` | no | Required with dry_run=false to create the pending candidate. Default: `false`. |
-
-### `dream_eval_run`
-
-Run deterministic local dream snapshot evaluation fixtures and return parseable CI-safe metrics. Does not require network, credentials, or model access.
-
-- Tier: `advanced`
-- Group: `feature.dream`
-- Required feature: `dream-phase`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `fixtures` | `array` | no | Optional subset of fixed fixture names. Omit to run all fixtures. Items: `string`. |
-| `include_details` | `boolean` | no | Include per-fixture candidate details. Default: `true`. |
-
-### `workspace_list`
-
-List all workspaces with their statistics (memory count, tier breakdown, etc.)
-
-- Tier: `essential`
-- Group: `workspace`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `workspace_stats`
-
-Get detailed statistics for a specific workspace
-
-- Tier: `standard`
-- Group: `workspace`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `workspace`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | yes | Workspace name |
-
-### `workspace_move`
-
-Move a memory to a different workspace
-
-- Tier: `standard`
-- Group: `workspace`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`, `workspace`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to move |
-| `workspace` | `string` | yes | Target workspace name |
-
-### `workspace_delete`
-
-Delete a workspace. Can either move all memories to 'default' workspace or hard delete them.
-
-- Tier: `advanced`
-- Group: `workspace`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: `workspace`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | yes | Workspace to delete |
-| `move_to_default` | `boolean` | no | If true, moves memories to 'default' workspace. If false, deletes all memories in the workspace. Default: `true`. |
-
-### `memory_create_daily`
-
-Create a daily (ephemeral) memory that auto-expires after the specified TTL. Useful for session context and scratch notes.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `content`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `content` | `string` | yes | The content to remember |
-| `type` | `string` | no | Default: `note`. Allowed: `note`, `todo`, `issue`, `decision`, `preference`, `learning`, `context`, `credential`. |
-| `tags` | `array` | no | Tags for categorization Items: `string`. |
-| `metadata` | `object` | no | Additional metadata as key-value pairs |
-| `importance` | `number` | no | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
-| `ttl_seconds` | `integer` | no | Time-to-live in seconds (default: 24 hours) Default: `86400`. |
-| `workspace` | `string` | no | Workspace to store the memory in (default: 'default') |
-
-### `memory_score`
-
-Compute deterministic memory policy scores for a memory. When persist=true, upserts the memory_policy row and emits a best-effort policy audit event.
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to score |
-| `persist` | `boolean` | no | Persist the computed policy score to memory_policy Default: `false`. |
-
-### `memory_lifecycle_update`
-
-Unified facade for memory lifecycle mutations: promote a memory or reinforce its policy, promote to permanent canonical tier, decay policy scores, set expiration TTL, or score policy components.
-
-- Tier: `essential`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to mutate lifecycle state for |
-| `action` | `string` | no | Lifecycle action to perform: promote (reinforce policy), promote_permanent (promote to canonical permanent tier), decay (policy decay), expire (set TTL), score (evaluate policy), explain (audit score), transition (manual state transition), restore (restore to active) Default: `promote`. Allowed: `promote`, `promote_permanent`, `decay`, `expire`, `score`, `explain`, `transition`, `restore`. |
-| `canonical_tier` | `boolean` | no | When action='promote' and canonical_tier=true, promotes to permanent canonical tier Default: `false`. |
-| `ttl_seconds` | `integer` | no | Time-to-live in seconds when action='expire' |
-| `state` | `string` | no | Target lifecycle state when action='transition' Allowed: `active`, `stale`, `archived`, `purged`. |
-| `reason` | `string` | no | Audit reason or explanation for the transition or reconciliation |
-| `persist` | `boolean` | no | When action='score', whether to persist the evaluated policy Default: `false`. |
-
-### `memory_promote`
-
-Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to promote or reinforce |
-| `canonical_tier` | `boolean` | no | When true, also call promote_to_permanent for canonical tier promotion Default: `false`. |
-
-### `memory_decay`
-
-Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply updates memory_policy scores only. Use lifecycle_run for lifecycle_state transitions.
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Workspace to decay Default: `default`. |
-| `dry_run` | `boolean` | no | When true, compute candidate changes without mutation Default: `true`. |
-
-### `memory_explain`
-
-Explain a memory's current policy score with feature components, reason text, and policy audit count.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to explain |
-
-### `memory_reconcile_conflict`
-
-Record a conflict reconciliation signal for a memory policy without deleting or mutating memory content.
-
-- Tier: `standard`
-- Group: `memory.quality`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`, `reason`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID with the conflict signal |
-| `reason` | `string` | yes | Audit reason for the conflict reconciliation |
-
-### `memory_promote_to_permanent`
-
-Promote a daily memory to permanent tier. Clears the expiration and makes the memory permanent.
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to promote |
-
-### `embedding_cache_stats`
-
-Get statistics about the embedding cache (hits, misses, entries, bytes used, hit rate)
-
-- Tier: `advanced`
-- Group: `embedding`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `embedding_cache_clear`
-
-Clear all entries from the embedding cache
-
-- Tier: `advanced`
-- Group: `embedding`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `session_index`
-
-Index a conversation into searchable memory chunks. Uses dual-limiter chunking (messages + characters) with overlap.
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `messages`, `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Unique session identifier |
-| `messages` | `array` | yes | Array of conversation messages Items: `object`. |
-| `title` | `string` | no | Optional session title |
-| `workspace` | `string` | no | Workspace to store chunks in (default: 'default') |
-| `agent_id` | `string` | no | Optional agent identifier |
-| `max_messages` | `integer` | no | Max messages per chunk Default: `10`. |
-| `max_chars` | `integer` | no | Max characters per chunk Default: `8000`. |
-| `overlap` | `integer` | no | Overlap messages between chunks Default: `2`. |
-| `ttl_days` | `integer` | no | TTL for transcript chunks in days Default: `7`. |
-
-### `session_index_delta`
-
-Incrementally index new messages to an existing session. More efficient than full reindex.
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `messages`, `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session to update |
-| `messages` | `array` | yes | New messages to add Items: `object`. |
-
-### `session_get`
-
-Get information about an indexed session
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session ID to retrieve |
-
-### `session_list`
-
-List indexed sessions with optional workspace filter
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Filter by workspace |
-| `limit` | `integer` | no | Maximum sessions to return Default: `20`. |
-
-### `session_delete`
-
-Delete a session and all its indexed chunks
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session to delete |
-
-### `identity_create`
-
-Create a new identity with canonical ID, display name, and optional aliases
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `canonical_id`, `display_name`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `canonical_id` | `string` | yes | Unique canonical identifier (e.g., 'user:ronaldo', 'org:acme') |
-| `display_name` | `string` | yes | Human-readable display name |
-| `entity_type` | `string` | no | Default: `person`. Allowed: `person`, `organization`, `project`, `tool`, `concept`, `other`. |
-| `description` | `string` | no | Optional description |
-| `aliases` | `array` | no | Initial aliases for this identity Items: `string`. |
-| `metadata` | `object` | no | Additional metadata |
-
-### `identity_get`
-
-Get an identity by its canonical ID
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `canonical_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `canonical_id` | `string` | yes | Canonical identifier |
-
-### `identity_update`
-
-Update an identity's display name, description, or type
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `canonical_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `canonical_id` | `string` | yes | Canonical identifier |
-| `display_name` | `string` | no | New display name |
-| `description` | `string` | no | New description |
-| `entity_type` | `string` | no | Allowed: `person`, `organization`, `project`, `tool`, `concept`, `other`. |
-
-### `identity_delete`
-
-Delete an identity and all its aliases
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: `canonical_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `canonical_id` | `string` | yes | Canonical identifier to delete |
-
-### `identity_add_alias`
-
-Add an alias to an identity. Aliases are normalized (lowercase, trimmed). Conflicts with existing aliases are rejected.
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `alias`, `canonical_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `canonical_id` | `string` | yes | Canonical identifier |
-| `alias` | `string` | yes | Alias to add |
-| `source` | `string` | no | Optional source of the alias (e.g., 'manual', 'extracted') |
-
-### `identity_remove_alias`
-
-Remove an alias from any identity
-
-- Tier: `advanced`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `alias`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `alias` | `string` | yes | Alias to remove |
-
-### `identity_resolve`
-
-Resolve an alias to its canonical identity. Returns the identity if found, null otherwise.
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `alias`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `alias` | `string` | yes | Alias to resolve |
-
-### `identity_list`
-
-List all identities with optional type filter
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `entity_type` | `string` | no | Allowed: `person`, `organization`, `project`, `tool`, `concept`, `other`. |
-| `limit` | `integer` | no | Default: `50`. |
-
-### `identity_search`
-
-Search identities by alias or display name
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `query`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `query` | `string` | yes | Search query |
-| `limit` | `integer` | no | Default: `20`. |
-
-### `identity_link`
-
-Link an identity to a memory (mark that the identity is mentioned in the memory)
-
-- Tier: `standard`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `canonical_id`, `memory_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_id` | `integer` | yes | Memory ID |
-| `canonical_id` | `string` | yes | Identity canonical ID |
-| `mention_text` | `string` | no | The text that mentions this identity |
-
-### `identity_unlink`
-
-Remove the link between an identity and a memory
-
-- Tier: `advanced`
-- Group: `identity`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `canonical_id`, `memory_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_id` | `integer` | yes | Memory ID |
-| `canonical_id` | `string` | yes | Identity canonical ID |
-
-### `memory_get_identities`
-
-Get all identities (persons, organizations, projects, etc.) linked to a memory. Returns identity details including display name, type, aliases, and mention information.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID |
-
 ### `memory_create_batch`
 
 Create multiple memories in a single operation. More efficient than individual creates for bulk imports.
@@ -1357,396 +560,12 @@ Batch append-only fact ingest. Inserts all facts in a single transaction. Return
 | `workspace` | `string` | no | Default workspace applied to all facts (default: 'default') |
 | `scope` | `string` | no | Memory scope applied to all facts (default: 'global') |
 
-### `memory_tags`
+### `memory_get_public`
 
-List all tags with usage counts and most recent usage timestamps.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_tag_hierarchy`
-
-Get tags organized in a hierarchical tree structure. Tags with slashes are treated as paths (e.g., 'project/engram/core').
+Get a memory with all <private>...</private> tagged sections removed. Safe for sharing in multi-agent contexts.
 
 - Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_validate_tags`
-
-Validate tag consistency across memories. Reports orphaned tags, unused tags, and suggested normalizations.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_rebuild_embeddings`
-
-Rebuild embeddings for all memories that are missing them. Useful after model changes or data recovery.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: idempotentHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_rebuild_crossrefs`
-
-Rebuild cross-reference links between memories. Re-analyzes all memories to find and create links.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: idempotentHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `context_budget_check`
-
-Check token usage of memories against a budget. Returns token counts and suggestions if over budget.
-
-- Tier: `advanced`
-- Group: `context`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `budget`, `memory_ids`, `model`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_ids` | `array` | yes | IDs of memories to check Items: `integer`. |
-| `model` | `string` | yes | Model name for tokenization (gpt-4, gpt-4o, gpt-4o-mini, claude-3-opus, etc.) |
-| `encoding` | `string` | no | Override encoding (cl100k_base, o200k_base). Optional if model is known. |
-| `budget` | `integer` | yes | Token budget to check against |
-
-### `pending_injections_count`
-
-Count of non-expired payloads queued in pending_injections for a workspace, waiting to be consumed by the next SessionStart.
-
-- Tier: `advanced`
-- Group: `admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Default: `default`. |
-
-### `pending_injections_cleanup`
-
-Drop every pending_injections row whose expires_at has passed. Idempotent. Returns the count removed.
-
-- Tier: `advanced`
-- Group: `admin`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_archive_old`
-
-Compress already-Archived memories by creating summary rows. Does not move originals to archived state; use lifecycle_run for lifecycle transitions.
-
-- Tier: `advanced`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `max_age_days` | `integer` | no | Compress archived memories older than this many days Default: `90`. |
-| `max_importance` | `number` | no | Only compress already-Archived memories with importance below this Default: `0.5`. |
-| `min_access_count` | `integer` | no | Skip already-Archived memories accessed more than this many times Default: `5`. |
-| `workspace` | `string` | no | Limit to specific workspace |
-| `dry_run` | `boolean` | no | If true, only report what would be compressed Default: `true`. |
-
-### `memory_from_trace`
-
-Create a memory from a specific Langfuse trace ID.
-
-- Tier: `advanced`
-- Group: `feature.langfuse`
-- Required feature: `langfuse`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `trace_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `trace_id` | `string` | yes | Langfuse trace ID |
-| `memory_type` | `string` | no | Type of memory to create Default: `episodic`. Allowed: `note`, `episodic`, `procedural`, `learning`. |
-| `workspace` | `string` | no | Workspace for the memory |
-| `tags` | `array` | no | Additional tags Items: `string`. |
-
-### `lifecycle_status`
-
-Get lifecycle statistics (active/stale/archived counts by workspace).
-
-- Tier: `standard`
-- Group: `lifecycle`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Filter by workspace (optional) |
-
-### `lifecycle_run`
-
-Run the canonical lifecycle predicate to mark stale and archive idle memories. Dry run by default; this is the only decay-derived lifecycle writer.
-
-- Tier: `standard`
-- Group: `lifecycle`
-- Required feature: `always`
-- Annotations: idempotentHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `dry_run` | `boolean` | no | Preview changes without applying Default: `true`. |
-| `workspace` | `string` | no | Limit to specific workspace |
-| `stale_days` | `integer` | no | Base idle days before marking as stale Default: `30`. |
-| `archive_days` | `integer` | no | Base idle days before archiving Default: `90`. |
-| `hard_idle_cap_days` | `integer` | no | Absolute idle-day cap before archiving Default: `365`. |
-| `max_importance_mult` | `number` | no | Maximum multiplier by which importance extends stale/archive windows Default: `4.0`. |
-
-### `memory_set_lifecycle`
-
-Manually set the lifecycle state of a memory.
-
-- Tier: `advanced`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`, `state`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID |
-| `state` | `string` | yes | New lifecycle state Allowed: `active`, `stale`, `archived`. |
-
-### `lifecycle_config`
-
-Get lifecycle predicate configuration defaults and optional overrides.
-
-- Tier: `advanced`
-- Group: `lifecycle`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `stale_days` | `integer` | no | Base idle days before marking as stale |
-| `archive_days` | `integer` | no | Base idle days before archiving |
-| `hard_idle_cap_days` | `integer` | no | Absolute idle-day cap before archiving |
-| `max_importance_mult` | `number` | no | Maximum multiplier by which importance extends stale/archive windows |
-
-### `retention_policy_set`
-
-Set a retention policy for a workspace. Controls compression of already-Archived memories, max memory count, and auto-deletion.
-
-- Tier: `standard`
-- Group: `lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `workspace`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | yes | Workspace name |
-| `max_age_days` | `integer` | no | Hard age limit — auto-delete after this many days |
-| `max_memories` | `integer` | no | Maximum active memories in this workspace |
-| `compress_after_days` | `integer` | no | Compress already-Archived memories older than this |
-| `compress_max_importance` | `number` | no | Only compress already-Archived memories with importance <= this (default 0.3) |
-| `compress_min_access` | `integer` | no | Skip compression if access_count >= this (default 3) |
-| `auto_delete_after_days` | `integer` | no | Auto-delete archived memories older than this |
-| `exclude_types` | `array` | no | Memory types exempt from policy (e.g. ["decision", "checkpoint"]) Items: `string`. |
-
-### `retention_policy_get`
-
-Get the retention policy for a workspace.
-
-- Tier: `standard`
-- Group: `lifecycle`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `workspace`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | yes | Workspace name |
-
-### `retention_policy_list`
-
-List all retention policies across all workspaces.
-
-- Tier: `standard`
-- Group: `lifecycle`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `retention_policy_delete`
-
-Delete a retention policy for a workspace.
-
-- Tier: `advanced`
-- Group: `lifecycle`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: `workspace`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | yes | Workspace name |
-
-### `retention_policy_apply`
-
-Apply all retention policies now. Compresses, caps, and deletes per workspace rules.
-
-- Tier: `advanced`
-- Group: `lifecycle`
-- Required feature: `always`
-- Annotations: idempotentHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `dry_run` | `boolean` | no | Preview what would happen without making changes Default: `false`. |
-
-### `salience_get`
-
-Get the salience score for a memory. Returns recency, frequency, importance, and feedback components with the combined score and lifecycle state.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to get salience for |
-| `feedback_signal` | `number` | no | Optional feedback signal (-1 to 1) to include in calculation Default: `0`. Minimum: `-1`. Maximum: `1`. |
-
-### `salience_set_importance`
-
-Set the importance score for a memory. This is the static importance component of salience.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`, `importance`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID |
-| `importance` | `number` | yes | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
-
-### `salience_boost`
-
-Boost a memory's salience score temporarily or permanently. Useful for marking memories as contextually relevant.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to boost |
-| `boost_amount` | `number` | no | Amount to boost (0-1) Default: `0.2`. Minimum: `0`. Maximum: `1`. |
-| `reason` | `string` | no | Optional reason for boosting |
-
-### `salience_demote`
-
-Demote a memory's salience score. Useful for marking memories as less relevant.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to demote |
-| `demote_amount` | `number` | no | Amount to demote (0-1) Default: `0.2`. Minimum: `0`. Maximum: `1`. |
-| `reason` | `string` | no | Optional reason for demoting |
-
-### `salience_decay_run`
-
-Run salience score decay and optionally record salience history. Does not update lifecycle_state; use lifecycle_run for lifecycle transitions.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `dry_run` | `boolean` | no | If true, compute score/history changes without persisting updates Default: `false`. |
-| `record_history` | `boolean` | no | Record salience history entries while updating Default: `true`. |
-| `workspace` | `string` | no | Limit to specific workspace |
-
-### `salience_stats`
-
-Get salience statistics across all memories. Returns distribution, percentiles, and state counts.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Limit to specific workspace |
-
-### `salience_history`
-
-Get salience score history for a memory. Shows how salience has changed over time.
-
-- Tier: `advanced`
-- Group: `quality`
+- Group: `memory.core`
 - Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
@@ -1754,14 +573,151 @@ Get salience score history for a memory. Shows how salience has changed over tim
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `id` | `integer` | yes | Memory ID |
-| `limit` | `integer` | no | Maximum history entries to return Default: `50`. |
 
-### `salience_top`
+### `memory_get_full`
 
-Get top memories by salience score. Useful for context injection.
+Get the full/original content of a memory. If the memory is a Summary, returns the original content from summary_of_id.
 
 - Tier: `advanced`
-- Group: `quality`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to get full content for |
+
+### `memory_create_section`
+
+Create a section memory for organizing content hierarchically. Sections can have parent sections for nested organization.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `title`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `title` | `string` | yes | Section title |
+| `content` | `string` | no | Section description or content |
+| `parent_id` | `integer` | no | Optional parent section ID for nesting |
+| `level` | `integer` | no | Heading level (1-6) Default: `1`. |
+| `workspace` | `string` | no | Workspace for the section |
+
+### `memory_checkpoint`
+
+Create a checkpoint memory marking a significant point in a session. Useful for session resumption and context restoration.
+
+- Tier: `standard`
+- Group: `memory.session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `session_id`, `summary`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session identifier |
+| `summary` | `string` | yes | Summary of session state at checkpoint |
+| `context` | `object` | no | Additional context data to preserve |
+| `workspace` | `string` | no | Workspace for the checkpoint |
+
+### `memory_create_episodic`
+
+Create an episodic memory representing an event with temporal context. Use for tracking when things happened and their duration.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `content`, `event_time`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `content` | `string` | yes | Description of the event |
+| `event_time` | `string` | yes | ISO8601 timestamp when the event occurred Format: `date-time`. |
+| `event_duration_seconds` | `integer` | no | Duration of the event in seconds |
+| `tags` | `array` | no | Tags for categorization Items: `string`. |
+| `metadata` | `object` | no | Additional metadata |
+| `importance` | `number` | no | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
+| `workspace` | `string` | no | Workspace (default: 'default') |
+
+### `memory_create_procedural`
+
+Create a procedural memory representing a learned pattern or workflow. Tracks success/failure to measure effectiveness.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `content`, `trigger_pattern`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `content` | `string` | yes | Description of the procedure/workflow |
+| `trigger_pattern` | `string` | yes | Pattern that triggers this procedure (e.g., 'When user asks about auth') |
+| `tags` | `array` | no | Tags for categorization Items: `string`. |
+| `metadata` | `object` | no | Additional metadata |
+| `importance` | `number` | no | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
+| `workspace` | `string` | no | Workspace (default: 'default') |
+
+### `memory_get_timeline`
+
+Query episodic memories by time range. Returns events ordered by event_time.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `start_time` | `string` | no | Start of time range (ISO8601) Format: `date-time`. |
+| `end_time` | `string` | no | End of time range (ISO8601) Format: `date-time`. |
+| `workspace` | `string` | no | Filter by workspace |
+| `tags` | `array` | no | Filter by tags Items: `string`. |
+| `limit` | `integer` | no | Maximum results to return Default: `50`. |
+
+### `memory_get_procedures`
+
+List procedural memories (learned patterns/workflows). Optionally filter by trigger pattern.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `trigger_pattern` | `string` | no | Filter by trigger pattern (partial match) |
+| `workspace` | `string` | no | Filter by workspace |
+| `min_success_rate` | `number` | no | Minimum success rate (successes / (successes + failures)) Minimum: `0`. Maximum: `1`. |
+| `limit` | `integer` | no | Maximum results to return Default: `50`. |
+
+### `memory_record_procedure_outcome`
+
+Record a success or failure for a procedural memory. Increments the corresponding counter.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `success`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Procedural memory ID |
+| `success` | `boolean` | yes | true = success, false = failure |
+
+### `memory_list_compact`
+
+List memories with compact preview instead of full content. More efficient for browsing/listing UIs. Returns only essential fields and a truncated content preview with metadata about original content length.
+
+- Tier: `essential`
+- Group: `memory.core`
 - Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
@@ -1769,462 +725,15 @@ Get top memories by salience score. Useful for context injection.
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `limit` | `integer` | no | Maximum memories to return Default: `20`. |
-| `workspace` | `string` | no | Limit to specific workspace |
-| `min_score` | `number` | no | Minimum salience score Minimum: `0`. Maximum: `1`. |
-| `memory_type` | `string` | no | Filter by memory type |
-
-### `quality_score`
-
-Get the quality score for a memory with detailed breakdown of clarity, completeness, freshness, consistency, and source trust components.
-
-- Tier: `standard`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to score |
-
-### `quality_report`
-
-Generate a comprehensive quality report for a workspace. Includes quality distribution, top issues, conflict and duplicate counts.
-
-- Tier: `standard`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Workspace to analyze (default: 'default') |
-
-### `quality_find_duplicates`
-
-Find near-duplicate memories using text similarity. Returns pairs of similar memories above the threshold.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `threshold` | `number` | no | Similarity threshold (0-1) Default: `0.85`. Minimum: `0`. Maximum: `1`. |
-| `limit` | `integer` | no | Maximum memories to compare Default: `100`. |
-
-### `quality_get_duplicates`
-
-Get pending duplicate candidates that need review.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `limit` | `integer` | no | Maximum duplicates to return Default: `50`. |
-
-### `quality_find_conflicts`
-
-Detect conflicts for a memory against existing memories. Finds contradictions, staleness, and semantic overlaps.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to check for conflicts |
-
-### `quality_get_conflicts`
-
-Get unresolved conflicts that need attention.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `limit` | `integer` | no | Maximum conflicts to return Default: `50`. |
-
-### `quality_resolve_conflict`
-
-Resolve a conflict between memories. Options: keep_a, keep_b, merge, keep_both, delete_both, false_positive.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: `conflict_id`, `resolution`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `conflict_id` | `integer` | yes | Conflict ID to resolve |
-| `resolution` | `string` | yes | How to resolve the conflict Allowed: `keep_a`, `keep_b`, `merge`, `keep_both`, `delete_both`, `false_positive`. |
-| `notes` | `string` | no | Optional notes about the resolution |
-
-### `quality_source_trust`
-
-Get or update trust score for a source type. Higher trust means memories from this source are weighted more in quality calculations.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `source_type`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `source_type` | `string` | yes | Source type (user, seed, extraction, inference, external) |
-| `source_identifier` | `string` | no | Optional specific source identifier |
-| `trust_score` | `number` | no | New trust score (omit to just get current score) Minimum: `0`. Maximum: `1`. |
-| `notes` | `string` | no | Notes about this source |
-
-### `quality_improve`
-
-Get suggestions for improving a memory's quality. Returns actionable recommendations.
-
-- Tier: `advanced`
-- Group: `quality`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to analyze |
-
-### `memory_export_markdown`
-
-Export a workspace as human-readable Markdown files with YAML frontmatter and wiki-style [[links]]. Creates one .md file per memory, organized by type in subdirectories, with an index.md overview.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `workspace`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | yes | Workspace to export |
-| `output_dir` | `string` | no | Output directory path (default: ./engram-export/{workspace}/) |
-| `include_links` | `boolean` | no | Include [[wiki links]] to related memories in each file Default: `true`. |
-
-### `memory_import_markdown`
-
-Import memories from Markdown files with engram_ frontmatter (RFC 0004). Review mode by default (confirm: false) — returns a staged list without writing. Detects drift via content_hash and version conflicts via engram_version. Ignores non-engram_ frontmatter keys (Obsidian-safe).
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `input_dir`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `input_dir` | `string` | yes | Directory to scan recursively for .md files |
-| `workspace` | `string` | no | Override workspace (default: from each file's engram_workspace) |
-| `confirm` | `boolean` | no | Apply writes. When false (default), dry-run review only Default: `false`. |
-| `force_version` | `boolean` | no | Bypass version conflict checks Default: `false`. |
-
-### `memory_block_create`
-
-Create a named, token-bounded memory block (Letta/MemGPT-style self-editing context slot).
-
-- Tier: `standard`
-- Group: `memory.block`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `name`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `name` | `string` | yes | Unique name for the memory block |
-| `content` | `string` | no | Initial content of the block (default: empty string) |
-| `max_tokens` | `integer` | no | Maximum token capacity for the block (default: 4096) |
-
-### `memory_block_get`
-
-Retrieve a memory block by name.
-
-- Tier: `standard`
-- Group: `memory.block`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `name`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `name` | `string` | yes | Name of the memory block to retrieve |
-
-### `memory_block_edit`
-
-Update the content of an existing memory block, incrementing its version and recording the reason.
-
-- Tier: `standard`
-- Group: `memory.block`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `content`, `name`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `name` | `string` | yes | Name of the memory block to edit |
-| `content` | `string` | yes | New content for the block |
-| `reason` | `string` | no | Human-readable reason for this edit (optional) |
-
-### `memory_block_list`
-
-List all memory blocks with their names, versions, and token usage.
-
-- Tier: `standard`
-- Group: `memory.block`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_block_archive`
-
-Permanently delete a memory block and return its final content before deletion. Destructive and irreversible.
-
-- Tier: `standard`
-- Group: `memory.block`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `name`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `name` | `string` | yes | Name of the memory block to archive and delete |
-
-### `memory_block_history`
-
-Return the edit history for a named memory block.
-
-- Tier: `standard`
-- Group: `memory.block`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `name`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `name` | `string` | yes | Name of the memory block |
-| `limit` | `integer` | no | Maximum number of history entries to return (default: 20) |
-
-### `memory_cache_stats`
-
-Return hit/miss statistics and entry count for the in-memory semantic search cache.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_cache_clear`
-
-Evict all entries from the semantic search cache. Mutates in-memory cache state.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_compress_for_context`
-
-Pack a set of memories into a token budget for LLM context, returning compressed entries and diagnostics about skipped memories.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `ids`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `ids` | `array` | yes | Memory IDs to compress and pack (alias: memory_ids). Items: `integer`. |
-| `memory_ids` | `array` | no | Alias for ids. Items: `integer`. |
-| `token_budget` | `integer` | no | Maximum token budget for the packed context (default: 4096). |
-
-### `memory_embedding_migrate`
-
-Re-embed all memories using the active embedding model; use dry_run to count affected memories without writing.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `dry_run` | `boolean` | no | If true, count memories to migrate without re-embedding them (default: false). |
-| `target_model` | `string` | no | Target embedding model name to record in embedding_model column. Defaults to the active embedder's model name. |
-
-### `memory_embedding_providers`
-
-List the active embedding provider including model name and vector dimensions.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `temporal_add_edge`
-
-Add a bi-temporal validity edge between two memories in the knowledge graph.
-
-- Tier: `advanced`
-- Group: `temporal`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `from_id`, `relation`, `to_id`, `valid_from`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `from_id` | `integer` | yes | Source memory ID. |
-| `to_id` | `integer` | yes | Target memory ID. |
-| `relation` | `string` | yes | Semantic label for the edge (e.g. "works_at"). |
-| `valid_from` | `string` | yes | RFC3339 timestamp marking the start of edge validity. |
-| `properties` | `object` | no | Arbitrary JSON metadata to attach to the edge. |
-| `confidence` | `number` | no | Edge confidence score between 0.0 and 1.0 (default: 1.0). |
-| `source` | `string` | no | Provenance string identifying where this edge originates. |
-| `scope_path` | `string` | no | Optional scope path to associate with this edge. |
-
-### `temporal_contradictions`
-
-Detect overlapping or contradictory edge pairs in the temporal knowledge graph.
-
-- Tier: `advanced`
-- Group: `temporal`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `temporal_diff`
-
-Compute the set of added, removed, and changed edges between two RFC3339 timestamps in the temporal graph.
-
-- Tier: `advanced`
-- Group: `temporal`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `t1`, `t2`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `t1` | `string` | yes | Earlier RFC3339 timestamp (snapshot baseline). |
-| `t2` | `string` | yes | Later RFC3339 timestamp (snapshot target). |
-| `scope_path` | `string` | no | Optional scope path to restrict the diff. |
-
-### `temporal_snapshot`
-
-Return all currently-valid temporal graph edges as of a given RFC3339 timestamp.
-
-- Tier: `advanced`
-- Group: `temporal`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `timestamp`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `timestamp` | `string` | yes | RFC3339 point-in-time for the snapshot. |
-| `scope_path` | `string` | no | Optional scope path to restrict the snapshot. |
-
-### `temporal_timeline`
-
-Return the full edge history between two memory IDs, ordered chronologically.
-
-- Tier: `advanced`
-- Group: `temporal`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `from_id`, `to_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `from_id` | `integer` | yes | Source memory ID. |
-| `to_id` | `integer` | yes | Target memory ID. |
-| `scope_path` | `string` | no | Optional scope path to restrict the timeline. |
-
-### `memory_enrichment_timeline`
-
-List all enrichment events for a specific memory (lifecycle transitions, consolidation, compression, etc.). Shows what automated operations affected this memory and why.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `memory_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_id` | `integer` | yes | ID of the memory whose enrichment history to retrieve. |
-| `event_type` | `string` | no | Filter to a specific event type (e.g. "consolidation", "lifecycle_transition"). |
-| `include_dry_runs` | `boolean` | no | Include events that were executed in dry-run mode (default: true). |
-| `include_snapshots` | `boolean` | no | Include snapshot events (default: true). |
-| `limit` | `integer` | no | Maximum number of events to return (default: 20, max: 100). |
-
-### `memory_enrichment_audit`
-
-Query enrichment events globally with filters (status, event_type, agent_id, operation_id, workspace, time range). Use for compliance audit and batch tracing.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `event_type` | `string` | no | Filter by event type (e.g. "consolidation", "lifecycle_transition", "compression"). |
-| `triggered_by` | `string` | no | Filter by the tool name that triggered the event. |
-| `agent_id` | `string` | no | Filter by the agent ID that triggered the event. |
-| `status` | `string` | no | Filter by event outcome status. Allowed: `completed`, `failed`, `skipped`. |
-| `workspace` | `string` | no | Filter to a specific workspace. |
-| `operation_id` | `string` | no | Filter by a specific operation ID (exact match). |
-| `memory_id` | `integer` | no | Filter to events that reference a specific memory. |
-| `version_id` | `integer` | no | Filter to events that reference a specific memory version. |
-| `dry_run` | `boolean` | no | Filter by dry-run flag (true = only dry-run events, false = only real events). |
-| `since` | `string` | no | ISO-8601 timestamp: return events created at or after this time. |
-| `until` | `string` | no | ISO-8601 timestamp: return events created at or before this time. |
-| `order` | `string` | no | Sort order by creation time: "desc" (newest first, default) or "asc". Allowed: `desc`, `asc`. |
-| `limit` | `integer` | no | Maximum number of events to return (default: 50, max: 200). |
+| `offset` | `integer` | no | Pagination offset Default: `0`. |
+| `tags` | `array` | no | Filter by tags Items: `string`. |
+| `memory_type` | `string` | no | Filter by memory type (preferred field; alias: type) |
+| `type` | `string` | no | Deprecated alias for memory_type |
+| `workspace` | `string` | no | Filter by workspace |
+| `tier` | `string` | no | Filter by tier Allowed: `permanent`, `daily`. |
+| `sort_by` | `string` | no | Default: `created_at`. Allowed: `created_at`, `updated_at`, `last_accessed_at`, `importance`, `access_count`. |
+| `sort_order` | `string` | no | Default: `desc`. Allowed: `asc`, `desc`. |
+| `preview_chars` | `integer` | no | Maximum characters for content preview Default: `100`. |
 
 ### `memory_search`
 
@@ -2656,6 +1165,748 @@ Analyse knowledge gaps in a workspace and suggest new memories to create.
 |-------|------|----------|---------|
 | `workspace` | `string` | no | Workspace to analyse (default: "default"). |
 | `limit` | `integer` | no | Maximum number of suggestions to return (default: 10). |
+
+### `memory_scan_project`
+
+Scan current directory for AI instruction files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) and ingest them as memories. Creates parent memory for each file and child memories for sections.
+
+- Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `path` | `string` | no | Directory to scan (defaults to current working directory) |
+| `scan_parents` | `boolean` | no | Also scan parent directories (security: disabled by default) Default: `false`. |
+| `extract_sections` | `boolean` | no | Create separate memories for each section Default: `true`. |
+
+### `memory_get_project_context`
+
+Get all project context memories for the current working directory. Returns instruction files and their sections.
+
+- Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `path` | `string` | no | Project path (defaults to current working directory) |
+| `include_sections` | `boolean` | no | Include section memories Default: `true`. |
+| `file_types` | `array` | no | Filter by file type (claude-md, cursorrules, etc.) Items: `string`. |
+
+### `memory_list_instruction_files`
+
+List AI instruction files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) in a directory without ingesting them. Returns file paths, types, and sizes for discovery purposes.
+
+- Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `path` | `string` | no | Directory to scan (defaults to current working directory) |
+| `scan_parents` | `boolean` | no | Also scan parent directories for instruction files Default: `false`. |
+
+### `memory_ingest_document`
+
+Ingest a document (PDF or Markdown) into memory. Extracts text, splits into chunks with overlap, and creates memories with deduplication.
+
+- Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `path` | `string` | yes | Local file path to the document |
+| `format` | `string` | no | Document format (auto-detect from extension if not specified) Default: `auto`. Allowed: `auto`, `md`, `pdf`. |
+| `chunk_size` | `integer` | no | Maximum characters per chunk Default: `1200`. |
+| `overlap` | `integer` | no | Overlap between chunks in characters Default: `200`. |
+| `max_file_size` | `integer` | no | Maximum file size in bytes (default 10MB) Default: `10485760`. |
+| `tags` | `array` | no | Additional tags to add to all chunks Items: `string`. |
+
+### `session_index`
+
+Index a conversation into searchable memory chunks. Uses dual-limiter chunking (messages + characters) with overlap.
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `messages`, `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Unique session identifier |
+| `messages` | `array` | yes | Array of conversation messages Items: `object`. |
+| `title` | `string` | no | Optional session title |
+| `workspace` | `string` | no | Workspace to store chunks in (default: 'default') |
+| `agent_id` | `string` | no | Optional agent identifier |
+| `max_messages` | `integer` | no | Max messages per chunk Default: `10`. |
+| `max_chars` | `integer` | no | Max characters per chunk Default: `8000`. |
+| `overlap` | `integer` | no | Overlap messages between chunks Default: `2`. |
+| `ttl_days` | `integer` | no | TTL for transcript chunks in days Default: `7`. |
+
+### `session_index_delta`
+
+Incrementally index new messages to an existing session. More efficient than full reindex.
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `messages`, `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session to update |
+| `messages` | `array` | yes | New messages to add Items: `object`. |
+
+### `session_get`
+
+Get information about an indexed session
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session ID to retrieve |
+
+### `session_list`
+
+List indexed sessions with optional workspace filter
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Filter by workspace |
+| `limit` | `integer` | no | Maximum sessions to return Default: `20`. |
+
+### `session_delete`
+
+Delete a session and all its indexed chunks
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session to delete |
+
+### `context_budget_check`
+
+Check token usage of memories against a budget. Returns token counts and suggestions if over budget.
+
+- Tier: `advanced`
+- Group: `context`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `budget`, `memory_ids`, `model`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_ids` | `array` | yes | IDs of memories to check Items: `integer`. |
+| `model` | `string` | yes | Model name for tokenization (gpt-4, gpt-4o, gpt-4o-mini, claude-3-opus, etc.) |
+| `encoding` | `string` | no | Override encoding (cl100k_base, o200k_base). Optional if model is known. |
+| `budget` | `integer` | yes | Token budget to check against |
+
+### `pending_injections_count`
+
+Count of non-expired payloads queued in pending_injections for a workspace, waiting to be consumed by the next SessionStart.
+
+- Tier: `advanced`
+- Group: `admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Default: `default`. |
+
+### `pending_injections_cleanup`
+
+Drop every pending_injections row whose expires_at has passed. Idempotent. Returns the count removed.
+
+- Tier: `advanced`
+- Group: `admin`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `session_context_create`
+
+Create a new session context for tracking related memories during a conversation or task.
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Session name |
+| `description` | `string` | no | Session description |
+| `workspace` | `string` | no | Workspace for the session |
+| `metadata` | `object` | no | Additional session metadata |
+
+### `session_context_add_memory`
+
+Add a memory to a session context with relevance score and role.
+
+- Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_id`, `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session ID |
+| `memory_id` | `integer` | yes | Memory ID to add |
+| `relevance_score` | `number` | no | How relevant this memory is to the session Default: `1.0`. Minimum: `0`. Maximum: `1`. |
+| `context_role` | `string` | no | Role of the memory in the session Default: `referenced`. Allowed: `referenced`, `created`, `updated`, `pinned`. |
+
+### `session_context_remove_memory`
+
+Remove a memory from a session context.
+
+- Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_id`, `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session ID |
+| `memory_id` | `integer` | yes | Memory ID to remove |
+
+### `session_context_get`
+
+Get a session context with its linked memories.
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session ID |
+
+### `session_context_list`
+
+List all session contexts with optional filtering.
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Filter by workspace |
+| `active_only` | `boolean` | no | Only return active sessions Default: `false`. |
+| `limit` | `integer` | no | Maximum sessions to return Default: `50`. |
+| `offset` | `integer` | no | Offset for pagination Default: `0`. |
+
+### `session_context_search`
+
+Search memories within a specific session context.
+
+- Tier: `standard`
+- Group: `session`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `query`, `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session ID to search within |
+| `query` | `string` | yes | Search query |
+| `limit` | `integer` | no | Maximum results Default: `20`. |
+
+### `session_context_update_summary`
+
+Update the summary of a session context.
+
+- Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `session_id`, `summary`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session ID |
+| `summary` | `string` | yes | New session summary |
+
+### `session_context_end`
+
+End a session context, marking it as inactive.
+
+- Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session ID to end |
+| `summary` | `string` | no | Optional final summary |
+
+### `session_context_export`
+
+Export a session context with all its memories for archival or sharing.
+
+- Tier: `advanced`
+- Group: `session`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session ID to export |
+| `include_content` | `boolean` | no | Include full memory content Default: `true`. |
+| `format` | `string` | no | Export format Default: `json`. Allowed: `json`, `markdown`. |
+
+### `memory_get_injection_prompt`
+
+Assembles the most relevant memories into a ready-to-inject system prompt block. Uses hybrid search to find relevant memories and formats them as markdown, respecting a token budget.
+
+- Tier: `essential`
+- Group: `memory.search`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `query`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | Search query to find relevant memories |
+| `token_budget` | `integer` | no | Max tokens for output (default: 2000) |
+| `workspace` | `string` | no | Filter to specific workspace |
+| `include_types` | `array` | no | Filter by memory types Items: `string`. |
+
+### `memory_observe_tool_use`
+
+Store a tool observation as an episodic memory for session continuity. Automatically compresses large inputs/outputs.
+
+- Tier: `standard`
+- Group: `memory.session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `tool_input`, `tool_name`, `tool_output`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `tool_name` | `string` | yes | Name of the tool that was used |
+| `tool_input` | `object` | yes | Tool input parameters |
+| `tool_output` | `string` | yes | Tool output/result |
+| `session_id` | `string` | no | Session identifier for grouping observations |
+| `compress` | `boolean` | no | Compress to 200-char previews (default: true) |
+
+### `memory_archive_tool_output`
+
+Archives a tool's full raw output to memory and returns a compressed summary (~500 tokens) for use in the active context. Transforms O(N²) context growth to O(N) by keeping only summaries in the working context while preserving full outputs for on-demand retrieval.
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `raw_output`, `tool_name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `tool_name` | `string` | yes | Name of the tool whose output is being archived |
+| `raw_output` | `string` | yes | Full raw output to archive |
+| `session_id` | `string` | no | Session identifier for grouping archived outputs (default: 'unknown') |
+| `compress_summary` | `boolean` | no | Whether to generate a compressed summary (default: true) |
+| `summary_tokens` | `integer` | no | Max tokens for the compressed summary (default: 500) |
+
+### `memory_get_archived_output`
+
+Retrieves the full raw output for an archived tool observation by its archive ID. Use when you need the complete output that was previously compressed for context efficiency.
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `archive_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `archive_id` | `integer` | yes | Archive ID returned by memory_archive_tool_output |
+
+### `memory_get_working_memory`
+
+Assembles all compressed tool observations for a session into a token-budgeted working memory block. Includes archive references for retrieving full outputs on demand. This is the core of the Endless Mode context management system.
+
+- Tier: `standard`
+- Group: `memory.session`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `session_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | yes | Session identifier to retrieve observations for |
+| `token_budget` | `integer` | no | Max tokens for the working memory block (default: 4000) |
+| `include_tool_names` | `array` | no | Whitelist of tool names to include (default: all) Items: `string`. |
+| `since_minutes` | `integer` | no | Only include observations from the last N minutes (default: all time) |
+
+### `session_land`
+
+Generate a structured session handoff ('land the plane'). Creates a checkpoint memory with session summary, open items, recent decisions, warnings, and a copy-ready block for the next session. If session_id is omitted, Engram falls back to the most recent session in the workspace, or returns a workspace-level packet with a warning.
+
+- Tier: `essential`
+- Group: `session`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `session_id` | `string` | no | Optional session identifier to hand off. Omit to use the most recent session in the workspace when available. |
+| `workspace` | `string` | no | Workspace scope (default: 'default') |
+| `summary` | `string` | no | Summary of what was accomplished this session |
+| `next_session_hints` | `array` | no | Hints for what should be done next session Items: `string`. |
+
+### `memory_build_context`
+
+Build a structured prompt context from relevant memories using hybrid search, with optional graph traversal depth, timeframe filtering, type filtering, and relationship graph inclusion. Inspired by Basic Memory's build_context.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `query`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | Search query to retrieve relevant memories |
+| `total_budget` | `integer` | no | Max tokens for the entire prompt (default: 4096) |
+| `strategy` | `string` | no | Context assembly strategy Default: `greedy`. Allowed: `greedy`, `balanced`, `recency`. |
+| `workspace` | `string` | no | Workspace to search in |
+| `limit` | `integer` | no | Max memories to retrieve (default: 20) |
+| `depth` | `integer` | no | Graph traversal depth: 1=search only, 2=search+1 hop of related memories, 3=search+2 hops Default: `1`. Minimum: `1`. Maximum: `3`. |
+| `timeframe` | `string` | no | Time window for memory filtering Default: `all`. Allowed: `1h`, `24h`, `7d`, `30d`, `all`. |
+| `include_types` | `array` | no | Only include these memory types (e.g., ['note', 'decision']) Items: `string`. |
+| `include_graph` | `boolean` | no | Include entity relationship graph in response Default: `false`. |
+
+### `context_record`
+
+Record a scoped Operational Context event and optional derived summary. Redacts text before storage, requires provenance scope, keeps raw payload storage off, and supports RTK-compatible external summary metadata without dereferencing external pointers.
+
+- Tier: `standard`
+- Group: `context`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `event_type`, `session_id`, `source`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `source` | `string` | yes | Source system or adapter, for example codex, harness, rtk, github_actions |
+| `source_version` | `string` | no | Optional source or adapter version |
+| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope |
+| `workspace` | `string` | no | Alias for workspace_path_hash |
+| `git_branch` | `string` | no | Branch observed when the event occurred |
+| `worktree_name` | `string` | no | Worktree name observed when the event occurred |
+| `commit_hash` | `string` | no | Commit observed when the event occurred |
+| `session_id` | `string` | yes | Agent or user session scope |
+| `task_id` | `string` | no | Task, issue, or ticket scope |
+| `agent_id` | `string` | no | Agent identity |
+| `event_type` | `string` | yes | Event family such as command, tool, decision_made, verification_run, verification_skipped, blocker_found, review_result, handoff_created |
+| `command` | `string` | no | Command line or command name for command events |
+| `command_name` | `string` | no | Alias/preferred command field |
+| `tool` | `string` | no | Tool name for tool events |
+| `tool_name` | `string` | no | Alias/preferred tool field |
+| `cwd` | `string` | no | Working directory context |
+| `exit_code` | `integer` | no | Command exit code; required for event_type=command |
+| `summary` | `string` | no | Optional derived/lossy summary to store with provenance |
+| `key_errors` | `array` | no | Important errors to index after redaction Items: `string`. |
+| `touched_files` | `array` | no | Files inspected or changed by the event Items: `string`. |
+| `reducer` | `object` | no | Optional reducer metadata: name, version, lossy, confidence, structured_facts, warnings, labels, tokens_raw_est, tokens_compact_est |
+| `external_reducer` | `string` | no | External reducer name for RTK-compatible summaries |
+| `raw_pointer` | `string` | no | External raw pointer recorded as metadata only; Engram does not dereference it |
+| `external_unverified` | `boolean` | no | Mark external summary as unverified |
+| `labels` | `array` | no | Additional labels; external records add derived/lossy/external_unverified conservatively Items: `string`. |
+| `retention_policy` | `string` | no | Retention label; sensitive commands may be forced to ephemeral_sensitive by policy |
+| `raw_artifact_id` | `string` | no | Optional existing artifact id pointer; raw payload content is not accepted by this tool |
+| `metadata` | `object` | no | Additional metadata redacted recursively before storage |
+| `started_at` | `string` | no | RFC3339 event start time; defaults to now |
+| `finished_at` | `string` | no | RFC3339 event finish time |
+
+### `context_record_artifact`
+
+Record an Operational Context artifact pointer or explicitly retained redacted raw artifact. Pointer-only is the default; raw_content requires retain_raw=true and policy approval.
+
+- Tier: `standard`
+- Group: `context`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `kind`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | no | Optional artifact id; generated when omitted |
+| `source_event_id` | `integer` | no | Related context event id |
+| `source` | `string` | no | Source system or adapter |
+| `source_version` | `string` | no | Optional source or adapter version |
+| `repo_id` | `string` | no | Repository scope identifier |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope |
+| `workspace` | `string` | no | Alias for workspace_path_hash |
+| `session_id` | `string` | no | Session scope for access policy |
+| `task_id` | `string` | no | Task scope for access policy |
+| `agent_id` | `string` | no | Agent scope for access policy |
+| `kind` | `string` | yes | Artifact type, for example command_output_summary, raw_command_output, review_artifact, diff_reference, test_report, external_url |
+| `label` | `string` | no | Human label |
+| `uri` | `string` | no | External/source-of-truth pointer |
+| `raw_pointer` | `string` | no | Alias pointer stored as uri/metadata only; not dereferenced |
+| `media_type` | `string` | no | Media type for pointer or raw content |
+| `raw_content` | `string` | no | Raw content to retain only when retain_raw=true and policy allows it |
+| `content_sha256` | `string` | no | Optional digest for pointer-only artifacts; raw digests are recomputed after redaction |
+| `byte_len` | `integer` | no | Optional source byte length for pointer-only artifacts |
+| `retention_policy` | `string` | no | Retention label, default pointer_only or raw_retained |
+| `access_policy` | `string` | no | Default: `same_session`. Allowed: `same_session`, `same_task`, `same_agent`, `repo`, `public`. |
+| `retain_raw` | `boolean` | no | Must be true to persist raw_content Default: `false`. |
+| `ttl_seconds` | `integer` | no | Optional raw retention TTL from now |
+| `stale_after_seconds` | `integer` | no | Optional stale threshold from now |
+| `metadata` | `object` | no | Additional metadata redacted recursively before storage |
+
+### `context_get_artifact`
+
+Explicitly retrieve retained Operational Context artifact content after access, retention, staleness, and redaction checks. Search and bundle tools return artifact pointers only; this tool requires an artifact_id and reason.
+
+- Tier: `standard`
+- Group: `context`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `artifact_id`, `reason`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `artifact_id` | `string` | yes | Artifact ID to retrieve; broad search queries are not accepted |
+| `reason` | `string` | yes | Why raw or retained artifact content is needed |
+| `requester_agent_id` | `string` | no | Agent identity used for same_agent access checks |
+| `session_id` | `string` | no | Session scope used for same_session access checks |
+| `task_id` | `string` | no | Task scope used for same_task access checks |
+| `repo_id` | `string` | no | Repository scope used for repo access checks |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope used for repo/workspace access checks |
+| `workspace` | `string` | no | Alias for workspace_path_hash |
+| `max_bytes` | `integer` | no | Maximum raw bytes to return; response marks truncation explicitly Minimum: `1`. |
+| `allow_stale` | `boolean` | no | Allow retrieval after stale_at has passed Default: `false`. |
+| `require_redacted` | `boolean` | no | Require a redaction status that permits raw retrieval Default: `true`. |
+
+### `context_search`
+
+Search scoped Operational Context events and derived summaries. Searches event metadata, command/tool names, summaries, structured facts, failure signals, decisions, inspected/touched file metadata, and artifact pointers without returning raw artifact content.
+
+- Tier: `standard`
+- Group: `context`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `query`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | Search query for operational events, summaries, decisions, failures, files, or artifact metadata |
+| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope |
+| `workspace` | `string` | no | Alias for workspace_path_hash when clients only have a workspace scope value |
+| `session_id` | `string` | no | Session scope filter |
+| `task_id` | `string` | no | Task scope filter |
+| `event_type` | `string` | no | Restrict results to one event type |
+| `event_types` | `array` | no | Restrict results to these event types Items: `string`. |
+| `event_type_filters` | `array` | no | Alias for event_types Items: `string`. |
+| `failure_only` | `boolean` | no | Only include failures/errors inferred from exit_code or event_type Default: `false`. |
+| `max_results` | `integer` | no | Maximum results to return Default: `25`. Minimum: `1`. Maximum: `200`. |
+| `include_artifact_pointers` | `boolean` | no | Include artifact IDs/pointers only; raw artifact content is never returned Default: `false`. |
+| `current_git_branch` | `string` | no | Current branch used to mark branch mismatch staleness |
+| `current_commit_hash` | `string` | no | Current commit used to mark commit mismatch staleness |
+| `stale_after_days` | `integer` | no | Age threshold for stale warnings Default: `7`. |
+
+### `context_build_bundle`
+
+Build a compact agent-ready Operational Context bundle for resuming work. Includes relevant failures, inferred unresolved blockers, recent decisions, commands already run, inspected/touched files, staleness warnings, and optional artifact pointers with provenance for every item. Does not include raw artifact content.
+
+- Tier: `standard`
+- Group: `context`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | no | Optional query describing the work to resume |
+| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
+| `workspace_path_hash` | `string` | no | Workspace path hash scope |
+| `workspace` | `string` | no | Alias for workspace_path_hash when clients only have a workspace scope value |
+| `session_id` | `string` | no | Session scope filter |
+| `task_id` | `string` | no | Task scope filter |
+| `max_results` | `integer` | no | Maximum operational context rows to inspect Default: `80`. Minimum: `1`. Maximum: `200`. |
+| `section_limit` | `integer` | no | Maximum entries per bundle section Default: `12`. Minimum: `1`. Maximum: `50`. |
+| `include_artifact_pointers` | `boolean` | no | Include artifact IDs/pointers only; raw artifact content is never returned Default: `false`. |
+| `current_git_branch` | `string` | no | Current branch used to mark branch mismatch staleness |
+| `current_commit_hash` | `string` | no | Current commit used to mark commit mismatch staleness |
+| `stale_after_days` | `integer` | no | Age threshold for stale warnings Default: `7`. |
+
+### `memory_prepare_context`
+
+Prepare optimized context for LLM using RTK-inspired pipeline (filter, group, truncate). Reduces token usage by 70-95% through intelligent context preparation.
+
+- Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `query`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | Query to prepare context for |
+| `budget` | `integer` | no | Token budget for prepared context Default: `4000`. |
+| `workspace` | `string` | no | Optional workspace filter |
+
+### `memory_extract_facts`
+
+Extract subject-predicate-object facts from a memory's content using rule-based NLP and persist them to the facts table.
+
+- Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory from which to extract and store facts. |
+
+### `memory_export_graph`
+
+Export knowledge graph visualization
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `format` | `string` | no | Default: `html`. Allowed: `html`, `json`. |
+| `max_nodes` | `integer` | no | Default: `500`. |
+| `focus_id` | `integer` | no | Center graph on this memory |
+
+### `temporal_add_edge`
+
+Add a bi-temporal validity edge between two memories in the knowledge graph.
+
+- Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `from_id`, `relation`, `to_id`, `valid_from`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `from_id` | `integer` | yes | Source memory ID. |
+| `to_id` | `integer` | yes | Target memory ID. |
+| `relation` | `string` | yes | Semantic label for the edge (e.g. "works_at"). |
+| `valid_from` | `string` | yes | RFC3339 timestamp marking the start of edge validity. |
+| `properties` | `object` | no | Arbitrary JSON metadata to attach to the edge. |
+| `confidence` | `number` | no | Edge confidence score between 0.0 and 1.0 (default: 1.0). |
+| `source` | `string` | no | Provenance string identifying where this edge originates. |
+| `scope_path` | `string` | no | Optional scope path to associate with this edge. |
+
+### `temporal_contradictions`
+
+Detect overlapping or contradictory edge pairs in the temporal knowledge graph.
+
+- Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `temporal_diff`
+
+Compute the set of added, removed, and changed edges between two RFC3339 timestamps in the temporal graph.
+
+- Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `t1`, `t2`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `t1` | `string` | yes | Earlier RFC3339 timestamp (snapshot baseline). |
+| `t2` | `string` | yes | Later RFC3339 timestamp (snapshot target). |
+| `scope_path` | `string` | no | Optional scope path to restrict the diff. |
+
+### `temporal_snapshot`
+
+Return all currently-valid temporal graph edges as of a given RFC3339 timestamp.
+
+- Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `timestamp`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `timestamp` | `string` | yes | RFC3339 point-in-time for the snapshot. |
+| `scope_path` | `string` | no | Optional scope path to restrict the snapshot. |
+
+### `temporal_timeline`
+
+Return the full edge history between two memory IDs, ordered chronologically.
+
+- Tier: `advanced`
+- Group: `temporal`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `from_id`, `to_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `from_id` | `integer` | yes | Source memory ID. |
+| `to_id` | `integer` | yes | Target memory ID. |
+| `scope_path` | `string` | no | Optional scope path to restrict the timeline. |
 
 ### `graph_query`
 
@@ -3104,6 +2355,633 @@ Generate a reflective synthesis over a set of memories at a configurable analyti
 | `ids` | `array` | yes | Array of memory IDs to reflect on (required, must be non-empty). Items: `integer`. |
 | `depth` | `string` | no | Reflection depth: "surface" (default), "analytical", or "meta". |
 
+### `scope_get`
+
+Return the current scope path and level for a given memory.
+
+- Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory whose scope to retrieve. |
+
+### `scope_list`
+
+List all distinct scope paths currently present in the database.
+
+- Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `scope_search`
+
+Search for memories whose content matches a query within a given scope, including ancestor scopes.
+
+- Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `query`, `scope_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | Substring to search for within scoped memories. |
+| `scope_path` | `string` | yes | Hierarchical scope path to search within (e.g. "global/org:acme/user:alice"). |
+
+### `scope_set`
+
+Assign or update the hierarchical scope of a memory.
+
+- Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_id`, `scope_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory to re-scope. |
+| `scope_path` | `string` | yes | Target scope path (e.g. "global/org:acme/user:alice"). |
+
+### `scope_tree`
+
+Return a hierarchical tree of all scopes in the database.
+
+- Tier: `standard`
+- Group: `scope`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_set_expiration`
+
+Set or update the expiration time for a memory
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `ttl_seconds`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID |
+| `ttl_seconds` | `integer` | yes | Time-to-live in seconds from now. Use 0 to remove expiration (make permanent). |
+
+### `memory_cleanup_expired`
+
+Delete all expired memories. Typically called by a background job, but can be invoked manually.
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_create_daily`
+
+Create a daily (ephemeral) memory that auto-expires after the specified TTL. Useful for session context and scratch notes.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `content`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `content` | `string` | yes | The content to remember |
+| `type` | `string` | no | Default: `note`. Allowed: `note`, `todo`, `issue`, `decision`, `preference`, `learning`, `context`, `credential`. |
+| `tags` | `array` | no | Tags for categorization Items: `string`. |
+| `metadata` | `object` | no | Additional metadata as key-value pairs |
+| `importance` | `number` | no | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
+| `ttl_seconds` | `integer` | no | Time-to-live in seconds (default: 24 hours) Default: `86400`. |
+| `workspace` | `string` | no | Workspace to store the memory in (default: 'default') |
+
+### `memory_score`
+
+Compute deterministic memory policy scores for a memory. When persist=true, upserts the memory_policy row and emits a best-effort policy audit event.
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to score |
+| `persist` | `boolean` | no | Persist the computed policy score to memory_policy Default: `false`. |
+
+### `memory_lifecycle_update`
+
+Unified facade for memory lifecycle mutations: promote a memory or reinforce its policy, promote to permanent canonical tier, decay policy scores, set expiration TTL, or score policy components.
+
+- Tier: `essential`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to mutate lifecycle state for |
+| `action` | `string` | no | Lifecycle action to perform: promote (reinforce policy), promote_permanent (promote to canonical permanent tier), decay (policy decay), expire (set TTL), score (evaluate policy), explain (audit score), transition (manual state transition), restore (restore to active) Default: `promote`. Allowed: `promote`, `promote_permanent`, `decay`, `expire`, `score`, `explain`, `transition`, `restore`. |
+| `canonical_tier` | `boolean` | no | When action='promote' and canonical_tier=true, promotes to permanent canonical tier Default: `false`. |
+| `ttl_seconds` | `integer` | no | Time-to-live in seconds when action='expire' |
+| `state` | `string` | no | Target lifecycle state when action='transition' Allowed: `active`, `stale`, `archived`, `purged`. |
+| `reason` | `string` | no | Audit reason or explanation for the transition or reconciliation |
+| `persist` | `boolean` | no | When action='score', whether to persist the evaluated policy Default: `false`. |
+
+### `memory_promote`
+
+Reinforce a memory's policy record, optionally promoting a Daily-tier memory to the canonical Permanent tier.
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to promote or reinforce |
+| `canonical_tier` | `boolean` | no | When true, also call promote_to_permanent for canonical tier promotion Default: `false`. |
+
+### `memory_decay`
+
+Compute or apply conservative memory policy decay for a workspace. Dry-run is the default; apply updates memory_policy scores only. Use lifecycle_run for lifecycle_state transitions.
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to decay Default: `default`. |
+| `dry_run` | `boolean` | no | When true, compute candidate changes without mutation Default: `true`. |
+
+### `memory_explain`
+
+Explain a memory's current policy score with feature components, reason text, and policy audit count.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to explain |
+
+### `memory_reconcile_conflict`
+
+Record a conflict reconciliation signal for a memory policy without deleting or mutating memory content.
+
+- Tier: `standard`
+- Group: `memory.quality`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `reason`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID with the conflict signal |
+| `reason` | `string` | yes | Audit reason for the conflict reconciliation |
+
+### `memory_promote_to_permanent`
+
+Promote a daily memory to permanent tier. Clears the expiration and makes the memory permanent.
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to promote |
+
+### `lifecycle_status`
+
+Get lifecycle statistics (active/stale/archived counts by workspace).
+
+- Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Filter by workspace (optional) |
+
+### `lifecycle_run`
+
+Run the canonical lifecycle predicate to mark stale and archive idle memories. Dry run by default; this is the only decay-derived lifecycle writer.
+
+- Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
+- Annotations: idempotentHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `dry_run` | `boolean` | no | Preview changes without applying Default: `true`. |
+| `workspace` | `string` | no | Limit to specific workspace |
+| `stale_days` | `integer` | no | Base idle days before marking as stale Default: `30`. |
+| `archive_days` | `integer` | no | Base idle days before archiving Default: `90`. |
+| `hard_idle_cap_days` | `integer` | no | Absolute idle-day cap before archiving Default: `365`. |
+| `max_importance_mult` | `number` | no | Maximum multiplier by which importance extends stale/archive windows Default: `4.0`. |
+
+### `memory_set_lifecycle`
+
+Manually set the lifecycle state of a memory.
+
+- Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `state`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID |
+| `state` | `string` | yes | New lifecycle state Allowed: `active`, `stale`, `archived`. |
+
+### `lifecycle_config`
+
+Get lifecycle predicate configuration defaults and optional overrides.
+
+- Tier: `advanced`
+- Group: `lifecycle`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `stale_days` | `integer` | no | Base idle days before marking as stale |
+| `archive_days` | `integer` | no | Base idle days before archiving |
+| `hard_idle_cap_days` | `integer` | no | Absolute idle-day cap before archiving |
+| `max_importance_mult` | `number` | no | Maximum multiplier by which importance extends stale/archive windows |
+
+### `retention_policy_set`
+
+Set a retention policy for a workspace. Controls compression of already-Archived memories, max memory count, and auto-deletion.
+
+- Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `workspace`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | yes | Workspace name |
+| `max_age_days` | `integer` | no | Hard age limit — auto-delete after this many days |
+| `max_memories` | `integer` | no | Maximum active memories in this workspace |
+| `compress_after_days` | `integer` | no | Compress already-Archived memories older than this |
+| `compress_max_importance` | `number` | no | Only compress already-Archived memories with importance <= this (default 0.3) |
+| `compress_min_access` | `integer` | no | Skip compression if access_count >= this (default 3) |
+| `auto_delete_after_days` | `integer` | no | Auto-delete archived memories older than this |
+| `exclude_types` | `array` | no | Memory types exempt from policy (e.g. ["decision", "checkpoint"]) Items: `string`. |
+
+### `retention_policy_get`
+
+Get the retention policy for a workspace.
+
+- Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `workspace`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | yes | Workspace name |
+
+### `retention_policy_list`
+
+List all retention policies across all workspaces.
+
+- Tier: `standard`
+- Group: `lifecycle`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `retention_policy_delete`
+
+Delete a retention policy for a workspace.
+
+- Tier: `advanced`
+- Group: `lifecycle`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: `workspace`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | yes | Workspace name |
+
+### `retention_policy_apply`
+
+Apply all retention policies now. Compresses, caps, and deletes per workspace rules.
+
+- Tier: `advanced`
+- Group: `lifecycle`
+- Required feature: `always`
+- Annotations: idempotentHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `dry_run` | `boolean` | no | Preview what would happen without making changes Default: `false`. |
+
+### `salience_get`
+
+Get the salience score for a memory. Returns recency, frequency, importance, and feedback components with the combined score and lifecycle state.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to get salience for |
+| `feedback_signal` | `number` | no | Optional feedback signal (-1 to 1) to include in calculation Default: `0`. Minimum: `-1`. Maximum: `1`. |
+
+### `salience_set_importance`
+
+Set the importance score for a memory. This is the static importance component of salience.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `importance`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID |
+| `importance` | `number` | yes | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
+
+### `salience_boost`
+
+Boost a memory's salience score temporarily or permanently. Useful for marking memories as contextually relevant.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to boost |
+| `boost_amount` | `number` | no | Amount to boost (0-1) Default: `0.2`. Minimum: `0`. Maximum: `1`. |
+| `reason` | `string` | no | Optional reason for boosting |
+
+### `salience_demote`
+
+Demote a memory's salience score. Useful for marking memories as less relevant.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to demote |
+| `demote_amount` | `number` | no | Amount to demote (0-1) Default: `0.2`. Minimum: `0`. Maximum: `1`. |
+| `reason` | `string` | no | Optional reason for demoting |
+
+### `salience_decay_run`
+
+Run salience score decay and optionally record salience history. Does not update lifecycle_state; use lifecycle_run for lifecycle transitions.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `dry_run` | `boolean` | no | If true, compute score/history changes without persisting updates Default: `false`. |
+| `record_history` | `boolean` | no | Record salience history entries while updating Default: `true`. |
+| `workspace` | `string` | no | Limit to specific workspace |
+
+### `salience_stats`
+
+Get salience statistics across all memories. Returns distribution, percentiles, and state counts.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Limit to specific workspace |
+
+### `salience_history`
+
+Get salience score history for a memory. Shows how salience has changed over time.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID |
+| `limit` | `integer` | no | Maximum history entries to return Default: `50`. |
+
+### `salience_top`
+
+Get top memories by salience score. Useful for context injection.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `limit` | `integer` | no | Maximum memories to return Default: `20`. |
+| `workspace` | `string` | no | Limit to specific workspace |
+| `min_score` | `number` | no | Minimum salience score Minimum: `0`. Maximum: `1`. |
+| `memory_type` | `string` | no | Filter by memory type |
+
+### `quality_score`
+
+Get the quality score for a memory with detailed breakdown of clarity, completeness, freshness, consistency, and source trust components.
+
+- Tier: `standard`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to score |
+
+### `quality_report`
+
+Generate a comprehensive quality report for a workspace. Includes quality distribution, top issues, conflict and duplicate counts.
+
+- Tier: `standard`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to analyze (default: 'default') |
+
+### `quality_find_duplicates`
+
+Find near-duplicate memories using text similarity. Returns pairs of similar memories above the threshold.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `threshold` | `number` | no | Similarity threshold (0-1) Default: `0.85`. Minimum: `0`. Maximum: `1`. |
+| `limit` | `integer` | no | Maximum memories to compare Default: `100`. |
+
+### `quality_get_duplicates`
+
+Get pending duplicate candidates that need review.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `limit` | `integer` | no | Maximum duplicates to return Default: `50`. |
+
+### `quality_find_conflicts`
+
+Detect conflicts for a memory against existing memories. Finds contradictions, staleness, and semantic overlaps.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to check for conflicts |
+
+### `quality_get_conflicts`
+
+Get unresolved conflicts that need attention.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `limit` | `integer` | no | Maximum conflicts to return Default: `50`. |
+
+### `quality_resolve_conflict`
+
+Resolve a conflict between memories. Options: keep_a, keep_b, merge, keep_both, delete_both, false_positive.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: `conflict_id`, `resolution`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `conflict_id` | `integer` | yes | Conflict ID to resolve |
+| `resolution` | `string` | yes | How to resolve the conflict Allowed: `keep_a`, `keep_b`, `merge`, `keep_both`, `delete_both`, `false_positive`. |
+| `notes` | `string` | no | Optional notes about the resolution |
+
+### `quality_source_trust`
+
+Get or update trust score for a source type. Higher trust means memories from this source are weighted more in quality calculations.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `source_type`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `source_type` | `string` | yes | Source type (user, seed, extraction, inference, external) |
+| `source_identifier` | `string` | no | Optional specific source identifier |
+| `trust_score` | `number` | no | New trust score (omit to just get current score) Minimum: `0`. Maximum: `1`. |
+| `notes` | `string` | no | Notes about this source |
+
+### `quality_improve`
+
+Get suggestions for improving a memory's quality. Returns actionable recommendations.
+
+- Tier: `advanced`
+- Group: `quality`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to analyze |
+
 ### `memory_resolve_conflict`
 
 Resolve a saved knowledge-graph conflict by ID using a chosen strategy, removing or retaining the conflicting edges accordingly.
@@ -3118,6 +2996,724 @@ Resolve a saved knowledge-graph conflict by ID using a chosen strategy, removing
 |-------|------|----------|---------|
 | `conflict_id` | `integer` | yes | ID of the conflict record to resolve (required). |
 | `strategy` | `string` | no | Resolution strategy: "keep_newer" (default), "keep_higher_confidence", "merge", or "manual". |
+
+### `memory_boost`
+
+Temporarily boost a memory's importance score. The boost can optionally decay over time.
+
+- Tier: `standard`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to boost |
+| `boost_amount` | `number` | no | Amount to increase importance (0-1) Default: `0.2`. |
+| `duration_seconds` | `integer` | no | Optional: duration before boost decays (omit for permanent boost) |
+
+### `memory_explain_utility`
+
+Explain why a memory has its current utility score. Returns the full feedback history summary (useful vs. not-useful retrievals), how much temporal decay has been applied, and a plain-English narrative. Useful for debugging or auditing memory quality.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory to explain |
+
+### `memory_detect_conflicts`
+
+Detect contradictory or conflicting facts in the knowledge graph; optionally persist detected conflicts for later resolution.
+
+- Tier: `standard`
+- Group: `memory.quality`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `save` | `boolean` | no | If true, persist detected conflicts to the conflicts table for later resolution (default: false). |
+
+### `memory_feedback`
+
+Record relevance feedback for a search result and update the memory's utility score; schedules low-utility memories for consolidation.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_id`, `query`, `signal`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | The search query that produced the result. |
+| `memory_id` | `integer` | yes | ID of the memory being rated. |
+| `signal` | `string` | yes | Feedback signal: "useful" (alias "helpful"), "irrelevant" (alias "not_helpful"), "outdated", or "conflict". |
+| `rank_position` | `integer` | no | 0-based rank position of the result in the original result list (optional). |
+| `original_score` | `number` | no | The final_score from the original search result (optional). |
+| `workspace` | `string` | no | Workspace context for the feedback (default: "default"). |
+
+### `memory_feedback_stats`
+
+Return aggregated search-feedback statistics (thumbs-up/down counts, top-rated queries) for a workspace.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace name to filter stats; omit for all workspaces. |
+
+### `memory_utility_score`
+
+Compute the Q-value utility score for a memory based on its retrieval feedback history.
+
+- Tier: `standard`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to score. |
+
+### `memory_stats`
+
+Get storage statistics
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `workspace_list`
+
+List all workspaces with their statistics (memory count, tier breakdown, etc.)
+
+- Tier: `essential`
+- Group: `workspace`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `workspace_stats`
+
+Get detailed statistics for a specific workspace
+
+- Tier: `standard`
+- Group: `workspace`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `workspace`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | yes | Workspace name |
+
+### `workspace_move`
+
+Move a memory to a different workspace
+
+- Tier: `standard`
+- Group: `workspace`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `workspace`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to move |
+| `workspace` | `string` | yes | Target workspace name |
+
+### `workspace_delete`
+
+Delete a workspace. Can either move all memories to 'default' workspace or hard delete them.
+
+- Tier: `advanced`
+- Group: `workspace`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: `workspace`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | yes | Workspace to delete |
+| `move_to_default` | `boolean` | no | If true, moves memories to 'default' workspace. If false, deletes all memories in the workspace. Default: `true`. |
+
+### `embedding_cache_stats`
+
+Get statistics about the embedding cache (hits, misses, entries, bytes used, hit rate)
+
+- Tier: `advanced`
+- Group: `embedding`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `embedding_cache_clear`
+
+Clear all entries from the embedding cache
+
+- Tier: `advanced`
+- Group: `embedding`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `identity_create`
+
+Create a new identity with canonical ID, display name, and optional aliases
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `canonical_id`, `display_name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `canonical_id` | `string` | yes | Unique canonical identifier (e.g., 'user:ronaldo', 'org:acme') |
+| `display_name` | `string` | yes | Human-readable display name |
+| `entity_type` | `string` | no | Default: `person`. Allowed: `person`, `organization`, `project`, `tool`, `concept`, `other`. |
+| `description` | `string` | no | Optional description |
+| `aliases` | `array` | no | Initial aliases for this identity Items: `string`. |
+| `metadata` | `object` | no | Additional metadata |
+
+### `identity_get`
+
+Get an identity by its canonical ID
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `canonical_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `canonical_id` | `string` | yes | Canonical identifier |
+
+### `identity_update`
+
+Update an identity's display name, description, or type
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `canonical_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `canonical_id` | `string` | yes | Canonical identifier |
+| `display_name` | `string` | no | New display name |
+| `description` | `string` | no | New description |
+| `entity_type` | `string` | no | Allowed: `person`, `organization`, `project`, `tool`, `concept`, `other`. |
+
+### `identity_delete`
+
+Delete an identity and all its aliases
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: `canonical_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `canonical_id` | `string` | yes | Canonical identifier to delete |
+
+### `identity_add_alias`
+
+Add an alias to an identity. Aliases are normalized (lowercase, trimmed). Conflicts with existing aliases are rejected.
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `alias`, `canonical_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `canonical_id` | `string` | yes | Canonical identifier |
+| `alias` | `string` | yes | Alias to add |
+| `source` | `string` | no | Optional source of the alias (e.g., 'manual', 'extracted') |
+
+### `identity_remove_alias`
+
+Remove an alias from any identity
+
+- Tier: `advanced`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `alias`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `alias` | `string` | yes | Alias to remove |
+
+### `identity_resolve`
+
+Resolve an alias to its canonical identity. Returns the identity if found, null otherwise.
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `alias`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `alias` | `string` | yes | Alias to resolve |
+
+### `identity_list`
+
+List all identities with optional type filter
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `entity_type` | `string` | no | Allowed: `person`, `organization`, `project`, `tool`, `concept`, `other`. |
+| `limit` | `integer` | no | Default: `50`. |
+
+### `identity_search`
+
+Search identities by alias or display name
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `query`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `query` | `string` | yes | Search query |
+| `limit` | `integer` | no | Default: `20`. |
+
+### `identity_link`
+
+Link an identity to a memory (mark that the identity is mentioned in the memory)
+
+- Tier: `standard`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `canonical_id`, `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | Memory ID |
+| `canonical_id` | `string` | yes | Identity canonical ID |
+| `mention_text` | `string` | no | The text that mentions this identity |
+
+### `identity_unlink`
+
+Remove the link between an identity and a memory
+
+- Tier: `advanced`
+- Group: `identity`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `canonical_id`, `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | Memory ID |
+| `canonical_id` | `string` | yes | Identity canonical ID |
+
+### `memory_get_identities`
+
+Get all identities (persons, organizations, projects, etc.) linked to a memory. Returns identity details including display name, type, aliases, and mention information.
+
+- Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID |
+
+### `memory_tags`
+
+List all tags with usage counts and most recent usage timestamps.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_tag_hierarchy`
+
+Get tags organized in a hierarchical tree structure. Tags with slashes are treated as paths (e.g., 'project/engram/core').
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_validate_tags`
+
+Validate tag consistency across memories. Reports orphaned tags, unused tags, and suggested normalizations.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_rebuild_embeddings`
+
+Rebuild embeddings for all memories that are missing them. Useful after model changes or data recovery.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: idempotentHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_rebuild_crossrefs`
+
+Rebuild cross-reference links between memories. Re-analyzes all memories to find and create links.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: idempotentHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_archive_old`
+
+Compress already-Archived memories by creating summary rows. Does not move originals to archived state; use lifecycle_run for lifecycle transitions.
+
+- Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `max_age_days` | `integer` | no | Compress archived memories older than this many days Default: `90`. |
+| `max_importance` | `number` | no | Only compress already-Archived memories with importance below this Default: `0.5`. |
+| `min_access_count` | `integer` | no | Skip already-Archived memories accessed more than this many times Default: `5`. |
+| `workspace` | `string` | no | Limit to specific workspace |
+| `dry_run` | `boolean` | no | If true, only report what would be compressed Default: `true`. |
+
+### `memory_from_trace`
+
+Create a memory from a specific Langfuse trace ID.
+
+- Tier: `advanced`
+- Group: `feature.langfuse`
+- Required feature: `langfuse`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `trace_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `trace_id` | `string` | yes | Langfuse trace ID |
+| `memory_type` | `string` | no | Type of memory to create Default: `episodic`. Allowed: `note`, `episodic`, `procedural`, `learning`. |
+| `workspace` | `string` | no | Workspace for the memory |
+| `tags` | `array` | no | Additional tags Items: `string`. |
+
+### `memory_export_markdown`
+
+Export a workspace as human-readable Markdown files with YAML frontmatter and wiki-style [[links]]. Creates one .md file per memory, organized by type in subdirectories, with an index.md overview.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `workspace`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | yes | Workspace to export |
+| `output_dir` | `string` | no | Output directory path (default: ./engram-export/{workspace}/) |
+| `include_links` | `boolean` | no | Include [[wiki links]] to related memories in each file Default: `true`. |
+
+### `memory_import_markdown`
+
+Import memories from Markdown files with engram_ frontmatter (RFC 0004). Review mode by default (confirm: false) — returns a staged list without writing. Detects drift via content_hash and version conflicts via engram_version. Ignores non-engram_ frontmatter keys (Obsidian-safe).
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `input_dir`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `input_dir` | `string` | yes | Directory to scan recursively for .md files |
+| `workspace` | `string` | no | Override workspace (default: from each file's engram_workspace) |
+| `confirm` | `boolean` | no | Apply writes. When false (default), dry-run review only Default: `false`. |
+| `force_version` | `boolean` | no | Bypass version conflict checks Default: `false`. |
+
+### `memory_block_create`
+
+Create a named, token-bounded memory block (Letta/MemGPT-style self-editing context slot).
+
+- Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Unique name for the memory block |
+| `content` | `string` | no | Initial content of the block (default: empty string) |
+| `max_tokens` | `integer` | no | Maximum token capacity for the block (default: 4096) |
+
+### `memory_block_get`
+
+Retrieve a memory block by name.
+
+- Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Name of the memory block to retrieve |
+
+### `memory_block_edit`
+
+Update the content of an existing memory block, incrementing its version and recording the reason.
+
+- Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `content`, `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Name of the memory block to edit |
+| `content` | `string` | yes | New content for the block |
+| `reason` | `string` | no | Human-readable reason for this edit (optional) |
+
+### `memory_block_list`
+
+List all memory blocks with their names, versions, and token usage.
+
+- Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_block_archive`
+
+Permanently delete a memory block and return its final content before deletion. Destructive and irreversible.
+
+- Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Name of the memory block to archive and delete |
+
+### `memory_block_history`
+
+Return the edit history for a named memory block.
+
+- Tier: `standard`
+- Group: `memory.block`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `name`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `name` | `string` | yes | Name of the memory block |
+| `limit` | `integer` | no | Maximum number of history entries to return (default: 20) |
+
+### `memory_cache_stats`
+
+Return hit/miss statistics and entry count for the in-memory semantic search cache.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_cache_clear`
+
+Evict all entries from the semantic search cache. Mutates in-memory cache state.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_compress_for_context`
+
+Pack a set of memories into a token budget for LLM context, returning compressed entries and diagnostics about skipped memories.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `ids`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `ids` | `array` | yes | Memory IDs to compress and pack (alias: memory_ids). Items: `integer`. |
+| `memory_ids` | `array` | no | Alias for ids. Items: `integer`. |
+| `token_budget` | `integer` | no | Maximum token budget for the packed context (default: 4096). |
+
+### `memory_embedding_migrate`
+
+Re-embed all memories using the active embedding model; use dry_run to count affected memories without writing.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `dry_run` | `boolean` | no | If true, count memories to migrate without re-embedding them (default: false). |
+| `target_model` | `string` | no | Target embedding model name to record in embedding_model column. Defaults to the active embedder's model name. |
+
+### `memory_embedding_providers`
+
+List the active embedding provider including model name and vector dimensions.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `memory_enrichment_timeline`
+
+List all enrichment events for a specific memory (lifecycle transitions, consolidation, compression, etc.). Shows what automated operations affected this memory and why.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `memory_id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory whose enrichment history to retrieve. |
+| `event_type` | `string` | no | Filter to a specific event type (e.g. "consolidation", "lifecycle_transition"). |
+| `include_dry_runs` | `boolean` | no | Include events that were executed in dry-run mode (default: true). |
+| `include_snapshots` | `boolean` | no | Include snapshot events (default: true). |
+| `limit` | `integer` | no | Maximum number of events to return (default: 20, max: 100). |
+
+### `memory_enrichment_audit`
+
+Query enrichment events globally with filters (status, event_type, agent_id, operation_id, workspace, time range). Use for compliance audit and batch tracing.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `event_type` | `string` | no | Filter by event type (e.g. "consolidation", "lifecycle_transition", "compression"). |
+| `triggered_by` | `string` | no | Filter by the tool name that triggered the event. |
+| `agent_id` | `string` | no | Filter by the agent ID that triggered the event. |
+| `status` | `string` | no | Filter by event outcome status. Allowed: `completed`, `failed`, `skipped`. |
+| `workspace` | `string` | no | Filter to a specific workspace. |
+| `operation_id` | `string` | no | Filter by a specific operation ID (exact match). |
+| `memory_id` | `integer` | no | Filter to events that reference a specific memory. |
+| `version_id` | `integer` | no | Filter to events that reference a specific memory version. |
+| `dry_run` | `boolean` | no | Filter by dry-run flag (true = only dry-run events, false = only real events). |
+| `since` | `string` | no | ISO-8601 timestamp: return events created at or after this time. |
+| `until` | `string` | no | ISO-8601 timestamp: return events created at or before this time. |
+| `order` | `string` | no | Sort order by creation time: "desc" (newest first, default) or "asc". Allowed: `desc`, `asc`. |
+| `limit` | `integer` | no | Maximum number of events to return (default: 50, max: 200). |
 
 ### `memory_sentiment_analyze`
 
@@ -3377,6 +3973,260 @@ Check whether an agent has a required permission level on a scope path (includin
 | `scope_path` | `string` | yes | Scope path to check access for |
 | `permissions` | `string` | no | Required permission level Default: `read`. Allowed: `read`, `write`, `admin`. |
 
+### `memory_suggest_tags`
+
+Suggest tags for a memory based on AI content analysis. Uses pattern matching, keyword extraction, and structure detection to suggest relevant tags with confidence scores.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | no | Memory ID to analyze (alternative to content) |
+| `memory_id` | `integer` | no | Memory ID to analyze (alias for id) |
+| `content` | `string` | no | Content to analyze (alternative to id/memory_id) |
+| `type` | `string` | no | Memory type (used when providing content directly) Allowed: `note`, `todo`, `issue`, `decision`, `preference`, `learning`, `context`, `credential`. |
+| `existing_tags` | `array` | no | Tags already on the memory (excluded from suggestions) Items: `string`. |
+| `min_confidence` | `number` | no | Minimum confidence threshold for suggestions Default: `0.5`. Minimum: `0`. Maximum: `1`. |
+| `max_tags` | `integer` | no | Maximum number of tags to suggest Default: `5`. |
+| `enable_patterns` | `boolean` | no | Use pattern-based tagging Default: `true`. |
+| `enable_keywords` | `boolean` | no | Use keyword-based tagging Default: `true`. |
+| `enable_entities` | `boolean` | no | Use entity-based tagging Default: `true`. |
+| `enable_type_tags` | `boolean` | no | Add tags based on memory type Default: `true`. |
+| `keyword_mappings` | `object` | no | Custom keyword-to-tag mappings (e.g., {"ibvi": "project/ibvi"}) |
+
+### `memory_auto_tag`
+
+Automatically suggest and optionally apply tags to a memory. Analyzes content using AI heuristics and can merge suggested tags with existing ones.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to auto-tag |
+| `memory_id` | `integer` | no | Memory ID (alias for id) |
+| `apply` | `boolean` | no | If true, apply the suggested tags to the memory. If false, only return suggestions. Default: `false`. |
+| `merge` | `boolean` | no | If true and apply=true, merge with existing tags. If false, replace existing tags. Default: `true`. |
+| `min_confidence` | `number` | no | Minimum confidence threshold Default: `0.5`. Minimum: `0`. Maximum: `1`. |
+| `max_tags` | `integer` | no | Maximum tags to suggest/apply Default: `5`. |
+| `keyword_mappings` | `object` | no | Custom keyword-to-tag mappings |
+
+### `memory_soft_trim`
+
+Intelligently trim memory content while preserving context. Keeps the beginning (head) and end (tail) of content with an ellipsis in the middle. Useful for displaying long content in limited space while keeping important context from both ends.
+
+- Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID to trim |
+| `max_chars` | `integer` | no | Maximum characters for trimmed output Default: `500`. |
+| `head_percent` | `integer` | no | Percentage of space for the head (0-100) Default: `60`. |
+| `tail_percent` | `integer` | no | Percentage of space for the tail (0-100) Default: `30`. |
+| `ellipsis` | `string` | no | Text to insert between head and tail Default: ` ... `. |
+| `preserve_words` | `boolean` | no | Avoid breaking in the middle of words Default: `true`. |
+
+### `memory_content_stats`
+
+Get content statistics for a memory (character count, word count, line count, sentence count, paragraph count)
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Memory ID |
+
+### `memory_export`
+
+Export all memories to a JSON-serializable format for backup or migration.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Export only memories from this workspace (omit for all) |
+| `include_embeddings` | `boolean` | no | Reserved feature: currently not supported (reserved for future embedding-inclusive exports) Default: `false`. |
+
+### `memory_import`
+
+Import memories from a previously exported JSON format.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `data`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `data` | `object` | yes | The exported data object |
+| `skip_duplicates` | `boolean` | no | Skip memories with matching content hash Default: `true`. |
+
+### `memory_summarize`
+
+Create a summary of one or more memories. Returns a new Summary-type memory with summary_of_id set.
+
+- Tier: `advanced`
+- Group: `memory.core`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `memory_ids`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_ids` | `array` | yes | IDs of memories to summarize Items: `integer`. |
+| `summary` | `string` | no | The summary text (provide this or let the system generate one) |
+| `max_length` | `integer` | no | Maximum length for auto-generated summary Default: `500`. |
+| `workspace` | `string` | no | Workspace for the summary memory |
+| `tags` | `array` | no | Tags for the summary memory Items: `string`. |
+
+### `memory_auto_consolidate`
+
+Enable, disable, configure, or inspect the automatic consolidation scheduler. Use action='enable'/'disable' to toggle it, 'set_interval' with interval_seconds to change the period (60–86400), or 'get_status' to inspect current settings.
+
+- Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `action`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `action` | `string` | yes | Allowed: `enable`, `disable`, `set_interval`, `get_status`. |
+| `interval_seconds` | `integer` | no | Minimum: `60`. Maximum: `86400`. |
+
+### `memory_consolidate_batch`
+
+Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories. Defaults to dry-run; returns a structured report of actions taken (or that would be taken).
+
+- Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: destructiveHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Default: `default`. |
+| `dry_run` | `boolean` | no | Default: `true`. |
+| `policy` | `object` | no | No description. |
+
+### `memory_consolidation_history`
+
+List recent auto-consolidation runs for a workspace (or all workspaces). Newest-first.
+
+- Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | No description. |
+| `limit` | `integer` | no | Default: `20`. Minimum: `1`. Maximum: `1000`. |
+
+### `memory_compress`
+
+Apply rule-based semantic compression to a single memory and return the structured result with key entities and facts.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | ID of the memory to compress. |
+| `target_ratio` | `number` | no | Target compression ratio as a fraction of original tokens (default: 0.1). |
+
+### `memory_consolidate`
+
+Run offline consolidation over a workspace, merging and archiving similar memories; use dry_run to preview without writing.
+
+- Tier: `advanced`
+- Group: `memory.lifecycle`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to consolidate (default: "default"). |
+| `strategy` | `string` | no | Grouping strategy: "content_overlap" (default), "tag_similarity", or "temporal_proximity". |
+| `dry_run` | `boolean` | no | If true, report what would be merged/archived without writing changes (default: false). |
+
+### `memory_decompress`
+
+Retrieve the original (uncompressed) content of a memory by ID.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | ID of the memory whose content to retrieve. |
+
+### `memory_synthesis`
+
+Check semantic overlap between two content strings and produce a merged synthesis using the chosen strategy.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `content_a`, `content_b`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `content_a` | `string` | yes | First content string to synthesise. |
+| `content_b` | `string` | yes | Second content string to synthesise. |
+| `id_a` | `integer` | no | Optional memory ID associated with content_a (default: 0). |
+| `strategy` | `string` | no | Synthesis strategy: "merge" (default), "replace", or "append". Allowed: `merge`, `replace`, `append`. |
+
+### `memory_replay_at_time`
+
+Replay one memory as it existed at a given RFC3339 timestamp and optionally return enrichment events affecting it up to that time.
+
+- Tier: `advanced`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `memory_id`, `timestamp`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | yes | ID of the memory to replay. |
+| `timestamp` | `string` | yes | RFC3339 timestamp to replay state at. |
+| `event_type` | `string` | no | Optional event type filter for replayed event list (e.g. "consolidation"). |
+| `include_events` | `boolean` | no | Whether to include enrichment events in the response. Default: `true`. |
+| `include_failed` | `boolean` | no | Whether to include failed enrichment events. Default: `false`. |
+| `include_dry_runs` | `boolean` | no | Whether to include dry-run events. Default: `false`. |
+| `event_limit` | `integer` | no | Max number of events to include in replay trail (default 50, max 200). |
+
 ### `memory_search_by_image`
 
 Search memories using an image as the query. Uses multimodal embeddings (CLIP-style) or falls back to describing the image via vision model and searching by description. Returns semantically similar memories — text or media — ranked by relevance.
@@ -3516,6 +4366,201 @@ Transcribe an audio file to text using the configured audio transcription provid
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `audio_path` | `string` | yes | Absolute or relative path to the audio file to transcribe. |
+
+### `dream_run_now`
+
+Manually trigger the Dream Phase (background consolidation) across all workspaces. This process compresses old memories and identifies patterns while the agent is 'sleeping'.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: idempotentHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| _(none)_ |  | no | No input properties declared. |
+
+### `dream_create`
+
+Create a reviewable dream snapshot job and optionally run deterministic candidate generation. Generated candidates are proposals, not canonical memories.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Default: `default`. |
+| `job_id` | `string` | no | Optional stable job id. Omit to generate one. |
+| `instructions` | `string` | no | No description. |
+| `run` | `boolean` | no | When true, run deterministic generation immediately. Default: `true`. |
+| `max_memories` | `integer` | no | Default: `50`. Minimum: `1`. |
+| `max_candidates` | `integer` | no | Default: `25`. Minimum: `1`. |
+| `summary_min_memories` | `integer` | no | Default: `2`. Minimum: `1`. |
+
+### `dream_get`
+
+Inspect one dream snapshot job.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream job id |
+
+### `dream_list`
+
+List dream snapshot jobs by workspace and status.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | No description. |
+| `status` | `string` | no | Allowed: `pending`, `running`, `completed`, `failed`, `canceled`, `archived`. |
+| `limit` | `integer` | no | Default: `100`. Minimum: `1`. Maximum: `1000`. |
+
+### `dream_cancel`
+
+Cancel a pending or running dream snapshot job idempotently.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: idempotentHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream job id |
+
+### `dream_archive`
+
+Archive a terminal dream snapshot job.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: idempotentHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream job id |
+
+### `dream_candidates_list`
+
+List review candidates emitted by dream snapshot jobs. Results are proposals and are not canonical memory facts.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | No description. |
+| `job_id` | `string` | no | No description. |
+| `review_state` | `string` | no | Allowed: `pending`, `accepted`, `edited`, `rejected`, `applied`, `archived`. |
+| `limit` | `integer` | no | Default: `100`. Minimum: `1`. Maximum: `1000`. |
+
+### `dream_candidate_get`
+
+Inspect one dream candidate and its evidence sources.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream candidate id |
+
+### `dream_candidate_review`
+
+Review a dream candidate by accepting, editing, rejecting, or archiving it. This does not mutate canonical memory.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`, `review_state`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream candidate id |
+| `review_state` | `string` | yes | Allowed: `accepted`, `edited`, `rejected`, `archived`. |
+| `edited_content` | `string` | no | Reviewed replacement content when review_state is edited. |
+| `metadata_patch` | `object` | no | Optional review metadata merged into candidate metadata. |
+
+### `dream_candidate_apply`
+
+Apply an accepted or edited dream candidate to canonical memory. Requires confirm=true unless dry_run=true; repeated apply is idempotent.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `string` | yes | Dream candidate id |
+| `confirm` | `boolean` | no | Must be true for canonical mutation. Default: `false`. |
+| `dry_run` | `boolean` | no | Preview planned canonical mutation without applying. Default: `false`. |
+
+### `memory_agent_writeback`
+
+Create a pending agent-generated memory proposal as an agent_writeback dream candidate. Defaults to dry_run=true and never mutates canonical memory; review/apply still happens through dream_candidate_get/review/apply.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `proposed_content`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `proposed_content` | `string` | yes | Agent-generated memory content to propose for human/agent review. |
+| `workspace` | `string` | no | Workspace for the pending candidate. Default: `default`. |
+| `job_id` | `string` | no | Optional dream job id to group writeback candidates. Omit to generate one. |
+| `candidate_id` | `string` | no | Optional stable candidate id. Omit to generate one. |
+| `confidence` | `number` | no | Confidence in the proposed writeback. Default: `0.5`. Minimum: `0`. Maximum: `1`. |
+| `reason_codes` | `array` | no | Reason codes for the pending candidate. Defaults to agent_writeback. Items: `string`. |
+| `metadata` | `object` | no | Additional candidate metadata. Governance markers are added by Engram. |
+| `source_memory_ids` | `array` | no | Canonical memory ids that support this proposal. Items: `integer`. |
+| `evidence` | `array` | no | Additional non-memory evidence sources. At least one source_memory_ids entry or evidence item is required. Items: `object`. |
+| `dry_run` | `boolean` | no | Preview the pending candidate without writing dream_candidates. Default: `true`. |
+| `confirm` | `boolean` | no | Required with dry_run=false to create the pending candidate. Default: `false`. |
+
+### `dream_eval_run`
+
+Run deterministic local dream snapshot evaluation fixtures and return parseable CI-safe metrics. Does not require network, credentials, or model access.
+
+- Tier: `advanced`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `fixtures` | `array` | no | Optional subset of fixed fixture names. Omit to run all fixtures. Items: `string`. |
+| `include_details` | `boolean` | no | Include per-fixture candidate details. Default: `true`. |
 
 ### `agent_register`
 
@@ -3872,488 +4917,6 @@ Record a verification command outcome with exit code, output summary, and option
 | `importance` | `number` | no | Importance score (0-1) Default: `0.8`. Minimum: `0`. Maximum: `1`. |
 | `workspace` | `string` | no | Workspace scope (default: 'default') |
 
-### `memory_suggest_tags`
-
-Suggest tags for a memory based on AI content analysis. Uses pattern matching, keyword extraction, and structure detection to suggest relevant tags with confidence scores.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | no | Memory ID to analyze (alternative to content) |
-| `memory_id` | `integer` | no | Memory ID to analyze (alias for id) |
-| `content` | `string` | no | Content to analyze (alternative to id/memory_id) |
-| `type` | `string` | no | Memory type (used when providing content directly) Allowed: `note`, `todo`, `issue`, `decision`, `preference`, `learning`, `context`, `credential`. |
-| `existing_tags` | `array` | no | Tags already on the memory (excluded from suggestions) Items: `string`. |
-| `min_confidence` | `number` | no | Minimum confidence threshold for suggestions Default: `0.5`. Minimum: `0`. Maximum: `1`. |
-| `max_tags` | `integer` | no | Maximum number of tags to suggest Default: `5`. |
-| `enable_patterns` | `boolean` | no | Use pattern-based tagging Default: `true`. |
-| `enable_keywords` | `boolean` | no | Use keyword-based tagging Default: `true`. |
-| `enable_entities` | `boolean` | no | Use entity-based tagging Default: `true`. |
-| `enable_type_tags` | `boolean` | no | Add tags based on memory type Default: `true`. |
-| `keyword_mappings` | `object` | no | Custom keyword-to-tag mappings (e.g., {"ibvi": "project/ibvi"}) |
-
-### `memory_auto_tag`
-
-Automatically suggest and optionally apply tags to a memory. Analyzes content using AI heuristics and can merge suggested tags with existing ones.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to auto-tag |
-| `memory_id` | `integer` | no | Memory ID (alias for id) |
-| `apply` | `boolean` | no | If true, apply the suggested tags to the memory. If false, only return suggestions. Default: `false`. |
-| `merge` | `boolean` | no | If true and apply=true, merge with existing tags. If false, replace existing tags. Default: `true`. |
-| `min_confidence` | `number` | no | Minimum confidence threshold Default: `0.5`. Minimum: `0`. Maximum: `1`. |
-| `max_tags` | `integer` | no | Maximum tags to suggest/apply Default: `5`. |
-| `keyword_mappings` | `object` | no | Custom keyword-to-tag mappings |
-
-### `session_context_create`
-
-Create a new session context for tracking related memories during a conversation or task.
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `name`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `name` | `string` | yes | Session name |
-| `description` | `string` | no | Session description |
-| `workspace` | `string` | no | Workspace for the session |
-| `metadata` | `object` | no | Additional session metadata |
-
-### `session_context_add_memory`
-
-Add a memory to a session context with relevance score and role.
-
-- Tier: `advanced`
-- Group: `session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `memory_id`, `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session ID |
-| `memory_id` | `integer` | yes | Memory ID to add |
-| `relevance_score` | `number` | no | How relevant this memory is to the session Default: `1.0`. Minimum: `0`. Maximum: `1`. |
-| `context_role` | `string` | no | Role of the memory in the session Default: `referenced`. Allowed: `referenced`, `created`, `updated`, `pinned`. |
-
-### `session_context_remove_memory`
-
-Remove a memory from a session context.
-
-- Tier: `advanced`
-- Group: `session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `memory_id`, `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session ID |
-| `memory_id` | `integer` | yes | Memory ID to remove |
-
-### `session_context_get`
-
-Get a session context with its linked memories.
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session ID |
-
-### `session_context_list`
-
-List all session contexts with optional filtering.
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Filter by workspace |
-| `active_only` | `boolean` | no | Only return active sessions Default: `false`. |
-| `limit` | `integer` | no | Maximum sessions to return Default: `50`. |
-| `offset` | `integer` | no | Offset for pagination Default: `0`. |
-
-### `session_context_search`
-
-Search memories within a specific session context.
-
-- Tier: `standard`
-- Group: `session`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `query`, `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session ID to search within |
-| `query` | `string` | yes | Search query |
-| `limit` | `integer` | no | Maximum results Default: `20`. |
-
-### `session_context_update_summary`
-
-Update the summary of a session context.
-
-- Tier: `advanced`
-- Group: `session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `session_id`, `summary`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session ID |
-| `summary` | `string` | yes | New session summary |
-
-### `session_context_end`
-
-End a session context, marking it as inactive.
-
-- Tier: `advanced`
-- Group: `session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session ID to end |
-| `summary` | `string` | no | Optional final summary |
-
-### `session_context_export`
-
-Export a session context with all its memories for archival or sharing.
-
-- Tier: `advanced`
-- Group: `session`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session ID to export |
-| `include_content` | `boolean` | no | Include full memory content Default: `true`. |
-| `format` | `string` | no | Export format Default: `json`. Allowed: `json`, `markdown`. |
-
-### `memory_get_public`
-
-Get a memory with all <private>...</private> tagged sections removed. Safe for sharing in multi-agent contexts.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID |
-
-### `memory_get_injection_prompt`
-
-Assembles the most relevant memories into a ready-to-inject system prompt block. Uses hybrid search to find relevant memories and formats them as markdown, respecting a token budget.
-
-- Tier: `essential`
-- Group: `memory.search`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `query`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `query` | `string` | yes | Search query to find relevant memories |
-| `token_budget` | `integer` | no | Max tokens for output (default: 2000) |
-| `workspace` | `string` | no | Filter to specific workspace |
-| `include_types` | `array` | no | Filter by memory types Items: `string`. |
-
-### `memory_observe_tool_use`
-
-Store a tool observation as an episodic memory for session continuity. Automatically compresses large inputs/outputs.
-
-- Tier: `standard`
-- Group: `memory.session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `tool_input`, `tool_name`, `tool_output`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `tool_name` | `string` | yes | Name of the tool that was used |
-| `tool_input` | `object` | yes | Tool input parameters |
-| `tool_output` | `string` | yes | Tool output/result |
-| `session_id` | `string` | no | Session identifier for grouping observations |
-| `compress` | `boolean` | no | Compress to 200-char previews (default: true) |
-
-### `memory_archive_tool_output`
-
-Archives a tool's full raw output to memory and returns a compressed summary (~500 tokens) for use in the active context. Transforms O(N²) context growth to O(N) by keeping only summaries in the working context while preserving full outputs for on-demand retrieval.
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `raw_output`, `tool_name`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `tool_name` | `string` | yes | Name of the tool whose output is being archived |
-| `raw_output` | `string` | yes | Full raw output to archive |
-| `session_id` | `string` | no | Session identifier for grouping archived outputs (default: 'unknown') |
-| `compress_summary` | `boolean` | no | Whether to generate a compressed summary (default: true) |
-| `summary_tokens` | `integer` | no | Max tokens for the compressed summary (default: 500) |
-
-### `memory_get_archived_output`
-
-Retrieves the full raw output for an archived tool observation by its archive ID. Use when you need the complete output that was previously compressed for context efficiency.
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `archive_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `archive_id` | `integer` | yes | Archive ID returned by memory_archive_tool_output |
-
-### `memory_get_working_memory`
-
-Assembles all compressed tool observations for a session into a token-budgeted working memory block. Includes archive references for retrieving full outputs on demand. This is the core of the Endless Mode context management system.
-
-- Tier: `standard`
-- Group: `memory.session`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `session_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session identifier to retrieve observations for |
-| `token_budget` | `integer` | no | Max tokens for the working memory block (default: 4000) |
-| `include_tool_names` | `array` | no | Whitelist of tool names to include (default: all) Items: `string`. |
-| `since_minutes` | `integer` | no | Only include observations from the last N minutes (default: all time) |
-
-### `session_land`
-
-Generate a structured session handoff ('land the plane'). Creates a checkpoint memory with session summary, open items, recent decisions, warnings, and a copy-ready block for the next session. If session_id is omitted, Engram falls back to the most recent session in the workspace, or returns a workspace-level packet with a warning.
-
-- Tier: `essential`
-- Group: `session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | no | Optional session identifier to hand off. Omit to use the most recent session in the workspace when available. |
-| `workspace` | `string` | no | Workspace scope (default: 'default') |
-| `summary` | `string` | no | Summary of what was accomplished this session |
-| `next_session_hints` | `array` | no | Hints for what should be done next session Items: `string`. |
-
-### `memory_build_context`
-
-Build a structured prompt context from relevant memories using hybrid search, with optional graph traversal depth, timeframe filtering, type filtering, and relationship graph inclusion. Inspired by Basic Memory's build_context.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `query`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `query` | `string` | yes | Search query to retrieve relevant memories |
-| `total_budget` | `integer` | no | Max tokens for the entire prompt (default: 4096) |
-| `strategy` | `string` | no | Context assembly strategy Default: `greedy`. Allowed: `greedy`, `balanced`, `recency`. |
-| `workspace` | `string` | no | Workspace to search in |
-| `limit` | `integer` | no | Max memories to retrieve (default: 20) |
-| `depth` | `integer` | no | Graph traversal depth: 1=search only, 2=search+1 hop of related memories, 3=search+2 hops Default: `1`. Minimum: `1`. Maximum: `3`. |
-| `timeframe` | `string` | no | Time window for memory filtering Default: `all`. Allowed: `1h`, `24h`, `7d`, `30d`, `all`. |
-| `include_types` | `array` | no | Only include these memory types (e.g., ['note', 'decision']) Items: `string`. |
-| `include_graph` | `boolean` | no | Include entity relationship graph in response Default: `false`. |
-
-### `context_record`
-
-Record a scoped Operational Context event and optional derived summary. Redacts text before storage, requires provenance scope, keeps raw payload storage off, and supports RTK-compatible external summary metadata without dereferencing external pointers.
-
-- Tier: `standard`
-- Group: `context`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `event_type`, `session_id`, `source`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `source` | `string` | yes | Source system or adapter, for example codex, harness, rtk, github_actions |
-| `source_version` | `string` | no | Optional source or adapter version |
-| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
-| `workspace_path_hash` | `string` | no | Workspace path hash scope |
-| `workspace` | `string` | no | Alias for workspace_path_hash |
-| `git_branch` | `string` | no | Branch observed when the event occurred |
-| `worktree_name` | `string` | no | Worktree name observed when the event occurred |
-| `commit_hash` | `string` | no | Commit observed when the event occurred |
-| `session_id` | `string` | yes | Agent or user session scope |
-| `task_id` | `string` | no | Task, issue, or ticket scope |
-| `agent_id` | `string` | no | Agent identity |
-| `event_type` | `string` | yes | Event family such as command, tool, decision_made, verification_run, verification_skipped, blocker_found, review_result, handoff_created |
-| `command` | `string` | no | Command line or command name for command events |
-| `command_name` | `string` | no | Alias/preferred command field |
-| `tool` | `string` | no | Tool name for tool events |
-| `tool_name` | `string` | no | Alias/preferred tool field |
-| `cwd` | `string` | no | Working directory context |
-| `exit_code` | `integer` | no | Command exit code; required for event_type=command |
-| `summary` | `string` | no | Optional derived/lossy summary to store with provenance |
-| `key_errors` | `array` | no | Important errors to index after redaction Items: `string`. |
-| `touched_files` | `array` | no | Files inspected or changed by the event Items: `string`. |
-| `reducer` | `object` | no | Optional reducer metadata: name, version, lossy, confidence, structured_facts, warnings, labels, tokens_raw_est, tokens_compact_est |
-| `external_reducer` | `string` | no | External reducer name for RTK-compatible summaries |
-| `raw_pointer` | `string` | no | External raw pointer recorded as metadata only; Engram does not dereference it |
-| `external_unverified` | `boolean` | no | Mark external summary as unverified |
-| `labels` | `array` | no | Additional labels; external records add derived/lossy/external_unverified conservatively Items: `string`. |
-| `retention_policy` | `string` | no | Retention label; sensitive commands may be forced to ephemeral_sensitive by policy |
-| `raw_artifact_id` | `string` | no | Optional existing artifact id pointer; raw payload content is not accepted by this tool |
-| `metadata` | `object` | no | Additional metadata redacted recursively before storage |
-| `started_at` | `string` | no | RFC3339 event start time; defaults to now |
-| `finished_at` | `string` | no | RFC3339 event finish time |
-
-### `context_record_artifact`
-
-Record an Operational Context artifact pointer or explicitly retained redacted raw artifact. Pointer-only is the default; raw_content requires retain_raw=true and policy approval.
-
-- Tier: `standard`
-- Group: `context`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `kind`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `string` | no | Optional artifact id; generated when omitted |
-| `source_event_id` | `integer` | no | Related context event id |
-| `source` | `string` | no | Source system or adapter |
-| `source_version` | `string` | no | Optional source or adapter version |
-| `repo_id` | `string` | no | Repository scope identifier |
-| `workspace_path_hash` | `string` | no | Workspace path hash scope |
-| `workspace` | `string` | no | Alias for workspace_path_hash |
-| `session_id` | `string` | no | Session scope for access policy |
-| `task_id` | `string` | no | Task scope for access policy |
-| `agent_id` | `string` | no | Agent scope for access policy |
-| `kind` | `string` | yes | Artifact type, for example command_output_summary, raw_command_output, review_artifact, diff_reference, test_report, external_url |
-| `label` | `string` | no | Human label |
-| `uri` | `string` | no | External/source-of-truth pointer |
-| `raw_pointer` | `string` | no | Alias pointer stored as uri/metadata only; not dereferenced |
-| `media_type` | `string` | no | Media type for pointer or raw content |
-| `raw_content` | `string` | no | Raw content to retain only when retain_raw=true and policy allows it |
-| `content_sha256` | `string` | no | Optional digest for pointer-only artifacts; raw digests are recomputed after redaction |
-| `byte_len` | `integer` | no | Optional source byte length for pointer-only artifacts |
-| `retention_policy` | `string` | no | Retention label, default pointer_only or raw_retained |
-| `access_policy` | `string` | no | Default: `same_session`. Allowed: `same_session`, `same_task`, `same_agent`, `repo`, `public`. |
-| `retain_raw` | `boolean` | no | Must be true to persist raw_content Default: `false`. |
-| `ttl_seconds` | `integer` | no | Optional raw retention TTL from now |
-| `stale_after_seconds` | `integer` | no | Optional stale threshold from now |
-| `metadata` | `object` | no | Additional metadata redacted recursively before storage |
-
-### `context_get_artifact`
-
-Explicitly retrieve retained Operational Context artifact content after access, retention, staleness, and redaction checks. Search and bundle tools return artifact pointers only; this tool requires an artifact_id and reason.
-
-- Tier: `standard`
-- Group: `context`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `artifact_id`, `reason`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `artifact_id` | `string` | yes | Artifact ID to retrieve; broad search queries are not accepted |
-| `reason` | `string` | yes | Why raw or retained artifact content is needed |
-| `requester_agent_id` | `string` | no | Agent identity used for same_agent access checks |
-| `session_id` | `string` | no | Session scope used for same_session access checks |
-| `task_id` | `string` | no | Task scope used for same_task access checks |
-| `repo_id` | `string` | no | Repository scope used for repo access checks |
-| `workspace_path_hash` | `string` | no | Workspace path hash scope used for repo/workspace access checks |
-| `workspace` | `string` | no | Alias for workspace_path_hash |
-| `max_bytes` | `integer` | no | Maximum raw bytes to return; response marks truncation explicitly Minimum: `1`. |
-| `allow_stale` | `boolean` | no | Allow retrieval after stale_at has passed Default: `false`. |
-| `require_redacted` | `boolean` | no | Require a redaction status that permits raw retrieval Default: `true`. |
-
-### `context_search`
-
-Search scoped Operational Context events and derived summaries. Searches event metadata, command/tool names, summaries, structured facts, failure signals, decisions, inspected/touched file metadata, and artifact pointers without returning raw artifact content.
-
-- Tier: `standard`
-- Group: `context`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `query`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `query` | `string` | yes | Search query for operational events, summaries, decisions, failures, files, or artifact metadata |
-| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
-| `workspace_path_hash` | `string` | no | Workspace path hash scope |
-| `workspace` | `string` | no | Alias for workspace_path_hash when clients only have a workspace scope value |
-| `session_id` | `string` | no | Session scope filter |
-| `task_id` | `string` | no | Task scope filter |
-| `event_type` | `string` | no | Restrict results to one event type |
-| `event_types` | `array` | no | Restrict results to these event types Items: `string`. |
-| `event_type_filters` | `array` | no | Alias for event_types Items: `string`. |
-| `failure_only` | `boolean` | no | Only include failures/errors inferred from exit_code or event_type Default: `false`. |
-| `max_results` | `integer` | no | Maximum results to return Default: `25`. Minimum: `1`. Maximum: `200`. |
-| `include_artifact_pointers` | `boolean` | no | Include artifact IDs/pointers only; raw artifact content is never returned Default: `false`. |
-| `current_git_branch` | `string` | no | Current branch used to mark branch mismatch staleness |
-| `current_commit_hash` | `string` | no | Current commit used to mark commit mismatch staleness |
-| `stale_after_days` | `integer` | no | Age threshold for stale warnings Default: `7`. |
-
-### `context_build_bundle`
-
-Build a compact agent-ready Operational Context bundle for resuming work. Includes relevant failures, inferred unresolved blockers, recent decisions, commands already run, inspected/touched files, staleness warnings, and optional artifact pointers with provenance for every item. Does not include raw artifact content.
-
-- Tier: `standard`
-- Group: `context`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `query` | `string` | no | Optional query describing the work to resume |
-| `repo_id` | `string` | no | Repository scope identifier, for example github:aiconnai/engram |
-| `workspace_path_hash` | `string` | no | Workspace path hash scope |
-| `workspace` | `string` | no | Alias for workspace_path_hash when clients only have a workspace scope value |
-| `session_id` | `string` | no | Session scope filter |
-| `task_id` | `string` | no | Task scope filter |
-| `max_results` | `integer` | no | Maximum operational context rows to inspect Default: `80`. Minimum: `1`. Maximum: `200`. |
-| `section_limit` | `integer` | no | Maximum entries per bundle section Default: `12`. Minimum: `1`. Maximum: `50`. |
-| `include_artifact_pointers` | `boolean` | no | Include artifact IDs/pointers only; raw artifact content is never returned Default: `false`. |
-| `current_git_branch` | `string` | no | Current branch used to mark branch mismatch staleness |
-| `current_commit_hash` | `string` | no | Current commit used to mark commit mismatch staleness |
-| `stale_after_days` | `integer` | no | Age threshold for stale warnings Default: `7`. |
-
 ### `recent_activity`
 
 Discover recently created or updated memories. Returns compact previews sorted by most recent activity. Useful for understanding what has changed recently.
@@ -4388,569 +4951,6 @@ List Engram tools by tier, group, or search query. Includes feature-disabled too
 | `category` | `string` | no | Deprecated alias for group/search-style filtering. |
 | `search` | `string` | no | Search tool names and descriptions |
 | `detail` | `string` | no | Per-tool detail level: 'names' (name only, cheapest), 'summary' (name + description + tier + group + availability + feature hints, the default), or 'schema' (summary plus the full input schema as a JSON object, so the tool can be called without a separate tools/list round-trip). Default: `summary`. Allowed: `names`, `summary`, `schema`. |
-
-### `memory_prepare_context`
-
-Prepare optimized context for LLM using RTK-inspired pipeline (filter, group, truncate). Reduces token usage by 70-95% through intelligent context preparation.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `query`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `query` | `string` | yes | Query to prepare context for |
-| `budget` | `integer` | no | Token budget for prepared context Default: `4000`. |
-| `workspace` | `string` | no | Optional workspace filter |
-
-### `memory_extract_facts`
-
-Extract subject-predicate-object facts from a memory's content using rule-based NLP and persist them to the facts table.
-
-- Tier: `standard`
-- Group: `memory.graph`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `memory_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_id` | `integer` | yes | ID of the memory from which to extract and store facts. |
-
-### `scope_get`
-
-Return the current scope path and level for a given memory.
-
-- Tier: `standard`
-- Group: `scope`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `memory_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_id` | `integer` | yes | ID of the memory whose scope to retrieve. |
-
-### `scope_list`
-
-List all distinct scope paths currently present in the database.
-
-- Tier: `standard`
-- Group: `scope`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `scope_search`
-
-Search for memories whose content matches a query within a given scope, including ancestor scopes.
-
-- Tier: `standard`
-- Group: `scope`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `query`, `scope_path`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `query` | `string` | yes | Substring to search for within scoped memories. |
-| `scope_path` | `string` | yes | Hierarchical scope path to search within (e.g. "global/org:acme/user:alice"). |
-
-### `scope_set`
-
-Assign or update the hierarchical scope of a memory.
-
-- Tier: `standard`
-- Group: `scope`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `memory_id`, `scope_path`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_id` | `integer` | yes | ID of the memory to re-scope. |
-| `scope_path` | `string` | yes | Target scope path (e.g. "global/org:acme/user:alice"). |
-
-### `scope_tree`
-
-Return a hierarchical tree of all scopes in the database.
-
-- Tier: `standard`
-- Group: `scope`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
-
-### `memory_soft_trim`
-
-Intelligently trim memory content while preserving context. Keeps the beginning (head) and end (tail) of content with an ellipsis in the middle. Useful for displaying long content in limited space while keeping important context from both ends.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to trim |
-| `max_chars` | `integer` | no | Maximum characters for trimmed output Default: `500`. |
-| `head_percent` | `integer` | no | Percentage of space for the head (0-100) Default: `60`. |
-| `tail_percent` | `integer` | no | Percentage of space for the tail (0-100) Default: `30`. |
-| `ellipsis` | `string` | no | Text to insert between head and tail Default: ` ... `. |
-| `preserve_words` | `boolean` | no | Avoid breaking in the middle of words Default: `true`. |
-
-### `memory_list_compact`
-
-List memories with compact preview instead of full content. More efficient for browsing/listing UIs. Returns only essential fields and a truncated content preview with metadata about original content length.
-
-- Tier: `essential`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `limit` | `integer` | no | Maximum memories to return Default: `20`. |
-| `offset` | `integer` | no | Pagination offset Default: `0`. |
-| `tags` | `array` | no | Filter by tags Items: `string`. |
-| `memory_type` | `string` | no | Filter by memory type (preferred field; alias: type) |
-| `type` | `string` | no | Deprecated alias for memory_type |
-| `workspace` | `string` | no | Filter by workspace |
-| `tier` | `string` | no | Filter by tier Allowed: `permanent`, `daily`. |
-| `sort_by` | `string` | no | Default: `created_at`. Allowed: `created_at`, `updated_at`, `last_accessed_at`, `importance`, `access_count`. |
-| `sort_order` | `string` | no | Default: `desc`. Allowed: `asc`, `desc`. |
-| `preview_chars` | `integer` | no | Maximum characters for content preview Default: `100`. |
-
-### `memory_content_stats`
-
-Get content statistics for a memory (character count, word count, line count, sentence count, paragraph count)
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID |
-
-### `memory_export`
-
-Export all memories to a JSON-serializable format for backup or migration.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Export only memories from this workspace (omit for all) |
-| `include_embeddings` | `boolean` | no | Reserved feature: currently not supported (reserved for future embedding-inclusive exports) Default: `false`. |
-
-### `memory_import`
-
-Import memories from a previously exported JSON format.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `data`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `data` | `object` | yes | The exported data object |
-| `skip_duplicates` | `boolean` | no | Skip memories with matching content hash Default: `true`. |
-
-### `memory_create_section`
-
-Create a section memory for organizing content hierarchically. Sections can have parent sections for nested organization.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `title`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `title` | `string` | yes | Section title |
-| `content` | `string` | no | Section description or content |
-| `parent_id` | `integer` | no | Optional parent section ID for nesting |
-| `level` | `integer` | no | Heading level (1-6) Default: `1`. |
-| `workspace` | `string` | no | Workspace for the section |
-
-### `memory_checkpoint`
-
-Create a checkpoint memory marking a significant point in a session. Useful for session resumption and context restoration.
-
-- Tier: `standard`
-- Group: `memory.session`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `session_id`, `summary`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `session_id` | `string` | yes | Session identifier |
-| `summary` | `string` | yes | Summary of session state at checkpoint |
-| `context` | `object` | no | Additional context data to preserve |
-| `workspace` | `string` | no | Workspace for the checkpoint |
-
-### `memory_create_episodic`
-
-Create an episodic memory representing an event with temporal context. Use for tracking when things happened and their duration.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `content`, `event_time`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `content` | `string` | yes | Description of the event |
-| `event_time` | `string` | yes | ISO8601 timestamp when the event occurred Format: `date-time`. |
-| `event_duration_seconds` | `integer` | no | Duration of the event in seconds |
-| `tags` | `array` | no | Tags for categorization Items: `string`. |
-| `metadata` | `object` | no | Additional metadata |
-| `importance` | `number` | no | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
-| `workspace` | `string` | no | Workspace (default: 'default') |
-
-### `memory_create_procedural`
-
-Create a procedural memory representing a learned pattern or workflow. Tracks success/failure to measure effectiveness.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `content`, `trigger_pattern`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `content` | `string` | yes | Description of the procedure/workflow |
-| `trigger_pattern` | `string` | yes | Pattern that triggers this procedure (e.g., 'When user asks about auth') |
-| `tags` | `array` | no | Tags for categorization Items: `string`. |
-| `metadata` | `object` | no | Additional metadata |
-| `importance` | `number` | no | Importance score (0-1) Minimum: `0`. Maximum: `1`. |
-| `workspace` | `string` | no | Workspace (default: 'default') |
-
-### `memory_get_timeline`
-
-Query episodic memories by time range. Returns events ordered by event_time.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `start_time` | `string` | no | Start of time range (ISO8601) Format: `date-time`. |
-| `end_time` | `string` | no | End of time range (ISO8601) Format: `date-time`. |
-| `workspace` | `string` | no | Filter by workspace |
-| `tags` | `array` | no | Filter by tags Items: `string`. |
-| `limit` | `integer` | no | Maximum results to return Default: `50`. |
-
-### `memory_get_procedures`
-
-List procedural memories (learned patterns/workflows). Optionally filter by trigger pattern.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `trigger_pattern` | `string` | no | Filter by trigger pattern (partial match) |
-| `workspace` | `string` | no | Filter by workspace |
-| `min_success_rate` | `number` | no | Minimum success rate (successes / (successes + failures)) Minimum: `0`. Maximum: `1`. |
-| `limit` | `integer` | no | Maximum results to return Default: `50`. |
-
-### `memory_record_procedure_outcome`
-
-Record a success or failure for a procedural memory. Increments the corresponding counter.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`, `success`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Procedural memory ID |
-| `success` | `boolean` | yes | true = success, false = failure |
-
-### `memory_boost`
-
-Temporarily boost a memory's importance score. The boost can optionally decay over time.
-
-- Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to boost |
-| `boost_amount` | `number` | no | Amount to increase importance (0-1) Default: `0.2`. |
-| `duration_seconds` | `integer` | no | Optional: duration before boost decays (omit for permanent boost) |
-
-### `memory_explain_utility`
-
-Explain why a memory has its current utility score. Returns the full feedback history summary (useful vs. not-useful retrievals), how much temporal decay has been applied, and a plain-English narrative. Useful for debugging or auditing memory quality.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `memory_id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_id` | `integer` | yes | ID of the memory to explain |
-
-### `memory_summarize`
-
-Create a summary of one or more memories. Returns a new Summary-type memory with summary_of_id set.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `memory_ids`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_ids` | `array` | yes | IDs of memories to summarize Items: `integer`. |
-| `summary` | `string` | no | The summary text (provide this or let the system generate one) |
-| `max_length` | `integer` | no | Maximum length for auto-generated summary Default: `500`. |
-| `workspace` | `string` | no | Workspace for the summary memory |
-| `tags` | `array` | no | Tags for the summary memory Items: `string`. |
-
-### `memory_get_full`
-
-Get the full/original content of a memory. If the memory is a Summary, returns the original content from summary_of_id.
-
-- Tier: `advanced`
-- Group: `memory.core`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to get full content for |
-
-### `memory_auto_consolidate`
-
-Enable, disable, configure, or inspect the automatic consolidation scheduler. Use action='enable'/'disable' to toggle it, 'set_interval' with interval_seconds to change the period (60–86400), or 'get_status' to inspect current settings.
-
-- Tier: `advanced`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `action`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `action` | `string` | yes | Allowed: `enable`, `disable`, `set_interval`, `get_status`. |
-| `interval_seconds` | `integer` | no | Minimum: `60`. Maximum: `86400`. |
-
-### `memory_consolidate_batch`
-
-Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories. Defaults to dry-run; returns a structured report of actions taken (or that would be taken).
-
-- Tier: `advanced`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: destructiveHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Default: `default`. |
-| `dry_run` | `boolean` | no | Default: `true`. |
-| `policy` | `object` | no | No description. |
-
-### `memory_consolidation_history`
-
-List recent auto-consolidation runs for a workspace (or all workspaces). Newest-first.
-
-- Tier: `advanced`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | No description. |
-| `limit` | `integer` | no | Default: `20`. Minimum: `1`. Maximum: `1000`. |
-
-### `memory_compress`
-
-Apply rule-based semantic compression to a single memory and return the structured result with key entities and facts.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | ID of the memory to compress. |
-| `target_ratio` | `number` | no | Target compression ratio as a fraction of original tokens (default: 0.1). |
-
-### `memory_consolidate`
-
-Run offline consolidation over a workspace, merging and archiving similar memories; use dry_run to preview without writing.
-
-- Tier: `advanced`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Workspace to consolidate (default: "default"). |
-| `strategy` | `string` | no | Grouping strategy: "content_overlap" (default), "tag_similarity", or "temporal_proximity". |
-| `dry_run` | `boolean` | no | If true, report what would be merged/archived without writing changes (default: false). |
-
-### `memory_decompress`
-
-Retrieve the original (uncompressed) content of a memory by ID.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | ID of the memory whose content to retrieve. |
-
-### `memory_detect_conflicts`
-
-Detect contradictory or conflicting facts in the knowledge graph; optionally persist detected conflicts for later resolution.
-
-- Tier: `standard`
-- Group: `memory.quality`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `save` | `boolean` | no | If true, persist detected conflicts to the conflicts table for later resolution (default: false). |
-
-### `memory_feedback`
-
-Record relevance feedback for a search result and update the memory's utility score; schedules low-utility memories for consolidation.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: mutating (no MCP hints)
-- Required inputs: `memory_id`, `query`, `signal`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `query` | `string` | yes | The search query that produced the result. |
-| `memory_id` | `integer` | yes | ID of the memory being rated. |
-| `signal` | `string` | yes | Feedback signal: "useful" (alias "helpful"), "irrelevant" (alias "not_helpful"), "outdated", or "conflict". |
-| `rank_position` | `integer` | no | 0-based rank position of the result in the original result list (optional). |
-| `original_score` | `number` | no | The final_score from the original search result (optional). |
-| `workspace` | `string` | no | Workspace context for the feedback (default: "default"). |
-
-### `memory_feedback_stats`
-
-Return aggregated search-feedback statistics (thumbs-up/down counts, top-rated queries) for a workspace.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: none
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `workspace` | `string` | no | Workspace name to filter stats; omit for all workspaces. |
-
-### `memory_synthesis`
-
-Check semantic overlap between two content strings and produce a merged synthesis using the chosen strategy.
-
-- Tier: `standard`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `content_a`, `content_b`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `content_a` | `string` | yes | First content string to synthesise. |
-| `content_b` | `string` | yes | Second content string to synthesise. |
-| `id_a` | `integer` | no | Optional memory ID associated with content_a (default: 0). |
-| `strategy` | `string` | no | Synthesis strategy: "merge" (default), "replace", or "append". Allowed: `merge`, `replace`, `append`. |
-
-### `memory_utility_score`
-
-Compute the Q-value utility score for a memory based on its retrieval feedback history.
-
-- Tier: `standard`
-- Group: `memory.lifecycle`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `id`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `id` | `integer` | yes | Memory ID to score. |
-
-### `memory_replay_at_time`
-
-Replay one memory as it existed at a given RFC3339 timestamp and optionally return enrichment events affecting it up to that time.
-
-- Tier: `advanced`
-- Group: `memory.admin`
-- Required feature: `always`
-- Annotations: readOnlyHint
-- Required inputs: `memory_id`, `timestamp`
-
-| Input | Type | Required | Summary |
-|-------|------|----------|---------|
-| `memory_id` | `integer` | yes | ID of the memory to replay. |
-| `timestamp` | `string` | yes | RFC3339 timestamp to replay state at. |
-| `event_type` | `string` | no | Optional event type filter for replayed event list (e.g. "consolidation"). |
-| `include_events` | `boolean` | no | Whether to include enrichment events in the response. Default: `true`. |
-| `include_failed` | `boolean` | no | Whether to include failed enrichment events. Default: `false`. |
-| `include_dry_runs` | `boolean` | no | Whether to include dry-run events. Default: `false`. |
-| `event_limit` | `integer` | no | Max number of events to include in replay trail (default 50, max 200). |
 
 ### `model_routing_status`
 

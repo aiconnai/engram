@@ -4,8 +4,6 @@ use serde_json::json;
 
 use super::protocol::{ToolAnnotations, ToolDefinition};
 
-pub(crate) mod catalog;
-
 /// Tool exposure tier for progressive discovery.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolTier {
@@ -18,6 +16,7 @@ pub enum ToolTier {
 }
 
 /// Structured tool definition with MCP 2025-11-25 annotations.
+#[derive(Debug, Clone)]
 pub struct ToolDef {
     pub name: &'static str,
     pub description: &'static str,
@@ -26,8 +25,10 @@ pub struct ToolDef {
     pub tier: ToolTier,
 }
 
-/// All tool definitions for Engram
-pub const TOOL_DEFINITIONS: &[ToolDef] = include!("registry.rs");
+pub(crate) mod catalog;
+pub mod registry;
+
+pub use registry::TOOL_DEFINITIONS;
 
 /// Returns `false` for tool names whose feature flag is not compiled in.
 ///
@@ -384,19 +385,8 @@ mod tests {
             }
         }
 
-        // Registry names: from the composed source, mirroring old behavior for cfg-gated tools.
-        let registry_src = include_str!("registry.rs");
-        let mut registry: BTreeSet<&str> = BTreeSet::new();
-        for line in registry_src.lines() {
-            let t = line.trim();
-            if let Some(rest) = t.strip_prefix("name:") {
-                if let Some(inner) = rest.trim().strip_prefix('"') {
-                    if let Some(name) = inner.split('"').next() {
-                        registry.insert(name);
-                    }
-                }
-            }
-        }
+        // Registry names: from the aggregated tool definitions.
+        let registry: BTreeSet<&str> = TOOL_DEFINITIONS.iter().map(|d| d.name).collect();
 
         // Legitimate asymmetries — keep empty; document any future addition.
         const DISPATCH_ONLY_OK: &[&str] = &[];

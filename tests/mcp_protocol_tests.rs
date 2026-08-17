@@ -276,7 +276,7 @@ fn test_tool_registry_has_no_orphan_definition_files() {
         .join("mcp")
         .join("tools");
 
-    let allowed = ["catalog.rs", "mod.rs", "registry.rs"];
+    let allowed = ["catalog", "mod.rs", "registry.rs"];
     for entry in std::fs::read_dir(&tools_dir).expect("read src/mcp/tools") {
         let path = entry.expect("read tool definition dir entry").path();
         let file_name = path
@@ -285,7 +285,7 @@ fn test_tool_registry_has_no_orphan_definition_files() {
             .expect("tool definition file name must be UTF-8");
         assert!(
             allowed.contains(&file_name),
-            "tool definitions must live in src/mcp/tools/registry.rs; remove orphan file: {}",
+            "tool definitions must live in src/mcp/tools/catalog/ or src/mcp/tools/registry.rs; remove orphan file: {}",
             path.display()
         );
     }

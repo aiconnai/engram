@@ -126,7 +126,11 @@ if [ -f src/mcp/tools/registry.rs ]; then
 from pathlib import Path
 import re
 
-registry = Path("src/mcp/tools/registry.rs").read_text()
+catalog_dir = Path("src/mcp/tools/catalog")
+if catalog_dir.exists():
+    registry = "\n".join(p.read_text() for p in catalog_dir.glob("*.rs"))
+else:
+    registry = Path("src/mcp/tools/registry.rs").read_text()
 tools_mod = Path("src/mcp/tools/mod.rs").read_text()
 all_names = re.findall(r"\bname:\s*\"([^\"]+)\"", registry)
 feature_gated = set()
@@ -143,11 +147,11 @@ print(f"{active_count} active / {len(all_names)} total")
 ' 2>/dev/null)"; then
       echo "MCP tools (source): ${MCP_COUNTS}"
     else
-      MCP_TOTAL="$(grep -c 'ToolDef {' src/mcp/tools/registry.rs 2>/dev/null || echo '?')"
+      MCP_TOTAL="$(grep -h -c 'ToolDef {' src/mcp/tools/catalog/*.rs 2>/dev/null || grep -c 'ToolDef {' src/mcp/tools/registry.rs 2>/dev/null || echo '?')"
       echo "MCP tools (source total): ${MCP_TOTAL}"
     fi
   else
-    MCP_TOTAL="$(grep -c 'ToolDef {' src/mcp/tools/registry.rs 2>/dev/null || echo '?')"
+    MCP_TOTAL="$(grep -h -c 'ToolDef {' src/mcp/tools/catalog/*.rs 2>/dev/null || grep -c 'ToolDef {' src/mcp/tools/registry.rs 2>/dev/null || echo '?')"
     echo "MCP tools (source total): ${MCP_TOTAL}"
   fi
 elif [ -f docs/MCP_TOOLS.md ]; then
