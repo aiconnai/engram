@@ -1,7 +1,7 @@
 use std::alloc::System;
 
 #[global_allocator]
-static ALLOCATOR: cap::Cap<System> = cap::Cap::new(System, 256 * 1024 * 1024);
+static ALLOCATOR: cap::Cap<System> = cap::Cap::new(System, 512 * 1024 * 1024);
 
 fn main() {
     if let Err(error) = engram::intelligence::pdf_worker::run() {
