@@ -477,6 +477,300 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
     }
 }
 
+const HNSW_MAGIC_HEADER: &[u8; 12] = b"ENGRAM_HNSW\0";
+const HNSW_BINARY_VERSION: u32 = 1;
+
+/// Adler-32 checksum calculator for corruption detection.
+struct Adler32 {
+    a: u32,
+    b: u32,
+}
+
+impl Adler32 {
+    fn new() -> Self {
+        Self { a: 1, b: 0 }
+    }
+
+    fn update(&mut self, data: &[u8]) {
+        const MOD_ADLER: u32 = 65521;
+        for &byte in data {
+            self.a = (self.a + byte as u32) % MOD_ADLER;
+            self.b = (self.b + self.a) % MOD_ADLER;
+        }
+    }
+
+    fn finish(&self) -> u32 {
+        (self.b << 16) | self.a
+    }
+}
+
+impl HnswIndex<i64> {
+    /// Serialize this HNSW index into a compact binary format and write it to `writer`.
+    pub fn save_to_writer<W: std::io::Write>(&self, writer: &mut W) -> crate::error::Result<()> {
+        let mut adler = Adler32::new();
+
+        // 1. Magic Header
+        writer.write_all(HNSW_MAGIC_HEADER)?;
+        adler.update(HNSW_MAGIC_HEADER);
+
+        // 2. Header Fields
+        let mut header_buf = Vec::with_capacity(64);
+        header_buf.extend_from_slice(&HNSW_BINARY_VERSION.to_le_bytes());
+        let metric_byte = match self.config.metric {
+            VectorMetric::Cosine => 0u8,
+            VectorMetric::DotProduct => 1u8,
+            VectorMetric::Euclidean => 2u8,
+        };
+        header_buf.push(metric_byte);
+        header_buf.extend_from_slice(&(self.config.dim as u32).to_le_bytes());
+        header_buf.extend_from_slice(&(self.config.m as u32).to_le_bytes());
+        header_buf.extend_from_slice(&(self.config.m_max0 as u32).to_le_bytes());
+        header_buf.extend_from_slice(&(self.config.ef_construction as u32).to_le_bytes());
+        header_buf.extend_from_slice(&(self.config.ef_search as u32).to_le_bytes());
+        header_buf.extend_from_slice(&self.config.ml.to_le_bytes());
+        header_buf.extend_from_slice(&(self.nodes.len() as u64).to_le_bytes());
+
+        let ep_val: i64 = self.entry_point.map(|idx| idx as i64).unwrap_or(-1);
+        header_buf.extend_from_slice(&ep_val.to_le_bytes());
+        header_buf.extend_from_slice(&(self.max_level as u32).to_le_bytes());
+        header_buf.extend_from_slice(&self.rng_state.to_le_bytes());
+
+        writer.write_all(&header_buf)?;
+        adler.update(&header_buf);
+
+        // 3. Nodes Payload
+        for node in &self.nodes {
+            let mut node_buf = Vec::with_capacity(8 + self.config.dim * 4 + 2);
+            node_buf.extend_from_slice(&node.id.to_le_bytes());
+            for &f in &node.vector {
+                node_buf.extend_from_slice(&f.to_le_bytes());
+            }
+
+            let num_levels = node.neighbors.len() as u16;
+            node_buf.extend_from_slice(&num_levels.to_le_bytes());
+
+            for level_neighbors in &node.neighbors {
+                let num_neighbors = level_neighbors.len() as u16;
+                node_buf.extend_from_slice(&num_neighbors.to_le_bytes());
+                for &neighbor_idx in level_neighbors {
+                    node_buf.extend_from_slice(&(neighbor_idx as u32).to_le_bytes());
+                }
+            }
+
+            writer.write_all(&node_buf)?;
+            adler.update(&node_buf);
+        }
+
+        // 4. Checksum
+        let checksum = adler.finish();
+        writer.write_all(&checksum.to_le_bytes())?;
+
+        Ok(())
+    }
+
+    /// Read and deserialize an HNSW index from a compact binary `reader`.
+    pub fn load_from_reader<R: std::io::Read>(reader: &mut R) -> crate::error::Result<Self> {
+        let mut adler = Adler32::new();
+
+        // 1. Magic Header
+        let mut magic = [0u8; 12];
+        reader.read_exact(&mut magic)?;
+        if &magic != HNSW_MAGIC_HEADER {
+            return Err(crate::error::EngramError::InvalidInput(
+                "Invalid HNSW binary header: magic bytes mismatch".to_string(),
+            ));
+        }
+        adler.update(&magic);
+
+        // 2. Header
+        let mut version_bytes = [0u8; 4];
+        reader.read_exact(&mut version_bytes)?;
+        adler.update(&version_bytes);
+        let version = u32::from_le_bytes(version_bytes);
+        if version != HNSW_BINARY_VERSION {
+            return Err(crate::error::EngramError::InvalidInput(format!(
+                "Unsupported HNSW binary version: {}",
+                version
+            )));
+        }
+
+        let mut metric_byte = [0u8; 1];
+        reader.read_exact(&mut metric_byte)?;
+        adler.update(&metric_byte);
+        let metric = match metric_byte[0] {
+            0 => VectorMetric::Cosine,
+            1 => VectorMetric::DotProduct,
+            2 => VectorMetric::Euclidean,
+            other => {
+                return Err(crate::error::EngramError::InvalidInput(format!(
+                    "Unknown HNSW vector metric tag: {}",
+                    other
+                )))
+            }
+        };
+
+        let mut u32_buf = [0u8; 4];
+
+        reader.read_exact(&mut u32_buf)?;
+        adler.update(&u32_buf);
+        let dim = u32::from_le_bytes(u32_buf) as usize;
+
+        reader.read_exact(&mut u32_buf)?;
+        adler.update(&u32_buf);
+        let m = u32::from_le_bytes(u32_buf) as usize;
+
+        reader.read_exact(&mut u32_buf)?;
+        adler.update(&u32_buf);
+        let m_max0 = u32::from_le_bytes(u32_buf) as usize;
+
+        reader.read_exact(&mut u32_buf)?;
+        adler.update(&u32_buf);
+        let ef_construction = u32::from_le_bytes(u32_buf) as usize;
+
+        reader.read_exact(&mut u32_buf)?;
+        adler.update(&u32_buf);
+        let ef_search = u32::from_le_bytes(u32_buf) as usize;
+
+        reader.read_exact(&mut u32_buf)?;
+        adler.update(&u32_buf);
+        let ml = f32::from_le_bytes(u32_buf);
+
+        let mut u64_buf = [0u8; 8];
+        reader.read_exact(&mut u64_buf)?;
+        adler.update(&u64_buf);
+        let node_count = u64::from_le_bytes(u64_buf) as usize;
+
+        let mut i64_buf = [0u8; 8];
+        reader.read_exact(&mut i64_buf)?;
+        adler.update(&i64_buf);
+        let ep_val = i64::from_le_bytes(i64_buf);
+        let entry_point = if ep_val >= 0 {
+            Some(ep_val as usize)
+        } else {
+            None
+        };
+
+        reader.read_exact(&mut u32_buf)?;
+        adler.update(&u32_buf);
+        let max_level = u32::from_le_bytes(u32_buf) as usize;
+
+        reader.read_exact(&mut u64_buf)?;
+        adler.update(&u64_buf);
+        let rng_state = u64::from_le_bytes(u64_buf);
+
+        let config = HnswConfig {
+            dim,
+            m,
+            m_max0,
+            ef_construction,
+            ef_search,
+            metric,
+            ml,
+        };
+
+        // 3. Nodes Payload
+        let mut nodes = Vec::with_capacity(node_count);
+        let mut id_to_idx = HashMap::with_capacity(node_count);
+
+        let mut u16_buf = [0u8; 2];
+        let mut vec_bytes = vec![0u8; dim * 4];
+
+        for idx in 0..node_count {
+            reader.read_exact(&mut i64_buf)?;
+            adler.update(&i64_buf);
+            let id = i64::from_le_bytes(i64_buf);
+
+            reader.read_exact(&mut vec_bytes)?;
+            adler.update(&vec_bytes);
+            let mut vector = Vec::with_capacity(dim);
+            for chunk in vec_bytes.chunks_exact(4) {
+                vector.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+            }
+
+            reader.read_exact(&mut u16_buf)?;
+            adler.update(&u16_buf);
+            let num_levels = u16::from_le_bytes(u16_buf) as usize;
+
+            let mut neighbors = Vec::with_capacity(num_levels);
+            for _ in 0..num_levels {
+                reader.read_exact(&mut u16_buf)?;
+                adler.update(&u16_buf);
+                let num_neighbors = u16::from_le_bytes(u16_buf) as usize;
+
+                let mut level_neighbors = Vec::with_capacity(num_neighbors);
+                for _ in 0..num_neighbors {
+                    reader.read_exact(&mut u32_buf)?;
+                    adler.update(&u32_buf);
+                    level_neighbors.push(u32::from_le_bytes(u32_buf) as usize);
+                }
+                neighbors.push(level_neighbors);
+            }
+
+            nodes.push(Node {
+                id,
+                vector,
+                neighbors,
+            });
+            id_to_idx.insert(id, idx);
+        }
+
+        // 4. Checksum Verification
+        let mut checksum_buf = [0u8; 4];
+        reader.read_exact(&mut checksum_buf)?;
+        let expected_checksum = u32::from_le_bytes(checksum_buf);
+        let calculated_checksum = adler.finish();
+
+        if expected_checksum != calculated_checksum {
+            return Err(crate::error::EngramError::InvalidInput(format!(
+                "HNSW binary checksum mismatch: expected {:#010x}, calculated {:#010x}",
+                expected_checksum, calculated_checksum
+            )));
+        }
+
+        Ok(Self {
+            config,
+            nodes,
+            id_to_idx,
+            entry_point,
+            max_level,
+            rng_state,
+        })
+    }
+
+    /// Serialize this HNSW index into an in-memory byte buffer.
+    pub fn save_to_bytes(&self) -> crate::error::Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.save_to_writer(&mut buf)?;
+        Ok(buf)
+    }
+
+    /// Deserialize an HNSW index from an in-memory byte slice.
+    pub fn load_from_bytes(bytes: &[u8]) -> crate::error::Result<Self> {
+        let mut cursor = std::io::Cursor::new(bytes);
+        Self::load_from_reader(&mut cursor)
+    }
+
+    /// Save the HNSW index to a disk file atomically.
+    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> crate::error::Result<()> {
+        use std::io::Write;
+        let path = path.as_ref();
+        let tmp_path = path.with_extension("tmp_hnsw");
+        {
+            let mut file = std::io::BufWriter::new(std::fs::File::create(&tmp_path)?);
+            self.save_to_writer(&mut file)?;
+            file.flush()?;
+        }
+        std::fs::rename(tmp_path, path)?;
+        Ok(())
+    }
+
+    /// Load the HNSW index from a disk file.
+    pub fn load_from_file<P: AsRef<std::path::Path>>(path: P) -> crate::error::Result<Self> {
+        let mut file = std::io::BufReader::new(std::fs::File::open(path)?);
+        Self::load_from_reader(&mut file)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,5 +810,78 @@ mod tests {
         assert_eq!(res.len(), 2);
         assert_eq!(res[0].id, 1);
         assert_eq!(res[1].id, 2);
+    }
+
+    #[test]
+    fn test_hnsw_binary_serialization_roundtrip() {
+        let config = HnswConfig::new(4, VectorMetric::Cosine).with_ef(64, 32);
+        let mut index = HnswIndex::new(config);
+
+        index.insert(101, &[0.5, 0.5, 0.5, 0.5]);
+        index.insert(102, &[1.0, 0.0, 0.0, 0.0]);
+        index.insert(103, &[0.0, 1.0, 0.0, 0.0]);
+        index.insert(104, &[0.0, 0.0, 1.0, 0.0]);
+        index.insert(105, &[0.0, 0.0, 0.0, 1.0]);
+
+        // Save to bytes
+        let bytes = index.save_to_bytes().expect("save bytes");
+        assert!(!bytes.is_empty());
+        assert_eq!(&bytes[0..12], HNSW_MAGIC_HEADER);
+
+        // Load from bytes
+        let loaded = HnswIndex::load_from_bytes(&bytes).expect("load bytes");
+        assert_eq!(loaded.len(), 5);
+        assert_eq!(loaded.config().dim, 4);
+        assert_eq!(loaded.config().metric, VectorMetric::Cosine);
+
+        // Search both and verify identical results
+        let query = [0.9, 0.1, 0.0, 0.0];
+        let original_results = index.search(&query, 3, None);
+        let loaded_results = loaded.search(&query, 3, None);
+
+        assert_eq!(original_results.len(), loaded_results.len());
+        for (r1, r2) in original_results.iter().zip(loaded_results.iter()) {
+            assert_eq!(r1.id, r2.id);
+            assert!((r1.distance - r2.distance).abs() < 1e-6);
+            assert!((r1.similarity - r2.similarity).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_hnsw_corrupted_payload_rejection() {
+        let config = HnswConfig::new(3, VectorMetric::Cosine);
+        let mut index = HnswIndex::new(config);
+        index.insert(1, &[1.0, 0.0, 0.0]);
+
+        let mut bytes = index.save_to_bytes().expect("save bytes");
+
+        // Corrupt a byte in the payload
+        let mid = bytes.len() / 2;
+        bytes[mid] ^= 0xFF;
+
+        let res = HnswIndex::load_from_bytes(&bytes);
+        assert!(res.is_err());
+        let err_msg = res.unwrap_err().to_string();
+        assert!(err_msg.contains("checksum mismatch") || err_msg.contains("Invalid"));
+    }
+
+    #[test]
+    fn test_hnsw_file_io_roundtrip() {
+        let tmp_dir = std::env::temp_dir();
+        let file_path = tmp_dir.join(format!("test_hnsw_{}.bin", std::process::id()));
+
+        let config = HnswConfig::new(2, VectorMetric::Cosine);
+        let mut index = HnswIndex::new(config);
+        index.insert(42, &[1.0, 2.0]);
+        index.insert(43, &[3.0, 4.0]);
+
+        index.save_to_file(&file_path).expect("save file");
+        let loaded = HnswIndex::load_from_file(&file_path).expect("load file");
+
+        let _ = std::fs::remove_file(&file_path);
+
+        assert_eq!(loaded.len(), 2);
+        assert!(loaded.contains(&42));
+        assert!(loaded.contains(&43));
     }
 }

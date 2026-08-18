@@ -869,17 +869,15 @@ fn main() -> Result<()> {
     tracing::info!("  - TruncationEngine: Active");
     tracing::info!("  - IntegrationOrchestrator: Active");
 
-    match args.transport {
-        TransportMode::Stdio => {
-            server.run()?;
-        }
+    let res = match args.transport {
+        TransportMode::Stdio => server.run(),
         TransportMode::Http => {
             let http_addr = SocketAddr::new(args.http_bind_address, args.http_port);
             let rt = tokio::runtime::Runtime::new()
                 .map_err(|e| engram::error::EngramError::Internal(e.to_string()))?;
             rt.block_on(async {
                 http_transport::serve_http(
-                    handler,
+                    handler.clone(),
                     http_addr,
                     args.http_api_key,
                     realtime_manager,
@@ -889,7 +887,7 @@ fn main() -> Result<()> {
                 )
                 .await
                 .map_err(|e| engram::error::EngramError::Internal(e.to_string()))
-            })?;
+            })
         }
         TransportMode::Both => {
             let http_handler = handler.clone();
@@ -918,7 +916,7 @@ fn main() -> Result<()> {
             });
 
             // Run stdio in the main thread
-            server.run()?;
+            server.run()
         }
         #[cfg(feature = "grpc")]
         TransportMode::Grpc => {
@@ -928,14 +926,27 @@ fn main() -> Result<()> {
             let rt = tokio::runtime::Runtime::new()
                 .map_err(|e| engram::error::EngramError::Internal(e.to_string()))?;
             rt.block_on(async {
-                grpc_transport::serve_grpc(handler, grpc_addr, args.grpc_api_key, realtime_manager)
-                    .await
-                    .map_err(|e| engram::error::EngramError::Internal(e.to_string()))
-            })?;
+                grpc_transport::serve_grpc(
+                    handler.clone(),
+                    grpc_addr,
+                    args.grpc_api_key,
+                    realtime_manager,
+                )
+                .await
+                .map_err(|e| engram::error::EngramError::Internal(e.to_string()))
+            })
         }
-    }
+    };
 
-    Ok(())
+    // Save final HNSW checkpoint on shutdown if vectors exist
+    let hnsw = handler.hnsw_index.read();
+    if !hnsw.is_empty() {
+        let _ = storage
+            .with_connection(|conn| engram::search::checkpoint_hnsw_to_db(conn, &hnsw, "default"));
+    }
+    drop(hnsw);
+
+    res
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@ mod v16_v25;
 mod v1_v15;
 mod v26_v33;
 mod v34_v46;
+mod v47;
 
 #[cfg(test)]
 mod tests;
@@ -15,9 +16,10 @@ use v16_v25::*;
 use v1_v15::*;
 use v26_v33::*;
 use v34_v46::*;
+use v47::*;
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 46;
+pub const SCHEMA_VERSION: i32 = 47;
 
 /// Run all migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -227,6 +229,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 46 {
         migrate_v46(conn)?;
+    }
+
+    if current_version < 47 {
+        migrate_v47(conn)?;
     }
 
     Ok(())

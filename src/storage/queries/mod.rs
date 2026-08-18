@@ -32,5 +32,8 @@ pub use sync::*;
 mod memory_policy;
 pub use memory_policy::*;
 
+mod hnsw_checkpoint;
+pub use hnsw_checkpoint::*;
+
 #[cfg(test)]
 mod tests;

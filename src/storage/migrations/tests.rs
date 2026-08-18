@@ -17,12 +17,30 @@ fn test_fresh_db_reaches_current_version() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 46);
+    assert_eq!(version, 47);
 }
 
 #[test]
 fn test_schema_version_constant() {
-    assert_eq!(SCHEMA_VERSION, 46);
+    assert_eq!(SCHEMA_VERSION, 47);
+}
+
+#[test]
+fn test_hnsw_checkpoints_table_exists() {
+    let conn = in_memory_conn();
+    conn.execute(
+        "INSERT INTO hnsw_checkpoints (model, dimensions, metric, vector_count, checkpoint_blob)
+         VALUES ('default', 384, 'cosine', 10, X'DEADBEEF')",
+        [],
+    )
+    .expect("insert checkpoint");
+
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM hnsw_checkpoints", [], |row| {
+            row.get(0)
+        })
+        .expect("count checkpoints");
+    assert_eq!(count, 1);
 }
 
 #[test]
@@ -177,7 +195,7 @@ fn test_upgrade_from_v17_to_v19() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 46, "should reach v46 after full migration");
+    assert_eq!(version, 47, "should reach v47 after full migration");
 
     // Verify both new tables exist
     let auto_links_exists: i32 = conn
@@ -513,7 +531,7 @@ fn test_v45_preserves_existing_dream_candidate_data() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 46);
+    assert_eq!(version, 47);
 
     let retained: i64 = conn
         .query_row(
@@ -611,4 +629,30 @@ fn test_dream_candidates_require_content_for_create_update_merge() {
         result.is_err(),
         "create/update/merge candidates should require proposed_content"
     );
+}
+
+#[test]
+fn test_v47_hnsw_checkpoints_columns() {
+    let conn = in_memory_conn();
+
+    // Verify hnsw_checkpoints table exists and supports insertion
+    conn.execute(
+        "INSERT INTO hnsw_checkpoints (model, dimensions, metric, vector_count, checkpoint_blob, created_at)
+         VALUES ('openai-text-3', 1536, 'cosine', 500, X'12345678', '2026-08-17T00:00:00Z')",
+        [],
+    )
+    .expect("insert hnsw checkpoint");
+
+    let (model, dim, metric, count): (String, i64, String, i64) = conn
+        .query_row(
+            "SELECT model, dimensions, metric, vector_count FROM hnsw_checkpoints WHERE model = 'openai-text-3'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .expect("query checkpoint");
+
+    assert_eq!(model, "openai-text-3");
+    assert_eq!(dim, 1536);
+    assert_eq!(metric, "cosine");
+    assert_eq!(count, 500);
 }

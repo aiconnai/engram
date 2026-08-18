@@ -137,13 +137,74 @@ impl Default for SearchConfig {
     }
 }
 
-/// Warm up and populate an HNSW index from all stored embedding BLOBs in SQLite.
+/// Warm up and populate an HNSW index from SQLite checkpoints and stored embedding BLOBs.
 ///
-/// Returns the number of vectors successfully inserted into the index.
+/// If a valid HNSW checkpoint exists for the model/dimension, it is restored in $O(1)$ time,
+/// and only embeddings created or updated *after* the checkpoint timestamp are incrementally ingested.
+/// Otherwise, all valid embeddings in the database are replayed into the index.
+///
+/// Returns the number of vectors in the warmed up index.
 pub fn warmup_hnsw_from_db(
     conn: &rusqlite::Connection,
     hnsw: &mut HnswIndex<i64>,
 ) -> crate::error::Result<usize> {
+    let dim = hnsw.config().dim;
+    let model = "default";
+
+    // 1. Try restoring from latest checkpoint
+    if let Ok(Some(ckpt)) = crate::storage::queries::get_latest_hnsw_checkpoint(conn, model, dim) {
+        if let Ok(loaded_index) = HnswIndex::load_from_bytes(&ckpt.checkpoint_blob) {
+            if loaded_index.config().dim == dim {
+                *hnsw = loaded_index;
+                let checkpoint_time = ckpt.created_at;
+
+                // Incremental catch-up for embeddings newer than checkpoint
+                let mut stmt = conn.prepare(
+                    "SELECT e.memory_id, e.embedding, e.dimensions
+                     FROM embeddings e
+                     INNER JOIN memories m ON e.memory_id = m.id
+                     WHERE m.valid_to IS NULL AND (e.created_at > ?1 OR m.updated_at > ?1)",
+                )?;
+
+                let mut count = 0;
+                let mut rows = stmt.query([&checkpoint_time])?;
+
+                while let Some(row) = rows.next()? {
+                    let memory_id: i64 = row.get(0)?;
+                    let bytes: Vec<u8> = row.get(1)?;
+                    let dimensions: usize = row.get(2)?;
+
+                    if dimensions != dim || bytes.len() != dimensions * 4 {
+                        continue;
+                    }
+
+                    let mut vector = Vec::with_capacity(dimensions);
+                    for chunk in bytes.chunks_exact(4) {
+                        let arr: [u8; 4] = match chunk.try_into() {
+                            Ok(a) => a,
+                            Err(_) => break,
+                        };
+                        vector.push(f32::from_le_bytes(arr));
+                    }
+
+                    if vector.len() == dimensions {
+                        hnsw.insert(memory_id, &vector);
+                        count += 1;
+                    }
+                }
+
+                tracing::debug!(
+                    "HNSW checkpoint restored ({} vectors); caught up {} incremental updates",
+                    hnsw.len(),
+                    count
+                );
+
+                return Ok(hnsw.len());
+            }
+        }
+    }
+
+    // 2. Full replay fallback when no checkpoint exists or dimensions mismatch
     let mut stmt = conn.prepare(
         "SELECT e.memory_id, e.embedding, e.dimensions
          FROM embeddings e
@@ -184,6 +245,30 @@ pub fn warmup_hnsw_from_db(
     }
 
     Ok(count)
+}
+
+/// Save a snapshot checkpoint of the HNSW index to SQLite.
+pub fn checkpoint_hnsw_to_db(
+    conn: &rusqlite::Connection,
+    hnsw: &HnswIndex<i64>,
+    model: &str,
+) -> crate::error::Result<i64> {
+    let blob = hnsw.save_to_bytes()?;
+    let metric_str = match hnsw.config().metric {
+        VectorMetric::Cosine => "cosine",
+        VectorMetric::DotProduct => "dot_product",
+        VectorMetric::Euclidean => "euclidean",
+    };
+    let checkpoint_id = crate::storage::queries::save_hnsw_checkpoint(
+        conn,
+        model,
+        hnsw.config().dim,
+        metric_str,
+        hnsw.len(),
+        &blob,
+    )?;
+    let _ = crate::storage::queries::prune_old_hnsw_checkpoints(conn, model, hnsw.config().dim, 2);
+    Ok(checkpoint_id)
 }
 
 #[cfg(test)]
