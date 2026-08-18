@@ -104,6 +104,16 @@ pub struct SearchConfig {
     pub project_context_path: Option<String>,
     /// Deduplication strategy for hybrid search
     pub dedupe_strategy: DedupeStrategy,
+    /// Whether in-memory HNSW approximate nearest neighbor search is enabled
+    pub hnsw_enabled: bool,
+    /// Number of candidates to evaluate during HNSW search phase (ef_search)
+    pub hnsw_ef_search: usize,
+    /// Number of candidates to evaluate during HNSW construction phase (ef_construction)
+    pub hnsw_ef_construction: usize,
+    /// Max connections per node at higher layers in HNSW
+    pub hnsw_m: usize,
+    /// Max connections per node at layer 0 in HNSW
+    pub hnsw_m_max0: usize,
 }
 
 impl Default for SearchConfig {
@@ -118,8 +128,62 @@ impl Default for SearchConfig {
             project_context_boost: 0.2,
             project_context_path: None,
             dedupe_strategy: DedupeStrategy::default(),
+            hnsw_enabled: true,
+            hnsw_ef_search: 64,
+            hnsw_ef_construction: 128,
+            hnsw_m: 16,
+            hnsw_m_max0: 32,
         }
     }
+}
+
+/// Warm up and populate an HNSW index from all stored embedding BLOBs in SQLite.
+///
+/// Returns the number of vectors successfully inserted into the index.
+pub fn warmup_hnsw_from_db(
+    conn: &rusqlite::Connection,
+    hnsw: &mut HnswIndex<i64>,
+) -> crate::error::Result<usize> {
+    let mut stmt = conn.prepare(
+        "SELECT e.memory_id, e.embedding, e.dimensions
+         FROM embeddings e
+         INNER JOIN memories m ON e.memory_id = m.id
+         WHERE m.valid_to IS NULL",
+    )?;
+
+    let mut count = 0;
+    let mut rows = stmt.query([])?;
+
+    while let Some(row) = rows.next()? {
+        let memory_id: i64 = row.get(0)?;
+        let bytes: Vec<u8> = row.get(1)?;
+        let dimensions: usize = row.get(2)?;
+
+        if dimensions != hnsw.config().dim {
+            continue;
+        }
+
+        let expected_bytes = dimensions * 4;
+        if bytes.len() != expected_bytes {
+            continue;
+        }
+
+        let mut vector = Vec::with_capacity(dimensions);
+        for chunk in bytes.chunks_exact(4) {
+            let arr: [u8; 4] = match chunk.try_into() {
+                Ok(a) => a,
+                Err(_) => break,
+            };
+            vector.push(f32::from_le_bytes(arr));
+        }
+
+        if vector.len() == dimensions {
+            hnsw.insert(memory_id, &vector);
+            count += 1;
+        }
+    }
+
+    Ok(count)
 }
 
 #[cfg(test)]

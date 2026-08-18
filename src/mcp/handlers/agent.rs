@@ -302,6 +302,9 @@ mod tests {
             search_cache: Arc::new(crate::search::SearchResultCache::new(
                 crate::search::AdaptiveCacheConfig::default(),
             )),
+            hnsw_index: Arc::new(parking_lot::RwLock::new(crate::search::HnswIndex::new(
+                crate::search::HnswConfig::new(128, crate::search::VectorMetric::Cosine),
+            ))),
             #[cfg(feature = "meilisearch")]
             meili: None,
             #[cfg(feature = "meilisearch")]

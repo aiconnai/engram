@@ -29,6 +29,9 @@ fn create_test_context() -> HandlerContext {
         realtime: None,
         embedding_cache: Arc::new(EmbeddingCache::default()),
         search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
+        hnsw_index: Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
+            engram::search::HnswConfig::new(128, engram::search::VectorMetric::Cosine),
+        ))),
         #[cfg(feature = "meilisearch")]
         meili: None,
         #[cfg(feature = "meilisearch")]

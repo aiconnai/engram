@@ -30,13 +30,14 @@ fn apply_project_context_boost(memory: &Memory, score: f32, config: &SearchConfi
     score
 }
 
-/// Perform hybrid search with automatic strategy selection
-pub fn hybrid_search(
+/// Perform hybrid search with automatic strategy selection and optional HNSW acceleration
+pub fn hybrid_search_with_hnsw(
     conn: &Connection,
     query: &str,
     query_embedding: Option<&[f32]>,
     options: &SearchOptions,
     config: &SearchConfig,
+    hnsw_index: Option<&crate::search::hnsw::HnswIndex<i64>>,
 ) -> Result<Vec<SearchResult>> {
     let strategy = options
         .strategy
@@ -50,7 +51,9 @@ pub fn hybrid_search(
         }
         SearchStrategy::SemanticOnly => {
             if let Some(embedding) = query_embedding {
-                semantic_only_search(conn, embedding, limit, min_score, options, config)
+                semantic_only_search_with_hnsw(
+                    conn, embedding, limit, min_score, options, config, hnsw_index,
+                )
             } else {
                 // Fallback to keyword if no embedding
                 keyword_only_search(conn, query, limit, min_score, options, config)
@@ -58,12 +61,25 @@ pub fn hybrid_search(
         }
         SearchStrategy::Hybrid => {
             if let Some(embedding) = query_embedding {
-                rrf_hybrid_search(conn, query, embedding, limit, min_score, options, config)
+                rrf_hybrid_search_with_hnsw(
+                    conn, query, embedding, limit, min_score, options, config, hnsw_index,
+                )
             } else {
                 keyword_only_search(conn, query, limit, min_score, options, config)
             }
         }
     }
+}
+
+/// Perform hybrid search with automatic strategy selection (legacy signature)
+pub fn hybrid_search(
+    conn: &Connection,
+    query: &str,
+    query_embedding: Option<&[f32]>,
+    options: &SearchOptions,
+    config: &SearchConfig,
+) -> Result<Vec<SearchResult>> {
+    hybrid_search_with_hnsw(conn, query, query_embedding, options, config, None)
 }
 
 /// Keyword-only search using BM25
@@ -128,6 +144,201 @@ fn keyword_only_search(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     results.truncate(limit as usize);
+
+    Ok(results)
+}
+
+/// Semantic-only search using HNSW vector index or falling back to SQLite linear scan
+fn semantic_only_search_with_hnsw(
+    conn: &Connection,
+    query_embedding: &[f32],
+    limit: i64,
+    min_score: f32,
+    options: &SearchOptions,
+    config: &SearchConfig,
+    hnsw_index: Option<&crate::search::hnsw::HnswIndex<i64>>,
+) -> Result<Vec<SearchResult>> {
+    if config.hnsw_enabled {
+        if let Some(hnsw) = hnsw_index {
+            if !hnsw.is_empty() && query_embedding.len() == hnsw.config().dim {
+                let candidate_k = (limit * 3).max(16) as usize;
+                let candidates =
+                    hnsw.search(query_embedding, candidate_k, Some(config.hnsw_ef_search));
+                if !candidates.is_empty() {
+                    let hydrated = semantic_hydrate_hnsw_candidates(
+                        conn, candidates, limit, min_score, options, config,
+                    )?;
+                    if !hydrated.is_empty() {
+                        return Ok(hydrated);
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback to SQLite linear scan
+    semantic_only_search(conn, query_embedding, limit, min_score, options, config)
+}
+
+/// Hydrate candidate records returned by HNSW index from SQLite and apply metadata/workspace filters
+fn semantic_hydrate_hnsw_candidates(
+    conn: &Connection,
+    candidates: Vec<crate::search::hnsw::HnswCandidate<i64>>,
+    limit: i64,
+    min_score: f32,
+    options: &SearchOptions,
+    config: &SearchConfig,
+) -> Result<Vec<SearchResult>> {
+    let now = Utc::now().to_rfc3339();
+    let candidate_ids: Vec<i64> = candidates.iter().map(|c| c.id).collect();
+    let candidate_sim_map: HashMap<i64, f32> = candidates
+        .into_iter()
+        .map(|c| (c.id, c.similarity))
+        .collect();
+
+    if candidate_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let placeholders: Vec<String> = candidate_ids.iter().map(|_| "?".to_string()).collect();
+    let mut sql = format!(
+        "SELECT m.id, m.content, m.memory_type, m.importance, m.access_count,
+                m.created_at, m.updated_at, m.last_accessed_at, m.owner_id,
+                m.visibility, m.version, m.has_embedding, m.metadata,
+                m.scope_type, m.scope_id, m.expires_at,
+                m.workspace, m.tier, m.lifecycle_state
+         FROM memories m
+         WHERE m.id IN ({}) AND m.valid_to IS NULL
+           AND (m.expires_at IS NULL OR m.expires_at > ?)",
+        placeholders.join(", ")
+    );
+
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = candidate_ids
+        .iter()
+        .map(|&id| Box::new(id) as Box<dyn rusqlite::ToSql>)
+        .collect();
+    params.push(Box::new(now));
+
+    if !options.include_transcripts {
+        sql.push_str(" AND m.memory_type != 'transcript_chunk'");
+    }
+
+    if !options.include_archived {
+        sql.push_str(" AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'archived')");
+    }
+
+    if let Some(ref filter_json) = options.filter {
+        let filter_expr = parse_filter(filter_json)?;
+        let mut builder = SqlBuilder::new();
+        let filter_sql = builder.build_filter(&filter_expr)?;
+        sql.push_str(" AND ");
+        sql.push_str(&filter_sql);
+        for param in builder.take_params() {
+            params.push(param);
+        }
+    } else {
+        if let Some(ref tags) = options.tags {
+            if !tags.is_empty() {
+                sql.push_str(
+                    " AND m.id IN (
+                        SELECT mt.memory_id FROM memory_tags mt
+                        JOIN tags t ON mt.tag_id = t.id
+                        WHERE t.name IN (",
+                );
+                let tag_placeholders: Vec<&str> = tags.iter().map(|_| "?").collect();
+                sql.push_str(&tag_placeholders.join(", "));
+                sql.push_str("))");
+                for tag in tags {
+                    params.push(Box::new(tag.clone()));
+                }
+            }
+        }
+
+        if let Some(ref memory_type) = options.memory_type {
+            sql.push_str(" AND m.memory_type = ?");
+            params.push(Box::new(memory_type.as_str().to_string()));
+        }
+    }
+
+    if let Some(ref scope) = options.scope {
+        sql.push_str(" AND m.scope_type = ?");
+        params.push(Box::new(scope.scope_type().to_string()));
+        if let Some(scope_id) = scope.scope_id() {
+            sql.push_str(" AND m.scope_id = ?");
+            params.push(Box::new(scope_id.to_string()));
+        } else {
+            sql.push_str(" AND m.scope_id IS NULL");
+        }
+    }
+
+    if options.global {
+        // Search across all workspaces
+    } else if let Some(ref workspace) = options.workspace {
+        sql.push_str(" AND m.workspace = ?");
+        params.push(Box::new(workspace.clone()));
+    } else if let Some(ref workspaces) = options.workspaces {
+        if !workspaces.is_empty() {
+            let ws_placeholders: Vec<&str> = workspaces.iter().map(|_| "?").collect();
+            sql.push_str(&format!(
+                " AND m.workspace IN ({})",
+                ws_placeholders.join(", ")
+            ));
+            for ws in workspaces {
+                params.push(Box::new(ws.clone()));
+            }
+        }
+    }
+
+    if let Some(ref tier) = options.tier {
+        sql.push_str(&format!(" AND m.tier = '{}'", tier.as_str()));
+    }
+
+    if let Some(ref sp) = options.scope_path {
+        let escaped = sp.replace('%', "\\%").replace('_', "\\_");
+        sql.push_str(" AND (m.scope_path = ? OR m.scope_path LIKE ? ESCAPE '\\')");
+        params.push(Box::new(sp.clone()));
+        params.push(Box::new(format!("{}/", escaped) + "%"));
+    }
+
+    let mut stmt = conn.prepare(&sql)?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+
+    let memories: Vec<Memory> = stmt
+        .query_map(param_refs.as_slice(), memory_from_row)?
+        .filter_map(|r| r.ok())
+        .map(|mut m| {
+            m.tags = load_tags(conn, m.id).unwrap_or_default();
+            m
+        })
+        .collect();
+
+    let mut scored: Vec<(Memory, f32, f32)> = Vec::new();
+    for memory in memories {
+        if let Some(&similarity) = candidate_sim_map.get(&memory.id) {
+            if similarity >= min_score {
+                let boosted_score = apply_project_context_boost(&memory, similarity, config);
+                scored.push((memory, boosted_score, similarity));
+            }
+        }
+    }
+
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let results: Vec<SearchResult> = scored
+        .into_iter()
+        .take(limit as usize)
+        .map(|(memory, boosted_score, original_score)| SearchResult {
+            memory,
+            score: boosted_score,
+            match_info: MatchInfo {
+                strategy: SearchStrategy::SemanticOnly,
+                matched_terms: vec![],
+                highlights: vec![],
+                semantic_score: Some(original_score),
+                keyword_score: None,
+            },
+        })
+        .collect();
 
     Ok(results)
 }
@@ -298,8 +509,8 @@ fn semantic_only_search(
     Ok(results)
 }
 
-/// Hybrid search using Reciprocal Rank Fusion
-fn rrf_hybrid_search(
+/// Hybrid search using Reciprocal Rank Fusion with optional HNSW acceleration
+fn rrf_hybrid_search_with_hnsw(
     conn: &Connection,
     query: &str,
     query_embedding: &[f32],
@@ -307,6 +518,7 @@ fn rrf_hybrid_search(
     min_score: f32,
     options: &SearchOptions,
     config: &SearchConfig,
+    hnsw_index: Option<&crate::search::hnsw::HnswIndex<i64>>,
 ) -> Result<Vec<SearchResult>> {
     // When global=true, skip all workspace filters to search across all workspaces.
     let workspace_filter = if options.global {
@@ -356,13 +568,14 @@ fn rrf_hybrid_search(
         project_context_path: None,
         ..*config
     };
-    let semantic_results = semantic_only_search(
+    let semantic_results = semantic_only_search_with_hnsw(
         conn,
         query_embedding,
         limit * 2,
         0.0,
         &semantic_options,
         &no_boost_config,
+        hnsw_index,
     )?;
 
     // Build rank maps

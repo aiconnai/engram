@@ -231,6 +231,8 @@ struct EngramHandler {
     embedding_cache: Arc<engram::embedding::EmbeddingCache>,
     /// Search result cache (Phase 4 - ENG-36)
     search_cache: Arc<engram::search::SearchResultCache>,
+    /// In-memory HNSW vector index (RFC 0005)
+    hnsw_index: Arc<parking_lot::RwLock<engram::search::HnswIndex<i64>>>,
     /// Meilisearch backend for Phase 7 MCP tools
     #[cfg(feature = "meilisearch")]
     meili: Option<Arc<engram::storage::MeilisearchBackend>>,
@@ -260,6 +262,17 @@ impl EngramHandler {
         embedder: Arc<dyn engram::embedding::Embedder>,
         progress_tx: std::sync::mpsc::Sender<engram::mcp::ProgressNotification>,
     ) -> Self {
+        let hnsw_index = Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
+            engram::search::HnswConfig::new(
+                embedder.dimensions(),
+                engram::search::VectorMetric::Cosine,
+            ),
+        )));
+
+        let _ = storage.with_connection(|conn| {
+            engram::search::warmup_hnsw_from_db(conn, &mut hnsw_index.write())
+        });
+
         Self {
             storage,
             embedder,
@@ -270,6 +283,7 @@ impl EngramHandler {
             search_cache: Arc::new(engram::search::SearchResultCache::new(
                 engram::search::AdaptiveCacheConfig::default(),
             )),
+            hnsw_index,
             #[cfg(feature = "meilisearch")]
             meili: None,
             #[cfg(feature = "meilisearch")]
@@ -371,6 +385,7 @@ impl EngramHandler {
             realtime: self.realtime.clone(),
             embedding_cache: self.embedding_cache.clone(),
             search_cache: self.search_cache.clone(),
+            hnsw_index: self.hnsw_index.clone(),
             #[cfg(feature = "meilisearch")]
             meili: self.meili.clone(),
             #[cfg(feature = "meilisearch")]
@@ -936,11 +951,17 @@ mod tests {
             search_cache: Arc::new(engram::search::result_cache::SearchResultCache::new(
                 Default::default(),
             )),
-            embedder,
+            embedder: embedder.clone(),
             fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
             search_config: SearchConfig::default(),
             realtime: None,
             embedding_cache: Arc::new(engram::embedding::EmbeddingCache::default()),
+            hnsw_index: Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
+                engram::search::HnswConfig::new(
+                    embedder.dimensions(),
+                    engram::search::VectorMetric::Cosine,
+                ),
+            ))),
             #[cfg(feature = "langfuse")]
             langfuse_runtime: Arc::new(
                 tokio::runtime::Runtime::new().expect("Failed to create Langfuse runtime"),

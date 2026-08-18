@@ -91,14 +91,21 @@ fn test_handler_context(
     use parking_lot::Mutex;
     use std::sync::Arc;
 
+    let embedder = engram::embedding::create_embedder(&Default::default()).unwrap();
     HandlerContext {
         storage,
-        embedder: engram::embedding::create_embedder(&Default::default()).unwrap(),
+        embedder: embedder.clone(),
         fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
         search_config: SearchConfig::default(),
         realtime: None,
         embedding_cache: Arc::new(EmbeddingCache::default()),
         search_cache: Arc::new(SearchResultCache::new(Default::default())),
+        hnsw_index: Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
+            engram::search::HnswConfig::new(
+                embedder.dimensions(),
+                engram::search::VectorMetric::Cosine,
+            ),
+        ))),
         #[cfg(feature = "meilisearch")]
         meili: None,
         #[cfg(feature = "meilisearch")]
@@ -124,15 +131,21 @@ fn test_mcp_tool_dream_run_now() {
 
     let storage = Storage::open_in_memory().unwrap();
 
-    // Setup HandlerContext
+    let embedder = engram::embedding::create_embedder(&Default::default()).unwrap();
     let ctx = HandlerContext {
         storage: storage.clone(),
-        embedder: engram::embedding::create_embedder(&Default::default()).unwrap(),
+        embedder: embedder.clone(),
         fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
         search_config: SearchConfig::default(),
         realtime: None,
         embedding_cache: Arc::new(EmbeddingCache::default()),
         search_cache: Arc::new(SearchResultCache::new(Default::default())),
+        hnsw_index: Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
+            engram::search::HnswConfig::new(
+                embedder.dimensions(),
+                engram::search::VectorMetric::Cosine,
+            ),
+        ))),
         #[cfg(feature = "meilisearch")]
         meili: None,
         #[cfg(feature = "meilisearch")]
@@ -179,14 +192,21 @@ fn test_mcp_dream_candidate_review_and_apply() {
         })
         .unwrap();
 
+    let embedder = engram::embedding::create_embedder(&Default::default()).unwrap();
     let ctx = HandlerContext {
         storage: storage.clone(),
-        embedder: engram::embedding::create_embedder(&Default::default()).unwrap(),
+        embedder: embedder.clone(),
         fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
         search_config: SearchConfig::default(),
         realtime: None,
         embedding_cache: Arc::new(EmbeddingCache::default()),
         search_cache: Arc::new(SearchResultCache::new(Default::default())),
+        hnsw_index: Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
+            engram::search::HnswConfig::new(
+                embedder.dimensions(),
+                engram::search::VectorMetric::Cosine,
+            ),
+        ))),
         #[cfg(feature = "meilisearch")]
         meili: None,
         #[cfg(feature = "meilisearch")]

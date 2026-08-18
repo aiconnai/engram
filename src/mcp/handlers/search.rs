@@ -6,7 +6,7 @@ use crate::intelligence::memory_policy::{
     blend_retrieval_priority, extract_features, score_policy, PolicyFeatureInput,
 };
 use crate::mcp::error::ToolError;
-use crate::search::{hybrid_search, RerankConfig, RerankStrategy, Reranker};
+use crate::search::{RerankConfig, RerankStrategy, Reranker};
 use crate::storage::queries::get_policy_record;
 use crate::types::*;
 
@@ -168,7 +168,14 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
-            let mut results = hybrid_search(conn, query, embedding_ref, &options, &search_config)?;
+            let mut results = crate::search::hybrid_search_with_hnsw(
+                conn,
+                query,
+                embedding_ref,
+                &options,
+                &search_config,
+                Some(&*ctx.hnsw_index.read()),
+            )?;
 
             let mut policy_info_by_memory_id = HashMap::new();
             if policy_rerank {
@@ -704,7 +711,14 @@ pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
-            let results = hybrid_search(conn, query, embedding_ref, &options, &search_config)?;
+            let results = crate::search::hybrid_search_with_hnsw(
+                conn,
+                query,
+                embedding_ref,
+                &options,
+                &search_config,
+                Some(&*ctx.hnsw_index.read()),
+            )?;
 
             let compact: Vec<Value> = results
                 .iter()
