@@ -77,6 +77,23 @@ remediation = "Upgrade AWS SDK/libsql TLS stacks until rustls-webpki is >=0.103.
 feature_gated = false
 default_graph = true
 
+[[exceptions]]
+advisory = "RUSTSEC-2026-0258"
+crate = "h2"
+versions = ["0.3.27"]
+tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
+dependency_path = [
+  "engram-core 0.22.0 -> aws-config 1.8.12 -> aws-smithy-http-client 1.1.5 -> hyper 0.14.32 -> h2 0.3.27",
+  "engram-core 0.22.0 -> libsql 0.9.30 -> tonic 0.11.0 -> h2 0.3.27",
+]
+feature = "cloud default feature via AWS SDK, plus turso optional feature via libsql"
+exposure = "Unbounded empty DATA frames in legacy h2 0.3.x transitive dependencies in AWS SDK HTTP client and libsql tonic 0.11 stack; h2 0.4.x is upgraded to 0.4.16+; exploitation requires malicious peer connection."
+owner = "supply-chain"
+expires = 2026-09-30
+remediation = "Track AWS SDK smithy client and libsql updates to upgrade h2 0.3.x to non-vulnerable HTTP/2 implementations, then remove this exception."
+feature_gated = false
+default_graph = true
+
 
 [[exceptions]]
 advisory = "RUSTSEC-2025-0141"
