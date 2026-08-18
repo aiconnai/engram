@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Engram — Persistent Memory Engine for Claude 5, Gemini 3.7, DeepSeek-V4, Grok 4.6, GPT-5.6 Sol & Antigravity</title>
-  <meta name="description" content="High-performance, local-first persistent memory engine for autonomous AI agents. Hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and 243+ MCP tools. Compatible with Claude Code, Cursor, Antigravity, OpenAI Agents, Gemini 3.7, and DeepSeek-V4.">
+  <meta name="description" content="Give your AI a memory. Local-first storage and retrieval for AI workflows, 3-way hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and 243+ MCP tools. Compatible with Claude Code, Cursor, Antigravity, OpenAI Agents, Gemini 3.7, and DeepSeek-V4.">
   <meta name="keywords" content="Engram, MCP memory server, Model Context Protocol, persistent memory for AI agents, Claude Code memory, Cursor rules memory, Google Antigravity, Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, GPT-5.6 Sol, LangGraph memory, CrewAI memory, hybrid search, SQLite WAL, knowledge graph, identity resolution">
   
   <!-- Open Graph -->
-  <meta property="og:title" content="Engram — Persistent Memory Engine for Frontier AI Agents">
+  <meta property="og:title" content="Engram — Memory is Identity for AI Agents">
   <meta property="og:description" content="Local-first persistent memory for AI agents. Sub-millisecond hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and MCP-native integration.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://aiconnai.github.io/engram/">
@@ -54,22 +54,22 @@
     <div class="container nav-container">
       <a href="#" class="brand" aria-label="Engram Home">
         <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
           <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
         </svg>
         <span>Engram</span>
         <span class="badge-version">v0.24.0 GA</span>
       </a>
       <nav aria-label="Main Navigation">
         <ul class="nav-links">
-          <li><a href="#features">Features</a></li>
-          <li><a href="#ecosystem">Ecosystem</a></li>
+          <li><a href="#forgetting">Comparison</a></li>
+          <li><a href="#anatomy">Anatomy</a></li>
+          <li><a href="#mechanics">Mechanics</a></li>
           <li><a href="#playground">Explorer</a></li>
-          <li><a href="mcp-tools.html">MCP Tools</a></li>
+          <li><a href="mcp-tools.html">MCP Tools (243)</a></li>
           <li><a href="architecture.html">Architecture</a></li>
           <li><a href="#sdk">SDKs</a></li>
-          <li><a href="#comparison">Comparison</a></li>
-          <li><a href="#quickstart">Quick Start</a></li>
+          <li><a href="#install">Install</a></li>
         </ul>
       </nav>
       <div class="nav-actions">
@@ -79,7 +79,7 @@
           </svg>
           GitHub
         </a>
-        <a href="#quickstart" class="btn btn-primary btn-sm">Get Started</a>
+        <a href="#install" class="btn btn-primary btn-sm">Get Started</a>
       </div>
     </div>
   </header>
@@ -88,14 +88,15 @@
   <section class="hero">
     <div class="container">
       <div class="hero-tag">
-        <span>⚡ PERSISTENT MEMORY LAYER FOR AI AGENTS</span> v0.24.0 GA
+        <span>⚡ PERSISTENT MEMORY ENGINE FOR FRONTIER AI</span> v0.24.0 GA
       </div>
-      <h1>Don't Let AI Agents Forget Context <span class="gradient-text">Between Sessions.</span></h1>
-      <p>
-        Chat history fades and context windows overflow. <strong>Engram gives agents durable, structured memory with sub-millisecond hybrid search (BM25 + Vectors + Fuzzy), dynamic knowledge graphs, and 243+ MCP tools.</strong> 100% local-first, zero-cloud lock-in, engineered for Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, Claude 5 Sonnet/Opus, GPT-5.6 Sol, Google Antigravity, and Cursor.
+      <h1>Memory is <span class="gradient-text">Identity.</span></h1>
+      <p class="hero-subtitle">
+        Every architecture decision, every convention, every critical fact… held somewhere safe.<br>
+        <strong>Sub-millisecond hybrid retrieval (BM25 + Vectors + Fuzzy), dynamic knowledge graphs, and 243+ MCP tools.</strong> 100% local-first, zero-cloud lock-in, engineered for Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, Claude 5 Sonnet/Opus, GPT-5.6 Sol, Google Antigravity, and Cursor.
       </p>
       <div class="hero-cta">
-        <a href="#quickstart" class="btn btn-primary">
+        <a href="#install" class="btn btn-primary">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="4 17 10 11 4 5"/>
             <line x1="12" y1="19" x2="20" y2="19"/>
@@ -141,7 +142,235 @@
     </div>
   </section>
 
-  <!-- Ecosystem / Works With Section -->
+  <!-- Section I: The Forgetting (Before · After Comparison Demo) -->
+  <section class="forgetting-section" id="forgetting">
+    <div class="container">
+      <div class="section-mark"><span class="roman">i</span> <span>the forgetting</span></div>
+      <div class="forgetting-head">
+        <div>
+          <span style="font-size:0.85rem; font-family:var(--font-mono); color:var(--text-muted); text-transform:uppercase;">before · after</span>
+          <h2 class="section-title">The same conversation, <em>twice.</em></h2>
+          <p class="section-subtitle">
+            On the left, a model without memory. On the right, the same model backed by Engram. The words are identical — until two weeks pass.
+          </p>
+        </div>
+        <button class="replay-btn" id="replay-demo" type="button" aria-label="Replay the comparison demo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4v6h6M20 20v-6h-6M4 10a8 8 0 0114-5l2 3M20 14a8 8 0 01-14 5l-2-3"/>
+          </svg>
+          Replay Demo
+        </button>
+      </div>
+
+      <div class="compare-grid">
+        <!-- Without Engram Pane -->
+        <article class="compare-pane pane-without">
+          <div class="pane-header">
+            <span class="pane-badge badge-danger">without engram</span>
+            <span class="pane-meta">session resets · 0% recall</span>
+          </div>
+          <div class="chat-box chat" data-pane="forget" aria-live="polite"></div>
+        </article>
+
+        <!-- With Engram Pane -->
+        <article class="compare-pane pane-with">
+          <div class="pane-header">
+            <span class="pane-badge badge-success">with engram</span>
+            <span class="pane-meta">verbatim · retrieved in 1.2ms</span>
+          </div>
+          <div class="chat-box chat" data-pane="remember" aria-live="polite"></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section II: Anatomy of Memory -->
+  <section class="anatomy-section" id="anatomy">
+    <div class="container">
+      <div class="section-mark"><span class="roman">ii</span> <span>anatomy of memory</span></div>
+      <h2 class="section-title">Workspaces. Sessions. Entities. <em>Drawers.</em></h2>
+      <p class="section-subtitle">
+        A structured cognitive architecture built in Rust. Broad workspaces partition projects; sessions record time-based context; entity graphs link concepts; verbatim drawers preserve immutable decisions.
+      </p>
+
+      <div class="stratum-grid">
+        <!-- Stratum 1: Workspace -->
+        <div class="stratum-card">
+          <div>
+            <div class="stratum-level">W — WORKSPACE</div>
+            <h3>The Workspaces</h3>
+            <div class="stratum-sub">projects · environments · teams</div>
+            <p>Strict cryptographic isolation per project. Distinct databases or segregated schemas prevent context contamination between repos.</p>
+          </div>
+          <svg class="stratum-svg" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="5" y="15" width="190" height="40" rx="4" stroke="currentColor" opacity="0.4"/>
+            <rect x="15" y="22" width="50" height="26" rx="2" fill="rgba(6, 182, 212, 0.1)"/>
+            <rect x="75" y="22" width="50" height="26" rx="2" fill="rgba(6, 182, 212, 0.1)"/>
+            <rect x="135" y="22" width="50" height="26" rx="2" fill="rgba(6, 182, 212, 0.1)"/>
+          </svg>
+        </div>
+
+        <!-- Stratum 2: Session -->
+        <div class="stratum-card">
+          <div>
+            <div class="stratum-level">S — SESSION</div>
+            <h3>The Sessions</h3>
+            <div class="stratum-sub">days · transcripts · threads</div>
+            <p>Chronological units of time. Auto-indexed chat transcripts and scratchpads that decay dynamically unless promoted to permanent memory.</p>
+          </div>
+          <svg class="stratum-svg" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="10" y="15" width="36" height="35" rx="3" stroke="currentColor"/>
+            <rect x="56" y="15" width="36" height="35" rx="3" stroke="currentColor"/>
+            <rect x="102" y="15" width="36" height="35" rx="3" stroke="currentColor"/>
+            <rect x="148" y="15" width="36" height="35" rx="3" stroke="currentColor"/>
+            <line x1="10" y1="55" x2="184" y2="55" stroke-dasharray="2 3" opacity="0.6"/>
+          </svg>
+        </div>
+
+        <!-- Stratum 3: Entity Graph -->
+        <div class="stratum-card">
+          <div>
+            <div class="stratum-level">E — ENTITY GRAPH</div>
+            <h3>The Entities</h3>
+            <div class="stratum-sub">concepts · systems · identities</div>
+            <p>Bidirectional relationships linking facts. Canonical identity resolution unifies aliases (e.g. <code>AuthService</code> $\to$ <code>auth-api</code>).</p>
+          </div>
+          <svg class="stratum-svg" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.2">
+            <circle cx="30" cy="30" r="10" fill="rgba(16, 185, 129, 0.15)"/>
+            <circle cx="100" cy="20" r="12" fill="rgba(16, 185, 129, 0.15)"/>
+            <circle cx="170" cy="35" r="10" fill="rgba(16, 185, 129, 0.15)"/>
+            <line x1="40" y1="30" x2="88" y2="20" stroke="currentColor"/>
+            <line x1="112" y1="20" x2="160" y2="35" stroke="currentColor"/>
+          </svg>
+        </div>
+
+        <!-- Stratum 4: Drawer -->
+        <div class="stratum-card">
+          <div>
+            <div class="stratum-level">D — DRAWER</div>
+            <h3>The Drawers</h3>
+            <div class="stratum-sub">verbatim · decisions · immutable</div>
+            <p>The exact chunk of verbatim content. Full fidelity with timestamp, salience score, provenance, and contradiction guardrails.</p>
+          </div>
+          <svg class="stratum-svg" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="30" y="10" width="140" height="12" rx="2" stroke="currentColor"/>
+            <rect x="30" y="26" width="140" height="12" rx="2" stroke="currentColor"/>
+            <rect x="30" y="42" width="140" height="12" rx="2" stroke="currentColor"/>
+            <circle cx="155" cy="16" r="1.5" fill="currentColor"/>
+            <circle cx="155" cy="32" r="1.5" fill="currentColor"/>
+            <circle cx="155" cy="48" r="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section III: Dialect / Pointer Layer vs Verbatim Layer -->
+  <section class="dialect-section" id="dialect">
+    <div class="container">
+      <div class="section-mark"><span class="roman">iii</span> <span>indexing & retrieval</span></div>
+      <h2 class="section-title">Dense Symbolic Indexing. <em>Verbatim Fidelity.</em></h2>
+      <p class="section-subtitle">
+        The content stays verbatim — always. The index above it is compressed into 3-way hybrid embeddings and entity graphs that an agent can query in &lt;2ms.
+      </p>
+
+      <div class="dialect-grid">
+        <!-- Verbatim Drawer -->
+        <article class="dialect-card">
+          <div class="dialect-header">
+            <span>DRAWER · mem_98f4a1</span>
+            <span>VERBATIM · EXACT · DECISION</span>
+          </div>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;">The decision, as recorded:</p>
+          <p style="font-size:0.95rem; line-height:1.6; color:var(--text-primary);">
+            "We have decided to size the <strong>PostgreSQL connection pool</strong> to <strong>25 connections</strong> with a <strong>5s timeout</strong>. Use <strong>Tokio async/await</strong> for all I/O workers; reserve std::thread for CPU compute."
+          </p>
+          <p style="color:var(--text-dim); font-size:0.8rem; font-family:var(--font-mono); margin-top:16px;">
+            — immutable provenance: session_2026_07_14.jsonl
+          </p>
+        </article>
+
+        <!-- Dialect Arrow -->
+        <div class="dialect-arrow" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M12 3v18M7 8l5-5 5 5M7 16l5 5 5-5"/>
+          </svg>
+          <span>FUSED · RRF</span>
+        </div>
+
+        <!-- Pointer Layer -->
+        <article class="dialect-card">
+          <div class="dialect-header">
+            <span>INDEX POINTER · RRF FUSION</span>
+            <span>3-WAY RETRIEVAL (BM25 + VECTOR + FUZZY)</span>
+          </div>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;">The pointer, as indexed in SQLite:</p>
+          <pre class="dialect-pre"><code>§ WS/backend/mem_98f4a1
+@type decision ~ salience=0.95
+@fts5 "postgresql connection pool size 25 timeout tokio"
+@vec  384-dim cos_sim(query, v) [MiniLM ONNX]
+@ent  [PostgreSQL, ConnectionPool, Tokio, Rust]
+@rel  (configures) -> DatabaseWorker
+§ ptr -> mem_98f4a1 (verbatim)</code></pre>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section IV: Mechanics & Four Pillars -->
+  <section class="mechanics-section" id="mechanics">
+    <div class="container">
+      <div class="section-mark"><span class="roman">iv</span> <span>mechanics</span></div>
+      <h2 class="section-title">Four Pillars. <em>No Cloud.</em> No Keys.</h2>
+      <p class="section-subtitle">
+        Engineered from scratch in Rust for uncompromising privacy, performance, and determinism.
+      </p>
+
+      <div class="mechanics-grid">
+        <!-- Mech 1 -->
+        <div class="mech-card">
+          <div>
+            <div class="mech-number">— 01</div>
+            <h3>Local-First</h3>
+            <p>SQLite with Write-Ahead Logging on disk. Nothing is uploaded. Zero telemetry. Your memories live under a single directory on your machine.</p>
+          </div>
+          <div class="mech-metric">default path · <b>~/.local/share/engram/memories.db</b></div>
+        </div>
+
+        <!-- Mech 2 -->
+        <div class="mech-card">
+          <div>
+            <div class="mech-number">— 02</div>
+            <h3>Zero API Keys</h3>
+            <p>3-way search (BM25 FTS5 + local MiniLM ONNX vectors + fuzzy distance) runs 100% on CPU. No OpenAI key or cloud embedding endpoint required.</p>
+          </div>
+          <div class="mech-metric">cloud keys required · <b>none</b></div>
+        </div>
+
+        <!-- Mech 3 -->
+        <div class="mech-card">
+          <div>
+            <div class="mech-number">— 03</div>
+            <h3>Background Hooks</h3>
+            <p>Ingestion and indexing happen silently via lifecycle hooks on session end or compaction. Agents query durable context without rebuilding history.</p>
+          </div>
+          <div class="mech-metric">hook budget · <b>&lt;50 ms</b></div>
+        </div>
+
+        <!-- Mech 4 -->
+        <div class="mech-card">
+          <div>
+            <div class="mech-number">— 04</div>
+            <h3>Temporal Graph</h3>
+            <p>Entity relations with valid-from and valid-to timestamps. Detects contradictions when requirements change and guides automated resolution.</p>
+          </div>
+          <div class="mech-metric">conflict engine · <b>temporal resolution</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section V: Frontier AI Models Grid -->
   <section class="ecosystem-section" id="ecosystem">
     <div class="container">
       <div class="section-tag">Frontier AI Compatibility</div>
@@ -211,124 +440,6 @@
             <span class="model-badge">Entity Memory</span>
           </div>
           <p class="model-desc">Shared crew memory with short-term, long-term, and entity memory adapters.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Core Features Section -->
-  <section class="features-section" id="features">
-    <div class="container">
-      <div class="section-tag">Core Architecture</div>
-      <h2 class="section-title">Why Teams Choose Engram</h2>
-      <p class="section-subtitle">A high-performance memory foundation built in Rust with local-first security and zero cloud lock-in.</p>
-
-      <div class="features-grid">
-        <!-- Feature 1 -->
-        <div class="feature-card">
-          <div class="feature-icon-wrapper">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </div>
-          <h3>3-Way Hybrid Search & HNSW</h3>
-          <p>Combines exact BM25 keyword search, in-memory HNSW vector graphs with SIMD 8-lane loop unrolling, and fuzzy Levenshtein distance fused via Reciprocal Rank Fusion (RRF).</p>
-          <div class="feature-pill-list">
-            <span class="feature-pill">FTS5 Engine</span>
-            <span class="feature-pill">HNSW Graph</span>
-            <span class="feature-pill">SIMD 8-Lane</span>
-            <span class="feature-pill">RRF Fusion</span>
-          </div>
-        </div>
-
-        <!-- Feature 2 -->
-        <div class="feature-card">
-          <div class="feature-icon-wrapper emerald">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="18" cy="5" r="3"/>
-              <circle cx="6" cy="12" r="3"/>
-              <circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-          </div>
-          <h3>Knowledge Graph & Identity</h3>
-          <p>Extracts entities automatically, tracks bidirectional relationship graphs, resolves aliases to canonical identities, and performs multi-hop shortest-path traversals.</p>
-          <div class="feature-pill-list">
-            <span class="feature-pill">Entity Extraction</span>
-            <span class="feature-pill">Identity Alias Resolution</span>
-            <span class="feature-pill">Shortest Path</span>
-          </div>
-        </div>
-
-        <!-- Feature 3 -->
-        <div class="feature-card">
-          <div class="feature-icon-wrapper violet">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-          </div>
-          <h3>Memory Tiering & Salience</h3>
-          <p>Distinguishes permanent architectural decisions from ephemeral 24h daily scratchpads. Dynamic salience decay scores recency, frequency, importance, and feedback.</p>
-          <div class="feature-pill-list">
-            <span class="feature-pill">Permanent vs Daily</span>
-            <span class="feature-pill">Exponential Decay</span>
-            <span class="feature-pill">Dream Compaction</span>
-          </div>
-        </div>
-
-        <!-- Feature 4 -->
-        <div class="feature-card">
-          <div class="feature-icon-wrapper">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </div>
-          <h3>Contradiction Detection</h3>
-          <p>Detects temporal contradictions and conflicting directives across agent sessions. 5-component quality scoring ensures clarity, consistency, and freshness.</p>
-          <div class="feature-pill-list">
-            <span class="feature-pill">Conflict Resolution</span>
-            <span class="feature-pill">Quality Report</span>
-            <span class="feature-pill">Deduplication</span>
-          </div>
-        </div>
-
-        <!-- Feature 5 -->
-        <div class="feature-card">
-          <div class="feature-icon-wrapper emerald">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-          </div>
-          <h3>Project Context Discovery</h3>
-          <p>Ingests and parses repository policy files automatically: <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.cursorrules</code>, <code>copilot-instructions.md</code>, and <code>.aider.conf.yml</code>.</p>
-          <div class="feature-pill-list">
-            <span class="feature-pill">Repo-Aware</span>
-            <span class="feature-pill">Zero Manual Setup</span>
-            <span class="feature-pill">Multi-Workspace</span>
-          </div>
-        </div>
-
-        <!-- Feature 6 -->
-        <div class="feature-card">
-          <div class="feature-icon-wrapper violet">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="16 18 22 12 16 6"/>
-              <polyline points="8 6 2 12 8 18"/>
-            </svg>
-          </div>
-          <h3>Universal Multi-Transport</h3>
-          <p>Operates simultaneously over stdio, HTTP JSON-RPC 2.0 (<code>POST /mcp</code>), real-time WebSocket subscriptions, and gRPC with Bearer token authentication.</p>
-          <div class="feature-pill-list">
-            <span class="feature-pill">MCP stdio</span>
-            <span class="feature-pill">HTTP /mcp</span>
-            <span class="feature-pill">WebSocket</span>
-            <span class="feature-pill">gRPC</span>
-          </div>
         </div>
       </div>
     </div>
@@ -580,11 +691,12 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
   </section>
 
   <!-- Quickstart Section -->
-  <section class="cta-section" id="quickstart">
+  <section class="cta-section" id="install">
     <div class="container">
       <div class="cta-box">
-        <h2>Start Hardening Your Agents with Engram Today</h2>
-        <p>Install via Homebrew, Cargo, or download pre-compiled releases for macOS and Linux.</p>
+        <div class="section-mark" style="justify-content: center;"><span class="roman">v</span> <span>begin</span></div>
+        <h2>Build Your Memory Layer with Engram</h2>
+        <p>One command to install. One to initialize. Your decisions and context — permanent, local, instantly recallable.</p>
         <div class="install-command-badge" style="margin-bottom: 24px;">
           <code>brew install aiconnai/engram/engram</code>
           <button class="copy-btn" title="Copy to clipboard" data-clipboard-text="brew install aiconnai/engram/engram">

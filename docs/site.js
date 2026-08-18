@@ -1,17 +1,73 @@
 /**
  * Engram Official GitHub Pages Interactive Engine
- * Handles terminal simulation, interactive memory playground, SDK tabs, and code copying.
+ * Handles terminal simulation, comparison chat playback, interactive memory playground, SDK tabs, and code copying.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
   initTerminalSimulation();
+  initComparisonDemo();
   initPlayground();
   initSdkTabs();
   initCopyButtons();
 });
 
 /* =========================================================================
-   1. Terminal Simulation
+   1. The Forgetting — Interactive Split Comparison Chat Demo
+   ========================================================================= */
+const chatScript = {
+  userPrompt: "What was our decision regarding database connection pooling and async workers in the backend?",
+  forgetAgent: "I don't have access to your previous sessions. Could you please remind me which database and async runtime you chose?",
+  rememberAgent: "Retrieved from workspace `backend` (decision mem_98f4a1, salience 0.95):\n\nOn July 14th, you decided to size the PostgreSQL connection pool to 25 connections (5s timeout) and use Tokio async/await for all I/O workers, reserving std::thread for CPU compute."
+};
+
+function initComparisonDemo() {
+  const replayBtn = document.getElementById('replay-demo');
+  const chatForget = document.querySelector('.chat[data-pane="forget"]');
+  const chatRemember = document.querySelector('.chat[data-pane="remember"]');
+
+  if (!chatForget || !chatRemember) return;
+
+  function runDemo() {
+    chatForget.innerHTML = '';
+    chatRemember.innerHTML = '';
+
+    // Step 1: User message appears on both sides
+    const userMsg1 = document.createElement('div');
+    userMsg1.className = 'chat-bubble user';
+    userMsg1.textContent = chatScript.userPrompt;
+
+    const userMsg2 = document.createElement('div');
+    userMsg2.className = 'chat-bubble user';
+    userMsg2.textContent = chatScript.userPrompt;
+
+    chatForget.appendChild(userMsg1);
+    chatRemember.appendChild(userMsg2);
+
+    // Step 2: Agent responses with typing effect
+    setTimeout(() => {
+      const agentForget = document.createElement('div');
+      agentForget.className = 'chat-bubble agent failure';
+      agentForget.innerHTML = `<strong>Claude (without memory):</strong><br>${chatScript.forgetAgent}`;
+      chatForget.appendChild(agentForget);
+
+      const agentRemember = document.createElement('div');
+      agentRemember.className = 'chat-bubble agent success';
+      agentRemember.innerHTML = `<strong>Claude (with Engram MCP):</strong><br>${chatScript.rememberAgent.replace(/\n/g, '<br>')}`;
+      chatRemember.appendChild(agentRemember);
+    }, 600);
+  }
+
+  runDemo();
+
+  if (replayBtn) {
+    replayBtn.addEventListener('click', () => {
+      runDemo();
+    });
+  }
+}
+
+/* =========================================================================
+   2. Terminal Simulation
    ========================================================================= */
 const terminalScenarios = {
   mcp: `<div><span class="t-prompt">$</span> <span class="t-cmd">engram-server --transport stdio</span></div>
@@ -65,14 +121,8 @@ function initTerminalSimulation() {
 }
 
 /* =========================================================================
-   2. Interactive Memory Playground (In-Browser Simulation)
+   3. Interactive Memory Playground (In-Browser Simulation)
    ========================================================================= */
-const sampleMemories = [
-  { id: 'mem_01', content: 'Database migration: PostgreSQL connection pool size set to 25 with 5s timeout.', type: 'decision', tags: ['db', 'postgres', 'infra'], workspace: 'prod', salience: 0.95, entities: ['PostgreSQL', 'ConnectionPool'] },
-  { id: 'mem_02', content: 'API authentication uses JWT with RS256 signing keys stored in Vault.', type: 'architecture', tags: ['auth', 'jwt', 'security'], workspace: 'prod', salience: 0.92, entities: ['JWT', 'Vault', 'AuthService'] },
-  { id: 'mem_03', content: 'Temporary scratchpad: User testing dark mode toggle on mobile client.', type: 'daily', tags: ['ui', 'frontend'], workspace: 'frontend', salience: 0.45, entities: ['DarkMode', 'MobileUI'] }
-];
-
 function initPlayground() {
   const pgTabs = document.querySelectorAll('.pg-tab-btn');
   const pgOutput = document.getElementById('pg-json-output');
@@ -259,7 +309,7 @@ function executePlaygroundAction(mode) {
 }
 
 /* =========================================================================
-   3. SDK Showcase Tabs
+   4. SDK Showcase Tabs
    ========================================================================= */
 const sdkSnippets = {
   rust: `// Cargo.toml: engram-core = "0.24.0"
@@ -380,7 +430,7 @@ function initSdkTabs() {
 }
 
 /* =========================================================================
-   4. Copy Buttons
+   5. Copy Buttons
    ========================================================================= */
 function initCopyButtons() {
   const copyBtns = document.querySelectorAll('.copy-btn');
