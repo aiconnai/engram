@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Tools Catalog & Reference — Engram</title>
+  <meta name="description" content="Complete interactive reference of 243+ Model Context Protocol (MCP) tools provided by Engram for AI agents. Filter by tier, category, or search tool names.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
+  <style>
+    .catalog-search-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .catalog-search-input {
+      flex: 1;
+      min-width: 280px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 12px 18px;
+      color: var(--text-primary);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .catalog-search-input:focus {
+      border-color: var(--color-cyan);
+    }
+    .filter-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      padding: 8px 16px;
+      border-radius: var(--radius-full);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-btn:hover {
+      border-color: var(--border-active);
+      color: var(--text-primary);
+    }
+    .filter-btn.active {
+      background: rgba(6, 182, 212, 0.15);
+      border-color: var(--color-cyan);
+      color: var(--color-cyan);
+    }
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 20px;
+      margin-bottom: 80px;
+    }
+    .tool-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+    .tool-card:hover {
+      border-color: var(--border-active);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-subtle);
+    }
+    .tool-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .tool-name {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--color-cyan);
+    }
+    .tool-tier-badge {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      background: var(--bg-surface-elevated);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+    }
+    .tool-tier-badge.tier-essential {
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--color-emerald);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .tool-tier-badge.tier-standard {
+      background: rgba(6, 182, 212, 0.12);
+      color: var(--color-cyan);
+      border-color: rgba(6, 182, 212, 0.3);
+    }
+    .tool-tier-badge.tier-all {
+      background: rgba(139, 92, 246, 0.12);
+      color: var(--color-violet);
+      border-color: rgba(139, 92, 246, 0.3);
+    }
+    .tool-desc {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .tool-group-tag {
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+
+  <!-- Navigation -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <a href="index.html" class="brand" aria-label="Engram Home">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+        <span>Engram</span>
+        <span class="badge-version">v0.24.0 GA</span>
+      </a>
+      <nav aria-label="Main Navigation">
+        <ul class="nav-links">
+          <li><a href="index.html#features">Features</a></li>
+          <li><a href="index.html#ecosystem">Ecosystem</a></li>
+          <li><a href="index.html#playground">Explorer</a></li>
+          <li><a href="mcp-tools.html" class="active">MCP Tools</a></li>
+          <li><a href="architecture.html">Architecture</a></li>
+          <li><a href="index.html#sdk">SDKs</a></li>
+          <li><a href="index.html#quickstart">Quick Start</a></li>
+        </ul>
+      </nav>
+      <div class="nav-actions">
+        <a href="https://github.com/aiconnai/engram" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">GitHub</a>
+        <a href="index.html#quickstart" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top: 60px;">
+    <div class="section-tag">Model Context Protocol Reference</div>
+    <h1 style="font-size: 2.8rem; font-weight: 800; margin-bottom: 16px;">MCP Tools Catalog</h1>
+    <p style="color: var(--text-secondary); font-size: 1.1rem; max-width: 800px; margin-bottom: 40px;">
+      Engram provides 243+ active MCP tools organized into tiers (<code>essential</code>, <code>standard</code>, <code>all</code>). Agents discover and execute these tools natively over stdio or HTTP JSON-RPC 2.0.
+    </p>
+
+    <!-- Search & Filters -->
+    <div class="catalog-search-bar">
+      <input type="text" id="tool-search-input" class="catalog-search-input" placeholder="Search tool by name, description, or parameter..." />
+      <div class="filter-pills">
+        <button class="filter-btn active" data-filter="all">All Tiers</button>
+        <button class="filter-btn" data-filter="essential">Essential (Default)</button>
+        <button class="filter-btn" data-filter="standard">Standard</button>
+        <button class="filter-btn" data-filter="memory">Memory Group</button>
+        <button class="filter-btn" data-filter="graph">Graph Group</button>
+        <button class="filter-btn" data-filter="identity">Identity Group</button>
+      </div>
+    </div>
+
+    <!-- Tools Grid -->
+    <div class="tools-grid" id="tools-container">
+      <!-- Tool 1 -->
+      <div class="tool-card" data-tier="essential" data-group="memory">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">memory_create</span>
+            <span class="tool-tier-badge tier-essential">essential</span>
+          </div>
+          <p class="tool-desc">Stores a permanent memory or decision with durable SQLite persistence, full text indexing, vector embeddings, and entity extraction.</p>
+        </div>
+        <div class="tool-group-tag">Group: core / memory</div>
+      </div>
+
+      <!-- Tool 2 -->
+      <div class="tool-card" data-tier="essential" data-group="memory">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">memory_create_daily</span>
+            <span class="tool-tier-badge tier-essential">essential</span>
+          </div>
+          <p class="tool-desc">Creates an ephemeral scratchpad or session memory that automatically decays and expires after 24 hours.</p>
+        </div>
+        <div class="tool-group-tag">Group: core / temporal</div>
+      </div>
+
+      <!-- Tool 3 -->
+      <div class="tool-card" data-tier="essential" data-group="search">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">memory_search</span>
+            <span class="tool-tier-badge tier-essential">essential</span>
+          </div>
+          <p class="tool-desc">Executes 3-way hybrid search (BM25 FTS5 + Dense Cosine Vectors + Fuzzy Levenshtein) fused via Reciprocal Rank Fusion.</p>
+        </div>
+        <div class="tool-group-tag">Group: search / hybrid</div>
+      </div>
+
+      <!-- Tool 4 -->
+      <div class="tool-card" data-tier="essential" data-group="graph">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">memory_traverse</span>
+            <span class="tool-tier-badge tier-essential">essential</span>
+          </div>
+          <p class="tool-desc">Traverses the entity knowledge graph from a root node up to N hops, resolving bidirectional relations and shared context.</p>
+        </div>
+        <div class="tool-group-tag">Group: graph / traversal</div>
+      </div>
+
+      <!-- Tool 5 -->
+      <div class="tool-card" data-tier="essential" data-group="identity">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">identity_resolve</span>
+            <span class="tool-tier-badge tier-essential">essential</span>
+          </div>
+          <p class="tool-desc">Resolves ambiguous aliases and entity mentions to a canonical unified identity across multiple workspaces.</p>
+        </div>
+        <div class="tool-group-tag">Group: identity / resolution</div>
+      </div>
+
+      <!-- Tool 6 -->
+      <div class="tool-card" data-tier="standard" data-group="temporal">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">memory_temporal_contradictions</span>
+            <span class="tool-tier-badge tier-standard">standard</span>
+          </div>
+          <p class="tool-desc">Scans a workspace for conflicting decisions or temporal anomalies and generates guided resolution proposals.</p>
+        </div>
+        <div class="tool-group-tag">Group: quality / conflict</div>
+      </div>
+
+      <!-- Tool 7 -->
+      <div class="tool-card" data-tier="standard" data-group="context">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">memory_scan_project</span>
+            <span class="tool-tier-badge tier-standard">standard</span>
+          </div>
+          <p class="tool-desc">Scans and ingests project policy files: CLAUDE.md, AGENTS.md, .cursorrules, .aider.conf.yml, and coding conventions.</p>
+        </div>
+        <div class="tool-group-tag">Group: context / repo</div>
+      </div>
+
+      <!-- Tool 8 -->
+      <div class="tool-card" data-tier="standard" data-group="council">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">memory_council</span>
+            <span class="tool-tier-badge tier-standard">standard</span>
+          </div>
+          <p class="tool-desc">Executes structured multi-perspective consensus review over proposed decisions before writing them to persistent canonical memory.</p>
+        </div>
+        <div class="tool-group-tag">Group: council / consensus</div>
+      </div>
+
+      <!-- Tool 9 -->
+      <div class="tool-card" data-tier="all" data-group="quality">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">quality_report</span>
+            <span class="tool-tier-badge tier-all">all</span>
+          </div>
+          <p class="tool-desc">Computes 5-component context quality report: clarity, completeness, freshness, consistency, and source trust metrics.</p>
+        </div>
+        <div class="tool-group-tag">Group: quality / audit</div>
+      </div>
+
+      <!-- Tool 10 -->
+      <div class="tool-card" data-tier="all" data-group="graph">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">memory_find_path</span>
+            <span class="tool-tier-badge tier-all">all</span>
+          </div>
+          <p class="tool-desc">Finds the shortest semantic connection path between two arbitrary entities or memories in the knowledge graph.</p>
+        </div>
+        <div class="tool-group-tag">Group: graph / pathfinding</div>
+      </div>
+
+      <!-- Tool 11 -->
+      <div class="tool-card" data-tier="all" data-group="temporal">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">salience_decay_run</span>
+            <span class="tool-tier-badge tier-all">all</span>
+          </div>
+          <p class="tool-desc">Executes lifecycle transitions (Active -> Stale -> Archived) and recalculates exponential salience decay scores.</p>
+        </div>
+        <div class="tool-group-tag">Group: lifecycle / salience</div>
+      </div>
+
+      <!-- Tool 12 -->
+      <div class="tool-card" data-tier="essential" data-group="admin">
+        <div>
+          <div class="tool-header">
+            <span class="tool-name">discover_tools</span>
+            <span class="tool-tier-badge tier-essential">essential</span>
+          </div>
+          <p class="tool-desc">Allows dynamic MCP tool surface expansion on demand when an agent requires specialized tools not in the active profile.</p>
+        </div>
+        <div class="tool-group-tag">Group: meta / discovery</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-bottom" style="border:none; padding: 0;">
+        <div>© 2026 aiconnai open-source contributors. Released under the MIT License.</div>
+        <div><a href="index.html" style="color:var(--color-cyan); text-decoration:none;">← Return to Homepage</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Tool search & filter engine
+    document.addEventListener('DOMContentLoaded', () => {
+      const searchInput = document.getElementById('tool-search-input');
+      const filterBtns = document.querySelectorAll('.filter-btn');
+      const toolCards = document.querySelectorAll('.tool-card');
+
+      function filterTools() {
+        const query = searchInput.value.toLowerCase().trim();
+        const activeFilter = document.querySelector('.filter-btn.active').getAttribute('data-filter');
+
+        toolCards.forEach(card => {
+          const name = card.querySelector('.tool-name').textContent.toLowerCase();
+          const desc = card.querySelector('.tool-desc').textContent.toLowerCase();
+          const tier = card.getAttribute('data-tier');
+          const group = card.getAttribute('data-group');
+
+          const matchesQuery = name.includes(query) || desc.includes(query);
+          const matchesFilter = activeFilter === 'all' || tier === activeFilter || group === activeFilter;
+
+          if (matchesQuery && matchesFilter) {
+            card.style.display = 'flex';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      }
+
+      searchInput.addEventListener('input', filterTools);
+
+      filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          filterBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          filterTools();
+        });
+      });
+    });
+  </script>
+</body>
+</html>

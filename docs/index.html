@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Engram — Persistent Memory Engine for Claude 5, Gemini 3.7, DeepSeek-V4, Grok 4.6, GPT-5.6 Sol & Antigravity</title>
+  <meta name="description" content="High-performance, local-first persistent memory engine for autonomous AI agents. Hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and 243+ MCP tools. Compatible with Claude Code, Cursor, Antigravity, OpenAI Agents, Gemini 3.7, and DeepSeek-V4.">
+  <meta name="keywords" content="Engram, MCP memory server, Model Context Protocol, persistent memory for AI agents, Claude Code memory, Cursor rules memory, Google Antigravity, Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, GPT-5.6 Sol, LangGraph memory, CrewAI memory, hybrid search, SQLite WAL, knowledge graph, identity resolution">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="Engram — Persistent Memory Engine for Frontier AI Agents">
+  <meta property="og:description" content="Local-first persistent memory for AI agents. Sub-millisecond hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and MCP-native integration.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://aiconnai.github.io/engram/">
+
+  <!-- Schema.org JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Engram",
+    "headline": "Universal Persistent Memory Engine for AI Agents",
+    "operatingSystem": "Linux, macOS, Windows",
+    "applicationCategory": "DeveloperApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "softwareVersion": "0.24.0",
+    "description": "Local-first memory engine for AI agents and teams. SQLite + WAL storage, 3-way hybrid search, knowledge graph traversal, and 243+ MCP tools.",
+    "url": "https://aiconnai.github.io/engram/",
+    "downloadUrl": "https://crates.io/crates/engram-core",
+    "author": {
+      "@type": "Organization",
+      "name": "aiconnai"
+    }
+  }
+  </script>
+
+  <!-- Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <div class="ambient-glow"></div>
+  <div class="ambient-glow-secondary"></div>
+
+  <!-- Navigation -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <a href="#" class="brand" aria-label="Engram Home">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          <circle cx="12" cy="12" r="4"/>
+        </svg>
+        <span>Engram</span>
+        <span class="badge-version">v0.24.0 GA</span>
+      </a>
+      <nav aria-label="Main Navigation">
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#ecosystem">Ecosystem</a></li>
+          <li><a href="#playground">Explorer</a></li>
+          <li><a href="mcp-tools.html">MCP Tools</a></li>
+          <li><a href="architecture.html">Architecture</a></li>
+          <li><a href="#sdk">SDKs</a></li>
+          <li><a href="#comparison">Comparison</a></li>
+          <li><a href="#quickstart">Quick Start</a></li>
+        </ul>
+      </nav>
+      <div class="nav-actions">
+        <a href="https://github.com/aiconnai/engram" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub
+        </a>
+        <a href="#quickstart" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-tag">
+        <span>⚡ PERSISTENT MEMORY LAYER FOR AI AGENTS</span> v0.24.0 GA
+      </div>
+      <h1>Don't Let AI Agents Forget Context <span class="gradient-text">Between Sessions.</span></h1>
+      <p>
+        Chat history fades and context windows overflow. <strong>Engram gives agents durable, structured memory with sub-millisecond hybrid search (BM25 + Vectors + Fuzzy), dynamic knowledge graphs, and 243+ MCP tools.</strong> 100% local-first, zero-cloud lock-in, engineered for Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, Claude 5 Sonnet/Opus, GPT-5.6 Sol, Google Antigravity, and Cursor.
+      </p>
+      <div class="hero-cta">
+        <a href="#quickstart" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          Install Engram (brew install)
+        </a>
+        <a href="#playground" class="btn btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polygon points="10 8 16 12 10 16 10 8"/>
+          </svg>
+          Interactive Playground
+        </a>
+      </div>
+
+      <!-- Live Terminal Simulation -->
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-controls">
+            <div class="terminal-dot dot-red"></div>
+            <div class="terminal-dot dot-yellow"></div>
+            <div class="terminal-dot dot-green"></div>
+          </div>
+          <div class="terminal-tabs">
+            <button class="terminal-tab-btn active" data-tab="mcp">MCP Stdio Server</button>
+            <button class="terminal-tab-btn" data-tab="search">Hybrid Search</button>
+            <button class="terminal-tab-btn" data-tab="graph">Knowledge Graph</button>
+          </div>
+          <div class="terminal-title">bash — engram</div>
+        </div>
+        <div class="terminal-body" id="hero-terminal">
+          <div><span class="t-prompt">$</span> <span class="t-cmd">engram-server --transport stdio</span></div>
+          <div class="t-banner">  Engram v0.24.0 (local-first persistent memory server)</div>
+          <div class="t-dim">  Database: ~/.local/share/engram/memories.db [SQLite 3.45 + WAL]</div>
+          <div class="t-dim">  Search: Hybrid BM25 (FTS5) + Cosine Vectors (MiniLM ONNX) + Fuzzy Levenshtein</div>
+          <div class="t-dim">  MCP Protocol: JSON-RPC 2.0 active over stdio [243 tools registered]</div>
+          <br>
+          <div><span class="t-success">[MCP INITIALIZED]</span> Handshake from host: <span class="t-cyan">Claude Code v1.0.18</span></div>
+          <div class="t-dim">  Capabilities: tools, resources, prompts, logging, completions</div>
+          <div><span class="t-success">[READY]</span> Loaded 1,482 project memories across 4 workspaces in 1.4ms</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ecosystem / Works With Section -->
+  <section class="ecosystem-section" id="ecosystem">
+    <div class="container">
+      <div class="section-tag">Frontier AI Compatibility</div>
+      <h2 class="section-title">Engineered for the Modern Agent Stack</h2>
+      <p class="section-subtitle">Connect Engram seamlessly to coding assistants, agent swarms, and frontier LLM frameworks.</p>
+      
+      <div class="models-grid">
+        <div class="model-card">
+          <div class="model-header">
+            <span class="model-name">Claude Code & Desktop</span>
+            <span class="model-badge">MCP Native</span>
+          </div>
+          <p class="model-desc">Native stdio/HTTP MCP integration for cross-session project memory, decision tracking, and repo context.</p>
+        </div>
+
+        <div class="model-card">
+          <div class="model-header">
+            <span class="model-name">Cursor & Cursor Rules</span>
+            <span class="model-badge">MCP Native</span>
+          </div>
+          <p class="model-desc">Real-time retrieval of architectural decisions and auto-discovered <code>.cursorrules</code>.</p>
+        </div>
+
+        <div class="model-card">
+          <div class="model-header">
+            <span class="model-name">Google Antigravity</span>
+            <span class="model-badge">Autonomous</span>
+          </div>
+          <p class="model-desc">Persistent multi-agent memory and shared workspace context for complex agentic refactors.</p>
+        </div>
+
+        <div class="model-card">
+          <div class="model-header">
+            <span class="model-name">OpenAI Agents SDK</span>
+            <span class="model-badge">HTTP JSON-RPC</span>
+          </div>
+          <p class="model-desc">Callable function tools for durable thread state, entity lookup, and fact verification.</p>
+        </div>
+
+        <div class="model-card">
+          <div class="model-header">
+            <span class="model-name">Gemini 3.7 Flash</span>
+            <span class="model-badge">High Concurrency</span>
+          </div>
+          <p class="model-desc">Ultra-fast sub-millisecond memory lookups matching high-throughput reasoning loops.</p>
+        </div>
+
+        <div class="model-card">
+          <div class="model-header">
+            <span class="model-name">DeepSeek-V4-Pro</span>
+            <span class="model-badge">Code & Logic</span>
+          </div>
+          <p class="model-desc">Accurate code snippet indexing and entity-linked dependency knowledge graphs.</p>
+        </div>
+
+        <div class="model-card">
+          <div class="model-header">
+            <span class="model-name">LangGraph & LangChain</span>
+            <span class="model-badge">Python / TS</span>
+          </div>
+          <p class="model-desc">Stateful graph nodes that search, store, and compact memory across multi-agent workflows.</p>
+        </div>
+
+        <div class="model-card">
+          <div class="model-header">
+            <span class="model-name">CrewAI Swarms</span>
+            <span class="model-badge">Entity Memory</span>
+          </div>
+          <p class="model-desc">Shared crew memory with short-term, long-term, and entity memory adapters.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Core Features Section -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <div class="section-tag">Core Architecture</div>
+      <h2 class="section-title">Why Teams Choose Engram</h2>
+      <p class="section-subtitle">A high-performance memory foundation built in Rust with local-first security and zero cloud lock-in.</p>
+
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </div>
+          <h3>3-Way Hybrid Search</h3>
+          <p>Combines exact BM25 keyword search, dense cosine vector embeddings (MiniLM ONNX or OpenAI), and fuzzy Levenshtein distance fused via Reciprocal Rank Fusion (RRF).</p>
+          <div class="feature-pill-list">
+            <span class="feature-pill">FTS5 Engine</span>
+            <span class="feature-pill">Local ONNX</span>
+            <span class="feature-pill">Typo Tolerant</span>
+            <span class="feature-pill">RRF Fusion</span>
+          </div>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="18" cy="5" r="3"/>
+              <circle cx="6" cy="12" r="3"/>
+              <circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+          </div>
+          <h3>Knowledge Graph & Identity</h3>
+          <p>Extracts entities automatically, tracks bidirectional relationship graphs, resolves aliases to canonical identities, and performs multi-hop shortest-path traversals.</p>
+          <div class="feature-pill-list">
+            <span class="feature-pill">Entity Extraction</span>
+            <span class="feature-pill">Identity Alias Resolution</span>
+            <span class="feature-pill">Shortest Path</span>
+          </div>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper violet">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <h3>Memory Tiering & Salience</h3>
+          <p>Distinguishes permanent architectural decisions from ephemeral 24h daily scratchpads. Dynamic salience decay scores recency, frequency, importance, and feedback.</p>
+          <div class="feature-pill-list">
+            <span class="feature-pill">Permanent vs Daily</span>
+            <span class="feature-pill">Exponential Decay</span>
+            <span class="feature-pill">Dream Compaction</span>
+          </div>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <h3>Contradiction Detection</h3>
+          <p>Detects temporal contradictions and conflicting directives across agent sessions. 5-component quality scoring ensures clarity, consistency, and freshness.</p>
+          <div class="feature-pill-list">
+            <span class="feature-pill">Conflict Resolution</span>
+            <span class="feature-pill">Quality Report</span>
+            <span class="feature-pill">Deduplication</span>
+          </div>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+          </div>
+          <h3>Project Context Discovery</h3>
+          <p>Ingests and parses repository policy files automatically: <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.cursorrules</code>, <code>copilot-instructions.md</code>, and <code>.aider.conf.yml</code>.</p>
+          <div class="feature-pill-list">
+            <span class="feature-pill">Repo-Aware</span>
+            <span class="feature-pill">Zero Manual Setup</span>
+            <span class="feature-pill">Multi-Workspace</span>
+          </div>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper violet">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 18 22 12 16 6"/>
+              <polyline points="8 6 2 12 8 18"/>
+            </svg>
+          </div>
+          <h3>Universal Multi-Transport</h3>
+          <p>Operates simultaneously over stdio, HTTP JSON-RPC 2.0 (<code>POST /mcp</code>), real-time WebSocket subscriptions, and gRPC with Bearer token authentication.</p>
+          <div class="feature-pill-list">
+            <span class="feature-pill">MCP stdio</span>
+            <span class="feature-pill">HTTP /mcp</span>
+            <span class="feature-pill">WebSocket</span>
+            <span class="feature-pill">gRPC</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Playground Section -->
+  <section class="playground-section" id="playground">
+    <div class="container">
+      <div class="section-tag">Live Interactive Simulator</div>
+      <h2 class="section-title">Experience Engram in Action</h2>
+      <p class="section-subtitle">Test memory creation, hybrid retrieval, graph traversal, and contradiction checks in real time.</p>
+
+      <div class="playground-container">
+        <!-- Controls Left Column -->
+        <div class="playground-controls">
+          <div class="playground-tabs">
+            <button class="pg-tab-btn active" data-mode="create">Create Memory</button>
+            <button class="pg-tab-btn" data-mode="search">Hybrid Search</button>
+            <button class="pg-tab-btn" data-mode="traverse">Knowledge Graph</button>
+            <button class="pg-tab-btn" data-mode="contradiction">Contradictions</button>
+          </div>
+
+          <div id="pg-inputs-dynamic">
+            <div class="pg-input-group">
+              <label>Memory Content</label>
+              <input type="text" id="pg-create-content" class="pg-input" value="Use AES-256-GCM encryption for cloud backup snapshots" />
+            </div>
+            <div class="pg-input-group">
+              <label>Memory Type</label>
+              <select id="pg-create-type" class="pg-select">
+                <option value="decision" selected>decision (Permanent)</option>
+                <option value="architecture">architecture</option>
+                <option value="daily">daily (24h Auto-Expire)</option>
+              </select>
+            </div>
+            <div class="pg-input-group">
+              <label>Workspace</label>
+              <input type="text" id="pg-create-workspace" class="pg-input" value="default" />
+            </div>
+          </div>
+
+          <button id="pg-action-btn" class="btn btn-primary" style="width: 100%;">
+            Execute memory_create
+          </button>
+        </div>
+
+        <!-- Output Right Column -->
+        <div class="playground-output">
+          <div class="pg-output-header">
+            <span class="pg-output-title">JSON-RPC 2.0 Protocol Response</span>
+            <span class="model-badge">Latency: 0.8ms</span>
+          </div>
+          <pre class="pg-json-view" id="pg-json-output">{
+  "jsonrpc": "2.0",
+  "result": {
+    "status": "ready",
+    "message": "Click 'Execute' to interact with Engram's simulated memory engine."
+  }
+}</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Section -->
+  <section class="comparison-section" id="comparison">
+    <div class="container">
+      <div class="section-tag">Honest Benchmark</div>
+      <h2 class="section-title">How Engram Compares</h2>
+      <p class="section-subtitle">Engineered specifically for autonomous coding agents with local-first security and true hybrid retrieval.</p>
+
+      <div class="table-wrapper">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th class="highlight-col">Engram</th>
+              <th>Mem0</th>
+              <th>Zep (Graphiti)</th>
+              <th>Cognee</th>
+              <th>Generic MCP Memory</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Core Runtime</strong></td>
+              <td class="highlight-col"><strong style="color:var(--color-cyan)">Rust (Single Binary)</strong></td>
+              <td>Python</td>
+              <td>Python / Cloud</td>
+              <td>Python</td>
+              <td>Node.js / Python</td>
+            </tr>
+            <tr>
+              <td><strong>100% Offline & Local-First</strong></td>
+              <td class="highlight-col"><span class="check-icon">✓ Yes (SQLite+WAL)</span></td>
+              <td>Partial (Cloud focus)</td>
+              <td><span class="cross-icon">✗ Cloud service</span></td>
+              <td>Partial</td>
+              <td><span class="check-icon">✓ Yes</span></td>
+            </tr>
+            <tr>
+              <td><strong>3-Way Hybrid Search</strong></td>
+              <td class="highlight-col"><span class="check-icon">✓ BM25 + Vector + Fuzzy</span></td>
+              <td>Vector only</td>
+              <td>Vector + Graph</td>
+              <td>Graph + Vector</td>
+              <td><span class="cross-icon">✗ Simple keyword</span></td>
+            </tr>
+            <tr>
+              <td><strong>Knowledge Graph & Identity Resolution</strong></td>
+              <td class="highlight-col"><span class="check-icon">✓ Built-in Entity Graph</span></td>
+              <td>Basic graph</td>
+              <td><span class="check-icon">✓ Graphiti Engine</span></td>
+              <td><span class="check-icon">✓ Knowledge Graph</span></td>
+              <td><span class="cross-icon">✗ None</span></td>
+            </tr>
+            <tr>
+              <td><strong>Memory Tiering & Salience Decay</strong></td>
+              <td class="highlight-col"><span class="check-icon">✓ Permanent + 24h Daily</span></td>
+              <td><span class="cross-icon">✗ Manual expiry</span></td>
+              <td><span class="cross-icon">✗ Single tier</span></td>
+              <td><span class="cross-icon">✗ Manual</span></td>
+              <td><span class="cross-icon">✗ None</span></td>
+            </tr>
+            <tr>
+              <td><strong>Contradiction Detection</strong></td>
+              <td class="highlight-col"><span class="check-icon">✓ Temporal Resolution</span></td>
+              <td><span class="cross-icon">✗ Overwrite only</span></td>
+              <td>Edge invalidation</td>
+              <td><span class="cross-icon">✗ None</span></td>
+              <td><span class="cross-icon">✗ None</span></td>
+            </tr>
+            <tr>
+              <td><strong>Transports Supported</strong></td>
+              <td class="highlight-col"><span class="check-icon">✓ stdio, HTTP, WS, gRPC</span></td>
+              <td>REST API</td>
+              <td>REST / GraphQL</td>
+              <td>REST API</td>
+              <td>stdio only</td>
+            </tr>
+            <tr>
+              <td><strong>Active MCP Tools</strong></td>
+              <td class="highlight-col"><strong style="color:var(--color-cyan)">243 tools</strong></td>
+              <td>~6 tools</td>
+              <td>~8 tools</td>
+              <td>~10 tools</td>
+              <td>~4 tools</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SDK Code Showcase -->
+  <section class="sdk-section" id="sdk">
+    <div class="container">
+      <div class="section-tag">Developer SDKs & Configuration</div>
+      <h2 class="section-title">Integrate in Minutes</h2>
+      <p class="section-subtitle">Use Engram from Rust, Python, TypeScript, CLI, or configure as an MCP server for your favorite agent.</p>
+
+      <div class="code-tabs-wrapper">
+        <div class="code-tabs-header">
+          <div class="code-tabs">
+            <button class="code-tab-btn active" data-lang="rust">Rust (engram-core)</button>
+            <button class="code-tab-btn" data-lang="python">Python (async SDK)</button>
+            <button class="code-tab-btn" data-lang="typescript">TypeScript (npm)</button>
+            <button class="code-tab-btn" data-lang="mcp">MCP Config</button>
+            <button class="code-tab-btn" data-lang="cli">CLI</button>
+          </div>
+          <button class="copy-btn" title="Copy code" data-clipboard-text="// Cargo.toml: engram-core = &quot;0.24.0&quot;
+use engram_core::{EngramEngine, MemoryBuilder, SearchQuery};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let engine = EngramEngine::open_local(&quot;~/.local/share/engram/memories.db&quot;)?;
+    let memory_id = engine.store_memory(
+        MemoryBuilder::new(&quot;PostgreSQL connection pool sized to 25 connections&quot;)
+            .workspace(&quot;backend&quot;)
+            .memory_type(&quot;decision&quot;)
+            .salience_boost(0.95)
+            .build()?
+    ).await?;
+    let results = engine.search(SearchQuery::new(&quot;postgres conn pool&quot;).workspace(&quot;backend&quot;)).await?;
+    for hit in results {
+        println!(&quot;Found [score {:.2}]: {}&quot;, hit.score, hit.content);
+    }
+    Ok(())
+}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
+        </div>
+        <pre class="code-content"><code id="sdk-code-display">// Cargo.toml: engram-core = "0.24.0"
+use engram_core::{EngramEngine, MemoryBuilder, SearchQuery};
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let engine = EngramEngine::open_local("~/.local/share/engram/memories.db")?;
+
+    // Create a permanent memory
+    let memory_id = engine.store_memory(
+        MemoryBuilder::new("PostgreSQL connection pool sized to 25 connections")
+            .workspace("backend")
+            .memory_type("decision")
+            .salience_boost(0.95)
+            .build()?
+    ).await?;
+
+    // 3-way hybrid search (BM25 + Vectors + Fuzzy)
+    let results = engine.search(SearchQuery::new("postgres conn pool").workspace("backend")).await?;
+    for hit in results {
+        println!("Found [score {:.2}]: {}", hit.score, hit.content);
+    }
+    Ok(())
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Performance Stats -->
+  <section class="stats-section">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number">&lt;2ms</div>
+          <div class="stat-label">Retrieval Latency</div>
+          <div class="stat-desc">SQLite FTS5 + WAL local execution</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">243+</div>
+          <div class="stat-label">Active MCP Tools</div>
+          <div class="stat-desc">Memory, search, graph, and council</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">0 B</div>
+          <div class="stat-label">Cloud Egress by Default</div>
+          <div class="stat-desc">100% private, local-first on your machine</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">100%</div>
+          <div class="stat-label">Workspace Isolation</div>
+          <div class="stat-desc">Cryptographically segregated contexts</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quickstart Section -->
+  <section class="cta-section" id="quickstart">
+    <div class="container">
+      <div class="cta-box">
+        <h2>Start Hardening Your Agents with Engram Today</h2>
+        <p>Install via Homebrew, Cargo, or download pre-compiled releases for macOS and Linux.</p>
+        <div class="install-command-badge" style="margin-bottom: 24px;">
+          <code>brew install aiconnai/engram/engram</code>
+          <button class="copy-btn" title="Copy to clipboard" data-clipboard-text="brew install aiconnai/engram/engram">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
+        </div>
+        <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+          <a href="https://github.com/aiconnai/engram" class="btn btn-primary" target="_blank" rel="noopener">
+            View on GitHub
+          </a>
+          <a href="mcp-tools.html" class="btn btn-secondary">
+            Browse MCP Catalog (243 Tools)
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="#" class="brand">
+            <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+            <span>Engram</span>
+          </a>
+          <p>Local-first, high-performance persistent memory engine for autonomous AI agents and engineering teams.</p>
+        </div>
+
+        <div class="footer-col">
+          <h4>Documentation</h4>
+          <ul class="footer-links">
+            <li><a href="mcp-tools.html">MCP Tools Reference</a></li>
+            <li><a href="architecture.html">System Architecture</a></li>
+            <li><a href="https://github.com/aiconnai/engram/blob/main/docs/QUICKSTART.md">Quickstart Guide</a></li>
+            <li><a href="https://github.com/aiconnai/engram/blob/main/docs/COMPARISON.md">In-Depth Comparison</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Integrations</h4>
+          <ul class="footer-links">
+            <li><a href="https://github.com/aiconnai/engram/blob/main/docs/integrations/claude-code-mcp-memory.md">Claude Code</a></li>
+            <li><a href="https://github.com/aiconnai/engram/blob/main/docs/integrations/cursor-mcp-memory.md">Cursor & Rules</a></li>
+            <li><a href="https://github.com/aiconnai/engram/blob/main/docs/integrations/openai-agents-memory.md">OpenAI Agents</a></li>
+            <li><a href="https://github.com/aiconnai/engram/tree/main/examples">Runnable Examples</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Community & Project</h4>
+          <ul class="footer-links">
+            <li><a href="https://github.com/aiconnai/engram">GitHub Repository</a></li>
+            <li><a href="https://crates.io/crates/engram-core">crates.io / engram-core</a></li>
+            <li><a href="https://github.com/aiconnai/agentshield">AgentShield (Security)</a></li>
+            <li><a href="https://github.com/aiconnai/engram/blob/main/LICENSE">MIT License</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>© 2026 aiconnai open-source contributors. Released under the MIT License.</div>
+        <div>Engineered with Rust & SQLite WAL.</div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="site.js"></script>
+</body>
+</html>
