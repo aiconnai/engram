@@ -413,3 +413,172 @@ fn test_hnsw_graceful_fallback_when_disabled_or_empty() {
     assert!(!legacy_results.is_empty());
     assert_eq!(legacy_results[0].memory.id, mem.id);
 }
+
+#[test]
+fn test_hnsw_checkpoint_sqlite_persistence_and_restore() {
+    let ctx = create_test_context();
+
+    // Create 3 memories via MCP
+    let res1 = dispatch(
+        &ctx,
+        "memory_create",
+        json!({
+            "content": "Zero-copy serialization with flatbuffers and bincode",
+            "workspace": "arch"
+        }),
+    );
+    let id1 = res1.get("id").unwrap().as_i64().unwrap();
+
+    let res2 = dispatch(
+        &ctx,
+        "memory_create",
+        json!({
+            "content": "Adjacency list graph representation in memory",
+            "workspace": "arch"
+        }),
+    );
+    let id2 = res2.get("id").unwrap().as_i64().unwrap();
+
+    // Save checkpoint into SQLite
+    let ckpt_id = ctx
+        .storage
+        .with_connection(|conn| {
+            engram::search::checkpoint_hnsw_to_db(conn, &ctx.hnsw_index.read(), "default")
+        })
+        .expect("checkpoint hnsw");
+
+    assert!(ckpt_id > 0);
+
+    // Verify record in SQLite
+    let record = ctx
+        .storage
+        .with_connection(|conn| {
+            engram::storage::queries::get_latest_hnsw_checkpoint(
+                conn,
+                "default",
+                ctx.embedder.dimensions(),
+            )
+        })
+        .expect("query checkpoint")
+        .expect("checkpoint exists");
+
+    assert_eq!(record.id, ckpt_id);
+    assert_eq!(record.vector_count, 2);
+    assert_eq!(record.dimensions, ctx.embedder.dimensions());
+
+    // Create a fresh empty HnswIndex and restore via warmup_hnsw_from_db
+    let mut restored_hnsw = HnswIndex::new(HnswConfig::new(
+        ctx.embedder.dimensions(),
+        VectorMetric::Cosine,
+    ));
+    assert_eq!(restored_hnsw.len(), 0);
+
+    let count = ctx
+        .storage
+        .with_connection(|conn| engram::search::warmup_hnsw_from_db(conn, &mut restored_hnsw))
+        .expect("warmup");
+
+    assert_eq!(count, 2);
+    assert_eq!(restored_hnsw.len(), 2);
+    assert!(restored_hnsw.contains(&id1));
+    assert!(restored_hnsw.contains(&id2));
+}
+
+#[test]
+fn test_hnsw_incremental_warmup_after_checkpoint() {
+    let ctx = create_test_context();
+
+    // 1. Ingest initial memories
+    let res1 = dispatch(
+        &ctx,
+        "memory_create",
+        json!({
+            "content": "Consensus protocols Paxos and Raft",
+            "workspace": "dist"
+        }),
+    );
+    let id1 = res1.get("id").unwrap().as_i64().unwrap();
+
+    let res2 = dispatch(
+        &ctx,
+        "memory_create",
+        json!({
+            "content": "Byzantine fault tolerance and state machine replication",
+            "workspace": "dist"
+        }),
+    );
+    let id2 = res2.get("id").unwrap().as_i64().unwrap();
+
+    // 2. Save checkpoint at T1
+    ctx.storage
+        .with_connection(|conn| {
+            engram::search::checkpoint_hnsw_to_db(conn, &ctx.hnsw_index.read(), "default")
+        })
+        .expect("checkpoint 1");
+
+    // Sleep briefly to ensure distinct timestamps
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    // 3. Ingest 3rd memory at T2 > T1
+    let res3 = dispatch(
+        &ctx,
+        "memory_create",
+        json!({
+            "content": "Vector similarity search and indexing with HNSW graphs",
+            "workspace": "dist"
+        }),
+    );
+    let id3 = res3.get("id").unwrap().as_i64().unwrap();
+
+    // 4. Create fresh index and warm up
+    let mut incremental_hnsw = HnswIndex::new(HnswConfig::new(
+        ctx.embedder.dimensions(),
+        VectorMetric::Cosine,
+    ));
+
+    let count = ctx
+        .storage
+        .with_connection(|conn| engram::search::warmup_hnsw_from_db(conn, &mut incremental_hnsw))
+        .expect("warmup incremental");
+
+    assert_eq!(count, 3);
+    assert_eq!(incremental_hnsw.len(), 3);
+    assert!(incremental_hnsw.contains(&id1));
+    assert!(incremental_hnsw.contains(&id2));
+    assert!(incremental_hnsw.contains(&id3));
+
+    // Search 3rd memory
+    let q = ctx.embedder.embed("vector similarity search HNSW").unwrap();
+    let hits = incremental_hnsw.search(&q, 2, None);
+    assert!(!hits.is_empty());
+    assert_eq!(hits[0].id, id3);
+}
+
+#[test]
+fn test_hnsw_checkpoint_pruning() {
+    let ctx = create_test_context();
+
+    // Save 5 checkpoints
+    for _ in 0..5 {
+        ctx.storage
+            .with_connection(|conn| {
+                engram::search::checkpoint_hnsw_to_db(conn, &ctx.hnsw_index.read(), "default")
+            })
+            .expect("checkpoint");
+    }
+
+    // Verify only the 2 most recent checkpoints are kept
+    let total_checkpoints: i64 = ctx
+        .storage
+        .with_connection(|conn| {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM hnsw_checkpoints WHERE model = 'default'",
+                [],
+                |r| r.get(0),
+            )?;
+            Ok(count)
+        })
+        .unwrap();
+
+    assert_eq!(total_checkpoints, 2);
+}
