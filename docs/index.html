@@ -232,12 +232,12 @@
               <line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
           </div>
-          <h3>3-Way Hybrid Search</h3>
-          <p>Combines exact BM25 keyword search, dense cosine vector embeddings (MiniLM ONNX or OpenAI), and fuzzy Levenshtein distance fused via Reciprocal Rank Fusion (RRF).</p>
+          <h3>3-Way Hybrid Search & HNSW</h3>
+          <p>Combines exact BM25 keyword search, in-memory HNSW vector graphs with SIMD 8-lane loop unrolling, and fuzzy Levenshtein distance fused via Reciprocal Rank Fusion (RRF).</p>
           <div class="feature-pill-list">
             <span class="feature-pill">FTS5 Engine</span>
-            <span class="feature-pill">Local ONNX</span>
-            <span class="feature-pill">Typo Tolerant</span>
+            <span class="feature-pill">HNSW Graph</span>
+            <span class="feature-pill">SIMD 8-Lane</span>
             <span class="feature-pill">RRF Fusion</span>
           </div>
         </div>

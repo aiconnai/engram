@@ -174,10 +174,45 @@
       </p>
       <ul style="color: var(--text-secondary); margin: 16px 0 16px 24px; line-height: 1.7;">
         <li><strong>BM25 Engine (FTS5):</strong> Full-text keyword search indexed immediately on write.</li>
-        <li><strong>Dense Cosine Vectors:</strong> 384-dimensional embeddings via local ONNX Runtime (<code>all-MiniLM-L6-v2</code>) or OpenAI.</li>
+        <li><strong>Dense Vectors & HNSW Index:</strong> 384-dimensional dense vectors with Hierarchical Navigable Small World (HNSW) graph indexing and SIMD 8-lane loop unrolling.</li>
         <li><strong>Fuzzy Matcher:</strong> Levenshtein distance matching for typos and varied inflections.</li>
         <li><strong>RRF (Reciprocal Rank Fusion):</strong> Combines ordinal ranks with configurable k-constant weighting.</li>
       </ul>
+    </div>
+
+    <!-- Layer 2.5: HNSW Vector Acceleration (RFC 0005) -->
+    <div class="arch-layer-card">
+      <span class="arch-badge">RFC 0005: Vector Acceleration</span>
+      <h2 style="font-size: 1.5rem; margin-bottom: 12px;">SIMD Vector Math & HNSW In-Memory Graph Indexing</h2>
+      <p style="color: var(--text-secondary); line-height: 1.6;">
+        For sub-millisecond semantic retrieval across hundreds of thousands of memories, Engram utilizes a dedicated in-memory Hierarchical Navigable Small World (HNSW) graph index:
+      </p>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>Subsystem</th>
+            <th>Specification & Guarantees</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SIMD Unrolling</td>
+            <td>8-lane unrolled vectorized loops for Cosine, Euclidean distance, Dot product, and L2 normalization</td>
+          </tr>
+          <tr>
+            <td>Graph Traversal</td>
+            <td>Logarithmic \(O(\log N)\) multi-layer skip-list descent with configurable \(ef_{\text{construction}}\) and \(ef_{\text{search}}\) beam search</td>
+          </tr>
+          <tr>
+            <td>Persistence & Checkpointing</td>
+            <td>Compact binary serialization with Adler-32 checksums, stored in SQLite <code>hnsw_checkpoints</code> (Migration v47)</td>
+          </tr>
+          <tr>
+            <td>Warm-Restarts</td>
+            <td>Instant \(O(1)\) snapshot restoration on server startup with automatic \(O(\Delta N)\) incremental catch-up for new memories</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Layer 3: Intelligence & Knowledge Graph -->
