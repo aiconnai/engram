@@ -1,0 +1,6 @@
+target/
+tests/fixtures/
+sdks/typescript/node_modules/
+sdks/typescript/dist/
+docs/*.js
+docs/*.html

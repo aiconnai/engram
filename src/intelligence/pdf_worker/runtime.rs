@@ -4,7 +4,7 @@ use super::WorkerResponse;
 
 const MAX_INPUT_BYTES: u64 = 10 * 1024 * 1024;
 #[cfg(all(unix, not(target_os = "macos")))]
-const MEMORY_BYTES: u64 = 256 * 1024 * 1024;
+const MEMORY_BYTES: u64 = 512 * 1024 * 1024;
 const CPU_SECONDS: u64 = 3;
 
 pub(super) fn run() -> Result<(), String> {

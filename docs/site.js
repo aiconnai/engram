@@ -28,8 +28,8 @@ function initComparisonDemo() {
   if (!chatForget || !chatRemember) return;
 
   function runDemo() {
-    chatForget.innerHTML = '';
-    chatRemember.innerHTML = '';
+    chatForget.replaceChildren();
+    chatRemember.replaceChildren();
 
     // Step 1: User message appears on both sides
     const userMsg1 = document.createElement('div');
@@ -43,16 +43,29 @@ function initComparisonDemo() {
     chatForget.appendChild(userMsg1);
     chatRemember.appendChild(userMsg2);
 
-    // Step 2: Agent responses with typing effect
+    // Step 2: Agent responses
     setTimeout(() => {
       const agentForget = document.createElement('div');
       agentForget.className = 'chat-bubble agent failure';
-      agentForget.innerHTML = `<strong>Claude (without memory):</strong><br>${chatScript.forgetAgent}`;
+      const fTitle = document.createElement('strong');
+      fTitle.textContent = 'Claude (without memory):';
+      agentForget.appendChild(fTitle);
+      agentForget.appendChild(document.createElement('br'));
+      agentForget.appendChild(document.createTextNode(chatScript.forgetAgent));
       chatForget.appendChild(agentForget);
 
       const agentRemember = document.createElement('div');
       agentRemember.className = 'chat-bubble agent success';
-      agentRemember.innerHTML = `<strong>Claude (with Engram MCP):</strong><br>${chatScript.rememberAgent.replace(/\n/g, '<br>')}`;
+      const rTitle = document.createElement('strong');
+      rTitle.textContent = 'Claude (with Engram MCP):';
+      agentRemember.appendChild(rTitle);
+      agentRemember.appendChild(document.createElement('br'));
+      
+      const lines = chatScript.rememberAgent.split('\n');
+      lines.forEach((line, idx) => {
+        if (idx > 0) agentRemember.appendChild(document.createElement('br'));
+        agentRemember.appendChild(document.createTextNode(line));
+      });
       chatRemember.appendChild(agentRemember);
     }, 600);
   }
@@ -70,52 +83,128 @@ function initComparisonDemo() {
    2. Terminal Simulation
    ========================================================================= */
 const terminalScenarios = {
-  mcp: `<div><span class="t-prompt">$</span> <span class="t-cmd">engram-server --transport stdio</span></div>
-<div class="t-banner">  Engram v0.24.0 (local-first persistent memory server)</div>
-<div class="t-dim">  Database: ~/.local/share/engram/memories.db [SQLite 3.45 + WAL]</div>
-<div class="t-dim">  Search: Hybrid BM25 (FTS5) + Cosine Vectors (MiniLM ONNX) + Fuzzy Levenshtein</div>
-<div class="t-dim">  MCP Protocol: JSON-RPC 2.0 active over stdio [243 tools registered]</div>
-<br>
-<div><span class="t-success">[MCP INITIALIZED]</span> Handshake from host: <span class="t-cyan">Claude Code v1.0.18</span></div>
-<div class="t-dim">  Capabilities: tools, resources, prompts, logging, completions</div>
-<div><span class="t-success">[READY]</span> Loaded 1,482 project memories across 4 workspaces in 1.4ms</div>`,
+  mcp: [
+    { type: 'line', prompt: '$', cmd: 'engram-server --transport stdio' },
+    { type: 'banner', text: '  Engram v0.24.0 (local-first persistent memory server)' },
+    { type: 'dim', text: '  Database: ~/.local/share/engram/memories.db [SQLite 3.45 + WAL]' },
+    { type: 'dim', text: '  Search: Hybrid BM25 (FTS5) + Cosine Vectors (MiniLM ONNX + HNSW) + Fuzzy' },
+    { type: 'dim', text: '  MCP Protocol: JSON-RPC 2.0 active over stdio [243 tools registered]' },
+    { type: 'break' },
+    { type: 'success', tag: '[MCP INITIALIZED]', text: ' Handshake from host: Claude Code v1.0.18' },
+    { type: 'dim', text: '  Capabilities: tools, resources, prompts, logging, completions' },
+    { type: 'success', tag: '[READY]', text: ' Loaded 1,482 project memories across 4 workspaces in 1.4ms' }
+  ],
 
-  search: `<div><span class="t-prompt">$</span> <span class="t-cmd">engram-cli search "asynch awiat rust" --workspace backend --explain</span></div>
-<div class="t-dim">  Executing 3-way hybrid search with Reciprocal Rank Fusion (RRF)...</div>
-<br>
-<div class="t-highlight">[MATCH 1] <span class="t-cyan">Score: 0.982</span> (BM25: 0.94, Vector: 0.99, Fuzzy: 0.92)</div>
-<div class="t-dim">  ID: mem_98f4a1 | Workspace: backend | Type: decision | Salience: 0.95</div>
-<div>  <span class="t-cmd">"Use Tokio async/await for all I/O-bound workers; reserve std::thread for CPU compute."</span></div>
-<div class="t-dim">  Entities: [Tokio, Rust, Async/Await] · Provenance: session_2026_07_14.jsonl</div>
-<br>
-<div class="t-highlight">[MATCH 2] <span class="t-cyan">Score: 0.874</span> (BM25: 0.82, Vector: 0.91, Fuzzy: 0.79)</div>
-<div class="t-dim">  ID: mem_42c8d9 | Workspace: backend | Type: pattern | Salience: 0.81</div>
-<div>  <span class="t-cmd">"Async channel buffer depth must be bounded at 1024 messages to prevent memory ballooning."</span></div>`,
+  search: [
+    { type: 'line', prompt: '$', cmd: 'engram-cli search "asynch awiat rust" --workspace backend --explain' },
+    { type: 'dim', text: '  Executing 3-way hybrid search with Reciprocal Rank Fusion (RRF)...' },
+    { type: 'break' },
+    { type: 'highlight', tag: '[MATCH 1]', score: 'Score: 0.982', detail: ' (BM25: 0.94, Vector: 0.99, Fuzzy: 0.92)' },
+    { type: 'dim', text: '  ID: mem_98f4a1 | Workspace: backend | Type: decision | Salience: 0.95' },
+    { type: 'cmd', text: '  "Use Tokio async/await for all I/O-bound workers; reserve std::thread for CPU compute."' },
+    { type: 'dim', text: '  Entities: [Tokio, Rust, Async/Await] · Provenance: session_2026_07_14.jsonl' },
+    { type: 'break' },
+    { type: 'highlight', tag: '[MATCH 2]', score: 'Score: 0.874', detail: ' (BM25: 0.82, Vector: 0.91, Fuzzy: 0.79)' },
+    { type: 'dim', text: '  ID: mem_42c8d9 | Workspace: backend | Type: pattern | Salience: 0.81' },
+    { type: 'cmd', text: '  "Async channel buffer depth must be bounded at 1024 messages to prevent memory ballooning."' }
+  ],
 
-  graph: `<div><span class="t-prompt">$</span> <span class="t-cmd">engram-cli graph traverse --entity "AuthService" --depth 2 --output json</span></div>
-<div class="t-dim">  Traversing knowledge graph from canonical identity 'AuthService'...</div>
-<br>
-<div><span class="t-purple">[ENTITY]</span> <span class="t-cyan">AuthService</span> (Aliases: [auth-api, authentication-worker, idp-client])</div>
-<div>  ├── <span class="t-success">(depends_on)</span> ──> <span class="t-cyan">VaultSecrets</span> [mem_12a0f7: "API keys are rotated daily via HashiCorp Vault"]</div>
-<div>  ├── <span class="t-success">(stores_in)</span> ───> <span class="t-cyan">PostgreSQL</span> [mem_33b8c2: "User credentials stored with Argon2id hash"]</div>
-<div>  └── <span class="t-success">(accessed_by)</span> ─> <span class="t-cyan">GatewayWorker</span> [mem_77d1e4: "JWT bearer validation executed at edge proxy"]</div>
-<br>
-<div class="t-dim">  Resolved 4 nodes, 3 relations in 0.82ms. Shortest path to DB: 1 hop.</div>`
+  graph: [
+    { type: 'line', prompt: '$', cmd: 'engram-cli graph traverse --entity "AuthService" --depth 2 --output json' },
+    { type: 'dim', text: '  Traversing knowledge graph from canonical identity \'AuthService\'...' },
+    { type: 'break' },
+    { type: 'purple', tag: '[ENTITY]', name: 'AuthService', detail: ' (Aliases: [auth-api, authentication-worker, idp-client])' },
+    { type: 'edge', rel: '(depends_on)', target: 'VaultSecrets', desc: ' [mem_12a0f7: "API keys rotated daily via Vault"]' },
+    { type: 'edge', rel: '(stores_in)', target: 'PostgreSQL', desc: ' [mem_33b8c2: "User credentials stored with Argon2id"]' },
+    { type: 'edge', rel: '(accessed_by)', target: 'GatewayWorker', desc: ' [mem_77d1e4: "JWT bearer validation executed at edge"]' },
+    { type: 'break' },
+    { type: 'dim', text: '  Resolved 4 nodes, 3 relations in 0.82ms. Shortest path to DB: 1 hop.' }
+  ]
 };
 
-function initTerminalSimulation() {
+function renderTerminal(scenarioKey) {
   const terminalBody = document.getElementById('hero-terminal');
+  if (!terminalBody) return;
+  const items = terminalScenarios[scenarioKey] || [];
+  terminalBody.replaceChildren();
+
+  items.forEach(item => {
+    if (item.type === 'break') {
+      terminalBody.appendChild(document.createElement('br'));
+      return;
+    }
+    const div = document.createElement('div');
+    if (item.type === 'line') {
+      const p = document.createElement('span');
+      p.className = 't-prompt';
+      p.textContent = item.prompt + ' ';
+      const c = document.createElement('span');
+      c.className = 't-cmd';
+      c.textContent = item.cmd;
+      div.appendChild(p);
+      div.appendChild(c);
+    } else if (item.type === 'banner') {
+      div.className = 't-banner';
+      div.textContent = item.text;
+    } else if (item.type === 'dim') {
+      div.className = 't-dim';
+      div.textContent = item.text;
+    } else if (item.type === 'cmd') {
+      div.className = 't-cmd';
+      div.textContent = item.text;
+    } else if (item.type === 'success') {
+      const tag = document.createElement('span');
+      tag.className = 't-success';
+      tag.textContent = item.tag;
+      div.appendChild(tag);
+      div.appendChild(document.createTextNode(item.text));
+    } else if (item.type === 'highlight') {
+      div.className = 't-highlight';
+      div.appendChild(document.createTextNode(item.tag + ' '));
+      const s = document.createElement('span');
+      s.className = 't-cyan';
+      s.textContent = item.score;
+      div.appendChild(s);
+      div.appendChild(document.createTextNode(item.detail));
+    } else if (item.type === 'purple') {
+      const tag = document.createElement('span');
+      tag.className = 't-purple';
+      tag.textContent = item.tag + ' ';
+      const n = document.createElement('span');
+      n.className = 't-cyan';
+      n.textContent = item.name;
+      div.appendChild(tag);
+      div.appendChild(n);
+      div.appendChild(document.createTextNode(item.detail));
+    } else if (item.type === 'edge') {
+      div.appendChild(document.createTextNode('  ├── '));
+      const rel = document.createElement('span');
+      rel.className = 't-success';
+      rel.textContent = item.rel;
+      div.appendChild(rel);
+      div.appendChild(document.createTextNode(' ──> '));
+      const target = document.createElement('span');
+      target.className = 't-cyan';
+      target.textContent = item.target;
+      div.appendChild(target);
+      div.appendChild(document.createTextNode(item.desc));
+    }
+    terminalBody.appendChild(div);
+  });
+}
+
+function initTerminalSimulation() {
   const tabBtns = document.querySelectorAll('.terminal-tab-btn');
-  if (!terminalBody || !tabBtns.length) return;
+  if (!tabBtns.length) return;
+
+  renderTerminal('mcp');
 
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       tabBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const target = btn.getAttribute('data-tab');
-      if (terminalScenarios[target]) {
-        terminalBody.innerHTML = terminalScenarios[target];
-      }
+      renderTerminal(target);
     });
   });
 }
@@ -151,69 +240,112 @@ function updatePlaygroundUI(mode) {
   const actionBtn = document.getElementById('pg-action-btn');
   if (!inputContainer || !actionBtn) return;
 
+  inputContainer.replaceChildren();
+
+  function createInputGroup(labelText, inputElement) {
+    const group = document.createElement('div');
+    group.className = 'pg-input-group';
+    const label = document.createElement('label');
+    label.textContent = labelText;
+    group.appendChild(label);
+    group.appendChild(inputElement);
+    return group;
+  }
+
   if (mode === 'create') {
     actionBtn.textContent = 'Execute memory_create';
-    inputContainer.innerHTML = `
-      <div class="pg-input-group">
-        <label>Memory Content</label>
-        <input type="text" id="pg-create-content" class="pg-input" value="Use AES-256-GCM encryption for cloud backup snapshots" />
-      </div>
-      <div class="pg-input-group">
-        <label>Memory Type</label>
-        <select id="pg-create-type" class="pg-select">
-          <option value="decision" selected>decision (Permanent)</option>
-          <option value="architecture">architecture</option>
-          <option value="daily">daily (24h Auto-Expire)</option>
-        </select>
-      </div>
-      <div class="pg-input-group">
-        <label>Workspace</label>
-        <input type="text" id="pg-create-workspace" class="pg-input" value="default" />
-      </div>
-    `;
+
+    const contentInput = document.createElement('input');
+    contentInput.type = 'text';
+    contentInput.id = 'pg-create-content';
+    contentInput.className = 'pg-input';
+    contentInput.value = 'Use AES-256-GCM encryption for cloud backup snapshots';
+    inputContainer.appendChild(createInputGroup('Memory Content', contentInput));
+
+    const typeSelect = document.createElement('select');
+    typeSelect.id = 'pg-create-type';
+    typeSelect.className = 'pg-select';
+    [
+      { val: 'decision', text: 'decision (Permanent)' },
+      { val: 'architecture', text: 'architecture' },
+      { val: 'daily', text: 'daily (24h Auto-Expire)' }
+    ].forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt.val;
+      o.textContent = opt.text;
+      typeSelect.appendChild(o);
+    });
+    inputContainer.appendChild(createInputGroup('Memory Type', typeSelect));
+
+    const wsInput = document.createElement('input');
+    wsInput.type = 'text';
+    wsInput.id = 'pg-create-workspace';
+    wsInput.className = 'pg-input';
+    wsInput.value = 'default';
+    inputContainer.appendChild(createInputGroup('Workspace', wsInput));
+
   } else if (mode === 'search') {
     actionBtn.textContent = 'Execute memory_search';
-    inputContainer.innerHTML = `
-      <div class="pg-input-group">
-        <label>Search Query (supports typos & semantic concepts)</label>
-        <input type="text" id="pg-search-query" class="pg-input" value="postgre connection pooling" />
-      </div>
-      <div class="pg-input-group">
-        <label>Workspace Filter</label>
-        <input type="text" id="pg-search-workspace" class="pg-input" value="prod" />
-      </div>
-    `;
+
+    const qInput = document.createElement('input');
+    qInput.type = 'text';
+    qInput.id = 'pg-search-query';
+    qInput.className = 'pg-input';
+    qInput.value = 'postgre connection pooling';
+    inputContainer.appendChild(createInputGroup('Search Query (supports typos & semantic concepts)', qInput));
+
+    const wsInput = document.createElement('input');
+    wsInput.type = 'text';
+    wsInput.id = 'pg-search-workspace';
+    wsInput.className = 'pg-input';
+    wsInput.value = 'prod';
+    inputContainer.appendChild(createInputGroup('Workspace Filter', wsInput));
+
   } else if (mode === 'traverse') {
     actionBtn.textContent = 'Execute memory_traverse';
-    inputContainer.innerHTML = `
-      <div class="pg-input-group">
-        <label>Target Entity / Identity</label>
-        <select id="pg-traverse-entity" class="pg-select">
-          <option value="AuthService">AuthService</option>
-          <option value="PostgreSQL">PostgreSQL</option>
-          <option value="Vault">Vault</option>
-        </select>
-      </div>
-      <div class="pg-input-group">
-        <label>Max Traversal Depth</label>
-        <input type="number" id="pg-traverse-depth" class="pg-input" value="2" min="1" max="5" />
-      </div>
-    `;
+
+    const entSelect = document.createElement('select');
+    entSelect.id = 'pg-traverse-entity';
+    entSelect.className = 'pg-select';
+    ['AuthService', 'PostgreSQL', 'Vault'].forEach(ent => {
+      const o = document.createElement('option');
+      o.value = ent;
+      o.textContent = ent;
+      entSelect.appendChild(o);
+    });
+    inputContainer.appendChild(createInputGroup('Target Entity / Identity', entSelect));
+
+    const depthInput = document.createElement('input');
+    depthInput.type = 'number';
+    depthInput.id = 'pg-traverse-depth';
+    depthInput.className = 'pg-input';
+    depthInput.value = '2';
+    depthInput.min = '1';
+    depthInput.max = '5';
+    inputContainer.appendChild(createInputGroup('Max Traversal Depth', depthInput));
+
   } else if (mode === 'contradiction') {
     actionBtn.textContent = 'Execute memory_temporal_contradictions';
-    inputContainer.innerHTML = `
-      <div class="pg-input-group">
-        <label>Target Workspace</label>
-        <input type="text" id="pg-contra-workspace" class="pg-input" value="prod" />
-      </div>
-      <div class="pg-input-group">
-        <label>Scan Scope</label>
-        <select class="pg-select">
-          <option value="all">Full Workspace Conflict Analysis</option>
-          <option value="recent">Past 7 Days</option>
-        </select>
-      </div>
-    `;
+
+    const wsInput = document.createElement('input');
+    wsInput.type = 'text';
+    wsInput.id = 'pg-contra-workspace';
+    wsInput.className = 'pg-input';
+    wsInput.value = 'prod';
+    inputContainer.appendChild(createInputGroup('Target Workspace', wsInput));
+
+    const scopeSelect = document.createElement('select');
+    scopeSelect.className = 'pg-select';
+    [
+      { val: 'all', text: 'Full Workspace Conflict Analysis' },
+      { val: 'recent', text: 'Past 7 Days' }
+    ].forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt.val;
+      o.textContent = opt.text;
+      scopeSelect.appendChild(o);
+    });
+    inputContainer.appendChild(createInputGroup('Scan Scope', scopeSelect));
   }
 }
 
@@ -238,7 +370,7 @@ function executePlaygroundAction(mode) {
         created_at: new Date().toISOString(),
         indexing: {
           bm25_fts5: 'indexed',
-          vector_embedding: '384-dim (MiniLM ONNX)',
+          vector_embedding: '384-dim (MiniLM ONNX + HNSW)',
           entities_extracted: ['AES-256-GCM', 'Snapshot', 'Encryption']
         }
       }
@@ -328,7 +460,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build()?
     ).await?;
 
-    // 3-way hybrid search (BM25 + Vectors + Fuzzy)
+    // 3-way hybrid search (BM25 + HNSW Vectors + Fuzzy)
     let results = engine.search(SearchQuery::new("postgres conn pool").workspace("backend")).await?;
     for hit in results {
         println!("Found [score {:.2}]: {}", hit.score, hit.content);
@@ -441,10 +573,9 @@ function initCopyButtons() {
                          '';
       if (textToCopy) {
         navigator.clipboard.writeText(textToCopy.trim()).then(() => {
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`;
+          btn.classList.add('copied');
           setTimeout(() => {
-            btn.innerHTML = originalHTML;
+            btn.classList.remove('copied');
           }, 2000);
         });
       }
