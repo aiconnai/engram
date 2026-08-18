@@ -116,6 +116,34 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
 
     match result {
         Ok(memory) => {
+            if !input.defer_embedding {
+                if let Ok(emb) = ctx.embedder.embed(&memory.content) {
+                    let _ = ctx.storage.with_connection(|conn| {
+                        let mut bytes = Vec::with_capacity(emb.len() * 4);
+                        for f in &emb {
+                            bytes.extend_from_slice(&f.to_le_bytes());
+                        }
+                        conn.execute(
+                            "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
+                             VALUES (?1, ?2, 'default', ?3, datetime('now'))",
+                            rusqlite::params![memory.id, bytes, emb.len()],
+                        )?;
+                        conn.execute(
+                            "UPDATE memories SET has_embedding = 1 WHERE id = ?",
+                            rusqlite::params![memory.id],
+                        )?;
+                        Ok(())
+                    });
+                    ctx.hnsw_index.write().insert(memory.id, &emb);
+                }
+            } else {
+                let _ = ctx.storage.with_connection(|conn| {
+                    if let Ok(Some(emb)) = crate::embedding::get_embedding(conn, memory.id) {
+                        ctx.hnsw_index.write().insert(memory.id, &emb);
+                    }
+                    Ok(())
+                });
+            }
             ctx.search_cache
                 .invalidate_for_workspace(Some(memory.workspace.as_str()));
             if let Some(ref manager) = ctx.realtime {
@@ -308,6 +336,28 @@ pub fn context_seed(ctx: &HandlerContext, params: Value) -> Value {
                     batch.total_created, batch.total_failed
                 ),
             );
+
+            let _ = ctx.storage.with_connection(|conn| {
+                for memory in &batch.created {
+                    if let Ok(emb) = ctx.embedder.embed(&memory.content) {
+                        let mut bytes = Vec::with_capacity(emb.len() * 4);
+                        for f in &emb {
+                            bytes.extend_from_slice(&f.to_le_bytes());
+                        }
+                        let _ = conn.execute(
+                            "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
+                             VALUES (?1, ?2, 'default', ?3, datetime('now'))",
+                            rusqlite::params![memory.id, bytes, emb.len()],
+                        );
+                        let _ = conn.execute(
+                            "UPDATE memories SET has_embedding = 1 WHERE id = ?",
+                            rusqlite::params![memory.id],
+                        );
+                        ctx.hnsw_index.write().insert(memory.id, &emb);
+                    }
+                }
+                Ok(())
+            });
 
             ctx.search_cache
                 .invalidate_for_workspace(input.workspace.as_deref());
@@ -649,6 +699,28 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
 
     match result {
         Ok(batch) => {
+            let _ = ctx.storage.with_connection(|conn| {
+                for memory in &batch.created {
+                    if let Ok(emb) = ctx.embedder.embed(&memory.content) {
+                        let mut bytes = Vec::with_capacity(emb.len() * 4);
+                        for f in &emb {
+                            bytes.extend_from_slice(&f.to_le_bytes());
+                        }
+                        let _ = conn.execute(
+                            "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
+                             VALUES (?1, ?2, 'default', ?3, datetime('now'))",
+                            rusqlite::params![memory.id, bytes, emb.len()],
+                        );
+                        let _ = conn.execute(
+                            "UPDATE memories SET has_embedding = 1 WHERE id = ?",
+                            rusqlite::params![memory.id],
+                        );
+                        ctx.hnsw_index.write().insert(memory.id, &emb);
+                    }
+                }
+                Ok(())
+            });
+
             ctx.reporter().complete(
                 total,
                 format!(

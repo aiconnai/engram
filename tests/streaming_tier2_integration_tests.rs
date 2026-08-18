@@ -23,12 +23,18 @@ fn create_test_context(reporter: Option<Arc<dyn ProgressReporter>>) -> HandlerCo
     let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
     HandlerContext {
         storage,
-        embedder,
+        embedder: embedder.clone(),
         fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
         search_config: SearchConfig::default(),
         realtime: None,
         embedding_cache: Arc::new(EmbeddingCache::default()),
         search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
+        hnsw_index: Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
+            engram::search::HnswConfig::new(
+                embedder.dimensions(),
+                engram::search::VectorMetric::Cosine,
+            ),
+        ))),
         #[cfg(feature = "meilisearch")]
         meili: None,
         #[cfg(feature = "meilisearch")]

@@ -21,7 +21,7 @@ fn test_ctx() -> handlers::HandlerContext {
     let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
     handlers::HandlerContext {
         storage,
-        embedder,
+        embedder: embedder.clone(),
         fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
         search_config: SearchConfig::default(),
         realtime: None,
@@ -30,6 +30,12 @@ fn test_ctx() -> handlers::HandlerContext {
             similarity_threshold: 0.90,
             ..Default::default()
         })),
+        hnsw_index: Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
+            engram::search::HnswConfig::new(
+                embedder.dimensions(),
+                engram::search::VectorMetric::Cosine,
+            ),
+        ))),
         #[cfg(feature = "meilisearch")]
         meili: None,
         #[cfg(feature = "meilisearch")]

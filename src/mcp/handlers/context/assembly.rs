@@ -20,7 +20,6 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
     use crate::intelligence::context_builder::{
         ContextBuilder, MemoryEntry, PromptTemplate, Section, SimpleTokenCounter, Strategy,
     };
-    use crate::search::hybrid_search;
     use crate::types::SearchOptions;
     use chrono::{Duration, Utc};
     use std::collections::HashSet;
@@ -91,12 +90,13 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
     let embedding_ref = query_embedding.as_deref();
 
     let search_result = ctx.storage.with_connection(|conn| {
-        hybrid_search(
+        crate::search::hybrid_search_with_hnsw(
             conn,
             &query,
             embedding_ref,
             &search_opts,
             &ctx.search_config,
+            Some(&*ctx.hnsw_index.read()),
         )
     });
 
@@ -257,7 +257,6 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
 /// - `workspace` (string, optional) — workspace to search in
 /// - `include_types` (array of string, optional) — filter by memory type (e.g. ["note","episodic"])
 pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::search::hybrid_search;
     use crate::types::SearchOptions;
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
@@ -293,12 +292,13 @@ pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value
     let embedding_ref = query_embedding.as_deref();
 
     let search_result = ctx.storage.with_connection(|conn| {
-        hybrid_search(
+        crate::search::hybrid_search_with_hnsw(
             conn,
             &query,
             embedding_ref,
             &search_opts,
             &ctx.search_config,
+            Some(&*ctx.hnsw_index.read()),
         )
     });
 
@@ -412,7 +412,6 @@ pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value
 /// - `workspace` (string, optional) — workspace filter
 pub fn memory_prepare_context(ctx: &HandlerContext, params: Value) -> Value {
     use crate::intelligence::integration_orchestrator::IntegrationOrchestrator;
-    use crate::search::hybrid_search;
     use crate::types::SearchOptions;
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
@@ -438,12 +437,13 @@ pub fn memory_prepare_context(ctx: &HandlerContext, params: Value) -> Value {
     let embedding_ref = query_embedding.as_deref();
 
     let search_result = ctx.storage.with_connection(|conn| {
-        hybrid_search(
+        crate::search::hybrid_search_with_hnsw(
             conn,
             &query,
             embedding_ref,
             &search_opts,
             &ctx.search_config,
+            Some(&*ctx.hnsw_index.read()),
         )
     });
 

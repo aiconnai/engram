@@ -21,6 +21,7 @@ pub struct AppState {
     pub search_config: SearchConfig,
     pub realtime: Option<Arc<RealtimeManager>>,
     pub embedding_cache: Arc<EmbeddingCache>,
+    pub hnsw_index: Arc<parking_lot::RwLock<crate::search::hnsw::HnswIndex<i64>>>,
     #[cfg(feature = "meilisearch")]
     pub meili: Option<Arc<MeilisearchBackend>>,
     #[cfg(feature = "meilisearch")]
@@ -45,6 +46,17 @@ impl AppState {
         #[cfg(feature = "meilisearch")] meili_indexer: Option<Arc<MeilisearchIndexer>>,
         #[cfg(feature = "meilisearch")] meili_sync_interval: Option<u64>,
     ) -> Self {
+        let hnsw_index = Arc::new(parking_lot::RwLock::new(
+            crate::search::hnsw::HnswIndex::new(crate::search::hnsw::HnswConfig::new(
+                embedder.dimensions(),
+                crate::search::VectorMetric::Cosine,
+            )),
+        ));
+
+        let _ = storage.with_connection(|conn| {
+            crate::search::warmup_hnsw_from_db(conn, &mut hnsw_index.write())
+        });
+
         Self {
             storage,
             embedder,
@@ -52,6 +64,7 @@ impl AppState {
             search_config,
             realtime,
             embedding_cache,
+            hnsw_index,
             #[cfg(feature = "meilisearch")]
             meili,
             #[cfg(feature = "meilisearch")]

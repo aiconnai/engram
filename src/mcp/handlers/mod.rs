@@ -5,13 +5,13 @@
 
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use serde_json::{json, Value};
 
 use crate::embedding::EmbeddingCache;
 use crate::mcp::progress::{NoopProgressReporter, ProgressReporter};
 use crate::realtime::RealtimeManager;
-use crate::search::{FuzzyEngine, SearchConfig, SearchResultCache};
+use crate::search::{FuzzyEngine, HnswIndex, SearchConfig, SearchResultCache};
 use crate::storage::Storage;
 
 pub mod agent;
@@ -79,6 +79,7 @@ pub struct HandlerContext {
     pub realtime: Option<RealtimeManager>,
     pub embedding_cache: Arc<EmbeddingCache>,
     pub search_cache: Arc<SearchResultCache>,
+    pub hnsw_index: Arc<RwLock<HnswIndex<i64>>>,
     /// Meilisearch backend (feature-gated).
     #[cfg(feature = "meilisearch")]
     pub meili: Option<Arc<crate::storage::MeilisearchBackend>>,
