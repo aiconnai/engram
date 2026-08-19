@@ -14,3 +14,4 @@ export {
 } from "./dream.js";
 export { AuthResource } from "./auth.js";
 export { AdminResource } from "./admin.js";
+export { EventsResource } from "./events.js";

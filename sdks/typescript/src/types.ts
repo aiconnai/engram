@@ -373,3 +373,48 @@ export interface DreamRunNowOptions {
   workspace?: string;
 }
 
+// -- Realtime & SSE Events --
+
+export type RealtimeEventType =
+  | "memory_created"
+  | "memory_updated"
+  | "memory_deleted"
+  | "crossref_created"
+  | "crossref_deleted"
+  | "sync_started"
+  | "sync_completed"
+  | "sync_failed"
+  | "progress";
+
+export interface RealtimeEvent {
+  seqId?: number;
+  type: RealtimeEventType;
+  timestamp: string;
+  memoryId?: number;
+  preview?: string;
+  changes?: string[];
+  data?: Record<string, unknown>;
+}
+
+export interface ProgressEventData {
+  progressToken: string | number;
+  progress: number;
+  total?: number;
+  message?: string;
+  workspace?: string;
+}
+
+export interface ProgressEvent {
+  seqId?: number;
+  type: "progress";
+  timestamp: string;
+  preview?: string;
+  data: ProgressEventData;
+}
+
+export interface StreamEventsOptions {
+  eventTypes?: RealtimeEventType[] | string;
+  workspace?: string;
+  lastEventId?: number | string;
+  signal?: AbortSignal;
+}

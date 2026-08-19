@@ -547,4 +547,40 @@ describe("EngramClient", () => {
       expect(res).toEqual({ error: "prompt must be a non-empty string" });
     });
   });
+
+  describe("EventsResource & Streaming", () => {
+    it("should parse SSE chunk into structured RealtimeEvent", () => {
+      const rawChunk =
+        'id: 42\nevent: progress\ndata: {"progress_token":"pt-1","progress":2,"total":4,"message":"Step 2 of 4"}\n';
+      const event = client.events.parseEvent(rawChunk);
+
+      expect(event).toBeDefined();
+      expect(event?.seqId).toBe(42);
+      expect(event?.type).toBe("progress");
+      expect(event?.data?.progress_token).toBe("pt-1");
+      expect(event?.data?.progress).toBe(2);
+      expect(event?.data?.total).toBe(4);
+    });
+
+    it("should parse realtime event without id", () => {
+      const rawChunk =
+        'event: memory_created\ndata: {"seq_id":10,"preview":"hello memory","workspace":"prod"}\n';
+      const event = client.events.parseEvent(rawChunk);
+
+      expect(event).toBeDefined();
+      expect(event?.type).toBe("memory_created");
+      expect(event?.seqId).toBe(10);
+      expect(event?.preview).toBe("hello memory");
+    });
+
+    it("should return null on invalid SSE chunk", () => {
+      expect(client.events.parseEvent("")).toBeNull();
+      expect(client.events.parseEvent("data: not-a-json")).toBeNull();
+    });
+
+    it("should expose watchProgress and streamEvents on client", () => {
+      expect(typeof client.streamEvents).toBe("function");
+      expect(typeof client.watchProgress).toBe("function");
+    });
+  });
 });

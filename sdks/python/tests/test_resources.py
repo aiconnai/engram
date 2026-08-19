@@ -308,3 +308,26 @@ async def test_search_digest(mock_client):
     )
     assert res == {"topic": "auth", "digest": {}}
 
+
+def test_parse_sse_event(mock_client):
+    """Test parse_sse_event helper."""
+    raw = 'id: 99\nevent: progress\ndata: {"progress_token":"pt-1","progress":3,"total":5,"message":"Step 3"}'
+    event = mock_client.parse_sse_event(raw)
+    assert event is not None
+    assert event["seq_id"] == 99
+    assert event["type"] == "progress"
+    assert event["data"]["progress_token"] == "pt-1"
+    assert event["data"]["progress"] == 3
+    assert event["data"]["total"] == 5
+
+    # Empty or invalid
+    assert mock_client.parse_sse_event("") is None
+    assert mock_client.parse_sse_event("data: invalid-json") is None
+
+
+def test_events_mixin_attributes(mock_client):
+    """Test that stream_events and watch_progress are exposed."""
+    assert hasattr(mock_client, "stream_events")
+    assert hasattr(mock_client, "watch_progress")
+    assert hasattr(mock_client, "parse_sse_event")
+

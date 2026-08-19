@@ -4,6 +4,7 @@ import {
   AuthResource,
   ContextResource,
   DreamResource,
+  EventsResource,
   GraphResource,
   MemoriesResource,
   SearchResource,
@@ -55,12 +56,15 @@ import type {
   MemoryCouncilOptions,
   MemoryDigestOptions,
   MemoryReplayAtTimeOptions,
+  ProgressEvent,
   PromptTemplateOptions,
   ProactiveScanOptions,
   QueryTripletsOptions,
+  RealtimeEvent,
   ScopeListOptions,
   SearchOptions,
   SentimentTimelineOptions,
+  StreamEventsOptions,
   SuggestAcquisitionOptions,
   TemporalContradictionsOptions,
   TemporalCreateOptions,
@@ -83,6 +87,7 @@ export class EngramClient implements McpCaller {
   public readonly dream: DreamCallableResource;
   public readonly auth: AuthResource;
   public readonly admin: AdminResource;
+  public readonly events: EventsResource;
 
   constructor(config: EngramConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -101,6 +106,7 @@ export class EngramClient implements McpCaller {
     this.dream = createDreamCallable(new DreamResource(this));
     this.auth = new AuthResource(this);
     this.admin = new AdminResource(this);
+    this.events = new EventsResource(this);
   }
 
   async mcpCall(
@@ -684,5 +690,31 @@ export class EngramClient implements McpCaller {
 
   dreamRunNow(options?: DreamRunNowOptions): Promise<unknown> {
     return this.dream.runNow(options);
+  }
+
+  /**
+   * Stream real-time and SSE progress events.
+   */
+  async *streamEvents(
+    options?: StreamEventsOptions
+  ): AsyncIterable<RealtimeEvent> {
+    yield* this.events.stream(this.baseUrl, this.headers, options);
+  }
+
+  /**
+   * Watch progress events for a specific progress token.
+   */
+  async watchProgress(
+    token: string | number,
+    onProgress: (event: ProgressEvent) => void,
+    signal?: AbortSignal
+  ): Promise<() => void> {
+    return this.events.watchProgress(
+      this.baseUrl,
+      this.headers,
+      token,
+      onProgress,
+      signal
+    );
   }
 }
