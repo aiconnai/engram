@@ -6,6 +6,7 @@ use chrono::Utc;
 use serde_json::{json, Value};
 
 use super::{context, smart_retrieve, HandlerContext};
+use crate::mcp::progress::ProgressReporterExt;
 
 const DEFAULT_LIMIT: usize = 12;
 const MAX_LIMIT: usize = 50;
@@ -49,6 +50,18 @@ pub fn memory_digest(ctx: &HandlerContext, params: Value) -> Value {
         Err(message) => return json!({"error": message}),
     };
 
+    let reporter = ctx.reporter();
+    let total_stages: u64 = 4;
+
+    reporter.stage(
+        1,
+        total_stages,
+        format!(
+            "Retrieving top candidate memories for topic: {}",
+            request.topic
+        ),
+    );
+
     let mut warnings = Vec::new();
     let mut strategies = vec!["memory_smart_retrieve".to_string()];
 
@@ -70,6 +83,15 @@ pub fn memory_digest(ctx: &HandlerContext, params: Value) -> Value {
     let top_memories = collect_top_memories(&retrieve_response, request.include_types.as_deref());
     let source_memory_ids: Vec<i64> = top_memories.iter().map(|memory| memory.id).collect();
 
+    reporter.stage(
+        2,
+        total_stages,
+        format!(
+            "Expanding graph relationships across {} candidate memories",
+            source_memory_ids.len()
+        ),
+    );
+
     let context_summary = build_memory_context_summary(ctx, &request, &mut warnings);
     if !context_summary.is_null() {
         strategies.push("memory_build_context".to_string());
@@ -81,6 +103,12 @@ pub fn memory_digest(ctx: &HandlerContext, params: Value) -> Value {
         } else {
             Vec::new()
         };
+
+    reporter.stage(
+        3,
+        total_stages,
+        "Assembling operational context and session state".to_string(),
+    );
 
     let operational_context = if request.include_operational_context {
         strategies.push("context_build_bundle".to_string());
@@ -96,16 +124,35 @@ pub fn memory_digest(ctx: &HandlerContext, params: Value) -> Value {
         warnings.push("No source memories matched the requested topic.".to_string());
     }
 
+    reporter.stage(
+        4,
+        total_stages,
+        "Synthesizing extractive digest and budget constraints".to_string(),
+    );
+
+    let digest_text = build_digest_section(&request, &top_memories);
+    let top_memories_output = top_memories_json(&top_memories);
+    let next_actions = build_next_actions(&request, &top_memories);
+
+    reporter.complete(
+        total_stages,
+        format!(
+            "Digest synthesis complete with {} top memories and {} graph relations",
+            top_memories.len(),
+            relationships.len()
+        ),
+    );
+
     json!({
         "topic": request.topic.clone(),
         "workspace": request.workspace.as_deref().unwrap_or("default"),
         "mode": request.mode,
         "generated_at": Utc::now().to_rfc3339(),
-        "digest": build_digest_section(&request, &top_memories),
-        "top_memories": top_memories_json(&top_memories),
+        "digest": digest_text,
+        "top_memories": top_memories_output,
         "relationships": relationships,
         "operational_context": operational_context,
-        "next_actions": build_next_actions(&request, &top_memories),
+        "next_actions": next_actions,
         "provenance": {
             "source_memory_ids": source_memory_ids,
             "source_context_event_ids": source_context_event_ids(&operational_context),

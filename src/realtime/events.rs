@@ -17,6 +17,7 @@ pub enum EventType {
     SyncStarted,
     SyncCompleted,
     SyncFailed,
+    Progress,
 }
 
 /// A real-time event
@@ -113,6 +114,38 @@ impl RealtimeEvent {
             data: Some(serde_json::json!({
                 "error": error,
             })),
+        }
+    }
+
+    /// Create a progress event correlated with a progress token.
+    pub fn progress(
+        token: impl Into<String>,
+        progress: u64,
+        total: Option<u64>,
+        message: Option<String>,
+        workspace: Option<String>,
+    ) -> Self {
+        let mut data = serde_json::json!({
+            "progress_token": token.into(),
+            "progress": progress,
+        });
+        if let Some(t) = total {
+            data["total"] = serde_json::json!(t);
+        }
+        if let Some(m) = &message {
+            data["message"] = serde_json::json!(m);
+        }
+        if let Some(ws) = workspace {
+            data["workspace"] = serde_json::json!(ws);
+        }
+        Self {
+            seq_id: None,
+            event_type: EventType::Progress,
+            timestamp: Utc::now(),
+            memory_id: None,
+            preview: message,
+            changes: None,
+            data: Some(data),
         }
     }
 

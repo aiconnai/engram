@@ -239,6 +239,9 @@ def bump_core_version(new_version: str) -> None:
         DOCS_INDEX_HTML.write_text(html_updated, encoding="utf-8")
 
     print(f"✅ Core successfully bumped to {ver}.")
+    print("   ℹ️ Note: Local targets and channel-matrix.toml local_version staged.")
+    print("   Registry observed_version fields will remain at published baseline until release is completed.")
+
 
 
 def bump_python_version(new_version: str) -> None:

@@ -106,6 +106,11 @@ impl HandlerContext {
             None => &NoopProgressReporter,
         }
     }
+
+    /// Alias for `reporter()` to access the progress reporter.
+    pub fn progress_reporter(&self) -> &dyn ProgressReporter {
+        self.reporter()
+    }
 }
 
 /// Route a tool call to the appropriate domain handler.

@@ -25,6 +25,7 @@
 use serde_json::{json, Value};
 
 use super::{graph, project_context, search, HandlerContext};
+use crate::mcp::progress::ProgressReporterExt;
 
 /// The retrieval intents recognised by the classifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -254,7 +255,17 @@ pub fn memory_smart_retrieve(ctx: &HandlerContext, params: Value) -> Value {
     let mut seen_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
     let mut strategies_called: Vec<&'static str> = Vec::new();
 
-    for intent in &intents {
+    let reporter = ctx.reporter();
+    let total_stages = (intents.len() + 1) as u64;
+
+    for (idx, intent) in intents.iter().enumerate() {
+        let stage_num = (idx + 1) as u64;
+        reporter.stage(
+            stage_num,
+            total_stages,
+            format!("Executing strategy: {}", intent.strategy_name()),
+        );
+
         let entries = match intent {
             Intent::Lookup => call_search(ctx, query, limit, workspace),
             Intent::Exploration => {
@@ -289,6 +300,15 @@ pub fn memory_smart_retrieve(ctx: &HandlerContext, params: Value) -> Value {
             break;
         }
     }
+
+    reporter.complete(
+        total_stages,
+        format!(
+            "Synthesized {} result(s) across {} strategy(ies)",
+            merged.len(),
+            strategies_called.len()
+        ),
+    );
 
     json!({
         "results": merged,

@@ -61,6 +61,7 @@ pub(super) fn parse_event_type(s: &str) -> Option<EventType> {
         "sync_started" => Some(EventType::SyncStarted),
         "sync_completed" => Some(EventType::SyncCompleted),
         "sync_failed" => Some(EventType::SyncFailed),
+        "progress" => Some(EventType::Progress),
         _ => None,
     }
 }
@@ -76,6 +77,7 @@ pub(super) fn event_type_to_str(et: EventType) -> &'static str {
         EventType::SyncStarted => "sync_started",
         EventType::SyncCompleted => "sync_completed",
         EventType::SyncFailed => "sync_failed",
+        EventType::Progress => "progress",
     }
 }
 

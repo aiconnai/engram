@@ -184,12 +184,24 @@ def python_methods() -> list[str]:
 
 
 def ts_exports(kind: str) -> list[str]:
-    text = (ROOT / "sdks/typescript/src/index.ts").read_text(encoding="utf-8")
-    return re.findall(rf"^export\s+{kind}\s+([A-Za-z_$][\w$]*)", text, re.MULTILINE)
+    items: list[str] = []
+    for path in (ROOT / "sdks/typescript/src").glob("*.ts"):
+        text = path.read_text(encoding="utf-8")
+        items.extend(re.findall(rf"^export\s+{kind}\s+([A-Za-z_$][\w$]*)", text, re.MULTILINE))
+    return sorted(items)
+
+
+def find_ts_class_file(class_name: str) -> tuple[Path, str]:
+    for path in (ROOT / "sdks/typescript/src").glob("*.ts"):
+        text = path.read_text(encoding="utf-8")
+        if re.search(rf"\bclass\s+{class_name}\b", text):
+            return path, text
+    raise ValueError(f"TypeScript class {class_name} is missing")
 
 
 def ts_methods(class_name: str) -> list[str]:
-    body = ts_class_body((ROOT / "sdks/typescript/src/index.ts").read_text(encoding="utf-8"), class_name)
+    _, text = find_ts_class_file(class_name)
+    body = ts_class_body(text, class_name)
     methods: list[str] = []
     depth = 0
     for line in body.splitlines():
@@ -201,7 +213,7 @@ def ts_methods(class_name: str) -> list[str]:
 
 
 def ts_class_body(text: str, class_name: str) -> str:
-    start = text.index(f"export class {class_name}")
+    start = text.index(f"class {class_name}")
     brace = text.index("{", start)
     depth = 0
     quote = ""
@@ -220,6 +232,7 @@ def ts_class_body(text: str, class_name: str) -> str:
             if depth == 0:
                 return text[brace + 1 : index]
     raise ValueError(f"TypeScript class {class_name} is unterminated")
+
 
 
 def cli_command_entries():

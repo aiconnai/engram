@@ -186,6 +186,16 @@ pub trait ProgressReporterExt: ProgressReporter {
         self.report(i, Some(n), Some(message.into()));
     }
 
+    /// Emit progress for stage `stage_idx` out of `total_stages` execution phases.
+    fn stage(&self, stage_idx: u64, total_stages: u64, stage_name: impl Into<String>) {
+        self.report(stage_idx, Some(total_stages), Some(stage_name.into()));
+    }
+
+    /// Emit progress for a partial chunk assembly.
+    fn chunk(&self, chunk_idx: u64, total_chunks: Option<u64>, message: impl Into<String>) {
+        self.report(chunk_idx, total_chunks, Some(message.into()));
+    }
+
     /// Emit a completion notification (progress == total).
     fn complete(&self, total: u64, message: impl Into<String>) {
         self.report(total, Some(total), Some(message.into()));
@@ -230,6 +240,39 @@ impl ProgressReporter for ChannelProgressReporter {
         let notification = ProgressNotification::new(self.token.clone(), progress, total, message);
         // Best-effort: if the receiver is dropped, silently discard.
         let _ = self.tx.send(notification);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Callback-based reporter
+// ---------------------------------------------------------------------------
+
+/// A `ProgressReporter` that invokes a callback function on each notification.
+pub struct CallbackProgressReporter<F>
+where
+    F: Fn(ProgressNotification) + Send + Sync,
+{
+    token: ProgressToken,
+    callback: F,
+}
+
+impl<F> CallbackProgressReporter<F>
+where
+    F: Fn(ProgressNotification) + Send + Sync,
+{
+    /// Create a new callback reporter.
+    pub fn new(token: ProgressToken, callback: F) -> Self {
+        Self { token, callback }
+    }
+}
+
+impl<F> ProgressReporter for CallbackProgressReporter<F>
+where
+    F: Fn(ProgressNotification) + Send + Sync,
+{
+    fn report(&self, progress: u64, total: Option<u64>, message: Option<String>) {
+        let notification = ProgressNotification::new(self.token.clone(), progress, total, message);
+        (self.callback)(notification);
     }
 }
 
