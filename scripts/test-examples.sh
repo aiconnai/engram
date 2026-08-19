@@ -48,13 +48,16 @@ for name in (
     "examples/openai-agents-sdk/agent_memory_tool.py",
     "examples/fastmcp-server/server.py",
     "examples/langgraph-tool/memory_graph.py",
+    "examples/google-antigravity/antigravity_memory_hook.py",
 ):
     compile(Path(name).read_text(), name, "exec")
 PY
   python3 examples/openai-agents-sdk/agent_memory_tool.py >/dev/null
   python3 examples/fastmcp-server/server.py >/dev/null
   python3 examples/langgraph-tool/memory_graph.py >/dev/null
+  python3 examples/google-antigravity/antigravity_memory_hook.py >/dev/null
 }
+
 
 cursor_config() {
   python3 - <<'PY'

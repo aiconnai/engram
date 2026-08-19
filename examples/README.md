@@ -19,6 +19,7 @@ dependency-free Engram adapters are syntax checked and exercised directly.
 | Family | Classification | Smoke coverage |
 | --- | --- | --- |
 | Rust library demos | Runnable | All Cargo examples compile |
+| Google Antigravity | Runnable integration pattern | Python SDK round trip & memory digest |
 | Claude MCP | Runnable | Real `memory_create` and `memory_search` HTTP round trip |
 | Cursor MCP | Illustrative configuration | JSON block and stdio arguments validate |
 | CrewAI memory | Illustrative adapter sketch | SDK adapter imports/classes validate |
@@ -28,9 +29,11 @@ dependency-free Engram adapters are syntax checked and exercised directly.
 
 ## Native Examples
 
+- [Google Antigravity](google-antigravity/) - persistent agent memory, decision tracking, and context distillation for Antigravity swarms.
 - [Claude MCP](claude-mcp/) - configure Engram as a Claude Code MCP memory server.
 - [Cursor MCP](cursor-mcp/) - use Engram from Cursor through `.cursor/mcp.json`.
 - [CrewAI memory](crewai-memory/) - use the Python SDK's CrewAI memory adapters.
+
 
 ## Integration Patterns
 
