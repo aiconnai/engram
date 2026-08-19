@@ -7,5 +7,10 @@ export {
 } from "./search.js";
 export { GraphResource } from "./graph.js";
 export { ContextResource } from "./context.js";
+export {
+  DreamResource,
+  createDreamCallable,
+  type DreamCallableResource,
+} from "./dream.js";
 export { AuthResource } from "./auth.js";
 export { AdminResource } from "./admin.js";

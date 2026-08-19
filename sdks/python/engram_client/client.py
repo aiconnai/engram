@@ -11,6 +11,7 @@ from .errors import EngramError
 from .mcp_result import post_tool_call
 from .resources.auth import AuthMixin
 from .resources.context import ContextMixin
+from .resources.dream import DreamMixin
 from .resources.graph import GraphMixin
 from .resources.memories import MemoriesMixin
 from .resources.search import SearchMixin
@@ -22,6 +23,7 @@ __all__ = ["EngramClient", "EngramError"]
 class EngramClient(
     MemoriesMixin,
     SearchMixin,
+    DreamMixin,
     GraphMixin,
     ContextMixin,
     AuthMixin,

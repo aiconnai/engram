@@ -3,10 +3,13 @@ import {
   AdminResource,
   AuthResource,
   ContextResource,
+  DreamResource,
   GraphResource,
   MemoriesResource,
   SearchResource,
+  createDreamCallable,
   createSearchCallable,
+  type DreamCallableResource,
   type McpCaller,
   type SearchCallableResource,
 } from "./resources/index.js";
@@ -28,6 +31,13 @@ import type {
   CreateDailyOptions,
   CreateIdentityOptions,
   CreateOptions,
+  DreamApplyOptions,
+  DreamCandidatesListOptions,
+  DreamCreateOptions,
+  DreamEvalOptions,
+  DreamListOptions,
+  DreamReviewOptions,
+  DreamRunNowOptions,
   EmbeddingMigrateOptions,
   EngramConfig,
   FactGraphOptions,
@@ -43,6 +53,7 @@ import type {
   ListFactsOptions,
   ListOptions,
   MemoryCouncilOptions,
+  MemoryDigestOptions,
   MemoryReplayAtTimeOptions,
   PromptTemplateOptions,
   ProactiveScanOptions,
@@ -69,6 +80,7 @@ export class EngramClient implements McpCaller {
   public readonly search: SearchCallableResource;
   public readonly graph: GraphResource;
   public readonly context: ContextResource;
+  public readonly dream: DreamCallableResource;
   public readonly auth: AuthResource;
   public readonly admin: AdminResource;
 
@@ -86,6 +98,7 @@ export class EngramClient implements McpCaller {
     this.search = createSearchCallable(new SearchResource(this));
     this.graph = new GraphResource(this);
     this.context = new ContextResource(this);
+    this.dream = createDreamCallable(new DreamResource(this));
     this.auth = new AuthResource(this);
     this.admin = new AdminResource(this);
   }
@@ -659,5 +672,17 @@ export class EngramClient implements McpCaller {
     options?: LifecycleUpdateOptions
   ): Promise<unknown> {
     return this.admin.lifecycleUpdate(id, options);
+  }
+
+  digest(topic: string, options?: MemoryDigestOptions): Promise<unknown> {
+    return this.search.digest(topic, options);
+  }
+
+  memoryDigest(topic: string, options?: MemoryDigestOptions): Promise<unknown> {
+    return this.search.digest(topic, options);
+  }
+
+  dreamRunNow(options?: DreamRunNowOptions): Promise<unknown> {
+    return this.dream.runNow(options);
   }
 }

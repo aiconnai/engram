@@ -2,10 +2,41 @@ import { BaseResource } from "./base.js";
 import type {
   FeedbackStatsOptions,
   MemoryCouncilOptions,
+  MemoryDigestOptions,
   SearchOptions,
 } from "../types.js";
 
 export class SearchResource extends BaseResource {
+  /**
+   * Build an actionable, source-linked retrieval digest for a topic.
+   */
+  async digest(
+    topic: string,
+    options?: MemoryDigestOptions
+  ): Promise<unknown> {
+    const params: Record<string, unknown> = {
+      topic,
+    };
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    if (options?.mode !== undefined) params.mode = options.mode;
+    if (options?.limit !== undefined) params.limit = options.limit;
+    if (options?.relatedDepth !== undefined) params.related_depth = options.relatedDepth;
+    if (options?.totalBudget !== undefined) params.total_budget = options.totalBudget;
+    if (options?.includeTypes !== undefined) params.include_types = options.includeTypes;
+    if (options?.timeframe !== undefined) params.timeframe = options.timeframe;
+    if (options?.includeGraph !== undefined) params.include_graph = options.includeGraph;
+    if (options?.includeOperationalContext !== undefined)
+      params.include_operational_context = options.includeOperationalContext;
+    if (options?.includeNextActions !== undefined)
+      params.include_next_actions = options.includeNextActions;
+    if (options?.currentGitBranch !== undefined)
+      params.current_git_branch = options.currentGitBranch;
+    if (options?.currentCommitHash !== undefined)
+      params.current_commit_hash = options.currentCommitHash;
+
+    return this.caller.mcpCall("memory_digest", params);
+  }
+
   /**
    * Search memories using hybrid search (BM25 + vector + fuzzy).
    */

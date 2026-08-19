@@ -457,6 +457,70 @@ describe("EngramClient", () => {
     });
   });
 
+  describe("DreamResource", () => {
+    it("should route all dream operations to MCP endpoints", async () => {
+      mockFetch.mockResolvedValue(okResponse({ status: "success" }));
+
+      await client.dream.create({ workspace: "ws", instructions: "Review memories" });
+      expect(requestMethod(0)).toBe("dream_create");
+      expect(requestArguments(0).workspace).toBe("ws");
+      expect(requestArguments(0).instructions).toBe("Review memories");
+
+      await client.dream.get("job-123");
+      expect(requestMethod(1)).toBe("dream_get");
+      expect(requestArguments(1).id).toBe("job-123");
+
+      await client.dream.list({ status: "pending", limit: 5 });
+      expect(requestMethod(2)).toBe("dream_list");
+      expect(requestArguments(2).status).toBe("pending");
+
+      await client.dream.cancel("job-123");
+      expect(requestMethod(3)).toBe("dream_cancel");
+
+      await client.dream.archive("job-123");
+      expect(requestMethod(4)).toBe("dream_archive");
+
+      await client.dream.candidatesList({ reviewState: "pending" });
+      expect(requestMethod(5)).toBe("dream_candidates_list");
+
+      await client.dream.candidateGet("cand-1");
+      expect(requestMethod(6)).toBe("dream_candidate_get");
+
+      await client.dream.candidateReview("cand-1", "accepted", { notes: "Looks good" });
+      expect(requestMethod(7)).toBe("dream_candidate_review");
+      expect(requestArguments(7).review_state).toBe("accepted");
+
+      await client.dream.candidateApply("cand-1", { confirm: true });
+      expect(requestMethod(8)).toBe("dream_candidate_apply");
+      expect(requestArguments(8).confirm).toBe(true);
+
+      await client.dream.evalRun({ lane: "carry_forward_context" });
+      expect(requestMethod(9)).toBe("dream_eval_run");
+
+      await client.dream.runNow({ workspace: "default" });
+      expect(requestMethod(10)).toBe("dream_run_now");
+    });
+  });
+
+  describe("SearchResource digest", () => {
+    it("should route digest call to memory_digest", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ topic: "auth", digest: {} }));
+
+      const res = await client.search.digest("auth", {
+        workspace: "prod",
+        mode: "brief",
+        relatedDepth: 1,
+      });
+
+      expect(requestMethod(0)).toBe("memory_digest");
+      expect(requestArguments(0).topic).toBe("auth");
+      expect(requestArguments(0).workspace).toBe("prod");
+      expect(requestArguments(0).mode).toBe("brief");
+      expect(requestArguments(0).related_depth).toBe(1);
+      expect(res).toEqual({ topic: "auth", digest: {} });
+    });
+  });
+
   describe("CouncilSkill", () => {
     it("should delegate to client.memoryCouncil", async () => {
       mockFetch.mockResolvedValueOnce(okResponse({ decision: "redis" }));

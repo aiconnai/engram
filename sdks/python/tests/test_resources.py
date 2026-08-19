@@ -10,6 +10,7 @@ from engram_client import EngramClient
 from engram_client.resources import (
     AuthMixin,
     ContextMixin,
+    DreamMixin,
     GraphMixin,
     MemoriesMixin,
     ResourceMixin,
@@ -17,6 +18,7 @@ from engram_client.resources import (
 )
 from engram_client.resources.auth import AuthMixin as DirectAuthMixin
 from engram_client.resources.context import ContextMixin as DirectContextMixin
+from engram_client.resources.dream import DreamMixin as DirectDreamMixin
 from engram_client.resources.graph import GraphMixin as DirectGraphMixin
 from engram_client.resources.memories import MemoriesMixin as DirectMemoriesMixin
 from engram_client.resources.search import SearchMixin as DirectSearchMixin
@@ -38,6 +40,7 @@ def test_resource_imports():
     """Verify all resource mixins can be imported directly and from resources package."""
     assert AuthMixin is DirectAuthMixin
     assert ContextMixin is DirectContextMixin
+    assert DreamMixin is DirectDreamMixin
     assert GraphMixin is DirectGraphMixin
     assert MemoriesMixin is DirectMemoriesMixin
     assert SearchMixin is DirectSearchMixin
@@ -47,6 +50,7 @@ def test_engram_client_inheritance():
     """Verify EngramClient inherits from all resource mixins."""
     assert issubclass(EngramClient, MemoriesMixin)
     assert issubclass(EngramClient, SearchMixin)
+    assert issubclass(EngramClient, DreamMixin)
     assert issubclass(EngramClient, GraphMixin)
     assert issubclass(EngramClient, ContextMixin)
     assert issubclass(EngramClient, AuthMixin)
@@ -218,3 +222,89 @@ async def test_auth_mixin_methods(mock_client):
         "memory_check_access",
         {"agent_id": "agent-1", "scope_path": "tenant/workspace", "permission": "write"},
     )
+
+
+@pytest.mark.asyncio
+async def test_dream_mixin_methods(mock_client):
+    """Test DreamMixin dispatch methods."""
+    mock_client._mcp_call = AsyncMock(return_value={"status": "ok"})
+
+    await mock_client.dream_create(workspace="ws", instructions="Consolidate")
+    mock_client._mcp_call.assert_awaited_with(
+        "dream_create",
+        {
+            "workspace": "ws",
+            "run": True,
+            "instructions": "Consolidate",
+            "max_memories": 50,
+            "max_candidates": 25,
+            "summary_min_memories": 2,
+        },
+    )
+
+    await mock_client.dream_get("job-123")
+    mock_client._mcp_call.assert_awaited_with("dream_get", {"id": "job-123"})
+
+    await mock_client.dream_list(status="completed", limit=10)
+    mock_client._mcp_call.assert_awaited_with(
+        "dream_list", {"status": "completed", "limit": 10}
+    )
+
+    await mock_client.dream_cancel("job-123")
+    mock_client._mcp_call.assert_awaited_with("dream_cancel", {"id": "job-123"})
+
+    await mock_client.dream_archive("job-123")
+    mock_client._mcp_call.assert_awaited_with("dream_archive", {"id": "job-123"})
+
+    await mock_client.dream_candidates_list(review_state="pending")
+    mock_client._mcp_call.assert_awaited_with(
+        "dream_candidates_list", {"review_state": "pending"}
+    )
+
+    await mock_client.dream_candidate_get("cand-1")
+    mock_client._mcp_call.assert_awaited_with("dream_candidate_get", {"id": "cand-1"})
+
+    await mock_client.dream_candidate_review("cand-1", "accepted", notes="Good")
+    mock_client._mcp_call.assert_awaited_with(
+        "dream_candidate_review",
+        {"id": "cand-1", "review_state": "accepted", "notes": "Good"},
+    )
+
+    await mock_client.dream_candidate_apply("cand-1", confirm=True)
+    mock_client._mcp_call.assert_awaited_with(
+        "dream_candidate_apply", {"id": "cand-1", "confirm": True}
+    )
+
+    await mock_client.dream_eval_run(lane="freshness_temporal")
+    mock_client._mcp_call.assert_awaited_with(
+        "dream_eval_run", {"lane": "freshness_temporal"}
+    )
+
+    await mock_client.dream_run_now(workspace="ws")
+    mock_client._mcp_call.assert_awaited_with("dream_run_now", {"workspace": "ws"})
+
+
+@pytest.mark.asyncio
+async def test_search_digest(mock_client):
+    """Test SearchMixin.digest method."""
+    mock_client._mcp_call = AsyncMock(return_value={"topic": "auth", "digest": {}})
+
+    res = await mock_client.digest(
+        "authentication rules",
+        workspace="prod",
+        mode="standard",
+        limit=15,
+        related_depth=1,
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_digest",
+        {
+            "topic": "authentication rules",
+            "workspace": "prod",
+            "mode": "standard",
+            "limit": 15,
+            "related_depth": 1,
+        },
+    )
+    assert res == {"topic": "auth", "digest": {}}
+

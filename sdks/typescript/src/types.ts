@@ -309,3 +309,67 @@ export interface FederationAddPeerOptions {
 export interface FederationSearchOptions {
   limit?: number;
 }
+
+// -- Retrieval Digest --
+
+export interface MemoryDigestOptions {
+  workspace?: string;
+  mode?: "brief" | "standard" | "deep";
+  limit?: number;
+  relatedDepth?: number;
+  totalBudget?: number;
+  includeTypes?: string[];
+  timeframe?: "1h" | "24h" | "7d" | "30d" | "all";
+  includeGraph?: boolean;
+  includeOperationalContext?: boolean;
+  includeNextActions?: boolean;
+  currentGitBranch?: string;
+  currentCommitHash?: string;
+}
+
+// -- Dream Phase & Candidates --
+
+export interface DreamCreateOptions {
+  workspace?: string;
+  run?: boolean;
+  jobId?: string;
+  instructions?: string;
+  maxMemories?: number;
+  maxCandidates?: number;
+  summaryMinMemories?: number;
+}
+
+export interface DreamListOptions {
+  workspace?: string;
+  status?: "pending" | "running" | "completed" | "failed" | "canceled" | "archived";
+  limit?: number;
+}
+
+export interface DreamCandidatesListOptions {
+  workspace?: string;
+  jobId?: string;
+  reviewState?: "pending" | "accepted" | "edited" | "rejected" | "applied" | "archived";
+  kind?: string;
+  proposedAction?: string;
+  limit?: number;
+}
+
+export interface DreamReviewOptions {
+  editedContent?: string;
+  notes?: string;
+}
+
+export interface DreamApplyOptions {
+  confirm?: boolean;
+  reviewerNotes?: string;
+}
+
+export interface DreamEvalOptions {
+  workspace?: string;
+  lane?: string;
+}
+
+export interface DreamRunNowOptions {
+  workspace?: string;
+}
+

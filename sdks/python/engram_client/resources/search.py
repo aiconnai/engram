@@ -10,7 +10,68 @@ from .base import ResourceMixin
 class SearchMixin(ResourceMixin):
     """Hybrid search, council orchestration, cache, feedback, and federation operations."""
 
-    # -- Search --
+    # -- Search & Digest --
+
+    async def digest(
+        self,
+        topic: str,
+        *,
+        workspace: str | None = None,
+        mode: str | None = None,
+        limit: int | None = None,
+        related_depth: int | None = None,
+        total_budget: int | None = None,
+        include_types: list[str] | None = None,
+        timeframe: str | None = None,
+        include_graph: bool | None = None,
+        include_operational_context: bool | None = None,
+        include_next_actions: bool | None = None,
+        current_git_branch: str | None = None,
+        current_commit_hash: str | None = None,
+    ) -> dict[str, Any]:
+        """Build an actionable, source-linked retrieval digest for a topic.
+
+        Args:
+            topic: Natural language topic or question.
+            workspace: Optional workspace filter.
+            mode: Digest detail mode ('brief', 'standard', 'deep').
+            limit: Maximum source memories to inspect (1..50).
+            related_depth: Graph expansion depth (0..2).
+            total_budget: Approximate token budget (512..12000).
+            include_types: Optional list of memory types to filter.
+            timeframe: Time window filter ('1h', '24h', '7d', '30d', 'all').
+            include_graph: Whether to include graph relationships.
+            include_operational_context: Whether to attach operational context.
+            include_next_actions: Whether to extract recommended next actions.
+            current_git_branch: Active git branch name for staleness checks.
+            current_commit_hash: Active git commit hash for staleness checks.
+        """
+        params: dict[str, Any] = {"topic": topic}
+        if workspace is not None:
+            params["workspace"] = workspace
+        if mode is not None:
+            params["mode"] = mode
+        if limit is not None:
+            params["limit"] = limit
+        if related_depth is not None:
+            params["related_depth"] = related_depth
+        if total_budget is not None:
+            params["total_budget"] = total_budget
+        if include_types is not None:
+            params["include_types"] = include_types
+        if timeframe is not None:
+            params["timeframe"] = timeframe
+        if include_graph is not None:
+            params["include_graph"] = include_graph
+        if include_operational_context is not None:
+            params["include_operational_context"] = include_operational_context
+        if include_next_actions is not None:
+            params["include_next_actions"] = include_next_actions
+        if current_git_branch is not None:
+            params["current_git_branch"] = current_git_branch
+        if current_commit_hash is not None:
+            params["current_commit_hash"] = current_commit_hash
+        return await self._mcp_call("memory_digest", params)
 
     async def search(
         self,
