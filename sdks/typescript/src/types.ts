@@ -418,3 +418,65 @@ export interface StreamEventsOptions {
   lastEventId?: number | string;
   signal?: AbortSignal;
 }
+
+// -- Multimodal Interfaces (RFC 0009) --
+
+export interface DescribeImageOptions {
+  prompt?: string;
+  maxTokens?: number;
+}
+
+export interface CaptureScreenshotOptions {
+  displayIndex?: number;
+  delaySeconds?: number;
+}
+
+export interface ProcessVideoOptions {
+  extractFrames?: boolean;
+  maxFrames?: number;
+}
+
+export interface ListMediaOptions {
+  mediaType?: "image" | "audio" | "video" | string;
+  limit?: number;
+}
+
+export interface SearchByImageOptions {
+  limit?: number;
+  minScore?: number;
+  workspace?: string;
+  strategy?: "clip" | "description" | "auto" | string;
+}
+
+export interface IngestMediaOptions {
+  mediaPath: string;
+  mediaType?: "image" | "audio" | "video" | string;
+  content?: string;
+  workspace?: string;
+  tags?: string[];
+  importance?: number;
+}
+
+export interface SyncMediaOptions {
+  dryRun?: boolean;
+}
+
+export interface MediaAsset {
+  id: number;
+  memoryId: number;
+  mediaType: string;
+  fileHash: string;
+  perceptualHash?: string;
+  filePath?: string;
+  fileSize?: number;
+  mimeType?: string;
+  durationSecs?: number;
+  width?: number;
+  height?: number;
+  transcription?: string;
+  description?: string;
+  provider?: string;
+  model?: string;
+  createdAt: string;
+}
+

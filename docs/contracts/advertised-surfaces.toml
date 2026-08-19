@@ -24,7 +24,8 @@ tools_list_all_tools = ["memory_create", "context_seed", "memory_seed", "memory_
 
 [cli]
 binaries = ["engram-server", "engram-cli", "engram-bench", "engram-watcher", "engram-agent", "engram-pdf-worker"]
-engram_cli_commands = ["create", "get", "list", "search", "delete", "stats", "session", "maintenance", "graph", "link", "versions", "interactive", "help"]
+engram_cli_commands = ["create", "get", "list", "search", "delete", "stats", "session", "maintenance", "graph", "link", "versions", "interactive", "export", "import", "mcp", "help"]
+
 feature_gated_commands = ["model", "snapshot", "attest"]
 feature_gated_command_features = ["model=onnx-embed", "snapshot=snapshot", "attest=attestation"]
 engram_server_default_transports = ["stdio", "http", "both"]

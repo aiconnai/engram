@@ -353,3 +353,53 @@ async def test_mcp_resources_mixin_methods(mock_client):
         "resources/unsubscribe", {"uri": "engram://workspace/dev/memories"}
     )
 
+
+@pytest.mark.asyncio
+async def test_multimodal_mixin_methods(mock_client):
+    """Test MultimodalMixin dispatch methods."""
+    mock_client._mcp_call = AsyncMock(return_value={"status": "ok"})
+
+    await mock_client.describe_image("/path/to/img.png", prompt="Describe this")
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_describe_image", {"image_path": "/path/to/img.png", "prompt": "Describe this"}
+    )
+
+    await mock_client.transcribe_audio("/path/to/voice.mp3")
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_transcribe_audio", {"audio_path": "/path/to/voice.mp3"}
+    )
+
+    await mock_client.capture_screenshot(display_index=1, delay_seconds=2)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_capture_screenshot", {"display_index": 1, "delay_seconds": 2}
+    )
+
+    await mock_client.process_video("/path/to/vid.mp4", max_frames=5)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_process_video",
+        {"video_path": "/path/to/vid.mp4", "extract_frames": True, "max_frames": 5},
+    )
+
+    await mock_client.list_media(media_type="image", limit=25)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_list_media", {"media_type": "image", "limit": 25}
+    )
+
+    await mock_client.search_by_image("/path/to/img.png", limit=5, workspace="dev")
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_search_by_image",
+        {"image_path": "/path/to/img.png", "limit": 5, "workspace": "dev"},
+    )
+
+    await mock_client.ingest_media(
+        "/path/to/chart.png", media_type="image", workspace="analytics"
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_ingest_media",
+        {"media_path": "/path/to/chart.png", "media_type": "image", "workspace": "analytics"},
+    )
+
+    await mock_client.sync_media(dry_run=True)
+    mock_client._mcp_call.assert_awaited_with("memory_sync_media", {"dry_run": True})
+
+

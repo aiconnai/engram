@@ -658,12 +658,20 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
 
         let asset_id: i64 = conn.last_insert_rowid();
 
+        let phash = if media_type_str == "image" {
+            let h = crate::multimodal::hashing::compute_perceptual_hash(&file_bytes);
+            Some(crate::multimodal::hashing::format_phash(h))
+        } else {
+            None
+        };
+
         Ok(json!({
             "memory_id": memory.id,
             "asset_id": asset_id,
             "media_type": media_type_str,
             "media_url": media_url,
             "file_hash": file_hash,
+            "perceptual_hash": phash,
             "file_size": file_size,
             "mime_type": mime_type,
             "workspace": memory.workspace,

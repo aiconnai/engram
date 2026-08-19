@@ -15,6 +15,7 @@ from .resources.dream import DreamMixin
 from .resources.events import EventsMixin
 from .resources.graph import GraphMixin
 from .resources.memories import MemoriesMixin
+from .resources.multimodal import MultimodalMixin
 from .resources.resources import McpResourcesMixin
 from .resources.search import SearchMixin
 
@@ -31,6 +32,7 @@ class EngramClient(
     ContextMixin,
     AuthMixin,
     McpResourcesMixin,
+    MultimodalMixin,
 ):
     """Async Engram Cloud client over authenticated MCP-HTTP."""
 

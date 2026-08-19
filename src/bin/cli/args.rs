@@ -126,6 +126,11 @@ pub(crate) enum Commands {
         #[command(subcommand)]
         action: crate::portability::ImportAction,
     },
+    /// Manage and configure MCP client integrations (Claude, Cursor, Antigravity, Windsurf)
+    Mcp {
+        #[command(subcommand)]
+        action: crate::mcp::McpAction,
+    },
     /// Manage local embedding models
     #[cfg(feature = "onnx-embed")]
     Model {

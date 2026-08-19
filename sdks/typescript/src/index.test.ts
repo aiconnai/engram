@@ -624,4 +624,99 @@ describe("EngramClient", () => {
       expect(requestMethod(0)).toBe("resources/subscribe");
     });
   });
+
+  describe("MultimodalResource", () => {
+    it("should call memory_describe_image", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ text: "A diagram" }));
+      const res = await client.multimodal.describeImage(
+        "/path/to/diagram.png",
+        { prompt: "Describe the components" }
+      );
+      expect(requestMethod(0)).toBe("memory_describe_image");
+      expect(requestArguments(0)).toEqual({
+        image_path: "/path/to/diagram.png",
+        prompt: "Describe the components",
+      });
+      expect(res).toEqual({ text: "A diagram" });
+    });
+
+    it("should call memory_transcribe_audio", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ text: "Hello voice note" }));
+      await client.multimodal.transcribeAudio("/path/to/audio.mp3");
+      expect(requestMethod(0)).toBe("memory_transcribe_audio");
+      expect(requestArguments(0)).toEqual({
+        audio_path: "/path/to/audio.mp3",
+      });
+    });
+
+    it("should call memory_capture_screenshot", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ path: "/tmp/screen.png" }));
+      await client.multimodal.captureScreenshot({ displayIndex: 1 });
+      expect(requestMethod(0)).toBe("memory_capture_screenshot");
+      expect(requestArguments(0)).toEqual({ display_index: 1 });
+    });
+
+    it("should call memory_process_video", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ frames: [] }));
+      await client.multimodal.processVideo("/path/to/video.mp4", {
+        maxFrames: 5,
+      });
+      expect(requestMethod(0)).toBe("memory_process_video");
+      expect(requestArguments(0)).toEqual({
+        video_path: "/path/to/video.mp4",
+        max_frames: 5,
+      });
+    });
+
+    it("should call memory_list_media", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ assets: [], count: 0 }));
+      await client.multimodal.listMedia({ mediaType: "image", limit: 20 });
+      expect(requestMethod(0)).toBe("memory_list_media");
+      expect(requestArguments(0)).toEqual({
+        media_type: "image",
+        limit: 20,
+      });
+    });
+
+    it("should call memory_search_by_image", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ results: [] }));
+      await client.multimodal.searchByImage("/path/to/img.png", { limit: 5 });
+      expect(requestMethod(0)).toBe("memory_search_by_image");
+      expect(requestArguments(0)).toEqual({
+        image_path: "/path/to/img.png",
+        limit: 5,
+      });
+    });
+
+    it("should call memory_ingest_media", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({ memory_id: 101, asset_id: 1 })
+      );
+      await client.multimodal.ingestMedia({
+        mediaPath: "/path/to/chart.png",
+        mediaType: "image",
+        workspace: "analytics",
+      });
+      expect(requestMethod(0)).toBe("memory_ingest_media");
+      expect(requestArguments(0)).toEqual({
+        media_path: "/path/to/chart.png",
+        media_type: "image",
+        workspace: "analytics",
+      });
+    });
+
+    it("should call memory_sync_media", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ assets_uploaded: 2 }));
+      await client.multimodal.syncMedia({ dryRun: true });
+      expect(requestMethod(0)).toBe("memory_sync_media");
+      expect(requestArguments(0)).toEqual({ dry_run: true });
+    });
+
+    it("should expose direct multimodal methods on client", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ results: [] }));
+      await client.searchByImage("/path/to/img.png");
+      expect(requestMethod(0)).toBe("memory_search_by_image");
+    });
+  });
 });
+

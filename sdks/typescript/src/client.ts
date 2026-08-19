@@ -8,6 +8,7 @@ import {
   GraphResource,
   McpResourcesResource,
   MemoriesResource,
+  MultimodalResource,
   SearchResource,
   createDreamCallable,
   createSearchCallable,
@@ -24,11 +25,18 @@ import type {
   BlockListOptions,
   BuildContextOptions,
   CacheClearOptions,
+  CaptureScreenshotOptions,
   CheckAccessOptions,
   CoactivationReportOptions,
   CompressForContextOptions,
   ConsolidateOptions,
   CouncilSkillAskOptions,
+  DescribeImageOptions,
+  IngestMediaOptions,
+  ListMediaOptions,
+  ProcessVideoOptions,
+  SearchByImageOptions,
+  SyncMediaOptions,
   CouncilSkillOptions,
   CreateDailyOptions,
   CreateIdentityOptions,
@@ -90,6 +98,7 @@ export class EngramClient implements McpCaller {
   public readonly admin: AdminResource;
   public readonly events: EventsResource;
   public readonly resources: McpResourcesResource;
+  public readonly multimodal: MultimodalResource;
 
   constructor(config: EngramConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -110,6 +119,7 @@ export class EngramClient implements McpCaller {
     this.admin = new AdminResource(this);
     this.events = new EventsResource(this);
     this.resources = new McpResourcesResource(this);
+    this.multimodal = new MultimodalResource(this);
   }
 
   async mcpCall(
@@ -748,4 +758,70 @@ export class EngramClient implements McpCaller {
   resourceUnsubscribe(uri: string): Promise<unknown> {
     return this.resources.unsubscribe(uri);
   }
+
+  /**
+   * Describe an image using the vision model.
+   */
+  describeImage(
+    imagePath: string,
+    options?: DescribeImageOptions
+  ): Promise<unknown> {
+    return this.multimodal.describeImage(imagePath, options);
+  }
+
+  /**
+   * Transcribe an audio file.
+   */
+  transcribeAudio(audioPath: string): Promise<unknown> {
+    return this.multimodal.transcribeAudio(audioPath);
+  }
+
+  /**
+   * Capture a desktop screenshot.
+   */
+  captureScreenshot(options?: CaptureScreenshotOptions): Promise<unknown> {
+    return this.multimodal.captureScreenshot(options);
+  }
+
+  /**
+   * Process a video file and extract key frames.
+   */
+  processVideo(
+    videoPath: string,
+    options?: ProcessVideoOptions
+  ): Promise<unknown> {
+    return this.multimodal.processVideo(videoPath, options);
+  }
+
+  /**
+   * List indexed media assets.
+   */
+  listMedia(options?: ListMediaOptions): Promise<unknown> {
+    return this.multimodal.listMedia(options);
+  }
+
+  /**
+   * Search memories by image semantic similarity.
+   */
+  searchByImage(
+    imagePath: string,
+    options?: SearchByImageOptions
+  ): Promise<unknown> {
+    return this.multimodal.searchByImage(imagePath, options);
+  }
+
+  /**
+   * Ingest and index a media asset into a durable memory.
+   */
+  ingestMedia(options: IngestMediaOptions): Promise<unknown> {
+    return this.multimodal.ingestMedia(options);
+  }
+
+  /**
+   * Sync local media assets to cloud storage.
+   */
+  syncMedia(options?: SyncMediaOptions): Promise<unknown> {
+    return this.multimodal.syncMedia(options);
+  }
 }
+

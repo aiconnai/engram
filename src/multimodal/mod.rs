@@ -8,6 +8,7 @@
 //! - `multimodal`: Enables this module (requires API key for a supported provider)
 
 pub mod audio;
+pub mod hashing;
 pub mod screenshot;
 pub mod video;
 pub mod vision;

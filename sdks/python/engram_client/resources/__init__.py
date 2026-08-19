@@ -7,6 +7,7 @@ from .dream import DreamMixin
 from .events import EventsMixin
 from .graph import GraphMixin
 from .memories import MemoriesMixin
+from .multimodal import MultimodalMixin
 from .resources import McpResourcesMixin
 from .search import SearchMixin
 
@@ -18,6 +19,8 @@ __all__ = [
     "GraphMixin",
     "McpResourcesMixin",
     "MemoriesMixin",
+    "MultimodalMixin",
     "ResourceMixin",
     "SearchMixin",
 ]
+
