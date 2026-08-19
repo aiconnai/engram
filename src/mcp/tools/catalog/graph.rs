@@ -670,4 +670,63 @@ pub const TOOLS: &[ToolDef] = &[
             annotations: ToolAnnotations::read_only(),
             tier: ToolTier::Standard,
         },
+    ToolDef {
+            name: "memory_predict_links",
+            description: "Predict implicit or missing relationships between memories using graph topology, transitive paths, and semantic embeddings.",
+            schema: r#"{
+                "type": "object",
+                "properties": {
+                    "memory_id": {
+                        "type": "integer",
+                        "description": "Optional focus memory ID to predict links for."
+                    },
+                    "workspace": {
+                        "type": "string",
+                        "description": "Restrict prediction candidates to this workspace."
+                    },
+                    "min_confidence": {
+                        "type": "number",
+                        "description": "Minimum confidence threshold between 0.0 and 1.0 (default: 0.6)."
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Maximum number of predicted links to return (default: 10)."
+                    },
+                    "algorithm": {
+                        "type": "string",
+                        "enum": ["hybrid", "topological", "semantic", "transitive"],
+                        "description": "Link prediction algorithm (default: \"hybrid\")."
+                    },
+                    "auto_apply": {
+                        "type": "boolean",
+                        "description": "If true, automatically creates the predicted links in the knowledge graph (default: false)."
+                    }
+                }
+            }"#,
+            annotations: ToolAnnotations::read_only(),
+            tier: ToolTier::Standard,
+        },
+    ToolDef {
+            name: "memory_cluster_concepts",
+            description: "Cluster knowledge graph memories into high-level semantic concepts with auto-synthesized labels, key tags, and cohesion metrics.",
+            schema: r#"{
+                "type": "object",
+                "properties": {
+                    "workspace": {
+                        "type": "string",
+                        "description": "Optional workspace name to cluster."
+                    },
+                    "min_cluster_size": {
+                        "type": "integer",
+                        "description": "Minimum number of members required for a concept cluster (default: 2)."
+                    },
+                    "max_clusters": {
+                        "type": "integer",
+                        "description": "Maximum number of concept clusters to return (default: 10)."
+                    }
+                }
+            }"#,
+            annotations: ToolAnnotations::read_only(),
+            tier: ToolTier::Standard,
+        },
 ];

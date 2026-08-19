@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **285**
+Total tools: **287**
 
 ## Summary
 
@@ -136,6 +136,8 @@ Total tools: **285**
 | `scope_search` | standard | scope | always | readOnlyHint | `query`, `scope_path` |
 | `scope_set` | standard | scope | always | mutating (no MCP hints) | `memory_id`, `scope_path` |
 | `scope_tree` | standard | scope | always | readOnlyHint | none |
+| `memory_predict_links` | standard | memory.graph | always | readOnlyHint | none |
+| `memory_cluster_concepts` | standard | memory.graph | always | readOnlyHint | none |
 | `memory_set_expiration` | standard | memory.lifecycle | always | mutating (no MCP hints) | `id`, `ttl_seconds` |
 | `memory_cleanup_expired` | standard | memory.lifecycle | always | destructiveHint | none |
 | `memory_create_daily` | standard | memory.core | always | mutating (no MCP hints) | `content` |
@@ -2426,6 +2428,41 @@ Return a hierarchical tree of all scopes in the database.
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | _(none)_ |  | no | No input properties declared. |
+
+### `memory_predict_links`
+
+Predict implicit or missing relationships between memories using graph topology, transitive paths, and semantic embeddings.
+
+- Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `memory_id` | `integer` | no | Optional focus memory ID to predict links for. |
+| `workspace` | `string` | no | Restrict prediction candidates to this workspace. |
+| `min_confidence` | `number` | no | Minimum confidence threshold between 0.0 and 1.0 (default: 0.6). |
+| `top_k` | `integer` | no | Maximum number of predicted links to return (default: 10). |
+| `algorithm` | `string` | no | Link prediction algorithm (default: "hybrid"). Allowed: `hybrid`, `topological`, `semantic`, `transitive`. |
+| `auto_apply` | `boolean` | no | If true, automatically creates the predicted links in the knowledge graph (default: false). |
+
+### `memory_cluster_concepts`
+
+Cluster knowledge graph memories into high-level semantic concepts with auto-synthesized labels, key tags, and cohesion metrics.
+
+- Tier: `standard`
+- Group: `memory.graph`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Optional workspace name to cluster. |
+| `min_cluster_size` | `integer` | no | Minimum number of members required for a concept cluster (default: 2). |
+| `max_clusters` | `integer` | no | Maximum number of concept clusters to return (default: 10). |
 
 ### `memory_set_expiration`
 

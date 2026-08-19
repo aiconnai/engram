@@ -480,3 +480,60 @@ export interface MediaAsset {
   createdAt: string;
 }
 
+// -- Graph Intelligence & Link Prediction --
+
+export interface PredictLinksOptions {
+  memoryId?: number;
+  workspace?: string;
+  minConfidence?: number;
+  topK?: number;
+  algorithm?: "hybrid" | "topological" | "semantic" | "transitive" | string;
+  autoApply?: boolean;
+}
+
+export interface PredictedLink {
+  from_id: number;
+  to_id: number;
+  from_preview: string;
+  to_preview: string;
+  predicted_relation: string;
+  confidence: number;
+  reasons: string[];
+}
+
+export interface PredictLinksResult {
+  predictions: PredictedLink[];
+  count: number;
+  applied_count: number;
+}
+
+export interface ClusterConceptsOptions {
+  workspace?: string;
+  minClusterSize?: number;
+  maxClusters?: number;
+}
+
+export interface ConceptCluster {
+  concept_id: number;
+  label: string;
+  description: string;
+  size: number;
+  member_ids: number[];
+  representative_memory_id: number;
+  key_tags: string[];
+  cohesion: number;
+}
+
+export interface AutoLinkOptions {
+  workspace?: string;
+  similarityThreshold?: number;
+  timeWindowMinutes?: number;
+}
+
+export interface ClusterOptions {
+  minClusterSize?: number;
+  resolution?: number;
+  linkTypes?: string[];
+}
+
+

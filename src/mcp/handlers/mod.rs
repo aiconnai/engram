@@ -221,6 +221,10 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_get_entities" => graph::get_entities(ctx, params),
         "memory_search_entities" => graph::search_entities(ctx, params),
         "memory_entity_stats" => graph::entity_stats(ctx, params),
+        "memory_predict_links" | "graph_predict_links" => graph::memory_predict_links(ctx, params),
+        "memory_cluster_concepts" | "graph_cluster_concepts" => {
+            graph::memory_cluster_concepts(ctx, params)
+        }
 
         // ── Workspace ────────────────────────────────────────────────────────
         "workspace_list" => workspace::workspace_list(ctx, params),

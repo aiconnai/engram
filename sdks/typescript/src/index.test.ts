@@ -304,6 +304,28 @@ describe("EngramClient", () => {
 
       await client.graph.temporalEvolve("Alice");
       expect(requestMethod(13)).toBe("memory_temporal_evolve");
+
+      await client.graph.predictLinks({ memoryId: 5, autoApply: true });
+      expect(requestMethod(14)).toBe("memory_predict_links");
+      expect(requestArguments(14).memory_id).toBe(5);
+      expect(requestArguments(14).auto_apply).toBe(true);
+
+      await client.graph.clusterConcepts({ minClusterSize: 3 });
+      expect(requestMethod(15)).toBe("memory_cluster_concepts");
+      expect(requestArguments(15).min_cluster_size).toBe(3);
+
+      await client.graph.autoLink({ similarityThreshold: 0.8 });
+      expect(requestMethod(16)).toBe("memory_auto_link");
+      expect(requestArguments(16).similarity_threshold).toBe(0.8);
+
+      await client.graph.cluster({ minClusterSize: 2 });
+      expect(requestMethod(17)).toBe("memory_cluster");
+
+      await client.graph.getCluster(5);
+      expect(requestMethod(18)).toBe("memory_get_cluster");
+
+      await client.graph.listClusters("louvain");
+      expect(requestMethod(19)).toBe("memory_list_clusters");
     });
   });
 

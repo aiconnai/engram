@@ -19,6 +19,7 @@ import {
 import type {
   AddKnowledgeOptions,
   AgentStartOptions,
+  AutoLinkOptions,
   BlockCreateOptions,
   BlockEditOptions,
   BlockGetOptions,
@@ -27,7 +28,10 @@ import type {
   CacheClearOptions,
   CaptureScreenshotOptions,
   CheckAccessOptions,
+  ClusterConceptsOptions,
+  ClusterOptions,
   CoactivationReportOptions,
+  ConceptCluster,
   CompressForContextOptions,
   ConsolidateOptions,
   CouncilSkillAskOptions,
@@ -68,6 +72,8 @@ import type {
   ProgressEvent,
   PromptTemplateOptions,
   ProactiveScanOptions,
+  PredictLinksOptions,
+  PredictLinksResult,
   QueryTripletsOptions,
   RealtimeEvent,
   ScopeListOptions,
@@ -461,6 +467,33 @@ export class EngramClient implements McpCaller {
   graphMutate(options?: GraphMutateOptions): Promise<unknown> {
     return this.graph.mutate(options);
   }
+
+  predictLinks(options?: PredictLinksOptions): Promise<PredictLinksResult> {
+    return this.graph.predictLinks(options);
+  }
+
+  clusterConcepts(
+    options?: ClusterConceptsOptions
+  ): Promise<{ count: number; concepts: ConceptCluster[] }> {
+    return this.graph.clusterConcepts(options);
+  }
+
+  autoLink(options?: AutoLinkOptions): Promise<unknown> {
+    return this.graph.autoLink(options);
+  }
+
+  cluster(options?: ClusterOptions): Promise<unknown> {
+    return this.graph.cluster(options);
+  }
+
+  getCluster(memoryId: number): Promise<unknown> {
+    return this.graph.getCluster(memoryId);
+  }
+
+  listClusters(algorithm?: string): Promise<unknown> {
+    return this.graph.listClusters(algorithm);
+  }
+
 
   // ==========================================
   // Direct & Backward-Compatible Context Methods

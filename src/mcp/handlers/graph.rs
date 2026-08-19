@@ -418,3 +418,80 @@ pub fn graph_mutate(ctx: &HandlerContext, params: Value) -> Value {
         }),
     }
 }
+
+/// Predict missing or implicit links in the knowledge graph.
+pub fn memory_predict_links(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::graph::link_prediction::{predict_links, PredictLinksOptions};
+
+    let memory_id = params.get("memory_id").and_then(|v| v.as_i64());
+    let workspace = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let min_confidence = params
+        .get("min_confidence")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.6) as f32;
+    let top_k = params.get("top_k").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+    let algorithm = params
+        .get("algorithm")
+        .and_then(|v| v.as_str())
+        .unwrap_or("hybrid")
+        .to_string();
+    let auto_apply = params
+        .get("auto_apply")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let options = PredictLinksOptions {
+        memory_id,
+        workspace,
+        min_confidence,
+        top_k,
+        algorithm,
+        auto_apply,
+    };
+
+    let embedder = ctx.embedder.as_ref();
+
+    ctx.storage
+        .with_transaction(|conn| {
+            let res = predict_links(conn, Some(embedder), &options)?;
+            Ok(json!(res))
+        })
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}
+
+/// Cluster memories into semantic concept nodes.
+pub fn memory_cluster_concepts(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::graph::concept_clustering::{cluster_concepts, ConceptClusterOptions};
+
+    let workspace = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let min_cluster_size = params
+        .get("min_cluster_size")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(2) as usize;
+    let max_clusters = params
+        .get("max_clusters")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(10) as usize;
+
+    let options = ConceptClusterOptions {
+        workspace,
+        min_cluster_size,
+        max_clusters,
+    };
+
+    ctx.storage
+        .with_connection(|conn| {
+            let concepts = cluster_concepts(conn, &options)?;
+            Ok(json!({
+                "count": concepts.len(),
+                "concepts": concepts
+            }))
+        })
+        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+}

@@ -171,6 +171,45 @@ async def test_graph_mixin_methods(mock_client):
         "graph_query", {"action": "relations", "id": 42}
     )
 
+    await mock_client.predict_links(memory_id=42, auto_apply=True)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_predict_links",
+        {
+            "memory_id": 42,
+            "min_confidence": 0.6,
+            "top_k": 10,
+            "algorithm": "hybrid",
+            "auto_apply": True,
+        },
+    )
+
+    await mock_client.cluster_concepts(min_cluster_size=3)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_cluster_concepts", {"min_cluster_size": 3, "max_clusters": 10}
+    )
+
+    await mock_client.auto_link(similarity_threshold=0.8)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_auto_link",
+        {"similarity_threshold": 0.8, "time_window_minutes": 30},
+    )
+
+    await mock_client.cluster(min_cluster_size=2)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_cluster", {"min_cluster_size": 2, "resolution": 1.0}
+    )
+
+    await mock_client.get_cluster(42)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_get_cluster", {"memory_id": 42}
+    )
+
+    await mock_client.list_clusters("louvain")
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_list_clusters", {"algorithm": "louvain"}
+    )
+
+
 
 @pytest.mark.asyncio
 async def test_context_mixin_methods(mock_client):

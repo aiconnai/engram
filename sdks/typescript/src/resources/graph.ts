@@ -1,15 +1,22 @@
 import { BaseResource } from "./base.js";
 import type {
   AddKnowledgeOptions,
+  AutoLinkOptions,
+  ClusterConceptsOptions,
+  ClusterOptions,
   CoactivationReportOptions,
+  ConceptCluster,
   GraphMutateOptions,
   GraphQueryOptions,
+  PredictLinksOptions,
+  PredictLinksResult,
   QueryTripletsOptions,
   TemporalContradictionsOptions,
   TemporalCreateOptions,
   TemporalInvalidateOptions,
   TemporalSnapshotOptions,
 } from "../types.js";
+
 
 export class GraphResource extends BaseResource {
   /**
@@ -197,4 +204,82 @@ export class GraphResource extends BaseResource {
   async temporalEvolve(entity: string): Promise<void> {
     await this.caller.mcpCall("memory_temporal_evolve", { entity });
   }
+
+  /**
+   * Predict missing or implicit links in the knowledge graph.
+   */
+  async predictLinks(
+    options?: PredictLinksOptions
+  ): Promise<PredictLinksResult> {
+    const params: Record<string, unknown> = {};
+    if (options?.memoryId !== undefined) params.memory_id = options.memoryId;
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    if (options?.minConfidence !== undefined)
+      params.min_confidence = options.minConfidence;
+    if (options?.topK !== undefined) params.top_k = options.topK;
+    if (options?.algorithm !== undefined) params.algorithm = options.algorithm;
+    if (options?.autoApply !== undefined) params.auto_apply = options.autoApply;
+    return this.caller.mcpCall("memory_predict_links", params) as Promise<PredictLinksResult>;
+  }
+
+  /**
+   * Cluster memories into semantic concept nodes.
+   */
+  async clusterConcepts(
+    options?: ClusterConceptsOptions
+  ): Promise<{ count: number; concepts: ConceptCluster[] }> {
+    const params: Record<string, unknown> = {};
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    if (options?.minClusterSize !== undefined)
+      params.min_cluster_size = options.minClusterSize;
+    if (options?.maxClusters !== undefined)
+      params.max_clusters = options.maxClusters;
+    return this.caller.mcpCall("memory_cluster_concepts", params) as Promise<{
+      count: number;
+      concepts: ConceptCluster[];
+    }>;
+  }
+
+  /**
+   * Run semantic + temporal auto-linker.
+   */
+  async autoLink(options?: AutoLinkOptions): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    if (options?.similarityThreshold !== undefined)
+      params.similarity_threshold = options.similarityThreshold;
+    if (options?.timeWindowMinutes !== undefined)
+      params.time_window_minutes = options.timeWindowMinutes;
+    return this.caller.mcpCall("memory_auto_link", params);
+  }
+
+  /**
+   * Run community detection clustering.
+   */
+  async cluster(options?: ClusterOptions): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (options?.minClusterSize !== undefined)
+      params.min_cluster_size = options.minClusterSize;
+    if (options?.resolution !== undefined)
+      params.resolution = options.resolution;
+    if (options?.linkTypes !== undefined) params.link_types = options.linkTypes;
+    return this.caller.mcpCall("memory_cluster", params);
+  }
+
+  /**
+   * Get cluster containing a specific memory.
+   */
+  async getCluster(memoryId: number): Promise<unknown> {
+    return this.caller.mcpCall("memory_get_cluster", { memory_id: memoryId });
+  }
+
+  /**
+   * List all detected clusters.
+   */
+  async listClusters(algorithm?: string): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (algorithm !== undefined) params.algorithm = algorithm;
+    return this.caller.mcpCall("memory_list_clusters", params);
+  }
 }
+

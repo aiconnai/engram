@@ -236,3 +236,83 @@ class GraphMixin(ResourceMixin):
         if pinned is not None:
             params["pinned"] = pinned
         return await self._mcp_call("graph_mutate", params)
+
+    async def predict_links(
+        self,
+        *,
+        memory_id: int | None = None,
+        workspace: str | None = None,
+        min_confidence: float = 0.6,
+        top_k: int = 10,
+        algorithm: str = "hybrid",
+        auto_apply: bool = False,
+    ) -> dict[str, Any]:
+        """Predict implicit or missing relationships between memories."""
+        params: dict[str, Any] = {
+            "min_confidence": min_confidence,
+            "top_k": top_k,
+            "algorithm": algorithm,
+            "auto_apply": auto_apply,
+        }
+        if memory_id is not None:
+            params["memory_id"] = memory_id
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("memory_predict_links", params)
+
+    async def cluster_concepts(
+        self,
+        *,
+        workspace: str | None = None,
+        min_cluster_size: int = 2,
+        max_clusters: int = 10,
+    ) -> dict[str, Any]:
+        """Cluster memories into high-level semantic concept nodes."""
+        params: dict[str, Any] = {
+            "min_cluster_size": min_cluster_size,
+            "max_clusters": max_clusters,
+        }
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("memory_cluster_concepts", params)
+
+    async def auto_link(
+        self,
+        *,
+        workspace: str | None = None,
+        similarity_threshold: float = 0.75,
+        time_window_minutes: int = 30,
+    ) -> dict[str, Any]:
+        """Run semantic + temporal auto-linker on a workspace."""
+        params: dict[str, Any] = {
+            "similarity_threshold": similarity_threshold,
+            "time_window_minutes": time_window_minutes,
+        }
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("memory_auto_link", params)
+
+    async def cluster(
+        self,
+        *,
+        min_cluster_size: int = 2,
+        resolution: float = 1.0,
+        link_types: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run Louvain community detection on the memory graph."""
+        params: dict[str, Any] = {
+            "min_cluster_size": min_cluster_size,
+            "resolution": resolution,
+        }
+        if link_types is not None:
+            params["link_types"] = link_types
+        return await self._mcp_call("memory_cluster", params)
+
+    async def get_cluster(self, memory_id: int) -> dict[str, Any]:
+        """Get the cluster containing a specific memory."""
+        return await self._mcp_call("memory_get_cluster", {"memory_id": memory_id})
+
+    async def list_clusters(self, algorithm: str = "louvain") -> dict[str, Any]:
+        """List all detected clusters."""
+        return await self._mcp_call("memory_list_clusters", {"algorithm": algorithm})
+
