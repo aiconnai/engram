@@ -34,5 +34,13 @@ docs:
     ./scripts/generate-mcp-reference.sh --check
     RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --no-deps --document-private-items
 
+version-check:
+    python3 scripts/bump-version.py --check
+    python3 scripts/check-release-channels.py --matrix docs/releases/channel-matrix.toml
+
+version-refresh-matrix:
+    python3 scripts/bump-version.py --refresh-matrix
+
 loop-security:
     @bash scripts/run-agentshield-loop.sh
+

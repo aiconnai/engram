@@ -49,6 +49,16 @@ docs:
 	./scripts/generate-mcp-reference.sh --check
 	RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features $(CI_REQUIRED_FEATURES) --no-deps --document-private-items
 
+.PHONY: version-check
+version-check:
+	python3 scripts/bump-version.py --check
+	python3 scripts/check-release-channels.py --matrix docs/releases/channel-matrix.toml
+
+.PHONY: version-refresh-matrix
+version-refresh-matrix:
+	python3 scripts/bump-version.py --refresh-matrix
+
 .PHONY: loop-security
 loop-security:
 	@bash scripts/run-agentshield-loop.sh
+

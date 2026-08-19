@@ -1,6 +1,6 @@
 [matrix]
 schema_version = 2
-observed_utc = "2026-07-10T08:41:33Z"
+observed_utc = "2026-08-19T11:47:29Z"
 max_staleness_days = 30
 repository = "aiconnai/engram"
 core_version = "0.22.0"
