@@ -254,6 +254,8 @@ struct EngramHandler {
     /// Sender for progress notifications emitted during tool calls.
     /// The receiver is owned by the transport loop (stdio or HTTP).
     progress_tx: std::sync::mpsc::Sender<engram::mcp::ProgressNotification>,
+    /// Active MCP resource subscriptions (MCP 2025-11-25).
+    subscriptions: Arc<engram::mcp::ResourceSubscriptionManager>,
 }
 
 impl EngramHandler {
@@ -297,6 +299,7 @@ impl EngramHandler {
             #[cfg(feature = "hooks")]
             hook_manager: None,
             progress_tx,
+            subscriptions: Arc::new(engram::mcp::ResourceSubscriptionManager::new()),
         }
     }
 
@@ -539,6 +542,40 @@ impl McpHandler for EngramHandler {
                             }),
                         )
                     }
+                    Err(msg) => McpResponse::error(request.id, -32602, msg),
+                }
+            }
+            methods::SUBSCRIBE_RESOURCE => {
+                let uri = match request.params.get("uri").and_then(|v| v.as_str()) {
+                    Some(u) => u.to_string(),
+                    None => {
+                        return McpResponse::error(
+                            request.id,
+                            -32602,
+                            "Missing required parameter: uri".to_string(),
+                        )
+                    }
+                };
+
+                match self.subscriptions.subscribe(&uri) {
+                    Ok(()) => McpResponse::success(request.id, json!({})),
+                    Err(msg) => McpResponse::error(request.id, -32602, msg),
+                }
+            }
+            methods::UNSUBSCRIBE_RESOURCE => {
+                let uri = match request.params.get("uri").and_then(|v| v.as_str()) {
+                    Some(u) => u.to_string(),
+                    None => {
+                        return McpResponse::error(
+                            request.id,
+                            -32602,
+                            "Missing required parameter: uri".to_string(),
+                        )
+                    }
+                };
+
+                match self.subscriptions.unsubscribe(&uri) {
+                    Ok(()) => McpResponse::success(request.id, json!({})),
                     Err(msg) => McpResponse::error(request.id, -32602, msg),
                 }
             }
@@ -986,6 +1023,7 @@ mod tests {
             #[cfg(feature = "hooks")]
             hook_manager: None,
             progress_tx,
+            subscriptions: Arc::new(engram::mcp::ResourceSubscriptionManager::new()),
         }
     }
 

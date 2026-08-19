@@ -6,6 +6,7 @@ import {
   DreamResource,
   EventsResource,
   GraphResource,
+  McpResourcesResource,
   MemoriesResource,
   SearchResource,
   createDreamCallable,
@@ -88,6 +89,7 @@ export class EngramClient implements McpCaller {
   public readonly auth: AuthResource;
   public readonly admin: AdminResource;
   public readonly events: EventsResource;
+  public readonly resources: McpResourcesResource;
 
   constructor(config: EngramConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -107,6 +109,7 @@ export class EngramClient implements McpCaller {
     this.auth = new AuthResource(this);
     this.admin = new AdminResource(this);
     this.events = new EventsResource(this);
+    this.resources = new McpResourcesResource(this);
   }
 
   async mcpCall(
@@ -716,5 +719,33 @@ export class EngramClient implements McpCaller {
       onProgress,
       signal
     );
+  }
+
+  /**
+   * List all resource templates exposed by the MCP server.
+   */
+  resourceList(): Promise<unknown> {
+    return this.resources.list();
+  }
+
+  /**
+   * Read an MCP resource by URI.
+   */
+  resourceRead(uri: string): Promise<unknown> {
+    return this.resources.read(uri);
+  }
+
+  /**
+   * Subscribe to live updates for an MCP resource URI.
+   */
+  resourceSubscribe(uri: string): Promise<unknown> {
+    return this.resources.subscribe(uri);
+  }
+
+  /**
+   * Unsubscribe from updates for an MCP resource URI.
+   */
+  resourceUnsubscribe(uri: string): Promise<unknown> {
+    return this.resources.unsubscribe(uri);
   }
 }

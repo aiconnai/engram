@@ -583,4 +583,45 @@ describe("EngramClient", () => {
       expect(typeof client.watchProgress).toBe("function");
     });
   });
+
+  describe("McpResourcesResource", () => {
+    it("should call resources/list", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ resources: [] }));
+      const res = await client.resources.list();
+      expect(requestMethod(0)).toBe("resources/list");
+      expect(res).toEqual({ resources: [] });
+    });
+
+    it("should call resources/read with uri", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ contents: [] }));
+      const res = await client.resources.read("engram://stats");
+      expect(requestMethod(0)).toBe("resources/read");
+      expect(requestArguments(0)).toEqual({ uri: "engram://stats" });
+      expect(res).toEqual({ contents: [] });
+    });
+
+    it("should call resources/subscribe with uri", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({}));
+      await client.resources.subscribe("engram://workspace/dev/memories");
+      expect(requestMethod(0)).toBe("resources/subscribe");
+      expect(requestArguments(0)).toEqual({
+        uri: "engram://workspace/dev/memories",
+      });
+    });
+
+    it("should call resources/unsubscribe with uri", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({}));
+      await client.resources.unsubscribe("engram://workspace/dev/memories");
+      expect(requestMethod(0)).toBe("resources/unsubscribe");
+      expect(requestArguments(0)).toEqual({
+        uri: "engram://workspace/dev/memories",
+      });
+    });
+
+    it("should expose direct resource methods on client", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({}));
+      await client.resourceSubscribe("engram://stats");
+      expect(requestMethod(0)).toBe("resources/subscribe");
+    });
+  });
 });

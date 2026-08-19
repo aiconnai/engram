@@ -15,6 +15,7 @@ from .resources.dream import DreamMixin
 from .resources.events import EventsMixin
 from .resources.graph import GraphMixin
 from .resources.memories import MemoriesMixin
+from .resources.resources import McpResourcesMixin
 from .resources.search import SearchMixin
 
 # Re-export for callers that historically imported from client.
@@ -29,6 +30,7 @@ class EngramClient(
     GraphMixin,
     ContextMixin,
     AuthMixin,
+    McpResourcesMixin,
 ):
     """Async Engram Cloud client over authenticated MCP-HTTP."""
 

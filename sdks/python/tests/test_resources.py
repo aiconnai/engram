@@ -331,3 +331,25 @@ def test_events_mixin_attributes(mock_client):
     assert hasattr(mock_client, "watch_progress")
     assert hasattr(mock_client, "parse_sse_event")
 
+
+@pytest.mark.asyncio
+async def test_mcp_resources_mixin_methods(mock_client):
+    """Test McpResourcesMixin dispatch methods."""
+    mock_client._mcp_call = AsyncMock(return_value={"status": "ok"})
+
+    await mock_client.resource_list()
+    mock_client._mcp_call.assert_awaited_with("resources/list")
+
+    await mock_client.resource_read("engram://stats")
+    mock_client._mcp_call.assert_awaited_with("resources/read", {"uri": "engram://stats"})
+
+    await mock_client.resource_subscribe("engram://workspace/dev/memories")
+    mock_client._mcp_call.assert_awaited_with(
+        "resources/subscribe", {"uri": "engram://workspace/dev/memories"}
+    )
+
+    await mock_client.resource_unsubscribe("engram://workspace/dev/memories")
+    mock_client._mcp_call.assert_awaited_with(
+        "resources/unsubscribe", {"uri": "engram://workspace/dev/memories"}
+    )
+

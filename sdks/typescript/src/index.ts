@@ -33,6 +33,7 @@ export {
   DreamResource,
   EventsResource,
   GraphResource,
+  McpResourcesResource,
   MemoriesResource,
   SearchResource,
   type McpCaller,

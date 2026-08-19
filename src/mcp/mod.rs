@@ -21,10 +21,13 @@ pub use prompts::{get_prompt, list_prompts};
 pub use protocol::{
     methods, InitializeResult, McpHandler, McpRequest, McpResponse, McpServer, PromptArgument,
     PromptCapabilities, PromptContent, PromptDefinition, PromptMessage, ResourceCapabilities,
-    ResourceDefinition, ResourceTemplate, ServerCapabilities, ToolAnnotations, ToolCallResult,
+    ResourceDefinition, ResourceListChangedNotification, ResourceTemplate,
+    ResourceUpdatedNotification, ServerCapabilities, ToolAnnotations, ToolCallResult,
     ToolsCapability, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
 };
-pub use resources::{list_resources, read_resource};
+pub use resources::{
+    list_resources, read_resource, validate_resource_uri, ResourceSubscriptionManager,
+};
 pub use shutdown::shutdown_signal;
 pub use tools::{get_tool_definitions, get_tool_definitions_tiered, TOOL_DEFINITIONS};
 

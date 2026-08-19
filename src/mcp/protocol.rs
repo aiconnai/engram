@@ -174,10 +174,16 @@ pub mod methods {
     pub const CALL_TOOL: &str = "tools/call";
     pub const LIST_RESOURCES: &str = "resources/list";
     pub const READ_RESOURCE: &str = "resources/read";
+    pub const SUBSCRIBE_RESOURCE: &str = "resources/subscribe";
+    pub const UNSUBSCRIBE_RESOURCE: &str = "resources/unsubscribe";
     pub const LIST_PROMPTS: &str = "prompts/list";
     pub const GET_PROMPT: &str = "prompts/get";
     /// Progress notification method (MCP 2025-11-25).
     pub const PROGRESS: &str = "notifications/progress";
+    /// Resource updated notification method (MCP 2025-11-25).
+    pub const NOTIFY_RESOURCE_UPDATED: &str = "notifications/resources/updated";
+    /// Resource list changed notification method (MCP 2025-11-25).
+    pub const NOTIFY_RESOURCE_LIST_CHANGED: &str = "notifications/resources/list_changed";
 }
 
 /// Current MCP protocol version supported by this server
@@ -320,8 +326,8 @@ impl Default for InitializeResult {
                     list_changed: false,
                 }),
                 resources: Some(ResourceCapabilities {
-                    subscribe: false,
-                    list_changed: false,
+                    subscribe: true,
+                    list_changed: true,
                 }),
                 prompts: Some(PromptCapabilities {
                     list_changed: false,
@@ -331,6 +337,45 @@ impl Default for InitializeResult {
                 name: "engram".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
             },
+        }
+    }
+}
+
+/// Notification sent when a subscribed resource's content has changed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceUpdatedNotification {
+    pub jsonrpc: String,
+    pub method: String,
+    pub params: ResourceUpdatedParams,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceUpdatedParams {
+    pub uri: String,
+}
+
+impl ResourceUpdatedNotification {
+    pub fn new(uri: impl Into<String>) -> Self {
+        Self {
+            jsonrpc: "2.0".to_string(),
+            method: methods::NOTIFY_RESOURCE_UPDATED.to_string(),
+            params: ResourceUpdatedParams { uri: uri.into() },
+        }
+    }
+}
+
+/// Notification sent when the list of available resources has changed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceListChangedNotification {
+    pub jsonrpc: String,
+    pub method: String,
+}
+
+impl Default for ResourceListChangedNotification {
+    fn default() -> Self {
+        Self {
+            jsonrpc: "2.0".to_string(),
+            method: methods::NOTIFY_RESOURCE_LIST_CHANGED.to_string(),
         }
     }
 }
