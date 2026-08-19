@@ -12,28 +12,29 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-08-19
+
+### Added
+
+- **RFC 0007: Dream Phase Memory Consolidation** — Background and on-demand sleep-time memory consolidation (`DreamResource`, `dream_run_now`, `dream_create_plan`, `dream_list_candidates`, `dream_evaluate_plan`, `dream_apply_plan`) with automated deduplication and decay scoring.
+- **RFC 0008: Actionable Retrieval Digest (`memory_digest`)** — Structured memory synthesis section generator extracting top-salience decisions, active graph relations, and session next-actions with strict token budgeting.
+- **MCP 2025-11-25 Dynamic Resource Subscriptions** — Full implementation of `resources/subscribe` and `resources/unsubscribe` RPC handlers, `ResourceSubscriptionManager`, and `notifications/resources/updated` / `notifications/resources/list_changed` events.
+- **Streaming Response Protocol (Tier 3)** — Real-time multi-stage progress reporting (`ProgressReporterExt`, `CallbackProgressReporter`, `RealtimeEvent::progress`) for long-running retrieval operations.
+- **Realtime SSE Streaming & EventsResource** — Server-Sent Events client in Python and TypeScript SDKs (`EventsResource`) supporting auto-reconnect, exponential backoff, sequence recovery (`Last-Event-ID`), and typed event streams.
+- **In-Browser WebAssembly Engine (`engram-wasm`)** — Pure-Rust WebAssembly compilation for client-side BM25 scoring, 384-dimensional TF-IDF vector embeddings, Named Entity Recognition, and Graph shortest-path computation directly in the browser on GitHub Pages.
+- **Google Antigravity Integration** — Official integration pattern and runnable hook in `examples/google-antigravity/` demonstrating cross-session memory and digest synthesis.
+- **Automated Versioning Tooling (`scripts/bump-version.py`)** — Unified CLI tool for 5-plane decoupled version management, matrix refresh, and consistency validation.
+
 ### Changed
 
-- **Default MCP tool surface is now Essential-only (behavioral change).**
-  `tools/list` advertises a curated ~15-tool Essential profile plus
-  `discover_tools` instead of the full tool set. **Migration:** hosts that
-  relied on the previous broad first-connect surface (including
-  `memory_search`, `memory_delete`, `session_index`, `identity_create`) should
-  set `ENGRAM_TOOL_TIER=standard` in the server environment; use
-  `ENGRAM_TOOL_TIER=all` for every compiled tool. Calling any tool by name
-  still works regardless of tier — only advertisement changes.
-- **`discover_tools` is now a full catalog browser.** Results include `group`,
-  `availability`, `feature`, and `enable_with` hints, and the listing covers
-  tools disabled by compile-time features (`availability=feature_disabled`)
-  with `total_defined` in the payload. Invalid `tier`, `group`/`category`,
-  `search`, or `detail` arguments are rejected with explicit errors instead of
-  being silently ignored.
-- **Feature split: `snapshot` and `attestation`.** The former
-  `agent-portability` feature is split into independent `snapshot` and
-  `attestation` features; `agent-portability` remains as a compatibility alias
-  enabling both. `clip-embeddings` is likewise a standalone feature.
+- **TypeScript SDK Modularization** — Modularized architecture (`client.ts`, `council.ts`, `errors.ts`, `resources/`, `types.ts`) with seamless backward-compatible re-exports in `index.ts`.
+- **Advertised Contracts AST Inspector** — Upgraded `scripts/check-advertised-contracts.py` to inspect modular TypeScript SDK classes and interfaces without requiring a single monolithic file.
+- **Default MCP tool surface** — Default `tools/list` advertises a curated ~15-tool Essential profile plus `discover_tools` instead of the full tool set. Hosts can configure `ENGRAM_TOOL_TIER=standard` or `ENGRAM_TOOL_TIER=all`.
+
+---
 
 ## [0.22.0] - 2026-06-19
+
 
 ### Changed
 

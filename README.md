@@ -3,7 +3,7 @@
 **Persistent, local-first memory engine for AI agents across Frontier LLMs.**
 
 [![CI](https://github.com/aiconnai/engram/actions/workflows/ci.yml/badge.svg)](https://github.com/aiconnai/engram/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/Release-v0.24.0%20GA-success.svg)](https://github.com/aiconnai/engram/releases)
+[![Release](https://img.shields.io/badge/Release-v0.23.0%20GA-success.svg)](https://github.com/aiconnai/engram/releases)
 [![Website](https://img.shields.io/badge/Website-aiconnai.github.io%2Fengram-cyan.svg)](https://aiconnai.github.io/engram/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/engram-core.svg)](https://crates.io/crates/engram-core)
