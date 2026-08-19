@@ -168,14 +168,53 @@ fn parse_request(params: &Value) -> Result<DigestRequest, String> {
         None => None,
     };
 
+    let limit = if let Some(v) = params.get("limit") {
+        let val = v
+            .as_u64()
+            .ok_or_else(|| "limit must be a positive integer".to_string())?
+            as usize;
+        if !(1..=MAX_LIMIT).contains(&val) {
+            return Err(format!("limit must be between 1 and {MAX_LIMIT}"));
+        }
+        val
+    } else {
+        DEFAULT_LIMIT
+    };
+
+    let related_depth = if let Some(v) = params.get("related_depth") {
+        let val = v
+            .as_u64()
+            .ok_or_else(|| "related_depth must be an integer".to_string())?
+            as usize;
+        if val > 2 {
+            return Err("related_depth must be between 0 and 2".to_string());
+        }
+        val
+    } else {
+        1
+    };
+
+    let total_budget = if let Some(v) = params.get("total_budget") {
+        let val = v
+            .as_u64()
+            .ok_or_else(|| "total_budget must be a positive integer".to_string())?;
+        if !(MIN_TOTAL_BUDGET..=MAX_TOTAL_BUDGET).contains(&val) {
+            return Err(format!(
+                "total_budget must be between {MIN_TOTAL_BUDGET} and {MAX_TOTAL_BUDGET}"
+            ));
+        }
+        val
+    } else {
+        DEFAULT_TOTAL_BUDGET
+    };
+
     Ok(DigestRequest {
         topic,
         workspace: optional_string(params, "workspace"),
         mode,
-        limit: optional_usize(params, "limit", DEFAULT_LIMIT).clamp(1, MAX_LIMIT),
-        related_depth: optional_usize(params, "related_depth", 1).clamp(0, 2),
-        total_budget: optional_u64(params, "total_budget", DEFAULT_TOTAL_BUDGET)
-            .clamp(MIN_TOTAL_BUDGET, MAX_TOTAL_BUDGET),
+        limit,
+        related_depth,
+        total_budget,
         include_types,
         timeframe,
         include_graph: optional_bool(params, "include_graph", true),
@@ -535,18 +574,6 @@ fn optional_string(params: &Value, name: &str) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
-}
-
-fn optional_usize(params: &Value, name: &str, default: usize) -> usize {
-    params
-        .get(name)
-        .and_then(Value::as_u64)
-        .map(|value| value as usize)
-        .unwrap_or(default)
-}
-
-fn optional_u64(params: &Value, name: &str, default: u64) -> u64 {
-    params.get(name).and_then(Value::as_u64).unwrap_or(default)
 }
 
 fn optional_bool(params: &Value, name: &str, default: bool) -> bool {
