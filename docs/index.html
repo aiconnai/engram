@@ -456,51 +456,49 @@
         <!-- Controls Left Column -->
         <div class="playground-controls">
           <div class="playground-tabs">
-            <button class="pg-tab-btn active" data-mode="create">Create Memory</button>
-            <button class="pg-tab-btn" data-mode="search">Hybrid Search</button>
-            <button class="pg-tab-btn" data-mode="traverse">Knowledge Graph</button>
+            <button class="pg-tab-btn active" data-mode="wasm-search">⚡ WASM Hybrid Search</button>
+            <button class="pg-tab-btn" data-mode="wasm-ner">🔍 WASM Entities</button>
+            <button class="pg-tab-btn" data-mode="wasm-graph">🕸️ WASM Graph</button>
+            <button class="pg-tab-btn" data-mode="create">Create Memory</button>
             <button class="pg-tab-btn" data-mode="contradiction">Contradictions</button>
           </div>
 
           <div id="pg-inputs-dynamic">
             <div class="pg-input-group">
-              <label>Memory Content</label>
-              <input type="text" id="pg-create-content" class="pg-input" value="Use AES-256-GCM encryption for cloud backup snapshots" />
+              <label>Search Query (Live WASM BM25 + Vector + RRF)</label>
+              <input type="text" id="pg-search-query" class="pg-input" value="postgres connection pooling tokio" />
             </div>
             <div class="pg-input-group">
-              <label>Memory Type</label>
-              <select id="pg-create-type" class="pg-select">
-                <option value="decision" selected>decision (Permanent)</option>
-                <option value="architecture">architecture</option>
-                <option value="daily">daily (24h Auto-Expire)</option>
-              </select>
-            </div>
-            <div class="pg-input-group">
-              <label>Workspace</label>
-              <input type="text" id="pg-create-workspace" class="pg-input" value="default" />
+              <label>Workspace Filter</label>
+              <input type="text" id="pg-search-workspace" class="pg-input" value="backend" />
             </div>
           </div>
 
           <button id="pg-action-btn" class="btn btn-primary" style="width: 100%;">
-            Execute memory_create
+            Run WASM Hybrid Search
           </button>
         </div>
 
         <!-- Output Right Column -->
         <div class="playground-output">
           <div class="pg-output-header">
-            <span class="pg-output-title">JSON-RPC 2.0 Protocol Response</span>
-            <span class="model-badge">Latency: 0.8ms</span>
+            <span class="pg-output-title">Client-Side Rust WASM Protocol Response</span>
+            <div style="display: flex; gap: 8px;">
+              <span id="wasm-badge" class="model-badge">⚡ Rust WASM v0.1.0 Loading...</span>
+              <span id="pg-latency-badge" class="model-badge">WASM Latency: &lt;0.05ms</span>
+            </div>
           </div>
           <pre class="pg-json-view" id="pg-json-output">{
   "jsonrpc": "2.0",
   "result": {
+    "engine": "engram-wasm (WebAssembly in Browser)",
     "status": "ready",
-    "message": "Click 'Execute' to interact with Engram's simulated memory engine."
+    "message": "Click 'Run WASM Hybrid Search' to execute pure-Rust BM25, TF-IDF vector embeddings, and RRF fusion in real-time."
   }
 }</pre>
         </div>
       </div>
+
     </div>
   </section>
 
@@ -771,6 +769,7 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     </div>
   </footer>
 
-  <script src="site.js"></script>
+  <script type="module" src="site.js"></script>
 </body>
 </html>
+

@@ -1,0 +1,28 @@
+{
+  "name": "engram-wasm",
+  "type": "module",
+  "description": "Engram algorithms compiled to WebAssembly — pure-Rust, no I/O dependencies",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aiconnai/engram"
+  },
+  "files": [
+    "engram_wasm_bg.wasm",
+    "engram_wasm.js",
+    "engram_wasm.d.ts"
+  ],
+  "main": "engram_wasm.js",
+  "homepage": "https://github.com/aiconnai/engram",
+  "types": "engram_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ],
+  "keywords": [
+    "ai",
+    "memory",
+    "search",
+    "wasm"
+  ]
+}

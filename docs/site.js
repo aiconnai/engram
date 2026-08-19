@@ -1,7 +1,13 @@
 /**
  * Engram Official GitHub Pages Interactive Engine
- * Handles terminal simulation, comparison chat playback, interactive memory playground, SDK tabs, and code copying.
+ * Integrates pure-Rust WebAssembly (`engram-wasm`) directly in the browser
+ * for client-side BM25 scoring, TF-IDF vector embeddings, entity extraction,
+ * graph traversal, and RRF rank fusion.
  */
+
+import initWasm, * as wasm from './wasm/engram_wasm.js';
+
+let wasmLoaded = false;
 
 document.addEventListener('DOMContentLoaded', () => {
   initTerminalSimulation();
@@ -9,7 +15,30 @@ document.addEventListener('DOMContentLoaded', () => {
   initPlayground();
   initSdkTabs();
   initCopyButtons();
+  initWasmEngine();
 });
+
+/* =========================================================================
+   0. WASM Engine Initialization
+   ========================================================================= */
+async function initWasmEngine() {
+  const badge = document.getElementById('wasm-badge');
+  try {
+    await initWasm();
+    wasmLoaded = true;
+    if (badge) {
+      badge.textContent = `⚡ Rust WASM v${wasm.version()} Active`;
+      badge.style.color = '#10b981';
+      badge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+    }
+  } catch (err) {
+    console.warn('WASM module initialization fallback:', err);
+    if (badge) {
+      badge.textContent = '⚡ Engine: JS Simulation';
+      badge.style.color = '#f59e0b';
+    }
+  }
+}
 
 /* =========================================================================
    1. The Forgetting — Interactive Split Comparison Chat Demo
@@ -114,9 +143,9 @@ const terminalScenarios = {
     { type: 'dim', text: '  Traversing knowledge graph from canonical identity \'AuthService\'...' },
     { type: 'break' },
     { type: 'purple', tag: '[ENTITY]', name: 'AuthService', detail: ' (Aliases: [auth-api, authentication-worker, idp-client])' },
-    { type: 'edge', rel: '(depends_on)', target: 'VaultSecrets', desc: ' [mem_12a0f7: "API keys rotated daily via Vault"]' },
-    { type: 'edge', rel: '(stores_in)', target: 'PostgreSQL', desc: ' [mem_33b8c2: "User credentials stored with Argon2id"]' },
-    { type: 'edge', rel: '(accessed_by)', target: 'GatewayWorker', desc: ' [mem_77d1e4: "JWT bearer validation executed at edge"]' },
+    { type: 'graph-edge', label: '(depends_on)', target: 'VaultSecrets', detail: ' [mem_12a0f7: "API keys rotated daily via Vault"]' },
+    { type: 'graph-edge', label: '(stores_in)', target: 'PostgreSQL', detail: ' [mem_33b8c2: "User credentials stored with Argon2id hash"]' },
+    { type: 'graph-edge', label: '(accessed_by)', target: 'GatewayWorker', detail: ' [mem_77d1e4: "JWT bearer validation executed at edge proxy"]' },
     { type: 'break' },
     { type: 'dim', text: '  Resolved 4 nodes, 3 relations in 0.82ms. Shortest path to DB: 1 hop.' }
   ]
@@ -124,72 +153,88 @@ const terminalScenarios = {
 
 function renderTerminal(scenarioKey) {
   const terminalBody = document.getElementById('hero-terminal');
-  if (!terminalBody) return;
-  const items = terminalScenarios[scenarioKey] || [];
+  if (!terminalBody || !terminalScenarios[scenarioKey]) return;
+
   terminalBody.replaceChildren();
 
+  const items = terminalScenarios[scenarioKey];
   items.forEach(item => {
-    if (item.type === 'break') {
-      terminalBody.appendChild(document.createElement('br'));
-      return;
-    }
-    const div = document.createElement('div');
     if (item.type === 'line') {
-      const p = document.createElement('span');
-      p.className = 't-prompt';
-      p.textContent = item.prompt + ' ';
-      const c = document.createElement('span');
-      c.className = 't-cmd';
-      c.textContent = item.cmd;
-      div.appendChild(p);
-      div.appendChild(c);
+      const row = document.createElement('div');
+      const pSpan = document.createElement('span');
+      pSpan.className = 't-prompt';
+      pSpan.textContent = item.prompt + ' ';
+      const cSpan = document.createElement('span');
+      cSpan.className = 't-cmd';
+      cSpan.textContent = item.cmd;
+      row.appendChild(pSpan);
+      row.appendChild(cSpan);
+      terminalBody.appendChild(row);
     } else if (item.type === 'banner') {
-      div.className = 't-banner';
-      div.textContent = item.text;
+      const row = document.createElement('div');
+      row.className = 't-banner';
+      row.textContent = item.text;
+      terminalBody.appendChild(row);
     } else if (item.type === 'dim') {
-      div.className = 't-dim';
-      div.textContent = item.text;
-    } else if (item.type === 'cmd') {
-      div.className = 't-cmd';
-      div.textContent = item.text;
+      const row = document.createElement('div');
+      row.className = 't-dim';
+      row.textContent = item.text;
+      terminalBody.appendChild(row);
+    } else if (item.type === 'break') {
+      terminalBody.appendChild(document.createElement('br'));
     } else if (item.type === 'success') {
+      const row = document.createElement('div');
       const tag = document.createElement('span');
       tag.className = 't-success';
       tag.textContent = item.tag;
-      div.appendChild(tag);
-      div.appendChild(document.createTextNode(item.text));
+      row.appendChild(tag);
+      row.appendChild(document.createTextNode(item.text));
+      terminalBody.appendChild(row);
     } else if (item.type === 'highlight') {
-      div.className = 't-highlight';
-      div.appendChild(document.createTextNode(item.tag + ' '));
-      const s = document.createElement('span');
-      s.className = 't-cyan';
-      s.textContent = item.score;
-      div.appendChild(s);
-      div.appendChild(document.createTextNode(item.detail));
+      const row = document.createElement('div');
+      const tag = document.createElement('span');
+      tag.className = 't-highlight';
+      tag.textContent = item.tag + ' ';
+      const sc = document.createElement('span');
+      sc.className = 't-cyan';
+      sc.textContent = item.score;
+      row.appendChild(tag);
+      row.appendChild(sc);
+      row.appendChild(document.createTextNode(item.detail));
+      terminalBody.appendChild(row);
+    } else if (item.type === 'cmd') {
+      const row = document.createElement('div');
+      const sc = document.createElement('span');
+      sc.className = 't-cmd';
+      sc.textContent = item.text;
+      row.appendChild(sc);
+      terminalBody.appendChild(row);
     } else if (item.type === 'purple') {
+      const row = document.createElement('div');
       const tag = document.createElement('span');
       tag.className = 't-purple';
       tag.textContent = item.tag + ' ';
-      const n = document.createElement('span');
-      n.className = 't-cyan';
-      n.textContent = item.name;
-      div.appendChild(tag);
-      div.appendChild(n);
-      div.appendChild(document.createTextNode(item.detail));
-    } else if (item.type === 'edge') {
-      div.appendChild(document.createTextNode('  ├── '));
-      const rel = document.createElement('span');
-      rel.className = 't-success';
-      rel.textContent = item.rel;
-      div.appendChild(rel);
-      div.appendChild(document.createTextNode(' ──> '));
+      const name = document.createElement('span');
+      name.className = 't-cyan';
+      name.textContent = item.name;
+      row.appendChild(tag);
+      row.appendChild(name);
+      row.appendChild(document.createTextNode(item.detail));
+      terminalBody.appendChild(row);
+    } else if (item.type === 'graph-edge') {
+      const row = document.createElement('div');
+      row.appendChild(document.createTextNode('  ├── '));
+      const edge = document.createElement('span');
+      edge.className = 't-success';
+      edge.textContent = item.label;
       const target = document.createElement('span');
       target.className = 't-cyan';
-      target.textContent = item.target;
-      div.appendChild(target);
-      div.appendChild(document.createTextNode(item.desc));
+      target.textContent = ' ──> ' + item.target;
+      row.appendChild(edge);
+      row.appendChild(target);
+      row.appendChild(document.createTextNode(item.detail));
+      terminalBody.appendChild(row);
     }
-    terminalBody.appendChild(div);
   });
 }
 
@@ -210,8 +255,41 @@ function initTerminalSimulation() {
 }
 
 /* =========================================================================
-   3. Interactive Memory Playground (In-Browser Simulation)
+   3. Interactive Memory Playground (Client-Side Rust WASM Integration)
    ========================================================================= */
+
+// Sample in-memory corpus for live in-browser WASM search
+const inMemoryCorpus = [
+  {
+    id: 1,
+    content: "PostgreSQL connection pooling configured with max 25 connections and 5s timeout. Use Tokio async/await for I/O workers.",
+    type: "decision",
+    workspace: "backend",
+    entities: ["PostgreSQL", "Tokio", "ConnectionPool", "Rust"]
+  },
+  {
+    id: 2,
+    content: "API authentication uses RS256 JWT tokens with public verification keys cached from HashiCorp Vault.",
+    type: "architecture",
+    workspace: "security",
+    entities: ["Vault", "JWT", "RS256", "AuthService"]
+  },
+  {
+    id: 3,
+    content: "Docker container setup: Redis caching layer with 512MB RAM and eviction policy allkeys-lru.",
+    type: "infra",
+    workspace: "prod",
+    entities: ["Docker", "Redis", "Cache"]
+  },
+  {
+    id: 4,
+    content: "Database migration scripts must run in atomic transactions with zero-downtime backwards compatibility.",
+    type: "pattern",
+    workspace: "backend",
+    entities: ["PostgreSQL", "Migration", "Database"]
+  }
+];
+
 function initPlayground() {
   const pgTabs = document.querySelectorAll('.pg-tab-btn');
   const pgOutput = document.getElementById('pg-json-output');
@@ -219,7 +297,7 @@ function initPlayground() {
 
   if (!pgOutput || !actionBtn) return;
 
-  let activeMode = 'create';
+  let activeMode = 'wasm-search';
 
   pgTabs.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -252,7 +330,69 @@ function updatePlaygroundUI(mode) {
     return group;
   }
 
-  if (mode === 'create') {
+  if (mode === 'wasm-search') {
+    actionBtn.textContent = 'Run WASM Hybrid Search';
+
+    const qInput = document.createElement('input');
+    qInput.type = 'text';
+    qInput.id = 'pg-search-query';
+    qInput.className = 'pg-input';
+    qInput.value = 'postgres connection pooling tokio';
+    inputContainer.appendChild(createInputGroup('Search Query (Live WASM BM25 + Vector + RRF)', qInput));
+
+    const wsInput = document.createElement('input');
+    wsInput.type = 'text';
+    wsInput.id = 'pg-search-workspace';
+    wsInput.className = 'pg-input';
+    wsInput.value = 'backend';
+    inputContainer.appendChild(createInputGroup('Workspace Filter', wsInput));
+
+  } else if (mode === 'wasm-ner') {
+    actionBtn.textContent = 'Run WASM Entity Extraction';
+
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.id = 'pg-ner-text';
+    textInput.className = 'pg-input';
+    textInput.value = 'Deploy @alex commit to https://api.engram.dev for PostgreSQL on 2026-08-19';
+    inputContainer.appendChild(createInputGroup('Input Text for Entity Extraction', textInput));
+
+  } else if (mode === 'wasm-graph') {
+    actionBtn.textContent = 'Run WASM Graph Path Finding';
+
+    const startSelect = document.createElement('select');
+    startSelect.id = 'pg-graph-start';
+    startSelect.className = 'pg-select';
+    [
+      { id: '1', name: 'Node 1 (AuthService)' },
+      { id: '2', name: 'Node 2 (Vault)' },
+      { id: '3', name: 'Node 3 (PostgreSQL)' },
+      { id: '4', name: 'Node 4 (GatewayWorker)' }
+    ].forEach(n => {
+      const o = document.createElement('option');
+      o.value = n.id;
+      o.textContent = n.name;
+      startSelect.appendChild(o);
+    });
+    inputContainer.appendChild(createInputGroup('Start Node', startSelect));
+
+    const endSelect = document.createElement('select');
+    endSelect.id = 'pg-graph-end';
+    endSelect.className = 'pg-select';
+    [
+      { id: '3', name: 'Node 3 (PostgreSQL)' },
+      { id: '2', name: 'Node 2 (Vault)' },
+      { id: '4', name: 'Node 4 (GatewayWorker)' },
+      { id: '1', name: 'Node 1 (AuthService)' }
+    ].forEach(n => {
+      const o = document.createElement('option');
+      o.value = n.id;
+      o.textContent = n.name;
+      endSelect.appendChild(o);
+    });
+    inputContainer.appendChild(createInputGroup('Target Node', endSelect));
+
+  } else if (mode === 'create') {
     actionBtn.textContent = 'Execute memory_create';
 
     const contentInput = document.createElement('input');
@@ -284,46 +424,6 @@ function updatePlaygroundUI(mode) {
     wsInput.value = 'default';
     inputContainer.appendChild(createInputGroup('Workspace', wsInput));
 
-  } else if (mode === 'search') {
-    actionBtn.textContent = 'Execute memory_search';
-
-    const qInput = document.createElement('input');
-    qInput.type = 'text';
-    qInput.id = 'pg-search-query';
-    qInput.className = 'pg-input';
-    qInput.value = 'postgre connection pooling';
-    inputContainer.appendChild(createInputGroup('Search Query (supports typos & semantic concepts)', qInput));
-
-    const wsInput = document.createElement('input');
-    wsInput.type = 'text';
-    wsInput.id = 'pg-search-workspace';
-    wsInput.className = 'pg-input';
-    wsInput.value = 'prod';
-    inputContainer.appendChild(createInputGroup('Workspace Filter', wsInput));
-
-  } else if (mode === 'traverse') {
-    actionBtn.textContent = 'Execute memory_traverse';
-
-    const entSelect = document.createElement('select');
-    entSelect.id = 'pg-traverse-entity';
-    entSelect.className = 'pg-select';
-    ['AuthService', 'PostgreSQL', 'Vault'].forEach(ent => {
-      const o = document.createElement('option');
-      o.value = ent;
-      o.textContent = ent;
-      entSelect.appendChild(o);
-    });
-    inputContainer.appendChild(createInputGroup('Target Entity / Identity', entSelect));
-
-    const depthInput = document.createElement('input');
-    depthInput.type = 'number';
-    depthInput.id = 'pg-traverse-depth';
-    depthInput.className = 'pg-input';
-    depthInput.value = '2';
-    depthInput.min = '1';
-    depthInput.max = '5';
-    inputContainer.appendChild(createInputGroup('Max Traversal Depth', depthInput));
-
   } else if (mode === 'contradiction') {
     actionBtn.textContent = 'Execute memory_temporal_contradictions';
 
@@ -351,13 +451,166 @@ function updatePlaygroundUI(mode) {
 
 function executePlaygroundAction(mode) {
   const output = document.getElementById('pg-json-output');
+  const latencyBadge = document.getElementById('pg-latency-badge');
   if (!output) return;
 
-  if (mode === 'create') {
+  const startTime = performance.now();
+
+  if (mode === 'wasm-search') {
+    const query = document.getElementById('pg-search-query')?.value || 'postgres';
+    const workspace = document.getElementById('pg-search-workspace')?.value || 'backend';
+
+    if (wasmLoaded) {
+      // 1. WASM BM25 tokenization
+      const queryTokens = JSON.parse(wasm.bm25_tokenize(query));
+      const queryVector = wasm.tfidf_embed(query, 384);
+      const queryEntities = JSON.parse(wasm.extract_entities(query));
+
+      const scoredDocs = inMemoryCorpus.map(doc => {
+        const docTokens = JSON.parse(wasm.bm25_tokenize(doc.content));
+        const bm25 = wasm.bm25_score(
+          JSON.stringify(queryTokens),
+          JSON.stringify(docTokens),
+          inMemoryCorpus.length,
+          15.0,
+          1.5,
+          0.75
+        );
+        const docVector = wasm.tfidf_embed(doc.content, 384);
+        const cosine = wasm.cosine_similarity(queryVector, docVector);
+        return {
+          id: doc.id,
+          content: doc.content,
+          workspace: doc.workspace,
+          bm25_score: parseFloat(bm25.toFixed(4)),
+          vector_similarity: parseFloat(cosine.toFixed(4)),
+          entities: doc.entities
+        };
+      });
+
+      // Rank by BM25 and Vector
+      const kwRanked = [...scoredDocs].sort((a, b) => b.bm25_score - a.bm25_score).map(d => d.id);
+      const vecRanked = [...scoredDocs].sort((a, b) => b.vector_similarity - a.vector_similarity).map(d => d.id);
+
+      // WASM RRF Fusion
+      const rrfResults = JSON.parse(wasm.rrf_hybrid(
+        JSON.stringify(kwRanked),
+        JSON.stringify(vecRanked),
+        1.0,
+        1.0,
+        60.0
+      ));
+
+      const rrfMap = new Map(rrfResults.map(r => [r.doc_id, r.score]));
+
+      const finalHits = scoredDocs
+        .map(d => ({
+          ...d,
+          rrf_fused_score: parseFloat((rrfMap.get(d.id) || 0).toFixed(4))
+        }))
+        .sort((a, b) => b.rrf_fused_score - a.rrf_fused_score);
+
+      const elapsed = (performance.now() - startTime).toFixed(3);
+      if (latencyBadge) latencyBadge.textContent = `WASM Latency: ${elapsed}ms`;
+
+      const res = {
+        engine: `engram-wasm v${wasm.version()} (Client-side Pure Rust)`,
+        execution_environment: "WebAssembly in Browser",
+        latency_ms: parseFloat(elapsed),
+        query_analysis: {
+          raw_query: query,
+          bm25_tokens: queryTokens,
+          entities_detected: queryEntities
+        },
+        fusion_algorithm: "Reciprocal Rank Fusion (RRF k=60)",
+        matches_found: finalHits.length,
+        results: finalHits
+      };
+      output.textContent = JSON.stringify(res, null, 2);
+    } else {
+      // Fallback
+      const res = {
+        status: "success",
+        query,
+        workspace,
+        algorithm: "Reciprocal Rank Fusion (RRF)",
+        results: inMemoryCorpus
+      };
+      output.textContent = JSON.stringify(res, null, 2);
+    }
+
+  } else if (mode === 'wasm-ner') {
+    const text = document.getElementById('pg-ner-text')?.value || '';
+    if (wasmLoaded) {
+      const entities = JSON.parse(wasm.extract_entities(text));
+      const elapsed = (performance.now() - startTime).toFixed(3);
+      if (latencyBadge) latencyBadge.textContent = `WASM Latency: ${elapsed}ms`;
+
+      const res = {
+        engine: `engram-wasm v${wasm.version()} (Named Entity Recognition)`,
+        input_text: text,
+        latency_ms: parseFloat(elapsed),
+        extracted_entities_count: entities.length,
+        entities: entities
+      };
+      output.textContent = JSON.stringify(res, null, 2);
+    }
+
+  } else if (mode === 'wasm-graph') {
+    const startNode = BigInt(document.getElementById('pg-graph-start')?.value || '1');
+    const endNode = BigInt(document.getElementById('pg-graph-end')?.value || '3');
+
+    const edges = [
+      { from: 1, to: 2 }, // AuthService -> Vault
+      { from: 1, to: 4 }, // AuthService -> GatewayWorker
+      { from: 4, to: 3 }, // GatewayWorker -> PostgreSQL
+      { from: 2, to: 3 }  // Vault -> PostgreSQL
+    ];
+
+    if (wasmLoaded) {
+      const bfsTree = JSON.parse(wasm.graph_bfs(JSON.stringify(edges), startNode, 3));
+      const shortestPath = JSON.parse(wasm.graph_shortest_path(JSON.stringify(edges), startNode, endNode));
+      const elapsed = (performance.now() - startTime).toFixed(3);
+      if (latencyBadge) latencyBadge.textContent = `WASM Latency: ${elapsed}ms`;
+
+      const nodeLabels = {
+        1: 'AuthService',
+        2: 'Vault',
+        3: 'PostgreSQL',
+        4: 'GatewayWorker'
+      };
+
+      const res = {
+        engine: `engram-wasm v${wasm.version()} (Graph Engine)`,
+        start_node: { id: Number(startNode), label: nodeLabels[Number(startNode)] },
+        target_node: { id: Number(endNode), label: nodeLabels[Number(endNode)] },
+        latency_ms: parseFloat(elapsed),
+        shortest_path_hops: shortestPath ? shortestPath.map(id => nodeLabels[id] || id) : null,
+        bfs_traversal: bfsTree.map(item => ({
+          node_id: item.node,
+          label: nodeLabels[item.node] || item.node,
+          depth: item.depth
+        }))
+      };
+      output.textContent = JSON.stringify(res, null, 2);
+    }
+
+  } else if (mode === 'create') {
     const content = document.getElementById('pg-create-content')?.value || 'Sample memory';
     const type = document.getElementById('pg-create-type')?.value || 'decision';
     const ws = document.getElementById('pg-create-workspace')?.value || 'default';
     const newId = 'mem_' + Math.random().toString(36).substr(2, 6);
+
+    let extractedEnts = ['AES-256-GCM', 'Snapshot', 'Encryption'];
+    if (wasmLoaded) {
+      const ents = JSON.parse(wasm.extract_entities(content));
+      if (ents.length > 0) {
+        extractedEnts = ents.map(e => e.normalized);
+      }
+    }
+
+    const elapsed = (performance.now() - startTime).toFixed(3);
+    if (latencyBadge) latencyBadge.textContent = `Latency: ${elapsed}ms`;
 
     const res = {
       jsonrpc: '2.0',
@@ -371,59 +624,16 @@ function executePlaygroundAction(mode) {
         indexing: {
           bm25_fts5: 'indexed',
           vector_embedding: '384-dim (MiniLM ONNX + HNSW)',
-          entities_extracted: ['AES-256-GCM', 'Snapshot', 'Encryption']
+          entities_extracted: extractedEnts
         }
       }
     };
     output.textContent = JSON.stringify(res, null, 2);
-  } else if (mode === 'search') {
-    const query = document.getElementById('pg-search-query')?.value || 'query';
-    const res = {
-      jsonrpc: '2.0',
-      result: {
-        query: query,
-        matches_found: 2,
-        fusion_algorithm: 'Reciprocal Rank Fusion (RRF)',
-        results: [
-          {
-            id: 'mem_01',
-            content: 'Database migration: PostgreSQL connection pool size set to 25 with 5s timeout.',
-            relevance_score: 0.964,
-            breakdown: { bm25: 0.92, vector: 0.98, fuzzy: 0.89 },
-            salience: 0.95,
-            workspace: 'prod'
-          },
-          {
-            id: 'mem_02',
-            content: 'API authentication uses JWT with RS256 signing keys stored in Vault.',
-            relevance_score: 0.412,
-            breakdown: { bm25: 0.12, vector: 0.54, fuzzy: 0.30 },
-            salience: 0.92,
-            workspace: 'prod'
-          }
-        ]
-      }
-    };
-    output.textContent = JSON.stringify(res, null, 2);
-  } else if (mode === 'traverse') {
-    const entity = document.getElementById('pg-traverse-entity')?.value || 'AuthService';
-    const res = {
-      jsonrpc: '2.0',
-      result: {
-        root_entity: entity,
-        canonical_id: 'ident_' + entity.toLowerCase(),
-        aliases: [entity, entity.toLowerCase() + '-core', 'idp-handler'],
-        relations: [
-          { type: 'uses_secret_store', target: 'Vault', confidence: 0.99, source_memory: 'mem_02' },
-          { type: 'validates_tokens_for', target: 'GatewayWorker', confidence: 0.94, source_memory: 'mem_77d1e4' },
-          { type: 'persists_to', target: 'PostgreSQL', confidence: 0.97, source_memory: 'mem_01' }
-        ],
-        graph_diameter: 2,
-        latency_ms: 0.74
-      }
-    };
-    output.textContent = JSON.stringify(res, null, 2);
+
   } else if (mode === 'contradiction') {
+    const elapsed = (performance.now() - startTime).toFixed(3);
+    if (latencyBadge) latencyBadge.textContent = `Latency: ${elapsed}ms`;
+
     const res = {
       jsonrpc: '2.0',
       result: {
@@ -460,7 +670,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build()?
     ).await?;
 
-    // 3-way hybrid search (BM25 + HNSW Vectors + Fuzzy)
+    // 3-way hybrid search (BM25 + Vectors + Fuzzy)
     let results = engine.search(SearchQuery::new("postgres conn pool").workspace("backend")).await?;
     for hit in results {
         println!("Found [score {:.2}]: {}", hit.score, hit.content);
@@ -475,7 +685,7 @@ from engram_client import EngramClient
 async def main():
     async with EngramClient(base_url="http://localhost:8080") as client:
         # Create a structured project memory
-        memory = await client.create_memory(
+        memory = await client.create(
             content="API keys are rotated daily via HashiCorp Vault",
             workspace="security",
             memory_type="decision"
@@ -483,7 +693,7 @@ async def main():
         print(f"Stored memory ID: {memory.id}")
 
         # Execute hybrid search with typo tolerance
-        results = await client.search_memory(
+        results = await client.search(
             query="hashicorp vault rotat",
             workspace="security"
         )
@@ -500,14 +710,14 @@ async function main() {
   const client = new EngramClient({ baseUrl: 'http://localhost:8080' });
 
   // Store persistent context
-  const memory = await client.memories.create({
+  const memory = await client.create({
     content: 'User prefers dark mode and JetBrains Mono code font',
     workspace: 'user-preferences',
     memoryType: 'permanent'
   });
 
   // Hybrid search with entity resolution
-  const searchResults = await client.search.query({
+  const searchResults = await client.search({
     query: 'user font preference',
     workspace: 'user-preferences'
   });
@@ -573,9 +783,24 @@ function initCopyButtons() {
                          '';
       if (textToCopy) {
         navigator.clipboard.writeText(textToCopy.trim()).then(() => {
-          btn.classList.add('copied');
+          const originalHTML = btn.innerHTML;
+          btn.replaceChildren();
+          
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('width', '16');
+          svg.setAttribute('height', '16');
+          svg.setAttribute('viewBox', '0 0 24 24');
+          svg.setAttribute('fill', 'none');
+          svg.setAttribute('stroke', '#10b981');
+          svg.setAttribute('stroke-width', '2');
+
+          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', '20 6 9 17 4 12');
+          svg.appendChild(polyline);
+          btn.appendChild(svg);
+
           setTimeout(() => {
-            btn.classList.remove('copied');
+            btn.innerHTML = originalHTML;
           }, 2000);
         });
       }
