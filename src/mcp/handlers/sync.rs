@@ -207,3 +207,134 @@ pub fn memory_events_clear(ctx: &HandlerContext, params: Value) -> Value {
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
+
+pub fn replication_status(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::sync::WalReplicationStreamer;
+
+    let db_path = params
+        .get("db_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| ctx.storage.db_path());
+
+    if db_path == ":memory:" {
+        return json!({
+            "status": "in_memory",
+            "message": "In-memory database does not produce disk WAL files",
+            "lag": null
+        });
+    }
+
+    let streamer = WalReplicationStreamer::new(db_path);
+    match streamer.status() {
+        Ok(status) => json!(status),
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
+pub fn replication_sync_now(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::sync::WalReplicationStreamer;
+
+    let db_path = params
+        .get("db_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| ctx.storage.db_path());
+
+    if db_path == ":memory:" {
+        return json!({"error": "In-memory database does not support disk WAL replication"});
+    }
+
+    let compress = params
+        .get("compress")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let identifier = params.get("identifier").and_then(|v| v.as_str());
+
+    let mut streamer = WalReplicationStreamer::new(db_path).with_compression(compress);
+    if let Some(id) = identifier {
+        streamer = streamer.with_identifier(id);
+    }
+
+    match streamer.flush_delta() {
+        Ok(Some(pack)) => json!({
+            "synced": true,
+            "pack_id": pack.pack_id,
+            "start_frame": pack.start_frame,
+            "end_frame": pack.end_frame,
+            "frame_count": pack.frame_count,
+            "page_size": pack.page_size,
+            "checkpoint_seq": pack.checkpoint_seq,
+            "compressed": pack.compressed,
+            "payload_bytes": pack.payload.len(),
+            "checksum_sha256": pack.checksum_sha256,
+        }),
+        Ok(None) => json!({
+            "synced": true,
+            "message": "No new WAL frames to replicate (already up to date)",
+            "frame_count": 0
+        }),
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
+pub fn replication_recover(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::sync::{RecoveryOptions, WalRecoveryEngine};
+    use chrono::DateTime;
+    use std::path::{Path, PathBuf};
+
+    let target_db_path = match params.get("target_db_path").and_then(|v| v.as_str()) {
+        Some(p) => p,
+        None => return json!({"error": "target_db_path is required"}),
+    };
+
+    let default_source = ctx.storage.db_path();
+    let source_db_path = params
+        .get("source_db_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or(default_source);
+
+    if source_db_path == ":memory:" {
+        return json!({"error": "Cannot recover from in-memory database"});
+    }
+
+    let default_wal = format!("{}-wal", source_db_path);
+    let source_wal_path = params
+        .get("source_wal_path")
+        .and_then(|v| v.as_str())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(default_wal));
+
+    let target_frame = params
+        .get("target_frame")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+    let target_time = params
+        .get("target_time")
+        .and_then(|v| v.as_str())
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&chrono::Utc));
+    let commit_boundary_only = params
+        .get("commit_boundary_only")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let verify_integrity = params
+        .get("verify_integrity")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let options = RecoveryOptions {
+        target_frame,
+        target_time,
+        commit_boundary_only,
+        verify_integrity,
+    };
+
+    match WalRecoveryEngine::point_in_time_recovery(
+        Path::new(source_db_path),
+        &source_wal_path,
+        Path::new(target_db_path),
+        &options,
+    ) {
+        Ok(report) => json!(report),
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}

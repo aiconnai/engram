@@ -16,6 +16,7 @@ mod encryption;
 pub mod key_config;
 #[cfg(all(test, feature = "cloud"))]
 mod key_config_tests;
+pub mod wal_replication;
 #[cfg(feature = "cloud")]
 mod worker;
 
@@ -24,6 +25,11 @@ pub use cloud::CloudStorage;
 pub use conflict::{
     Conflict, ConflictDetector, ConflictInfo, ConflictQueue, ConflictResolver, ConflictType,
     MergeResult, Resolution, ResolutionStrategy, SyncMemoryVersion, ThreeWayMerge,
+};
+pub use wal_replication::{
+    compute_wal_checksum, RecoveryOptions, RecoveryReport, ReplicationLag,
+    ReplicationStatus as WalReplicationStatus, WalDelta, WalDeltaPack, WalDeltaReader, WalFrame,
+    WalHeader, WalRecoveryEngine, WalReplicationError, WalReplicationStreamer,
 };
 #[cfg(feature = "cloud")]
 pub use worker::{get_sync_status, SyncWorker};

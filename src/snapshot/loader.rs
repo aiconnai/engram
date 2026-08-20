@@ -351,7 +351,7 @@ impl SnapshotLoader {
         storage.with_connection(|conn| {
             let count: i64 = conn.query_row(
                 "SELECT COUNT(*) FROM memories WHERE content_hash = ? AND workspace = ? AND valid_to IS NULL",
-                rusqlite::params![hash, workspace],
+                [hash, workspace],
                 |row| row.get(0),
             )?;
             Ok(count > 0)
@@ -364,7 +364,7 @@ impl SnapshotLoader {
             let now = Utc::now().to_rfc3339();
             conn.execute(
                 "UPDATE memories SET valid_to = ? WHERE workspace = ? AND valid_to IS NULL",
-                rusqlite::params![now, workspace],
+                [now.as_str(), workspace],
             )?;
             Ok(())
         })

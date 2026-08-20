@@ -698,10 +698,11 @@ mod tests {
     use super::*;
 
     fn make_messages(count: usize, char_len: usize) -> Vec<Message> {
+        let padding = "x".repeat(char_len);
         (0..count)
             .map(|i| Message {
                 role: if i % 2 == 0 { "user" } else { "assistant" }.to_string(),
-                content: format!("Message {} {}", i, "x".repeat(char_len)),
+                content: format!("Message {} {}", i, padding),
                 timestamp: Utc::now(),
                 id: Some(format!("msg-{}", i)),
             })

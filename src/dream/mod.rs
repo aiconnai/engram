@@ -321,9 +321,10 @@ pub fn spawn_scheduler(storage: Arc<Storage>, config: DreamConfig) -> tokio::tas
             {
                 Ok(r) => r,
                 Err(e) => {
+                    let err_msg = e.to_string();
                     tracing::error!(
                         target = "engram::dream",
-                        error = %e,
+                        error = %err_msg,
                         "Dream Phase pass panicked"
                     );
                     continue;
@@ -337,7 +338,8 @@ pub fn spawn_scheduler(storage: Arc<Storage>, config: DreamConfig) -> tokio::tas
                 "Dream Phase pass complete"
             );
             for err in &report.errors {
-                tracing::warn!(target = "engram::dream", error = %err, "Dream Phase workspace failed");
+                let err_msg = err.to_string();
+                tracing::warn!(target = "engram::dream", error = %err_msg, "Dream Phase workspace failed");
             }
         }
     })

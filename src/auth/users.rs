@@ -342,20 +342,24 @@ mod tests {
         assert_eq!(fetched.id, user.id);
     }
 
+    fn test_credential(seed: &str) -> String {
+        format!("test_auth_secret_{seed}")
+    }
+
     #[test]
     fn test_verify_password() {
         let conn = setup_db();
         let manager = UserManager::new(&conn);
 
         let user = User::new("authuser");
-        manager.create_user(&user, Some("secret123")).unwrap();
+        let valid_pw = test_credential("alpha");
+        let wrong_pw = test_credential("beta");
+        manager.create_user(&user, Some(&valid_pw)).unwrap();
 
-        let verified = manager.verify_password("authuser", "secret123").unwrap();
+        let verified = manager.verify_password("authuser", &valid_pw).unwrap();
         assert!(verified.is_some());
 
-        let wrong = manager
-            .verify_password("authuser", "wrongpassword")
-            .unwrap();
+        let wrong = manager.verify_password("authuser", &wrong_pw).unwrap();
         assert!(wrong.is_none());
     }
 
@@ -391,20 +395,24 @@ mod tests {
 
     #[test]
     fn test_argon2_hash_verify_correct_password() {
-        let hash = hash_password("hunter2").expect("hashing should succeed");
-        assert!(verify_password("hunter2", &hash).expect("verify should succeed"));
+        let pw = test_credential("correct");
+        let hash = hash_password(&pw).expect("hashing should succeed");
+        assert!(verify_password(&pw, &hash).expect("verify should succeed"));
     }
 
     #[test]
     fn test_argon2_verify_wrong_password_returns_false() {
-        let hash = hash_password("hunter2").expect("hashing should succeed");
-        assert!(!verify_password("wrong", &hash).expect("verify should succeed"));
+        let pw = test_credential("correct");
+        let wrong = test_credential("incorrect");
+        let hash = hash_password(&pw).expect("hashing should succeed");
+        assert!(!verify_password(&wrong, &hash).expect("verify should succeed"));
     }
 
     #[test]
     fn test_argon2_hashes_are_unique_per_call() {
-        let h1 = hash_password("samepassword").expect("hashing should succeed");
-        let h2 = hash_password("samepassword").expect("hashing should succeed");
+        let pw = test_credential("unique_check");
+        let h1 = hash_password(&pw).expect("hashing should succeed");
+        let h2 = hash_password(&pw).expect("hashing should succeed");
         assert_ne!(h1, h2, "different salts should produce different hashes");
     }
 

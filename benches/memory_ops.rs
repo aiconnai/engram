@@ -72,12 +72,13 @@ fn bench_memory_get(c: &mut Criterion) {
     // Create some memories first
     let mut ids = Vec::new();
     for i in 0..1000 {
+        let idx = i;
         let memory = storage
             .with_transaction(|conn| {
                 let input = CreateMemoryInput {
-                    content: format!("Memory content number {}", i),
+                    content: format!("Memory content number {}", idx),
                     memory_type: MemoryType::Note,
-                    tags: vec![format!("tag{}", i % 10)],
+                    tags: vec![format!("tag{}", idx % 10)],
                     metadata: Default::default(),
                     importance: Some(0.5),
                     defer_embedding: true,
@@ -214,10 +215,11 @@ fn bench_crossref_operations(c: &mut Criterion) {
     // Create memories
     let mut ids = Vec::new();
     for i in 0..100 {
+        let idx = i;
         let memory = storage
             .with_transaction(|conn| {
                 let input = CreateMemoryInput {
-                    content: format!("Memory {}", i),
+                    content: format!("Memory {}", idx),
                     memory_type: MemoryType::Note,
                     tags: vec![],
                     metadata: Default::default(),
@@ -307,12 +309,13 @@ fn bench_stats(c: &mut Criterion) {
 
     // Populate with data
     for i in 0..500 {
+        let idx = i;
         storage
             .with_transaction(|conn| {
                 let input = CreateMemoryInput {
-                    content: format!("Memory {}", i),
+                    content: format!("Memory {}", idx),
                     memory_type: MemoryType::Note,
-                    tags: vec![format!("tag{}", i % 20)],
+                    tags: vec![format!("tag{}", idx % 20)],
                     metadata: Default::default(),
                     importance: None,
                     defer_embedding: true,

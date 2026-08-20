@@ -16,5 +16,6 @@ pub static TOOL_DEFINITIONS: LazyLock<Vec<ToolDef>> = LazyLock::new(|| {
     tools.extend_from_slice(catalog::admin::TOOLS);
     tools.extend_from_slice(catalog::multimodal::TOOLS);
     tools.extend_from_slice(catalog::misc::TOOLS);
+    tools.extend_from_slice(catalog::sync::TOOLS);
     tools
 });

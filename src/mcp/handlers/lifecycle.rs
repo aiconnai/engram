@@ -668,6 +668,10 @@ mod lifecycle_tests {
         use chrono::{Duration, Utc};
 
         let old_ts = (Utc::now() - Duration::days(idle_days)).to_rfc3339();
+        let target_content = content;
+        let target_importance = importance;
+        let target_access_count = access_count;
+        let target_state = lifecycle_state.to_string();
         ctx.storage
             .with_transaction(|conn| {
                 conn.execute(
@@ -678,10 +682,10 @@ mod lifecycle_tests {
                      )
                      VALUES (?1, 'note', 'default', 'permanent', ?2, ?3, ?4, ?5, ?5, ?5)",
                     rusqlite::params![
-                        content,
-                        importance,
-                        access_count,
-                        lifecycle_state.to_string(),
+                        target_content,
+                        target_importance,
+                        target_access_count,
+                        target_state,
                         old_ts
                     ],
                 )?;
@@ -695,7 +699,7 @@ mod lifecycle_tests {
             .with_connection(|conn| {
                 Ok(conn.query_row(
                     "SELECT COALESCE(lifecycle_state, 'active') FROM memories WHERE id = ?1",
-                    rusqlite::params![id],
+                    [id],
                     |row| row.get::<_, String>(0),
                 )?)
             })

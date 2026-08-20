@@ -890,7 +890,8 @@ fn main() -> Result<()> {
                         RealtimeServer::new(ws_manager, ws_addr).with_auth_key(ws_auth_key);
                     tracing::info!("WebSocket server starting on {}...", ws_addr);
                     if let Err(e) = ws_server.start().await {
-                        tracing::error!("WebSocket server error: {}", e);
+                        let err_msg = e.to_string();
+                        tracing::error!("WebSocket server error: {}", err_msg);
                     }
                 });
             });
@@ -947,7 +948,8 @@ fn main() -> Result<()> {
                     )
                     .await
                     {
-                        tracing::error!("HTTP transport error: {}", e);
+                        let err_msg = e.to_string();
+                        tracing::error!("HTTP transport error: {}", err_msg);
                     }
                 });
             });

@@ -15,7 +15,7 @@ pub(super) fn collect_open_items(storage: &Storage, workspace: &str) -> Result<V
              LIMIT 50",
         )?;
         let items = stmt
-            .query_map(rusqlite::params![workspace], |row| {
+            .query_map([workspace], |row| {
                 let id: i64 = row.get(0)?;
                 let content: String = row.get(1)?;
                 let memory_type: String = row.get(2)?;
@@ -40,7 +40,7 @@ pub(super) fn collect_recent_decisions(
              LIMIT 20",
         )?;
         let items = stmt
-            .query_map(rusqlite::params![workspace], |row| {
+            .query_map([workspace], |row| {
                 let id: i64 = row.get(0)?;
                 let content: String = row.get(1)?;
                 Ok(memory_item(id, content, "memory_decision"))

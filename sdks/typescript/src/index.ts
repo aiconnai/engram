@@ -24,6 +24,7 @@
 export { EngramClient } from "./client.js";
 export { EngramError } from "./errors.js";
 export { CouncilSkill, type CouncilClient } from "./council.js";
+export * as integrations from "./integrations/index.js";
 
 export {
   AdminResource,

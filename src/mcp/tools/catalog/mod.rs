@@ -8,6 +8,7 @@ pub mod misc;
 pub mod multimodal;
 pub mod policy;
 pub mod search;
+pub mod sync;
 
 pub(crate) fn required_features(name: &str) -> &'static [&'static str] {
     match name {
@@ -105,7 +106,7 @@ pub(crate) fn tool_group(name: &str) -> &'static str {
         "quality" | "salience" => "quality",
         "scope" => "scope",
         "temporal" => "temporal",
-        "sync" => "sync",
+        "sync" | "replication" => "sync",
         "agent" => "agent",
         "graph" => "memory.graph",
         "harness" => "harness",

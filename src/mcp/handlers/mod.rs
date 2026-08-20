@@ -310,6 +310,9 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_share_ack" => sync::memory_share_ack(ctx, params),
         "memory_events_poll" => sync::memory_events_poll(ctx, params),
         "memory_events_clear" => sync::memory_events_clear(ctx, params),
+        "replication_status" => sync::replication_status(ctx, params),
+        "replication_sync_now" => sync::replication_sync_now(ctx, params),
+        "replication_recover" => sync::replication_recover(ctx, params),
 
         // ── Stats / Versions / Cache / Compact ───────────────────────────────
         "memory_stats" => stats::memory_stats(ctx, params),

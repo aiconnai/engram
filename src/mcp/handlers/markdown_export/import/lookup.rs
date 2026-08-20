@@ -8,7 +8,7 @@ pub(super) fn db_state_for_memory(
     ctx.storage.with_connection(|conn| {
         let result = conn.query_row(
             "SELECT content_hash, version FROM memories WHERE id = ?1",
-            rusqlite::params![engram_id],
+            [engram_id],
             |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
         );
         match result {

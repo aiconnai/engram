@@ -12,34 +12,33 @@ pub(super) fn health_check(backend: &MeilisearchBackend) -> Result<HealthStatus,
                 let index_health = backend.client.index(MEMORIES_INDEX).get_stats().await;
                 let derived_indexes = match index_health {
                     Ok(index_stats) => {
+                        let num_docs = index_stats.number_of_documents as i64;
+                        let is_indexing_str = index_stats.is_indexing.to_string();
+                        let mut meta = HashMap::new();
+                        meta.insert("index_name".to_string(), MEMORIES_INDEX.to_string());
+                        meta.insert("source_count".to_string(), num_docs.to_string());
+                        meta.insert("is_indexing".to_string(), is_indexing_str);
                         vec![DerivedIndexHealth::external(
                             MEMORIES_INDEX,
                             DerivedIndexStatus::Healthy,
-                            index_stats.number_of_documents as i64,
-                            index_stats.number_of_documents as i64,
-                            HashMap::from([
-                                ("index_name".to_string(), MEMORIES_INDEX.to_string()),
-                                (
-                                    "source_count".to_string(),
-                                    index_stats.number_of_documents.to_string(),
-                                ),
-                                (
-                                    "is_indexing".to_string(),
-                                    index_stats.is_indexing.to_string(),
-                                ),
-                            ]),
+                            num_docs,
+                            num_docs,
+                            meta,
                         )]
                     }
-                    Err(e) => vec![DerivedIndexHealth::external(
-                        MEMORIES_INDEX,
-                        DerivedIndexStatus::Unavailable,
-                        0,
-                        0,
-                        HashMap::from([
-                            ("index_name".to_string(), MEMORIES_INDEX.to_string()),
-                            ("error".to_string(), e.to_string()),
-                        ]),
-                    )],
+                    Err(e) => {
+                        let err_msg = e.to_string();
+                        let mut meta = HashMap::new();
+                        meta.insert("index_name".to_string(), MEMORIES_INDEX.to_string());
+                        meta.insert("error".to_string(), err_msg);
+                        vec![DerivedIndexHealth::external(
+                            MEMORIES_INDEX,
+                            DerivedIndexStatus::Unavailable,
+                            0,
+                            0,
+                            meta,
+                        )]
+                    }
                 };
 
                 Ok(HealthStatus {

@@ -1,7 +1,7 @@
 status=pass
 ci_status=pass
 doctor_status=pass
-mode=quick
-timestamp=2026-08-19T23:33:56Z
-duration_sec=19
-ci=cargo fmt + cargo check + pr-title-policy + harness doctor
+mode=full
+timestamp=2026-08-20T00:21:59Z
+duration_sec=50
+ci=fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + pr-title-policy + harness doctor

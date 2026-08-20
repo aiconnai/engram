@@ -7,8 +7,8 @@
 | Active task | `agent-harness-hardening-v1 — authorize trust boundaries and phased rollout` |
 | Active plan | `docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md` |
-| Last sensors | `2026-08-19 — status=pass (mode=quick; timestamp 2026-08-19T23:33:56Z)` |
-| Last commit | `e05849e` |
+| Last sensors | `2026-08-19 — status=pass (mode=quick; timestamp 2026-08-19T23:52:02Z)` |
+| Last commit | `bec1828` |
 | Last live-state check | `2026-08-19 — status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Sumário curto do trabalho ativo. Logs detalhados em `progress/`.

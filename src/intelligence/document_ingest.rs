@@ -354,7 +354,10 @@ impl<'a> DocumentIngestor<'a> {
 
             loop {
                 let mut filter = HashMap::new();
-                filter.insert("doc_id".to_string(), serde_json::json!(doc_id));
+                filter.insert(
+                    "doc_id".to_string(),
+                    serde_json::Value::String(doc_id.to_string()),
+                );
 
                 let options = ListOptions {
                     limit: Some(PAGE_SIZE),

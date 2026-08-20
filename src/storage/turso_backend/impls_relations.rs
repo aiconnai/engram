@@ -77,6 +77,7 @@ pub(super) fn get_crossrefs(
 ) -> Result<Vec<CrossReference>> {
     let rt = tokio::runtime::Handle::try_current()
         .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
+    let target_memory_id = memory_id;
 
     tokio::task::block_in_place(|| {
         rt.block_on(async {
@@ -91,7 +92,7 @@ pub(super) fn get_crossrefs(
                 .map_err(|e| EngramError::Storage(e.to_string()))?;
 
             let rows = stmt
-                .query(libsql::params![memory_id, memory_id])
+                .query(libsql::params![target_memory_id, target_memory_id])
                 .await
                 .map_err(|e| EngramError::Storage(e.to_string()))?;
 
@@ -150,6 +151,8 @@ pub(super) fn delete_crossref(
 ) -> Result<()> {
     let rt = tokio::runtime::Handle::try_current()
         .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
+    let f_id = from_id;
+    let t_id = to_id;
 
     tokio::task::block_in_place(|| {
         rt.block_on(async {
@@ -158,7 +161,7 @@ pub(super) fn delete_crossref(
 
         conn.execute(
             "UPDATE crossrefs SET valid_to = ? WHERE from_id = ? AND to_id = ? AND valid_to IS NULL",
-            libsql::params![now, from_id, to_id],
+            libsql::params![now, f_id, t_id],
         ).await.map_err(|e| EngramError::Storage(e.to_string()))?;
 
         Ok(())
@@ -258,6 +261,7 @@ pub(super) fn get_workspace_stats(
 ) -> Result<HashMap<String, i64>> {
     let rt = tokio::runtime::Handle::try_current()
         .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
+    let target_workspace = workspace.to_string();
 
     tokio::task::block_in_place(|| {
         rt.block_on(async {
@@ -265,7 +269,7 @@ pub(super) fn get_workspace_stats(
 
         let total: i64 = conn.query(
             "SELECT COUNT(*) FROM memories WHERE workspace = ? AND valid_to IS NULL",
-            libsql::params![workspace.to_string()],
+            libsql::params![target_workspace.clone()],
         ).await.map_err(|e| EngramError::Storage(e.to_string()))?
             .next().await.ok().flatten()
             .map(|r| r.get(0).unwrap_or(0))
@@ -273,7 +277,7 @@ pub(super) fn get_workspace_stats(
 
         let permanent: i64 = conn.query(
             "SELECT COUNT(*) FROM memories WHERE workspace = ? AND tier = 'permanent' AND valid_to IS NULL",
-            libsql::params![workspace.to_string()],
+            libsql::params![target_workspace.clone()],
         ).await.map_err(|e| EngramError::Storage(e.to_string()))?
             .next().await.ok().flatten()
             .map(|r| r.get(0).unwrap_or(0))
@@ -281,7 +285,7 @@ pub(super) fn get_workspace_stats(
 
         let daily: i64 = conn.query(
             "SELECT COUNT(*) FROM memories WHERE workspace = ? AND tier = 'daily' AND valid_to IS NULL",
-            libsql::params![workspace.to_string()],
+            libsql::params![target_workspace.clone()],
         ).await.map_err(|e| EngramError::Storage(e.to_string()))?
             .next().await.ok().flatten()
             .map(|r| r.get(0).unwrap_or(0))
@@ -303,6 +307,7 @@ pub(super) fn move_to_workspace(
 ) -> Result<usize> {
     let rt = tokio::runtime::Handle::try_current()
         .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
+    let target_workspace = workspace.to_string();
 
     tokio::task::block_in_place(|| {
         rt.block_on(async {
@@ -310,10 +315,11 @@ pub(super) fn move_to_workspace(
             let mut moved = 0usize;
 
             for id in ids {
+                let target_id = id;
                 let result = conn
                     .execute(
                         "UPDATE memories SET workspace = ? WHERE id = ? AND valid_to IS NULL",
-                        libsql::params![workspace.to_string(), id],
+                        libsql::params![target_workspace.clone(), target_id],
                     )
                     .await;
 

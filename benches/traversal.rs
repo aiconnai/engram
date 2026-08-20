@@ -18,10 +18,11 @@ use engram::types::{
 
 /// Insert a single memory into `storage`, returning its ID.
 fn create_test_memory(storage: &Storage, i: usize) -> MemoryId {
+    let idx = i;
     storage
         .with_transaction(|conn| {
             let input = CreateMemoryInput {
-                content: format!("Memory {}", i),
+                content: format!("Memory {}", idx),
                 memory_type: MemoryType::Note,
                 tags: vec![],
                 metadata: Default::default(),

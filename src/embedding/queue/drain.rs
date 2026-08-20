@@ -42,6 +42,8 @@ pub fn drain_pending_embeddings(
 ) -> Result<usize> {
     use rusqlite::params;
 
+    let limit = batch_size as i64;
+
     // ── Phase 1: claim a batch atomically ───────────────────────────────────
     // Wrap SELECT + mark-as-processing in a transaction so a hypothetical
     // second drainer can't claim the same rows between the two statements.
@@ -58,7 +60,7 @@ pub fn drain_pending_embeddings(
         )?;
 
         let rows: Vec<(MemoryId, String)> = stmt
-            .query_map(params![batch_size as i64], |row| {
+            .query_map([limit], |row| {
                 Ok((row.get::<_, MemoryId>(0)?, row.get::<_, String>(1)?))
             })?
             .collect::<rusqlite::Result<_>>()?;

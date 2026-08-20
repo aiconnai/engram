@@ -279,11 +279,12 @@ impl LongMemEvalBenchmark {
                 )
             });
 
+            let pattern = format!("%{}%", keyword);
             let count: i64 = storage
                 .with_connection(|conn| {
                     conn.query_row(
                         "SELECT COUNT(*) FROM memories WHERE content LIKE ?1",
-                        [format!("%{}%", keyword)],
+                        [pattern],
                         |row| row.get(0),
                     )
                     .map_err(crate::error::EngramError::Database)

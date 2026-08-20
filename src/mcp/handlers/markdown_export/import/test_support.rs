@@ -94,7 +94,7 @@ pub(super) fn db_row(c: &crate::mcp::handlers::HandlerContext, id: i64) -> (Stri
         .with_connection(|conn| {
             conn.query_row(
                 "SELECT content, version, importance FROM memories WHERE id = ?1",
-                rusqlite::params![id],
+                [id],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .map_err(crate::error::EngramError::Database)
@@ -110,7 +110,7 @@ pub(super) fn db_tags(c: &crate::mcp::handlers::HandlerContext, id: i64) -> Vec<
                          WHERE mt.memory_id = ?1 ORDER BY t.name",
             )?;
             let v = stmt
-                .query_map(rusqlite::params![id], |r| r.get::<_, String>(0))?
+                .query_map([id], |r| r.get::<_, String>(0))?
                 .filter_map(|r| r.ok())
                 .collect();
             Ok(v)

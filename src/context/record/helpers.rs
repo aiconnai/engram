@@ -203,7 +203,7 @@ pub(super) fn optional_i32(value: Option<i64>, field: &str) -> Result<Option<i32
     value
         .map(|value| {
             i32::try_from(value).map_err(|_| {
-                EngramError::InvalidInput(format!("{field} must fit in a 32-bit integer"))
+                EngramError::InvalidInput(format!("{} must fit in a 32-bit integer", field))
             })
         })
         .transpose()
@@ -222,7 +222,7 @@ pub(super) fn parse_optional_datetime(
     };
     DateTime::parse_from_rfc3339(&value)
         .map(|dt| Some(dt.with_timezone(&Utc)))
-        .map_err(|err| EngramError::InvalidInput(format!("{field} must be RFC3339: {err}")))
+        .map_err(|err| EngramError::InvalidInput(format!("{} must be RFC3339: {}", field, err)))
 }
 
 pub(super) fn sensitive_key(key: &str) -> bool {

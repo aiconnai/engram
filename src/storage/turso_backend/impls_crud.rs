@@ -89,17 +89,18 @@ pub(super) fn create_memory(backend: &TursoBackend, input: CreateMemoryInput) ->
 
         // Insert tags
         for tag in &input.tags {
+            let tag_name = tag.clone();
             // Ensure tag exists
             conn.execute(
                 "INSERT OR IGNORE INTO tags (name) VALUES (?)",
-                libsql::params![tag.clone()],
+                libsql::params![tag_name.clone()],
             ).await.ok();
 
             // Link tag to memory
             conn.execute(
                 "INSERT OR IGNORE INTO memory_tags (memory_id, tag_id)
                  SELECT ?, id FROM tags WHERE name = ?",
-                libsql::params![id, tag.clone()],
+                libsql::params![id, tag_name],
             ).await.ok();
         }
 
@@ -145,6 +146,7 @@ pub(super) fn create_memories_batch(
 pub(super) fn get_memory(backend: &TursoBackend, id: MemoryId) -> Result<Option<Memory>> {
     let rt = tokio::runtime::Handle::try_current()
         .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
+    let target_id = id;
 
     tokio::task::block_in_place(|| {
         rt.block_on(async {
@@ -153,7 +155,7 @@ pub(super) fn get_memory(backend: &TursoBackend, id: MemoryId) -> Result<Option<
                 MEMORY_COLUMNS
             );
             let memories = backend
-                .query_memories(&sql, vec![libsql::Value::Integer(id)])
+                .query_memories(&sql, vec![libsql::Value::Integer(target_id)])
                 .await?;
 
             Ok(memories.into_iter().next())
@@ -312,9 +314,10 @@ pub(super) fn update_memory(
             .map_err(|e| EngramError::Storage(e.to_string()))?;
 
             for tag in tags {
+                let tag_name = tag.clone();
                 conn.execute(
                     "INSERT OR IGNORE INTO tags (name) VALUES (?)",
-                    libsql::params![tag.clone()],
+                    libsql::params![tag_name.clone()],
                 )
                 .await
                 .ok();
@@ -322,7 +325,7 @@ pub(super) fn update_memory(
                 conn.execute(
                     "INSERT OR IGNORE INTO memory_tags (memory_id, tag_id)
                      SELECT ?, id FROM tags WHERE name = ?",
-                    libsql::params![id, tag.clone()],
+                    libsql::params![id, tag_name],
                 )
                 .await
                 .ok();

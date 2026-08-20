@@ -222,7 +222,10 @@ fn mark_harness_handoff_checkpoint(
 
         let mut metadata = memory.metadata.clone();
         metadata.insert("harness_kind".to_string(), json!("handoff"));
-        metadata.insert("current_goal".to_string(), json!(current_goal));
+        metadata.insert(
+            "current_goal".to_string(),
+            serde_json::Value::String(current_goal.to_string()),
+        );
         metadata.insert("source".to_string(), json!("session_handoff_builder"));
         for key in [
             "files_touched",

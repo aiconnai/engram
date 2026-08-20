@@ -248,6 +248,7 @@ subtle = "2"
 
 # Token counting for context compression (Phase 2)
 tiktoken-rs = "0.5"
+flate2 = "1.0"
 
 # Document ingestion (RML-928)
 pulldown-cmark = "0.10"

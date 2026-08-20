@@ -424,15 +424,15 @@ fn validate_sqlite_vec_binding(storage: &Storage, dimensions: usize) {
 }
 
 fn create_bench_vec0_index(storage: &Storage, dimensions: usize) {
+    let dim = dimensions;
     storage
         .with_connection(|conn| {
             conn.execute("DROP TABLE IF EXISTS bench_vec", [])?;
-            conn.execute(
-                &format!(
-                    "CREATE VIRTUAL TABLE bench_vec USING vec0(embedding float[{dimensions}] distance_metric=cosine)"
-                ),
-                [],
-            )?;
+            let ddl = format!(
+                "CREATE VIRTUAL TABLE bench_vec USING vec0(embedding float[{}] distance_metric=cosine)",
+                dim
+            );
+            conn.execute(&ddl, [])?;
             Ok(())
         })
         .unwrap();
@@ -877,12 +877,13 @@ fn percentile_usize(samples: &[usize], percentile: f64) -> usize {
 }
 
 fn measure_delete_visibility_lag(storage: &Storage, offset: usize) -> (u128, usize) {
+    let offset_val = offset as i64;
     let (target_id, query) = storage
         .with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id FROM memories WHERE valid_to IS NULL ORDER BY id LIMIT 1 OFFSET ?1",
             )?;
-            let target_id: i64 = stmt.query_row(params![offset as i64], |row| row.get(0))?;
+            let target_id: i64 = stmt.query_row([offset_val], |row| row.get(0))?;
             Ok((target_id, format!("benchunique{}", target_id - 1)))
         })
         .unwrap();

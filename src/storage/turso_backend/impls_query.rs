@@ -99,12 +99,14 @@ pub(super) fn list_memories(backend: &TursoBackend, options: ListOptions) -> Res
             };
             sql.push_str(&format!(" ORDER BY {} {}", sort_column, sort_dir));
 
-            if let Some(limit) = options.limit {
-                sql.push_str(&format!(" LIMIT {}", limit));
+            if let Some(limit_val) = options.limit {
+                sql.push_str(" LIMIT ");
+                sql.push_str(&limit_val.to_string());
             }
 
-            if let Some(offset) = options.offset {
-                sql.push_str(&format!(" OFFSET {}", offset));
+            if let Some(offset_val) = options.offset {
+                sql.push_str(" OFFSET ");
+                sql.push_str(&offset_val.to_string());
             }
 
             backend.query_memories(&sql, params).await
@@ -127,6 +129,7 @@ pub(super) fn search_memories(
 ) -> Result<Vec<SearchResult>> {
     let rt = tokio::runtime::Handle::try_current()
         .map_err(|_| EngramError::Storage("No tokio runtime available".to_string()))?;
+    let search_query = query.to_string();
 
     tokio::task::block_in_place(|| {
         rt.block_on(async {
@@ -135,7 +138,7 @@ pub(super) fn search_memories(
                 "SELECT {} FROM memories WHERE valid_to IS NULL AND content LIKE ?",
                 MEMORY_COLUMNS
             );
-            let mut params = vec![libsql::Value::Text(format!("%{}%", query))];
+            let mut params = vec![libsql::Value::Text(format!("%{}%", search_query))];
 
             if !options.include_archived {
                 sql.push_str(" AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')");
@@ -178,8 +181,9 @@ pub(super) fn search_memories(
             }
 
             sql.push_str(" ORDER BY importance DESC");
-            if let Some(limit) = options.limit {
-                sql.push_str(&format!(" LIMIT {}", limit));
+            if let Some(limit_val) = options.limit {
+                sql.push_str(" LIMIT ");
+                sql.push_str(&limit_val.to_string());
             } else {
                 sql.push_str(" LIMIT 20");
             }
@@ -193,7 +197,7 @@ pub(super) fn search_memories(
                     score: 1.0,
                     match_info: MatchInfo {
                         strategy: SearchStrategy::KeywordOnly,
-                        matched_terms: vec![query.to_string()],
+                        matched_terms: vec![search_query.clone()],
                         highlights: Vec::new(),
                         semantic_score: None,
                         keyword_score: Some(1.0),

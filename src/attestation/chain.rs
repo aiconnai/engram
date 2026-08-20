@@ -606,15 +606,12 @@ mod tests {
         let handles: Vec<_> = (0..4)
             .map(|i| {
                 let c = Arc::clone(&chain);
+                let idx = i;
                 std::thread::spawn(move || {
-                    c.log_document(
-                        format!("content-{i}").as_bytes(),
-                        &format!("doc-{i}.txt"),
-                        None,
-                        &[],
-                        None,
-                    )
-                    .unwrap()
+                    let doc_name = format!("doc-{}.txt", idx);
+                    let content_bytes = format!("content-{}", idx);
+                    c.log_document(content_bytes.as_bytes(), &doc_name, None, &[], None)
+                        .unwrap()
                 })
             })
             .collect();

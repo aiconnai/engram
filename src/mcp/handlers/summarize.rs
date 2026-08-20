@@ -444,6 +444,8 @@ mod summarize_tests {
 
         let id = seed_memory(ctx, content);
         let old_ts = (Utc::now() - Duration::days(120)).to_rfc3339();
+        let target_state = lifecycle_state;
+        let target_id = id;
         ctx.storage
             .with_transaction(|conn| {
                 conn.execute(
@@ -455,7 +457,7 @@ mod summarize_tests {
                          access_count = 0,
                          lifecycle_state = ?2
                      WHERE id = ?3",
-                    rusqlite::params![old_ts, lifecycle_state, id],
+                    rusqlite::params![old_ts, target_state, target_id],
                 )?;
                 Ok(())
             })
@@ -468,7 +470,7 @@ mod summarize_tests {
             .with_connection(|conn| {
                 Ok(conn.query_row(
                     "SELECT lifecycle_state FROM memories WHERE id = ?1",
-                    rusqlite::params![id],
+                    [id],
                     |row| row.get::<_, String>(0),
                 )?)
             })
@@ -481,7 +483,7 @@ mod summarize_tests {
                 Ok(conn.query_row(
                     "SELECT COUNT(*) FROM memories
                      WHERE summary_of_id = ?1 AND memory_type = 'summary' AND valid_to IS NULL",
-                    rusqlite::params![id],
+                    [id],
                     |row| row.get(0),
                 )?)
             })
