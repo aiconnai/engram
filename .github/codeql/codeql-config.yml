@@ -12,6 +12,7 @@ query-filters:
 paths-ignore:
   - "target/**"
   - "docs/**"
+  - "benches/**"
   - "**/fixtures/**"
   - "sdks/typescript/dist/**"
   - "sdks/typescript/node_modules/**"
