@@ -5,7 +5,7 @@ installation is required.
 """
 
 import unittest
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from engram_client.integrations.langchain import (
     EngramChatMessageHistory,

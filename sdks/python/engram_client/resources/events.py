@@ -29,7 +29,7 @@ class EventsMixin(ResourceMixin):
                 try:
                     seq_id = int(raw_id)
                 except ValueError:
-                    pass
+                    seq_id = None
             elif line.startswith("data:"):
                 data_str = line[5:].strip()
 

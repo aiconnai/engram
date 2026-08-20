@@ -7,8 +7,7 @@ installation is required.
 from __future__ import annotations
 
 import unittest
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from engram_client.integrations.openai_threads import (
     EngramThreadStore,

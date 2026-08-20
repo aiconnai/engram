@@ -10,7 +10,9 @@ from typing import cast
 import pytest
 
 import engram_client
-from engram_client import EngramClient, EngramError
+
+EngramClient = engram_client.EngramClient
+EngramError = engram_client.EngramError
 
 
 def live_config() -> tuple[str, str, str, str]:

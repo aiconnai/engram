@@ -237,6 +237,7 @@ class TestCreate:
         )
 
         args = mock_client._client.post.call_args.kwargs["json"]["params"]["arguments"]
+        assert result["id"] == 123
         assert args["content"] == "Test content"
         assert args["memory_type"] == "image"
         assert args["tags"] == ["test", "example"]

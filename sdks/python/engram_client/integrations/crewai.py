@@ -35,9 +35,12 @@ Usage::
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from engram_client import EngramClient
+
+logger = logging.getLogger(__name__)
 
 
 class EngramShortTermMemory:
@@ -108,8 +111,8 @@ class EngramShortTermMemory:
             if mem_id is not None:
                 try:
                     self.client.delete(int(mem_id))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to delete memory %s during reset: %s", mem_id, exc)
 
 
 class EngramLongTermMemory:

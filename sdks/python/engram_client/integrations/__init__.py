@@ -15,9 +15,8 @@ try:
         EngramDocumentStore,
         EngramLlamaIndexVectorStore,
     )
-    _llamaindex_available = True
 except ImportError:
-    _llamaindex_available = False
+    pass
 
 __all__ = [
     "EngramChatMessageHistory",

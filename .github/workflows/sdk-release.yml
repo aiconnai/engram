@@ -117,7 +117,7 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: ${{ needs.preflight.outputs.release_sha }}
+          ref: ${{ github.sha }}
       - name: Build and check wheel and sdist
         env:
           RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
@@ -143,12 +143,10 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: ${{ needs.preflight.outputs.release_sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: sdks/typescript/package-lock.json
       - name: Build, test, and pack npm tarball
         env:
           RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}

@@ -127,41 +127,6 @@ class SearchMixin(ResourceMixin):
             params["memory_tags"] = memory_tags
         return await self._mcp_call("memory_council", params)
 
-    # -- Multimodal --
-
-    async def search_by_image(
-        self,
-        image_path: str,
-        *,
-        limit: int = 10,
-        workspace: str | None = None,
-    ) -> dict[str, Any]:
-        """Find memories semantically similar to an image.
-
-        Uses CLIP embedding when available, falling back to a
-        description-based text search strategy.
-
-        Args:
-            image_path: Local path or URL to the image file.
-            limit: Maximum number of results.
-            workspace: Optional workspace filter.
-        """
-        params: dict[str, Any] = {"image_path": image_path, "limit": limit}
-        if workspace is not None:
-            params["workspace"] = workspace
-        return await self._mcp_call("memory_search_by_image", params)
-
-    async def sync_media(
-        self,
-        *,
-        dry_run: bool = False,
-    ) -> dict[str, Any]:
-        """Upload local media assets to S3/R2 cloud storage.
-
-        Requires the ``multimodal`` and ``cloud`` features on the server.
-        """
-        return await self._mcp_call("memory_sync_media", {"dry_run": dry_run})
-
     # -- Retrieval Excellence --
 
     async def cache_stats(self) -> dict[str, Any]:
