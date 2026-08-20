@@ -281,9 +281,16 @@ impl CoactivationTracker {
 
         let edges = stmt
             .query_map(params![memory_id], |row| {
+                let f_id: i64 = row.get(0)?;
+                let t_id: i64 = row.get(1)?;
+                let (from_id, to_id) = if f_id == memory_id {
+                    (f_id, t_id)
+                } else {
+                    (t_id, f_id)
+                };
                 Ok(CoactivationEdge {
-                    from_id: row.get(0)?,
-                    to_id: row.get(1)?,
+                    from_id,
+                    to_id,
                     strength: row.get(2)?,
                     count: row.get(3)?,
                     last_coactivated: row.get(4)?,

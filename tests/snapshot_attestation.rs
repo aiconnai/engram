@@ -330,6 +330,35 @@ fn scenario_7_signed_snapshot_flag() {
         info.files
     );
 
+    // Verify loading with the public verification key succeeds
+    let dst = open_storage();
+    let pub_key = engram::snapshot::crypto::public_key_from_secret(&sign_key);
+    let load_res = SnapshotLoader::load(
+        &dst,
+        &path,
+        LoadStrategy::Merge,
+        Some("signed_loaded_ws"),
+        None,
+        Some(&pub_key),
+    )
+    .expect("load signed snapshot with verify_key");
+    assert_eq!(load_res.memories_loaded, 1);
+
+    // Verify loading with wrong verification key fails
+    let wrong_pub_key = [0x99u8; 32];
+    let bad_load_res = SnapshotLoader::load(
+        &dst,
+        &path,
+        LoadStrategy::Merge,
+        Some("signed_loaded_ws"),
+        None,
+        Some(&wrong_pub_key),
+    );
+    assert!(
+        bad_load_res.is_err(),
+        "Loading with wrong verify_key must fail"
+    );
+
     cleanup_snapshot(&path);
 }
 

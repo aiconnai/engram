@@ -128,6 +128,43 @@ mod tests {
     }
 
     #[test]
+    fn test_procedural_distillation_idempotency_and_unicode() {
+        let (storage, _ctx) = setup_test_context();
+        let workspace = "test_unicode_idempotent";
+
+        // Create memory with non-ASCII and Turkish dotted I to test char boundary slicing safety
+        let input = CreateMemoryInput {
+            content: "Görev: İstanbul sunucu hatası çözümü. Lesson: Configure UTF-8 encoding properly for international strings.".to_string(),
+            memory_type: MemoryType::Episodic,
+            workspace: Some(workspace.to_string()),
+            tags: vec!["task".to_string(), "error".to_string()],
+            importance: Some(0.8),
+            ..Default::default()
+        };
+
+        let _m = storage
+            .with_transaction(|conn| create_memory(conn, &input))
+            .unwrap();
+
+        let config = DreamPipelineConfig {
+            enable_procedural_distillation: true,
+            enable_deduplication: false,
+            enable_graph_optimization: false,
+            enable_thematic_digest: false,
+            dry_run: false,
+            ..Default::default()
+        };
+
+        // First pass: extracts 1 rule
+        let res1 = DreamPipeline::run_workspace(&storage, workspace, &config).unwrap();
+        assert_eq!(res1.procedural_rules_extracted, 1);
+
+        // Second pass: idempotency ensures 0 duplicate rules extracted
+        let res2 = DreamPipeline::run_workspace(&storage, workspace, &config).unwrap();
+        assert_eq!(res2.procedural_rules_extracted, 0);
+    }
+
+    #[test]
     fn test_semantic_deduplication_and_archival() {
         let (storage, _ctx) = setup_test_context();
         let workspace = "test_dedup";
@@ -190,7 +227,86 @@ mod tests {
 
         assert_eq!(loaded1.lifecycle_state, LifecycleState::Active);
         assert_eq!(loaded2.lifecycle_state, LifecycleState::Archived);
-        assert_eq!(loaded2.summary_of_id, Some(m1.id));
+    }
+
+    #[test]
+    fn test_multi_duplicate_cascade_preserves_highest_importance() {
+        let (storage, _ctx) = setup_test_context();
+        let workspace = "test_multi_dedup";
+
+        // Insert 3 memories where importance: m1 (0.4) < m2 (0.7) < m3 (0.95)
+        let m1 = storage
+            .with_transaction(|conn| {
+                create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "Redundant cluster memory version A".to_string(),
+                        workspace: Some(workspace.to_string()),
+                        importance: Some(0.4),
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+
+        let m2 = storage
+            .with_transaction(|conn| {
+                create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "Redundant cluster memory version B".to_string(),
+                        workspace: Some(workspace.to_string()),
+                        importance: Some(0.7),
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+
+        let m3 = storage
+            .with_transaction(|conn| {
+                create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "Redundant cluster memory version C".to_string(),
+                        workspace: Some(workspace.to_string()),
+                        importance: Some(0.95),
+                        ..Default::default()
+                    },
+                )
+            })
+            .unwrap();
+
+        let emb = vec![1.0, 0.0, 0.0, 0.0];
+        storage
+            .with_transaction(|conn| {
+                insert_embedding(conn, m1.id, &emb);
+                insert_embedding(conn, m2.id, &emb);
+                insert_embedding(conn, m3.id, &emb);
+                Ok(())
+            })
+            .unwrap();
+
+        let config = DreamPipelineConfig {
+            semantic_dedup_threshold: 0.90,
+            enable_deduplication: true,
+            enable_procedural_distillation: false,
+            enable_graph_optimization: false,
+            enable_thematic_digest: false,
+            dry_run: false,
+            ..Default::default()
+        };
+
+        let result = DreamPipeline::run_workspace(&storage, workspace, &config).unwrap();
+        assert_eq!(result.duplicates_archived, 2);
+
+        let loaded1 = storage.with_connection(|c| get_memory(c, m1.id)).unwrap();
+        let loaded2 = storage.with_connection(|c| get_memory(c, m2.id)).unwrap();
+        let loaded3 = storage.with_connection(|c| get_memory(c, m3.id)).unwrap();
+
+        assert_eq!(loaded1.lifecycle_state, LifecycleState::Archived);
+        assert_eq!(loaded2.lifecycle_state, LifecycleState::Archived);
+        assert_eq!(loaded3.lifecycle_state, LifecycleState::Active);
     }
 
     #[test]

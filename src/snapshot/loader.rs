@@ -29,10 +29,21 @@ pub(crate) fn sanitize_zip_entry(name: &str) -> Result<&str> {
             "zip entry name must not contain null bytes".to_string(),
         ));
     }
+    if name.starts_with('/') || name.starts_with('\\') || name.contains('\\') {
+        return Err(EngramError::InvalidInput(format!(
+            "zip entry name '{}' contains invalid path separators",
+            name
+        )));
+    }
     for component in std::path::Path::new(name).components() {
-        if component == std::path::Component::ParentDir {
+        if matches!(
+            component,
+            std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
+        ) {
             return Err(EngramError::InvalidInput(format!(
-                "zip entry name '{}' contains path traversal sequence '..'",
+                "zip entry name '{}' contains path traversal sequence",
                 name
             )));
         }
@@ -106,7 +117,12 @@ impl SnapshotLoader {
         if let Some(pub_key) = verify_key {
             if manifest.signed {
                 let manifest_bytes = Self::read_entry_bytes(&mut archive, "manifest.json")?;
-                let sig_bytes = Self::read_entry_bytes(&mut archive, "manifest.sig")?;
+                let sig_raw_bytes = Self::read_entry_bytes(&mut archive, "manifest.sig")?;
+                let sig_hex_str = std::str::from_utf8(&sig_raw_bytes).map_err(|e| {
+                    EngramError::Encryption(format!("Invalid signature encoding: {e}"))
+                })?;
+                let sig_bytes = hex::decode(sig_hex_str.trim())
+                    .map_err(|e| EngramError::Encryption(format!("Invalid signature hex: {e}")))?;
                 let valid = super::crypto::verify_ed25519(&manifest_bytes, &sig_bytes, pub_key)?;
                 if !valid {
                     return Err(EngramError::Encryption(

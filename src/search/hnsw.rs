@@ -746,6 +746,18 @@ impl HnswIndex<i64> {
                     ep, node_count
                 )));
             }
+            if max_level >= nodes[ep].neighbors.len() {
+                return Err(crate::error::EngramError::InvalidInput(format!(
+                    "HNSW max_level {} exceeds entry point level count {}",
+                    max_level,
+                    nodes[ep].neighbors.len()
+                )));
+            }
+        } else if max_level != 0 {
+            return Err(crate::error::EngramError::InvalidInput(format!(
+                "HNSW max_level {} is non-zero but entry point is None",
+                max_level
+            )));
         }
 
         // 4. Checksum Verification

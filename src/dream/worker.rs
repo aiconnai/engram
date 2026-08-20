@@ -126,7 +126,7 @@ impl DreamPipeline {
         let started_at = Utc::now();
         let workspaces = storage.with_connection(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT DISTINCT workspace FROM memories WHERE workspace IS NOT NULL AND lifecycle_state = 'active'",
+                "SELECT DISTINCT workspace FROM memories WHERE workspace IS NOT NULL AND COALESCE(lifecycle_state, 'active') = 'active'",
             )?;
             let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
             let mut ws_list = Vec::new();
@@ -256,10 +256,31 @@ impl DreamPipeline {
             )
         })?;
 
+        // Query existing procedural rules to ensure idempotency across multiple dream passes
+        let existing_source_ids: HashSet<i64> = storage.with_connection(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT summary_of_id FROM memories 
+                 WHERE workspace = ?1 AND memory_type = 'procedural' 
+                   AND summary_of_id IS NOT NULL 
+                   AND COALESCE(lifecycle_state, 'active') = 'active'",
+            )?;
+            let rows = stmt.query_map(params![workspace], |r| r.get::<_, i64>(0))?;
+            Ok(rows.flatten().collect())
+        })?;
+
         let mut episodic_count = 0;
-        let mut rules_extracted = 0;
+        let mut inputs_to_create = Vec::new();
 
         for m in &memories {
+            // Guard against recursive self-distillation
+            if m.memory_type == MemoryType::Procedural
+                || m.tags
+                    .iter()
+                    .any(|t| t == "dream-distillate" || t == "procedural-rule")
+            {
+                continue;
+            }
+
             let is_episodic = m.memory_type == MemoryType::Episodic
                 || m.tags
                     .iter()
@@ -270,43 +291,65 @@ impl DreamPipeline {
             }
             episodic_count += 1;
 
-            // Extract pattern/solution pairs from content
+            // Idempotency: skip if already distilled
+            if existing_source_ids.contains(&m.id) {
+                continue;
+            }
+
+            // Extract pattern/solution pairs from content safely
             if let Some(rule) = extract_procedural_lesson(&m.content) {
-                rules_extracted += 1;
+                // Strip episodic workflow tags from the distilled rule
+                let mut tags: Vec<String> = m
+                    .tags
+                    .iter()
+                    .filter(|t| {
+                        *t != "task" && *t != "session" && *t != "execution" && *t != "error"
+                    })
+                    .cloned()
+                    .collect();
+
+                if !tags.contains(&"procedural-rule".to_string()) {
+                    tags.push("procedural-rule".to_string());
+                }
+                if !tags.contains(&"dream-distillate".to_string()) {
+                    tags.push("dream-distillate".to_string());
+                }
+
+                let input = CreateMemoryInput {
+                    content: format!(
+                        "Procedural Lesson (Distilled from Memory #{}):\n\n{}",
+                        m.id, rule
+                    ),
+                    memory_type: MemoryType::Procedural,
+                    workspace: Some(workspace.to_string()),
+                    scope: MemoryScope::Global,
+                    tier: MemoryTier::Permanent,
+                    importance: Some((m.importance + 0.2).min(1.0)),
+                    tags,
+                    summary_of_id: Some(m.id),
+                    trigger_pattern: Some(format!("procedure:memory-{}", m.id)),
+                    ..Default::default()
+                };
+
                 details.push(format!(
                     "Distilled procedural rule from memory #{}: '{}'",
                     m.id,
                     rule.chars().take(60).collect::<String>()
                 ));
 
-                if !dry_run {
-                    let mut tags = m.tags.clone();
-                    if !tags.contains(&"procedural-rule".to_string()) {
-                        tags.push("procedural-rule".to_string());
-                    }
-                    if !tags.contains(&"dream-distillate".to_string()) {
-                        tags.push("dream-distillate".to_string());
-                    }
-
-                    let input = CreateMemoryInput {
-                        content: format!(
-                            "Procedural Lesson (Distilled from Memory #{}):\n\n{}",
-                            m.id, rule
-                        ),
-                        memory_type: MemoryType::Procedural,
-                        workspace: Some(workspace.to_string()),
-                        scope: MemoryScope::Global,
-                        tier: MemoryTier::Permanent,
-                        importance: Some((m.importance + 0.2).min(1.0)),
-                        tags,
-                        summary_of_id: Some(m.id),
-                        trigger_pattern: Some(format!("procedure:memory-{}", m.id)),
-                        ..Default::default()
-                    };
-
-                    let _ = storage.with_transaction(|conn| create_memory(conn, &input));
-                }
+                inputs_to_create.push(input);
             }
+        }
+
+        let rules_extracted = inputs_to_create.len();
+
+        if !dry_run && !inputs_to_create.is_empty() {
+            storage.with_transaction(|conn| {
+                for input in &inputs_to_create {
+                    create_memory(conn, input)?;
+                }
+                Ok(())
+            })?;
         }
 
         Ok((episodic_count, rules_extracted))
@@ -325,7 +368,7 @@ impl DreamPipeline {
                 "SELECT m.id, m.content, m.importance, m.created_at, e.embedding
                  FROM memories m
                  LEFT JOIN embeddings e ON m.id = e.memory_id
-                 WHERE m.workspace = ?1 AND m.lifecycle_state = 'active'
+                 WHERE m.workspace = ?1 AND COALESCE(m.lifecycle_state, 'active') = 'active'
                  ORDER BY m.id DESC LIMIT 200",
             )?;
 
@@ -363,6 +406,7 @@ impl DreamPipeline {
         })?;
 
         let mut archived_ids = HashSet::new();
+        let mut dedup_actions: Vec<(i64, i64)> = Vec::new(); // (keeper_id, loser_id)
         let mut duplicates_found = 0;
         let mut tokens_saved = 0;
 
@@ -397,6 +441,8 @@ impl DreamPipeline {
                     };
 
                     archived_ids.insert(loser_id);
+                    dedup_actions.push((keeper_id, loser_id));
+
                     let estimated_tokens = (loser_content.len() / 4).max(10);
                     tokens_saved += estimated_tokens;
 
@@ -405,23 +451,27 @@ impl DreamPipeline {
                         sim, keeper_id, loser_id
                     ));
 
-                    if !config.dry_run {
-                        let _ = storage.with_transaction(|conn| {
-                            update_memory_lifecycle_state(
-                                conn,
-                                loser_id,
-                                LifecycleState::Archived,
-                            )?;
-                            // Remap summary_of_id to point to keeper
-                            conn.execute(
-                                "UPDATE memories SET summary_of_id = ?1 WHERE id = ?2",
-                                params![keeper_id, loser_id],
-                            )?;
-                            Ok(())
-                        });
+                    // If the outer memory is the loser, break out of comparing it against further memories
+                    if loser_id == *id1 {
+                        break;
                     }
                 }
             }
+        }
+
+        if !config.dry_run && !dedup_actions.is_empty() {
+            storage.with_transaction(|conn| {
+                for (keeper_id, loser_id) in &dedup_actions {
+                    update_memory_lifecycle_state(conn, *loser_id, LifecycleState::Archived)?;
+                    // Record cross-reference indicating keeper supersedes loser
+                    conn.execute(
+                        "INSERT INTO crossrefs (from_id, to_id, edge_type, score, strength, source)
+                         VALUES (?1, ?2, 'supersedes', 1.0, 1.0, 'dream_consolidation')",
+                        params![keeper_id, loser_id],
+                    )?;
+                }
+                Ok(())
+            })?;
         }
 
         Ok((duplicates_found, archived_ids.len(), tokens_saved))
@@ -441,7 +491,7 @@ impl DreamPipeline {
         });
 
         let pruned = if !config.dry_run {
-            storage.with_connection(|conn| {
+            storage.with_transaction(|conn| {
                 let count =
                     tracker.weaken_unused(conn, 0.1, config.graph_prune_min_age_days as u32)?;
                 // Remove any orphaned cross references whose source or target memories no longer exist
@@ -479,7 +529,7 @@ impl DreamPipeline {
     ) -> Result<Option<i64>> {
         let (active_count, tag_counts) = storage.with_connection(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT COUNT(*) FROM memories WHERE workspace = ?1 AND lifecycle_state = 'active'",
+                "SELECT COUNT(*) FROM memories WHERE workspace = ?1 AND COALESCE(lifecycle_state, 'active') = 'active'",
             )?;
             let active_count: i64 = stmt.query_row(params![workspace], |r| r.get(0))?;
 
@@ -488,7 +538,7 @@ impl DreamPipeline {
                  FROM tags t
                  JOIN memory_tags mt ON t.id = mt.tag_id
                  JOIN memories m ON mt.memory_id = m.id
-                 WHERE m.workspace = ?1 AND m.lifecycle_state = 'active'
+                 WHERE m.workspace = ?1 AND COALESCE(m.lifecycle_state, 'active') = 'active'
                  GROUP BY t.name ORDER BY cnt DESC LIMIT 8",
             )?;
             let rows = tag_stmt.query_map(params![workspace], |r| {
@@ -557,7 +607,7 @@ impl DreamPipeline {
             let mut digest_stmt = conn.prepare(
                 "SELECT id, memory_type, content, importance, created_at
                  FROM memories
-                 WHERE workspace = ?1 AND memory_type = 'summary' AND lifecycle_state = 'active'
+                 WHERE workspace = ?1 AND memory_type = 'summary' AND COALESCE(lifecycle_state, 'active') = 'active'
                  ORDER BY id DESC LIMIT 10",
             )?;
             let digest_rows = digest_stmt.query_map(params![workspace], |r| {
@@ -590,7 +640,7 @@ impl DreamPipeline {
             let mut rule_stmt = conn.prepare(
                 "SELECT id, memory_type, content, importance, created_at
                  FROM memories
-                 WHERE workspace = ?1 AND memory_type = 'procedural' AND lifecycle_state = 'active'
+                 WHERE workspace = ?1 AND memory_type = 'procedural' AND COALESCE(lifecycle_state, 'active') = 'active'
                  ORDER BY id DESC LIMIT 15",
             )?;
             let rule_rows = rule_stmt.query_map(params![workspace], |r| {
@@ -625,7 +675,7 @@ impl DreamPipeline {
                  FROM tags t
                  JOIN memory_tags mt ON t.id = mt.tag_id
                  JOIN memories m ON mt.memory_id = m.id
-                 WHERE m.workspace = ?1 AND m.lifecycle_state = 'active'
+                 WHERE m.workspace = ?1 AND COALESCE(m.lifecycle_state, 'active') = 'active'
                  GROUP BY t.name ORDER BY cnt DESC LIMIT 10",
             )?;
             let tag_rows = tag_stmt.query_map(params![workspace], |r| {
@@ -652,7 +702,7 @@ impl DreamPipeline {
     }
 }
 
-/// Helper to parse procedural patterns/solutions from episodic memory text.
+/// Helper to parse procedural patterns/solutions from episodic memory text safely.
 fn extract_procedural_lesson(text: &str) -> Option<String> {
     let lower = text.to_lowercase();
     let keywords = [
@@ -667,7 +717,15 @@ fn extract_procedural_lesson(text: &str) -> Option<String> {
 
     for kw in &keywords {
         if let Some(pos) = lower.find(kw) {
-            let snippet = text[pos..].trim();
+            // Map character count in lower to character indices in original text
+            // to prevent invalid UTF-8 byte slice panics.
+            let char_count = lower[..pos].chars().count();
+            let byte_pos = text
+                .char_indices()
+                .nth(char_count)
+                .map(|(idx, _)| idx)
+                .unwrap_or(0);
+            let snippet = text[byte_pos..].trim();
             if snippet.len() >= 20 {
                 return Some(snippet.to_string());
             }

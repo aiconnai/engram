@@ -482,13 +482,15 @@ fn verify_signature(
     let key = VerifyingKey::from_bytes(verifying_key_bytes)
         .map_err(|e| EngramError::InvalidInput(format!("invalid verifying key: {e}")))?;
 
-    let sig_bytes = hex::decode(signature_hex)
-        .map_err(|e| EngramError::InvalidInput(format!("invalid signature hex: {e}")))?;
+    let sig_bytes = match hex::decode(signature_hex) {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(false),
+    };
 
-    let sig_array: [u8; 64] = sig_bytes
-        .as_slice()
-        .try_into()
-        .map_err(|_| EngramError::InvalidInput("signature must be 64 bytes".to_string()))?;
+    let sig_array: [u8; 64] = match sig_bytes.as_slice().try_into() {
+        Ok(arr) => arr,
+        Err(_) => return Ok(false),
+    };
 
     let signature = Signature::from_bytes(&sig_array);
     Ok(key.verify(record_hash.as_bytes(), &signature).is_ok())

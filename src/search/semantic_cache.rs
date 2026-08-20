@@ -256,7 +256,8 @@ pub fn embedding_hash(embedding: &[f32], model_name: &str) -> u64 {
         hash = hash.wrapping_mul(0x100000001b3);
     }
     for &f in embedding {
-        let bytes = f.to_le_bytes();
+        let canonical_f = if f == 0.0 { 0.0f32 } else { f };
+        let bytes = canonical_f.to_le_bytes();
         for byte in bytes {
             hash ^= byte as u64;
             hash = hash.wrapping_mul(0x100000001b3); // FNV-1a prime
