@@ -157,15 +157,14 @@ impl MultimodalEmbedder for ClipEmbedder {
                 handle.block_on(self.embed_image_async(image_bytes, mime_type))
             }),
             Err(_) => {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .map_err(|e| {
-                        crate::error::EngramError::Embedding(format!(
-                            "Failed to build runtime: {}",
-                            e
-                        ))
-                    })?;
+                // No active Tokio runtime — create a temporary one.
+                // This handles CLI, stdio, and background-worker contexts.
+                let rt = tokio::runtime::Runtime::new().map_err(|e| {
+                    crate::error::EngramError::Internal(format!(
+                        "Failed to create Tokio runtime for embed_image_sync: {}",
+                        e
+                    ))
+                })?;
                 rt.block_on(self.embed_image_async(image_bytes, mime_type))
             }
         }

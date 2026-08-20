@@ -34,6 +34,12 @@ use crate::storage::Storage;
 
 pub mod candidates;
 pub mod eval;
+pub mod worker;
+
+pub use worker::{
+    DreamInsight, DreamInsightReport, DreamPipeline, DreamPipelineConfig, DreamPipelineResult,
+    DreamWorkerStatus, WorkspaceConsolidationResult,
+};
 
 /// Configuration for the Dream Phase runner.
 #[derive(Debug, Clone)]

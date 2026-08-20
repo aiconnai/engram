@@ -42,6 +42,7 @@
 //!     LoadStrategy::Merge,
 //!     Some("imported"),
 //!     None,
+//!     None,
 //! ).unwrap();
 //! println!("{} memories loaded", result.memories_loaded);
 //! ```

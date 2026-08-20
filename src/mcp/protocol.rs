@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 
 use crate::error::{EngramError, Result};
 
@@ -115,12 +115,21 @@ impl<H: McpHandler> McpServer<H> {
 
         loop {
             line.clear();
-            match std::io::Read::by_ref(&mut reader)
-                .take(MAX_STDIO_LINE_BYTES)
-                .read_line(&mut line)
-            {
+            match reader.read_line(&mut line) {
                 Ok(0) => break, // EOF
                 Ok(_) => {
+                    if line.len() > MAX_STDIO_LINE_BYTES as usize {
+                        line.clear();
+                        let response = McpResponse::error(
+                            None,
+                            -32600,
+                            format!("Request exceeds {} byte limit", MAX_STDIO_LINE_BYTES),
+                        );
+                        let response_json = serde_json::to_string(&response)?;
+                        writeln!(writer, "{}", response_json)?;
+                        writer.flush()?;
+                        continue;
+                    }
                     let trimmed = line.trim();
                     if trimmed.is_empty() {
                         continue;

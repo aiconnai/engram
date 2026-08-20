@@ -10,6 +10,7 @@ from .memories import MemoriesMixin
 from .multimodal import MultimodalMixin
 from .resources import McpResourcesMixin
 from .search import SearchMixin
+from .spatial import SpatialMixin
 
 __all__ = [
     "AuthMixin",
@@ -22,5 +23,6 @@ __all__ = [
     "MultimodalMixin",
     "ResourceMixin",
     "SearchMixin",
+    "SpatialMixin",
 ]
 

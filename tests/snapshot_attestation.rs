@@ -108,7 +108,7 @@ fn scenario_2_load_isolate_strategy() {
         .expect("build snapshot");
 
     let dst = open_storage();
-    let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Isolate, None, None)
+    let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Isolate, None, None, None)
         .expect("load snapshot");
 
     // Isolate strategy creates a new workspace
@@ -135,8 +135,15 @@ fn scenario_3_provenance_columns_set() {
         .expect("build snapshot");
 
     let dst = open_storage();
-    let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("loaded_ws"), None)
-        .expect("load snapshot");
+    let result = SnapshotLoader::load(
+        &dst,
+        &path,
+        LoadStrategy::Merge,
+        Some("loaded_ws"),
+        None,
+        None,
+    )
+    .expect("load snapshot");
 
     assert_eq!(result.memories_loaded, 1);
 
@@ -274,7 +281,14 @@ fn scenario_6_encrypted_wrong_key_fails() {
 
     let dst = open_storage();
     let wrong_key = [0xFFu8; 32];
-    let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, None, Some(&wrong_key));
+    let result = SnapshotLoader::load(
+        &dst,
+        &path,
+        LoadStrategy::Merge,
+        None,
+        Some(&wrong_key),
+        None,
+    );
 
     assert!(
         result.is_err(),
@@ -368,8 +382,15 @@ fn scenario_9_dry_run_no_insert() {
         .expect("build snapshot");
 
     let dst = open_storage();
-    let result = SnapshotLoader::load(&dst, &path, LoadStrategy::DryRun, Some("dr_target"), None)
-        .expect("dry run load");
+    let result = SnapshotLoader::load(
+        &dst,
+        &path,
+        LoadStrategy::DryRun,
+        Some("dr_target"),
+        None,
+        None,
+    )
+    .expect("dry run load");
 
     // DryRun reports what WOULD happen — memories_loaded is a preview count.
     // It does not actually insert anything; the database must remain empty.
@@ -405,13 +426,13 @@ fn scenario_10_merge_skips_duplicates() {
 
     // Load once
     let dst = open_storage();
-    let first = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("merged"), None)
+    let first = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("merged"), None, None)
         .expect("first load");
     assert_eq!(first.memories_loaded, 1);
     assert_eq!(first.memories_skipped, 0);
 
     // Load again — same content, should be skipped
-    let second = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("merged"), None)
+    let second = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("merged"), None, None)
         .expect("second load");
     assert_eq!(second.memories_loaded, 0);
     assert_eq!(second.memories_skipped, 1);

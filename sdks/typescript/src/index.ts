@@ -38,6 +38,7 @@ export {
   MemoriesResource,
   MultimodalResource,
   SearchResource,
+  SpatialResource,
   type McpCaller,
 } from "./resources/index.js";
 
@@ -92,6 +93,7 @@ export type {
   MemoryCouncilOptions,
   MemoryDigestOptions,
   MemoryReplayAtTimeOptions,
+  PalaceNavigateOptions,
   ProcessVideoOptions,
   PredictLinksOptions,
   PredictLinksResult,
@@ -103,6 +105,7 @@ export type {
   QueryTripletsOptions,
   RealtimeEvent,
   RealtimeEventType,
+  RoomSearchOptions,
   ScopeListOptions,
   SearchByImageOptions,
   SearchOptions,

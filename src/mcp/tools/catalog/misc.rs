@@ -7,12 +7,40 @@ use crate::mcp::tools::{ToolDef, ToolTier};
 pub const TOOLS: &[ToolDef] = &[
     ToolDef {
             name: "dream_run_now",
-            description: "Manually trigger the Dream Phase (background consolidation) across all workspaces. This process compresses old memories and identifies patterns while the agent is 'sleeping'.",
+            description: "Manually trigger the Dream Phase (background consolidation) across all workspaces or a specific workspace. Distills procedural rules, merges semantic duplicates, and emits thematic digests.",
             schema: r#"{
                 "type": "object",
-                "properties": {}
+                "properties": {
+                    "workspace": {"type": "string", "description": "Optional workspace name to consolidate. Omit to run across all workspaces."},
+                    "semantic_dedup_threshold": {"type": "number", "default": 0.92, "description": "Cosine similarity threshold for near-duplicate deduplication."},
+                    "dry_run": {"type": "boolean", "default": false, "description": "When true, scans and reports without mutating database."}
+                }
             }"#,
             annotations: ToolAnnotations::idempotent(),
+            tier: ToolTier::Advanced,
+        },
+    ToolDef {
+            name: "dream_consolidation_status",
+            description: "Retrieve memory consolidation status, counts of distilled procedural rules, archived duplicates, and tokens saved.",
+            schema: r#"{
+                "type": "object",
+                "properties": {
+                    "workspace": {"type": "string", "default": "default", "description": "Workspace to inspect"}
+                }
+            }"#,
+            annotations: ToolAnnotations::read_only(),
+            tier: ToolTier::Advanced,
+        },
+    ToolDef {
+            name: "dream_insights",
+            description: "Retrieve actionable distilled insights, procedural rules, and thematic summaries generated during consolidation passes.",
+            schema: r#"{
+                "type": "object",
+                "properties": {
+                    "workspace": {"type": "string", "default": "default", "description": "Workspace to query insights for"}
+                }
+            }"#,
+            annotations: ToolAnnotations::read_only(),
             tier: ToolTier::Advanced,
         },
     ToolDef {

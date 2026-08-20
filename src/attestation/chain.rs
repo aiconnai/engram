@@ -77,6 +77,11 @@ impl AttestationChain {
                 "document_name must not contain null bytes".to_string(),
             ));
         }
+        if document_name.contains('|') {
+            return Err(EngramError::InvalidInput(
+                "document_name must not contain pipe '|' characters".to_string(),
+            ));
+        }
 
         if let Some(id) = agent_id {
             if id.len() > 256 {
@@ -87,6 +92,11 @@ impl AttestationChain {
             if id.chars().any(|c| c.is_control()) {
                 return Err(EngramError::InvalidInput(
                     "agent_id must not contain control characters".to_string(),
+                ));
+            }
+            if id.contains('|') {
+                return Err(EngramError::InvalidInput(
+                    "agent_id must not contain pipe '|' characters".to_string(),
                 ));
             }
         }
@@ -415,22 +425,23 @@ impl AttestationChain {
     /// Hash = SHA-256 of:
     /// `document_hash|document_name|document_size|ingested_at|agent_id|memory_ids|previous_hash|metadata`
     pub fn compute_record_hash(record: &AttestationRecord) -> String {
-        let metadata_str = if record.metadata.is_null() {
-            String::new()
-        } else {
-            serde_json::to_string(&record.metadata).unwrap_or_default()
-        };
-        let canonical = format!(
-            "{}|{}|{}|{}|{}|{}|{}|{}",
-            record.document_hash,
-            record.document_name,
-            record.document_size,
+        // v2: Length-prefixed canonical encoding prevents delimiter injection.
+        // Includes metadata (omitted in v1).
+        let fields: Vec<String> = vec![
+            record.document_hash.clone(),
+            record.document_name.clone(),
+            record.document_size.to_string(),
             record.ingested_at.to_rfc3339(),
-            record.agent_id.as_deref().unwrap_or(""),
+            record.agent_id.as_deref().unwrap_or("").to_string(),
             serde_json::to_string(&record.memory_ids).unwrap_or_default(),
-            record.previous_hash,
-            metadata_str,
-        );
+            record.previous_hash.clone(),
+            serde_json::to_string(&record.metadata).unwrap_or_default(),
+        ];
+        let canonical = fields
+            .iter()
+            .map(|f| format!("{}:{}", f.len(), f))
+            .collect::<Vec<_>>()
+            .join("|");
         let mut hasher = Sha256::new();
         hasher.update(canonical.as_bytes());
         format!("sha256:{}", hex::encode(hasher.finalize()))
@@ -1068,6 +1079,44 @@ mod tests {
         assert!(
             msg.contains("invalid metadata JSON") || msg.contains("metadata"),
             "error should mention metadata, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_attestation_hash_includes_metadata() {
+        let rec1 = AttestationRecord {
+            id: Some(1),
+            document_hash: "hash1".to_string(),
+            document_name: "doc".to_string(),
+            document_size: 100,
+            ingested_at: chrono::Utc::now(),
+            agent_id: None,
+            memory_ids: vec![],
+            previous_hash: GENESIS_HASH.to_string(),
+            record_hash: String::new(),
+            signature: None,
+            metadata: serde_json::json!({"key": "val1"}),
+            created_at: Some(chrono::Utc::now()),
+        };
+        let mut rec2 = rec1.clone();
+        rec2.metadata = serde_json::json!({"key": "val2"});
+
+        let h1 = AttestationChain::compute_record_hash(&rec1);
+        let h2 = AttestationChain::compute_record_hash(&rec2);
+
+        assert_ne!(h1, h2, "Hashes must differ when metadata differs");
+    }
+
+    #[test]
+    fn test_attestation_pipe_in_name_rejected() {
+        let chain = test_chain();
+        let err = chain
+            .log_document(b"data", "file|name.txt", None, &[], None)
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("pipe '|' characters"),
+            "error should mention pipe: {msg}"
         );
     }
 

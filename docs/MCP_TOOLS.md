@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **293**
+Total tools: **295**
 
 ## Summary
 
@@ -270,6 +270,8 @@ Total tools: **293**
 | `room_search` | standard | misc | always | readOnlyHint | `query`, `wing` |
 | `drawer_open` | standard | misc | always | readOnlyHint | `id` |
 | `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
+| `dream_consolidation_status` | advanced | misc | always | readOnlyHint | none |
+| `dream_insights` | advanced | misc | always | readOnlyHint | none |
 | `dream_create` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | none |
 | `dream_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
 | `dream_list` | advanced | feature.dream | dream-phase | readOnlyHint | none |
@@ -4509,7 +4511,7 @@ Open a specific memory drawer by ID to read its full verbatim content and metada
 
 ### `dream_run_now`
 
-Manually trigger the Dream Phase (background consolidation) across all workspaces. This process compresses old memories and identifies patterns while the agent is 'sleeping'.
+Manually trigger the Dream Phase (background consolidation) across all workspaces or a specific workspace. Distills procedural rules, merges semantic duplicates, and emits thematic digests.
 
 - Tier: `advanced`
 - Group: `feature.dream`
@@ -4519,7 +4521,37 @@ Manually trigger the Dream Phase (background consolidation) across all workspace
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
+| `workspace` | `string` | no | Optional workspace name to consolidate. Omit to run across all workspaces. |
+| `semantic_dedup_threshold` | `number` | no | Cosine similarity threshold for near-duplicate deduplication. Default: `0.92`. |
+| `dry_run` | `boolean` | no | When true, scans and reports without mutating database. Default: `false`. |
+
+### `dream_consolidation_status`
+
+Retrieve memory consolidation status, counts of distilled procedural rules, archived duplicates, and tokens saved.
+
+- Tier: `advanced`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to inspect Default: `default`. |
+
+### `dream_insights`
+
+Retrieve actionable distilled insights, procedural rules, and thematic summaries generated during consolidation passes.
+
+- Tier: `advanced`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Workspace to query insights for Default: `default`. |
 
 ### `dream_create`
 

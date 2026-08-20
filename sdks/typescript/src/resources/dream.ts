@@ -127,7 +127,28 @@ export class DreamResource extends BaseResource {
   async runNow(options?: DreamRunNowOptions): Promise<unknown> {
     const params: Record<string, unknown> = {};
     if (options?.workspace !== undefined) params.workspace = options.workspace;
+    if (options?.semanticDedupThreshold !== undefined)
+      params.semantic_dedup_threshold = options.semanticDedupThreshold;
+    if (options?.dryRun !== undefined) params.dry_run = options.dryRun;
     return this.caller.mcpCall("dream_run_now", params);
+  }
+
+  /**
+   * Retrieve dream consolidation status and token reduction metrics.
+   */
+  async status(options?: { workspace?: string }): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    return this.caller.mcpCall("dream_consolidation_status", params);
+  }
+
+  /**
+   * Retrieve distilled procedural insights, rules, and thematic digests.
+   */
+  async insights(options?: { workspace?: string }): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    return this.caller.mcpCall("dream_insights", params);
   }
 }
 

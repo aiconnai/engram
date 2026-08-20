@@ -51,6 +51,19 @@ export interface SearchOptions {
   global?: boolean;
 }
 
+export interface PalaceNavigateOptions {
+  workspace?: string;
+  wing?: string;
+}
+
+export interface RoomSearchOptions {
+  wing: string;
+  query: string;
+  room?: string;
+  limit?: number;
+  workspace?: string;
+}
+
 export interface MemoryCouncilOptions {
   conversationId?: string;
   councilUrl?: string;
@@ -370,6 +383,16 @@ export interface DreamEvalOptions {
 }
 
 export interface DreamRunNowOptions {
+  workspace?: string;
+  semanticDedupThreshold?: number;
+  dryRun?: boolean;
+}
+
+export interface DreamConsolidationStatusOptions {
+  workspace?: string;
+}
+
+export interface DreamInsightsOptions {
   workspace?: string;
 }
 

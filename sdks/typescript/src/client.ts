@@ -10,6 +10,7 @@ import {
   MemoriesResource,
   MultimodalResource,
   SearchResource,
+  SpatialResource,
   createDreamCallable,
   createSearchCallable,
   type DreamCallableResource,
@@ -105,6 +106,7 @@ export class EngramClient implements McpCaller {
   public readonly events: EventsResource;
   public readonly resources: McpResourcesResource;
   public readonly multimodal: MultimodalResource;
+  public readonly spatial: SpatialResource;
 
   constructor(config: EngramConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -126,6 +128,7 @@ export class EngramClient implements McpCaller {
     this.events = new EventsResource(this);
     this.resources = new McpResourcesResource(this);
     this.multimodal = new MultimodalResource(this);
+    this.spatial = new SpatialResource(this);
   }
 
   async mcpCall(
@@ -736,6 +739,14 @@ export class EngramClient implements McpCaller {
 
   dreamRunNow(options?: DreamRunNowOptions): Promise<unknown> {
     return this.dream.runNow(options);
+  }
+
+  dreamStatus(options?: { workspace?: string }): Promise<unknown> {
+    return this.dream.status(options);
+  }
+
+  dreamInsights(options?: { workspace?: string }): Promise<unknown> {
+    return this.dream.insights(options);
   }
 
   /**

@@ -14,6 +14,7 @@ from engram_client.resources import (
     MemoriesMixin,
     ResourceMixin,
     SearchMixin,
+    SpatialMixin,
 )
 from engram_client.resources.auth import AuthMixin as DirectAuthMixin
 from engram_client.resources.context import ContextMixin as DirectContextMixin
@@ -21,6 +22,7 @@ from engram_client.resources.dream import DreamMixin as DirectDreamMixin
 from engram_client.resources.graph import GraphMixin as DirectGraphMixin
 from engram_client.resources.memories import MemoriesMixin as DirectMemoriesMixin
 from engram_client.resources.search import SearchMixin as DirectSearchMixin
+from engram_client.resources.spatial import SpatialMixin as DirectSpatialMixin
 
 
 @pytest.fixture
@@ -321,6 +323,12 @@ async def test_dream_mixin_methods(mock_client):
     await mock_client.dream_run_now(workspace="ws")
     mock_client._mcp_call.assert_awaited_with("dream_run_now", {"workspace": "ws"})
 
+    await mock_client.dream_status(workspace="ws")
+    mock_client._mcp_call.assert_awaited_with("dream_consolidation_status", {"workspace": "ws"})
+
+    await mock_client.dream_insights(workspace="ws")
+    mock_client._mcp_call.assert_awaited_with("dream_insights", {"workspace": "ws"})
+
 
 @pytest.mark.asyncio
 async def test_search_digest(mock_client):
@@ -439,5 +447,27 @@ async def test_multimodal_mixin_methods(mock_client):
 
     await mock_client.sync_media(dry_run=True)
     mock_client._mcp_call.assert_awaited_with("memory_sync_media", {"dry_run": True})
+
+
+@pytest.mark.asyncio
+async def test_spatial_mixin(mock_client):
+    """Test SpatialMixin mnemonic palace operations."""
+    assert SpatialMixin is DirectSpatialMixin
+    mock_client._mcp_call = AsyncMock(return_value={"success": True})
+
+    await mock_client.palace_navigate(workspace="prod", wing="backend")
+    mock_client._mcp_call.assert_awaited_with(
+        "palace_navigate", {"workspace": "prod", "wing": "backend"}
+    )
+
+    await mock_client.room_search("backend", "JWT expiration", room="auth", limit=5)
+    mock_client._mcp_call.assert_awaited_with(
+        "room_search",
+        {"wing": "backend", "query": "JWT expiration", "room": "auth", "limit": 5},
+    )
+
+    await mock_client.drawer_open(42)
+    mock_client._mcp_call.assert_awaited_with("drawer_open", {"id": 42})
+
 
 

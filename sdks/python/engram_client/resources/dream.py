@@ -144,9 +144,37 @@ class DreamMixin(ResourceMixin):
         self,
         *,
         workspace: str | None = None,
+        semantic_dedup_threshold: float | None = None,
+        dry_run: bool | None = None,
     ) -> dict[str, Any]:
-        """Trigger an immediate background consolidation pass across all workspaces."""
+        """Trigger an immediate background consolidation pass across all workspaces or a specific workspace."""
         params: dict[str, Any] = {}
         if workspace is not None:
             params["workspace"] = workspace
+        if semantic_dedup_threshold is not None:
+            params["semantic_dedup_threshold"] = semantic_dedup_threshold
+        if dry_run is not None:
+            params["dry_run"] = dry_run
         return await self._mcp_call("dream_run_now", params)
+
+    async def dream_status(
+        self,
+        *,
+        workspace: str | None = None,
+    ) -> dict[str, Any]:
+        """Retrieve memory consolidation status and token reduction metrics."""
+        params: dict[str, Any] = {}
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("dream_consolidation_status", params)
+
+    async def dream_insights(
+        self,
+        *,
+        workspace: str | None = None,
+    ) -> dict[str, Any]:
+        """Retrieve distilled procedural insights, rules, and thematic summaries."""
+        params: dict[str, Any] = {}
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("dream_insights", params)

@@ -81,6 +81,7 @@ impl SnapshotLoader {
         strategy: LoadStrategy,
         target_workspace: Option<&str>,
         decrypt_key: Option<&[u8; 32]>,
+        verify_key: Option<&[u8; 32]>,
     ) -> Result<LoadResult> {
         let snapshot_origin = path
             .file_name()
@@ -100,6 +101,24 @@ impl SnapshotLoader {
         }
 
         let manifest = Self::read_manifest(&mut archive)?;
+
+        // Verify Ed25519 signature if verification key is provided
+        if let Some(pub_key) = verify_key {
+            if manifest.signed {
+                let manifest_bytes = Self::read_entry_bytes(&mut archive, "manifest.json")?;
+                let sig_bytes = Self::read_entry_bytes(&mut archive, "manifest.sig")?;
+                let valid = super::crypto::verify_ed25519(&manifest_bytes, &sig_bytes, pub_key)?;
+                if !valid {
+                    return Err(EngramError::Encryption(
+                        "Snapshot signature verification failed".to_string(),
+                    ));
+                }
+            } else {
+                return Err(EngramError::Encryption(
+                    "Snapshot is not signed but signature verification was requested".to_string(),
+                ));
+            }
+        }
 
         // Load content (plaintext or decrypted)
         let (memories, edges) = if manifest.encrypted {
@@ -261,6 +280,21 @@ impl SnapshotLoader {
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    fn read_entry_bytes(
+        archive: &mut zip::ZipArchive<std::fs::File>,
+        name: &str,
+    ) -> Result<Vec<u8>> {
+        let mut entry = archive.by_name(name).map_err(|e| {
+            EngramError::Io(std::io::Error::other(format!(
+                "Missing archive entry '{}': {}",
+                name, e
+            )))
+        })?;
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes)?;
+        Ok(bytes)
+    }
 
     /// Read and parse the manifest from an open archive
     fn read_manifest(archive: &mut zip::ZipArchive<std::fs::File>) -> Result<SnapshotManifest> {
@@ -546,8 +580,9 @@ mod tests {
             .expect("build");
 
         let dst = make_storage();
-        let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("dst-ws"), None)
-            .expect("load");
+        let result =
+            SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, Some("dst-ws"), None, None)
+                .expect("load");
 
         assert_eq!(result.memories_loaded, 1);
         assert_eq!(result.memories_skipped, 0);
@@ -566,8 +601,8 @@ mod tests {
         SnapshotBuilder::new(src).build(&path).expect("build");
 
         let dst = make_storage();
-        let result =
-            SnapshotLoader::load(&dst, &path, LoadStrategy::DryRun, None, None).expect("load");
+        let result = SnapshotLoader::load(&dst, &path, LoadStrategy::DryRun, None, None, None)
+            .expect("load");
 
         assert_eq!(result.strategy, LoadStrategy::DryRun);
         assert_eq!(result.memories_loaded, 2);
@@ -596,6 +631,7 @@ mod tests {
             LoadStrategy::Merge,
             Some("loaded-ws"),
             Some(&key),
+            None,
         )
         .expect("load encrypted");
 
@@ -618,7 +654,14 @@ mod tests {
             .expect("build_encrypted");
 
         let dst = make_storage();
-        let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, None, Some(&wrong_key));
+        let result = SnapshotLoader::load(
+            &dst,
+            &path,
+            LoadStrategy::Merge,
+            None,
+            Some(&wrong_key),
+            None,
+        );
         assert!(result.is_err());
     }
 
@@ -639,9 +682,15 @@ mod tests {
         let dst = make_storage();
         insert_test_memory(&dst, "Pre-existing memory", "replace-ws");
 
-        let result =
-            SnapshotLoader::load(&dst, &path, LoadStrategy::Replace, Some("replace-ws"), None)
-                .expect("load replace");
+        let result = SnapshotLoader::load(
+            &dst,
+            &path,
+            LoadStrategy::Replace,
+            Some("replace-ws"),
+            None,
+            None,
+        )
+        .expect("load replace");
 
         assert_eq!(result.strategy, LoadStrategy::Replace);
         // The new memory from the snapshot should be loaded
@@ -677,7 +726,7 @@ mod tests {
             .expect("build");
 
         let dst = make_storage();
-        let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Isolate, None, None)
+        let result = SnapshotLoader::load(&dst, &path, LoadStrategy::Isolate, None, None, None)
             .expect("load isolate");
 
         assert_eq!(result.strategy, LoadStrategy::Isolate);

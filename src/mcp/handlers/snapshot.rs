@@ -234,6 +234,7 @@ pub fn snapshot_load(ctx: &HandlerContext, params: Value) -> Value {
         strategy,
         target_workspace.as_deref(),
         decrypt_key_bytes.as_ref(),
+        None,
     );
 
     match result {

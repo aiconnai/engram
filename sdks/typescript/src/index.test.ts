@@ -519,6 +519,12 @@ describe("EngramClient", () => {
 
       await client.dream.runNow({ workspace: "default" });
       expect(requestMethod(10)).toBe("dream_run_now");
+
+      await client.dream.status({ workspace: "default" });
+      expect(requestMethod(11)).toBe("dream_consolidation_status");
+
+      await client.dream.insights({ workspace: "default" });
+      expect(requestMethod(12)).toBe("dream_insights");
     });
   });
 
@@ -736,6 +742,43 @@ describe("EngramClient", () => {
       mockFetch.mockResolvedValueOnce(okResponse({ results: [] }));
       await client.searchByImage("/path/to/img.png");
       expect(requestMethod(0)).toBe("memory_search_by_image");
+    });
+  });
+
+  describe("SpatialResource", () => {
+    it("should call palace_navigate", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({ palace: "default", wings_count: 1, total_drawers: 10, wings: [] })
+      );
+      const res = await client.spatial.palaceNavigate({ workspace: "default" });
+      expect(requestMethod(0)).toBe("palace_navigate");
+      expect(requestArguments(0)).toEqual({ workspace: "default" });
+      expect(res).toEqual({ palace: "default", wings_count: 1, total_drawers: 10, wings: [] });
+    });
+
+    it("should call room_search", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ count: 1, drawers: [] }));
+      await client.spatial.roomSearch({
+        wing: "backend",
+        room: "auth",
+        query: "JWT token expiration",
+        limit: 5,
+      });
+      expect(requestMethod(0)).toBe("room_search");
+      expect(requestArguments(0)).toEqual({
+        wing: "backend",
+        room: "auth",
+        query: "JWT token expiration",
+        limit: 5,
+      });
+    });
+
+    it("should call drawer_open", async () => {
+      mockFetch.mockResolvedValueOnce(okResponse({ id: 42, content: "test" }));
+      const res = await client.spatial.drawerOpen(42);
+      expect(requestMethod(0)).toBe("drawer_open");
+      expect(requestArguments(0)).toEqual({ id: 42 });
+      expect(res).toEqual({ id: 42, content: "test" });
     });
   });
 });

@@ -18,6 +18,7 @@ from .resources.memories import MemoriesMixin
 from .resources.multimodal import MultimodalMixin
 from .resources.resources import McpResourcesMixin
 from .resources.search import SearchMixin
+from .resources.spatial import SpatialMixin
 
 # Re-export for callers that historically imported from client.
 __all__ = ["EngramClient", "EngramError"]
@@ -26,6 +27,7 @@ __all__ = ["EngramClient", "EngramError"]
 class EngramClient(
     MemoriesMixin,
     SearchMixin,
+    SpatialMixin,
     DreamMixin,
     EventsMixin,
     GraphMixin,

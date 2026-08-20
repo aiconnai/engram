@@ -96,7 +96,14 @@ fn load(
         }
     };
     let p = std::path::Path::new(&path);
-    match SnapshotLoader::load(storage, p, load_strategy, target_workspace.as_deref(), None) {
+    match SnapshotLoader::load(
+        storage,
+        p,
+        load_strategy,
+        target_workspace.as_deref(),
+        None,
+        None,
+    ) {
         Ok(result) => {
             println!(
                 "Loaded {} memories, {} skipped",

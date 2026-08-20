@@ -288,7 +288,7 @@ impl WalFrame {
         if page_number == 0 {
             return Err(WalReplicationError::InvalidFrame {
                 index: frame_index,
-                reason: "Invalid frame: page_number must be greater than 0".to_string(),
+                reason: "page_number must be >= 1 (SQLite pages are 1-based)".to_string(),
             });
         }
         let db_size_pages = u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
@@ -538,20 +538,23 @@ impl WalDeltaPack {
     /// Unpack and deserialize frames contained in this package.
     pub fn unpack_frames(&self) -> std::result::Result<Vec<WalFrame>, WalReplicationError> {
         use std::io::Read;
-        const MAX_DECOMPRESSED_DELTA_BYTES: u64 = 64 * 1024 * 1024; // 64 MB
+        const MAX_DECOMPRESSED_BYTES: u64 = 64 * 1024 * 1024; // 64 MB
 
         self.verify_checksum()?;
 
         let raw_json = if self.compressed {
-            let mut decoder = GzDecoder::new(&self.payload[..]);
+            let decoder = GzDecoder::new(&self.payload[..]);
+            let mut limited = decoder.take(MAX_DECOMPRESSED_BYTES + 1);
             let mut decompressed = Vec::new();
-            decoder
-                .by_ref()
-                .take(MAX_DECOMPRESSED_DELTA_BYTES)
-                .read_to_end(&mut decompressed)
-                .map_err(|e| {
-                    WalReplicationError::DecompressionFailed(format!("Decompression failed: {}", e))
-                })?;
+            limited.read_to_end(&mut decompressed).map_err(|e| {
+                WalReplicationError::DecompressionFailed(format!("Decompression failed: {}", e))
+            })?;
+            if decompressed.len() as u64 > MAX_DECOMPRESSED_BYTES {
+                return Err(WalReplicationError::DecompressionFailed(format!(
+                    "Decompressed payload exceeds {} byte limit",
+                    MAX_DECOMPRESSED_BYTES
+                )));
+            }
             decompressed
         } else {
             self.payload.clone()
@@ -987,7 +990,6 @@ impl WalRecoveryEngine {
         for pack in sorted_packs {
             page_size = pack.page_size;
             let mut frames = pack.unpack_frames()?;
-            frames.sort_by_key(|f| f.frame_index);
             all_frames.append(&mut frames);
         }
 
@@ -1034,5 +1036,44 @@ impl WalRecoveryEngine {
         // 3. Extract frames from source WAL and replay
         let delta = WalDeltaReader::extract_delta_frames(source_wal, 0, None)?;
         Self::replay_frames_to_db(target_db, delta.header.page_size, &delta.frames, options)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_walframe_parse_page_zero() {
+        // Create a frame buffer with page_number = 0
+        let page_size: u32 = 4096;
+        let mut bytes = vec![0u8; WAL_FRAME_HEADER_SIZE + page_size as usize];
+        // page_number = 0 (big-endian)
+        bytes[0..4].copy_from_slice(&0u32.to_be_bytes());
+        // db_size_pages = 1
+        bytes[4..8].copy_from_slice(&1u32.to_be_bytes());
+
+        let result = WalFrame::parse(&bytes, 1, page_size, false);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            WalReplicationError::InvalidFrame { index, reason } => {
+                assert_eq!(index, 1);
+                assert!(reason.contains("page_number"));
+            }
+            other => panic!("Expected InvalidFrame, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_walframe_parse_valid_page() {
+        let page_size: u32 = 4096;
+        let mut bytes = vec![0u8; WAL_FRAME_HEADER_SIZE + page_size as usize];
+        // page_number = 1 (valid)
+        bytes[0..4].copy_from_slice(&1u32.to_be_bytes());
+        bytes[4..8].copy_from_slice(&0u32.to_be_bytes());
+
+        let result = WalFrame::parse(&bytes, 1, page_size, false);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().page_number, 1);
     }
 }

@@ -45,6 +45,9 @@ struct CacheEntry {
     /// Stored for observability / future logging; not read in hot paths.
     #[allow(dead_code)]
     query_text: String,
+    /// Model name used for cache isolation; not read in hot paths.
+    #[allow(dead_code)]
+    model_name: String,
     results: Value,
     created_at: Instant,
     ttl: Duration,
@@ -81,6 +84,7 @@ pub struct SemanticCache {
     /// Live entries. Key = `embedding_hash(embedding)`.
     entries: DashMap<u64, CacheEntry>,
     config: SemanticCacheConfig,
+    model_name: String,
     hits: AtomicU64,
     misses: AtomicU64,
     evictions: AtomicU64,
@@ -89,10 +93,11 @@ pub struct SemanticCache {
 
 impl SemanticCache {
     /// Create a new cache with the supplied configuration.
-    pub fn new(config: SemanticCacheConfig) -> Self {
+    pub fn new(config: SemanticCacheConfig, model_name: String) -> Self {
         Self {
             entries: DashMap::new(),
             config,
+            model_name,
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
             evictions: AtomicU64::new(0),
@@ -118,6 +123,10 @@ impl SemanticCache {
 
         for entry_ref in self.entries.iter() {
             if entry_ref.is_expired() {
+                continue;
+            }
+
+            if entry_ref.query_embedding.len() != query_embedding.len() {
                 continue;
             }
 
@@ -150,10 +159,11 @@ impl SemanticCache {
             self.evict_oldest();
         }
 
-        let key = embedding_hash(&query_embedding);
+        let key = embedding_hash(&query_embedding, &self.model_name);
         let entry = CacheEntry {
             query_embedding,
             query_text,
+            model_name: self.model_name.clone(),
             results,
             created_at: Instant::now(),
             ttl: Duration::from_secs(self.config.default_ttl_secs),
@@ -238,8 +248,13 @@ pub use super::vector::cosine_similarity;
 ///
 /// This is used as the DashMap key for `O(1)` insertion. `get` always does a
 /// full linear scan for semantic matching.
-pub fn embedding_hash(embedding: &[f32]) -> u64 {
+pub fn embedding_hash(embedding: &[f32], model_name: &str) -> u64 {
     let mut hash: u64 = 0xcbf29ce484222325; // FNV-1a offset basis
+                                            // Mix model name into hash
+    for byte in model_name.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
     for &f in embedding {
         let bytes = f.to_le_bytes();
         for byte in bytes {
@@ -274,7 +289,7 @@ mod tests {
     use std::time::Duration;
 
     fn default_cache() -> SemanticCache {
-        SemanticCache::new(SemanticCacheConfig::default())
+        SemanticCache::new(SemanticCacheConfig::default(), "test-model".to_string())
     }
 
     fn unit_vec(dim: usize, hot: usize) -> Vec<f32> {
@@ -311,10 +326,13 @@ mod tests {
     #[test]
     fn test_cache_hit_similar() {
         // Slightly perturb the stored embedding; similarity must remain ≥ 0.92.
-        let cache = SemanticCache::new(SemanticCacheConfig {
-            similarity_threshold: 0.92,
-            ..Default::default()
-        });
+        let cache = SemanticCache::new(
+            SemanticCacheConfig {
+                similarity_threshold: 0.92,
+                ..Default::default()
+            },
+            "test-model".to_string(),
+        );
 
         let emb_stored = vec![1.0_f32, 0.0, 0.0, 0.0];
         let results = json!({"memories": [{"id": 7}]});
@@ -328,10 +346,13 @@ mod tests {
 
     #[test]
     fn test_ttl_expiration() {
-        let cache = SemanticCache::new(SemanticCacheConfig {
-            default_ttl_secs: 0, // expires immediately
-            ..Default::default()
-        });
+        let cache = SemanticCache::new(
+            SemanticCacheConfig {
+                default_ttl_secs: 0, // expires immediately
+                ..Default::default()
+            },
+            "test-model".to_string(),
+        );
 
         let emb = unit_vec(4, 2);
         cache.put(emb.clone(), "q".into(), json!({"ok": true}));
@@ -410,10 +431,13 @@ mod tests {
 
     #[test]
     fn test_capacity_eviction() {
-        let cache = SemanticCache::new(SemanticCacheConfig {
-            max_entries: 2,
-            ..Default::default()
-        });
+        let cache = SemanticCache::new(
+            SemanticCacheConfig {
+                max_entries: 2,
+                ..Default::default()
+            },
+            "test-model".to_string(),
+        );
 
         let emb0 = unit_vec(4, 0);
         let emb1 = unit_vec(4, 1);

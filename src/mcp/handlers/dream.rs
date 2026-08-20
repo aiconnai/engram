@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::dream::candidates::{run_candidate_generation, DreamCandidateGenerationConfig};
 use crate::dream::eval::{run_dream_eval, DreamEvalOptions};
-use crate::dream::{run_once_all, DreamConfig};
+use crate::dream::{run_once_all, DreamConfig, DreamPipeline, DreamPipelineConfig};
 use crate::error::{EngramError, Result};
 use crate::mcp::handlers::HandlerContext;
 use crate::storage::queries::{
@@ -23,18 +23,123 @@ use crate::types::{
 use rusqlite::params;
 use serde_json::{json, Value};
 
-/// Manually trigger a Dream Phase pass across all workspaces.
-pub fn dream_run_now(ctx: &HandlerContext, _params: Value) -> Value {
-    // For now, use default config. In the future, we could allow overriding
-    // consolidation parameters via params.
-    let config = DreamConfig::default();
+/// Manually trigger an Autonomous Dream Phase consolidation pass.
+pub fn dream_run_now(ctx: &HandlerContext, params: Value) -> Value {
+    let workspace = params.get("workspace").and_then(|v| v.as_str());
+    let dry_run = params
+        .get("dry_run")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let semantic_dedup_threshold = params
+        .get("semantic_dedup_threshold")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32)
+        .unwrap_or(0.92);
 
-    let report = run_once_all(&ctx.storage, &config);
+    let pipeline_config = DreamPipelineConfig {
+        semantic_dedup_threshold,
+        dry_run,
+        ..Default::default()
+    };
 
-    json!({
-        "status": "success",
-        "report": report
-    })
+    if let Some(ws) = workspace {
+        match DreamPipeline::run_workspace(&ctx.storage, ws, &pipeline_config) {
+            Ok(result) => json!({
+                "status": "success",
+                "workspace": ws,
+                "report": result,
+                "result": result
+            }),
+            Err(e) => json!({
+                "status": "error",
+                "error": e.to_string()
+            }),
+        }
+    } else {
+        match DreamPipeline::run_all(&ctx.storage, &pipeline_config) {
+            Ok(pipeline_result) => {
+                let legacy_config = DreamConfig::default();
+                let legacy_report = run_once_all(&ctx.storage, &legacy_config);
+                json!({
+                    "status": "success",
+                    "report": legacy_report,
+                    "consolidation": pipeline_result
+                })
+            }
+            Err(e) => json!({
+                "status": "error",
+                "error": e.to_string()
+            }),
+        }
+    }
+}
+
+/// Retrieve metrics and status of dream consolidation.
+pub fn dream_consolidation_status(ctx: &HandlerContext, params: Value) -> Value {
+    let workspace = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+
+    match ctx.storage.with_connection(|conn| {
+        let active_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM memories WHERE workspace = ?1 AND lifecycle_state = 'active'",
+            params![workspace],
+            |r| r.get(0),
+        )?;
+        let archived_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM memories WHERE workspace = ?1 AND lifecycle_state = 'archived'",
+            params![workspace],
+            |r| r.get(0),
+        )?;
+        let digest_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM memories WHERE workspace = ?1 AND memory_type = 'summary'",
+            params![workspace],
+            |r| r.get(0),
+        )?;
+        let procedural_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM memories WHERE workspace = ?1 AND memory_type = 'procedural'",
+            params![workspace],
+            |r| r.get(0),
+        )?;
+        let coactivation_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM coactivation_edges", [], |r| r.get(0))
+            .unwrap_or(0);
+
+        Ok(json!({
+            "status": "success",
+            "workspace": workspace,
+            "metrics": {
+                "active_memories": active_count,
+                "archived_memories": archived_count,
+                "distilled_procedural_rules": procedural_count,
+                "thematic_digests": digest_count,
+                "coactivation_edges": coactivation_count
+            }
+        }))
+    }) {
+        Ok(val) => val,
+        Err(e) => json!({ "status": "error", "error": e.to_string() }),
+    }
+}
+
+/// Retrieve actionable distilled insights, procedural rules, and thematic summaries.
+pub fn dream_insights(ctx: &HandlerContext, params: Value) -> Value {
+    let workspace = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+
+    match DreamPipeline::get_insights(&ctx.storage, workspace) {
+        Ok(insights) => json!({
+            "status": "success",
+            "insights": insights
+        }),
+        Err(e) => json!({
+            "status": "error",
+            "error": e.to_string()
+        }),
+    }
 }
 
 /// Create a reviewable dream snapshot job and optionally run it immediately.

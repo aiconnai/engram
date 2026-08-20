@@ -177,26 +177,20 @@ pub fn extract_agent_id<'a>(
     params: &'a Value,
     principal: Option<&'a TransportPrincipal>,
 ) -> Option<&'a str> {
+    // Always prefer the verified transport principal identity to prevent spoofing
     if let Some(p) = principal {
-        let auth = p.auth_context();
-        let pid = auth.user_id.as_str();
-        if auth.permissions.is_admin() || pid == "system" {
-            // Admin or system can act on behalf of a requested agent_id, or default to self
-            if let Some(id) = params.get("agent_id").and_then(|v| v.as_str()) {
-                if !id.trim().is_empty() {
-                    return Some(id);
-                }
-            }
-            return Some(pid);
-        }
-        if !pid.is_empty() && pid != "anonymous" {
-            return Some(pid);
+        let user_str = p.auth_context().user_id.as_str();
+        if !user_str.is_empty() && user_str != "system" && user_str != "anonymous" {
+            return Some(user_str);
         }
     }
-    params
-        .get("agent_id")
-        .and_then(|v| v.as_str())
-        .filter(|id| !id.trim().is_empty())
+    // Fallback to params only when no authenticated principal (e.g., stdio transport)
+    if let Some(id) = params.get("agent_id").and_then(|v| v.as_str()) {
+        if !id.trim().is_empty() {
+            return Some(id);
+        }
+    }
+    None
 }
 
 pub fn required_scope_permission(tool_name: &str) -> &'static str {
@@ -524,5 +518,20 @@ mod tests {
 
         assert!(allowed.is_none());
         assert!(denied.is_some());
+    }
+
+    #[test]
+    fn test_principal_overrides_params_agent_id() {
+        use serde_json::json;
+        // When a principal is present, params agent_id should be ignored
+        let params = json!({"agent_id": "spoofed_agent"});
+
+        let p = principal(None, PermissionSet::standard_user());
+
+        let result = extract_agent_id(&params, Some(&p));
+        assert_eq!(result, Some("user-1"));
+
+        let result_none = extract_agent_id(&params, None);
+        assert_eq!(result_none, Some("spoofed_agent"));
     }
 }

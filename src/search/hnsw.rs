@@ -615,6 +615,14 @@ impl HnswIndex<i64> {
         adler.update(&u32_buf);
         let dim = u32::from_le_bytes(u32_buf) as usize;
 
+        const MAX_HNSW_DIM: usize = 16_384;
+        if dim == 0 || dim > MAX_HNSW_DIM {
+            return Err(crate::error::EngramError::InvalidInput(format!(
+                "HNSW dim {} out of valid range [1, {}]",
+                dim, MAX_HNSW_DIM
+            )));
+        }
+
         reader.read_exact(&mut u32_buf)?;
         adler.update(&u32_buf);
         let m = u32::from_le_bytes(u32_buf) as usize;
@@ -639,6 +647,14 @@ impl HnswIndex<i64> {
         reader.read_exact(&mut u64_buf)?;
         adler.update(&u64_buf);
         let node_count = u64::from_le_bytes(u64_buf) as usize;
+
+        const MAX_HNSW_NODES: usize = 50_000_000;
+        if node_count > MAX_HNSW_NODES {
+            return Err(crate::error::EngramError::InvalidInput(format!(
+                "HNSW node_count {} exceeds maximum {}",
+                node_count, MAX_HNSW_NODES
+            )));
+        }
 
         let mut i64_buf = [0u8; 8];
         reader.read_exact(&mut i64_buf)?;
@@ -901,5 +917,24 @@ mod tests {
         assert_eq!(loaded.len(), 2);
         assert!(loaded.contains(&42));
         assert!(loaded.contains(&43));
+    }
+
+    #[test]
+    fn test_hnsw_load_rejects_huge_node_count() {
+        let config = HnswConfig::new(3, VectorMetric::Cosine);
+        let mut index = HnswIndex::new(config);
+        index.insert(1, &[1.0, 0.0, 0.0]);
+
+        let mut bytes = index.save_to_bytes().expect("save bytes");
+        // Replace node_count with u64::MAX
+        // Offset: magic(12) + version(4) + metric(1) + dim(4) + m(4) + m_max0(4) + ef_construction(4) + ef_search(4) + ml(4) = 41
+        for b in &mut bytes[41..49] {
+            *b = 0xFF;
+        }
+
+        let res = HnswIndex::load_from_bytes(&bytes);
+        assert!(res.is_err());
+        let err_msg = res.unwrap_err().to_string();
+        assert!(err_msg.contains("exceeds maximum"));
     }
 }

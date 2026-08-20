@@ -195,22 +195,20 @@ impl CoactivationTracker {
                 "Cannot strengthen self-loop on coactivation graph".to_string(),
             ));
         }
-        let canonical_from = from_id.min(to_id);
-        let canonical_to = from_id.max(to_id);
+        // Canonicalize edge direction: ensure from_id <= to_id
+        let (from_id, to_id) = if from_id <= to_id {
+            (from_id, to_id)
+        } else {
+            (to_id, from_id)
+        };
         let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-        self.upsert_edge(
-            conn,
-            canonical_from,
-            canonical_to,
-            self.config.learning_rate,
-            &now,
-        )?;
+        self.upsert_edge(conn, from_id, to_id, self.config.learning_rate, &now)?;
 
         // Read back the updated strength.
         let strength: f64 = conn
             .query_row(
                 "SELECT strength FROM coactivation_edges WHERE from_id = ?1 AND to_id = ?2",
-                params![canonical_from, canonical_to],
+                params![from_id, to_id],
                 |row| row.get(0),
             )
             .map_err(EngramError::Database)?;
@@ -706,6 +704,30 @@ mod tests {
         let graph = t.get_coactivation_graph(&conn, 7).expect("graph");
         assert_eq!(graph.len(), 1);
         assert_eq!(graph[0].count, 4, "count should reflect 4 co-activations");
+    }
+
+    #[test]
+    fn test_strengthen_canonicalizes_edge() {
+        let conn = setup_db();
+        let t = tracker();
+
+        t.strengthen(&conn, 5, 2).expect("strengthen");
+
+        // (2, 5) should exist (canonical order)
+        let val25: std::result::Result<f64, _> = conn.query_row(
+            "SELECT strength FROM coactivation_edges WHERE from_id=2 AND to_id=5",
+            [],
+            |r| r.get(0),
+        );
+        assert!(val25.is_ok(), "Edge (2,5) should exist in canonical order");
+
+        // (5, 2) should NOT exist (non-canonical)
+        let val52: std::result::Result<f64, _> = conn.query_row(
+            "SELECT strength FROM coactivation_edges WHERE from_id=5 AND to_id=2",
+            [],
+            |r| r.get(0),
+        );
+        assert!(val52.is_err(), "Edge (5,2) should NOT exist");
     }
 
     // -------------------------------------------------------------------------

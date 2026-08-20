@@ -342,6 +342,10 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         #[cfg(feature = "dream-phase")]
         "dream_run_now" => dream::dream_run_now(ctx, params),
         #[cfg(feature = "dream-phase")]
+        "dream_consolidation_status" => dream::dream_consolidation_status(ctx, params),
+        #[cfg(feature = "dream-phase")]
+        "dream_insights" => dream::dream_insights(ctx, params),
+        #[cfg(feature = "dream-phase")]
         "dream_create" => dream::dream_create(ctx, params),
         #[cfg(feature = "dream-phase")]
         "dream_get" => dream::dream_get(ctx, params),

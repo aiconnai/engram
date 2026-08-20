@@ -40,6 +40,8 @@ pub(crate) fn required_features(name: &str) -> &'static [&'static str] {
             &["duckdb-graph"]
         }
         "dream_run_now"
+        | "dream_consolidation_status"
+        | "dream_insights"
         | "dream_create"
         | "dream_get"
         | "dream_list"

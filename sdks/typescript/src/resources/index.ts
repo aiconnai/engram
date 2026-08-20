@@ -17,3 +17,4 @@ export { AdminResource } from "./admin.js";
 export { EventsResource } from "./events.js";
 export { McpResourcesResource } from "./resources.js";
 export { MultimodalResource } from "./multimodal.js";
+export { SpatialResource } from "./spatial.js";
