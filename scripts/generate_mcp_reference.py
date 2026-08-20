@@ -218,7 +218,7 @@ def extract_tool_definition_source(source: Path) -> str:
     catalog_dir = source.parent / "catalog"
     if catalog_dir.is_dir() and (catalog_dir / "memory_crud.rs").is_file():
         parts = []
-        for mod in ["memory_crud", "search", "context", "graph", "policy", "admin", "multimodal", "misc"]:
+        for mod in ["memory_crud", "search", "context", "graph", "policy", "admin", "multimodal", "sync", "spatial", "misc"]:
             mod_path = catalog_dir / f"{mod}.rs"
             if mod_path.is_file():
                 parts.append(mod_path.read_text())

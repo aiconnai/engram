@@ -43,6 +43,8 @@ pub enum MemoryType {
     Video,
     /// Lightweight append-only fact for high-frequency session/watcher ingest
     Fact,
+    /// Verbatim raw document, transcript chunk, or code snippet with loss-free guarantee
+    Verbatim,
 }
 
 /// Memory tier for tiered storage (permanent vs ephemeral)
@@ -114,6 +116,7 @@ impl MemoryType {
             MemoryType::Audio => "audio",
             MemoryType::Video => "video",
             MemoryType::Fact => "fact",
+            MemoryType::Verbatim => "verbatim",
         }
     }
 
@@ -154,6 +157,7 @@ impl std::str::FromStr for MemoryType {
             "audio" => Ok(MemoryType::Audio),
             "video" => Ok(MemoryType::Video),
             "fact" => Ok(MemoryType::Fact),
+            "verbatim" => Ok(MemoryType::Verbatim),
             _ => Err(format!("Unknown memory type: {}", s)),
         }
     }
@@ -361,4 +365,28 @@ pub enum RelationSource {
     Auto,
     Manual,
     Llm,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_type_verbatim() {
+        let mt = MemoryType::Verbatim;
+        assert_eq!(mt.as_str(), "verbatim");
+        assert_eq!(
+            "verbatim".parse::<MemoryType>().unwrap(),
+            MemoryType::Verbatim
+        );
+        assert_eq!(
+            "VERBATIM".parse::<MemoryType>().unwrap(),
+            MemoryType::Verbatim
+        );
+
+        let json = serde_json::to_string(&mt).unwrap();
+        assert_eq!(json, "\"verbatim\"");
+        let deserialized: MemoryType = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, MemoryType::Verbatim);
+    }
 }

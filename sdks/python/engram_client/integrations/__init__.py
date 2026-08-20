@@ -16,6 +16,7 @@ try:
         EngramLlamaIndexVectorStore,
     )
 except ImportError:
+    # Optional dependency: llama-index may not be installed.
     pass
 
 __all__ = [

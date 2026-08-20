@@ -64,9 +64,15 @@ IDEMPOTENT_TOOLS = {
 
 DISPATCH_ALIASES = {
     "memory_seed",
+    "graph_cluster_concepts",
+    "graph_predict_links",
 }
 
-DISPATCH_RE = re.compile(r'^\s*"(?P<name>(?:\\.|[^"\\])*)"\s*=>', re.MULTILINE)
+DISPATCH_ARM_RE = re.compile(
+    r'^\s*((?:"(?:\\.|[^"\\])*"\s*\|\s*)*"(?:\\.|[^"\\])*")\s*=>',
+    re.MULTILINE,
+)
+DISPATCH_NAME_RE = re.compile(r'"(?P<name>(?:\\.|[^"\\])*)"')
 DOC_HEADING_RE = re.compile(r"^### `(?P<name>[^`]+)`\s*$", re.MULTILINE)
 GENERATED_MARKER = "<!-- GENERATED: do not edit manually. Run `./scripts/generate-mcp-reference.sh`. -->"
 
@@ -105,7 +111,12 @@ def add_check(
 
 def parse_dispatch_names(path: Path) -> set[str]:
     text = path.read_text(encoding="utf-8")
-    return {json.loads(f'"{match.group("name")}"') for match in DISPATCH_RE.finditer(text)}
+    names: set[str] = set()
+    for match in DISPATCH_ARM_RE.finditer(text):
+        arm = match.group(1)
+        for n_match in DISPATCH_NAME_RE.finditer(arm):
+            names.add(json.loads(f'"{n_match.group("name")}"'))
+    return names
 
 
 def parse_doc_names(path: Path) -> set[str]:

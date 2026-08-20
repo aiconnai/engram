@@ -92,6 +92,13 @@ impl SnapshotLoader {
         let mut archive = zip::ZipArchive::new(file)
             .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
 
+        // Sanitize all entry names in the archive
+        for i in 0..archive.len() {
+            if let Ok(entry) = archive.by_index(i) {
+                sanitize_zip_entry(entry.name())?;
+            }
+        }
+
         let manifest = Self::read_manifest(&mut archive)?;
 
         // Load content (plaintext or decrypted)
@@ -105,6 +112,22 @@ impl SnapshotLoader {
         } else {
             Self::read_plaintext_content(&mut archive)?
         };
+
+        // Verify content hash integrity if present
+        if !manifest.content_hash.is_empty() {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            for m in &memories {
+                hasher.update(m.content.as_bytes());
+            }
+            let calculated_hash = hex::encode(hasher.finalize());
+            if calculated_hash != manifest.content_hash {
+                return Err(EngramError::Storage(format!(
+                    "Snapshot content hash mismatch: expected {}, calculated {}",
+                    manifest.content_hash, calculated_hash
+                )));
+            }
+        }
 
         // Determine the workspace name
         let resolved_workspace =

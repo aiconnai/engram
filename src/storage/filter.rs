@@ -104,7 +104,7 @@ pub enum FieldPath {
 /// Validate that a metadata JSON path contains only safe characters.
 /// Allows alphanumeric, underscore, dot (for nested paths), and hyphen.
 /// Rejects any characters that could be used for SQL injection (quotes, brackets, etc).
-fn validate_json_path(path: &str) -> Result<()> {
+pub(crate) fn validate_json_path(path: &str) -> Result<()> {
     if path.is_empty() {
         return Err(EngramError::InvalidInput(
             "Metadata path cannot be empty".to_string(),

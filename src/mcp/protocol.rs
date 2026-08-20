@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 
 use crate::error::{EngramError, Result};
 
@@ -111,10 +111,14 @@ impl<H: McpHandler> McpServer<H> {
         let mut writer = stdout.lock();
 
         let mut line = String::new();
+        const MAX_STDIO_LINE_BYTES: u64 = 16 * 1024 * 1024; // 16 MiB
 
         loop {
             line.clear();
-            match reader.read_line(&mut line) {
+            match std::io::Read::by_ref(&mut reader)
+                .take(MAX_STDIO_LINE_BYTES)
+                .read_line(&mut line)
+            {
                 Ok(0) => break, // EOF
                 Ok(_) => {
                     let trimmed = line.trim();

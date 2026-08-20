@@ -433,7 +433,8 @@ impl Reranker {
             MemoryType::Summary => 0.05,
             MemoryType::Checkpoint => 0.04,
             MemoryType::Image | MemoryType::Audio | MemoryType::Video => 0.05,
-            MemoryType::Fact => 0.06, // Facts have moderate relevance
+            MemoryType::Fact => 0.06,     // Facts have moderate relevance
+            MemoryType::Verbatim => 0.05, // Verbatim documents/transcripts
         }
     }
 

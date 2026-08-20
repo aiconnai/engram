@@ -152,11 +152,23 @@ impl Embedder for ClipEmbedder {
 
 impl MultimodalEmbedder for ClipEmbedder {
     fn embed_image_sync(&self, image_bytes: &[u8], mime_type: &str) -> Result<Vec<f32>> {
-        // Blocking wrapper around the async implementation
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(self.embed_image_async(image_bytes, mime_type))
-        })
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => tokio::task::block_in_place(|| {
+                handle.block_on(self.embed_image_async(image_bytes, mime_type))
+            }),
+            Err(_) => {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| {
+                        crate::error::EngramError::Embedding(format!(
+                            "Failed to build runtime: {}",
+                            e
+                        ))
+                    })?;
+                rt.block_on(self.embed_image_async(image_bytes, mime_type))
+            }
+        }
     }
 
     fn multimodal_provider_name(&self) -> &str {

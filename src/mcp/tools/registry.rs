@@ -10,6 +10,7 @@ pub static TOOL_DEFINITIONS: LazyLock<Vec<ToolDef>> = LazyLock::new(|| {
     let mut tools = Vec::with_capacity(300);
     tools.extend_from_slice(catalog::memory_crud::TOOLS);
     tools.extend_from_slice(catalog::search::TOOLS);
+    tools.extend_from_slice(catalog::spatial::TOOLS);
     tools.extend_from_slice(catalog::context::TOOLS);
     tools.extend_from_slice(catalog::graph::TOOLS);
     tools.extend_from_slice(catalog::policy::TOOLS);

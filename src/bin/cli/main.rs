@@ -10,6 +10,7 @@ mod graph;
 mod interactive;
 mod maintenance;
 mod mcp;
+mod mine;
 #[cfg(feature = "onnx-embed")]
 mod model;
 
@@ -18,6 +19,7 @@ mod session;
 #[cfg(feature = "snapshot")]
 mod snapshot;
 mod util;
+mod wake_up;
 
 use clap::Parser;
 use engram::error::Result;
@@ -56,6 +58,16 @@ fn main() -> Result<()> {
         } => core::search(&storage, query, limit, explain)?,
         Commands::Delete { id } => core::delete(&storage, id)?,
         Commands::Stats => core::stats(&storage)?,
+        Commands::Mine {
+            path,
+            mode,
+            wing,
+            room,
+            workspace,
+        } => mine::handle_mine(&storage, &path, &mode, wing, room, &workspace)?,
+        Commands::WakeUp { workspace, format } => {
+            wake_up::handle_wake_up(&storage, &workspace, &format)?
+        }
         Commands::Session { action } => session::handle(&storage, action)?,
         Commands::Maintenance { action } => maintenance::handle(&storage, action)?,
         Commands::Mcp { action } => mcp::handle(&storage, action)?,

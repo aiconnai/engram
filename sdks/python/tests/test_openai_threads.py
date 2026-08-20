@@ -6,8 +6,9 @@ installation is required.
 
 from __future__ import annotations
 
+from typing import Any
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from engram_client.integrations.openai_threads import (
     EngramThreadStore,
@@ -40,8 +41,8 @@ def _make_message(
     message_id: str = "msg_001",
     role: str = "user",
     content_text: str = "Hello, assistant!",
-    run_id: Optional[str] = None,
-    assistant_id: Optional[str] = None,
+    run_id: str | None = None,
+    assistant_id: str | None = None,
     created_at: int = 1700000000,
 ) -> MagicMock:
     """Build a MagicMock that mimics an OpenAI message object.
@@ -67,7 +68,7 @@ def _make_message(
     return msg
 
 
-def _make_list_response(messages: List[Any]) -> MagicMock:
+def _make_list_response(messages: list[Any]) -> MagicMock:
     """Build a MagicMock simulating the OpenAI list response with .data."""
     response = MagicMock()
     response.data = messages

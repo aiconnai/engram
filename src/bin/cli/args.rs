@@ -77,6 +77,32 @@ pub(crate) enum Commands {
     },
     /// Show statistics
     Stats,
+    /// Mine conversation transcripts, markdown documents, or files into memory
+    Mine {
+        /// Source file or directory to mine
+        path: String,
+        /// Ingestion mode: convos, markdown, text
+        #[arg(short, long, default_value = "convos")]
+        mode: String,
+        /// Target Wing / Domain
+        #[arg(short = 'W', long)]
+        wing: Option<String>,
+        /// Target Room / Topic
+        #[arg(short = 'r', long)]
+        room: Option<String>,
+        /// Target workspace (Palace)
+        #[arg(short = 'w', long, default_value = "default")]
+        workspace: String,
+    },
+    /// Generate a compact agent wake-up digest (~150 tokens) for session bootstrap
+    WakeUp {
+        /// Workspace name (Palace)
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+        /// Output format: text, json
+        #[arg(short, long, default_value = "text")]
+        format: String,
+    },
     /// Session continuation and handoff workflows
     Session {
         #[command(subcommand)]

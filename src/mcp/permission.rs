@@ -177,19 +177,26 @@ pub fn extract_agent_id<'a>(
     params: &'a Value,
     principal: Option<&'a TransportPrincipal>,
 ) -> Option<&'a str> {
-    if let Some(id) = params.get("agent_id").and_then(|v| v.as_str()) {
-        if !id.trim().is_empty() {
-            return Some(id);
+    if let Some(p) = principal {
+        let auth = p.auth_context();
+        let pid = auth.user_id.as_str();
+        if auth.permissions.is_admin() || pid == "system" {
+            // Admin or system can act on behalf of a requested agent_id, or default to self
+            if let Some(id) = params.get("agent_id").and_then(|v| v.as_str()) {
+                if !id.trim().is_empty() {
+                    return Some(id);
+                }
+            }
+            return Some(pid);
+        }
+        if !pid.is_empty() && pid != "anonymous" {
+            return Some(pid);
         }
     }
-    principal.and_then(|p| {
-        let user_str = p.auth_context().user_id.as_str();
-        if !user_str.is_empty() && user_str != "system" && user_str != "anonymous" {
-            Some(user_str)
-        } else {
-            None
-        }
-    })
+    params
+        .get("agent_id")
+        .and_then(|v| v.as_str())
+        .filter(|id| !id.trim().is_empty())
 }
 
 pub fn required_scope_permission(tool_name: &str) -> &'static str {
@@ -209,6 +216,14 @@ pub fn check_scope_authorization(
     params: &Value,
     principal: Option<&TransportPrincipal>,
 ) -> Option<Value> {
+    // Admins bypass granular scope grant checks
+    if principal
+        .map(|p| p.auth_context().permissions.is_admin())
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
     let agent_id = extract_agent_id(params, principal)?;
     let scopes = extract_requested_scopes(params);
     if scopes.is_empty() {
@@ -217,11 +232,6 @@ pub fn check_scope_authorization(
 
     let required_perm = required_scope_permission(tool_name);
     for scope in scopes {
-        // Global root or unparameterized scope does not require specific path grant
-        if scope.eq_ignore_ascii_case("global") {
-            continue;
-        }
-
         match crate::storage::scope_grants::check_scope_access(conn, agent_id, scope, required_perm)
         {
             Ok(true) => continue,

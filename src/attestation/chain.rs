@@ -413,10 +413,15 @@ impl AttestationChain {
     /// Compute the canonical `record_hash` for a record.
     ///
     /// Hash = SHA-256 of:
-    /// `document_hash|document_name|document_size|ingested_at|agent_id|memory_ids|previous_hash`
+    /// `document_hash|document_name|document_size|ingested_at|agent_id|memory_ids|previous_hash|metadata`
     pub fn compute_record_hash(record: &AttestationRecord) -> String {
+        let metadata_str = if record.metadata.is_null() {
+            String::new()
+        } else {
+            serde_json::to_string(&record.metadata).unwrap_or_default()
+        };
         let canonical = format!(
-            "{}|{}|{}|{}|{}|{}|{}",
+            "{}|{}|{}|{}|{}|{}|{}|{}",
             record.document_hash,
             record.document_name,
             record.document_size,
@@ -424,6 +429,7 @@ impl AttestationChain {
             record.agent_id.as_deref().unwrap_or(""),
             serde_json::to_string(&record.memory_ids).unwrap_or_default(),
             record.previous_hash,
+            metadata_str,
         );
         let mut hasher = Sha256::new();
         hasher.update(canonical.as_bytes());

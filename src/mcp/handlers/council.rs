@@ -68,16 +68,26 @@ pub fn memory_council(ctx: &HandlerContext, params: Value) -> Value {
         timeout: Duration::from_secs(timeout_secs),
     };
 
-    let rt = match tokio::runtime::Runtime::new() {
-        Ok(rt) => rt,
-        Err(e) => {
-            return json!({"error": format!("Failed to create async runtime: {e}")});
+    let result = match tokio::runtime::Handle::try_current() {
+        Ok(handle) => match tokio::task::block_in_place(|| handle.block_on(run_council(request))) {
+            Ok(v) => v,
+            Err(e) => return json!({"error": e}),
+        },
+        Err(_) => {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(e) => {
+                    return json!({"error": format!("Failed to create async runtime: {e}")});
+                }
+            };
+            match rt.block_on(run_council(request)) {
+                Ok(v) => v,
+                Err(e) => return json!({"error": e}),
+            }
         }
-    };
-
-    let result = match rt.block_on(run_council(request)) {
-        Ok(v) => v,
-        Err(e) => return json!({"error": e}),
     };
 
     let mut output = json!({

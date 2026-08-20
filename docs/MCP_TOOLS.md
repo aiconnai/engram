@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **287**
+Total tools: **293**
 
 ## Summary
 
@@ -263,6 +263,12 @@ Total tools: **287**
 | `memory_ingest_media` | standard | memory.core | always | mutating (no MCP hints) | `media_path` |
 | `memory_process_video` | advanced | feature.multimodal | multimodal | mutating (no MCP hints) | `video_path` |
 | `memory_transcribe_audio` | advanced | feature.multimodal | multimodal | readOnlyHint | `audio_path` |
+| `replication_status` | advanced | misc | always | readOnlyHint | none |
+| `replication_sync_now` | advanced | misc | always | mutating (no MCP hints) | none |
+| `replication_recover` | advanced | misc | always | mutating (no MCP hints) | `target_db_path` |
+| `palace_navigate` | standard | misc | always | readOnlyHint | none |
+| `room_search` | standard | misc | always | readOnlyHint | `query`, `wing` |
+| `drawer_open` | standard | misc | always | readOnlyHint | `id` |
 | `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
 | `dream_create` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | none |
 | `dream_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
@@ -4403,6 +4409,103 @@ Transcribe an audio file to text using the configured audio transcription provid
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `audio_path` | `string` | yes | Absolute or relative path to the audio file to transcribe. |
+
+### `replication_status`
+
+Get SQLite WAL continuous replication status, lag metrics, and frame sequence numbers for R2/S3 cloud backup and PITR.
+
+- Tier: `advanced`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `db_path` | `string` | no | Optional SQLite database path (defaults to active storage database) |
+
+### `replication_sync_now`
+
+Force an immediate WAL delta extraction and replication flush, generating a compressed and checksummed delta package.
+
+- Tier: `advanced`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `db_path` | `string` | no | Optional SQLite database path (defaults to active storage database) |
+| `compress` | `boolean` | no | Whether to gzip compress delta frame payloads Default: `true`. |
+| `identifier` | `string` | no | Optional logical database or workspace identifier |
+
+### `replication_recover`
+
+Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into a target database.
+
+- Tier: `advanced`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: mutating (no MCP hints)
+- Required inputs: `target_db_path`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `target_db_path` | `string` | yes | Destination file path for the recovered SQLite database |
+| `source_db_path` | `string` | no | Source SQLite database path (defaults to active storage database) |
+| `source_wal_path` | `string` | no | Source .db-wal path (defaults to source_db_path + '-wal') |
+| `target_frame` | `integer` | no | Target frame sequence number to stop recovery at (inclusive) |
+| `target_time` | `string` | no | Target timestamp (ISO-8601 / RFC3339) to stop recovery at Format: `date-time`. |
+| `commit_boundary_only` | `boolean` | no | Only apply frames up to the last transaction commit boundary Default: `true`. |
+| `verify_integrity` | `boolean` | no | Verify database integrity after recovery using PRAGMA integrity_check Default: `true`. |
+
+### `palace_navigate`
+
+Navigate the Memory Palace: inspect active wings (top-level domains), rooms (sub-topics), and memory counts for spatial orientation.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Target workspace (Palace). Defaults to 'default'. |
+| `wing` | `string` | no | Optional wing filter to inspect rooms inside a specific wing. |
+
+### `room_search`
+
+Search memories scoped within a specific spatial room and wing using hybrid retrieval.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `query`, `wing`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `wing` | `string` | yes | Target wing (domain/project). |
+| `room` | `string` | no | Optional room (subtopic/component). |
+| `query` | `string` | yes | Search query. |
+| `limit` | `integer` | no | Maximum number of drawer memories to return. Default: `10`. |
+| `workspace` | `string` | no | Optional workspace name. |
+
+### `drawer_open`
+
+Open a specific memory drawer by ID to read its full verbatim content and metadata.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `id`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `id` | `integer` | yes | Drawer (memory) ID to open. |
 
 ### `dream_run_now`
 

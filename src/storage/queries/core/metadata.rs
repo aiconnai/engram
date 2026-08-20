@@ -6,6 +6,7 @@ pub(crate) fn metadata_value_to_param(
     conditions: &mut Vec<String>,
     params: &mut Vec<Box<dyn rusqlite::ToSql>>,
 ) -> Result<()> {
+    crate::storage::filter::validate_json_path(key)?;
     match value {
         serde_json::Value::String(s) => {
             conditions.push(format!("json_extract(m.metadata, '$.{}') = ?", key));

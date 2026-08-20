@@ -669,8 +669,9 @@ impl HnswIndex<i64> {
         };
 
         // 3. Nodes Payload
-        let mut nodes = Vec::with_capacity(node_count);
-        let mut id_to_idx = HashMap::with_capacity(node_count);
+        let initial_cap = node_count.min(65536);
+        let mut nodes = Vec::with_capacity(initial_cap);
+        let mut id_to_idx = HashMap::with_capacity(initial_cap);
 
         let mut u16_buf = [0u8; 2];
         let mut vec_bytes = vec![0u8; dim * 4];
@@ -701,7 +702,14 @@ impl HnswIndex<i64> {
                 for _ in 0..num_neighbors {
                     reader.read_exact(&mut u32_buf)?;
                     adler.update(&u32_buf);
-                    level_neighbors.push(u32::from_le_bytes(u32_buf) as usize);
+                    let neighbor_idx = u32::from_le_bytes(u32_buf) as usize;
+                    if neighbor_idx >= node_count {
+                        return Err(crate::error::EngramError::InvalidInput(format!(
+                            "HNSW neighbor index {} out of bounds for node count {}",
+                            neighbor_idx, node_count
+                        )));
+                    }
+                    level_neighbors.push(neighbor_idx);
                 }
                 neighbors.push(level_neighbors);
             }
@@ -712,6 +720,16 @@ impl HnswIndex<i64> {
                 neighbors,
             });
             id_to_idx.insert(id, idx);
+        }
+
+        // Validate entry point bounds
+        if let Some(ep) = entry_point {
+            if ep >= node_count {
+                return Err(crate::error::EngramError::InvalidInput(format!(
+                    "HNSW entry point {} out of bounds for node count {}",
+                    ep, node_count
+                )));
+            }
         }
 
         // 4. Checksum Verification

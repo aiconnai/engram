@@ -49,6 +49,7 @@ pub mod retrieval;
 pub mod search;
 pub mod session;
 pub mod smart_retrieve;
+pub mod spatial;
 pub mod stats;
 pub mod summarize;
 pub mod sync;
@@ -226,11 +227,14 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
             graph::memory_cluster_concepts(ctx, params)
         }
 
-        // ── Workspace ────────────────────────────────────────────────────────
+        // ── Workspace & Spatial (Method of Loci) ─────────────────────────────
         "workspace_list" => workspace::workspace_list(ctx, params),
         "workspace_stats" => workspace::workspace_stats(ctx, params),
         "workspace_move" => workspace::workspace_move(ctx, params),
         "workspace_delete" => workspace::workspace_delete(ctx, params),
+        "palace_navigate" => spatial::palace_navigate(ctx, params),
+        "room_search" => spatial::room_search(ctx, params),
+        "drawer_open" => spatial::drawer_open(ctx, params),
 
         // ── Identity ─────────────────────────────────────────────────────────
         "identity_create" => identity::identity_create(ctx, params),

@@ -116,7 +116,7 @@ impl SemanticCache {
         let mut best_result: Option<Value> = None;
         let mut best_key: Option<u64> = None;
 
-        for mut entry_ref in self.entries.iter_mut() {
+        for entry_ref in self.entries.iter() {
             if entry_ref.is_expired() {
                 continue;
             }
@@ -126,16 +126,13 @@ impl SemanticCache {
                 best_similarity = sim;
                 best_result = Some(entry_ref.results.clone());
                 best_key = Some(*entry_ref.key());
-                // Increment hit_count in place while we hold the write lock.
-                entry_ref.hit_count = entry_ref.hit_count.saturating_add(1);
             }
         }
 
-        // If we found the best key but had to iterate past it to finish, we
-        // already incremented hit_count above — nothing more needed.
-        let _ = best_key; // suppress unused warning
-
-        if best_result.is_some() {
+        if let Some(key) = best_key {
+            if let Some(mut entry) = self.entries.get_mut(&key) {
+                entry.hit_count = entry.hit_count.saturating_add(1);
+            }
             self.hits.fetch_add(1, Ordering::Relaxed);
         } else {
             self.misses.fetch_add(1, Ordering::Relaxed);
@@ -237,14 +234,13 @@ impl SemanticCache {
 
 pub use super::vector::cosine_similarity;
 
-/// Derive a `u64` bucket key from the first 8 floats of an embedding.
+/// Derive a `u64` bucket key from the entire embedding vector.
 ///
 /// This is used as the DashMap key for `O(1)` insertion. `get` always does a
 /// full linear scan for semantic matching.
 pub fn embedding_hash(embedding: &[f32]) -> u64 {
     let mut hash: u64 = 0xcbf29ce484222325; // FNV-1a offset basis
-    let take = embedding.len().min(8);
-    for &f in &embedding[..take] {
+    for &f in embedding {
         let bytes = f.to_le_bytes();
         for byte in bytes {
             hash ^= byte as u64;

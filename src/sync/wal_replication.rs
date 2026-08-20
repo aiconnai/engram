@@ -285,6 +285,12 @@ impl WalFrame {
         }
 
         let page_number = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        if page_number == 0 {
+            return Err(WalReplicationError::InvalidFrame {
+                index: frame_index,
+                reason: "Invalid frame: page_number must be greater than 0".to_string(),
+            });
+        }
         let db_size_pages = u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
         let salt1 = u32::from_be_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
         let salt2 = u32::from_be_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]);
@@ -531,14 +537,21 @@ impl WalDeltaPack {
 
     /// Unpack and deserialize frames contained in this package.
     pub fn unpack_frames(&self) -> std::result::Result<Vec<WalFrame>, WalReplicationError> {
+        use std::io::Read;
+        const MAX_DECOMPRESSED_DELTA_BYTES: u64 = 64 * 1024 * 1024; // 64 MB
+
         self.verify_checksum()?;
 
         let raw_json = if self.compressed {
             let mut decoder = GzDecoder::new(&self.payload[..]);
             let mut decompressed = Vec::new();
-            decoder.read_to_end(&mut decompressed).map_err(|e| {
-                WalReplicationError::DecompressionFailed(format!("Decompression failed: {}", e))
-            })?;
+            decoder
+                .by_ref()
+                .take(MAX_DECOMPRESSED_DELTA_BYTES)
+                .read_to_end(&mut decompressed)
+                .map_err(|e| {
+                    WalReplicationError::DecompressionFailed(format!("Decompression failed: {}", e))
+                })?;
             decompressed
         } else {
             self.payload.clone()
@@ -974,10 +987,9 @@ impl WalRecoveryEngine {
         for pack in sorted_packs {
             page_size = pack.page_size;
             let mut frames = pack.unpack_frames()?;
+            frames.sort_by_key(|f| f.frame_index);
             all_frames.append(&mut frames);
         }
-
-        all_frames.sort_by_key(|f| f.frame_index);
 
         Self::replay_frames_to_db(target_db_path, page_size, &all_frames, options)
     }

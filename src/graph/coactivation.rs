@@ -186,18 +186,31 @@ impl CoactivationTracker {
     // strengthen
     // -------------------------------------------------------------------------
 
-    /// Apply a single Hebbian update to the edge `from_id → to_id`.
+    /// Apply a single Hebbian update to the edge `from_id ↔ to_id`.
     ///
     /// Creates the edge if it does not exist yet. Returns the new strength.
     pub fn strengthen(&self, conn: &Connection, from_id: i64, to_id: i64) -> Result<f64> {
+        if from_id == to_id {
+            return Err(EngramError::InvalidInput(
+                "Cannot strengthen self-loop on coactivation graph".to_string(),
+            ));
+        }
+        let canonical_from = from_id.min(to_id);
+        let canonical_to = from_id.max(to_id);
         let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-        self.upsert_edge(conn, from_id, to_id, self.config.learning_rate, &now)?;
+        self.upsert_edge(
+            conn,
+            canonical_from,
+            canonical_to,
+            self.config.learning_rate,
+            &now,
+        )?;
 
         // Read back the updated strength.
         let strength: f64 = conn
             .query_row(
                 "SELECT strength FROM coactivation_edges WHERE from_id = ?1 AND to_id = ?2",
-                params![from_id, to_id],
+                params![canonical_from, canonical_to],
                 |row| row.get(0),
             )
             .map_err(EngramError::Database)?;

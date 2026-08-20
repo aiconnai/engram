@@ -88,14 +88,17 @@ pub fn set_expiration(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_transaction(|conn| {
             let memory = set_memory_expiration(conn, id, ttl_seconds)?;
+            let message = if ttl_seconds == Some(0) {
+                "Expiration removed".to_string()
+            } else if let Some(ttl) = ttl_seconds {
+                format!("Expiration set to {} seconds from now", ttl)
+            } else {
+                "Expiration updated".to_string()
+            };
             Ok(json!({
                 "success": true,
                 "memory": memory,
-                "message": if ttl_seconds == Some(0) {
-                    "Expiration removed".to_string()
-                } else {
-                    format!("Expiration set to {} seconds from now", ttl_seconds.unwrap())
-                }
+                "message": message
             }))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))

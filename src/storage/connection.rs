@@ -448,6 +448,7 @@ fn ensure_filesystem_database_supported() -> Result<()> {
 impl StoragePool {
     /// Create a connection pool with the specified size
     pub fn new(config: StorageConfig, pool_size: usize) -> Result<Self> {
+        let pool_size = pool_size.max(1);
         let mut pool = Vec::with_capacity(pool_size);
 
         for _ in 0..pool_size {
