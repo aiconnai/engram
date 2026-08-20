@@ -15,12 +15,12 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze Rust
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        language: [rust]
+        language: [rust, javascript-typescript, python, actions]
 
     steps:
       - name: Checkout

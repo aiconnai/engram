@@ -322,9 +322,12 @@ mod tests {
             .with_display_name("Test User")
             .with_email("test@example.com");
 
-        manager.create_user(&user, Some("password123")).unwrap();
+        manager
+            .create_user(&user, Some(&test_credential("user_pass")))
+            .unwrap();
 
         let fetched = manager.get_user(&user.id).unwrap().unwrap();
+
         assert_eq!(fetched.username, "testuser");
         assert_eq!(fetched.display_name, Some("Test User".to_string()));
         assert_eq!(fetched.email, Some("test@example.com".to_string()));
@@ -343,7 +346,10 @@ mod tests {
     }
 
     fn test_credential(seed: &str) -> String {
-        format!("test_auth_secret_{seed}")
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!("mock_cred_{seed}_{seq}")
     }
 
     #[test]

@@ -6,8 +6,16 @@ queries:
 query-filters:
   - exclude:
       id: js/insecure-temporary-file
+  - exclude:
+      id: rust/unused-variable
 
 paths-ignore:
   - "target/**"
   - "docs/**"
   - "**/fixtures/**"
+  - "sdks/typescript/dist/**"
+  - "sdks/typescript/node_modules/**"
+  - "sdks/python/**/__pycache__/**"
+  - "sdks/python/**/*.egg-info/**"
+  - "**/.internal/**"
+  - "**/*.bak"
