@@ -17,12 +17,32 @@ fn test_fresh_db_reaches_current_version() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 47);
+    assert_eq!(version, 48);
 }
 
 #[test]
 fn test_schema_version_constant() {
-    assert_eq!(SCHEMA_VERSION, 47);
+    assert_eq!(SCHEMA_VERSION, 48);
+}
+
+#[test]
+fn test_attestation_hash_version_column_exists() {
+    let conn = in_memory_conn();
+    conn.execute(
+        "INSERT INTO attestation_log (document_hash, document_name, document_size, ingested_at, memory_ids, previous_hash, record_hash)
+         VALUES ('h1', 'doc.txt', 10, '2026-08-23T00:00:00Z', '[]', 'genesis', 'rechash1')",
+        [],
+    )
+    .expect("insert attestation record");
+
+    let hash_ver: i32 = conn
+        .query_row(
+            "SELECT hash_version FROM attestation_log LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("query hash_version");
+    assert_eq!(hash_ver, 1);
 }
 
 #[test]

@@ -93,6 +93,12 @@ pub(crate) enum Commands {
         /// Target workspace (Palace)
         #[arg(short = 'w', long, default_value = "default")]
         workspace: String,
+        /// Continuously watch directory and auto-mine new/modified transcripts in real-time
+        #[arg(long)]
+        watch: bool,
+        /// Debounce interval in milliseconds for watch mode (default: 1000)
+        #[arg(long, default_value = "1000")]
+        debounce_ms: u64,
     },
     /// Generate a compact agent wake-up digest (~150 tokens) for session bootstrap
     WakeUp {

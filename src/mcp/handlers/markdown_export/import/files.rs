@@ -17,7 +17,18 @@ pub(super) fn collect_md_files_inner(
         if path.is_dir() {
             collect_md_files_inner(&path, out)?;
         } else if path.extension().and_then(|e| e.to_str()) == Some("md") {
-            out.push(path);
+            let file_name = path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if !file_name.starts_with('.')
+                && !file_name.starts_with('_')
+                && file_name != "index.md"
+                && file_name != "readme.md"
+            {
+                out.push(path);
+            }
         }
     }
     Ok(())

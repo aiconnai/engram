@@ -19,6 +19,13 @@ pub struct AttestationRecord {
     pub signature: Option<String>,
     pub metadata: serde_json::Value,
     pub created_at: Option<DateTime<Utc>>,
+    /// Hash scheme version (1 = legacy delimiter, 2 = length-prefixed canonical)
+    #[serde(default = "default_attestation_hash_version")]
+    pub hash_version: i32,
+}
+
+fn default_attestation_hash_version() -> i32 {
+    1
 }
 
 /// Result of chain verification

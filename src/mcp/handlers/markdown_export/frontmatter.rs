@@ -132,22 +132,32 @@ pub(super) fn parse_frontmatter(content: &str) -> HashMap<String, String> {
 
 /// Extract the body (content after the closing `---` of frontmatter).
 pub(super) fn extract_body(content: &str) -> &str {
-    if !content.starts_with("---") {
-        return content;
-    }
-    // Skip past first ---\n
-    let pos = content.find('\n').map(|p| p + 1).unwrap_or(content.len());
-    // Find closing ---
-    if let Some(rel) = content[pos..].find("\n---\n") {
-        let body_start = pos + rel + 5; // skip \n---\n
-        &content[body_start..]
-    } else if let Some(rel) = content[pos..].find("\n---") {
-        let after = pos + rel + 4;
-        // after == content.len() → closing marker is at EOF, no body
-        // after < content.len() → body follows immediately after "---"
-        &content[after.min(content.len())..]
-    } else {
+    let body = if !content.starts_with("---") {
         content
+    } else {
+        // Skip past first ---\n
+        let pos = content.find('\n').map(|p| p + 1).unwrap_or(content.len());
+        // Find closing ---
+        if let Some(rel) = content[pos..].find("\n---\n") {
+            let body_start = pos + rel + 5; // skip \n---\n
+            &content[body_start..]
+        } else if let Some(rel) = content[pos..].find("\n---") {
+            let after = pos + rel + 4;
+            // after == content.len() → closing marker is at EOF, no body
+            // after < content.len() → body follows immediately after "---"
+            &content[after.min(content.len())..]
+        } else {
+            content
+        }
+    };
+
+    // Strip auto-generated `## Related` or `## Related Memories` footer if present
+    if let Some(pos) = body.find("\n## Related\n") {
+        &body[..pos]
+    } else if let Some(pos) = body.find("\n## Related Memories\n") {
+        &body[..pos]
+    } else {
+        body
     }
 }
 

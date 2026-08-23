@@ -84,6 +84,7 @@ mod tests {
             signature: None,
             metadata: serde_json::json!({}),
             created_at: None,
+            hash_version: 1,
         }
     }
 

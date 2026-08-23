@@ -15,6 +15,7 @@ from engram_client.resources import (
     ResourceMixin,
     SearchMixin,
     SpatialMixin,
+    VaultMixin,
 )
 from engram_client.resources.auth import AuthMixin as DirectAuthMixin
 from engram_client.resources.context import ContextMixin as DirectContextMixin
@@ -23,6 +24,7 @@ from engram_client.resources.graph import GraphMixin as DirectGraphMixin
 from engram_client.resources.memories import MemoriesMixin as DirectMemoriesMixin
 from engram_client.resources.search import SearchMixin as DirectSearchMixin
 from engram_client.resources.spatial import SpatialMixin as DirectSpatialMixin
+from engram_client.resources.vault import VaultMixin as DirectVaultMixin
 
 
 @pytest.fixture
@@ -468,6 +470,63 @@ async def test_spatial_mixin(mock_client):
 
     await mock_client.drawer_open(42)
     mock_client._mcp_call.assert_awaited_with("drawer_open", {"id": 42})
+
+
+@pytest.mark.asyncio
+async def test_vault_mixin(mock_client):
+    """Test VaultMixin Markdown & Obsidian export/import operations."""
+    assert VaultMixin is DirectVaultMixin
+    mock_client._mcp_call = AsyncMock(
+        return_value={"files_written": 10, "output_dir": "./vault", "workspace": "default"}
+    )
+
+    await mock_client.vault_export(
+        output_dir="./vault",
+        workspace="default",
+        group="workspace",
+        include_links=True,
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_export_markdown",
+        {
+            "output_dir": "./vault",
+            "workspace": "default",
+            "group": "workspace",
+            "include_links": True,
+        },
+    )
+
+    mock_client._mcp_call = AsyncMock(
+        return_value={"scanned": 5, "in_sync": 3, "new": 1, "pending": 1, "conflict": 0, "applied": 2}
+    )
+    await mock_client.vault_import(
+        input_dir="./vault",
+        workspace="default",
+        confirm=True,
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_import_markdown",
+        {
+            "input_dir": "./vault",
+            "workspace": "default",
+            "confirm": True,
+            "force_version": False,
+        },
+    )
+
+    await mock_client.vault_preview(
+        input_dir="./vault",
+        workspace="default",
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_import_markdown",
+        {
+            "input_dir": "./vault",
+            "workspace": "default",
+            "confirm": False,
+            "force_version": False,
+        },
+    )
 
 
 

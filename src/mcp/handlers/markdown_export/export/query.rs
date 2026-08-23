@@ -70,20 +70,14 @@ pub(super) fn build_related_map(
     let placeholders: Vec<String> = (1..=memory_ids.len()).map(|i| format!("?{i}")).collect();
     let in_list = placeholders.join(", ");
     let sql = format!(
-        "SELECT from_id, to_id, relation_type FROM cross_references
+        "SELECT from_id, to_id, edge_type FROM crossrefs
           WHERE from_id IN ({in_list}) OR to_id IN ({in_list})"
     );
 
     let result = ctx.storage.with_connection(|conn| {
         let mut stmt = conn.prepare(&sql)?;
-        // Build params: each id appears twice (once for from_id IN, once for to_id IN).
-        let doubled: Vec<i64> = memory_ids
-            .iter()
-            .chain(memory_ids.iter())
-            .copied()
-            .collect();
         let rows: Vec<(i64, i64, String)> = stmt
-            .query_map(rusqlite::params_from_iter(doubled.iter()), |row| {
+            .query_map(rusqlite::params_from_iter(memory_ids.iter()), |row| {
                 Ok((
                     row.get::<_, i64>(0)?,
                     row.get::<_, i64>(1)?,

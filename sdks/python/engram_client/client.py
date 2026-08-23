@@ -19,6 +19,7 @@ from .resources.multimodal import MultimodalMixin
 from .resources.resources import McpResourcesMixin
 from .resources.search import SearchMixin
 from .resources.spatial import SpatialMixin
+from .resources.vault import VaultMixin
 
 # Re-export for callers that historically imported from client.
 __all__ = ["EngramClient", "EngramError"]
@@ -35,6 +36,7 @@ class EngramClient(
     AuthMixin,
     McpResourcesMixin,
     MultimodalMixin,
+    VaultMixin,
 ):
     """Async Engram Cloud client over authenticated MCP-HTTP."""
 

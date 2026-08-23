@@ -559,4 +559,46 @@ export interface ClusterOptions {
   linkTypes?: string[];
 }
 
+export type VaultGrouping = 'flat' | 'day' | 'workspace' | 'type' | 'entity';
 
+export interface VaultExportOptions {
+  outputDir?: string;
+  workspace?: string;
+  group?: VaultGrouping;
+  includeLinks?: boolean;
+}
+
+export interface VaultExportReport {
+  files_written: number;
+  output_dir: string;
+  workspace: string;
+  error?: string;
+}
+
+export interface VaultImportOptions {
+  inputDir: string;
+  workspace?: string;
+  confirm?: boolean;
+  dryRun?: boolean;
+  forceVersion?: boolean;
+}
+
+export interface VaultFileDetail {
+  file: string;
+  engram_id?: number | null;
+  status: string;
+  applied?: boolean;
+  reason?: string;
+}
+
+export interface VaultImportReport {
+  scanned: number;
+  in_sync: number;
+  new: number;
+  pending: number;
+  conflict: number;
+  applied: number;
+  dry_run: boolean;
+  files?: VaultFileDetail[];
+  error?: string;
+}

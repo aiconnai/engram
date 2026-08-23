@@ -64,7 +64,20 @@ fn main() -> Result<()> {
             wing,
             room,
             workspace,
-        } => mine::handle_mine(&storage, &path, &mode, wing, room, &workspace)?,
+            watch,
+            debounce_ms,
+        } => mine::handle_mine(
+            &storage,
+            mine::MineOptions {
+                path_str: &path,
+                mode: &mode,
+                wing,
+                room,
+                workspace: &workspace,
+                watch,
+                debounce_ms,
+            },
+        )?,
         Commands::WakeUp { workspace, format } => {
             wake_up::handle_wake_up(&storage, &workspace, &format)?
         }

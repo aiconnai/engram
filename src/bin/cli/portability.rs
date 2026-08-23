@@ -12,7 +12,8 @@ use engram::storage::Storage;
 
 #[derive(Subcommand)]
 pub(crate) enum ExportAction {
-    /// Export memories to Markdown files
+    /// Export memories to Markdown files (Obsidian vault compatible)
+    #[command(alias = "vault")]
     Markdown {
         /// Output directory path
         #[arg(short, long, default_value = "./memories-export")]
@@ -23,12 +24,16 @@ pub(crate) enum ExportAction {
         /// Optional workspace filter
         #[arg(short, long)]
         workspace: Option<String>,
+        /// Include related memory wikilinks
+        #[arg(long, default_value_t = true)]
+        include_links: bool,
     },
 }
 
 #[derive(Subcommand)]
 pub(crate) enum ImportAction {
-    /// Import memories from Markdown files
+    /// Import memories from Markdown files (Obsidian vault compatible)
+    #[command(alias = "vault")]
     Markdown {
         /// Input directory path
         #[arg(short, long, default_value = "./memories-export")]
@@ -39,6 +44,9 @@ pub(crate) enum ImportAction {
         /// Target workspace override
         #[arg(short, long)]
         workspace: Option<String>,
+        /// Force overwrite even on version conflicts
+        #[arg(long)]
+        force_version: bool,
     },
 }
 
@@ -48,6 +56,7 @@ pub(crate) fn handle_export(storage: &Storage, action: ExportAction) -> Result<(
             path,
             group,
             workspace,
+            include_links,
         } => {
             let grouping = ExportGrouping::from_str(&group)?;
             let report = export_markdown(
@@ -56,6 +65,7 @@ pub(crate) fn handle_export(storage: &Storage, action: ExportAction) -> Result<(
                     output_dir: path,
                     grouping,
                     workspace,
+                    include_links,
                 },
             )?;
             println!(
@@ -73,6 +83,7 @@ pub(crate) fn handle_import(storage: &Storage, action: ImportAction) -> Result<(
             path,
             dry_run,
             workspace,
+            force_version,
         } => {
             let report = import_markdown(
                 storage,
@@ -80,6 +91,7 @@ pub(crate) fn handle_import(storage: &Storage, action: ImportAction) -> Result<(
                     input_dir: path,
                     dry_run,
                     target_workspace: workspace,
+                    force_version,
                 },
             )?;
             println!(

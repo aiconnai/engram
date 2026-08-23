@@ -26,6 +26,12 @@ use super::types::{AttestationFilter, AttestationRecord, ChainStatus};
 /// separate `attestation_config` table).
 const GENESIS_HASH: &str = "genesis";
 
+/// Sentinel for hash scheme version 1 (legacy pipe-delimited format).
+pub const LEGACY_HASH_VERSION: i32 = 1;
+
+/// Current hash scheme version for newly created attestation records (v2 length-prefixed canonical format).
+pub const CURRENT_HASH_VERSION: i32 = 2;
+
 /// Maximum allowed document size (100 MB). Documents larger than this would
 /// block the thread synchronously during SHA-256 hashing.
 const MAX_DOCUMENT_BYTES: usize = 100 * 1024 * 1024;
@@ -155,9 +161,10 @@ impl AttestationChain {
                 signature: None,
                 metadata: serde_json::Value::Object(serde_json::Map::new()),
                 created_at: None,
+                hash_version: CURRENT_HASH_VERSION,
             };
 
-            record.record_hash = Self::compute_record_hash(&record);
+            record.record_hash = Self::compute_record_hash_v2(&record);
 
             // M3 (key zeroization): `SigningKey` is `ZeroizeOnDrop` in ed25519-dalek 2.x,
             // so the copy created from `key_bytes` is zeroed when it drops here.
@@ -190,8 +197,8 @@ impl AttestationChain {
             conn.execute(
                 "INSERT INTO attestation_log
                     (document_hash, document_name, document_size, ingested_at,
-                     agent_id, memory_ids, previous_hash, record_hash, signature, metadata)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                     agent_id, memory_ids, previous_hash, record_hash, signature, metadata, hash_version)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 rusqlite::params![
                     record.document_hash,
                     record.document_name,
@@ -203,6 +210,7 @@ impl AttestationChain {
                     record.record_hash,
                     record.signature,
                     metadata_json,
+                    record.hash_version,
                 ],
             )?;
 
@@ -233,7 +241,7 @@ impl AttestationChain {
             let mut stmt = conn.prepare(
                 "SELECT id, document_hash, document_name, document_size, ingested_at,
                         agent_id, memory_ids, previous_hash, record_hash, signature,
-                        metadata, created_at
+                        metadata, created_at, hash_version
                  FROM attestation_log
                  WHERE document_hash = ?1
                  ORDER BY id ASC
@@ -251,7 +259,7 @@ impl AttestationChain {
     ///
     /// Walks all records in insertion order and checks:
     /// - `previous_hash` of each record matches the `record_hash` of the preceding one
-    /// - Each `record_hash` is correctly computed from the record's fields
+    /// - Each `record_hash` is correctly computed from the record's fields (supporting both v1 and v2 schemes)
     /// - If `verifying_key` is `Some`, every record must carry a valid Ed25519
     ///   signature for its `record_hash`
     pub fn verify_chain(&self, verifying_key: Option<&[u8; 32]>) -> Result<ChainStatus> {
@@ -262,7 +270,7 @@ impl AttestationChain {
             let mut stmt = conn.prepare(
                 "SELECT id, document_hash, document_name, document_size, ingested_at,
                         agent_id, memory_ids, previous_hash, record_hash, signature,
-                        metadata, created_at
+                        metadata, created_at, hash_version
                  FROM attestation_log
                  ORDER BY id ASC",
             )?;
@@ -298,8 +306,24 @@ impl AttestationChain {
                     });
                 }
 
-                // 2. Recompute record_hash and compare (constant-time)
-                let recomputed = Self::compute_record_hash(&record);
+                // 2. Recompute record_hash and compare (constant-time).
+                // Supports v1 legacy delimiter format and v2 canonical format.
+                let recomputed = match record.hash_version {
+                    1 => {
+                        let v1_hash = Self::compute_record_hash_v1(&record);
+                        if bool::from(v1_hash.as_bytes().ct_eq(record.record_hash.as_bytes())) {
+                            v1_hash
+                        } else {
+                            let v1_meta = Self::compute_record_hash_v1_with_meta(&record);
+                            if bool::from(v1_meta.as_bytes().ct_eq(record.record_hash.as_bytes())) {
+                                v1_meta
+                            } else {
+                                v1_hash
+                            }
+                        }
+                    }
+                    _ => Self::compute_record_hash_v2(&record),
+                };
                 let hash_ok: bool = recomputed
                     .as_bytes()
                     .ct_eq(record.record_hash.as_bytes())
@@ -391,7 +415,7 @@ impl AttestationChain {
             let sql = format!(
                 "SELECT id, document_hash, document_name, document_size, ingested_at,
                         agent_id, memory_ids, previous_hash, record_hash, signature,
-                        metadata, created_at
+                        metadata, created_at, hash_version
                  FROM attestation_log
                  {}
                  ORDER BY id ASC
@@ -420,13 +444,58 @@ impl AttestationChain {
 
     // ─── Private helpers ────────────────────────────────────────────────────
 
-    /// Compute the canonical `record_hash` for a record.
-    ///
-    /// Hash = SHA-256 of:
-    /// `document_hash|document_name|document_size|ingested_at|agent_id|memory_ids|previous_hash|metadata`
+    /// Compute the record hash for a record according to its `hash_version`.
     pub fn compute_record_hash(record: &AttestationRecord) -> String {
-        // v2: Length-prefixed canonical encoding prevents delimiter injection.
-        // Includes metadata (omitted in v1).
+        match record.hash_version {
+            1 => Self::compute_record_hash_v1(record),
+            _ => Self::compute_record_hash_v2(record),
+        }
+    }
+
+    /// Compute v1 legacy record hash (delimiter-separated).
+    ///
+    /// Hash = SHA-256 of `document_hash|document_name|document_size|ingested_at|agent_id|memory_ids|previous_hash`
+    pub fn compute_record_hash_v1(record: &AttestationRecord) -> String {
+        let canonical = format!(
+            "{}|{}|{}|{}|{}|{}|{}",
+            record.document_hash,
+            record.document_name,
+            record.document_size,
+            record.ingested_at.to_rfc3339(),
+            record.agent_id.as_deref().unwrap_or(""),
+            serde_json::to_string(&record.memory_ids).unwrap_or_default(),
+            record.previous_hash,
+        );
+        let mut hasher = Sha256::new();
+        hasher.update(canonical.as_bytes());
+        format!("sha256:{}", hex::encode(hasher.finalize()))
+    }
+
+    /// Compute intermediate v1 record hash with metadata appended.
+    pub fn compute_record_hash_v1_with_meta(record: &AttestationRecord) -> String {
+        let metadata_str = if record.metadata.is_null() {
+            String::new()
+        } else {
+            serde_json::to_string(&record.metadata).unwrap_or_default()
+        };
+        let canonical = format!(
+            "{}|{}|{}|{}|{}|{}|{}|{}",
+            record.document_hash,
+            record.document_name,
+            record.document_size,
+            record.ingested_at.to_rfc3339(),
+            record.agent_id.as_deref().unwrap_or(""),
+            serde_json::to_string(&record.memory_ids).unwrap_or_default(),
+            record.previous_hash,
+            metadata_str,
+        );
+        let mut hasher = Sha256::new();
+        hasher.update(canonical.as_bytes());
+        format!("sha256:{}", hex::encode(hasher.finalize()))
+    }
+
+    /// Compute v2 canonical record hash (length-prefixed fields with metadata).
+    pub fn compute_record_hash_v2(record: &AttestationRecord) -> String {
         let fields: Vec<String> = vec![
             record.document_hash.clone(),
             record.document_name.clone(),
@@ -510,6 +579,7 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> Result<AttestationRecord> {
     let signature: Option<String> = row.get(9)?;
     let metadata_json: String = row.get(10)?;
     let created_at_str: Option<String> = row.get(11)?;
+    let hash_version: i32 = row.get(12).unwrap_or(1);
 
     // M6: rusqlite's `Error::display()` does not embed the DB file path in its
     // string representation, so these errors are safe to propagate as-is.
@@ -545,6 +615,7 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> Result<AttestationRecord> {
         signature,
         metadata,
         created_at,
+        hash_version,
     })
 }
 
@@ -1099,6 +1170,7 @@ mod tests {
             signature: None,
             metadata: serde_json::json!({"key": "val1"}),
             created_at: Some(chrono::Utc::now()),
+            hash_version: CURRENT_HASH_VERSION,
         };
         let mut rec2 = rec1.clone();
         rec2.metadata = serde_json::json!({"key": "val2"});
@@ -1159,6 +1231,77 @@ mod tests {
                 assert!(at_record_id > 0);
             }
             other => panic!("expected Broken chain after tamper, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_legacy_v1_record_verification_and_mixed_chain() {
+        let storage = Storage::open_in_memory().unwrap();
+        let chain = AttestationChain::new(storage.clone());
+
+        // Construct legacy v1 record manually and insert into attestation_log
+        let now = chrono::Utc::now();
+        let mut rec1 = AttestationRecord {
+            id: None,
+            document_hash: "sha256:abc123doc".to_string(),
+            document_name: "legacy_v1.txt".to_string(),
+            document_size: 128,
+            ingested_at: now,
+            agent_id: Some("agent-v1".to_string()),
+            memory_ids: vec![1, 2],
+            previous_hash: GENESIS_HASH.to_string(),
+            record_hash: String::new(),
+            signature: None,
+            metadata: serde_json::json!({}),
+            created_at: Some(now),
+            hash_version: LEGACY_HASH_VERSION,
+        };
+        rec1.record_hash = AttestationChain::compute_record_hash_v1(&rec1);
+
+        storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "INSERT INTO attestation_log
+                        (document_hash, document_name, document_size, ingested_at,
+                         agent_id, memory_ids, previous_hash, record_hash, signature, metadata, hash_version)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    rusqlite::params![
+                        rec1.document_hash,
+                        rec1.document_name,
+                        rec1.document_size as i64,
+                        rec1.ingested_at.to_rfc3339(),
+                        rec1.agent_id,
+                        serde_json::to_string(&rec1.memory_ids).unwrap(),
+                        rec1.previous_hash,
+                        rec1.record_hash,
+                        rec1.signature,
+                        serde_json::to_string(&rec1.metadata).unwrap(),
+                        rec1.hash_version,
+                    ],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        // Now append a v2 record using standard log_document
+        let r2 = chain
+            .log_document(
+                b"new v2 content",
+                "modern_v2.txt",
+                Some("agent-v2"),
+                &[3],
+                None,
+            )
+            .expect("append v2 record");
+        assert_eq!(r2.previous_hash, rec1.record_hash);
+        assert_eq!(r2.hash_version, CURRENT_HASH_VERSION);
+
+        // Verify the entire mixed chain (v1 followed by v2)
+        match chain.verify_chain(None).unwrap() {
+            ChainStatus::Valid { record_count } => {
+                assert_eq!(record_count, 2);
+            }
+            other => panic!("expected Valid chain for mixed v1/v2 records, got {other:?}"),
         }
     }
 }

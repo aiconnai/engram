@@ -189,6 +189,7 @@ mod tests {
             signature: None,
             metadata: serde_json::Value::Object(serde_json::Map::new()),
             created_at: None,
+            hash_version: 1,
         }
     }
 

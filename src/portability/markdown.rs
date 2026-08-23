@@ -51,6 +51,18 @@ pub struct ExportOptions {
     pub output_dir: PathBuf,
     pub grouping: ExportGrouping,
     pub workspace: Option<String>,
+    pub include_links: bool,
+}
+
+impl Default for ExportOptions {
+    fn default() -> Self {
+        Self {
+            output_dir: PathBuf::from("./memories-export"),
+            grouping: ExportGrouping::Flat,
+            workspace: None,
+            include_links: true,
+        }
+    }
 }
 
 /// Result of an export run.
@@ -67,6 +79,18 @@ pub struct ImportOptions {
     pub input_dir: PathBuf,
     pub dry_run: bool,
     pub target_workspace: Option<String>,
+    pub force_version: bool,
+}
+
+impl Default for ImportOptions {
+    fn default() -> Self {
+        Self {
+            input_dir: PathBuf::from("./memories-export"),
+            dry_run: false,
+            target_workspace: None,
+            force_version: false,
+        }
+    }
 }
 
 /// Result of an import run.
@@ -128,7 +152,7 @@ pub fn export_markdown(storage: &Storage, opts: &ExportOptions) -> Result<Export
             "workspace": workspace,
             "output_dir": opts.output_dir.to_str().unwrap_or("./memories-export"),
             "group": group_str,
-            "include_links": true
+            "include_links": opts.include_links
         }),
     );
 
@@ -165,6 +189,7 @@ pub fn import_markdown(storage: &Storage, opts: &ImportOptions) -> Result<Import
             "input_dir": opts.input_dir.to_str().unwrap_or("./memories-export"),
             "workspace": opts.target_workspace,
             "confirm": !opts.dry_run,
+            "force_version": opts.force_version,
         }),
     );
 
@@ -175,8 +200,16 @@ pub fn import_markdown(storage: &Storage, opts: &ImportOptions) -> Result<Import
     let scanned = val.get("scanned").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
     let in_sync = val.get("in_sync").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
     let new = val.get("new").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-    let pending = val.get("pending").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-    let conflict = val.get("conflict").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let pending = val
+        .get("pending")
+        .or_else(|| val.get("pending_updates"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as usize;
+    let conflict = val
+        .get("conflict")
+        .or_else(|| val.get("conflicts"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as usize;
     let applied = val.get("applied").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
     Ok(ImportReport {
@@ -188,4 +221,21 @@ pub fn import_markdown(storage: &Storage, opts: &ImportOptions) -> Result<Import
         applied,
         dry_run: opts.dry_run,
     })
+}
+
+/// Preview Markdown files import without mutating storage (dry-run mode).
+pub fn preview_markdown(
+    storage: &Storage,
+    input_dir: PathBuf,
+    target_workspace: Option<String>,
+) -> Result<ImportReport> {
+    import_markdown(
+        storage,
+        &ImportOptions {
+            input_dir,
+            dry_run: true,
+            target_workspace,
+            force_version: false,
+        },
+    )
 }

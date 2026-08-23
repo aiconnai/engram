@@ -101,6 +101,7 @@ fn test_markdown_portability_export_and_import_roundtrip() {
             output_dir: temp_dir.path().to_path_buf(),
             grouping: ExportGrouping::Type,
             workspace: Some("portability_test".to_string()),
+            include_links: true,
         },
     )
     .expect("export markdown type grouping");
@@ -114,6 +115,7 @@ fn test_markdown_portability_export_and_import_roundtrip() {
             output_dir: temp_ws_dir.path().to_path_buf(),
             grouping: ExportGrouping::Workspace,
             workspace: Some("portability_test".to_string()),
+            include_links: true,
         },
     )
     .expect("export markdown workspace grouping");
@@ -126,6 +128,7 @@ fn test_markdown_portability_export_and_import_roundtrip() {
             output_dir: temp_entity_dir.path().to_path_buf(),
             grouping: ExportGrouping::Entity,
             workspace: Some("portability_test".to_string()),
+            include_links: true,
         },
     )
     .expect("export markdown entity grouping");
@@ -138,6 +141,7 @@ fn test_markdown_portability_export_and_import_roundtrip() {
             input_dir: temp_dir.path().to_path_buf(),
             dry_run: true,
             target_workspace: Some("portability_test".to_string()),
+            force_version: false,
         },
     )
     .expect("dry-run import");

@@ -11,6 +11,7 @@ import {
   MultimodalResource,
   SearchResource,
   SpatialResource,
+  VaultResource,
   createDreamCallable,
   createSearchCallable,
   type DreamCallableResource,
@@ -88,6 +89,10 @@ import type {
   TemporalSnapshotOptions,
   UpdateOptions,
   UtilityScoreOptions,
+  VaultExportOptions,
+  VaultExportReport,
+  VaultImportOptions,
+  VaultImportReport,
 } from "./types.js";
 
 export class EngramClient implements McpCaller {
@@ -107,6 +112,7 @@ export class EngramClient implements McpCaller {
   public readonly resources: McpResourcesResource;
   public readonly multimodal: MultimodalResource;
   public readonly spatial: SpatialResource;
+  public readonly vault: VaultResource;
 
   constructor(config: EngramConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -129,6 +135,7 @@ export class EngramClient implements McpCaller {
     this.resources = new McpResourcesResource(this);
     this.multimodal = new MultimodalResource(this);
     this.spatial = new SpatialResource(this);
+    this.vault = new VaultResource(this);
   }
 
   async mcpCall(
@@ -867,5 +874,29 @@ export class EngramClient implements McpCaller {
   syncMedia(options?: SyncMediaOptions): Promise<unknown> {
     return this.multimodal.syncMedia(options);
   }
+
+  /**
+   * Export memories to Markdown files (Obsidian vault compatible).
+   */
+  vaultExport(options?: VaultExportOptions): Promise<VaultExportReport> {
+    return this.vault.export(options);
+  }
+
+  /**
+   * Import memories from Markdown files into Engram with drift detection.
+   */
+  vaultImport(options: VaultImportOptions): Promise<VaultImportReport> {
+    return this.vault.import(options);
+  }
+
+  /**
+   * Preview Markdown import without mutating the database (dry-run review mode).
+   */
+  vaultPreview(
+    options: Omit<VaultImportOptions, "confirm" | "dryRun">
+  ): Promise<VaultImportReport> {
+    return this.vault.preview(options);
+  }
 }
+
 

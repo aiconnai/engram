@@ -88,12 +88,34 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
             .unwrap_or(-1);
 
         if engram_id == -1 {
-            files_detail.push(json!({
-                "file": filename,
-                "engram_id": null,
-                "status": "skipped",
-                "reason": "no valid engram_id in frontmatter"
-            }));
+            count_new += 1;
+            if confirm {
+                match create_memory_from_import(ctx, &fm, &body, workspace_override.as_deref()) {
+                    Ok(inserted_id) => {
+                        applied += 1;
+                        files_detail.push(json!({
+                            "file": filename,
+                            "engram_id": inserted_id,
+                            "status": "new",
+                            "applied": true
+                        }));
+                    }
+                    Err(e) => {
+                        files_detail.push(json!({
+                            "file": filename,
+                            "engram_id": null,
+                            "status": "error",
+                            "reason": format!("insert error: {}", e)
+                        }));
+                    }
+                }
+            } else {
+                files_detail.push(json!({
+                    "file": filename,
+                    "engram_id": null,
+                    "status": "new"
+                }));
+            }
             continue;
         }
 
@@ -226,7 +248,9 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
         "scanned": scanned,
         "in_sync": count_in_sync,
         "new": count_new,
+        "pending": count_pending,
         "pending_updates": count_pending,
+        "conflict": count_conflict,
         "conflicts": count_conflict,
         "applied": applied,
         "files": files_detail

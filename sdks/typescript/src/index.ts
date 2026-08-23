@@ -39,6 +39,7 @@ export {
   MultimodalResource,
   SearchResource,
   SpatialResource,
+  VaultResource,
   type McpCaller,
 } from "./resources/index.js";
 
@@ -119,4 +120,10 @@ export type {
   TemporalSnapshotOptions,
   UpdateOptions,
   UtilityScoreOptions,
+  VaultExportOptions,
+  VaultExportReport,
+  VaultFileDetail,
+  VaultGrouping,
+  VaultImportOptions,
+  VaultImportReport,
 } from "./types.js";

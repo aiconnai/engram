@@ -219,7 +219,7 @@ fn test_import_ignores_obsidian_keys() {
 }
 
 #[test]
-fn test_import_skips_file_without_engram_id() {
+fn test_import_stages_file_without_engram_id_as_new() {
     let c = ctx();
     let dir = tempfile::tempdir().unwrap();
     write_md(
@@ -234,15 +234,22 @@ fn test_import_skips_file_without_engram_id() {
     );
 
     let r = memory_import_markdown(&c, json!({"input_dir": dir.path().to_str().unwrap()}));
-    let skipped = r["files"]
+    let is_new = r["files"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|f| f["status"] == "skipped");
+        .any(|f| f["status"] == "new");
     assert!(
-        skipped,
-        "file without engram_id must be skipped; result={}",
+        is_new,
+        "file without engram_id must be staged as new; result={}",
         r
     );
     assert_eq!(r["applied"].as_i64(), Some(0));
+
+    // When confirm is true, it should be applied to storage
+    let r_confirmed = memory_import_markdown(
+        &c,
+        json!({"input_dir": dir.path().to_str().unwrap(), "confirm": true}),
+    );
+    assert_eq!(r_confirmed["applied"].as_i64(), Some(1));
 }

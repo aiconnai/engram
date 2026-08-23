@@ -11,6 +11,7 @@ from .multimodal import MultimodalMixin
 from .resources import McpResourcesMixin
 from .search import SearchMixin
 from .spatial import SpatialMixin
+from .vault import VaultMixin
 
 __all__ = [
     "AuthMixin",
@@ -24,5 +25,6 @@ __all__ = [
     "ResourceMixin",
     "SearchMixin",
     "SpatialMixin",
+    "VaultMixin",
 ]
 

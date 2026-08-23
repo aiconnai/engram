@@ -152,7 +152,7 @@ pub struct CreateMemoryInput {
 }
 
 /// Input for updating a memory
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UpdateMemoryInput {
     pub content: Option<String>,
     #[serde(alias = "type")]

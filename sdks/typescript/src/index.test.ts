@@ -781,5 +781,76 @@ describe("EngramClient", () => {
       expect(res).toEqual({ id: 42, content: "test" });
     });
   });
+
+  describe("VaultResource", () => {
+    it("should export memories to vault markdown", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({ files_written: 10, output_dir: "./vault", workspace: "default" })
+      );
+      const res = await client.vault.export({
+        outputDir: "./vault",
+        workspace: "default",
+        group: "workspace",
+        includeLinks: true,
+      });
+      expect(requestMethod(0)).toBe("memory_export_markdown");
+      expect(requestArguments(0)).toEqual({
+        workspace: "default",
+        output_dir: "./vault",
+        group: "workspace",
+        include_links: true,
+      });
+      expect(res.files_written).toBe(10);
+    });
+
+    it("should import memories from vault markdown", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          scanned: 5,
+          in_sync: 3,
+          new: 1,
+          pending: 1,
+          conflict: 0,
+          applied: 2,
+          dry_run: false,
+        })
+      );
+      const res = await client.vault.import({
+        inputDir: "./vault",
+        workspace: "default",
+        confirm: true,
+      });
+      expect(requestMethod(0)).toBe("memory_import_markdown");
+      expect(requestArguments(0)).toEqual({
+        input_dir: "./vault",
+        workspace: "default",
+        confirm: true,
+      });
+      expect(res.applied).toBe(2);
+    });
+
+    it("should preview vault import with dryRun", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          scanned: 5,
+          in_sync: 3,
+          new: 1,
+          pending: 1,
+          conflict: 0,
+          applied: 0,
+          dry_run: true,
+        })
+      );
+      const res = await client.vaultPreview({
+        inputDir: "./vault",
+      });
+      expect(requestMethod(0)).toBe("memory_import_markdown");
+      expect(requestArguments(0)).toEqual({
+        input_dir: "./vault",
+        confirm: false,
+      });
+      expect(res.dry_run).toBe(true);
+    });
+  });
 });
 
