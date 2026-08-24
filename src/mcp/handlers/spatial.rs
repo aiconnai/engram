@@ -145,6 +145,44 @@ pub fn drawer_open(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+/// Generate or export a memory palace topological visualizer in HTML, ASCII, SVG, Mermaid, or JSON format.
+pub fn palace_visualize(ctx: &HandlerContext, params: Value) -> Value {
+    let workspace = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+    let target_wing = params.get("wing").and_then(|v| v.as_str());
+    let format_str = params
+        .get("format")
+        .and_then(|v| v.as_str())
+        .unwrap_or("html");
+    let output_path = params.get("output_path").and_then(|v| v.as_str());
+
+    let format = match format_str.parse::<crate::spatial::PalaceFormat>() {
+        Ok(fmt) => fmt,
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+
+    match crate::spatial::generate_palace_visualizer(
+        &ctx.storage,
+        workspace,
+        target_wing,
+        format,
+        output_path,
+    ) {
+        Ok(output) => json!({
+            "workspace": output.workspace,
+            "format": format_str,
+            "wings_count": output.wings_count,
+            "rooms_count": output.rooms_count,
+            "total_drawers": output.total_drawers,
+            "rendered": output.rendered,
+            "output_path": output.output_path,
+        }),
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -74,4 +74,33 @@ pub const TOOLS: &[ToolDef] = &[
         annotations: ToolAnnotations::read_only(),
         tier: ToolTier::Standard,
     },
+    ToolDef {
+        name: "palace_visualize",
+        description: "Generate or export a topological visualization of the memory palace in interactive HTML, ASCII floorplan, vector SVG, Mermaid mindmap, or Cytoscape JSON.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "workspace": {
+                    "type": "string",
+                    "description": "Target workspace (Palace). Defaults to 'default'."
+                },
+                "wing": {
+                    "type": "string",
+                    "description": "Optional wing filter to isolate a specific palace wing."
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["html", "ascii", "svg", "mermaid", "json"],
+                    "default": "html",
+                    "description": "Visualization export format ('html', 'ascii', 'svg', 'mermaid', 'json'). Defaults to 'html'."
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Optional local file path to save the rendered output."
+                }
+            }
+        }"#,
+        annotations: ToolAnnotations::read_only(),
+        tier: ToolTier::Standard,
+    },
 ];

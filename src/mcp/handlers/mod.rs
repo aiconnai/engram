@@ -248,6 +248,7 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "palace_navigate" => spatial::palace_navigate(ctx, params),
         "room_search" => spatial::room_search(ctx, params),
         "drawer_open" => spatial::drawer_open(ctx, params),
+        "palace_visualize" => spatial::palace_visualize(ctx, params),
 
         // ── Identity ─────────────────────────────────────────────────────────
         "identity_create" => identity::identity_create(ctx, params),

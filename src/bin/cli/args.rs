@@ -158,6 +158,11 @@ pub(crate) enum Commands {
         #[command(subcommand)]
         action: crate::portability::ImportAction,
     },
+    /// Spatial Memory Palace navigation and visualizer (Method of Loci)
+    Palace {
+        #[command(subcommand)]
+        action: crate::palace::PalaceAction,
+    },
     /// Manage and configure MCP client integrations (Claude, Cursor, Antigravity, Windsurf)
     Mcp {
         #[command(subcommand)]

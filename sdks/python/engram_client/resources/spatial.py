@@ -46,3 +46,22 @@ class SpatialMixin(ResourceMixin):
     async def drawer_open(self, memory_id: int) -> dict[str, Any]:
         """Open a memory drawer by ID to inspect full verbatim content and metadata."""
         return await self._mcp_call("drawer_open", {"id": memory_id})
+
+    async def palace_visualize(
+        self,
+        *,
+        workspace: str = "default",
+        wing: str | None = None,
+        format_: str = "html",
+        output_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate or export a memory palace topological visualization in HTML, ASCII, SVG, Mermaid, or JSON format."""
+        params: dict[str, Any] = {
+            "workspace": workspace,
+            "format": format_,
+        }
+        if wing is not None:
+            params["wing"] = wing
+        if output_path is not None:
+            params["output_path"] = output_path
+        return await self._mcp_call("palace_visualize", params)

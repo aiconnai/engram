@@ -529,4 +529,35 @@ async def test_vault_mixin(mock_client):
     )
 
 
+@pytest.mark.asyncio
+async def test_spatial_palace_visualize(mock_client):
+    mock_client._mcp_call = AsyncMock(
+        return_value={
+            "workspace": "default",
+            "format": "html",
+            "wings_count": 2,
+            "rooms_count": 4,
+            "total_drawers": 10,
+            "rendered": "<html>...</html>",
+        }
+    )
+    res = await mock_client.palace_visualize(
+        workspace="default",
+        wing="backend",
+        format_="html",
+        output_path="/tmp/palace.html",
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "palace_visualize",
+        {
+            "workspace": "default",
+            "wing": "backend",
+            "format": "html",
+            "output_path": "/tmp/palace.html",
+        },
+    )
+    assert res["wings_count"] == 2
+    assert res["total_drawers"] == 10
+
+
 

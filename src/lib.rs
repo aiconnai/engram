@@ -32,6 +32,7 @@ pub mod routing;
 pub mod search;
 #[cfg(feature = "snapshot")]
 pub mod snapshot;
+pub mod spatial;
 pub mod storage;
 pub mod sync;
 pub mod types;

@@ -103,9 +103,17 @@ pub fn create_memory(conn: &Connection, input: &CreateMemoryInput) -> Result<Mem
 
     let event_time = input.event_time.map(|dt| dt.to_rfc3339());
 
+    let scope_path = input
+        .metadata
+        .get("scope_path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| scope_id.clone())
+        .unwrap_or_else(|| "global".to_string());
+
     conn.execute(
-        "INSERT INTO memories (content, memory_type, importance, metadata, created_at, updated_at, valid_from, scope_type, scope_id, workspace, tier, expires_at, content_hash, event_time, event_duration_seconds, trigger_pattern, summary_of_id, media_url)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO memories (content, memory_type, importance, metadata, created_at, updated_at, valid_from, scope_type, scope_id, scope_path, workspace, tier, expires_at, content_hash, event_time, event_duration_seconds, trigger_pattern, summary_of_id, media_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             input.content,
             input.memory_type.as_str(),
@@ -116,6 +124,7 @@ pub fn create_memory(conn: &Connection, input: &CreateMemoryInput) -> Result<Mem
             now_str,
             scope_type,
             scope_id,
+            scope_path,
             workspace,
             tier.as_str(),
             expires_at,

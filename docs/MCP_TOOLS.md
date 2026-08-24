@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **295**
+Total tools: **296**
 
 ## Summary
 
@@ -269,6 +269,7 @@ Total tools: **295**
 | `palace_navigate` | standard | misc | always | readOnlyHint | none |
 | `room_search` | standard | misc | always | readOnlyHint | `query`, `wing` |
 | `drawer_open` | standard | misc | always | readOnlyHint | `id` |
+| `palace_visualize` | standard | misc | always | readOnlyHint | none |
 | `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
 | `dream_consolidation_status` | advanced | misc | always | readOnlyHint | none |
 | `dream_insights` | advanced | misc | always | readOnlyHint | none |
@@ -4509,6 +4510,23 @@ Open a specific memory drawer by ID to read its full verbatim content and metada
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `id` | `integer` | yes | Drawer (memory) ID to open. |
+
+### `palace_visualize`
+
+Generate or export a topological visualization of the memory palace in interactive HTML, ASCII floorplan, vector SVG, Mermaid mindmap, or Cytoscape JSON.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `workspace` | `string` | no | Target workspace (Palace). Defaults to 'default'. |
+| `wing` | `string` | no | Optional wing filter to isolate a specific palace wing. |
+| `format` | `string` | no | Visualization export format ('html', 'ascii', 'svg', 'mermaid', 'json'). Defaults to 'html'. Default: `html`. Allowed: `html`, `ascii`, `svg`, `mermaid`, `json`. |
+| `output_path` | `string` | no | Optional local file path to save the rendered output. |
 
 ### `dream_run_now`
 

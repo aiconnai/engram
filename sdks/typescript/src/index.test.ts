@@ -852,5 +852,37 @@ describe("EngramClient", () => {
       expect(res.dry_run).toBe(true);
     });
   });
+
+  describe("Spatial Visualizer (RFC 0005)", () => {
+    it("should call palace_visualize with default and custom options", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          workspace: "default",
+          format: "html",
+          wings_count: 2,
+          rooms_count: 4,
+          total_drawers: 12,
+          rendered: "<html>...</html>",
+        })
+      );
+
+      const res = await client.spatial.visualize({
+        workspace: "default",
+        wing: "backend",
+        format: "html",
+        outputPath: "/tmp/palace.html",
+      });
+
+      expect(requestMethod(0)).toBe("palace_visualize");
+      expect(requestArguments(0)).toEqual({
+        workspace: "default",
+        wing: "backend",
+        format: "html",
+        output_path: "/tmp/palace.html",
+      });
+      expect(res.wings_count).toBe(2);
+      expect(res.total_drawers).toBe(12);
+    });
+  });
 });
 

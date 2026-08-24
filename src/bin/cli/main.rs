@@ -14,6 +14,7 @@ mod mine;
 #[cfg(feature = "onnx-embed")]
 mod model;
 
+mod palace;
 mod portability;
 mod session;
 #[cfg(feature = "snapshot")]
@@ -85,8 +86,8 @@ fn main() -> Result<()> {
         Commands::Maintenance { action } => maintenance::handle(&storage, action)?,
         Commands::Mcp { action } => mcp::handle(&storage, action)?,
         Commands::Export { action } => portability::handle_export(&storage, action)?,
-
         Commands::Import { action } => portability::handle_import(&storage, action)?,
+        Commands::Palace { action } => palace::handle(&storage, action)?,
         Commands::Graph {
             format,
             output,

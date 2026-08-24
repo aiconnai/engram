@@ -1,6 +1,8 @@
 import { BaseResource } from "./base.js";
 import type {
   PalaceNavigateOptions,
+  PalaceVisualizeOptions,
+  PalaceVisualizeResult,
   RoomSearchOptions,
 } from "../types.js";
 
@@ -14,6 +16,19 @@ export class SpatialResource extends BaseResource {
     };
     if (options?.wing) params.wing = options.wing;
     return this.caller.mcpCall("palace_navigate", params);
+  }
+
+  /**
+   * Generate or export a visual representation of the memory palace in HTML, ASCII, SVG, Mermaid, or JSON format.
+   */
+  async visualize(options?: PalaceVisualizeOptions): Promise<PalaceVisualizeResult> {
+    const params: Record<string, unknown> = {
+      workspace: options?.workspace ?? "default",
+      format: options?.format ?? "html",
+    };
+    if (options?.wing) params.wing = options.wing;
+    if (options?.outputPath) params.output_path = options.outputPath;
+    return this.caller.mcpCall("palace_visualize", params) as Promise<PalaceVisualizeResult>;
   }
 
   /**

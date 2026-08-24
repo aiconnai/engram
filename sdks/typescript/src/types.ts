@@ -56,6 +56,25 @@ export interface PalaceNavigateOptions {
   wing?: string;
 }
 
+export type PalaceFormat = "html" | "ascii" | "svg" | "mermaid" | "json";
+
+export interface PalaceVisualizeOptions {
+  workspace?: string;
+  wing?: string;
+  format?: PalaceFormat;
+  outputPath?: string;
+}
+
+export interface PalaceVisualizeResult {
+  workspace: string;
+  format: string;
+  wings_count: number;
+  rooms_count: number;
+  total_drawers: number;
+  rendered: string;
+  output_path?: string;
+}
+
 export interface RoomSearchOptions {
   wing: string;
   query: string;
