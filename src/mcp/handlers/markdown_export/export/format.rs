@@ -143,6 +143,7 @@ pub(super) fn build_index_markdown(
     memories: &[Value],
     type_counts: &HashMap<String, usize>,
     id_to_filename: &HashMap<i64, String>,
+    group: &str,
 ) -> String {
     let mut index = String::new();
     index.push_str(&format!("# {} -- Engram Export\n\n", workspace));
@@ -177,14 +178,13 @@ pub(super) fn build_index_markdown(
             .replace('\n', " ");
         let tags_str = mem.get("tags").and_then(|v| v.as_str()).unwrap_or("");
         let filename = id_to_filename.get(&id).cloned().unwrap_or_default();
+        let rel_link = match compute_file_subdir(group, mem) {
+            Some(subdir) => format!("{}/{}.md", subdir, filename),
+            None => format!("{}.md", filename),
+        };
         index.push_str(&format!(
-            "| {} | {} | [{}]({}/{}.md) | {} |\n",
-            id,
-            mem_type,
-            title,
-            pluralize_type(mem_type),
-            filename,
-            tags_str
+            "| {} | {} | [{}]({}) | {} |\n",
+            id, mem_type, title, rel_link, tags_str
         ));
     }
 

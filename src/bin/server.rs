@@ -398,6 +398,7 @@ impl EngramHandler {
             #[cfg(feature = "langfuse")]
             langfuse_runtime: self.langfuse_runtime.clone(),
             progress_reporter: None,
+            principal: None,
         }
     }
 }

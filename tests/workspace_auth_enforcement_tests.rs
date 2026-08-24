@@ -42,6 +42,7 @@ fn test_ctx() -> HandlerContext {
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         progress_reporter: None,
+        principal: None,
     }
 }
 
@@ -236,4 +237,45 @@ fn test_hierarchical_scope_grant_enforcement_in_dispatch() {
     assert!(ToolError::is_error_response(&unauth_result));
     assert_eq!(unauth_result["error"]["code"], "permission_denied");
     assert_eq!(unauth_result["error"]["details"]["agent_id"], "agent-2");
+}
+
+#[test]
+fn test_dispatch_enforces_transport_principal() {
+    let mut ctx = test_ctx();
+    let principal = create_principal(
+        "agent-scoped",
+        Some("tenant-a"),
+        PermissionSet::standard_user(),
+    );
+    ctx.principal = Some(principal);
+
+    // 1. Dispatch to allowed workspace succeeds
+    let ok_res = dispatch(
+        &ctx,
+        "memory_create",
+        json!({
+            "content": "Allowed tenant data",
+            "workspace": "tenant-a"
+        }),
+    );
+    assert!(
+        ok_res.get("error").is_none(),
+        "dispatch must allow operation within principal workspace: {ok_res}"
+    );
+    assert!(ok_res.get("id").is_some());
+
+    // 2. Dispatch to foreign workspace is rejected by central authorization in dispatch()
+    let denied_res = dispatch(
+        &ctx,
+        "memory_create",
+        json!({
+            "content": "Cross-tenant intrusion attempt",
+            "workspace": "tenant-b"
+        }),
+    );
+    assert!(
+        ToolError::is_error_response(&denied_res),
+        "dispatch must reject operation in foreign workspace"
+    );
+    assert_eq!(denied_res["error"]["code"], "permission_denied");
 }

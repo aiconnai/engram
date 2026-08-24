@@ -215,7 +215,7 @@ fn test_upgrade_from_v17_to_v19() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 47, "should reach v47 after full migration");
+    assert_eq!(version, 48, "should reach v48 after full migration");
 
     // Verify both new tables exist
     let auto_links_exists: i32 = conn
@@ -551,7 +551,7 @@ fn test_v45_preserves_existing_dream_candidate_data() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 47);
+    assert_eq!(version, 48);
 
     let retained: i64 = conn
         .query_row(

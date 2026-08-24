@@ -128,6 +128,7 @@ fn create_ephemeral_context(storage: Storage) -> HandlerContext {
             tokio::runtime::Runtime::new().expect("Failed to create langfuse runtime"),
         ),
         progress_reporter: None,
+        principal: None,
     }
 }
 

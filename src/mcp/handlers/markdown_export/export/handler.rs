@@ -123,7 +123,7 @@ pub fn memory_export_markdown(ctx: &HandlerContext, params: Value) -> Value {
 
     // 4. Write index.md in root
     let index_path = output_path.join("index.md");
-    let index = build_index_markdown(&workspace, &memories, &type_counts, &id_to_filename);
+    let index = build_index_markdown(&workspace, &memories, &type_counts, &id_to_filename, &group);
 
     if let Err(e) = fs::write(&index_path, &index) {
         return json!({"error": format!("Failed to write index: {}", e)});

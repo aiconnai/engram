@@ -278,6 +278,7 @@ mod tests {
                 tokio::runtime::Runtime::new().expect("Failed to create langfuse runtime"),
             ),
             progress_reporter: None,
+            principal: None,
         }
     }
 

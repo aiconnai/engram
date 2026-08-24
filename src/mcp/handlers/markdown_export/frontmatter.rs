@@ -151,14 +151,20 @@ pub(super) fn extract_body(content: &str) -> &str {
         }
     };
 
-    // Strip auto-generated `## Related` or `## Related Memories` footer if present
-    if let Some(pos) = body.find("\n## Related\n") {
-        &body[..pos]
-    } else if let Some(pos) = body.find("\n## Related Memories\n") {
-        &body[..pos]
-    } else {
-        body
+    // Strip trailing auto-generated `## Related` or `## Related Memories` footer if present
+    if let Some(pos) = body.rfind("\n## Related\n") {
+        let footer = &body[pos..];
+        if footer.contains("[[") {
+            return &body[..pos];
+        }
+    } else if let Some(pos) = body.rfind("\n## Related Memories\n") {
+        let footer = &body[pos..];
+        if footer.contains("[[") {
+            return &body[..pos];
+        }
     }
+
+    body
 }
 
 #[cfg(test)]
@@ -195,5 +201,14 @@ mod tests {
         let content = "---\nengram_id: 1\n---\nHello world\nSecond line";
         let body = extract_body(content);
         assert_eq!(body.trim(), "Hello world\nSecond line");
+    }
+
+    #[test]
+    fn test_extract_body_preserves_user_related_heading() {
+        let content = "---\nengram_id: 1\n---\n# User Notes\n\n## Related Topics\n\nDiscussing auth\n\n## Related\n\n- relates_to [[2-other-note]]\n";
+        let body = extract_body(content);
+        assert!(body.contains("## Related Topics"));
+        assert!(body.contains("Discussing auth"));
+        assert!(!body.contains("[[2-other-note]]"));
     }
 }

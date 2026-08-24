@@ -103,3 +103,31 @@ fn test_classify_import_status_case_only_edit_detected() {
     );
     assert_eq!(status, ImportStatus::PendingUpdate);
 }
+
+#[test]
+fn test_classify_import_status_file_version_ahead_conflict() {
+    // File version is 5, DB version is 2, different hash, no force → conflict per RFC 0004
+    let status = classify_import_status(
+        Some(("sha256:db", 2)),
+        "sha256:file_new",
+        "sha256:db",
+        5,
+        false,
+    );
+    assert_eq!(
+        status,
+        ImportStatus::Conflict(
+            "File version 5 > DB version 2 (file version is ahead of DB)".to_string()
+        )
+    );
+
+    // With force_version: true → pending_update
+    let status_forced = classify_import_status(
+        Some(("sha256:db", 2)),
+        "sha256:file_new",
+        "sha256:db",
+        5,
+        true,
+    );
+    assert_eq!(status_forced, ImportStatus::PendingUpdate);
+}

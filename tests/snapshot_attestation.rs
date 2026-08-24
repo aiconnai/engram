@@ -468,3 +468,41 @@ fn scenario_10_merge_skips_duplicates() {
 
     cleanup_snapshot(&path);
 }
+
+// ── Scenario 11: Decompression guard rejects oversized archive entries ─────────
+
+#[test]
+fn scenario_11_decompression_guard_rejects_bomb() {
+    use std::io::Write;
+
+    let path = tmp_egm("s11_bomb");
+    let file = std::fs::File::create(&path).expect("create zip");
+    let mut zip = zip::ZipWriter::new(file);
+
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    zip.start_file("manifest.json", options)
+        .expect("start file");
+
+    // Write a repeating stream of spaces that decompresses to > 256 MiB
+    let chunk = vec![b' '; 1024 * 1024]; // 1 MiB chunk of spaces
+    for _ in 0..257 {
+        zip.write_all(&chunk).expect("write chunk");
+    }
+    zip.finish().expect("finish zip");
+
+    // Inspecting or loading should fail with InvalidInput mentioning decompression guard
+    let result = SnapshotLoader::inspect(&path);
+    assert!(
+        result.is_err(),
+        "loader must reject entries exceeding decompression threshold"
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("decompression bomb guard")
+            || err_msg.contains("exceeds maximum allowed size"),
+        "expected decompression guard error, got: {err_msg}"
+    );
+
+    cleanup_snapshot(&path);
+}

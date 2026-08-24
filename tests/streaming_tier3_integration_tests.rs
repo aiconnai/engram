@@ -49,6 +49,7 @@ fn create_test_context(reporter: Option<Arc<dyn ProgressReporter>>) -> (Storage,
         meili_sync_interval: 60,
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+        principal: None,
     };
     (storage, ctx)
 }

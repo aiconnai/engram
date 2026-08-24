@@ -51,6 +51,10 @@ pub(crate) fn sanitize_zip_entry(name: &str) -> Result<&str> {
     Ok(name)
 }
 
+/// Maximum allowed uncompressed size for any single snapshot entry (256 MiB).
+/// Protects against zip decompression bombs (CWE-409).
+pub const MAX_SNAPSHOT_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
+
 /// Loads .egm snapshot archives into storage
 pub struct SnapshotLoader;
 
@@ -297,29 +301,55 @@ impl SnapshotLoader {
     // Private helpers
     // -------------------------------------------------------------------------
 
+    fn read_entry_limited<R: std::io::Read>(
+        mut reader: R,
+        name: &str,
+        max_bytes: u64,
+    ) -> Result<Vec<u8>> {
+        let mut buffer = Vec::new();
+        let mut take = (&mut reader).take(max_bytes.saturating_add(1));
+        take.read_to_end(&mut buffer)?;
+        if buffer.len() as u64 > max_bytes {
+            return Err(EngramError::InvalidInput(format!(
+                "Snapshot entry '{}' exceeds maximum allowed size of {} bytes (decompression bomb guard)",
+                name, max_bytes
+            )));
+        }
+        Ok(buffer)
+    }
+
+    fn read_entry_string_limited<R: std::io::Read>(
+        reader: R,
+        name: &str,
+        max_bytes: u64,
+    ) -> Result<String> {
+        let bytes = Self::read_entry_limited(reader, name, max_bytes)?;
+        String::from_utf8(bytes).map_err(|e| {
+            EngramError::Storage(format!("Entry '{}' is not valid UTF-8: {}", name, e))
+        })
+    }
+
     fn read_entry_bytes(
         archive: &mut zip::ZipArchive<std::fs::File>,
         name: &str,
     ) -> Result<Vec<u8>> {
-        let mut entry = archive.by_name(name).map_err(|e| {
+        let entry = archive.by_name(name).map_err(|e| {
             EngramError::Io(std::io::Error::other(format!(
                 "Missing archive entry '{}': {}",
                 name, e
             )))
         })?;
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut entry, &mut bytes)?;
-        Ok(bytes)
+        Self::read_entry_limited(entry, name, MAX_SNAPSHOT_ENTRY_BYTES)
     }
 
     /// Read and parse the manifest from an open archive
     fn read_manifest(archive: &mut zip::ZipArchive<std::fs::File>) -> Result<SnapshotManifest> {
-        let mut entry = archive.by_name("manifest.json").map_err(|_| {
+        let entry = archive.by_name("manifest.json").map_err(|_| {
             EngramError::Storage("Snapshot archive missing manifest.json".to_string())
         })?;
 
-        let mut json = String::new();
-        entry.read_to_string(&mut json)?;
+        let json =
+            Self::read_entry_string_limited(entry, "manifest.json", MAX_SNAPSHOT_ENTRY_BYTES)?;
 
         serde_json::from_str(&json)
             .map_err(|e| EngramError::Storage(format!("Failed to parse snapshot manifest: {}", e)))
@@ -339,14 +369,20 @@ impl SnapshotLoader {
         archive: &mut zip::ZipArchive<std::fs::File>,
         key: &[u8; 32],
     ) -> Result<(Vec<Memory>, Vec<SnapshotEdge>)> {
-        let mut entry = archive.by_name("payload.enc").map_err(|_| {
+        let entry = archive.by_name("payload.enc").map_err(|_| {
             EngramError::Storage("Encrypted snapshot missing payload.enc".to_string())
         })?;
 
-        let mut ciphertext = Vec::new();
-        entry.read_to_end(&mut ciphertext)?;
+        let ciphertext = Self::read_entry_limited(entry, "payload.enc", MAX_SNAPSHOT_ENTRY_BYTES)?;
 
         let plaintext = decrypt_aes256(&ciphertext, key)?;
+
+        if plaintext.len() as u64 > MAX_SNAPSHOT_ENTRY_BYTES {
+            return Err(EngramError::InvalidInput(format!(
+                "Decrypted snapshot payload exceeds maximum allowed size of {} bytes",
+                MAX_SNAPSHOT_ENTRY_BYTES
+            )));
+        }
 
         // The plaintext is itself a ZIP archive
         let cursor = std::io::Cursor::new(plaintext);
@@ -366,12 +402,11 @@ impl SnapshotLoader {
         archive: &mut zip::ZipArchive<std::fs::File>,
         name: &str,
     ) -> Result<T> {
-        let mut entry = archive
+        let entry = archive
             .by_name(name)
             .map_err(|_| EngramError::Storage(format!("Snapshot archive missing {}", name)))?;
 
-        let mut json = String::new();
-        entry.read_to_string(&mut json)?;
+        let json = Self::read_entry_string_limited(entry, name, MAX_SNAPSHOT_ENTRY_BYTES)?;
 
         serde_json::from_str(&json)
             .map_err(|e| EngramError::Storage(format!("Failed to parse {}: {}", name, e)))
@@ -382,12 +417,11 @@ impl SnapshotLoader {
         archive: &mut zip::ZipArchive<std::io::Cursor<Vec<u8>>>,
         name: &str,
     ) -> Result<T> {
-        let mut entry = archive
+        let entry = archive
             .by_name(name)
             .map_err(|_| EngramError::Storage(format!("Inner archive missing {}", name)))?;
 
-        let mut json = String::new();
-        entry.read_to_string(&mut json)?;
+        let json = Self::read_entry_string_limited(entry, name, MAX_SNAPSHOT_ENTRY_BYTES)?;
 
         serde_json::from_str(&json)
             .map_err(|e| EngramError::Storage(format!("Failed to parse {}: {}", name, e)))

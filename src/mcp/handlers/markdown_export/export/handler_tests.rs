@@ -32,6 +32,7 @@ fn ctx() -> crate::mcp::handlers::HandlerContext {
                 .unwrap(),
         ),
         progress_reporter: None,
+        principal: None,
     }
 }
 

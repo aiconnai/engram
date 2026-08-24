@@ -177,6 +177,7 @@ mod tests {
             #[cfg(feature = "langfuse")]
             langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
             progress_reporter: None,
+            principal: None,
         }
     }
 

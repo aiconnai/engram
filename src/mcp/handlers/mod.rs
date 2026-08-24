@@ -97,6 +97,8 @@ pub struct HandlerContext {
     /// Optional progress reporter for streaming progress notifications.
     /// When `None`, progress events are silently discarded.
     pub progress_reporter: Option<Arc<dyn ProgressReporter>>,
+    /// Authenticated transport principal (None for anonymous or stdio fallback).
+    pub principal: Option<crate::auth::TransportPrincipal>,
 }
 
 impl HandlerContext {
@@ -112,6 +114,12 @@ impl HandlerContext {
     pub fn progress_reporter(&self) -> &dyn ProgressReporter {
         self.reporter()
     }
+
+    /// Attach an authenticated transport principal to this context.
+    pub fn with_principal(mut self, principal: Option<crate::auth::TransportPrincipal>) -> Self {
+        self.principal = principal;
+        self
+    }
 }
 
 /// Route a tool call to the appropriate domain handler.
@@ -125,11 +133,16 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
                 Some(conn),
                 tool_name,
                 &params,
-                None,
+                ctx.principal.as_ref(),
             ))
         })
         .unwrap_or_else(|_| {
-            crate::mcp::permission::check_tool_authorization(None, tool_name, &params, None)
+            crate::mcp::permission::check_tool_authorization(
+                None,
+                tool_name,
+                &params,
+                ctx.principal.as_ref(),
+            )
         });
 
     if let Some(denial) = auth_denial {

@@ -32,7 +32,6 @@ mod tests {
                     engram::search::VectorMetric::Cosine,
                 ),
             ))),
-            progress_reporter: None,
             #[cfg(feature = "meilisearch")]
             meili: None,
             #[cfg(feature = "meilisearch")]
@@ -41,6 +40,8 @@ mod tests {
             meili_sync_interval: 60,
             #[cfg(feature = "langfuse")]
             langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+            progress_reporter: None,
+            principal: None,
         };
         (storage, ctx)
     }

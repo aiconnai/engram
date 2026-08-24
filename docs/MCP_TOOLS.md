@@ -3535,6 +3535,7 @@ Export a workspace as human-readable Markdown files with YAML frontmatter and wi
 |-------|------|----------|---------|
 | `workspace` | `string` | yes | Workspace to export |
 | `output_dir` | `string` | no | Output directory path (default: ./engram-export/{workspace}/) |
+| `group` | `string` | no | Grouping strategy for exported files ('flat', 'day', 'workspace', 'type', 'entity') Default: `flat`. Allowed: `flat`, `day`, `workspace`, `type`, `entity`. |
 | `include_links` | `boolean` | no | Include [[wiki links]] to related memories in each file Default: `true`. |
 
 ### `memory_import_markdown`

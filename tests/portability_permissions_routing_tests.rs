@@ -45,6 +45,7 @@ fn create_test_context() -> HandlerContext {
                 .expect("langfuse runtime"),
         ),
         progress_reporter: None,
+        principal: None,
     }
 }
 

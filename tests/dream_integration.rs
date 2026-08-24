@@ -115,6 +115,7 @@ fn test_handler_context(
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         progress_reporter: None,
+        principal: None,
     }
 }
 
@@ -155,6 +156,7 @@ fn test_mcp_tool_dream_run_now() {
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         progress_reporter: None,
+        principal: None,
     };
 
     let result = dispatch(&ctx, "dream_run_now", json!({}));
@@ -216,6 +218,7 @@ fn test_mcp_dream_candidate_review_and_apply() {
         #[cfg(feature = "langfuse")]
         langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
         progress_reporter: None,
+        principal: None,
     };
 
     let create = dispatch(

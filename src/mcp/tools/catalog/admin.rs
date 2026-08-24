@@ -343,6 +343,7 @@ pub const TOOLS: &[ToolDef] = &[
                 "properties": {
                     "workspace": {"type": "string", "description": "Workspace to export"},
                     "output_dir": {"type": "string", "description": "Output directory path (default: ./engram-export/{workspace}/)"},
+                    "group": {"type": "string", "enum": ["flat", "day", "workspace", "type", "entity"], "default": "flat", "description": "Grouping strategy for exported files ('flat', 'day', 'workspace', 'type', 'entity')"},
                     "include_links": {"type": "boolean", "default": true, "description": "Include [[wiki links]] to related memories in each file"}
                 },
                 "required": ["workspace"]

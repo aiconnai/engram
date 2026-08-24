@@ -102,12 +102,31 @@ fn test_build_index_markdown_header() {
     let mut id_to_filename = HashMap::new();
     id_to_filename.insert(1i64, "1-test-note".to_string());
 
-    let index = build_index_markdown("mywork", &memories, &type_counts, &id_to_filename);
+    let index = build_index_markdown("mywork", &memories, &type_counts, &id_to_filename, "flat");
 
     assert!(index.contains("# mywork -- Engram Export"));
     assert!(index.contains("**Total memories:** 1"));
     assert!(index.contains("**notes/**"));
-    assert!(index.contains("| 1 | note |"));
+    assert!(index.contains("| 1 | note | [Test note](1-test-note.md) |  |"));
+}
+
+#[test]
+fn test_build_index_markdown_type_grouping_links() {
+    let memories = vec![json!({
+        "id": 1,
+        "content": "Architecture decision",
+        "memory_type": "decision",
+        "tags": "arch",
+    })];
+    let mut type_counts = HashMap::new();
+    type_counts.insert("decision".to_string(), 1);
+    let mut id_to_filename = HashMap::new();
+    id_to_filename.insert(1i64, "1-architecture-decision".to_string());
+
+    let index = build_index_markdown("mywork", &memories, &type_counts, &id_to_filename, "type");
+    assert!(index.contains(
+        "| 1 | decision | [Architecture decision](decision/1-architecture-decision.md) | arch |"
+    ));
 }
 
 // ── memory_export_markdown (requires HandlerContext — skip here) ──

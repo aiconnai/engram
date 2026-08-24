@@ -48,8 +48,11 @@ pub(super) fn classify_import_status(
                     db_version, file_version
                 ))
             } else {
-                // file is ahead of DB — normal pending update
-                ImportStatus::PendingUpdate
+                // File is ahead of DB — RFC 0004 specifies conflict requiring explicit --force-version
+                ImportStatus::Conflict(format!(
+                    "File version {} > DB version {} (file version is ahead of DB)",
+                    file_version, db_version
+                ))
             }
         }
     }

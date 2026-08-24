@@ -76,6 +76,7 @@ impl TestHandler {
             #[cfg(feature = "langfuse")]
             langfuse_runtime: test_langfuse_runtime(),
             progress_reporter: None,
+            principal: None,
         };
         Self { storage, ctx }
     }
