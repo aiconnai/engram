@@ -537,22 +537,32 @@ impl WalDeltaPack {
 
     /// Unpack and deserialize frames contained in this package.
     pub fn unpack_frames(&self) -> std::result::Result<Vec<WalFrame>, WalReplicationError> {
+        Self::unpack_frames_with_limit(self, Self::DEFAULT_MAX_DECOMPRESSED_BYTES)
+    }
+
+    /// Default decompression limit (64 MiB).
+    const DEFAULT_MAX_DECOMPRESSED_BYTES: u64 = 64 * 1024 * 1024;
+
+    /// Unpack frames with a configurable decompression byte limit.
+    fn unpack_frames_with_limit(
+        &self,
+        max_decompressed_bytes: u64,
+    ) -> std::result::Result<Vec<WalFrame>, WalReplicationError> {
         use std::io::Read;
-        const MAX_DECOMPRESSED_BYTES: u64 = 64 * 1024 * 1024; // 64 MB
 
         self.verify_checksum()?;
 
         let raw_json = if self.compressed {
             let decoder = GzDecoder::new(&self.payload[..]);
-            let mut limited = decoder.take(MAX_DECOMPRESSED_BYTES + 1);
+            let mut limited = decoder.take(max_decompressed_bytes + 1);
             let mut decompressed = Vec::new();
             limited.read_to_end(&mut decompressed).map_err(|e| {
                 WalReplicationError::DecompressionFailed(format!("Decompression failed: {}", e))
             })?;
-            if decompressed.len() as u64 > MAX_DECOMPRESSED_BYTES {
+            if decompressed.len() as u64 > max_decompressed_bytes {
                 return Err(WalReplicationError::DecompressionFailed(format!(
                     "Decompressed payload exceeds {} byte limit",
-                    MAX_DECOMPRESSED_BYTES
+                    max_decompressed_bytes
                 )));
             }
             decompressed
@@ -1075,5 +1085,69 @@ mod tests {
         let result = WalFrame::parse(&bytes, 1, page_size, false);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().page_number, 1);
+    }
+
+    #[test]
+    fn test_unpack_frames_decompression_bomb_rejected() {
+        use flate2::write::GzEncoder;
+        use sha2::{Digest, Sha256};
+        use std::io::Write;
+
+        // Create a JSON payload of ~2 KiB (well above a tiny limit we'll set)
+        let frame = WalFrame {
+            frame_index: 1,
+            page_number: 1,
+            db_size_pages: 0,
+            salt1: 0,
+            salt2: 0,
+            checksum1: 0,
+            checksum2: 0,
+            data: vec![0u8; 512],
+        };
+        let frames = vec![frame; 4]; // ~2 KiB of JSON when serialized
+        let raw_json = serde_json::to_vec(&frames).unwrap();
+
+        // Compress the payload
+        let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(&raw_json).unwrap();
+        let compressed = encoder.finish().unwrap();
+
+        // Compute checksum
+        let mut hasher = Sha256::new();
+        hasher.update(&compressed);
+        let checksum = hex::encode(hasher.finalize());
+
+        let pack = WalDeltaPack {
+            pack_id: "test-bomb".to_string(),
+            db_identifier: None,
+            checkpoint_seq: 1,
+            start_frame: 1,
+            end_frame: 4,
+            frame_count: 4,
+            page_size: 4096,
+            salt1: 0,
+            salt2: 0,
+            created_at: chrono::Utc::now(),
+            compressed: true,
+            checksum_sha256: checksum,
+            payload: compressed,
+        };
+
+        // Normal unpack should succeed (within 64 MiB limit)
+        assert!(pack.unpack_frames().is_ok());
+
+        // With a tiny limit (128 bytes), decompression should be rejected
+        let result = WalDeltaPack::unpack_frames_with_limit(&pack, 128);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            WalReplicationError::DecompressionFailed(msg) => {
+                assert!(
+                    msg.contains("exceeds"),
+                    "Expected size limit error, got: {}",
+                    msg
+                );
+            }
+            other => panic!("Expected DecompressionFailed, got: {:?}", other),
+        }
     }
 }
