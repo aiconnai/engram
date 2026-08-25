@@ -617,4 +617,41 @@ pub const TOOLS: &[ToolDef] = &[
             annotations: ToolAnnotations::read_only(),
             tier: ToolTier::Standard,
         },
+    ToolDef {
+            name: "model_route_resolve",
+            description: "Deterministically resolve the active or preferred model route for a given AI capability / purpose (RFC 0011). Reports exact degradation, missing secrets, or offline policy without network calls.",
+            schema: r#"{
+                "type": "object",
+                "properties": {
+                    "purpose": {
+                        "type": "string",
+                        "enum": ["embedding_text", "embedding_image", "rerank", "vision_describe_image", "audio_transcribe", "llm_council", "token_count", "deterministic_eval"],
+                        "description": "Model purpose to resolve."
+                    },
+                    "preferred_provider": {
+                        "type": "string",
+                        "description": "Optional caller preference for provider (e.g. 'openai', 'voyage', 'cohere', 'tfidf', 'clip')."
+                    }
+                },
+                "required": ["purpose"]
+            }"#,
+            annotations: ToolAnnotations::read_only(),
+            tier: ToolTier::Standard,
+        },
+    ToolDef {
+            name: "model_routes_list",
+            description: "List all declared model routes and their capabilities, cost classes, latency profiles, and fallback policies (RFC 0011).",
+            schema: r#"{
+                "type": "object",
+                "properties": {
+                    "purpose": {
+                        "type": "string",
+                        "enum": ["embedding_text", "embedding_image", "rerank", "vision_describe_image", "audio_transcribe", "llm_council", "token_count", "deterministic_eval"],
+                        "description": "Optional purpose filter."
+                    }
+                }
+            }"#,
+            annotations: ToolAnnotations::read_only(),
+            tier: ToolTier::Standard,
+        },
 ];

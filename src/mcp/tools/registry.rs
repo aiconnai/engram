@@ -11,6 +11,7 @@ pub static TOOL_DEFINITIONS: LazyLock<Vec<ToolDef>> = LazyLock::new(|| {
     tools.extend_from_slice(catalog::memory_crud::TOOLS);
     tools.extend_from_slice(catalog::search::TOOLS);
     tools.extend_from_slice(catalog::spatial::TOOLS);
+    tools.extend_from_slice(catalog::aaak::TOOLS);
     tools.extend_from_slice(catalog::context::TOOLS);
     tools.extend_from_slice(catalog::graph::TOOLS);
     tools.extend_from_slice(catalog::policy::TOOLS);

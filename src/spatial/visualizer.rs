@@ -78,10 +78,28 @@ pub struct PalaceGraph {
     pub wings: Vec<PalaceWing>,
 }
 
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 impl PalaceGraph {
     /// Extract the spatial palace graph from storage for a given workspace and optional wing filter.
     pub fn extract(storage: &Storage, workspace: &str, target_wing: Option<&str>) -> Result<Self> {
-        storage.with_connection(|conn| {
+        let now_str = chrono::Utc::now().to_rfc3339();
+
+        let raw_drawers: Vec<PalaceDrawer> = storage.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT m.id, m.content, m.memory_type, m.importance,
                         COALESCE(GROUP_CONCAT(t.name, ','), '') as tags_str,
@@ -92,11 +110,12 @@ impl PalaceGraph {
                  WHERE m.workspace = ?1
                    AND COALESCE(m.lifecycle_state, 'active') != 'archived'
                    AND m.valid_to IS NULL
+                   AND (m.expires_at IS NULL OR m.expires_at > ?2)
                  GROUP BY m.id
                  ORDER BY COALESCE(m.scope_path, m.scope_id, 'global'), m.importance DESC, m.id DESC",
             )?;
 
-            let rows = stmt.query_map(rusqlite::params![workspace], |row| {
+            let rows = stmt.query_map(rusqlite::params![workspace, now_str], |row| {
                 let id: i64 = row.get(0)?;
                 let content: String = row.get(1)?;
                 let memory_type: String = row.get(2)?;
@@ -116,10 +135,10 @@ impl PalaceGraph {
                 };
 
                 let effective_scope = match (scope_path.as_deref(), scope_type.as_deref(), scope_id.as_deref()) {
-                    (Some(p), _, _) if p != "global" && !p.is_empty() => p.to_string(),
-                    (_, Some("custom"), Some(id)) if !id.is_empty() => id.to_string(),
+                    (Some(p), _, _) if p != "global" && !p.trim().is_empty() => p.to_string(),
+                    (_, Some("custom"), Some(id)) if !id.trim().is_empty() => id.to_string(),
                     (_, _, Some(id)) if id.contains("wing:") || id.contains('/') => id.to_string(),
-                    (Some(p), _, _) => p.to_string(),
+                    (Some(p), _, _) if !p.trim().is_empty() => p.to_string(),
                     _ => "global".to_string(),
                 };
 
@@ -138,63 +157,73 @@ impl PalaceGraph {
                 })
             })?;
 
-            // Grouping: Wing -> Room -> Vec<PalaceDrawer>
-            let mut wings_map: BTreeMap<String, BTreeMap<String, Vec<PalaceDrawer>>> = BTreeMap::new();
-            let mut total_drawers = 0;
+            rows.collect::<std::result::Result<Vec<_>, _>>().map_err(Into::into)
+        })?;
 
-            for row in rows {
-                let drawer = row?;
-                total_drawers += 1;
+        let mut wings_map: BTreeMap<String, BTreeMap<String, Vec<PalaceDrawer>>> = BTreeMap::new();
 
-                let clean = drawer.scope_path.trim_start_matches("wing:").trim_start_matches('/');
-                let mut parts = clean.split('/');
-                let wing = parts.next().unwrap_or("general").to_string();
-                let room = parts.next().map(|r| r.trim_start_matches("room:").to_string()).unwrap_or_else(|| "main".to_string());
+        for drawer in raw_drawers {
+            let clean = drawer
+                .scope_path
+                .trim_start_matches("wing:")
+                .trim_start_matches('/');
+            let mut parts = clean.split('/');
+            let wing = parts.next().unwrap_or("general").to_string();
+            let room = parts
+                .next()
+                .map(|r| r.trim_start_matches("room:").to_string())
+                .unwrap_or_else(|| "main".to_string());
 
-                if let Some(tw) = target_wing {
-                    if !wing.eq_ignore_ascii_case(tw) && !drawer.scope_path.contains(tw) {
-                        continue;
-                    }
+            if let Some(tw) = target_wing {
+                if !wing.eq_ignore_ascii_case(tw) && !drawer.scope_path.contains(tw) {
+                    continue;
                 }
-
-                wings_map.entry(wing).or_default().entry(room).or_default().push(drawer);
             }
 
-            let mut wings = Vec::new();
-            let mut rooms_count = 0;
+            wings_map
+                .entry(wing)
+                .or_default()
+                .entry(room)
+                .or_default()
+                .push(drawer);
+        }
 
-            for (wing_name, rooms_map) in wings_map {
-                let mut rooms = Vec::new();
-                let mut wing_drawer_count = 0;
+        let mut wings = Vec::new();
+        let mut rooms_count = 0;
+        let mut total_drawers = 0;
 
-                for (room_name, drawers) in rooms_map {
-                    rooms_count += 1;
-                    wing_drawer_count += drawers.len();
-                    rooms.push(PalaceRoom {
-                        name: room_name.clone(),
-                        full_path: format!("wing:{}/room:{}", wing_name, room_name),
-                        drawer_count: drawers.len(),
-                        drawers,
-                    });
-                }
+        for (wing_name, rooms_map) in wings_map {
+            let mut rooms = Vec::new();
+            let mut wing_drawer_count = 0;
 
-                wings.push(PalaceWing {
-                    name: wing_name,
-                    drawer_count: wing_drawer_count,
-                    room_count: rooms.len(),
-                    rooms,
+            for (room_name, drawers) in rooms_map {
+                rooms_count += 1;
+                wing_drawer_count += drawers.len();
+                rooms.push(PalaceRoom {
+                    name: room_name.clone(),
+                    full_path: format!("wing:{}/room:{}", wing_name, room_name),
+                    drawer_count: drawers.len(),
+                    drawers,
                 });
             }
 
-            let wings_count = wings.len();
+            total_drawers += wing_drawer_count;
+            wings.push(PalaceWing {
+                name: wing_name,
+                drawer_count: wing_drawer_count,
+                room_count: rooms.len(),
+                rooms,
+            });
+        }
 
-            Ok(PalaceGraph {
-                workspace: workspace.to_string(),
-                total_drawers,
-                wings_count,
-                rooms_count,
-                wings,
-            })
+        let wings_count = wings.len();
+
+        Ok(PalaceGraph {
+            workspace: workspace.to_string(),
+            total_drawers,
+            wings_count,
+            rooms_count,
+            wings,
         })
     }
 
@@ -301,16 +330,29 @@ impl PalaceGraph {
     pub fn render_mermaid(&self) -> String {
         let mut out = String::new();
         out.push_str("mindmap\n");
-        out.push_str(&format!("  root((🏰 {}))\n", self.workspace));
+        let safe_ws = self
+            .workspace
+            .replace('"', "'")
+            .replace('(', "[")
+            .replace(')', "]");
+        out.push_str(&format!("  root((🏰 \"{}\"))\n", safe_ws));
 
         for wing in &self.wings {
-            let safe_wing = wing.name.replace('(', "[").replace(')', "]");
+            let safe_wing = wing
+                .name
+                .replace('"', "'")
+                .replace('(', "[")
+                .replace(')', "]");
             out.push_str(&format!(
                 "    🏛️ \"{} ({} drawers)\"\n",
                 safe_wing, wing.drawer_count
             ));
             for room in &wing.rooms {
-                let safe_room = room.name.replace('(', "[").replace(')', "]");
+                let safe_room = room
+                    .name
+                    .replace('"', "'")
+                    .replace('(', "[")
+                    .replace(')', "]");
                 out.push_str(&format!(
                     "      🚪 \"{} ({})\"\n",
                     safe_room, room.drawer_count
@@ -359,7 +401,7 @@ impl PalaceGraph {
             width = width,
             height = height,
             header_w = width - 40,
-            ws = self.workspace,
+            ws = xml_escape(&self.workspace),
             total = self.total_drawers,
             w_cnt = self.wings_count
         );
@@ -373,14 +415,24 @@ impl PalaceGraph {
 "##,
                 y = cur_y,
                 w = width - 40,
-                wing_name = wing.name,
+                wing_name = xml_escape(&wing.name),
                 drawers = wing.drawer_count
             ));
 
             let mut room_x = 20;
-            for room in &wing.rooms {
-                let room_w = (room.name.len() * 9 + 40).max(100);
-                if room_x + room_w > width - 60 {
+            for (rooms_shown, room) in wing.rooms.iter().enumerate() {
+                let room_w = (room.name.chars().count() * 9 + 40).max(100);
+                if room_x + room_w > width - 120 && wing.rooms.len() > rooms_shown + 1 {
+                    let remaining = wing.rooms.len() - rooms_shown;
+                    svg.push_str(&format!(
+                        r##"  <g transform="translate({rx}, 45)">
+    <rect x="0" y="0" width="80" height="55" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1" stroke-dasharray="3 3"/>
+    <text x="10" y="32" fill="#94a3b8" font-size="11">+{rem} more</text>
+  </g>
+"##,
+                        rx = room_x,
+                        rem = remaining
+                    ));
                     break;
                 }
                 svg.push_str(&format!(
@@ -392,7 +444,7 @@ impl PalaceGraph {
 "##,
                     rx = room_x,
                     rw = room_w,
-                    rname = room.name,
+                    rname = xml_escape(&room.name),
                     rdrawers = room.drawer_count
                 ));
                 room_x += room_w + 15;
@@ -419,7 +471,12 @@ impl PalaceGraph {
 
     /// Render interactive HTML5/Canvas visualization application.
     pub fn render_html(&self) -> String {
-        let palace_json = serde_json::to_string(&self).unwrap_or_default();
+        let palace_json = serde_json::to_string(&self)
+            .unwrap_or_default()
+            .replace('<', "\\u003c")
+            .replace('>', "\\u003e")
+            .replace('&', "\\u0026");
+        let ws_escaped = html_escape(&self.workspace);
         format!(
             r#"<!DOCTYPE html>
 <html lang="en" class="dark">
@@ -548,7 +605,7 @@ impl PalaceGraph {
       margin-bottom: 16px;
     }}
     .wing-title {{
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
       color: #38bdf8;
       display: flex;
@@ -557,14 +614,14 @@ impl PalaceGraph {
     }}
     .rooms-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 16px;
     }}
     .room-card {{
       background: var(--room-bg);
       border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 16px;
+      border-radius: 8px;
+      padding: 14px;
     }}
     .room-header {{
       display: flex;
@@ -574,7 +631,7 @@ impl PalaceGraph {
       border-bottom: 1px solid rgba(255,255,255,0.05);
       padding-bottom: 8px;
     }}
-    .room-title {{ font-size: 15px; font-weight: 600; color: #e2e8f0; }}
+    .room-title {{ font-size: 14px; font-weight: 600; color: #e2e8f0; }}
     .drawers-list {{
       display: flex;
       flex-direction: column;
@@ -582,16 +639,16 @@ impl PalaceGraph {
     }}
     .drawer-item {{
       background: var(--drawer-bg);
-      border: 1px solid rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.05);
       border-radius: 6px;
-      padding: 10px 12px;
+      padding: 10px;
       cursor: pointer;
-      transition: transform 0.15s, border-color 0.15s;
+      transition: all 0.15s;
     }}
     .drawer-item:hover {{
-      transform: translateX(4px);
-      border-color: var(--accent);
       background: var(--drawer-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }}
     .drawer-header {{
       display: flex;
@@ -706,8 +763,11 @@ impl PalaceGraph {
     </div>
   </div>
 
+  <script id="palace-data" type="application/json">{}</script>
+
   <script>
-    const data = {};
+    const data = JSON.parse(document.getElementById('palace-data').textContent);
+    const drawersMap = new Map();
 
     function render(filter = '') {{
       const query = filter.toLowerCase();
@@ -715,6 +775,7 @@ impl PalaceGraph {
       const container = document.getElementById('wingsContainer');
       sidebar.innerHTML = '';
       container.innerHTML = '';
+      drawersMap.clear();
 
       // All wings option
       const allItem = document.createElement('div');
@@ -731,7 +792,7 @@ impl PalaceGraph {
         // Sidebar item
         const nav = document.createElement('div');
         nav.className = 'nav-item';
-        nav.innerHTML = `<span>🏛️ ${{wing.name}}</span><span class="nav-count">${{wing.drawer_count}}</span>`;
+        nav.innerHTML = `<span>🏛️ ${{escapeHtml(wing.name)}}</span><span class="nav-count">${{wing.drawer_count}}</span>`;
         nav.onclick = () => {{
           document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
           nav.classList.add('active');
@@ -751,6 +812,7 @@ impl PalaceGraph {
 
         wing.rooms.forEach(room => {{
           const filteredDrawers = room.drawers.filter(d => {{
+            drawersMap.set(d.id, d);
             if (!query) return true;
             return d.title.toLowerCase().includes(query) ||
                    d.preview.toLowerCase().includes(query) ||
@@ -762,9 +824,9 @@ impl PalaceGraph {
           matchingDrawers += filteredDrawers.length;
 
           let drawersHtml = filteredDrawers.map(d => `
-            <div class="drawer-item" onclick="openDrawer(${{JSON.stringify(d).replace(/"/g, '&quot;')}})">
+            <div class="drawer-item" data-drawer-id="${{d.id}}" onclick="openDrawerById(${{d.id}})">
               <div class="drawer-header">
-                <span class="drawer-type">${{d.memory_type}}</span>
+                <span class="drawer-type">${{escapeHtml(d.memory_type)}}</span>
                 <span style="font-size:11px; color:var(--text-muted);">#${{d.id}}</span>
               </div>
               <div class="drawer-title">${{escapeHtml(d.title)}}</div>
@@ -804,7 +866,9 @@ impl PalaceGraph {
       }}
     }}
 
-    function openDrawer(d) {{
+    function openDrawerById(id) {{
+      const d = drawersMap.get(id);
+      if (!d) return;
       document.getElementById('modalTitle').textContent = `📦 Drawer #${{d.id}} [${{d.memory_type}}] - ${{d.scope_path}}`;
       document.getElementById('modalBody').textContent = d.preview;
       document.getElementById('modalOverlay').classList.add('open');
@@ -818,7 +882,13 @@ impl PalaceGraph {
     }}
 
     function escapeHtml(str) {{
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }}
 
     document.getElementById('searchInput').addEventListener('input', (e) => {{
@@ -831,8 +901,8 @@ impl PalaceGraph {
 </body>
 </html>
 "#,
-            self.workspace,
-            self.workspace,
+            ws_escaped,
+            ws_escaped,
             self.wings_count,
             self.rooms_count,
             self.total_drawers,

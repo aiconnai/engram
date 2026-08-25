@@ -65,6 +65,8 @@ pub enum CompressionLevel {
     Medium,
     /// Key facts only: "Entity: fact" patterns, numbers, and dates.
     Heavy,
+    /// AAAK ultra-dense abbreviation compression (up to 30x token reduction).
+    Aaak,
 }
 
 /// A memory entry after compression.
@@ -159,10 +161,7 @@ impl ContextCompressor {
     /// Count tokens, using tiktoken if available, else chars/4.
     fn count(&self, text: &str) -> usize {
         match &self.token_counter {
-            Some(c) => {
-                use crate::intelligence::context_builder::TokenCounter;
-                c.count_tokens(text)
-            }
+            Some(c) => c.count_tokens(text),
             None => Self::estimate_tokens(text),
         }
     }
@@ -319,6 +318,13 @@ impl ContextCompressor {
             CompressionLevel::Light => Self::compress_light(content),
             CompressionLevel::Medium => Self::compress_medium(content),
             CompressionLevel::Heavy => Self::compress_heavy(content),
+            CompressionLevel::Aaak => {
+                crate::intelligence::aaak::AaakCompressor::compress(
+                    content,
+                    crate::intelligence::aaak::AaakMode::UltraDense,
+                )
+                .compressed
+            }
         }
     }
 
@@ -380,6 +386,7 @@ impl ContextCompressor {
                 CompressionLevel::Light,
                 CompressionLevel::Medium,
                 CompressionLevel::Heavy,
+                CompressionLevel::Aaak,
             ];
 
             let mut chosen: Option<(CompressionLevel, String, usize)> = None;

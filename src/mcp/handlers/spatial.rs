@@ -14,28 +14,48 @@ pub fn palace_navigate(ctx: &HandlerContext, params: Value) -> Value {
         .get("workspace")
         .and_then(|v| v.as_str())
         .unwrap_or("default");
+    let ws = crate::types::normalize_workspace(workspace).unwrap_or_else(|_| workspace.to_string());
     let target_wing = params.get("wing").and_then(|v| v.as_str());
+    let now_str = chrono::Utc::now().to_rfc3339();
 
     ctx.storage
         .with_connection(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT scope_path, COUNT(*) as cnt FROM memories
-                 WHERE workspace = ?1 AND lifecycle_state != 'archived'
-                 GROUP BY scope_path",
+                "SELECT m.scope_path, m.scope_type, m.scope_id, COUNT(*) as cnt
+                 FROM memories m
+                 WHERE m.workspace = ?1
+                   AND COALESCE(m.lifecycle_state, 'active') != 'archived'
+                   AND m.valid_to IS NULL
+                   AND (m.expires_at IS NULL OR m.expires_at > ?2)
+                 GROUP BY COALESCE(m.scope_path, m.scope_id, 'global')",
             )?;
 
-            let rows = stmt.query_map([workspace], |row| {
+            let rows = stmt.query_map(rusqlite::params![ws, now_str], |row| {
                 let scope_path: Option<String> = row.get(0)?;
-                let count: i64 = row.get(1)?;
-                Ok((scope_path.unwrap_or_else(|| "global".to_string()), count))
+                let scope_type: Option<String> = row.get(1)?;
+                let scope_id: Option<String> = row.get(2)?;
+                let count: i64 = row.get(3)?;
+
+                let effective_scope = match (
+                    scope_path.as_deref(),
+                    scope_type.as_deref(),
+                    scope_id.as_deref(),
+                ) {
+                    (Some(p), _, _) if p != "global" && !p.trim().is_empty() => p.to_string(),
+                    (_, Some("custom"), Some(id)) if !id.trim().is_empty() => id.to_string(),
+                    (_, _, Some(id)) if id.contains("wing:") || id.contains('/') => id.to_string(),
+                    (Some(p), _, _) if !p.trim().is_empty() => p.to_string(),
+                    _ => "global".to_string(),
+                };
+
+                Ok((effective_scope, count))
             })?;
 
             let mut wings_map: BTreeMap<String, (i64, BTreeSet<String>)> = BTreeMap::new();
-            let mut total_drawers = 0;
+            let mut total_drawers: i64 = 0;
 
             for row in rows {
                 let (path, count) = row?;
-                total_drawers += count;
 
                 // Normalize path into wing / room
                 let clean_path = path.trim_start_matches("wing:").trim_start_matches('/');
@@ -51,6 +71,7 @@ pub fn palace_navigate(ctx: &HandlerContext, params: Value) -> Value {
                     }
                 }
 
+                total_drawers += count;
                 let entry = wings_map.entry(wing).or_insert((0, BTreeSet::new()));
                 entry.0 += count;
                 if let Some(r) = room {
@@ -72,7 +93,7 @@ pub fn palace_navigate(ctx: &HandlerContext, params: Value) -> Value {
                 .collect();
 
             Ok(json!({
-                "palace": workspace,
+                "palace": ws,
                 "wings_count": wings_list.len(),
                 "total_drawers": total_drawers,
                 "wings": wings_list
@@ -102,7 +123,8 @@ pub fn room_search(ctx: &HandlerContext, params: Value) -> Value {
     });
 
     if let Some(ws) = workspace {
-        search_params["workspace"] = json!(ws);
+        let norm_ws = crate::types::normalize_workspace(ws).unwrap_or_else(|_| ws.to_string());
+        search_params["workspace"] = json!(norm_ws);
     }
 
     // Set scope path filter for hierarchical retrieval
@@ -125,18 +147,28 @@ pub fn drawer_open(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| match get_memory(conn, id) {
-            Ok(memory) => Ok(json!({
-                "id": memory.id,
-                "content": memory.content,
-                "memory_type": memory.memory_type.as_str(),
-                "importance": memory.importance,
-                "tags": memory.tags,
-                "workspace": memory.workspace,
-                "scope": memory.scope,
-                "created_at": memory.created_at,
-                "updated_at": memory.updated_at,
-                "metadata": memory.metadata,
-            })),
+            Ok(memory) => {
+                if let Some(ref principal) = ctx.principal {
+                    if !principal.allows_workspace(Some(&memory.workspace)) {
+                        return Ok(json!({
+                            "error": format!("Permission denied: cannot access memory in workspace '{}'", memory.workspace)
+                        }));
+                    }
+                }
+
+                Ok(json!({
+                    "id": memory.id,
+                    "content": memory.content,
+                    "memory_type": memory.memory_type.as_str(),
+                    "importance": memory.importance,
+                    "tags": memory.tags,
+                    "workspace": memory.workspace,
+                    "scope": memory.scope,
+                    "created_at": memory.created_at,
+                    "updated_at": memory.updated_at,
+                    "metadata": memory.metadata,
+                }))
+            }
             Err(EngramError::NotFound(_)) => {
                 Ok(json!({"error": format!("Drawer with ID {} not found", id)}))
             }
@@ -151,6 +183,7 @@ pub fn palace_visualize(ctx: &HandlerContext, params: Value) -> Value {
         .get("workspace")
         .and_then(|v| v.as_str())
         .unwrap_or("default");
+    let ws = crate::types::normalize_workspace(workspace).unwrap_or_else(|_| workspace.to_string());
     let target_wing = params.get("wing").and_then(|v| v.as_str());
     let format_str = params
         .get("format")
@@ -165,7 +198,7 @@ pub fn palace_visualize(ctx: &HandlerContext, params: Value) -> Value {
 
     match crate::spatial::generate_palace_visualizer(
         &ctx.storage,
-        workspace,
+        &ws,
         target_wing,
         format,
         output_path,

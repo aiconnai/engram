@@ -1,5 +1,8 @@
 import { BaseResource } from "./base.js";
 import type {
+  CompressAaakOptions,
+  CompressAaakResult,
+  DecompressAaakResult,
   PalaceNavigateOptions,
   PalaceVisualizeOptions,
   PalaceVisualizeResult,
@@ -50,5 +53,24 @@ export class SpatialResource extends BaseResource {
    */
   async drawerOpen(id: number): Promise<unknown> {
     return this.caller.mcpCall("drawer_open", { id });
+  }
+
+  /**
+   * Compress text or a memory drawer into AAAK ultra-dense format (20x-30x token savings).
+   */
+  async compressAaak(options?: CompressAaakOptions): Promise<CompressAaakResult> {
+    const params: Record<string, unknown> = {
+      mode: options?.mode ?? "ultradense",
+    };
+    if (options?.text) params.text = options.text;
+    if (options?.memoryId !== undefined) params.memory_id = options.memoryId;
+    return this.caller.mcpCall("memory_compress_aaak", params) as Promise<CompressAaakResult>;
+  }
+
+  /**
+   * Decompress an AAAK-encoded text back into standard prose.
+   */
+  async decompressAaak(text: string): Promise<DecompressAaakResult> {
+    return this.caller.mcpCall("memory_decompress_aaak", { text }) as Promise<DecompressAaakResult>;
   }
 }

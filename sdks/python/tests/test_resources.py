@@ -12,6 +12,7 @@ from engram_client.resources import (
     DreamMixin,
     GraphMixin,
     MemoriesMixin,
+    ModelRoutingMixin,
     ResourceMixin,
     SearchMixin,
     SpatialMixin,
@@ -22,6 +23,9 @@ from engram_client.resources.context import ContextMixin as DirectContextMixin
 from engram_client.resources.dream import DreamMixin as DirectDreamMixin
 from engram_client.resources.graph import GraphMixin as DirectGraphMixin
 from engram_client.resources.memories import MemoriesMixin as DirectMemoriesMixin
+from engram_client.resources.model_routing import (
+    ModelRoutingMixin as DirectModelRoutingMixin,
+)
 from engram_client.resources.search import SearchMixin as DirectSearchMixin
 from engram_client.resources.spatial import SpatialMixin as DirectSpatialMixin
 from engram_client.resources.vault import VaultMixin as DirectVaultMixin
@@ -46,7 +50,10 @@ def test_resource_imports():
     assert DreamMixin is DirectDreamMixin
     assert GraphMixin is DirectGraphMixin
     assert MemoriesMixin is DirectMemoriesMixin
+    assert ModelRoutingMixin is DirectModelRoutingMixin
     assert SearchMixin is DirectSearchMixin
+    assert SpatialMixin is DirectSpatialMixin
+    assert VaultMixin is DirectVaultMixin
 
 
 def test_engram_client_inheritance():
@@ -57,6 +64,9 @@ def test_engram_client_inheritance():
     assert issubclass(EngramClient, GraphMixin)
     assert issubclass(EngramClient, ContextMixin)
     assert issubclass(EngramClient, AuthMixin)
+    assert issubclass(EngramClient, SpatialMixin)
+    assert issubclass(EngramClient, VaultMixin)
+    assert issubclass(EngramClient, ModelRoutingMixin)
     assert issubclass(EngramClient, ResourceMixin)
 
 
@@ -471,6 +481,17 @@ async def test_spatial_mixin(mock_client):
     await mock_client.drawer_open(42)
     mock_client._mcp_call.assert_awaited_with("drawer_open", {"id": 42})
 
+    await mock_client.compress_aaak(text="The database config", mode="ultradense")
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_compress_aaak", {"mode": "ultradense", "text": "The database config"}
+    )
+
+    await mock_client.decompress_aaak("[AAAK:v1:dense]\ndb cfg")
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_decompress_aaak", {"text": "[AAAK:v1:dense]\ndb cfg"}
+    )
+
+
 
 @pytest.mark.asyncio
 async def test_vault_mixin(mock_client):
@@ -558,6 +579,45 @@ async def test_spatial_palace_visualize(mock_client):
     )
     assert res["wings_count"] == 2
     assert res["total_drawers"] == 10
+
+
+@pytest.mark.asyncio
+async def test_model_routing_mixin_methods(mock_client):
+    """Test ModelRoutingMixin dispatch methods."""
+    mock_client._mcp_call = AsyncMock(
+        return_value={
+            "purpose": "embedding_text",
+            "status": "ok",
+            "provider_id": "tfidf",
+            "model_id": "tfidf-128",
+            "offline_policy": "works_offline",
+            "fallback_used": False,
+        }
+    )
+
+    res = await mock_client.model_route_resolve(
+        purpose="embedding_text",
+        preferred_provider="openai",
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "model_route_resolve",
+        {"purpose": "embedding_text", "preferred_provider": "openai"},
+    )
+    assert res["status"] == "ok"
+    assert res["provider_id"] == "tfidf"
+
+    mock_client._mcp_call = AsyncMock(
+        return_value={
+            "routes_count": 5,
+            "routes": [{"purpose": "embedding_text", "provider_id": "tfidf"}],
+        }
+    )
+    res_list = await mock_client.model_routes_list(purpose="embedding_text")
+    mock_client._mcp_call.assert_awaited_with(
+        "model_routes_list",
+        {"purpose": "embedding_text"},
+    )
+    assert res_list["routes_count"] == 5
 
 
 

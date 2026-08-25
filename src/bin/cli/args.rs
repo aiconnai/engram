@@ -158,6 +158,28 @@ pub(crate) enum Commands {
         #[command(subcommand)]
         action: crate::portability::ImportAction,
     },
+    /// Compress text, a file, or a memory into AAAK ultra-dense format
+    Compress {
+        /// Text to compress, or path to a file (if --file is passed)
+        input: Option<String>,
+        /// Treat input as a file path
+        #[arg(short, long)]
+        file: bool,
+        /// Memory ID to load directly from storage
+        #[arg(long)]
+        memory_id: Option<i64>,
+        /// Compression mode: lossless, ultradense, transcript
+        #[arg(short, long, default_value = "ultradense")]
+        mode: String,
+    },
+    /// Decompress an AAAK-encoded text or file back to standard natural language prose
+    Decompress {
+        /// AAAK text or file path
+        input: Option<String>,
+        /// Treat input as a file path
+        #[arg(short, long)]
+        file: bool,
+    },
     /// Spatial Memory Palace navigation and visualizer (Method of Loci)
     Palace {
         #[command(subcommand)]
@@ -167,6 +189,11 @@ pub(crate) enum Commands {
     Mcp {
         #[command(subcommand)]
         action: crate::mcp::McpAction,
+    },
+    /// Model routing and provider resolution (RFC 0011)
+    Routing {
+        #[command(subcommand)]
+        action: crate::routing::RoutingAction,
     },
     /// Manage local embedding models
     #[cfg(feature = "onnx-embed")]

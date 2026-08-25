@@ -19,3 +19,4 @@ export { McpResourcesResource } from "./resources.js";
 export { MultimodalResource } from "./multimodal.js";
 export { SpatialResource } from "./spatial.js";
 export { VaultResource } from "./vault.js";
+export { ModelRoutingResource } from "./model_routing.js";

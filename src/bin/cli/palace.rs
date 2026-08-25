@@ -41,7 +41,8 @@ pub(crate) enum PalaceAction {
 pub(crate) fn handle(storage: &Storage, action: PalaceAction) -> Result<()> {
     match action {
         PalaceAction::Ls { workspace, wing } => {
-            let graph = PalaceGraph::extract(storage, &workspace, wing.as_deref())?;
+            let ws = engram::types::normalize_workspace(&workspace).unwrap_or(workspace);
+            let graph = PalaceGraph::extract(storage, &ws, wing.as_deref())?;
             println!("{}", graph.render_ascii());
             Ok(())
         }
@@ -76,7 +77,7 @@ pub(crate) fn handle(storage: &Storage, action: PalaceAction) -> Result<()> {
                     }
                     Err(EngramError::NotFound(_)) => {
                         eprintln!("Error: Drawer with ID {} not found", id);
-                        Ok(())
+                        Err(EngramError::NotFound(id))
                     }
                     Err(e) => Err(e),
                 },
@@ -88,14 +89,10 @@ pub(crate) fn handle(storage: &Storage, action: PalaceAction) -> Result<()> {
             format,
             output,
         } => {
+            let ws = engram::types::normalize_workspace(&workspace).unwrap_or(workspace);
             let fmt = format.parse::<PalaceFormat>()?;
-            let res = generate_palace_visualizer(
-                storage,
-                &workspace,
-                wing.as_deref(),
-                fmt,
-                output.as_deref(),
-            )?;
+            let res =
+                generate_palace_visualizer(storage, &ws, wing.as_deref(), fmt, output.as_deref())?;
 
             if let Some(path) = &res.output_path {
                 println!("✅ Palace visualization saved to: {}", path);

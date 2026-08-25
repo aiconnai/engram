@@ -12,6 +12,7 @@ import {
   SearchResource,
   SpatialResource,
   VaultResource,
+  ModelRoutingResource,
   createDreamCallable,
   createSearchCallable,
   type DreamCallableResource,
@@ -113,6 +114,7 @@ export class EngramClient implements McpCaller {
   public readonly multimodal: MultimodalResource;
   public readonly spatial: SpatialResource;
   public readonly vault: VaultResource;
+  public readonly modelRouting: ModelRoutingResource;
 
   constructor(config: EngramConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -136,6 +138,7 @@ export class EngramClient implements McpCaller {
     this.multimodal = new MultimodalResource(this);
     this.spatial = new SpatialResource(this);
     this.vault = new VaultResource(this);
+    this.modelRouting = new ModelRoutingResource(this);
   }
 
   async mcpCall(

@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **296**
+Total tools: **300**
 
 ## Summary
 
@@ -270,6 +270,8 @@ Total tools: **296**
 | `room_search` | standard | misc | always | readOnlyHint | `query`, `wing` |
 | `drawer_open` | standard | misc | always | readOnlyHint | `id` |
 | `palace_visualize` | standard | misc | always | readOnlyHint | none |
+| `memory_compress_aaak` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_decompress_aaak` | standard | memory.admin | always | readOnlyHint | `text` |
 | `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
 | `dream_consolidation_status` | advanced | misc | always | readOnlyHint | none |
 | `dream_insights` | advanced | misc | always | readOnlyHint | none |
@@ -308,6 +310,8 @@ Total tools: **296**
 | `recent_activity` | essential | core | always | readOnlyHint | none |
 | `discover_tools` | essential | core | always | readOnlyHint | none |
 | `model_routing_status` | standard | misc | always | readOnlyHint | none |
+| `model_route_resolve` | standard | misc | always | readOnlyHint | `purpose` |
+| `model_routes_list` | standard | misc | always | readOnlyHint | none |
 
 ## Tools
 
@@ -4528,6 +4532,36 @@ Generate or export a topological visualization of the memory palace in interacti
 | `format` | `string` | no | Visualization export format ('html', 'ascii', 'svg', 'mermaid', 'json'). Defaults to 'html'. Default: `html`. Allowed: `html`, `ascii`, `svg`, `mermaid`, `json`. |
 | `output_path` | `string` | no | Optional local file path to save the rendered output. |
 
+### `memory_compress_aaak`
+
+Compress text or a memory drawer into AAAK (Agent Abbreviation Knowledge) ultra-dense format, achieving up to 20x-30x token savings for LLM prompts.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `text` | `string` | no | Raw text or dialogue transcript to compress. |
+| `memory_id` | `integer` | no | Optional memory ID to load content directly from storage. |
+| `mode` | `string` | no | Compression mode: 'lossless' (reversible table), 'ultradense' (max token reduction), or 'transcript' (dialogue turn compaction). Default: `ultradense`. Allowed: `lossless`, `ultradense`, `transcript`. |
+
+### `memory_decompress_aaak`
+
+Decompress an AAAK-encoded text back into standard natural language prose.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `text`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `text` | `string` | yes | AAAK-encoded string (with [AAAK:v1] prefix or raw shorthands) to expand. |
+
 ### `dream_run_now`
 
 Manually trigger the Dream Phase (background consolidation) across all workspaces or a specific workspace. Distills procedural rules, merges semantic duplicates, and emits thematic digests.
@@ -5158,3 +5192,32 @@ Inspect active model provider availability, embedding dimensions, reranker healt
 | `model` | `string` | no | Optional provider name to inspect (e.g. tfidf, onnx, openai). |
 | `embedding_model` | `string` | no | Optional specific model ID. |
 | `dimensions` | `integer` | no | Optional dimension configuration. |
+
+### `model_route_resolve`
+
+Deterministically resolve the active or preferred model route for a given AI capability / purpose (RFC 0011). Reports exact degradation, missing secrets, or offline policy without network calls.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `purpose`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `purpose` | `string` | yes | Model purpose to resolve. Allowed: `embedding_text`, `embedding_image`, `rerank`, `vision_describe_image`, `audio_transcribe`, `llm_council`, `token_count`, `deterministic_eval`. |
+| `preferred_provider` | `string` | no | Optional caller preference for provider (e.g. 'openai', 'voyage', 'cohere', 'tfidf', 'clip'). |
+
+### `model_routes_list`
+
+List all declared model routes and their capabilities, cost classes, latency profiles, and fallback policies (RFC 0011).
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `purpose` | `string` | no | Optional purpose filter. Allowed: `embedding_text`, `embedding_image`, `rerank`, `vision_describe_image`, `audio_transcribe`, `llm_council`, `token_count`, `deterministic_eval`. |

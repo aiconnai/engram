@@ -180,7 +180,7 @@ fn test_spatial_palace_svg_and_mermaid_render() {
 
 #[test]
 fn test_spatial_palace_target_wing_filter() {
-    let (storage, _) = setup_test_context();
+    let (storage, ctx) = setup_test_context();
     seed_test_palace(&storage, "test_workspace");
 
     let graph =
@@ -188,6 +188,178 @@ fn test_spatial_palace_target_wing_filter() {
     assert_eq!(graph.wings_count, 1);
     assert_eq!(graph.wings[0].name, "backend");
     assert_eq!(graph.wings[0].drawer_count, 3);
+    assert_eq!(graph.total_drawers, 3);
+
+    // Verify MCP palace_navigate tool also calculates accurate total_drawers
+    let nav = dispatch(
+        &ctx,
+        "palace_navigate",
+        json!({
+            "workspace": "test_workspace",
+            "wing": "backend"
+        }),
+    );
+    assert_eq!(nav["total_drawers"], 3);
+    assert_eq!(nav["wings_count"], 1);
+}
+
+#[test]
+fn test_spatial_palace_json_format_and_empty_palace() {
+    let (storage, ctx) = setup_test_context();
+
+    // 1. Empty palace test
+    let empty_graph = PalaceGraph::extract(&storage, "empty_ws", None).expect("extraction");
+    assert_eq!(empty_graph.total_drawers, 0);
+    assert_eq!(empty_graph.wings_count, 0);
+    let ascii_empty = empty_graph.render(PalaceFormat::Ascii);
+    assert!(ascii_empty.contains("Palace is currently empty"));
+
+    // 2. Populated JSON format test
+    seed_test_palace(&storage, "json_workspace");
+    let graph = PalaceGraph::extract(&storage, "json_workspace", None).expect("extraction");
+    let json_rendered = graph.render(PalaceFormat::Json);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&json_rendered).expect("valid JSON output");
+    assert_eq!(parsed["palace"], "json_workspace");
+    assert_eq!(parsed["total_drawers"], 4);
+    assert_eq!(parsed["wings_count"], 2);
+
+    // 3. Error on unsupported format via MCP dispatch
+    let res = dispatch(
+        &ctx,
+        "palace_visualize",
+        json!({
+            "workspace": "json_workspace",
+            "format": "invalid_format_xyz"
+        }),
+    );
+    assert!(res.get("error").is_some());
+}
+
+#[test]
+fn test_spatial_palace_xss_and_xml_escaping() {
+    let (storage, _) = setup_test_context();
+
+    storage
+        .with_connection(|conn| {
+            create_memory(
+                conn,
+                &CreateMemoryInput {
+                    content: "Malicious payload: </script><script>alert('xss')</script> & <test>"
+                        .to_string(),
+                    memory_type: MemoryType::Decision,
+                    tags: vec!["<tag>".to_string(), "foo&bar".to_string()],
+                    importance: Some(0.9),
+                    workspace: Some("security_ops".to_string()),
+                    scope: engram::types::MemoryScope::agent("wing:sec_ops/room:auth_x"),
+                    ..Default::default()
+                },
+            )?;
+            Ok(())
+        })
+        .expect("seed malicious memory");
+
+    let graph = PalaceGraph::extract(&storage, "security_ops", None).expect("extraction");
+
+    // HTML XSS verification
+    let html = graph.render(PalaceFormat::Html);
+    assert!(!html.contains("</script><script>alert('xss')</script>"));
+    assert!(
+        html.contains(r#"\u003c/script\u003e\u003cscript\u003e"#) || html.contains(r#"\u003c"#)
+    );
+
+    // SVG XML entity escaping verification
+    let svg = graph.render(PalaceFormat::Svg);
+    assert!(svg.contains("<svg"));
+    assert!(svg.contains("security_ops"));
+}
+
+#[test]
+fn test_spatial_palace_lifecycle_and_expiration_isolation() {
+    let (storage, ctx) = setup_test_context();
+
+    storage
+        .with_connection(|conn| {
+            // 1. Active memory
+            create_memory(
+                conn,
+                &CreateMemoryInput {
+                    content: "Active valid memory".to_string(),
+                    memory_type: MemoryType::Decision,
+                    tags: vec!["active".to_string()],
+                    workspace: Some("lifecycle_ws".to_string()),
+                    scope: engram::types::MemoryScope::agent("wing:prod/room:core"),
+                    ..Default::default()
+                },
+            )?;
+
+            // 2. Expired daily memory
+            let expired = create_memory(
+                conn,
+                &CreateMemoryInput {
+                    content: "Expired daily memory".to_string(),
+                    memory_type: MemoryType::Note,
+                    workspace: Some("lifecycle_ws".to_string()),
+                    scope: engram::types::MemoryScope::agent("wing:prod/room:core"),
+                    ..Default::default()
+                },
+            )?;
+            let past = chrono::Utc::now() - chrono::Duration::hours(2);
+            conn.execute(
+                "UPDATE memories SET expires_at = ?1 WHERE id = ?2",
+                rusqlite::params![past.to_rfc3339(), expired.id],
+            )?;
+
+            // 3. Archived memory
+            let archived = create_memory(
+                conn,
+                &CreateMemoryInput {
+                    content: "Archived memory".to_string(),
+                    memory_type: MemoryType::Note,
+                    workspace: Some("lifecycle_ws".to_string()),
+                    scope: engram::types::MemoryScope::agent("wing:prod/room:core"),
+                    ..Default::default()
+                },
+            )?;
+            conn.execute(
+                "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ?1",
+                rusqlite::params![archived.id],
+            )?;
+
+            // 4. Soft-deleted memory (valid_to IS NOT NULL)
+            let deleted = create_memory(
+                conn,
+                &CreateMemoryInput {
+                    content: "Soft deleted memory".to_string(),
+                    memory_type: MemoryType::Note,
+                    workspace: Some("lifecycle_ws".to_string()),
+                    scope: engram::types::MemoryScope::agent("wing:prod/room:core"),
+                    ..Default::default()
+                },
+            )?;
+            conn.execute(
+                "UPDATE memories SET valid_to = datetime('now') WHERE id = ?1",
+                rusqlite::params![deleted.id],
+            )?;
+
+            Ok(())
+        })
+        .expect("seed lifecycle records");
+
+    let graph = PalaceGraph::extract(&storage, "lifecycle_ws", None).expect("extraction");
+    assert_eq!(graph.total_drawers, 1);
+    assert_eq!(graph.wings[0].rooms[0].drawers.len(), 1);
+    assert_eq!(
+        graph.wings[0].rooms[0].drawers[0].title,
+        "Active valid memory"
+    );
+
+    let nav = dispatch(
+        &ctx,
+        "palace_navigate",
+        json!({"workspace": "lifecycle_ws"}),
+    );
+    assert_eq!(nav["total_drawers"], 1);
 }
 
 #[test]

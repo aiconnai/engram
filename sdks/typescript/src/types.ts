@@ -75,6 +75,29 @@ export interface PalaceVisualizeResult {
   output_path?: string;
 }
 
+export interface CompressAaakOptions {
+  text?: string;
+  memoryId?: number;
+  mode?: "lossless" | "ultradense" | "transcript";
+}
+
+export interface CompressAaakResult {
+  compressed: string;
+  original_bytes: number;
+  compressed_bytes: number;
+  original_tokens: number;
+  compressed_tokens: number;
+  compression_ratio: string;
+  token_savings_pct: string;
+  mode: string;
+}
+
+export interface DecompressAaakResult {
+  decompressed: string;
+  original_length: number;
+  expanded_length: number;
+}
+
 export interface RoomSearchOptions {
   wing: string;
   query: string;
@@ -621,3 +644,65 @@ export interface VaultImportReport {
   files?: VaultFileDetail[];
   error?: string;
 }
+
+export type ModelPurpose =
+  | 'embedding_text'
+  | 'embedding_image'
+  | 'rerank'
+  | 'vision_describe_image'
+  | 'audio_transcribe'
+  | 'llm_council'
+  | 'token_count'
+  | 'deterministic_eval';
+
+export type RouteStatus =
+  | 'ok'
+  | 'missing_secret'
+  | 'feature_disabled'
+  | 'model_missing'
+  | 'provider_unavailable'
+  | 'fallback_used'
+  | 'unavailable';
+
+export interface ModelRouteResolveOptions {
+  purpose: ModelPurpose;
+  preferredProvider?: string;
+}
+
+export interface ModelRouteResolution {
+  purpose: ModelPurpose;
+  status: RouteStatus;
+  provider_id: string;
+  model_id: string;
+  offline_policy: string;
+  fallback_used: boolean;
+  fallback_available?: string | null;
+  reason?: string | null;
+  required_secret?: string | null;
+  warnings?: string[];
+}
+
+export interface ModelRouteDescriptor {
+  purpose: ModelPurpose;
+  provider_id: string;
+  model_id: string;
+  capability: string;
+  cost_class: string;
+  latency_class: string;
+  offline_policy: string;
+  fallback_policy: string;
+  feature_flag?: string | null;
+  requires_secret: boolean;
+  required_secret_name?: string | null;
+  fallback_route_provider?: string | null;
+}
+
+export interface ModelRoutesListOptions {
+  purpose?: ModelPurpose;
+}
+
+export interface ModelRoutesListResult {
+  routes_count: number;
+  routes: ModelRouteDescriptor[];
+}
+

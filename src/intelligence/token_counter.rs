@@ -31,6 +31,12 @@ pub struct TiktokenCounter {
     encoding: TokenEncoding,
 }
 
+impl Default for TiktokenCounter {
+    fn default() -> Self {
+        Self::new(TokenEncoding::Cl100kBase)
+    }
+}
+
 impl TiktokenCounter {
     /// Create a counter for the given encoding.
     pub fn new(encoding: TokenEncoding) -> Self {
@@ -54,6 +60,11 @@ impl TiktokenCounter {
     /// Return the encoding identifier string (e.g. `"cl100k_base"`).
     pub fn encoding_name(&self) -> &'static str {
         self.encoding.as_str()
+    }
+
+    /// Count the number of tokens in `text`.
+    pub fn count_tokens(&self, text: &str) -> usize {
+        self.encode(text).len()
     }
 
     /// Encode `text` to token IDs.

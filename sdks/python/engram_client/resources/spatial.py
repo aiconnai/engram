@@ -65,3 +65,23 @@ class SpatialMixin(ResourceMixin):
         if output_path is not None:
             params["output_path"] = output_path
         return await self._mcp_call("palace_visualize", params)
+
+    async def compress_aaak(
+        self,
+        *,
+        text: str | None = None,
+        memory_id: int | None = None,
+        mode: str = "ultradense",
+    ) -> dict[str, Any]:
+        """Compress text or a memory drawer into AAAK ultra-dense format (20x-30x token savings)."""
+        params: dict[str, Any] = {"mode": mode}
+        if text is not None:
+            params["text"] = text
+        if memory_id is not None:
+            params["memory_id"] = memory_id
+        return await self._mcp_call("memory_compress_aaak", params)
+
+    async def decompress_aaak(self, text: str) -> dict[str, Any]:
+        """Decompress an AAAK-encoded text back to standard prose."""
+        return await self._mcp_call("memory_decompress_aaak", {"text": text})
+

@@ -14,6 +14,7 @@ use crate::realtime::RealtimeManager;
 use crate::search::{FuzzyEngine, HnswIndex, SearchConfig, SearchResultCache};
 use crate::storage::Storage;
 
+pub mod aaak;
 pub mod agent;
 pub mod agent_memory_contract;
 #[cfg(feature = "dream-phase")]
@@ -412,6 +413,10 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_suggest_tags" => misc::memory_suggest_tags(ctx, params),
         "memory_auto_tag" => misc::memory_auto_tag(ctx, params),
 
+        // ── Model Routing (RFC 0011) ──────────────────────────────────────────
+        "model_route_resolve" => model_routing::model_route_resolve(ctx, params),
+        "model_routes_list" => model_routing::model_routes_list(ctx, params),
+
         // ── Langfuse (feature-gated) ──────────────────────────────────────────
         #[cfg(feature = "langfuse")]
         "langfuse_connect" => misc::langfuse_connect(ctx, params),
@@ -530,9 +535,11 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_expand" => search::memory_expand(ctx, params),
         "recent_activity" => search::recent_activity(ctx, params),
 
-        // ── Compression (semantic compression + context packing + consolidation) ─
+        // ── Compression (semantic compression + context packing + consolidation + AAAK) ─
         "memory_compress" => compression::memory_compress(ctx, params),
         "memory_decompress" => compression::memory_decompress(ctx, params),
+        "memory_compress_aaak" => aaak::memory_compress_aaak(ctx, params),
+        "memory_decompress_aaak" => aaak::memory_decompress_aaak(ctx, params),
         "memory_compress_for_context" => compression::memory_compress_for_context(ctx, params),
         "memory_consolidate" => compression::memory_consolidate(ctx, params),
         "memory_synthesis" => compression::memory_synthesis(ctx, params),

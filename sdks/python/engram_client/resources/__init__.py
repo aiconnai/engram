@@ -12,6 +12,7 @@ from .resources import McpResourcesMixin
 from .search import SearchMixin
 from .spatial import SpatialMixin
 from .vault import VaultMixin
+from .model_routing import ModelRoutingMixin
 
 __all__ = [
     "AuthMixin",
@@ -21,6 +22,7 @@ __all__ = [
     "GraphMixin",
     "McpResourcesMixin",
     "MemoriesMixin",
+    "ModelRoutingMixin",
     "MultimodalMixin",
     "ResourceMixin",
     "SearchMixin",
