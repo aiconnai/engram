@@ -85,23 +85,6 @@ struct AbbrevPair {
 }
 
 static ABBREVIATIONS: &[AbbrevPair] = &[
-    // Dialogue & Roles
-    AbbrevPair {
-        full: "assistant",
-        short: "A",
-    },
-    AbbrevPair {
-        full: "user",
-        short: "U",
-    },
-    AbbrevPair {
-        full: "system",
-        short: "S",
-    },
-    AbbrevPair {
-        full: "developer",
-        short: "D",
-    },
     // Programming & Concepts
     AbbrevPair {
         full: "function",
@@ -417,7 +400,7 @@ static ABBREVIATIONS: &[AbbrevPair] = &[
     },
     AbbrevPair {
         full: "timeout",
-        short: "to",
+        short: "tmout",
     },
     AbbrevPair {
         full: "version",
@@ -576,7 +559,26 @@ static CONVERSATIONAL_FILLERS: &[&str] = &[
 static RE_WHITESPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[ \t]+").unwrap());
 static RE_MULTILINE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n{3,}").unwrap());
 static RE_TRANSCRIPT_ROLE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"(?i)\[?(user|assistant|system|developer)\]?[:\s]+"#).unwrap());
+    Lazy::new(|| Regex::new(r#"(?im)^\[?(user|assistant|system|developer)\]?[:\s]+"#).unwrap());
+
+static FILLER_REGEXES: Lazy<Vec<Regex>> = Lazy::new(|| {
+    CONVERSATIONAL_FILLERS
+        .iter()
+        .map(|f| Regex::new(&format!(r"(?i){}", regex::escape(f))).unwrap())
+        .collect()
+});
+
+static ABBREV_REGEXES: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
+    ABBREVIATIONS
+        .iter()
+        .map(|pair| {
+            (
+                Regex::new(&format!(r"(?i)\b{}\b", regex::escape(pair.full))).unwrap(),
+                pair.short,
+            )
+        })
+        .collect()
+});
 
 /// Core AAAK compressor engine.
 pub struct AaakCompressor;
@@ -648,17 +650,33 @@ impl AaakCompressor {
 
         let mut expanded = stripped.to_string();
 
-        // Expand transcript roles
+        // 1. Pre-replace multi-character punctuation/symbolic shorthands safely before word splitting
+        expanded = expanded
+            .replace("w/o", "without")
+            .replace("w/", "with")
+            .replace("e.g.", "for example")
+            .replace("i.e.", "that is")
+            .replace(".:", "therefore")
+            .replace("tmout", "timeout");
+
+        // 2. Expand transcript roles
         expanded = expanded
             .replace("[U] ", "User: ")
             .replace("[A] ", "Assistant: ")
             .replace("[S] ", "System: ")
             .replace("[D] ", "Developer: ");
 
-        // Reverse abbreviations map (preserve canonical first full form)
+        // 3. Reverse abbreviations map (preserve canonical first full form, exclude bare single-letters and 'to')
         let mut reverse_map: HashMap<&'static str, &'static str> = HashMap::new();
         for pair in ABBREVIATIONS {
-            reverse_map.entry(pair.short).or_insert(pair.full);
+            if pair.short != "to"
+                && pair.short != "A"
+                && pair.short != "U"
+                && pair.short != "S"
+                && pair.short != "D"
+            {
+                reverse_map.entry(pair.short).or_insert(pair.full);
+            }
         }
 
         let words: Vec<&str> = expanded
@@ -704,11 +722,8 @@ impl AaakCompressor {
     /// Compresses text using lossless deterministic substitution.
     fn compress_lossless(text: &str) -> String {
         let mut result = text.to_string();
-        for pair in ABBREVIATIONS {
-            let pattern = format!(r"(?i)\b{}\b", regex::escape(pair.full));
-            if let Ok(re) = Regex::new(&pattern) {
-                result = re.replace_all(&result, pair.short).to_string();
-            }
+        for (re, short) in ABBREV_REGEXES.iter() {
+            result = re.replace_all(&result, *short).to_string();
         }
         result
     }
@@ -718,19 +733,13 @@ impl AaakCompressor {
         let mut working = text.to_string();
 
         // 1. Remove conversational fillers
-        for filler in CONVERSATIONAL_FILLERS {
-            let pattern = format!(r"(?i){}", regex::escape(filler));
-            if let Ok(re) = Regex::new(&pattern) {
-                working = re.replace_all(&working, "").to_string();
-            }
+        for re in FILLER_REGEXES.iter() {
+            working = re.replace_all(&working, "").to_string();
         }
 
         // 2. Apply abbreviation dictionary
-        for pair in ABBREVIATIONS {
-            let pattern = format!(r"(?i)\b{}\b", regex::escape(pair.full));
-            if let Ok(re) = Regex::new(&pattern) {
-                working = re.replace_all(&working, pair.short).to_string();
-            }
+        for (re, short) in ABBREV_REGEXES.iter() {
+            working = re.replace_all(&working, *short).to_string();
         }
 
         // 3. Compact whitespace and empty lines
@@ -876,5 +885,40 @@ mod tests {
         assert!(res.compressed.contains("fn"));
         assert!(res.compressed.contains("repo"));
         assert!(res.compressed.contains("iface"));
+    }
+
+    #[test]
+    fn test_punctuation_shorthands_and_no_collision() {
+        let input = "Send request to server w/ token and w/o delay e.g. for testing.";
+        let decompressed = AaakCompressor::decompress(input);
+
+        // Preposition 'to' is preserved as 'to' (not converted to 'timeout')
+        assert!(decompressed.contains("to server"));
+        // w/ expanded to with, w/o expanded to without, e.g. expanded to for example
+        assert!(decompressed.contains("with token"));
+        assert!(decompressed.contains("without delay"));
+        assert!(decompressed.contains("for example"));
+    }
+
+    #[test]
+    fn test_indefinite_article_a_preservation() {
+        let input = "A database configuration was created.";
+        let res = AaakCompressor::compress(input, AaakMode::Lossless);
+        let decompressed = AaakCompressor::decompress(&res.compressed);
+
+        // Leading 'A' must remain 'A', not expand to 'Assistant'
+        assert!(decompressed.starts_with("A database"));
+    }
+
+    #[test]
+    fn test_unicode_and_empty_string_safety() {
+        let empty_res = AaakCompressor::compress("", AaakMode::Lossless);
+        assert_eq!(AaakCompressor::decompress(&empty_res.compressed), "");
+
+        let unicode_input = "Configuração do banco de dados na aplicação com autenticação.";
+        let res = AaakCompressor::compress(unicode_input, AaakMode::Lossless);
+        let decomp = AaakCompressor::decompress(&res.compressed);
+        assert!(decomp.contains("Configuração"));
+        assert!(decomp.contains("aplicação"));
     }
 }

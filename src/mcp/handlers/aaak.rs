@@ -24,7 +24,16 @@ pub fn memory_compress_aaak(ctx: &HandlerContext, params: Value) -> Value {
     } else if let Some(mem_id) = memory_id_opt {
         let fetch_res = ctx.storage.with_connection(|conn| get_memory(conn, mem_id));
         match fetch_res {
-            Ok(mem) => mem.content,
+            Ok(mem) => {
+                if let Some(ref principal) = ctx.principal {
+                    if !principal.allows_workspace(Some(&mem.workspace)) {
+                        return json!({
+                            "error": format!("Permission denied: cannot access memory in workspace '{}'", mem.workspace)
+                        });
+                    }
+                }
+                mem.content
+            }
             Err(EngramError::NotFound(id)) => {
                 return json!({
                     "error": format!("Memory not found: {}", id)

@@ -29,6 +29,7 @@ pub mod multimodal;
 pub mod portability;
 pub mod realtime;
 pub mod routing;
+pub use routing as model_routing;
 pub mod search;
 #[cfg(feature = "snapshot")]
 pub mod snapshot;

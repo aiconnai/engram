@@ -228,7 +228,7 @@ impl ModelRouter {
                 latency_class: LatencyClass::Background,
                 offline_policy: OfflinePolicy::RequiresLocalModel,
                 fallback_policy: FallbackPolicy::None,
-                feature_flag: Some("audio".to_string()),
+                feature_flag: Some("multimodal".to_string()),
                 requires_secret: false,
                 required_secret_name: None,
                 fallback_route_provider: None,

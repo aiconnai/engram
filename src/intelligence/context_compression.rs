@@ -10,6 +10,8 @@
 //! - `Heavy`  — key facts only (entities, numbers, dates)
 
 use crate::intelligence::token_counter::TiktokenCounter;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -48,6 +50,13 @@ const FILLER_PHRASES: &[&str] = &[
     "kind of",
     "sort of",
 ];
+
+static FILLER_PHRASE_REGEXES: Lazy<Vec<Regex>> = Lazy::new(|| {
+    FILLER_PHRASES
+        .iter()
+        .map(|phrase| Regex::new(&format!(r"(?i)\b{}\b", regex::escape(phrase))).unwrap())
+        .collect()
+});
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -184,36 +193,9 @@ impl ContextCompressor {
     pub fn compress_light(text: &str) -> String {
         let mut result = text.to_string();
 
-        // Remove filler phrases first (case-insensitive, whole-phrase match)
-        for phrase in FILLER_PHRASES {
-            let lower = result.to_lowercase();
-            // Find and remove all occurrences (greedy from the right to avoid
-            // index invalidation when the string shrinks).
-            let mut positions: Vec<usize> = lower.match_indices(phrase).map(|(i, _)| i).collect();
-            positions.sort_unstable_by(|a, b| b.cmp(a)); // reverse order
-            for pos in positions {
-                // Only remove if the match is surrounded by non-alphabetic chars
-                // to avoid partial-word removal.
-                let before_ok = pos == 0
-                    || !result
-                        .as_bytes()
-                        .get(pos - 1)
-                        .copied()
-                        .map(|b| b.is_ascii_alphabetic())
-                        .unwrap_or(false);
-                let after_pos = pos + phrase.len();
-                let after_ok = after_pos >= result.len()
-                    || !result
-                        .as_bytes()
-                        .get(after_pos)
-                        .copied()
-                        .map(|b| b.is_ascii_alphabetic())
-                        .unwrap_or(false);
-
-                if before_ok && after_ok {
-                    result.drain(pos..after_pos);
-                }
-            }
+        // Remove filler phrases first (case-insensitive, whole-word/phrase match)
+        for re in FILLER_PHRASE_REGEXES.iter() {
+            result = re.replace_all(&result, "").to_string();
         }
 
         // Drop standalone stopwords (whole-word, case-insensitive)
@@ -384,9 +366,9 @@ impl ContextCompressor {
             let levels = [
                 CompressionLevel::None,
                 CompressionLevel::Light,
+                CompressionLevel::Aaak,
                 CompressionLevel::Medium,
                 CompressionLevel::Heavy,
-                CompressionLevel::Aaak,
             ];
 
             let mut chosen: Option<(CompressionLevel, String, usize)> = None;
@@ -831,5 +813,15 @@ mod tests {
             compressed.contains("First sentence here"),
             "medium compression should keep first sentence"
         );
+    }
+
+    #[test]
+    fn test_compress_light_multilingual_utf8() {
+        let text = "Basically, a straße and an İstanbul address are clearly important.";
+        let compressed = ContextCompressor::compress_light(text);
+        assert!(compressed.contains("straße"));
+        assert!(compressed.contains("İstanbul"));
+        assert!(!compressed.to_lowercase().contains("basically"));
+        assert!(!compressed.to_lowercase().contains("clearly"));
     }
 }

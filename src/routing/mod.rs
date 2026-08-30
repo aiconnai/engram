@@ -7,7 +7,7 @@ pub mod model;
 pub mod resolver;
 pub mod types;
 
-pub use model::{inspect_model_routing, ModelRoutingReport, ProviderStatus};
+pub use model::{inspect_model_routing, ModelRoutingReport, ProviderCapability, ProviderStatus};
 pub use resolver::ModelRouter;
 pub use types::{
     CostClass, FallbackPolicy, LatencyClass, ModelCapability, ModelPurpose, ModelRoute,

@@ -120,18 +120,38 @@ impl TokenChunker {
     /// Create a chunker with the given `chunk_size` and `chunk_overlap` (both
     /// in tokens).
     ///
-    /// # Panics
-    /// Panics if `chunk_overlap >= chunk_size`.
+    /// Clamps `chunk_size` to minimum 1 and `chunk_overlap` to `< chunk_size`.
     pub fn new(counter: TiktokenCounter, chunk_size: usize, chunk_overlap: usize) -> Self {
-        assert!(
-            chunk_overlap < chunk_size,
-            "chunk_overlap must be < chunk_size"
-        );
+        let size = chunk_size.max(1);
+        let overlap = chunk_overlap.min(size.saturating_sub(1));
         Self {
+            counter,
+            chunk_size: size,
+            chunk_overlap: overlap,
+        }
+    }
+
+    /// Safely attempt to create a chunker, returning an error if `chunk_size == 0` or `chunk_overlap >= chunk_size`.
+    pub fn try_new(
+        counter: TiktokenCounter,
+        chunk_size: usize,
+        chunk_overlap: usize,
+    ) -> crate::error::Result<Self> {
+        if chunk_size == 0 {
+            return Err(crate::error::EngramError::InvalidInput(
+                "chunk_size must be greater than 0".to_string(),
+            ));
+        }
+        if chunk_overlap >= chunk_size {
+            return Err(crate::error::EngramError::InvalidInput(
+                "chunk_overlap must be strictly less than chunk_size".to_string(),
+            ));
+        }
+        Ok(Self {
             counter,
             chunk_size,
             chunk_overlap,
-        }
+        })
     }
 
     /// Split `text` into overlapping token chunks.

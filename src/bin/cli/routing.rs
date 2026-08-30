@@ -35,9 +35,10 @@ pub(crate) fn handle(action: RoutingAction) -> Result<()> {
 
     match action {
         RoutingAction::List { purpose, format } => {
-            let filter = purpose
-                .as_deref()
-                .and_then(|s| ModelPurpose::from_str(s).ok());
+            let filter = match purpose.as_deref() {
+                Some(s) => Some(ModelPurpose::from_str(s)?),
+                None => None,
+            };
             let mut routes = router.list_routes();
             if let Some(target) = filter {
                 routes.retain(|r| r.purpose == target);

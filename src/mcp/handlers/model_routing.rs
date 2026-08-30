@@ -31,10 +31,14 @@ pub fn model_route_resolve(_ctx: &HandlerContext, params: Value) -> Value {
 
 /// List all declared model routes and their metadata.
 pub fn model_routes_list(_ctx: &HandlerContext, params: Value) -> Value {
-    let filter_purpose = params
-        .get("purpose")
-        .and_then(|v| v.as_str())
-        .and_then(|s| ModelPurpose::from_str(s).ok());
+    let filter_purpose = if let Some(p_val) = params.get("purpose").and_then(|v| v.as_str()) {
+        match ModelPurpose::from_str(p_val) {
+            Ok(p) => Some(p),
+            Err(e) => return json!({ "error": format!("Invalid purpose '{}': {}", p_val, e) }),
+        }
+    } else {
+        None
+    };
 
     let router = ModelRouter::new();
     let mut routes = router.list_routes();

@@ -909,7 +909,15 @@ impl WalRecoveryEngine {
         let mut commits_applied = 0;
         let mut last_frame_applied = None;
 
+        const MAX_ALLOWED_DB_PAGES: u32 = 100_000_000;
+
         for frame in &candidate_frames {
+            if frame.page_number == 0 || frame.page_number > MAX_ALLOWED_DB_PAGES {
+                return Err(WalReplicationError::InvalidFrame {
+                    index: frame.page_number,
+                    reason: format!("invalid frame page_number: {}", frame.page_number),
+                });
+            }
             let offset = (frame.page_number as u64 - 1) * page_size as u64;
             file.seek(SeekFrom::Start(offset))?;
             file.write_all(&frame.data)?;
