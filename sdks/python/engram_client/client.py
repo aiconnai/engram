@@ -88,3 +88,12 @@ class EngramClient(
             method=method,
             params=params,
         )
+
+    async def permission_mode_status(
+        self, tool: str | None = None
+    ) -> dict[str, Any]:
+        """Inspect the active MCP permission mode (RFC 0010) and required modes for tools."""
+        params: dict[str, Any] = {}
+        if tool:
+            params["tool"] = tool
+        return await self._mcp_call("permission_mode_status", params)

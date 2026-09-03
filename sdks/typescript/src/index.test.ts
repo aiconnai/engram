@@ -993,6 +993,44 @@ describe("EngramClient", () => {
       expect(res.routes[0].provider_id).toBe("tfidf");
     });
   });
+
+  describe("Permission Modes (RFC 0010)", () => {
+    it("should query permission_mode_status without arguments", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          active_mode: "scoped_write",
+          configured_via: "env",
+          modes_hierarchy: ["read_only", "scoped_write", "maintenance", "admin"],
+          total_tools_count: 100,
+          allowed_tools_count: 85,
+        })
+      );
+
+      const res = await client.permissionModeStatus();
+      expect(requestMethod(0)).toBe("permission_mode_status");
+      expect(requestArguments(0)).toEqual({});
+      expect(res.active_mode).toBe("scoped_write");
+      expect(res.allowed_tools_count).toBe(85);
+    });
+
+    it("should query permission_mode_status for a specific tool", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          active_mode: "scoped_write",
+          configured_via: "env",
+          tool: "memory_delete",
+          required_mode: "admin",
+          allowed: false,
+        })
+      );
+
+      const res = await client.permissionModeStatus("memory_delete");
+      expect(requestMethod(0)).toBe("permission_mode_status");
+      expect(requestArguments(0)).toEqual({ tool: "memory_delete" });
+      expect(res.tool).toBe("memory_delete");
+      expect(res.allowed).toBe(false);
+    });
+  });
 });
 
 

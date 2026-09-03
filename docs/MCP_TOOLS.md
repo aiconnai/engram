@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **300**
+Total tools: **301**
 
 ## Summary
 
@@ -312,6 +312,7 @@ Total tools: **300**
 | `model_routing_status` | standard | misc | always | readOnlyHint | none |
 | `model_route_resolve` | standard | misc | always | readOnlyHint | `purpose` |
 | `model_routes_list` | standard | misc | always | readOnlyHint | none |
+| `permission_mode_status` | standard | misc | always | readOnlyHint | none |
 
 ## Tools
 
@@ -5221,3 +5222,17 @@ List all declared model routes and their capabilities, cost classes, latency pro
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `purpose` | `string` | no | Optional purpose filter. Allowed: `embedding_text`, `embedding_image`, `rerank`, `vision_describe_image`, `audio_transcribe`, `llm_council`, `token_count`, `deterministic_eval`. |
+
+### `permission_mode_status`
+
+Inspect the active MCP permission mode (RFC 0010) and required modes for tools.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `tool` | `string` | no | Optional tool name to check permission eligibility for. |

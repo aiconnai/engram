@@ -599,6 +599,12 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         // ── Model Routing (RFC 0011) ─────────────────────────────────────────
         "model_routing_status" => model_routing::model_routing_status(ctx, params),
 
+        // ── Permission Modes (RFC 0010) ───────────────────────────────────────
+        "permission_mode_status" => {
+            let tool_opt = params.get("tool").and_then(|v| v.as_str());
+            crate::mcp::permission::permission_mode_status_report(tool_opt)
+        }
+
         _ => crate::mcp::error::ToolError::tool_not_found(tool_name).into_value(),
     }
 }

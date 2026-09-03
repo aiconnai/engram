@@ -94,6 +94,7 @@ import type {
   VaultExportReport,
   VaultImportOptions,
   VaultImportReport,
+  PermissionModeStatusResult,
 } from "./types.js";
 
 export class EngramClient implements McpCaller {
@@ -899,6 +900,16 @@ export class EngramClient implements McpCaller {
     options: Omit<VaultImportOptions, "confirm" | "dryRun">
   ): Promise<VaultImportReport> {
     return this.vault.preview(options);
+  }
+
+  /**
+   * Inspect the active MCP permission mode (RFC 0010) and required modes for tools.
+   */
+  permissionModeStatus(tool?: string): Promise<PermissionModeStatusResult> {
+    return this.mcpCall(
+      "permission_mode_status",
+      tool ? { tool } : {}
+    ) as Promise<PermissionModeStatusResult>;
   }
 }
 

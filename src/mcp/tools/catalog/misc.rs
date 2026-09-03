@@ -654,4 +654,19 @@ pub const TOOLS: &[ToolDef] = &[
             annotations: ToolAnnotations::read_only(),
             tier: ToolTier::Standard,
         },
+        ToolDef {
+            name: "permission_mode_status",
+            description: "Inspect the active MCP permission mode (RFC 0010) and required modes for tools.",
+            schema: r#"{
+                "type": "object",
+                "properties": {
+                    "tool": {
+                        "type": "string",
+                        "description": "Optional tool name to check permission eligibility for."
+                    }
+                }
+            }"#,
+            annotations: ToolAnnotations::read_only(),
+            tier: ToolTier::Standard,
+        },
 ];

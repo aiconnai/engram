@@ -620,4 +620,38 @@ async def test_model_routing_mixin_methods(mock_client):
     assert res_list["routes_count"] == 5
 
 
+@pytest.mark.asyncio
+async def test_permission_mode_status(mock_client: EngramClient) -> None:
+    mock_client._mcp_call = AsyncMock(
+        return_value={
+            "active_mode": "scoped_write",
+            "configured_via": "env",
+            "modes_hierarchy": ["read_only", "scoped_write", "maintenance", "admin"],
+            "total_tools_count": 300,
+            "allowed_tools_count": 280,
+        }
+    )
+    res = await mock_client.permission_mode_status()
+    mock_client._mcp_call.assert_awaited_with(
+        "permission_mode_status",
+        {},
+    )
+    assert res["active_mode"] == "scoped_write"
+
+    mock_client._mcp_call = AsyncMock(
+        return_value={
+            "active_mode": "scoped_write",
+            "tool": "memory_delete",
+            "required_mode": "admin",
+            "allowed": False,
+        }
+    )
+    res_tool = await mock_client.permission_mode_status(tool="memory_delete")
+    mock_client._mcp_call.assert_awaited_with(
+        "permission_mode_status",
+        {"tool": "memory_delete"},
+    )
+    assert res_tool["allowed"] is False
+
+
 

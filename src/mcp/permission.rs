@@ -15,11 +15,14 @@ const ADMIN_TOOLS: &[&str] = &[
     "agent_register",
     "embedding_cache_clear",
     "identity_delete",
+    "memory_cache_clear",
     "memory_delete",
     "memory_delete_batch",
+    "memory_events_clear",
     "memory_grant_access",
     "memory_revoke_access",
     "retention_policy_delete",
+    "search_cache_clear",
     "session_delete",
     "workspace_delete",
 ];
@@ -30,6 +33,7 @@ const MAINTENANCE_TOOLS: &[&str] = &[
     "memory_archive_old",
     "memory_cleanup_expired",
     "memory_embedding_migrate",
+    "memory_migrate_images",
     "memory_rebuild_crossrefs",
     "memory_rebuild_embeddings",
     "pending_injections_cleanup",
@@ -113,6 +117,57 @@ pub fn permission_denial_from_env(tool_name: &str) -> Option<Value> {
     };
 
     permission_denial_for_mode(tool_name, mode)
+}
+
+/// Returns the active permission mode configured in the process environment, if any.
+pub fn active_permission_mode() -> Option<PermissionMode> {
+    std::env::var(MODE_ENV)
+        .ok()
+        .and_then(|raw| PermissionMode::parse(&raw))
+}
+
+/// Inspect permission modes and tool requirements report (RFC 0010).
+pub fn permission_mode_status_report(target_tool: Option<&str>) -> Value {
+    let active = active_permission_mode();
+    let active_str = active.map(|m| m.as_str()).unwrap_or("unconstrained");
+
+    if let Some(tool) = target_tool {
+        let req = required_mode(tool);
+        let allowed = match (active, req) {
+            (Some(act), Some(r)) => act.allows(r),
+            (None, _) => true,
+            _ => false,
+        };
+        json!({
+            "active_mode": active_str,
+            "configured_via": if active.is_some() { "env" } else { "default_unconstrained" },
+            "tool": tool,
+            "required_mode": req.map(|r| r.as_str()),
+            "allowed": allowed
+        })
+    } else {
+        let all_tools = TOOL_DEFINITIONS.len();
+        let allowed_count = if let Some(act) = active {
+            TOOL_DEFINITIONS
+                .iter()
+                .filter(|t| {
+                    required_mode(t.name)
+                        .map(|r| act.allows(r))
+                        .unwrap_or(false)
+                })
+                .count()
+        } else {
+            all_tools
+        };
+
+        json!({
+            "active_mode": active_str,
+            "configured_via": if active.is_some() { "env" } else { "default_unconstrained" },
+            "modes_hierarchy": ["read_only", "scoped_write", "maintenance", "admin"],
+            "total_tools_count": all_tools,
+            "allowed_tools_count": allowed_count
+        })
+    }
 }
 
 fn permission_denied(tool_name: &str, current: PermissionMode, required: PermissionMode) -> Value {
@@ -267,6 +322,19 @@ pub fn check_tool_authorization(
     params: &Value,
     principal: Option<&TransportPrincipal>,
 ) -> Option<Value> {
+    // 0. Per-call explicit permission mode override (RFC 0010 per-request override)
+    if let Some(mode_str) = params
+        .get("_permission_mode")
+        .or_else(|| params.get("permission_mode"))
+        .and_then(|v| v.as_str())
+    {
+        if let Some(mode) = PermissionMode::parse(mode_str) {
+            if let Some(denial) = permission_denial_for_mode(tool_name, mode) {
+                return Some(denial);
+            }
+        }
+    }
+
     // 1. Env-level permission mode
     if let Some(denial) = permission_denial_from_env(tool_name) {
         return Some(denial);

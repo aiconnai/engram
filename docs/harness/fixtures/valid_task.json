@@ -1,0 +1,33 @@
+{
+  "schema_version": "task-v1",
+  "task_id": "task-20260721-agent-harness-001",
+  "target_sha": "0123456789abcdef0123456789abcdef01234567",
+  "base_sha": "abcdef0123456789abcdef0123456789abcdef01",
+  "allowed_capabilities": [
+    "workspace_read",
+    "workspace_write",
+    "test_exec",
+    "lint_exec",
+    "format_exec",
+    "sandbox_container"
+  ],
+  "required_checks": [
+    "fmt",
+    "clippy",
+    "test_lib",
+    "doctor"
+  ],
+  "timeout_seconds": 300,
+  "allowed_paths": [
+    "docs/harness/",
+    "src/"
+  ],
+  "protected_paths": [
+    ".git/",
+    ".github/workflows/"
+  ],
+  "metadata": {
+    "author": "engram-harness-v1",
+    "environment": "isolated-container"
+  }
+}

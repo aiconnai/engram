@@ -706,3 +706,16 @@ export interface ModelRoutesListResult {
   routes: ModelRouteDescriptor[];
 }
 
+export type PermissionMode = 'read_only' | 'scoped_write' | 'maintenance' | 'admin';
+
+export interface PermissionModeStatusResult {
+  active_mode: string;
+  configured_via: string;
+  tool?: string;
+  required_mode?: string;
+  allowed?: boolean;
+  modes_hierarchy?: string[];
+  total_tools_count?: number;
+  allowed_tools_count?: number;
+}
+

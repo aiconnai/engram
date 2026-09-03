@@ -140,4 +140,6 @@ export type {
   ModelRouteDescriptor,
   ModelRoutesListOptions,
   ModelRoutesListResult,
+  PermissionMode,
+  PermissionModeStatusResult,
 } from "./types.js";
