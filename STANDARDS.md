@@ -151,5 +151,43 @@ All recurring errors must be documented in [ERRORS_AND_LESSONS.md](ERRORS_AND_LE
 
 ---
 
-**Created:** 2026-03-09
-**Last Updated:** 2026-03-09
+## 11. Embedded Storage & Concurrency Discipline (SQLite / WAL)
+
+### 11.1. Scoped Connection Lifecycle Across Async Boundaries
+- **No `Connection` across `.await`:** `rusqlite::Connection` handles must never be held across Tokio await points (`!Send`/`!Sync`). Isolate database operations to synchronous closures checked out from a connection pool (`with_connection(|conn| ...)`).
+- **Zero network I/O inside transactions:** Never issue HTTP calls, LLM requests, embedding API queries, or remote sync operations while holding an open transaction. Keep locks bounded to microsecond durations to prevent `SQLITE_BUSY` contention across concurrent readers and writers.
+
+### 11.2. Upper-Bound Defense on Byte Replay (Sparse-File Attack)
+- **Upper-bound page checks:** When streaming or replaying WAL frames from peers or untrusted sources, validate that `page_number` does not exceed `MAX_ALLOWED_DB_PAGES` (e.g., 100,000,000 pages). Seeking to arbitrary `u32` offsets silently allocates multi-terabyte sparse files on disk, exhausting backup systems and storage quotas.
+- **Saturating decompression bomb guards:** Enforce streaming byte limits on decompressed archives using saturating readers (`read_entry_limited`) rather than checking size post-inflation.
+
+---
+
+## 12. Multilingual Unicode & String Safety
+
+### 12.1. The Case-Folding Slicing Trap
+- **Never slice original strings using byte offsets calculated on lowercased or normalized text (`&s[start..end]` or `s.drain(start..end)`):** Multi-byte Unicode characters alter byte lengths upon casing changes (e.g., German `ß` [2 bytes] vs. uppercase `ẞ` [3 bytes] or `SS` [2 ASCII bytes]; Greek and Turkish casing variances).
+- **Safe string manipulation:** Always slice using character iterators, Unicode grapheme clusters (`unicode-segmentation`), or regex engine word boundaries (`\b`).
+
+---
+
+## 13. Agentic Tool Governance & Model Transparency
+
+### 13.1. Anti-IDOR Tenant Enforcement on Integer Primary Keys
+- **Autonomous agents traverse numerical IDs (`id: 123`):** Every lookup by primary key must enforce tenant and workspace verification against the authenticated principal (`principal.allows_workspace`).
+- **Fail-closed permission ladders:** Enforce runtime permission modes (`read_only < scoped_write < maintenance < admin`) at the dispatcher layer so agents cannot execute mutating actions in read-only sessions.
+- **Case-insensitive reserved metadata shielding:** Prevent callers from spoofing system governance keys by casing variations (reject `Workspace`, `_Scope`, `Principal` case-insensitively).
+
+### 13.2. Zero Silent Degradation in Model Fallbacks
+- **No silent downgrades:** When API keys are missing or compile-time features are disabled, never silently fall back to a lower-tier provider without returning explicit degradation metadata.
+- **Deterministic offline resolution:** Model routing must resolve deterministically and offline without network probes, returning explicit status codes (`missing_secret`, `feature_disabled`, `fallback_used`).
+
+### 13.3. Anti-Self-Approval & Negative Scope Contracts
+- **AI agents must never approve their own policy or harness changes:** Enforce an explicit **Negative Scope** ([WHAT_WE_DONT_DO.md](docs/harness/WHAT_WE_DONT_DO.md)) declaring security boundaries that reject autonomous mutation without human ADR sign-off.
+- **Adversarial fixture verification:** Prove task and evidence validators against adversarial fixtures (`wrong-sha`, `scope-violation`, `missing-required-fields`) that fail closed.
+
+---
+
+**Created:** 2026-03-09  
+**Last Updated:** 2026-09-03
+

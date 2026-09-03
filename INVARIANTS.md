@@ -58,29 +58,47 @@ These are truths that must **always** hold. They guide implementation, testing, 
 
 21. **Cache get never blocks writers** - Read lock for get, write lock only for put/evict.
 
-## Concurrency Invariants
+## Concurrency & Storage Invariants
 
-22. **SQLite connections are not shared across threads** - Each thread/task gets own connection from pool.
+22. **SQLite connections are not shared across threads or held across await points** - `rusqlite::Connection` handles must never be held across Tokio `.await` points (`!Send`/`!Sync`). Use connection pool closures (`with_connection(|conn| ...)`).
 
-23. **Transactions are short-lived** - No network I/O inside transactions.
+23. **Transactions are short-lived** - No network I/O inside transactions (prevents `SQLITE_BUSY` lock starvation).
 
 24. **All external calls have timeouts** - HTTP, embedding APIs, cloud sync.
 
+25. **WAL replication replay has bounded page limits** - Frame replay enforces `page_number <= MAX_ALLOWED_DB_PAGES` to prevent sparse-file allocation attacks.
+
+26. **Archive and delta decompression has saturating streaming limits** - Readers use a saturating byte limit (`read_entry_limited`) to halt before memory or disk exhaustion.
+
+## String & Multilingual Invariants
+
+27. **String slicing never uses byte offsets from case-folded or normalized text** - Casing changes alter UTF-8 byte lengths (e.g. `ß` vs `ẞ`). Always slice via character iterators, grapheme clusters, or regex word boundaries (`\b`) to prevent char boundary panics.
+
 ## Error Invariants
 
-25. **No unwrap() in production paths** - All fallible operations use `?` or explicit error handling.
+28. **No unwrap() in production paths** - All fallible operations use `?` or explicit error handling.
 
-26. **Errors include context** - Memory ID, workspace name, operation type in error messages.
+29. **Errors include context** - Memory ID, workspace name, operation type in error messages.
 
-27. **Validation errors list all problems** - Not just first failure.
+30. **Validation errors list all problems** - Not just first failure.
+
+## Agentic Governance & Security Invariants
+
+31. **Integer ID lookups must verify workspace authorization** - Every query by integer ID must join/check against `principal.allows_workspace` (anti-IDOR).
+
+32. **Permission modes fail closed** - Calls exceeding active permission mode return structured `{ "error": { "code": "permission_denied", ... } }` denial payloads.
+
+33. **Model routing resolves deterministically and offline** - Zero network calls, explicit degradation reporting (`missing_secret`, `feature_disabled`) rather than silent model fallback.
+
+34. **Harness security boundaries reject autonomous self-approval** - Automated agents are bound by negative scope (`WHAT_WE_DONT_DO.md`) and cannot authorize their own policy or harness mutations without human ADR acceptance.
 
 ## Quota Invariants (engram-cloud)
 
-28. **Quota check happens before mutation** - Check quota, then create memory (not reverse).
+35. **Quota check happens before mutation** - Check quota, then create memory (not reverse).
 
-29. **Storage-counted metrics query tenant SQLite** - Workspaces, Identities, Sessions counted from storage, not control plane.
+36. **Storage-counted metrics query tenant SQLite** - Workspaces, Identities, Sessions counted from storage, not control plane.
 
-30. **Quota exceeded returns structured error** - Includes metric name, current value, max value.
+37. **Quota exceeded returns structured error** - Includes metric name, current value, max value.
 
 ---
 
