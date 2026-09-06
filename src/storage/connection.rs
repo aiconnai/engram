@@ -139,6 +139,18 @@ impl Storage {
     where
         F: FnOnce(&Connection) -> Result<T>,
     {
+        let mut f = Some(f);
+        let mut res = None;
+        self.with_connection_dyn(&mut |conn| {
+            let func = f.take().expect("closure runs exactly once");
+            let output = func(conn)?;
+            res = Some(output);
+            Ok(())
+        })?;
+        Ok(res.expect("closure must run"))
+    }
+
+    fn with_connection_dyn(&self, f: &mut dyn FnMut(&Connection) -> Result<()>) -> Result<()> {
         let result = {
             let conn = self.conn.lock();
             f(&conn)
@@ -151,11 +163,23 @@ impl Storage {
     where
         F: FnOnce(&Connection) -> Result<T>,
     {
+        let mut f = Some(f);
+        let mut res = None;
+        self.with_transaction_dyn(&mut |conn| {
+            let func = f.take().expect("closure runs exactly once");
+            let output = func(conn)?;
+            res = Some(output);
+            Ok(())
+        })?;
+        Ok(res.expect("closure must run"))
+    }
+
+    fn with_transaction_dyn(&self, f: &mut dyn FnMut(&Connection) -> Result<()>) -> Result<()> {
         let result = {
             let mut conn = self.conn.lock();
             let tx = conn.transaction()?;
             match f(&tx) {
-                Ok(result) => tx.commit().map(|_| result).map_err(Into::into),
+                Ok(()) => tx.commit().map_err(Into::into),
                 Err(err) => Err(err),
             }
         };
@@ -407,11 +431,11 @@ impl Storage {
         &self.config
     }
 
-    fn reassert_sqlite_artifact_permissions_after<T>(&self, result: Result<T>) -> Result<T> {
+    fn reassert_sqlite_artifact_permissions_after(&self, result: Result<()>) -> Result<()> {
         match result {
-            Ok(value) => {
+            Ok(()) => {
                 self.reassert_sqlite_artifact_permissions()?;
-                Ok(value)
+                Ok(())
             }
             Err(err) => {
                 let _ = self.reassert_sqlite_artifact_permissions();
@@ -481,15 +505,27 @@ impl StoragePool {
     where
         F: FnOnce(&Connection) -> Result<T>,
     {
+        let mut f = Some(f);
+        let mut res = None;
+        self.with_connection_dyn(&mut |conn| {
+            let func = f.take().expect("closure runs exactly once");
+            let output = func(conn)?;
+            res = Some(output);
+            Ok(())
+        })?;
+        Ok(res.expect("closure must run"))
+    }
+
+    fn with_connection_dyn(&self, f: &mut dyn FnMut(&Connection) -> Result<()>) -> Result<()> {
         let result = {
             let conn_arc = self.get();
             let conn = conn_arc.lock();
             f(&conn)
         };
         match result {
-            Ok(value) => {
+            Ok(()) => {
                 Storage::reassert_sqlite_artifact_permissions_for_config(&self.config)?;
-                Ok(value)
+                Ok(())
             }
             Err(err) => {
                 let _ = Storage::reassert_sqlite_artifact_permissions_for_config(&self.config);

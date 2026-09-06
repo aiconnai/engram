@@ -107,6 +107,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
           source scripts/ci-required-features.env
           cargo clippy --all-targets --no-default-features --features "$CI_REQUIRED_FEATURES" -- -D warnings
@@ -146,6 +147,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Enforce retrieval and performance budgets
         run: >-
           python3 scripts/check-quality-budgets.py
@@ -188,6 +190,8 @@ jobs:
             exit 1
           fi
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: macOS smoke test
         run: |
           source scripts/ci-features.env
@@ -207,6 +211,9 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --test property_tests -- --test-threads=1
         env:
           PROPTEST_CASES: 500
@@ -220,6 +227,9 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --test golden_tests
 
   full-feature-clippy:
@@ -249,6 +259,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: extended-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   full-feature-tests:
@@ -281,6 +292,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: extended-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
           cargo test --profile ci --all-features --lib --tests
 
@@ -303,6 +315,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: extended-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test local embedding backend
         run: cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
       - name: Test neural rerank backend
@@ -460,6 +473,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@9458fed45835344deb5e69e06e831be047c96abf # cargo-llvm-cov
@@ -504,6 +518,9 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo bench --no-run
 
   bench:
@@ -517,6 +534,9 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run benchmarks (Criterion bencher output)
         shell: bash
@@ -582,6 +602,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: ./scripts/generate-mcp-reference.sh --check
       - run: python3 scripts/test_check_pdf_worker_packaging.py
       - run: python3 scripts/check-pdf-worker-packaging.py
@@ -614,6 +635,8 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }} --features pdf --bin engram-server --bin engram-cli --bin engram-pdf-worker

@@ -177,7 +177,16 @@ full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher",
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.35", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "sync",
+    "time",
+    "io-util",
+    "fs",
+    "signal",
+] }
 
 # Database
 rusqlite = { version = "0.31", features = ["bundled", "vtab", "functions", "trace"] }
@@ -194,7 +203,7 @@ serde_json = "1.0"
 # HTTP/WebSocket server
 axum = { version = "0.7", features = ["ws"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
 
 # Shell expansion for paths
 shellexpand = "3.1"
@@ -206,7 +215,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart"], de
 async-trait = { version = "0.1", optional = true }
 
 # Cloud storage (S3/R2/GCS) - optional, feature-gated
-aws-sdk-s3 = { version = "1.12", optional = true }
+aws-sdk-s3 = { version = "1.12", default-features = false, features = ["default-https-client", "rt-tokio", "sigv4a"], optional = true }
 aws-config = { version = "1.1", optional = true }
 
 # Encryption (for cloud sync)
@@ -334,11 +343,27 @@ harness = false
 name = "token_reduction"
 harness = false
 
+[profile.dev]
+opt-level = 0
+debug = "line-tables-only"
+incremental = true
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
 [profile.release]
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[profile.ci-release]
+inherits = "release"
+lto = "off"
+codegen-units = 16
 
 [profile.bench]
 lto = true
