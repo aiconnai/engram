@@ -30,12 +30,20 @@ cargo clippy --all-targets --no-default-features --features "$CI_REQUIRED_FEATUR
 
 echo "==> [3/5] Core tests (lib + integration, matching required GitHub CI job)"
 # Mirrors the required "Test (ubuntu-latest)" job as closely as practical for local work.
-cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests
+if command -v cargo-nextest >/dev/null 2>&1; then
+  cargo nextest run --cargo-profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests --bin engram-server --bin engram-watcher
+else
+  cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests
+fi
 
 if [[ "$CI_RUN_FULL_FEATURES" == "1" ]]; then
   echo "==> Optional full feature checks"
   run_optional cargo clippy --all-targets --all-features -- -D warnings
-  run_optional cargo test --profile ci --all-features --lib --tests
+  if command -v cargo-nextest >/dev/null 2>&1; then
+    run_optional cargo nextest run --cargo-profile ci --all-features --lib --tests
+  else
+    run_optional cargo test --profile ci --all-features --lib --tests
+  fi
 fi
 
 if [[ "$CI_RUN_BACKEND_SMOKE" == "1" ]]; then
@@ -44,9 +52,11 @@ if [[ "$CI_RUN_BACKEND_SMOKE" == "1" ]]; then
   run_optional cargo test --profile ci --no-default-features --features openai,neural-rerank --lib search::neural_rerank
 fi
 
-# Binary unit tests (required in the GitHub job)
-cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-server
-cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-watcher
+if ! command -v cargo-nextest >/dev/null 2>&1; then
+  # Binary unit tests (already covered in nextest invocation above when nextest is present)
+  cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-server
+  cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-watcher
+fi
 
 echo "==> [4/5] WASM crate"
 if ! rustup target list --installed | grep -qx "wasm32-unknown-unknown"; then

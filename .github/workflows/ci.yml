@@ -153,17 +153,14 @@ jobs:
           python3 scripts/check-quality-budgets.py
           --budgets docs/quality/budgets.json
           --retrieval tests/fixtures/retrieval_quality/baseline.json
-          --criterion benches/results/benchmark_results.txt
-      - name: Test library and integration tests
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2
+        with:
+          tool: nextest
+      - name: Run tests with cargo-nextest
         run: |
           source scripts/ci-required-features.env
-          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests
-
-      - name: Test binary unit tests
-        run: |
-          source scripts/ci-required-features.env
-          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-server
-          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-watcher
+          cargo nextest run --cargo-profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests --bin engram-server --bin engram-watcher
       - name: Check WASM crate
         run: |
           cargo check -p engram-wasm --all-targets
@@ -293,8 +290,12 @@ jobs:
         with:
           shared-key: extended-linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2
+        with:
+          tool: nextest
       - run: |
-          cargo test --profile ci --all-features --lib --tests
+          cargo nextest run --cargo-profile ci --all-features --lib --tests
 
   backend-smoke:
     name: Backend Smoke Tests
