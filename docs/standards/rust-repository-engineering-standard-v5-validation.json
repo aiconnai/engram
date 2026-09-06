@@ -1,0 +1,18 @@
+{
+  "file": "/mnt/data/rust-repository-engineering-standard-v5.md",
+  "lines": 593,
+  "words": 9450,
+  "rule_ids": 154,
+  "unique_rule_ids": 154,
+  "must_rule_ids": 119,
+  "mapped_rule_ids": 119,
+  "duplicate_ids": [],
+  "normative_paragraphs_without_id": [],
+  "unmapped_must_rules": [],
+  "unknown_mapped_rules": [],
+  "unknown_rule_references": [],
+  "em_dash_count": 0,
+  "bullet_line_count": 0,
+  "code_fence_count": 8,
+  "review_findings_resolved": 22
+}

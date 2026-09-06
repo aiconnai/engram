@@ -1,0 +1,101 @@
+# Governance Model Registry
+# Enforces [R-8.3.3] of the Rust Repository Engineering Standard v5 and RFC 0011.
+#
+# Schema requirements for each [[model]] entry:
+#   provider             - Approved provider ID (e.g. "openai", "gemini", "ollama", "local")
+#   model_id             - Precise model identifier string
+#   purpose              - Primary purpose (e.g. "embedding_text", "rerank", "vision", "council")
+#   capability_class     - "remote_api", "local_deterministic", "local_neural"
+#   offline_capable      - Boolean flag indicating whether offline execution is supported
+#   fallback_eligible    - Boolean flag indicating whether this model may be used as a fallback
+#   fallback_target      - Target provider/model if degraded (or empty if final terminal)
+
+[[model]]
+provider = "tfidf"
+model_id = "tfidf-128"
+purpose = "embedding_text"
+capability_class = "local_deterministic"
+offline_capable = true
+fallback_eligible = true
+fallback_target = ""
+
+[[model]]
+provider = "openai"
+model_id = "text-embedding-3-small"
+purpose = "embedding_text"
+capability_class = "remote_api"
+offline_capable = false
+fallback_eligible = true
+fallback_target = "tfidf"
+
+[[model]]
+provider = "openai"
+model_id = "text-embedding-3-large"
+purpose = "embedding_text"
+capability_class = "remote_api"
+offline_capable = false
+fallback_eligible = true
+fallback_target = "openai:text-embedding-3-small"
+
+[[model]]
+provider = "gemini"
+model_id = "text-embedding-004"
+purpose = "embedding_text"
+capability_class = "remote_api"
+offline_capable = false
+fallback_eligible = true
+fallback_target = "tfidf"
+
+[[model]]
+provider = "ollama"
+model_id = "bge-m3"
+purpose = "embedding_text"
+capability_class = "local_neural"
+offline_capable = true
+fallback_eligible = true
+fallback_target = "tfidf"
+
+[[model]]
+provider = "local"
+model_id = "all-minilm-l6-v2"
+purpose = "embedding_text"
+capability_class = "local_neural"
+offline_capable = true
+fallback_eligible = true
+fallback_target = "tfidf"
+
+[[model]]
+provider = "cohere"
+model_id = "rerank-v3.5"
+purpose = "rerank"
+capability_class = "remote_api"
+offline_capable = false
+fallback_eligible = false
+fallback_target = ""
+
+[[model]]
+provider = "voyage"
+model_id = "rerank-2"
+purpose = "rerank"
+capability_class = "remote_api"
+offline_capable = false
+fallback_eligible = false
+fallback_target = ""
+
+[[model]]
+provider = "anthropic"
+model_id = "claude-sonnet-4"
+purpose = "llm_council"
+capability_class = "remote_api"
+offline_capable = false
+fallback_eligible = true
+fallback_target = "openai:gpt-4o"
+
+[[model]]
+provider = "openai"
+model_id = "gpt-4o"
+purpose = "llm_council"
+capability_class = "remote_api"
+offline_capable = false
+fallback_eligible = true
+fallback_target = ""

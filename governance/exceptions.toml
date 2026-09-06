@@ -1,0 +1,22 @@
+# Governance Exceptions Manifest
+# Enforces [R-0.6] of the Rust Repository Engineering Standard v5.
+#
+# Schema requirements for each [[exception]] entry:
+#   id                   - Unique identifier (e.g. "EXC-0001")
+#   rule                 - Mapped rule ID (e.g. "R-2.1.3" or "P-A.2.1")
+#   owner                - Accountable individual or team handle
+#   rationale            - Clear business/technical explanation for the waiver
+#   scope                - Specific crate, path, or module where waiver applies
+#   compensating_control - Safeguards in effect while waiver is active
+#   record               - Linked ADR, RFC, or issue ID
+#   expires              - Expiration date in YYYY-MM-DD format (must be unexpired)
+
+[[exception]]
+id = "EXC-0001"
+rule = "P-A.2.1"
+owner = "platform-team"
+rationale = "Dual reqwest version tolerance (0.12 and 0.13) during gradual transport stack upgrade"
+scope = "Cargo.toml"
+compensating_control = "cargo-deny security advisory and bans gates enforce vulnerability-free resolution on all branches"
+record = "ADR-0014"
+expires = "2026-12-31"
