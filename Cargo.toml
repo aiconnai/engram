@@ -81,7 +81,7 @@ required-features = ["pdf"]
 bench = false
 
 [features]
-default = ["cloud", "openai"]
+default = ["openai"]
 
 # Shared HTTP client dependency for optional integrations.
 http-client = ["dep:reqwest"]
