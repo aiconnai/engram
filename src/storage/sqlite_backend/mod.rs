@@ -18,6 +18,7 @@ use super::backend::{
     StorageBackend, StorageStats, SyncDelta, SyncResult, SyncState, TransactionalBackend,
 };
 use super::connection::Storage;
+use super::db::DbConnectionExt;
 use super::queries::{
     self, delete_memory_batch, get_related, get_sync_delta, get_sync_version, list_tags,
 };
@@ -214,7 +215,7 @@ impl StorageBackend for SqliteBackend {
             sql.push_str(&conditions.join(" AND "));
 
             let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
-            let count: i64 = conn.query_row(&sql, param_refs.as_slice(), |row| row.get(0))?;
+            let count: i64 = conn.query_scalar(&sql, param_refs.as_slice())?;
 
             Ok(count)
         })
@@ -344,9 +345,7 @@ impl StorageBackend for SqliteBackend {
     fn schema_version(&self) -> Result<i32> {
         self.storage.with_connection(|conn| {
             let version: i32 = conn
-                .query_row("SELECT MAX(version) FROM schema_version", [], |row| {
-                    row.get(0)
-                })
+                .query_scalar_0("SELECT MAX(version) FROM schema_version")
                 .unwrap_or(0);
             Ok(version)
         })
@@ -583,9 +582,7 @@ mod tests {
         let count = backend
             .storage()
             .with_connection(|conn| {
-                let count = conn.query_row("SELECT COUNT(*) FROM savepoint_probe", [], |row| {
-                    row.get::<_, i64>(0)
-                })?;
+                let count: i64 = conn.query_scalar_0("SELECT COUNT(*) FROM savepoint_probe")?;
                 Ok(count)
             })
             .unwrap();

@@ -644,6 +644,7 @@ fn mark_failed_best_effort(storage: &Storage, job_id: &str, err: &EngramError) {
 mod tests {
     use super::*;
     use crate::storage::queries::create_memory;
+    use crate::storage::DbConnectionExt;
     use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
 
     fn create_test_memory(storage: &Storage, content: &str, importance: f32) -> i64 {
@@ -673,7 +674,7 @@ mod tests {
 
         let before_count: i64 = storage
             .with_connection(|conn| {
-                conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
+                conn.query_scalar_0("SELECT COUNT(*) FROM memories")
                     .map_err(Into::into)
             })
             .expect("count before");
@@ -695,7 +696,7 @@ mod tests {
 
         let after_count: i64 = storage
             .with_connection(|conn| {
-                conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
+                conn.query_scalar_0("SELECT COUNT(*) FROM memories")
                     .map_err(Into::into)
             })
             .expect("count after");
@@ -703,20 +704,16 @@ mod tests {
 
         storage
             .with_connection(|conn| {
-                let job_status: String = conn.query_row(
+                let job_status: String = conn.query_scalar_0(
                     "SELECT status FROM dream_jobs WHERE id = 'job-generator-summary'",
-                    [],
-                    |row| row.get(0),
                 )?;
                 assert_eq!(job_status, "completed");
-                let summary_count: i64 = conn.query_row(
+                let summary_count: i64 = conn.query_scalar_0(
                     "SELECT COUNT(*) FROM dream_candidates
                      WHERE job_id = 'job-generator-summary'
                        AND kind = 'summary'
                        AND proposed_action = 'create'
                        AND review_state = 'pending'",
-                    [],
-                    |row| row.get(0),
                 )?;
                 assert_eq!(summary_count, 1);
                 Ok(())
@@ -768,9 +765,7 @@ mod tests {
                 assert_eq!(action, "expire");
                 assert_eq!(freshness, "expired");
                 let sources: i64 =
-                    conn.query_row("SELECT COUNT(*) FROM dream_candidate_sources", [], |row| {
-                        row.get(0)
-                    })?;
+                    conn.query_scalar_0("SELECT COUNT(*) FROM dream_candidate_sources")?;
                 assert_eq!(sources, 1);
                 Ok(())
             })
@@ -808,13 +803,11 @@ mod tests {
 
         storage
             .with_connection(|conn| {
-                let count: i64 = conn.query_row(
+                let count: i64 = conn.query_scalar_0(
                     "SELECT COUNT(*) FROM dream_candidates
                      WHERE job_id = 'job-generator-policy'
                        AND kind = 'promotion'
                        AND proposed_action = 'promote'",
-                    [],
-                    |row| row.get(0),
                 )?;
                 assert_eq!(count, 1);
                 Ok(())

@@ -10,6 +10,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use super::db::DbConnectionExt;
 use super::migrations::run_migrations;
 #[cfg(unix)]
 use crate::error::EngramError;
@@ -233,10 +234,8 @@ impl Storage {
     /// Get database size in bytes
     pub fn db_size(&self) -> Result<i64> {
         let conn = self.conn.lock();
-        let size: i64 = conn.query_row(
+        let size: i64 = conn.query_scalar_0(
             "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()",
-            [],
-            |row| row.get(0),
         )?;
         Ok(size)
     }
@@ -288,37 +287,21 @@ impl Storage {
 
         let conn = self.conn.lock();
 
-        let page_size: i64 = conn
-            .query_row("PRAGMA page_size", [], |r| r.get(0))
-            .unwrap_or(0);
-        let page_count: i64 = conn
-            .query_row("PRAGMA page_count", [], |r| r.get(0))
-            .unwrap_or(0);
-        let freelist_count: i64 = conn
-            .query_row("PRAGMA freelist_count", [], |r| r.get(0))
-            .unwrap_or(0);
+        let page_size: i64 = conn.query_scalar_0("PRAGMA page_size").unwrap_or(0);
+        let page_count: i64 = conn.query_scalar_0("PRAGMA page_count").unwrap_or(0);
+        let freelist_count: i64 = conn.query_scalar_0("PRAGMA freelist_count").unwrap_or(0);
         let db_size_bytes = page_size * page_count;
         let reclaimable_bytes = page_size * freelist_count;
 
         let queue_complete_prunable: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM embedding_queue WHERE status = 'complete'",
-                [],
-                |r| r.get(0),
-            )
+            .query_scalar_0("SELECT COUNT(*) FROM embedding_queue WHERE status = 'complete'")
             .unwrap_or(0);
         let queue_failed_prunable: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed'",
-                [],
-                |r| r.get(0),
-            )
+            .query_scalar_0("SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed'")
             .unwrap_or(0);
         let orphan_embeddings: i64 = conn
-            .query_row(
+            .query_scalar_0(
                 "SELECT COUNT(*) FROM embeddings WHERE memory_id NOT IN (SELECT id FROM memories)",
-                [],
-                |r| r.get(0),
             )
             .unwrap_or(0);
 
@@ -927,12 +910,8 @@ mod tests {
             target_sha_before
         );
         let conn = Connection::open(&target).unwrap();
-        let journal_mode: String = conn
-            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
-            .unwrap();
-        let sentinel: String = conn
-            .query_row("SELECT value FROM sentinel", [], |row| row.get(0))
-            .unwrap();
+        let journal_mode: String = conn.query_scalar_0("PRAGMA journal_mode").unwrap();
+        let sentinel: String = conn.query_scalar_0("SELECT value FROM sentinel").unwrap();
         assert_eq!(journal_mode, "delete");
         assert_eq!(sentinel, "unchanged");
     }

@@ -10,6 +10,7 @@ use super::super::backend::{
     DerivedIndexHealth, DerivedIndexKind, DerivedIndexStatus, HealthStatus,
 };
 use super::super::connection::Storage;
+use super::super::db::DbConnectionExt;
 
 /// Check SQLite storage health using an already-open storage handle.
 ///
@@ -23,9 +24,9 @@ pub fn health_check_storage(storage: &Storage) -> Result<HealthStatus> {
     let db_path = storage.db_path().to_string();
 
     let result = storage.with_connection(|conn| {
-        conn.query_row("SELECT 1", [], |_| Ok(()))?;
+        conn.query_exists("SELECT 1", &[])?;
 
-        let quick_check: String = conn.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
+        let quick_check: String = conn.query_scalar_0("PRAGMA quick_check")?;
         let quick_check_ok = quick_check == "ok";
         let quick_check_status = if quick_check_ok {
             "ok".to_string()
@@ -33,9 +34,9 @@ pub fn health_check_storage(storage: &Storage) -> Result<HealthStatus> {
             quick_check
         };
 
-        let page_size: i64 = conn.query_row("PRAGMA page_size", [], |row| row.get(0))?;
-        let page_count: i64 = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
-        let freelist_count: i64 = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
+        let page_size: i64 = conn.query_scalar_0("PRAGMA page_size")?;
+        let page_count: i64 = conn.query_scalar_0("PRAGMA page_count")?;
+        let freelist_count: i64 = conn.query_scalar_0("PRAGMA freelist_count")?;
         let reclaimable_bytes = page_size * freelist_count;
         let db_size_bytes = page_size * page_count;
 
@@ -375,16 +376,14 @@ fn sqlite_graph_health(conn: &rusqlite::Connection) -> Result<DerivedIndexHealth
 }
 
 fn count_i64(conn: &rusqlite::Connection, sql: &str) -> Result<i64> {
-    Ok(conn.query_row(sql, [], |row| row.get(0))?)
+    Ok(conn.query_scalar_0(sql)?)
 }
 
 fn sqlite_table_exists(conn: &rusqlite::Connection, table_name: &str) -> Result<bool> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
-        [table_name],
-        |row| row.get(0),
-    )?;
-    Ok(count > 0)
+    Ok(conn.query_exists(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        &[&table_name],
+    )?)
 }
 
 #[cfg(test)]
