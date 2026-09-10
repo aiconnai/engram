@@ -50,8 +50,11 @@ highlight = "all"
 
 deny = [
     # Use rustls instead
-    { crate = "openssl" },
-    { crate = "openssl-sys" },
+    { crate = "openssl", reason = "Use rustls for pure-Rust TLS without C runtime dependencies" },
+    { crate = "openssl-sys", reason = "Use rustls for pure-Rust TLS without C runtime dependencies" },
+    { crate = "native-tls", reason = "Use rustls for pure-Rust TLS without C runtime dependencies" },
+    # Deprecated crates
+    { crate = "net2", reason = "Deprecated in ecosystem; use socket2 instead" },
 ]
 
 [sources]
