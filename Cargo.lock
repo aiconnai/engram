@@ -2004,6 +2004,7 @@ dependencies = [
  "dirs 5.0.1",
  "duckdb",
  "ed25519-dalek",
+ "engram-types",
  "flate2",
  "futures",
  "hex",
@@ -2047,6 +2048,15 @@ dependencies = [
  "uuid",
  "zeroize",
  "zip 2.4.2",
+]
+
+[[package]]
+name = "engram-types"
+version = "0.23.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

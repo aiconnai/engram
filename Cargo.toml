@@ -25,6 +25,7 @@ exclude = [
     "Cargo.toml.orig",
     "LAZYCODEX_USAGE.md",
     "benchmark_*.txt",
+    "crates/**",
     "docs/harness/**",
     "docs/private/**",
     "engram-wasm/**",
@@ -36,7 +37,7 @@ exclude = [
 ignored = ["prost"]
 
 [workspace]
-members = [".", "engram-wasm"]
+members = [".", "crates/engram-types", "engram-wasm"]
 default-members = ["."]
 resolver = "2"
 
@@ -176,6 +177,9 @@ grpc = ["dep:tonic", "dep:prost", "dep:tonic-build"]
 full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "clip-embeddings", "emergent-graph", "hooks", "dream-phase", "ollama", "cohere", "voyage", "local-embeddings", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "snapshot", "attestation", "agent-portability", "grpc"]
 
 [dependencies]
+# Core domain types (Phase 1 Workspace Modularization)
+engram-types = { path = "crates/engram-types", version = "0.23.0" }
+
 # Async runtime
 tokio = { version = "1.35", features = [
     "rt-multi-thread",
