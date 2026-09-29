@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790586875924,
+  "lastUpdate": 1790673817492,
   "repoUrl": "https://github.com/aiconnai/engram",
   "entries": {
     "Engram Performance (Nightly)": [
@@ -40759,6 +40759,358 @@ window.BENCHMARK_DATA = {
             "name": "traversal/bfs_depth_3",
             "value": 1252250,
             "range": "± 21166",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Ronaldo Martins",
+            "username": "limaronaldo",
+            "email": "ron@ldinho.com.br"
+          },
+          "committer": {
+            "name": "Ronaldo Martins",
+            "username": "limaronaldo",
+            "email": "ron@ldinho.com.br"
+          },
+          "id": "949c9634be28badea43ba2a2b5bcdf5d4c0dd358",
+          "message": "feat(spatial): implement Mnemonic Palace visualizer for 2D/3D spatial memory (RFC 0005)",
+          "timestamp": "2026-08-24T02:46:20Z",
+          "url": "https://github.com/aiconnai/engram/commit/949c9634be28badea43ba2a2b5bcdf5d4c0dd358"
+        },
+        "date": 1790673816010,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "community_detection/detect_communities_500_nodes",
+            "value": 6123953,
+            "range": "± 188774",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extractor_new/default",
+            "value": 3570,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extraction/extract_mixed",
+            "value": 381280,
+            "range": "± 845",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_create/memory_create",
+            "value": 902715,
+            "range": "± 31811",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search/memory_search",
+            "value": 94053,
+            "range": "± 708",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_list/memory_list",
+            "value": 296667,
+            "range": "± 3002",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_stats/memory_stats",
+            "value": 101858,
+            "range": "± 473",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_error_path/unknown_tool",
+            "value": 461,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_create/no_embedding",
+            "value": 284838,
+            "range": "± 12563",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_get/by_id",
+            "value": 40932,
+            "range": "± 919",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/10",
+            "value": 121870,
+            "range": "± 580",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/10",
+            "value": 270761,
+            "range": "± 2318",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/50",
+            "value": 482671,
+            "range": "± 2508",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/50",
+            "value": 695980,
+            "range": "± 4507",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/100",
+            "value": 931511,
+            "range": "± 5191",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/100",
+            "value": 1131777,
+            "range": "± 11882",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/create",
+            "value": 34776,
+            "range": "± 104",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/get_related",
+            "value": 21955,
+            "range": "± 776",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "get_stats",
+            "value": 299851,
+            "range": "± 1399",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/authentication",
+            "value": 230722,
+            "range": "± 5098",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/database migration",
+            "value": 264902,
+            "range": "± 2261",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/React hooks optimization",
+            "value": 292665,
+            "range": "± 2263",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/API rate limiting Redis",
+            "value": 326989,
+            "range": "± 3139",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/short",
+            "value": 35889,
+            "range": "± 187",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/medium",
+            "value": 12655547,
+            "range": "± 424345",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/long",
+            "value": 12183846,
+            "range": "± 83798",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/short",
+            "value": 889,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/medium",
+            "value": 2490,
+            "range": "± 258",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/long",
+            "value": 5659,
+            "range": "± 54",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/batch_100",
+            "value": 206782,
+            "range": "± 679",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/1_char_typo",
+            "value": 19070,
+            "range": "± 37",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/2_char_typo",
+            "value": 17920,
+            "range": "± 27",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/transposition",
+            "value": 19025,
+            "range": "± 617",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/100",
+            "value": 1376205,
+            "range": "± 93625",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/100",
+            "value": 1141161,
+            "range": "± 14643",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/1000",
+            "value": 11647308,
+            "range": "± 56033",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/1000",
+            "value": 11233638,
+            "range": "± 48832",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/10000",
+            "value": 123914148,
+            "range": "± 1243911",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/10000",
+            "value": 119205124,
+            "range": "± 1008820",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_index_v2_report/noop",
+            "value": 0,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/100",
+            "value": 6699,
+            "range": "± 36",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/500",
+            "value": 35361,
+            "range": "± 123",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/2000",
+            "value": 143258,
+            "range": "± 518",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/20",
+            "value": 529,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/100",
+            "value": 554,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/500",
+            "value": 552,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/tight_500/500",
+            "value": 2690,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/medium_2k/2000",
+            "value": 9869,
+            "range": "± 25",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/loose_8k/8000",
+            "value": 38456,
+            "range": "± 238",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/200",
+            "value": 13437,
+            "range": "± 32",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/1000",
+            "value": 70045,
+            "range": "± 526",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/semantic_compression/fixed_corpus_ratio_recall",
+            "value": 82745690,
+            "range": "± 151250",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/50",
+            "value": 4908322,
+            "range": "± 12335",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/200",
+            "value": 17669543,
+            "range": "± 49196",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "traversal/bfs_depth_3",
+            "value": 1192198,
+            "range": "± 21479",
             "unit": "ns/iter"
           }
         ]
