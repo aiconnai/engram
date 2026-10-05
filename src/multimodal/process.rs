@@ -259,16 +259,71 @@ pub(crate) mod test_support {
     use std::path::Path;
     use std::time::Duration;
 
+    /// Write an executable shell script. The executable itself is written by a
+    /// separate `cp` process: if this test process opened it for writing, a
+    /// `fork` by a concurrent test could inherit that descriptor until its
+    /// `exec`, and running the script would fail with ETXTBSY ("Text file
+    /// busy"), as seen on Linux.
     pub(crate) fn write_script(dir: &Path, name: &str, body: &str) -> std::path::PathBuf {
         let path = dir.join(name);
-        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        let staged = dir.join(format!(".{name}.staged"));
+        std::fs::write(&staged, format!("#!/bin/sh\n{body}\n")).unwrap();
+        let copied = std::process::Command::new("cp")
+            .arg(&staged)
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(copied.success(), "cp {} failed", staged.display());
+        std::fs::remove_file(&staged).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         path
     }
 
-    pub(crate) fn pid_alive(pid: i32) -> bool {
+    /// True if `pid` is still running after a short grace period. `kill(2)`
+    /// returns before the target has exited, and a killed orphan stays a
+    /// signalable zombie until its new parent reaps it, so a single
+    /// `kill(pid, 0)` right after SIGKILL reports a dead process as alive
+    /// (seen on Linux CI runners). Zombies count as gone.
+    pub(crate) fn still_running_after_grace(pid: i32) -> bool {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while running(pid) {
+            if std::time::Instant::now() >= deadline {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+
+    fn running(pid: i32) -> bool {
         // SAFETY: signal 0 only checks existence/permission.
-        unsafe { libc::kill(pid, 0) == 0 }
+        let exists = unsafe { libc::kill(pid, 0) == 0 };
+        exists && !is_zombie(pid)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn is_zombie(pid: i32) -> bool {
+        // /proc/<pid>/stat is "pid (comm) state ..."; comm may contain ')'.
+        std::fs::read_to_string(format!("/proc/{pid}/stat"))
+            .ok()
+            .and_then(|stat| {
+                let rest = &stat[stat.rfind(')')? + 1..];
+                rest.trim_start().chars().next()
+            })
+            == Some('Z')
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn is_zombie(pid: i32) -> bool {
+        std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .map(|out| {
+                String::from_utf8_lossy(&out.stdout)
+                    .trim_start()
+                    .starts_with('Z')
+            })
+            .unwrap_or(false)
     }
 
     pub(crate) fn read_pid(path: &Path) -> i32 {
@@ -286,7 +341,7 @@ pub(crate) mod test_support {
 
 #[cfg(all(test, unix))]
 mod tests {
-    use super::test_support::{pid_alive, read_pid, write_script};
+    use super::test_support::{read_pid, still_running_after_grace, write_script};
     use super::*;
 
     #[test]
@@ -329,8 +384,8 @@ mod tests {
         assert!(matches!(err, RunError::Timeout(_)));
         assert!(started.elapsed() < Duration::from_secs(5));
         let (c, g) = (read_pid(&child_pid), read_pid(&grand_pid));
-        assert!(!pid_alive(c), "child {c} left running");
-        assert!(!pid_alive(g), "grandchild {g} left running");
+        assert!(!still_running_after_grace(c), "child {c} left running");
+        assert!(!still_running_after_grace(g), "grandchild {g} left running");
     }
 
     #[test]
@@ -359,7 +414,10 @@ mod tests {
         );
         for (file, what) in [(&held, "pipe-holding"), (&quiet, "detached-quiet")] {
             let pid = read_pid(file);
-            assert!(!pid_alive(pid), "{what} straggler {pid} survived");
+            assert!(
+                !still_running_after_grace(pid),
+                "{what} straggler {pid} survived"
+            );
         }
     }
 

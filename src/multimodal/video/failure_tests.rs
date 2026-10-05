@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::*;
-use crate::multimodal::process::test_support::{pid_alive, read_pid, write_script};
+use crate::multimodal::process::test_support::{read_pid, still_running_after_grace, write_script};
 use crate::multimodal::vision::{ImageDescription, VisionOptions};
 
 const PROBE_JSON: &str = r#"{"streams":[{"codec_type":"video","width":64,"height":48,"codec_name":"h264","duration":"10.0"}],"format":{"duration":"10.0"}}"#;
@@ -122,7 +122,10 @@ impl VisionProvider for StubVision {
 
 fn assert_gone(pid_file: &Path, what: &str) {
     let pid = read_pid(pid_file);
-    assert!(!pid_alive(pid), "{what} (pid {pid}) is still running");
+    assert!(
+        !still_running_after_grace(pid),
+        "{what} (pid {pid}) is still running"
+    );
 }
 
 #[test]
