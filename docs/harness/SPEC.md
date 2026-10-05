@@ -3,13 +3,13 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Agent harness hardening v1 — governance` |
-| Active task | `agent-harness-hardening-v1 — authorize trust boundaries and phased rollout` |
-| Started | `2026-07-21` |
+| Active sprint | `Engram comprehensive improvement program — waves 0-4` |
+| Active task | `engram-comprehensive-improvement — waves 0-4 execution` |
+| Started | `2026-10-05` |
 | Owner | `Ronaldo + agents (Claude Code + Claude Code Sonnet reviewer)` |
 | Active spec | `docs/harness/SPEC.md` |
-| Active plan | `docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md` |
-| Tracker | Operator-authorized harness hardening; Wave 0 governance only |
+| Active plan | `docs/harness/progress/2026-10-05-improvement-lane-p.md` |
+| Tracker | Owner-authorized program (chat, 2026-10-05); local commits only, no push/PR/merge |
 
 ## Escopo da sprint ativa
 
@@ -19,12 +19,43 @@
 > - Standards gerais: [`../../STANDARDS.md`](../../STANDARDS.md)
 > - Erros & lições: [`../../ERRORS_AND_LESSONS.md`](../../ERRORS_AND_LESSONS.md)
 
-## Tarefa ativa: Agent harness hardening v1 — Wave 0 governance
+## Tarefa ativa: Engram comprehensive improvement — waves 0-4 execution
+
+- **Plano completo**: [`plans/2026-10-02-engram-comprehensive-improvement-plan.md`](./plans/2026-10-02-engram-comprehensive-improvement-plan.md)
+- **Progress log (Lane P — harness/governança/CI docs)**: [`progress/2026-10-05-improvement-lane-p.md`](./progress/2026-10-05-improvement-lane-p.md)
+- **Progress log (Lane R — Rust/produto)**: [`progress/2026-10-05-improvement-lane-r.md`](./progress/2026-10-05-improvement-lane-r.md) (pertence à lane R; criado na worktree dessa lane)
+- **Baseline de execução**: `1952f3b461fe7a8f8a6b5c106ac8c4f5929bae91` (14 commits locais à frente de `origin/main` `949c9634be28badea43ba2a2b5bcdf5d4c0dd358`; permanecem locais, sem push). Inventário: [`audits/2026-10-02-improvement-baseline.md`](./audits/2026-10-02-improvement-baseline.md)
+- **Autorização do owner (2026-10-05, chat)**: ondas 0-4 autorizadas; ADR `agent-harness-hardening-v1` **aceito** (ver ADR); runners da Onda 4 somente com *fake writer*, offline; budget WAL 64 GiB configurável; `defer_embedding=true` enfileira em background; entrega por commits locais na branch da worktree.
+- **Status**: active — as 25 tarefas do plano e as tarefas novas G1, P1 e Q2F concluídas com revisão SDD independente (todas "review clean"); lanes integradas (INT); revisão final do branch (Opus): *Ready with fixes*, 0 Critical, corrigida na onda FINALFIX (sem re-revisão ao commitar). Nenhum `review-gate.sh post` com receipt foi rodado. Pendente: decisões do owner e merge humano. Registro: [`reviews/2026-10-05-comprehensive-improvement/README.md`](./reviews/2026-10-05-comprehensive-improvement/README.md).
+
+### Em escopo
+
+- Reconciliar estado/autorização/baseline (E0) e as tarefas H*, Q*, C*, O* do plano, cada uma com seu brief, TDD/evidência e review independente.
+- Docs/harness da Lane P: `docs/harness/`, `docs/decisions/`, `docs/harness/audits/`; Lane R mantém seu próprio log.
+- Manter `SPEC.md` ↔ `progress.md` sincronizados (`doctor.sh`).
+
+### Fora de escopo
+
+- Push, PR, merge, publicação de pacotes, produção, nuvem, issues remotas, alteração de branch protection.
+- Execução autônoma real (writer de agente real), fallback para host, credenciais reais, provedores externos pagos.
+- Promover schemas/validator já existentes (commit `2313d8a`) a TCB sem a tarefa de onda correspondente e aprovação do owner.
+- Remoção de código/dependências baseada só em auditoria estática; enfraquecer cobertura, assertions ou o gate completo.
+
+### Gates esperados
+
+- `bash docs/harness/bin/bootstrap.sh`
+- `bash docs/harness/bin/doctor.sh`
+- `bash docs/harness/bin/sensors.sh` (completo, sem argumentos) para completion claims; `sensors.sh quick` apenas como lane rápida
+- `git diff --check`
+- Review independente por task (dois FAILs consecutivos escalam ao humano)
+
+## Tarefa anterior: Agent harness hardening v1 — Wave 0 governance
 
 - **Branch**: `feat/harness-hardening-v1`
 - **Progress log**: [`progress/2026-07-21-agent-harness-hardening-v1.md`](./progress/2026-07-21-agent-harness-hardening-v1.md)
-- **Status**: active — governance proposal prepared; ADR acceptance and
-  pre-change independent review remain required before executable hardening.
+- **Status**: superseded 2026-10-05 — governance proposal landed; the ADR was
+  **accepted by the owner on 2026-10-05** (see the ADR acceptance record). The
+  executable waves now run as part of the comprehensive improvement program above.
 
 ### Em escopo
 

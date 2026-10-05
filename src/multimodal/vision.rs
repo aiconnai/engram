@@ -102,7 +102,7 @@ impl GeminiVisionProvider {
         Self {
             api_key,
             model,
-            client: reqwest::Client::new(),
+            client: super::http_client(),
         }
     }
 
@@ -200,7 +200,7 @@ impl OpenAIVisionProvider {
         Self {
             api_key,
             model: "gpt-4o".to_string(),
-            client: reqwest::Client::new(),
+            client: super::http_client(),
         }
     }
 
@@ -209,7 +209,7 @@ impl OpenAIVisionProvider {
         Self {
             api_key,
             model,
-            client: reqwest::Client::new(),
+            client: super::http_client(),
         }
     }
 }

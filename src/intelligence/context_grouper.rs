@@ -115,7 +115,10 @@ impl ContextGrouper {
                 .join(" ");
 
             if combined.len() > 500 {
-                format!("{}... (truncated)", &combined[..500])
+                format!(
+                    "{}... (truncated)",
+                    crate::text_util::truncate_bytes(&combined, 500)
+                )
             } else {
                 combined
             }

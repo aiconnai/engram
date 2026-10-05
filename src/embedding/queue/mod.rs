@@ -10,25 +10,32 @@
 //! - [`status`]: per-memory status/embedding readback and failed-row retry
 //! - [`health`]: read-only durable queue health summaries
 //! - [`hygiene`]: explicit repair passes over stale/failed/complete rows
-//! - [`drain`]: storage-scoped drain of pending SQL queue rows
+//! - [`drain`]: storage-scoped drain of pending SQL queue rows and the drain cycle
+//! - [`jobs`]: per-memory job lifecycle (enqueue, atomic persist) shared by all writers
 
 mod core;
 mod drain;
 mod health;
 mod hygiene;
+mod jobs;
 mod status;
 mod types;
 mod util;
 mod worker;
 
 pub use core::EmbeddingQueue;
-pub use drain::drain_pending_embeddings;
+pub use drain::{
+    drain_pending_embeddings, drain_pending_embeddings_observed, run_embedding_drain_cycle,
+    run_embedding_drain_cycle_logged, PersistedEmbeddingObserver,
+};
 pub use health::get_embedding_queue_health;
 pub use hygiene::{requeue_stale_processing_embeddings, run_embedding_queue_hygiene};
+pub use jobs::{enqueue_embedding_job, persist_computed_embedding};
 pub use status::{get_embedding, get_embedding_status};
 pub use types::{
-    EmbeddingQueueHealth, EmbeddingQueueHygieneConfig, EmbeddingQueueHygieneReport,
-    DEFAULT_COMPLETE_RETENTION, DEFAULT_MAX_EMBEDDING_RETRIES, DEFAULT_STALE_PROCESSING_AFTER,
+    EmbeddingDrainReport, EmbeddingQueueHealth, EmbeddingQueueHygieneConfig,
+    EmbeddingQueueHygieneReport, DEFAULT_COMPLETE_RETENTION, DEFAULT_MAX_EMBEDDING_RETRIES,
+    DEFAULT_STALE_PROCESSING_AFTER,
 };
 pub use worker::EmbeddingWorker;
 
@@ -40,5 +47,7 @@ pub use status::retry_failed_embeddings;
 #[allow(unused_imports)]
 pub use types::EmbeddingRequest;
 
+#[cfg(test)]
+mod redaction_tests;
 #[cfg(test)]
 mod tests;

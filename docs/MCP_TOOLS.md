@@ -6,7 +6,7 @@ This reference documents the MCP surface that turns Engram into a shared source 
 
 It is generated from `src/mcp/tools/registry.rs`.
 
-Total tools: **296**
+Total tools: **301**
 
 ## Summary
 
@@ -270,6 +270,8 @@ Total tools: **296**
 | `room_search` | standard | misc | always | readOnlyHint | `query`, `wing` |
 | `drawer_open` | standard | misc | always | readOnlyHint | `id` |
 | `palace_visualize` | standard | misc | always | readOnlyHint | none |
+| `memory_compress_aaak` | standard | memory.admin | always | readOnlyHint | none |
+| `memory_decompress_aaak` | standard | memory.admin | always | readOnlyHint | `text` |
 | `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
 | `dream_consolidation_status` | advanced | misc | always | readOnlyHint | none |
 | `dream_insights` | advanced | misc | always | readOnlyHint | none |
@@ -308,6 +310,9 @@ Total tools: **296**
 | `recent_activity` | essential | core | always | readOnlyHint | none |
 | `discover_tools` | essential | core | always | readOnlyHint | none |
 | `model_routing_status` | standard | misc | always | readOnlyHint | none |
+| `model_route_resolve` | standard | misc | always | readOnlyHint | `purpose` |
+| `model_routes_list` | standard | misc | always | readOnlyHint | none |
+| `permission_mode_status` | standard | misc | always | readOnlyHint | none |
 
 ## Tools
 
@@ -435,7 +440,7 @@ Delete a memory (soft delete)
 
 ### `memory_list`
 
-List memories with filtering and pagination. Supports workspace isolation, tier filtering, and advanced filter syntax with AND/OR and comparison operators.
+List memories with filtering and pagination. Supports workspace isolation, tier filtering, and advanced filter syntax with AND/OR and comparison operators. Never returns a silently shortened page: a stored row that cannot be decoded (corruption or schema drift) fails the call with an internal_error naming the row id.
 
 - Tier: `standard`
 - Group: `memory.core`
@@ -1263,7 +1268,7 @@ Index a conversation into searchable memory chunks. Uses dual-limiter chunking (
 | `max_messages` | `integer` | no | Max messages per chunk Default: `10`. |
 | `max_chars` | `integer` | no | Max characters per chunk Default: `8000`. |
 | `overlap` | `integer` | no | Overlap messages between chunks Default: `2`. |
-| `ttl_days` | `integer` | no | TTL for transcript chunks in days Default: `7`. |
+| `ttl_days` | `integer` | no | TTL for transcript chunks in days; out-of-range values are rejected Default: `7`. Minimum: `0`. Maximum: `36500`. |
 
 ### `session_index_delta`
 
@@ -4369,7 +4374,7 @@ List media assets stored in the media_assets table, optionally filtered by type 
 
 ### `memory_ingest_media`
 
-Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets.
+Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets. Retrying with the same file bytes in the same workspace is idempotent: it returns the existing live memory with deduplicated=true and ignores the retry's content, tags and importance (a deleted memory is not revived). Known limitation: media_assets keys assets by file hash across all workspaces, so ingesting the same bytes in another workspace creates a memory there and re-points the shared asset row to it; a later retry in the first workspace then creates a new memory instead of deduplicating.
 
 - Tier: `standard`
 - Group: `memory.core`
@@ -4446,7 +4451,7 @@ Force an immediate WAL delta extraction and replication flush, generating a comp
 
 ### `replication_recover`
 
-Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into a target database.
+Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into a target database. When the source is the active storage database (the default), only its latest committed state is recovered, via a SQLite snapshot (frames_replayed 0, last_frame_applied null); target_frame, target_time and source_wal_path are refused for the active database and require a closed copy. The target must not be the active database or one of its side files.
 
 - Tier: `advanced`
 - Group: `misc`
@@ -4457,7 +4462,7 @@ Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `target_db_path` | `string` | yes | Destination file path for the recovered SQLite database |
-| `source_db_path` | `string` | no | Source SQLite database path (defaults to active storage database) |
+| `source_db_path` | `string` | no | Source SQLite database path (defaults to active storage database; the active database supports latest-state recovery only) |
 | `source_wal_path` | `string` | no | Source .db-wal path (defaults to source_db_path + '-wal') |
 | `target_frame` | `integer` | no | Target frame sequence number to stop recovery at (inclusive) |
 | `target_time` | `string` | no | Target timestamp (ISO-8601 / RFC3339) to stop recovery at Format: `date-time`. |
@@ -4527,6 +4532,36 @@ Generate or export a topological visualization of the memory palace in interacti
 | `wing` | `string` | no | Optional wing filter to isolate a specific palace wing. |
 | `format` | `string` | no | Visualization export format ('html', 'ascii', 'svg', 'mermaid', 'json'). Defaults to 'html'. Default: `html`. Allowed: `html`, `ascii`, `svg`, `mermaid`, `json`. |
 | `output_path` | `string` | no | Optional local file path to save the rendered output. |
+
+### `memory_compress_aaak`
+
+Compress text or a memory drawer into AAAK (Agent Abbreviation Knowledge) ultra-dense format, achieving up to 20x-30x token savings for LLM prompts.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `text` | `string` | no | Raw text or dialogue transcript to compress. |
+| `memory_id` | `integer` | no | Optional memory ID to load content directly from storage. |
+| `mode` | `string` | no | Compression mode: 'lossless' (reversible table), 'ultradense' (max token reduction), or 'transcript' (dialogue turn compaction). Default: `ultradense`. Allowed: `lossless`, `ultradense`, `transcript`. |
+
+### `memory_decompress_aaak`
+
+Decompress an AAAK-encoded text back into standard natural language prose.
+
+- Tier: `standard`
+- Group: `memory.admin`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `text`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `text` | `string` | yes | AAAK-encoded string (with [AAAK:v1] prefix or raw shorthands) to expand. |
 
 ### `dream_run_now`
 
@@ -5158,3 +5193,46 @@ Inspect active model provider availability, embedding dimensions, reranker healt
 | `model` | `string` | no | Optional provider name to inspect (e.g. tfidf, onnx, openai). |
 | `embedding_model` | `string` | no | Optional specific model ID. |
 | `dimensions` | `integer` | no | Optional dimension configuration. |
+
+### `model_route_resolve`
+
+Deterministically resolve the active or preferred model route for a given AI capability / purpose (RFC 0011). Reports exact degradation, missing secrets, or offline policy without network calls.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: `purpose`
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `purpose` | `string` | yes | Model purpose to resolve. Allowed: `embedding_text`, `embedding_image`, `rerank`, `vision_describe_image`, `audio_transcribe`, `llm_council`, `token_count`, `deterministic_eval`. |
+| `preferred_provider` | `string` | no | Optional caller preference for provider (e.g. 'openai', 'voyage', 'cohere', 'tfidf', 'clip'). |
+
+### `model_routes_list`
+
+List all declared model routes and their capabilities, cost classes, latency profiles, and fallback policies (RFC 0011).
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `purpose` | `string` | no | Optional purpose filter. Allowed: `embedding_text`, `embedding_image`, `rerank`, `vision_describe_image`, `audio_transcribe`, `llm_council`, `token_count`, `deterministic_eval`. |
+
+### `permission_mode_status`
+
+Inspect the active MCP permission mode (RFC 0010) and required modes for tools.
+
+- Tier: `standard`
+- Group: `misc`
+- Required feature: `always`
+- Annotations: readOnlyHint
+- Required inputs: none
+
+| Input | Type | Required | Summary |
+|-------|------|----------|---------|
+| `tool` | `string` | no | Optional tool name to check permission eligibility for. |

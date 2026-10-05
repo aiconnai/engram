@@ -1,0 +1,27 @@
+{
+  "schema_version": "review-v1",
+  "review_id": "rev-20260721-001",
+  "base_sha": "abcdef0123456789abcdef0123456789abcdef01",
+  "head_sha": "0123456789abcdef0123456789abcdef01234567",
+  "intensity": "high",
+  "lanes": [
+    "correctness",
+    "security",
+    "contract"
+  ],
+  "findings": [
+    {
+      "finding_id": "FIND-001",
+      "path": "src/storage/connection.rs",
+      "line": 42,
+      "category": "correctness",
+      "severity": "low",
+      "message": "Connection timeout should use constant instead of magic number",
+      "evidence": "let timeout = 30;"
+    }
+  ],
+  "verdict": "pass",
+  "reviewer": "claude-code-sonnet",
+  "timestamp": "2026-07-21T18:30:00Z",
+  "summary": "Review passed with 1 low severity suggestion."
+}

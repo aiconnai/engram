@@ -1,0 +1,17 @@
+# Governed ledger of container images that are NOT yet pinned by digest.
+#
+# `scripts/check-workflow-supply-chain.py` requires every container image used by a workflow
+# step (docker run, docker:// action) or by the Dockerfile to carry an @sha256 digest. An image
+# may sit here only while a digest cannot be resolved offline; each record needs an owner, a
+# reason and an expiry (<= 90 days). Entries that match nothing, or that expired, fail the
+# check, so this file shrinks as images get pinned. Resolve a digest with, on a networked
+# machine:  docker buildx imagetools inspect <image:tag>   (use the top-level index digest).
+
+schema_version = 1
+as_of = 2026-10-05
+owner = "Ronaldo"
+
+# Empty: semgrep/semgrep:1.169.0, rust:1-bookworm and debian:bookworm-slim were pinned by
+# index digest on 2026-10-05 (issue #241). Add a record here only for a new image whose
+# digest truly cannot be resolved yet, with owner, reason and expiry <= 90 days.
+unpinned_images = []

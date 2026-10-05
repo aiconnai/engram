@@ -84,6 +84,16 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         global,
         rerank_strategy: effective_rerank_strategy,
         policy_rerank,
+        limit: options.limit,
+        min_score_bits: options.min_score.map(f32::to_bits),
+        strategy: options.strategy.map(|s| format!("{s:?}")),
+        scope: options
+            .scope
+            .as_ref()
+            .and_then(|s| serde_json::to_string(s).ok()),
+        workspaces: options.workspaces.clone(),
+        scope_path: options.scope_path.clone(),
+        filter: options.filter.as_ref().map(|f| f.to_string()),
     };
 
     let skip_cache = params
@@ -729,7 +739,7 @@ pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
                     let first_line = memory.content.lines().next().unwrap_or("");
                     let has_more_lines = memory.content.contains('\n');
                     let title_str = if first_line.len() > 80 {
-                        format!("{}...", &first_line[..80])
+                        format!("{}...", crate::text_util::truncate_bytes(first_line, 80))
                     } else if has_more_lines {
                         format!("{}...", first_line)
                     } else {

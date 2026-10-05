@@ -1,0 +1,22 @@
+# Governed exceptions for individual scanner findings (CodeQL and other SARIF reports).
+#
+# Consumed ONLY by `scripts/check-security-findings.py --exceptions`, supplied by the CI
+# supervisor. A SARIF file cannot approve its own findings: suppressions embedded in the report
+# are ignored. A high finding passes only when a record below matches its scanner, rule_id and
+# (when present) path exactly, and the record is unexpired.
+#
+# Record schema (every field is required except `path`; a single invalid record rejects the
+# whole file, which blocks the gate):
+#
+#   [[exceptions]]
+#   scanner     = "codeql"                     # scanner id passed via --scanner
+#   rule_id     = "rs/some-rule"               # SARIF ruleId
+#   path        = "src/some/file.rs"           # optional; exact artifact URI
+#   owner       = "Ronaldo"                    # accountable human
+#   approved_by = "Ronaldo"                    # who accepted the risk
+#   expires     = 2026-12-31                   # at most 90 days after the evaluation date
+#   rationale   = "why this is not reachable / not fixable now"
+#
+# There are no approved finding exceptions today.
+
+schema_version = 1

@@ -32,13 +32,13 @@ impl MeilisearchIndexer {
 
         // Initial sync on startup (could be optimized to check state)
         if let Err(e) = self.run_full_sync().await {
-            error!("Initial full sync failed: {}", e);
+            error!(error = %crate::observability::redact::redacted(&e), "Initial full sync failed");
         }
 
         loop {
             sleep(self.sync_interval).await;
             if let Err(e) = self.run_incremental_sync().await {
-                error!("Incremental sync failed: {}", e);
+                error!(error = %crate::observability::redact::redacted(&e), "Incremental sync failed");
             }
         }
     }

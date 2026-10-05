@@ -1,0 +1,94 @@
+   Compiling version_check v0.9.5
+   Compiling zerocopy v0.8.59
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling pkg-config v0.3.34
+   Compiling once_cell v1.21.4
+   Compiling cfg-if v1.0.5
+   Compiling vcpkg v0.2.15
+   Compiling libc v0.2.180
+   Compiling smallvec v1.16.2
+   Compiling fallible-iterator v0.3.0
+   Compiling bitflags v2.13.2
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling cc v1.5.1
+   Compiling ahash v0.8.12
+   Compiling libsqlite3-sys v0.28.0
+   Compiling hashbrown v0.14.5
+   Compiling hashlink v0.9.1
+   Compiling rusqlite v0.31.0
+   Compiling c4spike v0.0.0 (/tmp/w)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.26s
+     Running tests/shim.rs (target/debug/deps/shim-ffdf94eca689360c)
+
+running 11 tests
+test shim_refuses_directory_writable_by_others ... FAILED
+test shim_new_database_is_created_owner_only_in_pinned_dir ... FAILED
+test shim_pool_and_stock_peer_process_share_wal_locks_and_checkpoint ... ok
+test shim_refuses_symlinked_main_file ... ok
+test shim_open_reads_original_after_parent_directory_rename_swap ... FAILED
+test shim_rollback_journal_mode_keeps_journal_in_pinned_dir ... FAILED
+test in_process_stock_openers_of_the_bound_pathname_are_redirected_too ... FAILED
+test shim_refuses_regular_file_swapped_over_main ... FAILED
+test unbound_databases_keep_the_stock_path_behaviour ... ok
+test shim_wal_sidecars_stay_in_pinned_directory_after_swap ... FAILED
+test shim_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+failures:
+
+---- shim_refuses_directory_writable_by_others stdout ----
+
+thread 'shim_refuses_directory_writable_by_others' (512) panicked at tests/shim.rs:111:5:
+bound a database in a world-writable directory
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- shim_new_database_is_created_owner_only_in_pinned_dir stdout ----
+
+thread 'shim_new_database_is_created_owner_only_in_pinned_dir' (509) panicked at tests/shim.rs:168:6:
+called `Result::unwrap()` on an `Err` value: SqlInputError { error: Error { code: Unknown, extended_code: 1 }, msg: "table t already exists", sql: " CREATE TABLE t(v TEXT NOT NULL); INSERT INTO t(v) VALUES ('fresh');", offset: 14 }
+
+---- shim_open_reads_original_after_parent_directory_rename_swap stdout ----
+
+thread 'shim_open_reads_original_after_parent_directory_rename_swap' (510) panicked at tests/shim.rs:38:5:
+assertion `left == right` failed: opened the attacker's database
+  left: "attacker"
+ right: "original"
+
+---- shim_rollback_journal_mode_keeps_journal_in_pinned_dir stdout ----
+
+thread 'shim_rollback_journal_mode_keeps_journal_in_pinned_dir' (515) panicked at tests/shim.rs:289:5:
+journal not in pinned dir
+
+---- in_process_stock_openers_of_the_bound_pathname_are_redirected_too stdout ----
+
+thread 'in_process_stock_openers_of_the_bound_pathname_are_redirected_too' (507) panicked at tests/shim.rs:198:5:
+assertion `left == right` failed
+  left: "attacker"
+ right: "original"
+
+---- shim_refuses_regular_file_swapped_over_main stdout ----
+
+thread 'shim_refuses_regular_file_swapped_over_main' (513) panicked at tests/shim.rs:102:5:
+opened a swapped-in main file: Ok("attacker")
+
+---- shim_wal_sidecars_stay_in_pinned_directory_after_swap stdout ----
+
+thread 'shim_wal_sidecars_stay_in_pinned_directory_after_swap' (516) panicked at tests/shim.rs:55:5:
+WAL not in pinned dir
+
+
+failures:
+    in_process_stock_openers_of_the_bound_pathname_are_redirected_too
+    shim_new_database_is_created_owner_only_in_pinned_dir
+    shim_open_reads_original_after_parent_directory_rename_swap
+    shim_refuses_directory_writable_by_others
+    shim_refuses_regular_file_swapped_over_main
+    shim_rollback_journal_mode_keeps_journal_in_pinned_dir
+    shim_wal_sidecars_stay_in_pinned_directory_after_swap
+
+test result: FAILED. 4 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+error: test failed, to rerun pass `--test shim`
+error: 1 target failed:
+    `--test shim`
+exit=101

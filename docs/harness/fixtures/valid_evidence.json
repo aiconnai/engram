@@ -1,0 +1,37 @@
+{
+  "schema_version": "evidence-v1",
+  "timestamp": "2026-07-21T18:00:00Z",
+  "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+  "task_id": "task-20260721-agent-harness-001",
+  "base_sha": "abcdef0123456789abcdef0123456789abcdef01",
+  "tree_sha": "fedcba9876543210fedcba9876543210fedcba98",
+  "verdict": "pass",
+  "checks": [
+    {
+      "id": "fmt",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 150,
+      "message": "formatting check passed"
+    },
+    {
+      "id": "clippy",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 1200,
+      "message": "clippy check passed with zero warnings"
+    },
+    {
+      "id": "test_lib",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 3400,
+      "message": "all library tests passed"
+    }
+  ],
+  "sha256_manifest": {
+    "docs/harness/SPEC.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "docs/harness/schemas/task-v1.schema.json": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+  },
+  "recorder": "trusted-runner-v1"
+}

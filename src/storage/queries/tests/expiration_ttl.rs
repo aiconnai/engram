@@ -158,3 +158,35 @@ fn test_expired_memories_excluded_from_queries() {
         })
         .unwrap();
 }
+
+#[test]
+fn out_of_range_ttl_is_a_typed_error_not_a_chrono_panic() {
+    let storage = open_test_storage();
+    storage
+        .with_connection(|conn| {
+            let mut input = test_memory_input("daily huge ttl");
+            input.tier = MemoryTier::Daily;
+            input.ttl_seconds = Some(i64::MAX);
+            assert!(matches!(
+                create_memory(conn, &input),
+                Err(EngramError::InvalidInput(_))
+            ));
+
+            let id = make_memory(conn);
+            assert!(matches!(
+                set_memory_expiration(conn, id, Some(i64::MIN)),
+                Err(EngramError::InvalidInput(_))
+            ));
+            assert!(matches!(
+                set_memory_expiration(conn, id, Some(i64::MAX)),
+                Err(EngramError::InvalidInput(_))
+            ));
+
+            assert!(matches!(
+                acquire_dream_lock(conn, "lock", "owner", u64::MAX),
+                Err(EngramError::InvalidInput(_))
+            ));
+            Ok(())
+        })
+        .unwrap();
+}

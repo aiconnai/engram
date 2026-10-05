@@ -1,0 +1,3 @@
+Darwin mode=stock runs=50 failed=0 sidecar_create_enoent_or_retry_events=0 ro_fallback_opens=0
+Darwin mode=shim runs=50 failed=0 sidecar_create_enoent_or_retry_events=9 ro_fallback_opens=0
+Darwin mode=shim-no-retry runs=50 failed=12 sidecar_create_enoent_or_retry_events=30 ro_fallback_opens=15

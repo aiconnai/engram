@@ -99,7 +99,7 @@ pub const TOOLS: &[ToolDef] = &[
         },
     ToolDef {
             name: "memory_ingest_media",
-            description: "Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets.",
+            description: "Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets. Retrying with the same file bytes in the same workspace is idempotent: it returns the existing live memory with deduplicated=true and ignores the retry's content, tags and importance (a deleted memory is not revived). Known limitation: media_assets keys assets by file hash across all workspaces, so ingesting the same bytes in another workspace creates a memory there and re-points the shared asset row to it; a later retry in the first workspace then creates a new memory instead of deduplicating.",
             schema: r#"{
                 "type": "object",
                 "properties": {

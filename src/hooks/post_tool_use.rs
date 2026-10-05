@@ -9,6 +9,17 @@ use std::collections::{BTreeSet, HashMap};
 
 const POST_TOOL_REINFORCEMENT_BOOST: f32 = 0.05;
 
+/// Most distinct memories one PostToolUse event may reinforce. The hook runs
+/// on the tool-call path, so a tool output naming thousands of ids must not
+/// turn into thousands of writes; ids beyond the cap are skipped (smallest ids
+/// that belong to the event's workspace win, deterministically) and the skip is
+/// logged.
+pub const MAX_REINFORCED_MEMORIES_PER_EVENT: usize = 50;
+
+/// Most ids whose workspace is looked up per event (reads are cheap but the id
+/// list comes from tool output and is untrusted).
+pub const MAX_CANDIDATE_LOOKUPS_PER_EVENT: usize = 20 * MAX_REINFORCED_MEMORIES_PER_EVENT;
+
 /// Handler for the PostToolUse hook.
 ///
 /// The handler reinforces memory policy from explicit memory IDs in hook
@@ -54,10 +65,36 @@ impl PostToolUseHandler {
         if memory_ids.is_empty() {
             return;
         }
+        let workspace = context.workspace.as_deref();
 
         let triggered_by = format!("post_tool_use:{}", tool_name);
         let result = storage.with_connection(|conn| {
-            for memory_id in &memory_ids {
+            // The workspace filter runs first, then the write cap: foreign ids
+            // must not use up the budget. Lookups are bounded too.
+            let mut reinforced = 0usize;
+            for (examined, memory_id) in memory_ids.iter().enumerate() {
+                if reinforced >= MAX_REINFORCED_MEMORIES_PER_EVENT
+                    || examined >= MAX_CANDIDATE_LOOKUPS_PER_EVENT
+                {
+                    tracing::warn!(
+                        target = "engram::hooks::post_tool_use",
+                        tool_name,
+                        requested = memory_ids.len(),
+                        reinforced,
+                        examined,
+                        "post-tool-use reinforcement capped; remaining ids skipped"
+                    );
+                    break;
+                }
+                if !memory_belongs_to_workspace(conn, *memory_id, workspace) {
+                    tracing::debug!(
+                        target = "engram::hooks::post_tool_use",
+                        memory_id = *memory_id,
+                        "skipping reinforcement: memory missing or in another workspace"
+                    );
+                    continue;
+                }
+                reinforced += 1;
                 if let Err(e) = record_reinforcement(
                     conn,
                     *memory_id,
@@ -83,6 +120,35 @@ impl PostToolUseHandler {
                 error = %e,
                 "failed to access storage for post-tool-use policy reinforcement; continuing"
             );
+        }
+    }
+}
+
+/// When the hook context names a workspace, only reinforce memories that live
+/// in it. A context without a workspace keeps the legacy behaviour (any id).
+fn memory_belongs_to_workspace(
+    conn: &rusqlite::Connection,
+    memory_id: i64,
+    workspace: Option<&str>,
+) -> bool {
+    let Some(workspace) = workspace else {
+        return true;
+    };
+    match conn.query_row(
+        "SELECT workspace FROM memories WHERE id = ?1",
+        [memory_id],
+        |row| row.get::<_, String>(0),
+    ) {
+        Ok(actual) => actual == workspace,
+        Err(rusqlite::Error::QueryReturnedNoRows) => false,
+        Err(e) => {
+            tracing::warn!(
+                target = "engram::hooks::post_tool_use",
+                memory_id,
+                error = %e,
+                "workspace lookup failed; skipping reinforcement"
+            );
+            false
         }
     }
 }

@@ -5,13 +5,16 @@ use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::sse::{Event, KeepAlive, Sse},
+    Extension,
 };
 use serde::Deserialize;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
+use super::request_id::RequestId;
 use super::{authenticate_transport_principal, principal_can_read_workspace, AppState};
 use crate::mcp::progress::ProgressNotification;
+use crate::observability::{CorrelationId, OperationEvent};
 use crate::realtime::{EventType, RealtimeEvent};
 
 // ---------------------------------------------------------------------------
@@ -133,18 +136,35 @@ pub(super) fn progress_to_sse(notification: &ProgressNotification) -> Event {
 pub(super) async fn handle_events(
     State(state): State<AppState>,
     headers: HeaderMap,
+    request_id: Option<Extension<RequestId>>,
     Query(query): Query<EventsQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
+    let started = std::time::Instant::now();
+    let correlation = request_id
+        .map(|Extension(id)| id.0)
+        .unwrap_or_else(CorrelationId::generate);
+    let reject = |status: StatusCode, outcome: &'static str| {
+        OperationEvent::new(
+            "http.events",
+            correlation.as_str(),
+            outcome,
+            started.elapsed(),
+        )
+        .http(None, None, status.as_u16())
+        .failed(true)
+        .emit();
+        status
+    };
     let principal = match authenticate_transport_principal(&state.api_key, &headers) {
         Ok(principal) => principal,
         Err(_) => {
             state.metrics.on_events_request(true, false);
-            return Err(StatusCode::UNAUTHORIZED);
+            return Err(reject(StatusCode::UNAUTHORIZED, "unauthorized"));
         }
     };
     if !principal_can_read_workspace(&principal, query.workspace.as_deref()) {
         state.metrics.on_events_request(true, false);
-        return Err(StatusCode::FORBIDDEN);
+        return Err(reject(StatusCode::FORBIDDEN, "forbidden"));
     }
 
     // If realtime is not enabled, return 503.
@@ -152,11 +172,21 @@ pub(super) async fn handle_events(
         Some(m) => m,
         None => {
             state.metrics.on_events_request(false, true);
-            return Err(StatusCode::SERVICE_UNAVAILABLE);
+            return Err(reject(StatusCode::SERVICE_UNAVAILABLE, "unavailable"));
         }
     };
 
     state.metrics.on_events_request(false, false);
+    // Held by the stream below: `events_active` drops when the client goes away.
+    let open_stream = state.metrics.on_events_stream_opened();
+    OperationEvent::new(
+        "http.events",
+        correlation.as_str(),
+        "stream_opened",
+        started.elapsed(),
+    )
+    .http(None, None, StatusCode::OK.as_u16())
+    .emit();
 
     // Parse Last-Event-Id header for replay support.
     let last_event_id: Option<u64> = headers
@@ -234,7 +264,12 @@ pub(super) async fn handle_events(
     let retry_event = std::iter::once(Ok::<Event, Infallible>(
         Event::default().retry(Duration::from_millis(SSE_RETRY_MS)),
     ));
-    let full_stream = tokio_stream::iter(retry_event).chain(combined);
+    let full_stream = tokio_stream::iter(retry_event)
+        .chain(combined)
+        .map(move |item| {
+            let _open = &open_stream;
+            item
+        });
 
     Ok(Sse::new(full_stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30))))
 }

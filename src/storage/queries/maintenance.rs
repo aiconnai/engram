@@ -143,7 +143,7 @@ pub fn boost_memory(
 
     // If duration specified, store boost info in metadata for later decay
     if let Some(duration) = duration_seconds {
-        let expires = now + chrono::Duration::seconds(duration);
+        let expires = expiry_after(now, duration)?;
         let mut metadata = memory.metadata.clone();
         metadata.insert(
             "boost_expires".to_string(),
@@ -163,8 +163,21 @@ pub fn boost_memory(
 
     get_memory(conn, id)
 }
+/// SQL predicate (over `memories`) for a live memory that has no usable
+/// embedding: flag unset, or flag set but no `embeddings` row to back it.
+const MISSING_EMBEDDING_PREDICATE: &str = "valid_to IS NULL AND (has_embedding = 0 OR NOT EXISTS \
+     (SELECT 1 FROM embeddings e WHERE e.memory_id = memories.id))";
+
 /// Rebuild derived indexes (issue #23): the FTS5 index and/or the embedding
 /// queue for memories missing embeddings.
+///
+/// "Missing" means a live memory whose `has_embedding` flag is unset **or**
+/// whose flag is set without an `embeddings` row. Applying the embedding rebuild
+/// (one caller-owned transaction) resets such flags to 0 and (re)queues a
+/// `pending` job per memory, resetting any existing job (including `complete`
+/// without a row, `failed` and stale `processing`) to `pending` with
+/// `retry_count = 0`. It does not touch memories that already have an
+/// embedding row and a set flag.
 ///
 /// Derived indexes are disposable — this never mutates canonical `memories` or
 /// their versions. With `apply = false` (dry-run) it only reports counts and
@@ -196,20 +209,14 @@ pub fn rebuild_derived_indexes(
     let fts_indexed_before = fts_count();
     let fts_drift_before = (memories_total - fts_indexed_before).abs();
 
-    let embeddings_present: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM memories WHERE has_embedding = 1 AND valid_to IS NULL",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
     let embeddings_missing: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM memories WHERE has_embedding = 0 AND valid_to IS NULL",
+            &format!("SELECT COUNT(*) FROM memories WHERE {MISSING_EMBEDDING_PREDICATE}"),
             [],
             |r| r.get(0),
         )
         .unwrap_or(0);
+    let embeddings_present = memories - embeddings_missing;
 
     let mut fts_rebuilt = false;
     let mut embeddings_requeued = 0i64;
@@ -229,13 +236,23 @@ pub fn rebuild_derived_indexes(
             fts_rebuilt = true;
         }
         if requeue_embeddings {
+            // Queue first (the predicate still sees the original flags), then drop
+            // flags that no embeddings row backs so flag, row and job agree.
             embeddings_requeued = conn.execute(
-                "INSERT INTO embedding_queue (memory_id, status) \
-                 SELECT id, 'pending' FROM memories WHERE has_embedding = 0 AND valid_to IS NULL \
-                 ON CONFLICT(memory_id) DO UPDATE SET \
-                   status = 'pending', error = NULL, retry_count = 0, started_at = NULL, completed_at = NULL",
+                &format!(
+                    "INSERT INTO embedding_queue (memory_id, status) \
+                     SELECT id, 'pending' FROM memories WHERE {MISSING_EMBEDDING_PREDICATE} \
+                     ON CONFLICT(memory_id) DO UPDATE SET \
+                       status = 'pending', error = NULL, retry_count = 0, started_at = NULL, completed_at = NULL"
+                ),
                 [],
             )? as i64;
+            conn.execute(
+                "UPDATE memories SET has_embedding = 0 \
+                 WHERE valid_to IS NULL AND has_embedding = 1 \
+                   AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.memory_id = memories.id)",
+                [],
+            )?;
         }
     }
 

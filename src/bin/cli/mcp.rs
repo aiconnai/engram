@@ -46,7 +46,7 @@ pub(crate) enum McpAction {
         /// HTTP port (used if transport is http)
         #[arg(long, default_value_t = 8080)]
         port: u16,
-        /// Force overwrite without backup prompt
+        /// Replace a client config that is not strict JSON (a backup is still written)
         #[arg(short, long)]
         force: bool,
     },
@@ -155,8 +155,8 @@ pub(crate) fn handle(storage: &Storage, action: McpAction) -> Result<()> {
             db_path,
             tier,
             port,
-            force: _,
-        } => handle_install(client, &transport, &db_path, &tier, port),
+            force,
+        } => handle_install(client, &transport, &db_path, &tier, port, force),
         McpAction::Status { client, port } => handle_status(storage, client, port),
         McpAction::Uninstall { client } => handle_uninstall(client),
     }
@@ -168,6 +168,7 @@ fn handle_install(
     db_path: &str,
     tier: &str,
     port: u16,
+    force: bool,
 ) -> Result<()> {
     println!("=== Engram MCP Client Auto-Installer ===");
     println!("Transport:   {}", transport);
@@ -180,6 +181,7 @@ fn handle_install(
 
     let specs = get_client_specs();
     let mut installed_count = 0;
+    let mut failures: Vec<String> = Vec::new();
 
     let server_entry = if transport == "http" {
         json!({
@@ -215,7 +217,7 @@ fn handle_install(
                 continue;
             }
 
-            match install_to_config_file(path, &server_entry) {
+            match install_to_config_file(path, &server_entry, force) {
                 Ok(status) => {
                     println!(
                         "  [✓] {} -> {} ({})",
@@ -232,12 +234,25 @@ fn handle_install(
                         path.display(),
                         err
                     );
+                    failures.push(format!("{}: {}", path.display(), err));
                 }
             }
         }
     }
 
     println!("-----------------------------------------");
+    if !failures.is_empty() {
+        println!(
+            "Configured Engram MCP in {} location(s); {} failed.",
+            installed_count,
+            failures.len()
+        );
+        return Err(EngramError::InvalidInput(format!(
+            "could not update {} client config(s): {}",
+            failures.len(),
+            failures.join("; ")
+        )));
+    }
     println!(
         "✅ Configured Engram MCP in {} location(s).",
         installed_count
@@ -246,7 +261,170 @@ fn handle_install(
     Ok(())
 }
 
-fn install_to_config_file(path: &Path, server_entry: &Value) -> Result<&'static str> {
+/// Permission bits for a rewritten or backed-up client config: the existing
+/// file's bits, or owner-only (0600) for a new file. Client configs can hold
+/// other MCP servers' tokens in their `env` blocks.
+#[cfg(unix)]
+fn config_mode(path: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path)
+        .map(|meta| meta.permissions().mode() & 0o777)
+        .unwrap_or(0o600)
+}
+
+#[cfg(not(unix))]
+fn config_mode(_path: &Path) -> u32 {
+    0o600
+}
+
+/// Exclusively create `path` with `mode` (the umask can only narrow it), then
+/// set the exact bits while the file is still empty, so no byte is ever
+/// readable under wider permissions than the config it copies.
+#[cfg(unix)]
+fn create_new_with_mode(path: &Path, mode: u32) -> std::io::Result<fs::File> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(mode)
+        .open(path)?;
+    if let Err(e) = file.set_permissions(fs::Permissions::from_mode(mode)) {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(e);
+    }
+    Ok(file)
+}
+
+#[cfg(not(unix))]
+fn create_new_with_mode(path: &Path, _mode: u32) -> std::io::Result<fs::File> {
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+}
+
+/// Set `path` to exactly `mode` (used to narrow a reused backup).
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))
+}
+
+#[cfg(not(unix))]
+fn set_mode(_path: &Path, _mode: u32) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// The file a write to `path` must replace. A symlinked config is resolved to
+/// its target so the rename lands there and the link itself survives (a
+/// dangling link is an error rather than being replaced by a regular file).
+fn resolve_write_target(path: &Path) -> std::io::Result<PathBuf> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => fs::canonicalize(path),
+        _ => Ok(path.to_path_buf()),
+    }
+}
+
+/// Back up `content` next to `path` without ever overwriting an earlier backup.
+///
+/// The first backup is `<name>.bak`; later ones are `<name>.bak.<unix-ts>` (with a
+/// numeric suffix on collision). If an existing backup already holds exactly this
+/// content, it is reused instead of writing a duplicate. Backups carry the
+/// config's permission bits (a reused backup is set to them too).
+fn write_unique_backup(path: &Path, content: &str) -> Result<PathBuf> {
+    let base = path.with_extension("json.bak");
+    let mode = config_mode(path);
+
+    if let (Some(dir), Some(name)) = (base.parent(), base.file_name()) {
+        let prefix = name.to_string_lossy().into_owned();
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let candidate = entry.path();
+                let is_backup = candidate
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with(&prefix));
+                if is_backup
+                    && fs::read_to_string(&candidate).is_ok_and(|existing| existing == content)
+                {
+                    set_mode(&candidate, mode).map_err(EngramError::Io)?;
+                    return Ok(candidate);
+                }
+            }
+        }
+    }
+
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let stem = base.as_os_str().to_string_lossy().into_owned();
+    let mut candidates = vec![base.clone(), PathBuf::from(format!("{stem}.{ts}"))];
+    candidates.extend((1..1000).map(|n| PathBuf::from(format!("{stem}.{ts}.{n}"))));
+
+    for candidate in candidates {
+        match create_new_with_mode(&candidate, mode) {
+            Ok(mut file) => {
+                use std::io::Write;
+                file.write_all(content.as_bytes())
+                    .and_then(|_| file.sync_all())
+                    .map_err(EngramError::Io)?;
+                return Ok(candidate);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(EngramError::Io(e)),
+        }
+    }
+    Err(EngramError::Storage(format!(
+        "could not allocate a unique backup name for {}",
+        path.display()
+    )))
+}
+
+/// Replace `path` atomically: write a sibling temp file, fsync it, then rename.
+/// A crash or full disk therefore never leaves a truncated client config. The
+/// temp file is created with the config's permission bits (0600 for a new
+/// config), and a symlinked config is written through to its target.
+fn write_atomic(path: &Path, contents: &str) -> Result<()> {
+    use std::io::Write;
+
+    let target = resolve_write_target(path).map_err(EngramError::Io)?;
+    let mode = config_mode(&target);
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "config".to_string());
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = target.with_file_name(format!(".{name}.engram-tmp.{}.{nanos}", std::process::id()));
+
+    let result = (|| -> std::io::Result<()> {
+        let mut file = create_new_with_mode(&tmp, mode)?;
+        file.write_all(contents.as_bytes())?;
+        file.sync_all()?;
+        fs::rename(&tmp, &target)
+    })();
+
+    if let Err(e) = result {
+        let _ = fs::remove_file(&tmp);
+        return Err(EngramError::Io(e));
+    }
+    Ok(())
+}
+
+fn refuse_unparseable(path: &Path, why: &str) -> EngramError {
+    EngramError::InvalidInput(format!(
+        "{} is not a strict-JSON object with {}; refusing to overwrite it. \
+         Fix or remove the file, or re-run with --force to back it up and replace it",
+        path.display(),
+        why
+    ))
+}
+
+fn install_to_config_file(path: &Path, server_entry: &Value, force: bool) -> Result<&'static str> {
     if let Some(parent) = path.parent() {
         if !parent.exists() {
             fs::create_dir_all(parent).map_err(EngramError::Io)?;
@@ -256,42 +434,51 @@ fn install_to_config_file(path: &Path, server_entry: &Value) -> Result<&'static 
     let mut config: Value = if path.exists() {
         let content = fs::read_to_string(path).map_err(EngramError::Io)?;
 
-        // Backup before edit
-        let bak_path = path.with_extension("json.bak");
-        let _ = fs::write(&bak_path, &content);
+        let parsed = match serde_json::from_str::<Value>(&content) {
+            Ok(v) if v.is_object() => v,
+            Ok(_) if !force => return Err(refuse_unparseable(path, "an object at the top level")),
+            Err(e) if !force => {
+                return Err(refuse_unparseable(path, &format!("valid syntax ({e})")))
+            }
+            _ => json!({}),
+        };
+        if !force
+            && parsed
+                .get("mcpServers")
+                .is_some_and(|servers| !servers.is_object())
+        {
+            return Err(refuse_unparseable(path, "an object under \"mcpServers\""));
+        }
 
-        serde_json::from_str(&content).unwrap_or_else(|_| json!({}))
+        // Back up before any edit; a backup failure aborts the install.
+        write_unique_backup(path, &content)?;
+        parsed
     } else {
         json!({})
     };
 
-    if !config.is_object() {
-        config = json!({});
-    }
-
-    let servers_obj = config
-        .as_object_mut()
-        .expect("config is object")
+    let Some(config_obj) = config.as_object_mut() else {
+        return Err(refuse_unparseable(path, "an object at the top level"));
+    };
+    let servers_obj = config_obj
         .entry("mcpServers".to_string())
         .or_insert_with(|| json!({}));
-
     if !servers_obj.is_object() {
         *servers_obj = json!({});
     }
+    let Some(servers) = servers_obj.as_object_mut() else {
+        return Err(refuse_unparseable(path, "an object under \"mcpServers\""));
+    };
 
-    let action_str = if servers_obj.get("engram").is_some() {
+    let action_str = if servers.contains_key("engram") {
         "updated"
     } else {
         "created"
     };
-
-    servers_obj
-        .as_object_mut()
-        .expect("servers is object")
-        .insert("engram".to_string(), server_entry.clone());
+    servers.insert("engram".to_string(), server_entry.clone());
 
     let formatted = serde_json::to_string_pretty(&config).map_err(EngramError::Serialization)?;
-    fs::write(path, formatted).map_err(EngramError::Io)?;
+    write_atomic(path, &formatted)?;
 
     Ok(action_str)
 }
@@ -404,7 +591,7 @@ fn handle_uninstall(target: ClientTarget) -> Result<()> {
                 if servers.remove("engram").is_some() {
                     let formatted = serde_json::to_string_pretty(&json_val)
                         .map_err(EngramError::Serialization)?;
-                    fs::write(path, formatted).map_err(EngramError::Io)?;
+                    write_atomic(path, &formatted)?;
                     println!(
                         "  [✓] Removed from {} ({})",
                         spec.client_name,
@@ -441,7 +628,7 @@ mod tests {
         });
 
         // 1. First install (creates file)
-        let res = install_to_config_file(&config_file, &entry).unwrap();
+        let res = install_to_config_file(&config_file, &entry, false).unwrap();
         assert_eq!(res, "created");
         assert!(config_file.exists());
 
@@ -450,7 +637,7 @@ mod tests {
         assert!(parsed["mcpServers"]["engram"].is_object());
 
         // 2. Second install (updates file)
-        let res2 = install_to_config_file(&config_file, &entry).unwrap();
+        let res2 = install_to_config_file(&config_file, &entry, false).unwrap();
         assert_eq!(res2, "updated");
 
         // 3. Verify backup file created
@@ -481,7 +668,7 @@ mod tests {
             "args": ["--transport", "stdio"]
         });
 
-        install_to_config_file(&config_file, &entry).unwrap();
+        install_to_config_file(&config_file, &entry, false).unwrap();
 
         let read_content = fs::read_to_string(&config_file).unwrap();
         let parsed: Value = serde_json::from_str(&read_content).unwrap();
@@ -489,5 +676,149 @@ mod tests {
         assert!(parsed["mcpServers"]["sqlite"].is_object());
         assert!(parsed["mcpServers"]["github"].is_object());
         assert!(parsed["mcpServers"]["engram"].is_object());
+    }
+
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    fn chmod(path: &Path, mode: u32) {
+        set_mode(path, mode).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_keeps_an_owner_only_config_and_its_backup_owner_only() {
+        let dir = tempdir().unwrap();
+        let config_file = dir.path().join("mcp.json");
+        let original = r#"{"mcpServers":{"other":{"env":{"TOKEN":"t"}}}}"#;
+        fs::write(&config_file, original).unwrap();
+        chmod(&config_file, 0o600);
+
+        install_to_config_file(&config_file, &json!({"command": "engram-server"}), false).unwrap();
+
+        assert_eq!(mode_of(&config_file), 0o600, "rewritten config");
+        let bak = dir.path().join("mcp.json.bak");
+        assert_eq!(fs::read_to_string(&bak).unwrap(), original);
+        assert_eq!(mode_of(&bak), 0o600, "backup of an owner-only config");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_keeps_a_group_readable_config_mode() {
+        let dir = tempdir().unwrap();
+        let config_file = dir.path().join("mcp.json");
+        fs::write(&config_file, r#"{"mcpServers":{}}"#).unwrap();
+        chmod(&config_file, 0o640);
+
+        install_to_config_file(&config_file, &json!({"command": "engram-server"}), false).unwrap();
+
+        assert_eq!(mode_of(&config_file), 0o640);
+        assert_eq!(mode_of(&dir.path().join("mcp.json.bak")), 0o640);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn new_config_is_created_owner_only() {
+        let dir = tempdir().unwrap();
+        let config_file = dir.path().join("mcp.json");
+
+        install_to_config_file(&config_file, &json!({"command": "engram-server"}), false).unwrap();
+
+        assert_eq!(mode_of(&config_file), 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn temp_and_backup_files_start_with_the_target_mode_before_any_byte() {
+        let dir = tempdir().unwrap();
+        for mode in [0o600, 0o640] {
+            let file_path = dir.path().join(format!("fresh-{mode:o}"));
+            let file = create_new_with_mode(&file_path, mode).unwrap();
+            assert_eq!(fs::metadata(&file_path).unwrap().len(), 0);
+            assert_eq!(mode_of(&file_path), mode, "mode {mode:o} at creation");
+            drop(file);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reused_identical_backup_is_narrowed_to_the_config_mode() {
+        let dir = tempdir().unwrap();
+        let config_file = dir.path().join("mcp.json");
+        let original = r#"{"mcpServers":{}}"#;
+        fs::write(&config_file, original).unwrap();
+        chmod(&config_file, 0o600);
+        let bak = dir.path().join("mcp.json.bak");
+        fs::write(&bak, original).unwrap();
+        chmod(&bak, 0o644);
+
+        assert_eq!(write_unique_backup(&config_file, original).unwrap(), bak);
+
+        assert_eq!(mode_of(&bak), 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_through_a_symlinked_config_keeps_the_symlink() {
+        let dir = tempdir().unwrap();
+        let real_dir = dir.path().join("dotfiles");
+        fs::create_dir(&real_dir).unwrap();
+        let real = real_dir.join("mcp.json");
+        fs::write(&real, r#"{"mcpServers":{"other":{"command":"x"}}}"#).unwrap();
+        chmod(&real, 0o600);
+        let link = dir.path().join("mcp.json");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        install_to_config_file(&link, &json!({"command": "engram-server"}), false).unwrap();
+        assert_still_a_symlink_to(&link, &real);
+
+        let parsed: Value = serde_json::from_str(&fs::read_to_string(&real).unwrap()).unwrap();
+        assert!(parsed["mcpServers"]["engram"].is_object());
+        assert!(parsed["mcpServers"]["other"].is_object());
+        assert_eq!(mode_of(&real), 0o600);
+        for d in [dir.path(), real_dir.as_path()] {
+            let leftovers: Vec<_> = fs::read_dir(d)
+                .unwrap()
+                .flatten()
+                .filter(|e| e.file_name().to_string_lossy().contains("engram-tmp"))
+                .collect();
+            assert!(leftovers.is_empty(), "temp files left in {}", d.display());
+        }
+    }
+
+    #[cfg(unix)]
+    fn assert_still_a_symlink_to(link: &Path, real: &Path) {
+        let meta = fs::symlink_metadata(link).unwrap();
+        assert!(meta.file_type().is_symlink(), "config symlink was replaced");
+        assert_eq!(
+            fs::canonicalize(link).unwrap(),
+            fs::canonicalize(real).unwrap()
+        );
+    }
+
+    #[test]
+    fn refuses_non_object_config_and_bad_mcp_servers_without_force() {
+        let dir = tempdir().unwrap();
+        let entry = json!({ "command": "engram-server" });
+
+        for body in ["[1,2]", r#"{"mcpServers":"nope"}"#, "not json"] {
+            let config_file = dir.path().join("mcp.json");
+            fs::write(&config_file, body).unwrap();
+            let err = install_to_config_file(&config_file, &entry, false).unwrap_err();
+            assert!(matches!(err, EngramError::InvalidInput(_)), "{body}: {err}");
+            assert_eq!(fs::read_to_string(&config_file).unwrap(), body);
+            assert!(!dir.path().join("mcp.json.bak").exists());
+
+            install_to_config_file(&config_file, &entry, true).unwrap();
+            assert_eq!(
+                fs::read_to_string(dir.path().join("mcp.json.bak")).unwrap(),
+                body
+            );
+            fs::remove_file(dir.path().join("mcp.json.bak")).unwrap();
+        }
     }
 }

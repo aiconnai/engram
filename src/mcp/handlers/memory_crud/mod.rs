@@ -27,6 +27,8 @@ pub(super) fn strip_private_content(content: &str) -> String {
 }
 
 mod create;
+#[cfg(test)]
+mod create_embedding_tests;
 mod facts;
 mod lifecycle;
 mod procedural;

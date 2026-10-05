@@ -1,0 +1,11 @@
+# Synthetic fixture: an approved, unexpired finding exception.
+schema_version = 1
+
+[[exceptions]]
+scanner = "codeql"
+rule_id = "rs/synthetic-high"
+path = "src/lib.rs"
+owner = "Ronaldo"
+approved_by = "Ronaldo"
+expires = 2026-12-31
+rationale = "Synthetic fixture rationale: finding is a known false positive."

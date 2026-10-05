@@ -44,3 +44,10 @@ version-refresh-matrix:
 loop-security:
     @bash scripts/run-agentshield-loop.sh
 
+deny:
+    cargo deny check advisories bans licenses sources
+
+audit:
+    python3 scripts/check-security-exceptions.py --config docs/security/advisory-exceptions.toml --audit-config .cargo/audit.toml --deny-config deny.toml
+    cargo audit
+

@@ -1,0 +1,4 @@
+# Byte-exact artifacts: trailing whitespace is part of the recorded bytes (C4 spike traces and
+# fuzz seeds that exercise trailing whitespace), so whitespace checks must not flag them.
+docs/decisions/assets/2026-10-05-c4-spike/evidence/** -whitespace
+fuzz/seeds/** -whitespace

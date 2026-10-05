@@ -1,0 +1,104 @@
+name: Agent Evidence
+
+# Read-only merge-policy evaluation (task H5). This workflow NEVER approves, merges, deploys,
+# publishes or comments; it has no write permission, no secret and no token beyond the automatic
+# read-only GITHUB_TOKEN used by actions/checkout (not persisted).
+#
+# Trust split:
+#   * trusted/   = the BASE revision. The evaluator (docs/harness/bin/merge-gate.py), its tests, the
+#                  check registry and the security-gate policy are executed ONLY from here.
+#   * candidate/ = the PR HEAD. Untrusted input: read through git by the evaluator, never executed.
+# Under pull_request the workflow file itself is the PR's copy, so its result is NOT trusted and is
+# not a merge signal: a modified copy could run other code with this job's read-only token. That
+# is why the job holds no write permission and no secret (limiting what such a copy could reach),
+# and why the decision a human relies on comes from the evaluator run by the operator from a
+# trusted revision. pull_request_target is never used.
+#
+# Without operator-owned inputs (trusted-runner evidence, review receipt, identity allowlist, check
+# runs, workflow runs saved outside any worktree) the decision is "refused" by design. The job
+# succeeds when the evaluator produced a well-formed decision (eligible or refused); the decision
+# is advisory input and a human decides the merge. --head-ref is the raw head SHA here, so the
+# evaluator's final head re-check is vacuous in CI: the human merge must compare the live PR head
+# with bound.head. On the PR that introduces this workflow the base has no evaluator yet, so the
+# run fails with "evaluator unavailable on the base revision".
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  merge-policy:
+    name: Agent Evidence (read-only merge policy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the base revision (trusted evaluator)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Check out the PR head (untrusted input, never executed)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Evaluator present on the base revision
+        run: |
+          if [ ! -f trusted/docs/harness/bin/merge-gate.py ]; then
+            echo "::error::evaluator unavailable on the base revision (no merge-gate.py yet)"
+            exit 1
+          fi
+
+      - name: Evaluator unit tests (base revision code, synthetic fixtures)
+        run: python3 -m unittest discover -s trusted/docs/harness/tests -p 'test_merge_gate.py' -v
+
+      - name: Evaluate the PR head (decision only)
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REGISTRY: trusted/docs/harness/checks/registry.json
+          READ_POLICY: "import json, sys; print(json.load(open(sys.argv[1]))['policy_version'])"
+        run: |
+          policy="$(python3 -c "$READ_POLICY" "$REGISTRY")"
+          set +e
+          python3 trusted/docs/harness/bin/merge-gate.py \
+            --repo candidate \
+            --task "pr-${PR_NUMBER}" \
+            --head-ref "$HEAD_SHA" \
+            --base-ref "refs/remotes/origin/${BASE_REF}" \
+            --expect-head "$HEAD_SHA" \
+            --expect-base "$BASE_SHA" \
+            --expect-policy-version "$policy" >decision.json
+          rc=$?
+          set -e
+          python3 - "$rc" decision.json <<'PY'
+          import json, sys
+          rc, path = int(sys.argv[1]), sys.argv[2]
+          doc = json.load(open(path))
+          expected = {"eligible": 0, "refused": 1}
+          if doc.get("decision") not in expected or expected[doc["decision"]] != rc:
+              sys.exit(f"malformed decision (exit {rc}): {doc.get('decision')!r}")
+          print(f"decision={doc['decision']} head={doc['bound'].get('head')}")
+          for reason in doc["reasons"]:
+              print(f"- {reason['section']}: {reason['code']}")
+          PY
+          {
+            echo "### Agent Evidence (advisory; a human decides the merge)"
+            echo '```json'
+            cat decision.json
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"

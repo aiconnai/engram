@@ -1,0 +1,152 @@
+name: Candidate Quality Evidence
+
+# Q1b: current-run retrieval and Criterion evidence for the commit under review (Q7 runner).
+# REPORT-ONLY and NOT a required check. It stays out of branch protection, out of ci.yml and out
+# of every `needs:` chain until the candidate floors are accepted by independent human review and
+# anchored on the protected base (docs/quality/retrieval-performance-policy.md, "Trust model" and
+# "Consuming a report"). No step uses continue-on-error:
+#   * a failed capture/run or an integrity failure (status, SHA, supervisor binding) fails the job;
+#   * intact evidence whose floors are not accepted yet is reported as NOT ACCEPTED with a warning
+#     (consumer exit 3), which is the expected state of the report-only phase.
+# The runner, capture and consumer execute from a TRUSTED checkout of the anchor commit on the
+# protected base, never from the candidate tree; only data files come from the candidate. The
+# candidate's build scripts and tests still run in this job under the same user, so this is
+# tamper-evidence for the verifier source, not isolation; acceptance remains a human decision.
+# The historical baseline integrity lane (Q1a) stays in the required Test job, unchanged.
+# Rollback: delete this workflow; no required context or baseline depends on it.
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.air/**'
+      - 'LICENSE'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.air/**'
+      - 'LICENSE'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+
+jobs:
+  quality-candidate:
+    name: Candidate Quality Evidence (report-only, not required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out the candidate (full history for merge-base and anchor ancestry)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          path: cand
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+      - name: Free Linux runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          docker system prune -af || true
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          workspaces: cand -> target
+          shared-key: quality-candidate
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Supervisor-owned inputs: candidate SHA from the checkout, anchor = merge-base with the
+      # protected base (first parent when the candidate is the base tip, e.g. a push to main), the
+      # supervisor id from this run, and a trusted checkout of the anchor in a separate directory.
+      # On pull_request, actions/checkout checks out refs/pull/<N>/merge, so the candidate SHA is
+      # GitHub's synthetic merge commit (PR head merged into the current base), not the PR head
+      # SHA; the report binds that merge commit.
+      - name: Resolve candidate, trusted anchor and supervisor id
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          SHA="$(git -C cand rev-parse HEAD)"
+          ANCHOR="$(git -C cand merge-base "$SHA" origin/main)"
+          if [ "$ANCHOR" = "$SHA" ]; then
+            ANCHOR="$(git -C cand rev-parse "$SHA^1")"
+          fi
+          git -C cand worktree add --detach "$GITHUB_WORKSPACE/trusted" "$ANCHOR"
+          for tool in scripts/capture-criterion-candidate.py scripts/run-quality-candidate.py \
+                      scripts/consume-quality-candidate.py scripts/ci-required-features.env; do
+            if [ ! -f "trusted/$tool" ]; then
+              echo "::error::trusted anchor $ANCHOR has no $tool; candidate evidence cannot be" \
+                "verified from a trusted ref until the runner is on the protected base (bootstrap)"
+              exit 1
+            fi
+          done
+          # Feature list from the trusted ref, read as data (never sourced from the candidate).
+          FEATURES="$(sed -n 's/^CI_REQUIRED_FEATURES=//p' trusted/scripts/ci-required-features.env)"
+          if [ -z "$FEATURES" ]; then
+            echo "::error::trusted ci-required-features.env has no CI_REQUIRED_FEATURES" >&2
+            exit 1
+          fi
+          {
+            echo "CANDIDATE_SHA=$SHA"
+            echo "FLOORS_ANCHOR=$ANCHOR"
+            echo "QUALITY_FEATURES=$FEATURES"
+            echo "ENGRAM_QUALITY_SUPERVISOR=${RUN_ID}-${RUN_ATTEMPT}"
+          } >> "$GITHUB_ENV"
+          echo "candidate=$SHA anchor=$ANCHOR supervisor=${RUN_ID}-${RUN_ATTEMPT}"
+      - name: Capture Criterion evidence bound to the candidate (trusted capture)
+        run: >-
+          python3 trusted/scripts/capture-criterion-candidate.py
+          --candidate-dir cand
+          --require-supervisor
+          --candidate-sha "$CANDIDATE_SHA"
+          --features "$QUALITY_FEATURES"
+          --output "$RUNNER_TEMP/quality-candidate/criterion.txt"
+      - name: Run the candidate retrieval evaluation (trusted runner)
+        run: >-
+          python3 trusted/scripts/run-quality-candidate.py
+          --candidate-dir cand
+          --require-supervisor
+          --floors-anchor "$FLOORS_ANCHOR"
+          --candidate-sha "$CANDIDATE_SHA"
+          --corpus cand/tests/fixtures/retrieval_quality/candidate_corpus.json
+          --features "$QUALITY_FEATURES"
+          --criterion "$RUNNER_TEMP/quality-candidate/criterion.txt"
+          --output "$RUNNER_TEMP/quality-candidate/quality-candidate-report.json"
+      - name: Apply the Q1 consumption rule (report-only verdict)
+        if: always()
+        run: |
+          # GitHub runs this with `bash -e`: capture the exit code explicitly (exit 3 = intact
+          # evidence, floors not accepted yet; every other non-zero exit fails the job).
+          rc=0
+          python3 trusted/scripts/consume-quality-candidate.py \
+            --report "$RUNNER_TEMP/quality-candidate/quality-candidate-report.json" \
+            --candidate-sha "${CANDIDATE_SHA:-unresolved}" \
+            --supervisor "${ENGRAM_QUALITY_SUPERVISOR:-unresolved}" \
+            --summary "$GITHUB_STEP_SUMMARY" || rc=$?
+          if [ "$rc" -eq 3 ]; then
+            echo "::warning::candidate evidence is intact but NOT ACCEPTED: floors pending independent review"
+            exit 0
+          fi
+          exit "$rc"
+      - name: Upload candidate evidence (report, Criterion capture)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: quality-candidate-evidence
+          path: ${{ runner.temp }}/quality-candidate/
+          if-no-files-found: warn
+          retention-days: 30

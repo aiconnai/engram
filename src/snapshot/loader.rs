@@ -228,6 +228,7 @@ impl SnapshotLoader {
             let new_memory = storage.with_transaction(|conn| {
                 use crate::storage::queries::create_memory;
                 let m = create_memory(conn, &input)?;
+                crate::embedding::enqueue_embedding_job(conn, m.id)?;
 
                 // Set snapshot provenance columns
                 conn.execute(
@@ -548,6 +549,37 @@ mod tests {
             .expect("insert");
     }
 
+    // ── C2: bounded entry reads (tiny injected limits, no large payloads) ───
+
+    #[test]
+    fn test_read_entry_limited_boundaries() {
+        let limit = 64u64;
+        let exact = std::io::Cursor::new(vec![b'a'; limit as usize]);
+        let bytes = SnapshotLoader::read_entry_limited(exact, "exact.json", limit)
+            .expect("payload exactly at the limit is accepted");
+        assert_eq!(bytes.len() as u64, limit);
+
+        let over = std::io::Cursor::new(vec![b'a'; limit as usize + 1]);
+        let err = SnapshotLoader::read_entry_limited(over, "over.json", limit)
+            .expect_err("payload one byte over the limit is refused");
+        assert!(
+            err.to_string().contains("decompression bomb guard"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn test_read_entry_limited_stops_reading_unbounded_stream() {
+        // An endless reader must be cut at limit + 1 bytes, never drained.
+        let endless = std::io::repeat(b'x');
+        let err = SnapshotLoader::read_entry_limited(endless, "endless.json", 1024)
+            .expect_err("unbounded stream refused");
+        assert!(
+            err.to_string().contains("exceeds maximum allowed size"),
+            "{err}"
+        );
+    }
+
     // ── M5: sanitize_zip_entry tests ─────────────────────────────────────────
 
     #[test]
@@ -637,6 +669,43 @@ mod tests {
         assert_eq!(result.memories_loaded, 1);
         assert_eq!(result.memories_skipped, 0);
         assert_eq!(result.target_workspace, "dst-ws");
+    }
+
+    #[test]
+    fn test_load_enqueues_embedding_jobs_for_loaded_memories() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("enqueue.egm");
+        let src = make_storage();
+        insert_test_memory(&src, "Snapshot memory to embed", "default");
+        SnapshotBuilder::new(src).build(&path).expect("build");
+
+        let dst = make_storage();
+        let result =
+            SnapshotLoader::load(&dst, &path, LoadStrategy::Merge, None, None, None).expect("load");
+        assert_eq!(result.memories_loaded, 1);
+
+        // Loaded memories carry no embedding: each must have a pending job so
+        // the background drain produces it (health: backlog, not degraded).
+        let pending: i64 = dst
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM embedding_queue WHERE status = 'pending'",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("queue count");
+        assert_eq!(pending, 1);
+        let health = crate::storage::health_check_storage(&dst).expect("health");
+        let embeddings = health
+            .derived_indexes
+            .iter()
+            .find(|index| index.name == "embeddings")
+            .expect("embeddings health");
+        assert_eq!(
+            embeddings.status,
+            crate::storage::DerivedIndexStatus::Backlogged
+        );
     }
 
     #[test]

@@ -39,8 +39,12 @@ struct TestHandler {
 
 impl TestHandler {
     fn new() -> Self {
-        let storage = Storage::open_in_memory().expect("in-memory storage");
         let embedder = create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder");
+        Self::with_embedder(embedder)
+    }
+
+    fn with_embedder(embedder: Arc<dyn engram::embedding::Embedder>) -> Self {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
         let ctx = handlers::HandlerContext {
             storage: storage.clone(),
             embedder: embedder.clone(),
@@ -212,6 +216,10 @@ impl McpHandler for TestHandler {
         }
     }
 }
+
+// Q4 contract matrix (principal-aware tools/call envelopes, pagination, lifecycle).
+#[path = "mcp_protocol_tests/contract_matrix.rs"]
+mod contract_matrix;
 
 // ---------------------------------------------------------------------------
 // Helper utilities
@@ -3145,4 +3153,458 @@ fn test_recent_activity_preview_truncated_at_100_chars() {
             preview.len()
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// C7: `defer_embedding` end-to-end (MCP create -> queue -> drain -> health)
+// ---------------------------------------------------------------------------
+
+/// (embedding rows, `has_embedding` flag, job status) for one memory.
+fn embedding_coherence(handler: &TestHandler, memory_id: i64) -> (i64, i64, Option<String>) {
+    use rusqlite::{params, OptionalExtension};
+    handler
+        .storage
+        .with_connection(|conn| {
+            let rows = conn.query_row(
+                "SELECT COUNT(*) FROM embeddings WHERE memory_id = ?",
+                params![memory_id],
+                |row| row.get(0),
+            )?;
+            let flag = conn.query_row(
+                "SELECT has_embedding FROM memories WHERE id = ?",
+                params![memory_id],
+                |row| row.get(0),
+            )?;
+            let job = conn
+                .query_row(
+                    "SELECT status FROM embedding_queue WHERE memory_id = ?",
+                    params![memory_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            Ok((rows, flag, job))
+        })
+        .expect("coherence readback")
+}
+
+fn embeddings_index_health(handler: &TestHandler) -> engram::storage::DerivedIndexHealth {
+    engram::storage::health_check_storage(&handler.storage)
+        .expect("health check")
+        .derived_indexes
+        .into_iter()
+        .find(|index| index.name == "embeddings")
+        .expect("embeddings derived index")
+}
+
+#[test]
+fn test_deferred_create_enqueues_and_drains() {
+    use engram::storage::DerivedIndexStatus;
+
+    let handler = TestHandler::new();
+    let created = call_tool_json(
+        &handler,
+        901,
+        "memory_create",
+        json!({
+            "content": "deferred embedding goes through the background queue",
+            "memory_type": "note",
+            "defer_embedding": true
+        }),
+    );
+    let id = created["id"].as_i64().expect("created memory id");
+
+    // Catalog promise: embedding deferred to the background queue. The memory is
+    // durable, a pending job exists, no embedding exists yet, and health shows
+    // the backlog (not "healthy because nothing is wrong").
+    assert_eq!(
+        embedding_coherence(&handler, id),
+        (0, 0, Some("pending".to_string()))
+    );
+    let pending = embeddings_index_health(&handler);
+    assert_eq!(pending.status, DerivedIndexStatus::Backlogged);
+    assert_eq!(pending.pending_count, 1);
+    assert_eq!(pending.details["missing_embedding_unqueued"], "0");
+    assert!(
+        handler.ctx.hnsw_index.read().is_empty(),
+        "deferred create must not insert into the vector index before an embedding exists"
+    );
+
+    // Worker drains the queue: row + flag + completion arrive together.
+    let drained = engram::embedding::drain_pending_embeddings(
+        &handler.storage,
+        handler.ctx.embedder.as_ref(),
+        10,
+    )
+    .expect("drain");
+    assert_eq!(drained, 1);
+    assert_eq!(
+        embedding_coherence(&handler, id),
+        (1, 1, Some("complete".to_string()))
+    );
+    let drained_health = embeddings_index_health(&handler);
+    assert_eq!(drained_health.status, DerivedIndexStatus::Healthy);
+    assert_eq!(drained_health.pending_count, 0);
+    assert_eq!(drained_health.indexed_count, 1);
+
+    // Idempotent: draining again changes nothing.
+    assert_eq!(
+        engram::embedding::drain_pending_embeddings(
+            &handler.storage,
+            handler.ctx.embedder.as_ref(),
+            10
+        )
+        .expect("second drain"),
+        0
+    );
+    assert_eq!(
+        embedding_coherence(&handler, id),
+        (1, 1, Some("complete".to_string()))
+    );
+}
+
+#[test]
+fn test_immediate_create_embeds_and_completes_job() {
+    use engram::storage::DerivedIndexStatus;
+
+    let handler = TestHandler::new();
+    let created = call_tool_json(
+        &handler,
+        902,
+        "memory_create",
+        json!({
+            "content": "immediate embedding is computed right after the commit",
+            "memory_type": "note",
+            "defer_embedding": false
+        }),
+    );
+    let id = created["id"].as_i64().expect("created memory id");
+
+    assert_eq!(
+        embedding_coherence(&handler, id),
+        (1, 1, Some("complete".to_string())),
+        "immediate path must write row, flag and job completion together"
+    );
+    let health = embeddings_index_health(&handler);
+    assert_eq!(health.status, DerivedIndexStatus::Healthy);
+    assert_eq!(health.pending_count, 0);
+    assert!(!handler.ctx.hnsw_index.read().is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// C5: characterization of `memory_create` persistence through the MCP path
+//
+// These pin the observable contract (MCP response, persisted rows, flags,
+// queue job, vector index, in-memory fuzzy vocabulary) so the persistence
+// boundary inside the create handler can be restructured without drift.
+// ---------------------------------------------------------------------------
+
+/// Wraps the real embedder and can simulate a provider outage on demand.
+struct OutageEmbedder {
+    inner: Arc<dyn engram::embedding::Embedder>,
+    down: std::sync::atomic::AtomicBool,
+}
+
+impl OutageEmbedder {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            inner: create_embedder(&EmbeddingConfig::default()).expect("tfidf embedder"),
+            down: std::sync::atomic::AtomicBool::new(false),
+        })
+    }
+
+    fn set_down(&self, down: bool) {
+        self.down.store(down, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl engram::embedding::Embedder for OutageEmbedder {
+    fn embed(&self, text: &str) -> engram::error::Result<Vec<f32>> {
+        if self.down.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(engram::error::EngramError::Embedding(
+                "provider outage".to_string(),
+            ));
+        }
+        self.inner.embed(text)
+    }
+
+    fn dimensions(&self) -> usize {
+        self.inner.dimensions()
+    }
+
+    fn model_name(&self) -> &str {
+        "outage-test"
+    }
+}
+
+fn scalar_count(handler: &TestHandler, sql: &str) -> i64 {
+    handler
+        .storage
+        .with_connection(|conn| Ok(conn.query_row(sql, [], |row| row.get(0))?))
+        .expect("count query")
+}
+
+/// Raw `tools/call` that returns the whole JSON-RPC result (no error assert on
+/// the tool payload): tool-level failures are reported inside the payload.
+fn create_via_mcp(handler: &TestHandler, id: i64, arguments: Value) -> Value {
+    call_tool_json(handler, id, "memory_create", arguments)
+}
+
+#[test]
+fn c5_create_response_shape_is_identical_with_and_without_immediate_embedding() {
+    let handler = TestHandler::new();
+    let deferred = create_via_mcp(
+        &handler,
+        1001,
+        json!({"content": "c5 deferred shape", "memory_type": "note", "defer_embedding": true}),
+    );
+    let immediate = create_via_mcp(
+        &handler,
+        1002,
+        json!({"content": "c5 immediate shape", "memory_type": "note"}),
+    );
+
+    let keys = |v: &Value| -> Vec<String> {
+        let mut k: Vec<String> = v.as_object().expect("object").keys().cloned().collect();
+        k.sort();
+        k
+    };
+    assert_eq!(keys(&deferred), keys(&immediate));
+    for response in [&deferred, &immediate] {
+        assert!(response.get("error").is_none(), "{response}");
+        assert!(response["id"].as_i64().is_some());
+        assert_eq!(
+            response["type"]
+                .as_str()
+                .or(response["memory_type"].as_str()),
+            Some("note")
+        );
+    }
+    let d = deferred["id"].as_i64().unwrap();
+    let i = immediate["id"].as_i64().unwrap();
+    assert_eq!(
+        embedding_coherence(&handler, d),
+        (0, 0, Some("pending".to_string()))
+    );
+    assert_eq!(
+        embedding_coherence(&handler, i),
+        (1, 1, Some("complete".to_string()))
+    );
+    // Only the immediate memory is in the vector index.
+    assert_eq!(handler.ctx.hnsw_index.read().len(), 1);
+}
+
+#[test]
+fn c5_provider_failure_keeps_memory_with_explicit_pending_job() {
+    let embedder = OutageEmbedder::new();
+    let handler = TestHandler::with_embedder(embedder.clone());
+    embedder.set_down(true);
+
+    let created = create_via_mcp(
+        &handler,
+        1010,
+        json!({"content": "c5 provider is down", "memory_type": "note"}),
+    );
+    let id = created["id"]
+        .as_i64()
+        .expect("memory is durable despite outage");
+    assert!(created.get("error").is_none(), "{created}");
+    assert_eq!(
+        embedding_coherence(&handler, id),
+        (0, 0, Some("pending".to_string()))
+    );
+    assert!(handler.ctx.hnsw_index.read().is_empty());
+    assert_eq!(
+        embeddings_index_health(&handler).status,
+        engram::storage::DerivedIndexStatus::Backlogged
+    );
+
+    embedder.set_down(false);
+    let drained = engram::embedding::drain_pending_embeddings(
+        &handler.storage,
+        handler.ctx.embedder.as_ref(),
+        10,
+    )
+    .expect("drain after recovery");
+    assert_eq!(drained, 1);
+    assert_eq!(
+        embedding_coherence(&handler, id),
+        (1, 1, Some("complete".to_string()))
+    );
+}
+
+#[test]
+fn c5_exact_duplicate_with_skip_returns_existing_without_new_state() {
+    let handler = TestHandler::new();
+    let first = create_via_mcp(
+        &handler,
+        1020,
+        json!({"content": "c5 exact duplicate", "memory_type": "note"}),
+    );
+    let id = first["id"].as_i64().unwrap();
+    let again = create_via_mcp(
+        &handler,
+        1021,
+        json!({"content": "c5 exact duplicate", "memory_type": "note", "dedup_mode": "skip"}),
+    );
+    assert_eq!(again["id"].as_i64(), Some(id));
+    assert_eq!(scalar_count(&handler, "SELECT COUNT(*) FROM memories"), 1);
+    assert_eq!(
+        scalar_count(&handler, "SELECT COUNT(*) FROM embedding_queue"),
+        1
+    );
+    assert_eq!(
+        embedding_coherence(&handler, id),
+        (1, 1, Some("complete".to_string()))
+    );
+    assert_eq!(handler.ctx.hnsw_index.read().len(), 1);
+}
+
+#[test]
+fn c5_semantic_duplicate_reject_skip_and_merge() {
+    let handler = TestHandler::new();
+    let first = create_via_mcp(
+        &handler,
+        1030,
+        json!({"content": "alpha beta gamma delta epsilon", "memory_type": "note", "tags": ["one"]}),
+    );
+    let id = first["id"].as_i64().unwrap();
+    let base = |mode: &str| {
+        json!({
+            "content": "alpha beta gamma delta epsilon zeta",
+            "memory_type": "note",
+            "tags": ["two"],
+            "dedup_mode": mode,
+            "dedup_threshold": 0.5
+        })
+    };
+
+    // Reject: conflict error carrying the existing id; nothing new persisted.
+    let rejected = create_via_mcp(&handler, 1031, base("reject"));
+    assert!(
+        rejected.get("error").is_some(),
+        "reject must error: {rejected}"
+    );
+    assert!(rejected.to_string().contains(&id.to_string()), "{rejected}");
+
+    // Skip: returns the existing memory untouched.
+    let skipped = create_via_mcp(&handler, 1032, base("skip"));
+    assert_eq!(skipped["id"].as_i64(), Some(id));
+
+    assert_eq!(scalar_count(&handler, "SELECT COUNT(*) FROM memories"), 1);
+    assert_eq!(
+        scalar_count(&handler, "SELECT COUNT(*) FROM embedding_queue"),
+        1
+    );
+
+    // Merge: same row, union of tags, still one embedding/job, content untouched.
+    let merged = create_via_mcp(&handler, 1033, base("merge"));
+    assert_eq!(merged["id"].as_i64(), Some(id));
+    let tags: Vec<&str> = merged["tags"]
+        .as_array()
+        .expect("tags")
+        .iter()
+        .filter_map(|t| t.as_str())
+        .collect();
+    assert!(tags.contains(&"one") && tags.contains(&"two"), "{tags:?}");
+    assert_eq!(
+        merged["content"].as_str(),
+        Some("alpha beta gamma delta epsilon")
+    );
+    assert_eq!(scalar_count(&handler, "SELECT COUNT(*) FROM memories"), 1);
+    assert_eq!(scalar_count(&handler, "SELECT COUNT(*) FROM embeddings"), 1);
+    assert_eq!(
+        embedding_coherence(&handler, id),
+        (1, 1, Some("complete".to_string()))
+    );
+    assert_eq!(handler.ctx.hnsw_index.read().len(), 1);
+}
+
+#[test]
+fn c5_commit_failure_leaves_no_memory_job_embedding_index_or_vocabulary() {
+    for (rpc_id, defer) in [(1040_i64, false), (1041, true)] {
+        let handler = TestHandler::new();
+        // A deferred foreign key violation only surfaces at COMMIT, i.e. after
+        // the whole create closure (insert, enqueue, side effects) has run.
+        handler
+            .storage
+            .with_connection(|conn| {
+                conn.execute_batch(
+                    "CREATE TABLE c5_parent(id INTEGER PRIMARY KEY);
+                     CREATE TABLE c5_child(
+                         parent_id INTEGER REFERENCES c5_parent(id) DEFERRABLE INITIALLY DEFERRED);
+                     CREATE TRIGGER c5_fail_at_commit AFTER INSERT ON memories
+                     BEGIN INSERT INTO c5_child(parent_id) VALUES (999); END;",
+                )?;
+                Ok(())
+            })
+            .expect("inject commit failure");
+        let vocab_before = handler.ctx.fuzzy_engine.lock().vocabulary_size();
+
+        let result = create_via_mcp(
+            &handler,
+            rpc_id,
+            json!({
+                "content": "c5 commit failure uniquevocabularytoken",
+                "memory_type": "note",
+                "defer_embedding": defer
+            }),
+        );
+
+        assert!(result.get("error").is_some(), "defer={defer}: {result}");
+        assert_eq!(
+            scalar_count(&handler, "SELECT COUNT(*) FROM memories"),
+            0,
+            "defer={defer}"
+        );
+        assert_eq!(
+            scalar_count(&handler, "SELECT COUNT(*) FROM embedding_queue"),
+            0,
+            "defer={defer}"
+        );
+        assert_eq!(
+            scalar_count(&handler, "SELECT COUNT(*) FROM embeddings"),
+            0,
+            "defer={defer}"
+        );
+        assert!(handler.ctx.hnsw_index.read().is_empty(), "defer={defer}");
+        assert_eq!(
+            handler.ctx.fuzzy_engine.lock().vocabulary_size(),
+            vocab_before,
+            "defer={defer}: a rolled-back create must not leak into the in-memory vocabulary"
+        );
+    }
+}
+
+#[test]
+fn c5_batch_create_reports_invalid_item_and_keeps_valid_items_coherent() {
+    let embedder = OutageEmbedder::new();
+    let handler = TestHandler::with_embedder(embedder.clone());
+    let batch = call_tool_json(
+        &handler,
+        1050,
+        "memory_create_batch",
+        json!({"memories": [
+            {"content": "c5 batch immediate", "memory_type": "note"},
+            {"memory_type": "note"},
+            {"content": "c5 batch deferred", "memory_type": "note", "defer_embedding": true}
+        ]}),
+    );
+    assert_eq!(batch["total_created"].as_i64(), Some(2), "{batch}");
+    assert_eq!(batch["total_failed"].as_i64(), Some(1), "{batch}");
+    assert_eq!(batch["failed"][0]["index"].as_i64(), Some(1));
+    let ids: Vec<i64> = batch["created"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(
+        embedding_coherence(&handler, ids[0]),
+        (1, 1, Some("complete".to_string()))
+    );
+    assert_eq!(
+        embedding_coherence(&handler, ids[1]),
+        (0, 0, Some("pending".to_string()))
+    );
+    assert_eq!(handler.ctx.hnsw_index.read().len(), 1);
 }

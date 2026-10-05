@@ -276,7 +276,10 @@ fn ensure_auto_consolidator_scheduler(storage: Storage) -> bool {
                     );
                 }
             }
-            Err(e) => tracing::error!("Auto-consolidation scheduler error: {}", e),
+            Err(e) => tracing::error!(
+                error = %crate::observability::redact::redacted(&e),
+                "Auto-consolidation scheduler error"
+            ),
         }
     });
 

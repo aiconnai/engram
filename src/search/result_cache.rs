@@ -32,6 +32,28 @@ pub struct CacheFilterParams {
     /// Whether policy-based reranking is applied
     #[serde(default)]
     pub policy_rerank: bool,
+    /// Requested result count: a cached answer for one `limit` must not be served
+    /// for another (coverage-map gap G-3).
+    #[serde(default)]
+    pub limit: Option<i64>,
+    /// `min_score` as raw bits (`f32` is not `Hash`/`Eq`).
+    #[serde(default)]
+    pub min_score_bits: Option<u32>,
+    /// Forced search strategy, if any.
+    #[serde(default)]
+    pub strategy: Option<String>,
+    /// Scope filter, serialized.
+    #[serde(default)]
+    pub scope: Option<String>,
+    /// Multi-workspace filter.
+    #[serde(default)]
+    pub workspaces: Option<Vec<String>>,
+    /// Hierarchical scope-path prefix filter.
+    #[serde(default)]
+    pub scope_path: Option<String>,
+    /// Advanced filter expression, serialized.
+    #[serde(default)]
+    pub filter: Option<String>,
 }
 
 /// A cached search result entry
@@ -737,5 +759,49 @@ mod tests {
             cache.record_feedback("query", &filters, true);
         }
         assert!((cache.current_threshold() - 0.85).abs() < 1e-4);
+    }
+
+    #[test]
+    fn cache_key_distinguishes_limit_and_other_shaping_options() {
+        let base = CacheFilterParams::default();
+        let key = |f: &CacheFilterParams| SearchResultCache::cache_key(1, f);
+        let variants = [
+            CacheFilterParams {
+                limit: Some(1),
+                ..base.clone()
+            },
+            CacheFilterParams {
+                limit: Some(2),
+                ..base.clone()
+            },
+            CacheFilterParams {
+                min_score_bits: Some(0.5f32.to_bits()),
+                ..base.clone()
+            },
+            CacheFilterParams {
+                strategy: Some("Hybrid".into()),
+                ..base.clone()
+            },
+            CacheFilterParams {
+                scope: Some("\"global\"".into()),
+                ..base.clone()
+            },
+            CacheFilterParams {
+                workspaces: Some(vec!["a".into()]),
+                ..base.clone()
+            },
+            CacheFilterParams {
+                scope_path: Some("global/org:a".into()),
+                ..base.clone()
+            },
+            CacheFilterParams {
+                filter: Some("{}".into()),
+                ..base.clone()
+            },
+        ];
+        let mut keys: Vec<String> = variants.iter().map(key).collect();
+        keys.push(key(&base));
+        let unique: std::collections::HashSet<_> = keys.iter().collect();
+        assert_eq!(unique.len(), keys.len(), "every option must change the key");
     }
 }

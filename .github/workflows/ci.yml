@@ -44,9 +44,10 @@ permissions:
 #   - test (ubuntu-latest only)
 #   - docs (includes ./scripts/generate-mcp-reference.sh --check)
 #
-# These four branch-protection contexts protect main. `Test (ubuntu-latest)`
-# also depends transitively on the PR-visible `Security Gate`, which aggregates
-# the supply-chain and security scans below. Contributors should run `make ci`
+# Six branch-protection contexts protect main (live, 2026-10-05): Format, Clippy,
+# Documentation, Test (ubuntu-latest), Security Audit and Cargo Deny. `Test
+# (ubuntu-latest)` also depends transitively on the PR-visible `Security Gate`,
+# which aggregates the supply-chain and security scans below (see GATES.md). Contributors should run `make ci`
 # or `just ci` locally before pushing.
 #
 # Property tests, golden tests, full-feature Clippy, backend smoke, benchmarks,
@@ -67,7 +68,7 @@ permissions:
 # per-PR costs (especially macOS minutes and long-running jobs).
 #
 # To change what is "required", update branch protection rules on GitHub
-# to only mark the four jobs above as required.
+# (never from automation) and keep GATES.md and scripts/check-security-gate.py in sync.
 # =============================================================================
 
 jobs:
@@ -107,6 +108,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
           source scripts/ci-required-features.env
           cargo clippy --all-targets --no-default-features --features "$CI_REQUIRED_FEATURES" -- -D warnings
@@ -146,22 +148,56 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
-      - name: Enforce retrieval and performance budgets
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Historical baseline integrity only: validates the committed retrieval
+      # floors and the committed Criterion snapshot. It does not measure
+      # candidate performance (current-run evidence arrives with Q7/Q1b).
+      # --criterion is mandatory; scripts/ci.sh quality-budgets runs the same argv.
+      - name: Historical baseline integrity (committed floors and Criterion snapshot; not candidate performance)
         run: >-
           python3 scripts/check-quality-budgets.py
           --budgets docs/quality/budgets.json
           --retrieval tests/fixtures/retrieval_quality/baseline.json
           --criterion benches/results/benchmark_results.txt
-      - name: Test library and integration tests
+      - name: Historical baseline integrity self-test (not candidate performance; degraded inputs must be rejected)
+        run: >-
+          python3 scripts/check-quality-budgets.py
+          --budgets docs/quality/budgets.json
+          --retrieval tests/fixtures/retrieval_quality/baseline.json
+          --criterion benches/results/benchmark_results.txt
+          --self-test-degraded
+      # Runs the contract suite that pins this lane's argv (workflow + scripts/ci.sh) so
+      # dropping --criterion or this wiring again fails the required job.
+      - name: Historical baseline integrity contract tests (not candidate performance; workflow and local argv)
+        run: python3 scripts/test_check_quality_ci_contract.py
+      # Q1b: fast offline unit tests of the candidate quality runner and its consumption rule are
+      # blocking here; the runner itself is report-only in quality-candidate.yml (not required).
+      # Q4: SDK contract drift ratchet (unit tests import the Python SDK, hence httpx; the
+      # TypeScript sweep is static). scripts/ci.sh step 5 runs the same commands.
+      - name: Install SDK drift ratchet prerequisite (python3-httpx)
+        run: sudo apt-get install -y --no-install-recommends python3-httpx
+      - name: Fast offline Python contract tests (candidate quality runner, consumption rule, SDK drift ratchet)
+        run: |
+          python3 -m unittest scripts/test_run_quality_candidate.py
+          python3 -m unittest scripts/test_quality_candidate_consume.py
+          python3 -m unittest scripts/test_check_sdk_contract_alignment.py
+          python3 scripts/check-sdk-contract-alignment.py --only typescript
+      # Mandatory offline harness lane (H2). Fail-closed: zero tests, skipped/not-run checks, a deleted
+      # component or a missing jsonschema fail this required job. It also runs from sensors.sh (quick
+      # and full) and scripts/ci.sh; doctor.sh fails if this step disappears. jsonschema makes the
+      # "present" half of the validator parity tests real; acl backs the receipt-ACL review-gate test.
+      - name: Install offline harness lane prerequisites (jsonschema, acl)
+        run: sudo apt-get install -y --no-install-recommends python3-jsonschema acl
+      - name: Offline harness lane (validator, fixtures, live-state and review-gate regressions)
+        run: bash docs/harness/bin/run-offline-lane.sh
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2
+        with:
+          tool: nextest
+      - name: Run tests with cargo-nextest
         run: |
           source scripts/ci-required-features.env
-          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests
-
-      - name: Test binary unit tests
-        run: |
-          source scripts/ci-required-features.env
-          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-server
-          cargo test --profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --bin engram-watcher
+          cargo nextest run --cargo-profile ci --no-default-features --features "$CI_REQUIRED_FEATURES" --lib --tests --bin engram-server --bin engram-watcher
       - name: Check WASM crate
         run: |
           cargo check -p engram-wasm --all-targets
@@ -188,6 +224,8 @@ jobs:
             exit 1
           fi
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: macOS smoke test
         run: |
           source scripts/ci-features.env
@@ -207,6 +245,9 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --test property_tests -- --test-threads=1
         env:
           PROPTEST_CASES: 500
@@ -220,6 +261,9 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --test golden_tests
 
   full-feature-clippy:
@@ -249,6 +293,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: extended-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   full-feature-tests:
@@ -281,8 +326,13 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: extended-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2
+        with:
+          tool: nextest
       - run: |
-          cargo test --profile ci --all-features --lib --tests
+          cargo nextest run --cargo-profile ci --all-features --lib --tests
 
   backend-smoke:
     name: Backend Smoke Tests
@@ -303,6 +353,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: extended-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test local embedding backend
         run: cargo test --profile ci --no-default-features --features local-embeddings --lib embedding::onnx
       - name: Test neural rerank backend
@@ -348,13 +399,17 @@ jobs:
       - name: Validate governed advisory exceptions
         run: python3 scripts/check-security-exceptions.py --config docs/security/advisory-exceptions.toml --audit-config .cargo/audit.toml --deny-config deny.toml
 
+  # Read-only measurement job: it never publishes. SARIF is produced locally (upload: never),
+  # retained as an artifact and judged by the findings policy below; publication to GitHub code
+  # scanning stays in codeql.yml and only runs on trusted (non-pull_request) events.
   codeql-security:
     name: CodeQL security
     runs-on: ubuntu-latest
+    # Read-only. `actions: read` is kept (private repositories need it for CodeQL's analysis key);
+    # there is no write permission, so SARIF is never uploaded from this pull_request-exposed job.
     permissions:
       actions: read
       contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: github/codeql-action/init@641a925cfafe92d0fdf8b239ba4053e3f8d99d6d # v3
@@ -364,18 +419,52 @@ jobs:
       - uses: github/codeql-action/analyze@641a925cfafe92d0fdf8b239ba4053e3f8d99d6d # v3
         with:
           category: /language:rust
+          upload: never
+          output: sarif-results
+      - name: Retain CodeQL SARIF
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: codeql-security-sarif
+          path: sarif-results/
+          if-no-files-found: error
+          retention-days: 30
+      # CodeQL exits 0 even with high findings, so the exit code is not the verdict. The
+      # supervisor (this job) provides identity: scanner, tool and the commit SHA under test.
+      # `upload: never` SARIF has no versionControlProvenance, so the job attests identity from
+      # its own checkout (--checkout-dir .): HEAD must equal github.sha or the policy blocks.
+      # Nothing inside the SARIF can approve itself; exceptions come only from the governed file.
+      - name: Enforce CodeQL findings policy (high finding blocks even with exit 0)
+        run: >-
+          python3 scripts/check-security-findings.py
+          --scanner codeql
+          --tool CodeQL
+          --sarif sarif-results/rust.sarif
+          --expected-sha "${{ github.sha }}"
+          --scanner-exit 0
+          --exceptions docs/security/finding-exceptions.toml
+          --checkout-dir .
 
   semgrep-security:
     name: Semgrep security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      # --error makes any finding a non-zero exit; SARIF is retained for the audit trail.
       - name: Run Semgrep
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/src" \
-            semgrep/semgrep:1.169.0 \
-            semgrep --config p/ci --error /src
+            semgrep/semgrep:1.169.0@sha256:2b33f46ba66cf8cc2ad59ccfa7d22951fd00c632c38f1339e84ec8e6e641a942 \
+            semgrep --config p/ci --error --sarif-output=/src/semgrep.sarif /src
+      - name: Retain Semgrep SARIF
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: semgrep-security-sarif
+          path: semgrep.sarif
+          if-no-files-found: error
+          retention-days: 30
 
   gitleaks-security:
     name: Secret scan security
@@ -384,12 +473,22 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
+      # --exit-code 1 makes any leak a non-zero exit; SARIF is retained for the audit trail.
       - name: Run Gitleaks
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/src" \
-            zricethezav/gitleaks:v8.23.3 \
-            detect --source /src --no-git --verbose --redact --exit-code 1
+            zricethezav/gitleaks:v8.23.3@sha256:8e03b497df3d3080d61f5f13c1ea67c331b5e4c4c475256f67fb3dddcd9e895d \
+            detect --source /src --no-git --verbose --redact --exit-code 1 \
+              --report-format sarif --report-path /src/gitleaks.sarif
+      - name: Retain Gitleaks SARIF
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gitleaks-security-sarif
+          path: gitleaks.sarif
+          if-no-files-found: error
+          retention-days: 30
 
   agentshield-security:
     name: AgentShield security
@@ -419,6 +518,17 @@ jobs:
       - agentshield-security
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      # The gate's own contract: matrix cases, findings policy, workflow pins/permissions, and the
+      # required-context chain (removing security-gate from Test's needs fails here).
+      - name: Security gate contract tests (matrix, findings policy, workflow supply chain)
+        run: |
+          python3 scripts/test_check_security_gate.py
+          python3 scripts/test_check_security_findings.py
+          python3 scripts/test_check_workflow_supply_chain.py
+          python3 scripts/test_check_security_ci_contract.py
+          python3 scripts/test_check_security_exceptions.py
+      - name: Workflow supply-chain policy (SHA pins, image digests, pull_request exposure)
+        run: python3 scripts/check-workflow-supply-chain.py
       - name: Require every security constituent
         env:
           RESULTS_JSON: ${{ toJSON(needs) }}
@@ -460,6 +570,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@9458fed45835344deb5e69e06e831be047c96abf # cargo-llvm-cov
@@ -504,19 +615,28 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo bench --no-run
 
+  # Read-only measurement job: runs the benchmarks, compares against the stored baseline and
+  # fails a pull request on regression. It holds no write permission and no secret, so an
+  # untrusted pull request can never push to gh-pages or comment. Publication lives in
+  # `bench-publish` below and only runs on direct pushes to main.
   bench:
     name: Benchmark Regression Check
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable 2026-07-12
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run benchmarks (Criterion bencher output)
         shell: bash
@@ -528,7 +648,7 @@ jobs:
             cargo bench -- --output-format bencher
           fi | tee bench-output.txt
 
-      - name: Store benchmark results
+      - name: Compare against stored benchmark baseline (no publication, no comment)
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1
         # Tolerate missing gh-pages branch on first run / forks. The raw
         # criterion artifacts still upload via the next step, so PR authors
@@ -538,25 +658,55 @@ jobs:
           name: Engram Performance
           tool: cargo
           output-file-path: bench-output.txt
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          # On main: update baseline and publish to gh-pages
-          auto-push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          # On PRs: compare against baseline and comment
-          comment-on-alert: true
-          comment-always: ${{ github.event_name == 'pull_request' }}
+          auto-push: false
+          comment-on-alert: false
+          comment-always: false
           # Fail if any benchmark regresses significantly (tuned for shared VM jitter)
           alert-threshold: "200%"
           fail-on-alert: ${{ github.event_name == 'pull_request' }}
-          # Store history in gh-pages branch
           gh-pages-branch: gh-pages
           benchmark-data-dir-path: dev/bench
 
-      - name: Upload raw Criterion reports
+      - name: Upload raw Criterion reports and bencher output
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: benchmark-results
-          path: target/criterion/
+          path: |
+            target/criterion/
+            bench-output.txt
+
+  # Trusted publication job: updates the gh-pages baseline from the artifact produced by `bench`.
+  # It only runs on direct pushes to main (never on pull_request), which is the only place
+  # write permission is granted.
+  bench-publish:
+    name: Benchmark Baseline Publish
+    runs-on: ubuntu-latest
+    needs: bench
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Download measured benchmark output
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: benchmark-results
+          path: bench-artifact
+      - name: Publish benchmark baseline to gh-pages
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1
+        continue-on-error: true
+        with:
+          name: Engram Performance
+          tool: cargo
+          output-file-path: bench-artifact/bench-output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          comment-on-alert: false
+          comment-always: false
+          fail-on-alert: false
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench
 
   # =============================================================================
   # Documentation
@@ -582,6 +732,7 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           shared-key: required-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: ./scripts/generate-mcp-reference.sh --check
       - run: python3 scripts/test_check_pdf_worker_packaging.py
       - run: python3 scripts/check-pdf-worker-packaging.py
@@ -614,6 +765,8 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }} --features pdf --bin engram-server --bin engram-cli --bin engram-pdf-worker

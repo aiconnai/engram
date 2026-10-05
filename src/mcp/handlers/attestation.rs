@@ -230,11 +230,9 @@ pub fn attestation_list(ctx: &HandlerContext, params: Value) -> Value {
 
 /// Parse a hex-encoded string into a 32-byte array.
 fn parse_hex_key(hex_str: &str) -> std::result::Result<[u8; 32], String> {
-    let bytes: Vec<u8> = (0..hex_str.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&hex_str[i..i + 2], 16))
-        .collect::<std::result::Result<Vec<u8>, _>>()
-        .map_err(|e| format!("Invalid hex: {}", e))?;
+    // `hex::decode` rejects odd lengths and any non-hex char (non-ASCII, `+`/`-`
+    // signs) without byte-slicing the input.
+    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
     if bytes.len() != 32 {
         return Err(format!("Key must be 32 bytes, got {}", bytes.len()));
     }

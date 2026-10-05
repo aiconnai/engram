@@ -492,13 +492,25 @@ fn truncate(value: &str, max_bytes: usize) -> String {
     if value.len() <= max_bytes {
         return value.to_string();
     }
-    let mut boundary = max_bytes;
-    while boundary > 0 && !value.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    format!("{}...", &value[..boundary])
+    format!("{}...", crate::text_util::truncate_bytes(value, max_bytes))
 }
 
 fn escape_inline(value: &str) -> String {
     value.replace('`', "'")
+}
+
+#[cfg(test)]
+mod truncate_tests {
+    use super::truncate;
+
+    #[test]
+    fn truncate_never_splits_a_multibyte_char() {
+        let value = "é".repeat(40);
+        for max in 0..value.len() {
+            let out = truncate(&value, max);
+            assert!(out.ends_with("..."), "max={max}");
+            assert!(out.len() <= max + 3, "max={max}");
+        }
+        assert_eq!(truncate("short", 80), "short");
+    }
 }

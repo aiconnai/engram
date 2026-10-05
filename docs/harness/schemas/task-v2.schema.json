@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiconnai.github.io/engram/schemas/task-v2.schema.json",
+  "title": "Engram Harness Task Specification v2",
+  "description": "Hardened task specification. Structure only: a valid document is not authentic. Supersedes task-v1 for new artifacts; v1 artifacts stay historical and are never upgraded.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "policy_version",
+    "task_id",
+    "target_sha",
+    "base_sha",
+    "allowed_capabilities",
+    "required_checks",
+    "timeout_seconds",
+    "allowed_paths",
+    "protected_paths"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Schema version identifier.",
+      "type": "string",
+      "const": "task-v2"
+    },
+    "policy_version": {
+      "description": "Policy version the artifact was produced under. The validator never trusts this value: the caller passes the expected policy version out of band.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "task_id": {
+      "description": "Unique identifier for this task run.",
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "target_sha": {
+      "description": "Target Git commit SHA.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "base_sha": {
+      "description": "Base Git commit SHA.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "allowed_capabilities": {
+      "description": "Authorized sandbox capabilities granted to the writer.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "workspace_read",
+          "workspace_write",
+          "test_exec",
+          "lint_exec",
+          "format_exec",
+          "doc_exec",
+          "git_read",
+          "sandbox_container",
+          "network_none"
+        ]
+      }
+    },
+    "required_checks": {
+      "description": "Check IDs from the check catalog that must run and pass.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "description": "Check ID present in the check catalog.",
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9_:.-]+$",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "timeout_seconds": {
+      "description": "Maximum execution time in seconds before the task fails closed.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400
+    },
+    "allowed_paths": {
+      "description": "Repo-relative paths the task may inspect or modify. Globs are not authorized.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "description": "Repo-relative path.",
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[a-zA-Z0-9_./-]+$",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "protected_paths": {
+      "description": "Repo-relative paths that must not be modified.",
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "description": "Repo-relative path.",
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[a-zA-Z0-9_./-]+$",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "metadata": {
+      "description": "Optional string metadata for audit logging.",
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9_.-]+$",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 512
+      }
+    }
+  }
+}

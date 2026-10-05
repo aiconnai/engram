@@ -1,0 +1,61 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "CodeQL",
+          "rules": [
+            {
+              "id": "rs/synthetic-low",
+              "name": "rs/synthetic-low",
+              "properties": {
+                "security-severity": "3.2"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "rs/synthetic-low",
+          "message": {
+            "text": "synthetic fixture finding"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs"
+                }
+              }
+            }
+          ],
+          "level": "warning"
+        },
+        {
+          "ruleId": "rs/synthetic-note",
+          "message": {
+            "text": "synthetic fixture finding"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs"
+                }
+              }
+            }
+          ],
+          "level": "note"
+        }
+      ],
+      "versionControlProvenance": [
+        {
+          "repositoryUri": "https://example.invalid/engram",
+          "revisionId": "0123456789abcdef0123456789abcdef01234567"
+        }
+      ]
+    }
+  ]
+}

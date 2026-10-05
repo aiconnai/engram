@@ -89,16 +89,30 @@ ambiente. O output humano continua sendo o default.
 
 The PR-visible `Security Gate` job in `.github/workflows/ci.yml` aggregates
 Cargo Audit, Cargo Deny, governed exception-policy validation, CodeQL,
-Semgrep, Gitleaks, and AgentShield. Every constituent is release-blocking on a
-pull request: a failed or unexpectedly skipped constituent makes the aggregate
-red. Event-policy skips are neutral only when explicitly listed in
-`tests/fixtures/security_gate_matrix.json`; the current pull-request policy has
-no such skip.
+Semgrep, Gitleaks, and AgentShield. The decision is tri-state
+(`scripts/check-security-gate.py`):
 
-Branch protection itself is not changed by repository automation. Instead, the
-already-required `Test (ubuntu-latest)` job depends on `security-gate`, so a
-security failure blocks that required context transitively. Verify the live,
-read-only chain with:
+| Verdict | When | Gate result |
+|---|---|---|
+| `pass` | every constituent is `success` | green, reported as `PASS` |
+| `neutral` | the only non-success states are `skipped` constituents explicitly listed for the event in `tests/fixtures/security_gate_matrix.json` | green, reported as `NEUTRAL`, never as `PASS` |
+| `block` | anything else: `failure`, `cancelled`, `timed_out`, missing result, unknown state, or an unauthorized `skipped` | red |
+
+`pull_request`, `push`, `schedule` and `workflow_dispatch` may never allow a skip
+(the matrix validator rejects it), and a matrix scenario cannot grant a skip its
+event does not allow. The matrix must keep one scenario for each case: all-pass,
+constituent failure, cancelled, timed-out, missing, unauthorized skip and allowed
+skip (neutral); removing a case fails the checker.
+
+Branch protection itself is not changed by repository automation. The live
+protection of `main` (read-only check, 2026-10-05) requires `Format`, `Clippy`,
+`Documentation`, `Test (ubuntu-latest)`, `Security Audit` and `Cargo Deny`.
+`Security Gate` is **not** itself a required context: the already-required
+`Test (ubuntu-latest)` job `needs: security-gate`, so a security failure blocks
+that required context transitively. The checker fails when that `needs:` is
+removed (`required_dependency_job` in the matrix), when the aggregate stops
+running with `if: always()`, or when it stops depending on any constituent.
+Verify the live, read-only chain with:
 
 ```bash
 gh api repos/aiconnai/engram/branches/main/protection/required_status_checks \
@@ -109,9 +123,72 @@ python3 scripts/check-security-gate.py \
   --workflow .github/workflows/ci.yml
 ```
 
-The checker also exposes `--self-test-failure` and `--self-test-unrequired` to
-prove that a constituent failure or removal of the required-context dependency
-fails closed.
+The checker also exposes `--self-test-failure` (failure, cancelled, timed-out,
+missing and unauthorized skip all fail closed) and `--self-test-unrequired`
+(removing the required-context dependency fails closed).
+
+#### Scanner execution, SARIF publication and findings policy are separate
+
+1. **Execution** - did the scanner run and exit cleanly? A scanner that did not run
+   is a `block` unless the supervisor explicitly authorizes the skip (`neutral`).
+2. **Publication** - uploading SARIF to GitHub code scanning is a trusted-event
+   action (`push`/`schedule`) in `codeql.yml`, `semgrep.yml`, `gitleaks.yml` and
+   `agentshield.yml`. A successful upload proves nothing about the absence of
+   findings and is never read as a clean scan.
+3. **Findings policy** - `scripts/check-security-findings.py` decides from the
+   SARIF itself. `ci.yml` applies it to CodeQL (`codeql-security`), whose exit code
+   is 0 even with high findings. Semgrep (`--error`) and Gitleaks (`--exit-code 1`)
+   already fail on any finding and AgentShield on `fail-on: high`; their SARIF is
+   retained as artifacts (30 days) but is not re-judged.
+
+Findings policy (mechanical, fail-closed; fixtures in
+`tests/fixtures/security_findings/`, tests in `scripts/test_check_security_findings.py`):
+
+- A **high** finding (`level: error`, or `security-severity >= 7.0`, also resolved
+  through the rule default) blocks even when the scanner exit code is 0.
+- An **approved exception** needs `owner`, `approved_by`, `rationale` and an
+  unexpired `expires` (at most 90 days ahead), matched on scanner + rule id (+ path)
+  in `docs/security/finding-exceptions.toml`. Any invalid record rejects the whole
+  file. SARIF `suppressions` embedded in the report are ignored: a payload cannot
+  approve itself.
+- SARIF **missing**, **malformed** (not JSON, wrong version, no runs, no results
+  array), from another tool, with **no revision provenance**, or **stale** (revision
+  differs from the expected SHA) blocks.
+- Identity comes from the supervisor on the command line (`--scanner`, `--tool`,
+  `--expected-sha`, `--scanner-exit`, `--allowed-skip`), never from the payload.
+- A run with no revision provenance (CodeQL with `upload: never` omits it) is accepted
+  only when the supervisor passes `--checkout-dir` and that checkout's HEAD equals
+  `--expected-sha` (job-checkout attestation, recorded in the reasons). Explicit
+  provenance, when present, must still match; attestation never excuses findings.
+- Exit codes: 0 for `pass`/`neutral`, 1 for `block`, 2 for usage errors.
+
+#### Workflow supply chain and pull-request exposure
+
+`scripts/check-workflow-supply-chain.py` (run inside the `security-gate` job, with
+`scripts/test_check_workflow_supply_chain.py`) enforces:
+
+- every third-party `uses:` is pinned by a full commit SHA;
+- every container image is pinned by `@sha256:` digest, or is listed in the
+  expiring ledger `docs/security/supply-chain-pins.toml` (owner, reason, expiry;
+  stale or expired entries fail);
+- a job that can run on `pull_request` has no write permission and uses no secret
+  other than `GITHUB_TOKEN`; publication/comment jobs are excluded from pull
+  requests with `if: github.event_name != 'pull_request'` (or run only on
+  `push`/`schedule`);
+- `pull_request_target` is never used.
+
+Measurement jobs are read-only (`ci.yml` `bench` and `codeql-security`, and the
+`scan` jobs of the standalone scanner workflows); publication lives in separate
+jobs (`bench-publish`, the `publish` jobs, `agentshield.yml` `scan-publish`).
+
+#### Advisory exceptions
+
+`docs/security/advisory-exceptions.toml` stays in lockstep with `.cargo/audit.toml`
+and `deny.toml` (`scripts/check-security-exceptions.py`). Besides owner/expiry
+parity, an expiry more than 90 days ahead is rejected. An advisory that a
+dependency update can fix is never renewed: it is handed to the task that owns
+`Cargo.toml`/`Cargo.lock`. The gate may stay red until that update lands; renewing
+an exception to hide a fixable advisory is not allowed.
 
 ### PR Title Policy
 
@@ -329,22 +406,95 @@ Modos opcionais:
 
 Essas lanes opcionais não substituem o gate completo para merge, handoff ou completion claims.
 
+### Offline mandatory lane (H2)
+
+`bash docs/harness/bin/run-offline-lane.sh` é a lane offline **obrigatória** do harness
+(sem rede, sem credenciais, fixtures sintéticas). Ela roda, fail-closed:
+
+1. `python3 -m unittest discover -s docs/harness/tests -p 'test_validate_evidence.py'`;
+2. `python3 docs/harness/bin/validate-evidence.py --self-test`;
+3. `bash docs/harness/bin/test-fixtures.sh`;
+4. `bash docs/harness/bin/test-check-live-state.sh`;
+5. `bash docs/harness/bin/test-review-gate.sh`;
+6. `python3 -m unittest discover -s docs/harness/tests -p 'test_offline_lane.py'` (contrato
+   fail-closed do próprio runner).
+7. `python3 -m unittest discover -s docs/harness/tests -p 'test_sandbox_adapter.py'` (adaptador de
+   sandbox H3, offline com `docker` fake; o smoke com Docker real **não** faz parte da lane);
+8. `python3 -m unittest discover -s docs/harness/tests -p 'test_context_budget.py'` (H6: orçamento
+   do resumo vivo e do bootstrap, retenção byte a byte do histórico, links/âncoras, ordem de leitura).
+9. `python3 -m unittest -v docs/harness/tests/test_runner.py docs/harness/tests/test_scope.py
+   docs/harness/tests/test_evidence_integrity.py` (H4: runner, scope e evidência, `docker` stub);
+10. `python3 -m unittest discover -s docs/harness/tests -p 'test_merge_gate.py'` (H5: avaliador
+   de merge-policy read-only, produtor de receipt e contrato do `agent-evidence.yml`).
+
+Um componente só conta como verde com exit 0, resumo próprio encontrado com contagem > 0 e sem
+falhas, contagem **no piso** de tripwire (apagar testes em silêncio falha; subir o piso é o
+caminho normal, baixá-lo exige review), e sem skip/`NOT RUN` (o review-gate tolera no máximo
+`HARNESS_LANE_MAX_NOT_RUN` lacunas de plataforma, default 0). `jsonschema` precisa estar
+instalado: a metade "presente" da paridade jsonschema presente = ausente é exercida de verdade,
+nunca pulada (a ausência é simulada com import blocker, sem desinstalar nada).
+
+Wiring (o `doctor.sh` falha se qualquer item sumir, e comentário não conta):
+
+- `sensors.sh quick` (`run_offline_lane`) e `sensors.sh` full (passo `offline_lane`);
+- `scripts/ci.sh`;
+- passo incondicional do job `Test (ubuntu-latest)` em `.github/workflows/ci.yml`. Esse job foi
+  escolhido porque é required na proteção live de `main`; `Harness Contract` **não** é required
+  live (audits/2026-10-02-improvement-baseline.md §4), então não carrega a lane. O passo instala
+  `python3-jsonschema` e `acl` por apt antes de rodar.
+
+Escopo de confiança de `validate-evidence.py`: valida **estrutura e semântica**, nunca
+autenticidade. SHA candidato esperado, versão de política, hash do catálogo de checks, diretório
+de logs e a task vêm do **chamador** (`--expect-candidate-sha`, `--expect-policy-version`,
+`--expect-catalog-sha256`, `--logs-dir`, `--task`; `--require-expectations` os torna
+obrigatórios) e nunca do payload. Artefatos `*-v1` são históricos: validam estrutura, aparecem
+como `NOTE[HISTORICAL_V1]` e não viram evidência confiável; `*-v2` são os schemas endurecidos.
+Nenhuma fixture escrita por agente é evidência confiável.
+
+### Context budget and live-state enforcement (H6)
+
+O estado de retomada é curto e o histórico é retido, não apagado (detalhe, medições e a
+decisão #152 em [`context-budget.md`](./context-budget.md)):
+
+- `progress.md` é o **resumo vivo, ≤150 linhas**; o texto anterior está byte a byte em
+  `progress-history.md` (marcador `BEGIN-VERBATIM` com tamanho e SHA-256, verificado por teste).
+  O `doctor.sh` falha se o resumo passar de 150 linhas.
+- `bootstrap.sh` imprime ≤50 linhas (doctor e `test_context_budget.py`; duro em qualquer ambiente) em <500 ms
+  (só o teste; `HARNESS_BOOTSTRAP_MAX_SECONDS`, 2,0 s quando `CI=true`). A **ordem de
+  leitura obrigatória** é a mesma em bootstrap, `AGENTS.md`, `CLAUDE.md` e `INVARIANTS.md`; o teste
+  falha se divergirem. Reduzir contexto nunca remove autoridade obrigatória.
+- `check-live-state.sh --structural` (rodado pelo `doctor.sh` no `progress.md` real) exige campos,
+  Active plan existente, review PASS autoritativo, linhas de reconciliação e Last commit **bem
+  formado**; não exige HEAD exato nem o timestamp de `.sensors-last` (churn por commit e por run
+  de sensores). Ancestralidade de HEAD é verificada quando possível: SHA bem formado que HEAD não
+  alcança (squash/rebase reescrevem SHAs) e clone raso (`ancestor_check=skipped-shallow`) viram
+  **warning** do doctor e linha `WARN` do checker, nunca falha nem pass silencioso;
+  `--require-ancestor` é a variante dura, usada só por fixtures herméticos. A forma estrita (sem a
+  flag) continua sendo a que fecha tasks.
+- `check-doc-links.py` valida links relativos e âncoras (regras do GitHub); alvo ignorado por git
+  conta como quebrado porque não existe num clone limpo.
+
 ### Required checks no GitHub (merge em `main`)
 
 Os sensores locais confirmam o trabalho cedo; o GitHub re-confirma os mesmos
-contratos como **required status checks** antes do merge. Bloqueiam o merge:
+contratos como **required status checks** antes do merge. A proteção live de `main`
+(leitura somente, 2026-10-05; `strict: true`) exige seis contexts:
 
-- `Format`, `Clippy`, `Test (ubuntu-latest)`, `Documentation` (os quatro jobs de
-  CI baratos e determinísticos);
-- `Harness Contract` — gate leve (`bootstrap.sh` + política de título de PR). A
-  política só rejeita o marcador literal `[codex]`; não é validação ampla de
-  título. O `doctor.sh` **não** entra neste gate required (fica local/advisory).
+- `Format`, `Clippy`, `Documentation`, `Test (ubuntu-latest)` (os jobs de CI
+  baratos e determinísticos);
+- `Security Audit` e `Cargo Deny` (exigidos diretamente);
+- `Test (ubuntu-latest)` também bloqueia de forma **transitiva** via
+  `needs: security-gate` (seção "Required aggregate security gate").
 
-`Security Audit` e `Cargo Deny` rodam nos PRs como **advisory** e não bloqueiam
-merge enquanto o baseline tiver advisories abertas (atualmente
-`RUSTSEC-2026-0187` em `lopdf` e `RUSTSEC-2026-0185` em `quinn-proto`). Promover
-qualquer um a required exige antes resolver/ignorar essas advisories com
-rationale datado. Code review automático é sinal extra, nunca o único bloqueador.
+`Security Gate` e `Harness Contract` **não** são contexts required live.
+`Harness Contract` é um gate leve (`bootstrap.sh` + política de título de PR, que só
+rejeita o marcador literal `[codex]`); o `doctor.sh` não entra nesse job: roda no job
+separado `Harness Doctor Advisory` (non-blocking, não required) e localmente. A proteção também não exige revisão de PR e `enforce_admins` é
+`false`: "merge humano obrigatório" é regra de processo, não controle técnico.
+Advisories abertas no lock (ex.: `RUSTSEC-2026-0285` em `rustls`) deixam
+`Security Audit`/`Cargo Deny` vermelhos até a atualização de dependência; não se
+renova exceção para esconder advisory corrigível. Code review automático é sinal
+extra, nunca o único bloqueador.
 
 ### Baseline Snapshot
 
@@ -395,8 +545,8 @@ Ver `review-gate.sh` e `CODE_REVIEW_POLICY.md` para detalhes de execução e pro
 
 Características chave:
 
-- Pre: advisory (sempre 0), mas findings são obrigatórios de ler.
-- Post: hard gate. `PASS <resumo>` na primeira linha ou FAIL, **e** incluir sempre a linha `REVIEW_VERDICT: PASS|FAIL ...` para parser hard.
+- Pre: advisory (`GATE_STATUS: ADVISORY`, exit 0) e **nunca aprova**; findings são obrigatórios de ler.
+- Post: hard gate **fail-closed** (detalhes na subseção abaixo). `PASS <resumo>` na primeira linha ou FAIL, **e** incluir sempre uma única linha `REVIEW_VERDICT: PASS|FAIL ...` para parser hard. O marcador sozinho é histórico: exit 0 exige receipt confiável vinculado ao escopo exato.
 - Continuity: após FAIL, reruns injetam `[BLOCKER]`/`[HIGH]` anteriores relevantes (com ids estáveis para dedup).
 - Exclusões automáticas de diff: `docs/harness/reviews/*`, `docs/harness/progress/*`, `target/`, `coverage/`, artefatos de build, etc. (anti self-referential loop).
 - Timeout configurável via `REVIEWER_TIMEOUT_SECS`.
@@ -424,6 +574,202 @@ ou
 REVIEW_VERDICT: FAIL ...
 ```
 
+### Review gate fail-closed (H1): escopo, exit codes e receipt manual
+
+Semântica de `review-gate.sh post` (substitui o comportamento antigo "sem review → exit 0"):
+
+- **Fonte do diff é explícita.** Modo final = `--base REV --head REV` (ou `--range A..B`, duas
+  pontas, sem `...`): todos os commits de `base..candidate`, com `base` ancestral de `candidate`.
+  `post` sem escopo explícito é erro de uso — o gate nunca "adivinha o último commit". Modo
+  preparação (`pre`/`scope --prepare`, sem range) = working tree vs `HEAD`, incluindo mudanças
+  *staged-only* e arquivos untracked não ignorados. Caminhos são tratados com NUL (`-z`) e
+  `--no-renames`, então rename/delete listam os dois lados; nomes com espaço, newline ou `-` inicial
+  são seguros. O modo preparação mostra também o conteúdo *staged* quando index ≠ working tree ≠
+  `HEAD`. O diff é calculado com `--text` (atributos `-diff`/binary, inclusive `.git/info/attributes`,
+  não escondem conteúdo; binários aparecem como patch bruto), sem textconv/ext-diff, e com replace
+  refs, grafts e arquivos de atributos neutralizados (`--no-replace-objects`, `GIT_GRAFT_FILE`,
+  `core.attributesFile`): estado de `.git` gravável pelo writer não altera o que o gate enxerga.
+  `node_modules/` **não** é excluído (pode conter código executável); só bookkeeping do harness e
+  saída de build (`docs/harness/reviews|progress`, `target/`, `engram-wasm/target/`, `coverage/`).
+- **Falha de git antes de qualquer verdict.** Range inválido/vazio, commit ausente, `git diff`/`git
+  show` falhando → exit 4 sem ler o artefato de review. Texto de erro nunca entra como diff.
+- **Provenance confiável (procedimento manual, até H4/H5 automatizarem).** Um receipt escrito pelo
+  operador humano, guardado **fora** de qualquer worktree e do `.git` (path absoluto via `--receipt`
+  ou `ENGRAM_REVIEW_RECEIPT`), vincula task, base, head, tree, sha256 do diff revisado, path +
+  sha256 do artefato de review, sha256 do script do gate e identidade do operador. O gate recomputa base/head/tree/diff a
+  partir do git e exige igualdade com o receipt **e** com os valores que o operador passa na linha de
+  comando (`--expect-tree`, `--expect-diff-sha256`, `--expect-gate-sha256`, `--operator`). Receipt
+  dentro do repo/worktree/`.git` (comparado por **identidade de filesystem**, não por grafia — variante
+  de caixa em APFS não escapa), symlink, hard link, não regular, de outro dono, gravável por
+  grupo/outros ou com ACL que concede escrita (receipt e diretório) é recusado. Nenhum JSON/marcador
+  do writer se autentica sozinho.
+- **PENDING distinto de PASS.** Review ausente, receipt ausente/não confiável/malformado ou
+  divergente do escopo recomputado (inclui review "velho" reaproveitado após mudar um byte) →
+  `GATE_STATUS: PENDING`, exit 3, mesmo com `REVIEW_VERDICT: PASS` no artefato.
+- **Parser de marcador mantido (invariante 14), mais estrito**: exatamente uma linha
+  `REVIEW_VERDICT: PASS|FAIL <resumo>`; zero marcadores, mais de um, ou o placeholder
+  `<one-line summary>` do prompt → `INVALID_REVIEW`, exit 1. Prosa `PASS` sem marcador não conta.
+- **Skip allowlist inalterada.** O gate só dispensa review mecanicamente o item 1 da seção
+  *Skip Allowlist* (todo path alterado, nos dois lados de renames, é `docs/**/*.md` fora de
+  `docs/harness/`, arquivos regulares) → `GATE_STATUS: SKIPPED_ALLOWLIST` (exit 0, **não** é PASS).
+  Itens 2-4 (comment-only, formatting-only, test-only) exigem julgamento humano e nunca são
+  dispensados automaticamente. Qualquer path em `docs/harness/**` — em especial `docs/harness/bin/*`
+  — exige reviewer sempre; paths de bookkeeping excluídos do diff (`docs/harness/reviews|progress`,
+  `target/` etc.) não "diluem" a allowlist e são listados como `EXCLUDED_PATH`.
+- **O script alterado não autoriza a própria alteração.** O `post` **sempre** deve rodar a partir de
+  uma cópia do gate mantida fora de qualquer worktree, tirada de um revision confiável (`base`/`main`),
+  apontada com `--repo <worktree>`: `git show BASE:docs/harness/bin/review-gate.sh >
+  /dir/do/operador/review-gate.sh`. O sha256 desse script (impresso como `Gate script sha256`) é
+  vinculado pelo receipt (`GATE_SCRIPT_SHA256`) e conferido com `--expect-gate-sha256`; um PASS vindo
+  de um gate que mora dentro de um worktree do repo julgado é recusado (`gate-untrusted-location`,
+  PENDING).
+- **Como o próprio H1 é aceito.** O `base` de H1 (`cf6d969`) ainda não tem receipts nem gate
+  fail-closed, então nenhum gate pode aceitar H1. A aceitação de H1 é a revisão independente do SDD
+  mais a decisão do owner; a primeira mudança aceita *pelo* gate é a seguinte (a partir de H1 como
+  `base` confiável).
+
+| Exit | `GATE_STATUS` | Significado | Consumidor |
+|-----:|---------------|-------------|------------|
+| 0 | `PASS` | receipt confiável + marcador PASS ligados ao escopo recomputado | pode prosseguir |
+| 0 | `SKIPPED_ALLOWLIST` | diff docs-only elegível; review não exigido | pode prosseguir; não citar como review |
+| 0 | `ADVISORY` | `pre` / `scope`; não é aprovação | **não** aprova |
+| 1 | `FAIL` | reviewer reprovou | bloquear |
+| 1 | `INVALID_REVIEW` | zero/múltiplos marcadores, placeholder, marcador malformado | bloquear |
+| 2 | `ERROR reason=usage` | uso inválido (sem range, flag desconhecida, task-id inválido) | bloquear |
+| 3 | `PENDING` | falta evidência confiável (review/receipt ausente, não confiável ou stale) | bloquear; **nunca** tratar como PASS |
+| 4 | `ERROR` (`invalid-range`, `missing-commit`, `git-failure`, `empty-scope`) | escopo não verificável | bloquear |
+
+Consumidores (CI, doctor, agentes) devem aceitar apenas exit 0 com `GATE_STATUS: PASS` como review
+aprovado; `SKIPPED_ALLOWLIST` só quando a política permite e deve ser registrado como skip.
+
+**Runbook do operador (receipt manual).** Executado por um humano autenticado, fora do writer:
+
+0. Copie o gate **de um revision confiável, para fora de qualquer worktree** (nunca use o script do
+   working tree do writer) e guarde seu hash:
+   `git show <BASE>:docs/harness/bin/review-gate.sh > $OPDIR/review-gate.sh; shasum -a 256 $OPDIR/review-gate.sh`.
+   Todos os comandos abaixo usam `G="bash $OPDIR/review-gate.sh"` e `--repo <worktree>`.
+1. `$G scope <task> --repo <worktree> --base <BASE> --head <HEAD>` — confira
+   `BASE_SHA`, `HEAD_SHA`, `TREE_SHA`, `DIFF_SHA256`, lista de paths e `SKIP_ALLOWLIST`.
+2. `$G post <task> --repo <worktree> --base <BASE> --head <HEAD>` (sem
+   `--review-file`) gera o prompt `.raw`; um reviewer independente produz o artefato com
+   `REVIEW_VERDICT:`. Inspecione a origem do review.
+3. Escreva o receipt num diretório seu (`chmod 700`), fora do repo e de worktrees, modo `0600`/`0644`:
+
+   ```text
+   RECEIPT_VERSION=1
+   TASK_ID=<task>
+   BASE_SHA=<sha completo>
+   HEAD_SHA=<sha completo>
+   TREE_SHA=<tree sha>
+   DIFF_SHA256=<sha256 do diff, do passo 1>
+   REVIEW_ARTIFACT=<path do artefato de review>
+   REVIEW_SHA256=<sha256 do artefato>
+   OPERATOR=<sua identidade>
+   GATE_SCRIPT_SHA256=<sha256 da cópia do gate do passo 0>
+   ```
+
+   Atalho recomendado: `$G receipt-template <task> --repo <worktree> --base <BASE> --head <HEAD>
+   --review-file <artefato>` imprime o receipt já com os valores recomputados (formato
+   `RECEIPT_VERSION=2`, superset aceito pelo `post`; ver seção H5) e `<placeholders>` para o que só
+   o operador atesta. Confira e preencha; placeholder esquecido → `receipt-malformed`.
+
+4. `ENGRAM_REVIEW_RECEIPT=/abs/receipt.env $G post <task> --repo <worktree> --base <BASE> --head
+   <HEAD> --review-file <artefato> --expect-tree <TREE_SHA> --expect-diff-sha256 <DIFF_SHA256>
+   --expect-gate-sha256 <hash do passo 0> --operator <identidade>` com os valores **que você
+   conferiu**, não copiados do writer. Qualquer mudança posterior de um byte (commit novo, artefato editado) invalida o receipt:
+   emita outro.
+
+Limites honestos: o gate roda `git` contra um repositório que o writer pode editar (por exemplo
+`.git/config` com comandos de filtro/fsmonitor); replace refs, grafts e atributos são neutralizados,
+mas a execução de config arbitrária do writer só é impedida pelo isolamento de H4/H5. Arquivos
+ignorados (`.gitignore`, `info/exclude`) ficam fora do escopo de preparação. O receipt é fronteira
+procedimental. Isolamento real do writer (mesmo usuário do SO)
+chega com H4/H5; por ora a decisão humana continua sendo a autoridade e não é substituída por este
+script nem por pareceres de IA. O `doctor.sh` apenas verifica presença do marcador (legado/histórico).
+
+### Merge-policy read-only (H5): `merge-gate.py` e `agent-evidence.yml`
+
+`docs/harness/bin/merge-gate.py` (+ `merge_gate_ci.py`) responde só se **este head exato** está
+`eligible` para a decisão humana de merge; nunca aprova, faz merge, deploy, push nem publica. Saída:
+um JSON `{decision: eligible|refused, reasons[], sections{}, bound{task, base, head, tree, policy,
+merge_policy, ci_policy_sha256, evaluator_sha256}}`; exit 0 eligible, 1 refused, 2 uso. `eligible`
+exige **todas** as seções em `pass` (seção não avaliada = refused): refs, evidence, gate_history,
+review_receipt, review_scope, review, reviewer, lineage, ci, integrated, head_recheck. A versão de
+política esperada precisa existir em `MERGE_POLICIES` (hoje `harness-hardening-v1` →
+`merge-policy-v1`), coincidir com o registry confiável, e o fingerprint das constantes de CI
+(`ci_policy_sha256`) precisa ser o fixado ali; mudar as constantes sem refixar → `policy_mismatch`.
+
+- **Base confiável, head não confiável.** Avaliador, registry/catálogo, schema `review-v2` e a
+  política do Q5 vêm do checkout onde o script mora (base/cópia do operador); o candidato entra por
+  `--repo`. Head e base (e `--integrated-ref`) são re-resolvidos do git, nunca de payload, e
+  re-checados logo antes de emitir; ref movido durante a avaliação → refused. Com SHA cru (o CI) o
+  re-check é vazio: o humano compara o head vivo do PR com `bound.head` no momento do merge.
+- **Evidência H4** só via `record-evidence.py verify()` para o head atual; base da evidência ≠ base
+  atual → `stale_base`; outro gate do mesmo task/candidato com veredito ≠ pass → refused.
+- **Pacote do reviewer (fresh context).** O reviewer readonly recebe só: a task (id + brief), o diff
+  `base..head` e a lista de arquivos de `review-gate.sh scope`, os arquivos do head e a evidência H4
+  (receipt + `evidence.json` + logs). **Nunca** o transcript, prompts ou rascunhos do writer. Produz
+  um `review-v2` JSON (`head_sha`/`base_sha`/`policy_version` do candidato, findings, verdict,
+  `reviewer` = seu id na allowlist).
+- **Receipt do operador (produtor + consumidores).** `review-gate.sh receipt-template <task> --repo
+  <worktree> --base <BASE> --head <HEAD> --review-file <review.json>` (cópia confiável do gate, fora
+  de worktrees) imprime um receipt `RECEIPT_VERSION=2` com task/base/head/tree/diff/gate sha256 e
+  path+sha256 do review recomputados, e `<placeholders>` em `OPERATOR`, `REVIEWER`,
+  `POLICY_VERSION` e `REVIEW_CONTEXT`. O operador confere, preenche, grava fora de worktrees (dir
+  `0700`, arquivo `0600`). Placeholder não preenchido é `receipt-malformed` nos dois consumidores.
+  `REVIEW_CONTEXT=fresh-readonly` é a atestação deliberada do operador de que o pacote acima foi
+  respeitado (por isso nunca vem preenchido). v2 é superset de v1: `review-gate.sh post` aceita v1
+  e v2; `merge-gate.py` exige v2 (v1 → `reviewer_unavailable`, histórico). Um receipt vincula **um**
+  artefato: o fluxo H1 (`post`, review com marcador `REVIEW_VERDICT`) e o fluxo H5 (review-v2 JSON)
+  precisam de artefatos de review e receipts **separados**; o review com marcador nunca satisfaz
+  H5. O diff sha256 é recomputado pela cópia confiável (`--review-gate`, `--expect-gate-sha256`);
+  o artefato `review-v2` é validado por H2; prosa, marcador `REVIEW_VERDICT`, `review-v1`, PASS
+  com finding bloqueante ou veredito ≠ `pass` → refused.
+- **Identidade e lineage** só da allowlist do operador (`--identities`, `merge-gate-identities-v1`:
+  `operators`, `reviewers{id: {lineage}}`, `writers{adapter: {lineage}}`). O campo livre `reviewer`
+  precisa coincidir com o `REVIEWER` do receipt, mas não autentica; lineage do writer vem do adapter
+  registrado pelo runner; lineage ausente → unavailable, igual → refused.
+- **CI (proveniência).** O operador salva, com credencial read-only (nunca a do writer):
+  `gh api --paginate --slurp "repos/<o>/<r>/commits/<head>/check-runs?per_page=100" > ci.json` e
+  `gh api --paginate --slurp "repos/<o>/<r>/actions/runs?head_sha=<head>&per_page=100" > runs.json`
+  (`--ci-results`, `--workflow-runs`). Regras: (1) PR que toca o que define, configura ou implementa
+  um job required → `ci_policy_paths_changed` (o próprio PR poderia fabricar seu verde; julgamento
+  humano sem `eligible`): `.github/**` inteiro (workflows, actions, CodeQL config, CODEOWNERS),
+  `.cargo/**`, `.config/**`, `scripts/**`, `docs/harness/{bin,tests,checks,schemas}/**`,
+  `docs/security/**` (exceções), `docs/quality/**`, `benches/results/**`,
+  `tests/fixtures/retrieval_quality/**`, `tests/fixtures/security_gate_matrix.json` e configs na
+  raiz (`deny.toml`, `.gitleaks.toml`, `.gitleaksignore`, `.semgrepignore`, `rust-toolchain*`,
+  `rustfmt.toml`, `clippy.toml`, `Makefile`, `justfile`); além disso, todo arquivo citado nos steps
+  do fecho de jobs required (nomes required + `needs:`) do `ci.yml` **da base** é protegido
+  dinamicamente, e um teste falha se um arquivo citado pelo `ci.yml` atual escapar da lista
+  estática. O blob de `.github/workflows/ci.yml` do head tem de ser o da base. (2) Só check runs
+  do app `github-actions` para o head contam. (3) Cada context required (`Format`, `Clippy`,
+  `Test (ubuntu-latest)`, `Documentation`, `Security Audit`, `Cargo Deny`, `Security Gate`) resolve para **exatamente um** check suite, e esse suite pertence a
+  um workflow run com `path` `.github/workflows/ci.yml` (`ci_workflow_unbound` caso contrário);
+  outro suite com o mesmo nome → `ci_context_multiple_suites` (sem lavar falha entre suites).
+  Reabrir o PR ou `workflow_dispatch` que crie um segundo suite de `ci.yml` para o mesmo head deixa
+  esse head **permanentemente** `ci_context_multiple_suites`; a recuperação é um commit novo (novo
+  head, nova evidência, review e receipt), nunca apagar runs do arquivo salvo.
+  (4) Dentro do suite, re-run vale (o mais recente vence; re-run em andamento bloqueia) e o
+  resultado passa pelo `verdict()` do Q5 sem skips permitidos.
+- **Arquivos do operador** (receipt, allowlist, check runs, workflow runs, cópia do gate): abertos
+  uma vez com `O_NOFOLLOW` e validados no descritor (regular, um link, nossos, sem escrita de
+  grupo/outros, sem ACL de escrita), diretório pai nosso e sem escrita de grupo/outros, ancestrais
+  nossos ou de root e
+  sem escrita alheia salvo sticky (`/tmp`), fora de qualquer worktree/`.git` (identidade de
+  filesystem). A cópia do gate é executada a partir dos bytes verificados.
+- **Merge queue / merge sintético**: a evidência vale para a árvore do head. `--integrated-ref`
+  avalia o commit integrado em separado: árvore igual à do head → ok; diferente → refused
+  (`integrated_tree_unverified`: precisa de evidência própria, que H4 ainda não produz para merges).
+  Sem `--integrated-ref`, `stale_base` garante que o merge sobre a base atual reproduz a árvore.
+- **Workflow `agent-evidence.yml`** (`pull_request`, nunca `pull_request_target`; `contents: read`;
+  sem secrets; checkouts sem credencial persistida; expressões `${{ }}` só via `env:`, nunca dentro
+  de `run:`): roda testes e avaliador do checkout da **base** (`trusted/`) contra o head
+  (`candidate/`, nunca executado). Sob `pull_request` o arquivo do workflow é a cópia do PR, então o
+  resultado do job não é confiável nem sinal de merge; sem inputs do operador a decisão é `refused`
+  por desenho e o job só verifica que ela é bem formada. Rollback: remover workflow/avaliador; gates
+  aceitos e evidência antiga ficam.
+
 ## Camada 3 — Checklist Humano em PR / Commit
 
 Itens que os gates automatizados não cobrem completamente:
@@ -445,6 +791,9 @@ Pode pular o review-gate (camada 2) **somente** quando o diff inteiro for:
 2. **Comment-only** ou doc comments (///, //!, //! ) sem mudança de comportamento.
 3. **Formatting-only** (cargo fmt) sem outra alteração.
 4. **Test-only additions** que não alteram produção (cobertura de path existente, sem mudança de contrato).
+
+O `review-gate.sh post` implementa mecanicamente somente o item 1 (ver "Review gate fail-closed"); os
+itens 2-4 dependem de julgamento humano registrado e não são dispensados automaticamente.
 
 **Sensores (camada 1) NUNCA são pulados.**
 

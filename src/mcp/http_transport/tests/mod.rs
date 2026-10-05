@@ -1,7 +1,10 @@
 mod auth_router;
 mod events;
 mod health;
+mod incident_exercise;
+mod observability;
 mod rate_limit_basic;
 mod rate_limit_keying;
 mod rate_limit_state;
+mod redaction;
 mod support;

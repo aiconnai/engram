@@ -83,11 +83,34 @@ where
 /// Trait for handling MCP requests
 pub trait McpHandler: Send + Sync {
     fn handle_request(&self, request: McpRequest) -> McpResponse;
+
+    /// Handle a request on behalf of the principal the transport authenticated.
+    ///
+    /// Authenticated transports (HTTP, gRPC) call this so the principal reaches
+    /// tool dispatch and storage lookups. The default ignores the principal and
+    /// is only suitable for handlers that do not read workspace-scoped data;
+    /// handlers that do must override it and enforce the principal.
+    fn handle_request_as(
+        &self,
+        request: McpRequest,
+        principal: Option<crate::auth::TransportPrincipal>,
+    ) -> McpResponse {
+        let _ = principal;
+        self.handle_request(request)
+    }
 }
 
 impl<T: McpHandler> McpHandler for std::sync::Arc<T> {
     fn handle_request(&self, request: McpRequest) -> McpResponse {
         (**self).handle_request(request)
+    }
+
+    fn handle_request_as(
+        &self,
+        request: McpRequest,
+        principal: Option<crate::auth::TransportPrincipal>,
+    ) -> McpResponse {
+        (**self).handle_request_as(request, principal)
     }
 }
 

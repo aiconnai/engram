@@ -17,6 +17,7 @@
 //! - `TransactionalBackend` - For backends that support ACID transactions
 //! - `CloudSyncBackend` - For backends with cloud synchronization
 
+mod active_artifacts;
 pub mod agent_registry;
 mod audit;
 pub mod auto_linker;
@@ -25,6 +26,7 @@ pub mod backend;
 pub mod clustering;
 mod confidence;
 mod connection;
+pub mod db;
 pub mod dream_snapshots;
 pub mod enrichment_events;
 pub mod entity_queries;
@@ -39,6 +41,8 @@ pub mod migrations;
 pub mod operational_context;
 pub mod pending_injections;
 pub mod queries;
+#[cfg(test)]
+mod redaction_tests;
 pub mod scope_grants;
 pub mod scoping;
 pub mod sqlite_backend;
@@ -56,6 +60,7 @@ pub use crate::context::{
     ArtifactAccessPolicy, ArtifactRedactionStatus, ArtifactRetentionPolicy,
     ArtifactRetrievalRequest, ContextArtifact, NewContextArtifact, RetrievedContextArtifact,
 };
+pub use active_artifacts::ActiveDbSnapshot;
 pub use agent_registry::{
     deregister_agent, get_agent, get_agents_in_namespace, heartbeat_agent, list_agents,
     register_agent, update_agent_capabilities, Agent, RegisterAgentInput,
@@ -77,6 +82,7 @@ pub use clustering::{
 };
 pub use confidence::*;
 pub use connection::{Storage, StoragePool};
+pub use db::DbConnectionExt;
 pub use dream_snapshots::{
     add_dream_candidate_source, create_dream_candidate, create_dream_job, get_dream_candidate,
     get_dream_candidate_with_sources, get_dream_job, list_dream_candidate_sources,

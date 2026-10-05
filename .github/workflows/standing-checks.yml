@@ -1,0 +1,72 @@
+name: Standing Checks
+
+# Read-only standing checks with ownership (task O4). ALERT-ONLY: this workflow never writes to the
+# repository, never commits, opens PRs, comments, merges, deploys or publishes, and never starts a
+# writer. It has no write permission and no secret beyond the read-only GITHUB_TOKEN used by
+# actions/checkout (not persisted). The approved check runs through the H3 sandbox adapter (docker,
+# no network, no credentials); a failure becomes a local alert report uploaded as an artifact. The
+# hand-off of an alert to its owner needs a channel and a human authorization of its own.
+# Rollback: disable this workflow; receipts are preserved and no baseline changes.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      goal:
+        description: 'Goal id from docs/harness/goals/registry.json (empty = every daily goal)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standing-checks
+  cancel-in-progress: false
+
+jobs:
+  standing-checks:
+    name: Standing Checks (read-only, alert-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+
+      - name: Validate the goals registry
+        run: python3 docs/harness/bin/run-standing-checks.py validate
+
+      - name: Make the pinned sandbox image available
+        # The adapter never pulls (--pull never); the image is pinned by digest in the check registry.
+        run: |
+          image="$(python3 -c 'import json; print(json.load(open("docs/harness/checks/registry.json"))["sandbox"]["image"])')"
+          docker pull "$image"
+
+      - name: Run the standing checks (alert-only)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GOAL_INPUT: ${{ github.event.inputs.goal }}
+          RUNS_ROOT: ${{ runner.temp }}/standing-checks
+        run: |
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            python3 docs/harness/bin/run-standing-checks.py run --mode scheduled --schedule daily \
+              --repo . --runs-root "$RUNS_ROOT"
+          elif [ -n "$GOAL_INPUT" ]; then
+            python3 docs/harness/bin/run-standing-checks.py run --mode dispatched --goal "$GOAL_INPUT" \
+              --repo . --runs-root "$RUNS_ROOT"
+          else
+            python3 docs/harness/bin/run-standing-checks.py run --mode dispatched --schedule daily \
+              --repo . --runs-root "$RUNS_ROOT"
+          fi
+
+      - name: Upload receipts and alert reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: standing-checks-reports
+          path: |
+            ${{ runner.temp }}/standing-checks/
+            !${{ runner.temp }}/standing-checks/goals/*/*/checkout/
+          if-no-files-found: ignore

@@ -81,11 +81,17 @@ pub fn meilisearch_reindex(ctx: &HandlerContext, _params: Value) -> Value {
         {
             Ok(rt) => {
                 if let Err(e) = rt.block_on(indexer.run_full_sync()) {
-                    tracing::error!("Meilisearch reindex failed: {}", e);
+                    tracing::error!(
+                        error = %crate::observability::redact::redacted(&e),
+                        "Meilisearch reindex failed"
+                    );
                 }
             }
             Err(e) => {
-                tracing::error!("Meilisearch reindex: failed to create runtime: {}", e);
+                tracing::error!(
+                    error_class = %crate::observability::redact::io_class(&e),
+                    "Meilisearch reindex: failed to create runtime"
+                );
             }
         }
     });

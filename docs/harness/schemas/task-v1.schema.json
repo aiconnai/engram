@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiconnai.github.io/engram/schemas/task-v1.schema.json",
+  "title": "Engram Harness Task Specification v1",
+  "description": "Schema for task specifications governing isolated agent execution in the Engram harness.",
+  "type": "object",
+  "required": [
+    "task_id",
+    "target_sha",
+    "base_sha",
+    "allowed_capabilities",
+    "required_checks",
+    "timeout_seconds"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Schema version identifier for the task specification.",
+      "type": "string",
+      "const": "task-v1"
+    },
+    "task_id": {
+      "description": "Unique identifier for this task run.",
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "target_sha": {
+      "description": "Target Git commit SHA (40-character lowercase hexadecimal).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "base_sha": {
+      "description": "Base Git commit SHA (40-character lowercase hexadecimal).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "allowed_capabilities": {
+      "description": "List of authorized sandbox capabilities granted to the writer.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "workspace_read",
+          "workspace_write",
+          "test_exec",
+          "lint_exec",
+          "format_exec",
+          "doc_exec",
+          "git_read",
+          "sandbox_container",
+          "network_none"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "required_checks": {
+      "description": "List of approved check IDs that must be run and pass.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9_:.-]+$",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "timeout_seconds": {
+      "description": "Maximum execution time in seconds before task fails closed.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400
+    },
+    "allowed_paths": {
+      "description": "Optional list of repo-relative paths the task is permitted to inspect or modify.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[a-zA-Z0-9_./-]+$"
+      },
+      "uniqueItems": true
+    },
+    "protected_paths": {
+      "description": "Optional list of protected paths that cannot be modified.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[a-zA-Z0-9_./-]+$"
+      },
+      "uniqueItems": true
+    },
+    "metadata": {
+      "description": "Optional arbitrary metadata for audit logging.",
+      "type": "object"
+    }
+  }
+}

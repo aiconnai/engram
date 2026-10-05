@@ -1,0 +1,18 @@
+{
+  "schema_version": "task-v1",
+  "task_id": "task-adversarial-scope-001",
+  "target_sha": "0123456789abcdef0123456789abcdef01234567",
+  "base_sha": "abcdef0123456789abcdef0123456789abcdef01",
+  "allowed_capabilities": [
+    "arbitrary_host_exec",
+    "credential_mount"
+  ],
+  "required_checks": [
+    "fmt"
+  ],
+  "timeout_seconds": 60,
+  "allowed_paths": [
+    "../../etc/shadow",
+    "/etc/passwd"
+  ]
+}

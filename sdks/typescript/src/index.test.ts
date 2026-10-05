@@ -7,6 +7,9 @@ import {
   ContextResource,
   AuthResource,
   AdminResource,
+  SpatialResource,
+  VaultResource,
+  ModelRoutingResource,
 } from "./index.js";
 
 const mockFetch = vi.fn();
@@ -63,6 +66,9 @@ describe("EngramClient", () => {
       expect(client.context).toBeInstanceOf(ContextResource);
       expect(client.auth).toBeInstanceOf(AuthResource);
       expect(client.admin).toBeInstanceOf(AdminResource);
+      expect(client.spatial).toBeInstanceOf(SpatialResource);
+      expect(client.vault).toBeInstanceOf(VaultResource);
+      expect(client.modelRouting).toBeInstanceOf(ModelRoutingResource);
     });
 
     it("should strip trailing slash from baseUrl", async () => {
@@ -780,6 +786,32 @@ describe("EngramClient", () => {
       expect(requestArguments(0)).toEqual({ id: 42 });
       expect(res).toEqual({ id: 42, content: "test" });
     });
+
+    it("should call memory_compress_aaak", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({ compressed: "[AAAK:v1:dense]\ndb cfg", compression_ratio: "2.5x" })
+      );
+      const res = await client.spatial.compressAaak({
+        text: "The database configuration",
+        mode: "ultradense",
+      });
+      expect(requestMethod(0)).toBe("memory_compress_aaak");
+      expect(requestArguments(0)).toEqual({
+        text: "The database configuration",
+        mode: "ultradense",
+      });
+      expect(res.compressed).toBe("[AAAK:v1:dense]\ndb cfg");
+    });
+
+    it("should call memory_decompress_aaak", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({ decompressed: "The database configuration" })
+      );
+      const res = await client.spatial.decompressAaak("[AAAK:v1:dense]\ndb cfg");
+      expect(requestMethod(0)).toBe("memory_decompress_aaak");
+      expect(requestArguments(0)).toEqual({ text: "[AAAK:v1:dense]\ndb cfg" });
+      expect(res.decompressed).toBe("The database configuration");
+    });
   });
 
   describe("VaultResource", () => {
@@ -884,5 +916,121 @@ describe("EngramClient", () => {
       expect(res.total_drawers).toBe(12);
     });
   });
+
+  describe("Model Routing Contract (RFC 0011)", () => {
+    it("should resolve active route for purpose", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          purpose: "embedding_text",
+          status: "ok",
+          provider_id: "tfidf",
+          model_id: "tfidf-128",
+          offline_policy: "works_offline",
+          fallback_used: false,
+          warnings: [],
+        })
+      );
+
+      const res = await client.modelRouting.resolve("embedding_text");
+      expect(requestMethod(0)).toBe("model_route_resolve");
+      expect(requestArguments(0)).toEqual({
+        purpose: "embedding_text",
+      });
+      expect(res.status).toBe("ok");
+      expect(res.provider_id).toBe("tfidf");
+    });
+
+    it("should resolve route with preferred provider", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          purpose: "embedding_text",
+          status: "ok",
+          provider_id: "openai",
+          model_id: "text-embedding-3-small",
+          offline_policy: "requires_network",
+          fallback_used: false,
+        })
+      );
+
+      const res = await client.modelRouting.resolve({
+        purpose: "embedding_text",
+        preferredProvider: "openai",
+      });
+      expect(requestMethod(0)).toBe("model_route_resolve");
+      expect(requestArguments(0)).toEqual({
+        purpose: "embedding_text",
+        preferred_provider: "openai",
+      });
+      expect(res.provider_id).toBe("openai");
+    });
+
+    it("should list registered model routes", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          routes_count: 8,
+          routes: [
+            {
+              purpose: "embedding_text",
+              provider_id: "tfidf",
+              model_id: "tfidf-128",
+              capability: "local_rule_based",
+              cost_class: "free_local",
+              latency_class: "inline",
+              offline_policy: "works_offline",
+              fallback_policy: "none",
+              requires_secret: false,
+            },
+          ],
+        })
+      );
+
+      const res = await client.modelRouting.list({ purpose: "embedding_text" });
+      expect(requestMethod(0)).toBe("model_routes_list");
+      expect(requestArguments(0)).toEqual({
+        purpose: "embedding_text",
+      });
+      expect(res.routes_count).toBe(8);
+      expect(res.routes[0].provider_id).toBe("tfidf");
+    });
+  });
+
+  describe("Permission Modes (RFC 0010)", () => {
+    it("should query permission_mode_status without arguments", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          active_mode: "scoped_write",
+          configured_via: "env",
+          modes_hierarchy: ["read_only", "scoped_write", "maintenance", "admin"],
+          total_tools_count: 100,
+          allowed_tools_count: 85,
+        })
+      );
+
+      const res = await client.permissionModeStatus();
+      expect(requestMethod(0)).toBe("permission_mode_status");
+      expect(requestArguments(0)).toEqual({});
+      expect(res.active_mode).toBe("scoped_write");
+      expect(res.allowed_tools_count).toBe(85);
+    });
+
+    it("should query permission_mode_status for a specific tool", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          active_mode: "scoped_write",
+          configured_via: "env",
+          tool: "memory_delete",
+          required_mode: "admin",
+          allowed: false,
+        })
+      );
+
+      const res = await client.permissionModeStatus("memory_delete");
+      expect(requestMethod(0)).toBe("permission_mode_status");
+      expect(requestArguments(0)).toEqual({ tool: "memory_delete" });
+      expect(res.tool).toBe("memory_delete");
+      expect(res.allowed).toBe(false);
+    });
+  });
 });
+
 

@@ -9,7 +9,7 @@ pub type Result<T> = std::result::Result<T, EngramError>;
 #[derive(Error, Debug)]
 pub enum EngramError {
     #[error("Database error: {0}")]
-    Database(#[from] rusqlite::Error),
+    Database(#[source] rusqlite::Error),
 
     #[error("Storage error: {0}")]
     Storage(String),
@@ -69,6 +69,19 @@ pub enum EngramError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+}
+
+impl From<rusqlite::Error> for EngramError {
+    /// Every SQLite error enters `EngramError` through here, so this is the one
+    /// place that can count SQLITE_BUSY/LOCKED without touching each call site.
+    /// Busy retries handled inside `storage/connection.rs` never convert and are
+    /// not counted (see `observability::counters::NOT_INSTRUMENTED`).
+    fn from(err: rusqlite::Error) -> Self {
+        if crate::observability::redact::is_sqlite_busy(&err) {
+            crate::observability::record_sqlite_busy();
+        }
+        EngramError::Database(err)
+    }
 }
 
 impl EngramError {

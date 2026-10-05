@@ -48,6 +48,10 @@ cargo build --release
 ### Rust
 - **Tratamento de Erros**: Use `Result<T, EngramError>` com `?` para propagação
 - **Thread Safety**: Handlers devem implementar `Send + Sync`
+- **SQLite & Concurrency**: Nunca segure `rusqlite::Connection` através de `.await` (`!Send`/`!Sync`). Use `with_connection(|conn| ...)`. Jamais faça chamadas de rede ou APIs de embedding dentro de transações de banco (evita `SQLITE_BUSY`).
+- **Unicode Safety**: Nunca fatie strings originais usando offsets de bytes calculados em cópias lowercased/normalizadas. Use iteradores de caracteres, graphemes ou limites de regex (`\b`).
+- **Anti-IDOR**: Consultas por ID primário inteiro (`id: 123`) devem obrigatoriamente validar o workspace contra o principal autenticado (`principal.allows_workspace`).
+- **Build Velocity**: Nunca rode `cargo clean` sem confirmação prévia explícita. O cache incremental preserva a velocidade da suíte de testes.
 - **Testes**: Use `#[cfg(test)] mod tests` com `#[test]` functions
 - **Clippy**: Sempre execute `cargo clippy` antes de submeter PRs
 - **Migrations**: Ao alterar o schema, atualize `SCHEMA_VERSION` em `storage/migrations.rs` e os testes correspondentes
@@ -67,6 +71,9 @@ cargo build --release
 1. **Schema Version Mismatch**: Testes em `storage/migrations.rs` têm versão hardcoded. Ao atualizar schema, atualize também os testes.
 2. **Python Built-ins**: O parâmetro `filter` em `EngramClient.list()` foi renomeado para `filter_` para evitar sombra do built-in.
 3. **TypeScript Syntax**: Verifique cuidadosamente o fechamento de tipos em métodos que retornam objetos complexos (ex: `Promise<{...}>`).
+4. **Unicode Slicing**: Textos multilíngues sofrem variação de tamanho em bytes ao converter maiúsculas/minúsculas (ex: `ß` vs `ẞ`). Fatiar strings originais com índices de string normalizada causa panic no Rust.
+5. **SQLite WAL Starvation**: Abrir uma transação de escrita antes de aguardar APIs externas bloqueia todos os leitores e escritores do banco local.
+6. **WAL Sparse-File Attack**: Replay de frames de replicação deve validar `page_number <= MAX_ALLOWED_DB_PAGES` para impedir criação acidental de arquivos esparsos de múltiplos terabytes.
 
 ## Ferramentas MCP Disponíveis
 O Engram expõe as ferramentas MCP documentadas em [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Elas existem para transformar contexto disperso em memória acionável, com leitura e escrita pela mesma superfície. Principais:
@@ -91,6 +98,7 @@ Se o skill `huly` estiver disponível no seu ambiente (`.claude/skills/huly/SKIL
 - **Cliente TypeScript**: `sdks/typescript/src/index.ts`
 - **Testes de integração**: `tests/*.rs`
 - **Documentação da API**: `docs/REFERENCE.md` (Engram Cloud), `INVARIANTS.md` (regras do projeto)
+- **Engenharia e Governança**: `docs/standards/rust-repository-engineering-standard-v5.md`, `governance/exceptions.toml`, `governance/models.toml`
 - **Tese do produto**: `README.md`, `docs/README.md`, `docs/AI_GUIDE.md`, `docs/USING_ENGRAM_IN_A_REPO.md`
 - **AI Operating Guide / lazycodex-ai**: `docs/AI_OPERATING_GUIDE.md`
 

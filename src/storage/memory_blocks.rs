@@ -231,14 +231,15 @@ pub fn archive_overflow(conn: &Connection, name: &str) -> Result<Option<String>>
     let block = get_block(conn, name)?
         .ok_or_else(|| EngramError::Storage(format!("memory block '{}' not found", name)))?;
 
-    let max_chars = block.max_tokens * 4;
+    let max_chars = block.max_tokens.saturating_mul(4);
     if block.content.len() <= max_chars {
         return Ok(None);
     }
 
-    // Truncate at a char boundary.
-    let keep = &block.content[..max_chars];
-    let overflow = block.content[max_chars..].to_string();
+    // Truncate at a char boundary (a raw byte offset may split a multibyte char).
+    let split = crate::text_util::floor_char_boundary(&block.content, max_chars);
+    let keep = &block.content[..split];
+    let overflow = block.content[split..].to_string();
 
     update_block(conn, name, keep, "overflow archived")?;
 
@@ -367,6 +368,23 @@ mod tests {
 
         let block = get_block(&conn, "small").unwrap().unwrap();
         assert_eq!(block.content, "12345678");
+    }
+
+    // 7b. Archive overflow never splits a multibyte char
+    #[test]
+    fn test_archive_overflow_multibyte_boundary() {
+        let conn = setup();
+        // max_tokens = 2  →  max_chars = 8; the 8-byte cut lands inside 'é' (bytes 7..9).
+        let content = "abcdefgéhij";
+        assert!(!content.is_char_boundary(8));
+        create_block(&conn, "mb", content, 2).unwrap();
+
+        let overflow = archive_overflow(&conn, "mb").unwrap().unwrap();
+
+        let block = get_block(&conn, "mb").unwrap().unwrap();
+        assert_eq!(block.content, "abcdefg");
+        assert_eq!(overflow, "éhij");
+        assert_eq!(format!("{}{}", block.content, overflow), content);
     }
 
     // 8. Archive non-overflowing block returns None

@@ -1,0 +1,57 @@
+{
+  "schema_version": "evidence-v2",
+  "policy_version": "harness-hardening-v1",
+  "timestamp": "2026-02-30T18:00:00Z",
+  "task_id": "task-20260721-agent-harness-001",
+  "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+  "base_sha": "abcdef0123456789abcdef0123456789abcdef01",
+  "tree_sha": "fedcba9876543210fedcba9876543210fedcba98",
+  "verdict": "pass",
+  "checks": [
+    {
+      "id": "fmt",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 150,
+      "command": "sensors step fmt",
+      "message": "fmt passed (synthetic)",
+      "log_hash": "95babd980c30b4f9aeaf2d38e7d017a9d24acefd143bb5dbf05ee69dc19f1073",
+      "log_path": "fmt.txt"
+    },
+    {
+      "id": "clippy",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 1200,
+      "command": "sensors step clippy",
+      "message": "clippy passed (synthetic)",
+      "log_hash": "0e1f89f4d907e359e13079b574006a0159a2bb0a0114dff8cab89c26de69d0db",
+      "log_path": "clippy.txt"
+    },
+    {
+      "id": "test_lib",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 3400,
+      "command": "sensors step test_lib",
+      "message": "test_lib passed (synthetic)",
+      "log_hash": "199abd581ee05f0f9785ffbb51db9fc501913cbd635b183ec3852260adb70e46",
+      "log_path": "test_lib.txt"
+    },
+    {
+      "id": "doctor",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 800,
+      "command": "sensors step doctor",
+      "message": "doctor passed (synthetic)",
+      "log_hash": "0c0529d9a05e653190e848f3726a8c7b01981950d91607cee84598d5826975ee",
+      "log_path": "doctor.txt"
+    }
+  ],
+  "sha256_manifest": {
+    "docs/harness/SPEC.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "docs/harness/schemas/task-v2.schema.json": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+  },
+  "recorder": "synthetic-test-fixture"
+}

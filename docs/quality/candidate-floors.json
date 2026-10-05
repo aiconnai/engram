@@ -1,0 +1,60 @@
+{
+  "schema_version": "engram.quality-candidate-floors.v1",
+  "acceptance_note": "Floors are accepted only when a supervisor-chosen strict ancestor of the candidate (run-quality-candidate.py --floors-anchor) holds an entry for the same corpus hash with review.status 'accepted-independent-review'. The candidate's own file cannot assert acceptance. To accept: after independent review of corpus labels, runner and floors, change review.status to 'accepted-independent-review', run `cd scripts && python3 -m quality_candidate.floors seal ../docs/quality/candidate-floors.json`, merge, and have CI pass the merged commit as the anchor.",
+  "corpora": [
+    {
+      "name": "engram-synthetic-candidate",
+      "version": "2.0.0",
+      "corpus_path": "tests/fixtures/retrieval_quality/candidate_corpus.json",
+      "corpus_sha256": "14b7eb0f3e2800468f4aba0ae81e2535b5468107c1aa688ebbf809a0a9f4cfa1",
+      "deterministic_seed": 20261005,
+      "memory_count": 50,
+      "query_count": 49,
+      "floors": {
+        "lexical_fts5": {
+          "recall@10": 0.857,
+          "mrr": 0.877,
+          "ndcg@10": 0.871
+        },
+        "hybrid_tfidf": {
+          "recall@10": 0.948,
+          "mrr": 0.909,
+          "ndcg@10": 0.917
+        }
+      },
+      "review": {
+        "status": "proposed-pending-independent-review",
+        "label_review": "llm-authored-not-human-reviewed",
+        "justification": "Floors equal the deterministic Q7 measurement on 2026-10-05 (offline TF-IDF provider; measured on the Q7 development tree and re-confirmed identical on clean candidate 12d2c3ba by an end-to-end runner execution) rounded down to 3 decimals, so any change that lowers a metric by one query-level step fails. They are regression detectors for this corpus, not a statement of acceptable retrieval quality: the relevance labels were authored by an LLM and no human has reviewed them. Raise only with a corpus/runner review; never lower to make a run pass."
+      },
+      "entry_digest": "6ece245b16b43c58abc4614b3e927820b7aa407f70e528471ce404e75ccaf263"
+    },
+    {
+      "name": "engram-synthetic-representative",
+      "version": "1.0.0",
+      "corpus_path": "tests/fixtures/retrieval_quality/corpus.json",
+      "corpus_sha256": "1564628cb12478c6bf8b30458806fc0d74097397cdfd9e533612a24259d2224e",
+      "deterministic_seed": 20260712,
+      "memory_count": 9,
+      "query_count": 6,
+      "floors": {
+        "lexical_fts5": {
+          "recall@10": 1.0,
+          "mrr": 1.0,
+          "ndcg@10": 1.0
+        },
+        "hybrid_tfidf": {
+          "recall@10": 1.0,
+          "mrr": 1.0,
+          "ndcg@10": 1.0
+        }
+      },
+      "review": {
+        "status": "carried-over-from-budgets-json",
+        "label_review": "frozen v1 smoke corpus; reviewed with docs/quality/budgets.json (Wave 3 independent post-review)",
+        "justification": "The lexical floors repeat the already reviewed budgets.json retrieval floors (1.0) and the runner refuses any lower value. Hybrid floors are the measured 1.0 on 2026-10-05. Metrics of 1.0 on 9 memories prove plumbing only, not retrieval quality on customer-like data."
+      },
+      "entry_digest": "b19b2049348c5b530d63be6afff33256d7a444e95cdbc294b48399e0ae32fd69"
+    }
+  ]
+}

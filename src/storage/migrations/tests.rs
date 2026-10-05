@@ -439,11 +439,8 @@ fn test_dream_candidates_allow_agent_writeback_kind() {
     assert_eq!(kind, "agent_writeback");
 }
 
-#[test]
-fn test_v45_preserves_existing_dream_candidate_data() {
-    let conn = Connection::open_in_memory().expect("open in-memory db");
-    conn.execute_batch(
-        r#"
+/// v44-era dream schema with one job, candidate and source row.
+const V44_DREAM_FIXTURE: &str = r#"
         CREATE TABLE schema_version (
             version INTEGER PRIMARY KEY,
             applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -538,9 +535,57 @@ fn test_v45_preserves_existing_dream_candidate_data() {
         VALUES
             ('v44-candidate', 'memory', '1', 'memory:1',
              '{"preview":"source"}');
-        "#,
-    )
-    .expect("create v44 dream candidate schema");
+"#;
+
+fn count_rows(conn: &Connection, sql: &str) -> i64 {
+    conn.query_row(sql, [], |row| row.get(0))
+        .expect("count rows")
+}
+
+#[test]
+fn test_v45_preserves_sources_with_foreign_keys_on() {
+    // Production path: Storage::open enables foreign keys before migrating.
+    let conn = Connection::open_in_memory().expect("open in-memory db");
+    conn.execute_batch("PRAGMA foreign_keys = ON;")
+        .expect("enable foreign keys");
+    conn.execute_batch(V44_DREAM_FIXTURE)
+        .expect("create v44 dream candidate schema");
+
+    run_migrations(&conn).expect("run v45+ migrations with FK on");
+
+    assert_eq!(
+        count_rows(
+            &conn,
+            "SELECT COUNT(*) FROM dream_candidates WHERE id = 'v44-candidate'"
+        ),
+        1
+    );
+    assert_eq!(
+        count_rows(
+            &conn,
+            "SELECT COUNT(*) FROM dream_candidate_sources
+             WHERE candidate_id = 'v44-candidate'"
+        ),
+        1,
+        "rebuild of dream_candidates must not cascade-delete sources"
+    );
+    let fk_enabled: i64 = conn
+        .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+        .expect("read foreign_keys");
+    assert_eq!(fk_enabled, 1, "foreign_keys restored to ON");
+    let mut stmt = conn.prepare("PRAGMA foreign_key_check").expect("fk check");
+    let violations = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("fk rows")
+        .count();
+    assert_eq!(violations, 0, "no foreign key violations after v45");
+}
+
+#[test]
+fn test_v45_preserves_existing_dream_candidate_data() {
+    let conn = Connection::open_in_memory().expect("open in-memory db");
+    conn.execute_batch(V44_DREAM_FIXTURE)
+        .expect("create v44 dream candidate schema");
 
     run_migrations(&conn).expect("run v45 migration");
 
@@ -675,4 +720,77 @@ fn test_v47_hnsw_checkpoints_columns() {
     assert_eq!(dim, 1536);
     assert_eq!(metric, "cosine");
     assert_eq!(count, 500);
+}
+
+#[test]
+fn test_migration_table_is_contiguous() {
+    let versions: Vec<i32> = MIGRATIONS.iter().map(|(v, _)| *v).collect();
+    let expected: Vec<i32> = (1..=SCHEMA_VERSION).collect();
+    assert_eq!(versions, expected);
+}
+
+fn conn_at_version(version: i32) -> Connection {
+    let conn = Connection::open_in_memory().expect("open in-memory db");
+    conn.execute_batch(&format!(
+        "CREATE TABLE schema_version (
+             version INTEGER PRIMARY KEY,
+             applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+         );
+         INSERT INTO schema_version (version) VALUES ({version});
+         CREATE TABLE parent (id INTEGER PRIMARY KEY);
+         CREATE TABLE child (
+             id INTEGER PRIMARY KEY,
+             parent_id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED
+         );"
+    ))
+    .expect("fixture");
+    conn
+}
+
+/// Inserts an orphan child row; with foreign keys ON the deferred constraint
+/// makes COMMIT (not the statement) fail.
+fn orphan_migration(conn: &Connection) -> crate::error::Result<()> {
+    conn.execute_batch(
+        "INSERT INTO child (id, parent_id) VALUES (1, 999);
+         INSERT INTO schema_version (version) VALUES (45);",
+    )?;
+    Ok(())
+}
+
+#[test]
+fn test_commit_failure_rolls_back_and_leaves_no_open_transaction() {
+    let conn = conn_at_version(44);
+    conn.execute_batch("PRAGMA foreign_keys = ON;")
+        .expect("fk on");
+    let result = apply_migration(&conn, 46, orphan_migration);
+    assert!(result.is_err(), "deferred FK violation fails COMMIT");
+    assert!(conn.is_autocommit(), "failed COMMIT must be rolled back");
+    let orphans: i64 = conn
+        .query_row("SELECT COUNT(*) FROM child", [], |r| r.get(0))
+        .expect("count");
+    assert_eq!(orphans, 0);
+}
+
+#[test]
+fn test_fk_off_step_refuses_new_foreign_key_violations() {
+    let conn = conn_at_version(44);
+    conn.execute_batch("PRAGMA foreign_keys = ON;")
+        .expect("fk on");
+    // v45 runs with foreign keys disabled; new orphans must still be caught.
+    let result = apply_migration(&conn, 45, orphan_migration);
+    assert!(result.is_err(), "new FK violation must abort the step");
+    assert!(conn.is_autocommit());
+    let (orphans, version): (i64, i32) = conn
+        .query_row(
+            "SELECT (SELECT COUNT(*) FROM child),
+                    (SELECT MAX(version) FROM schema_version)",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .expect("state");
+    assert_eq!((orphans, version), (0, 44), "step rolled back");
+    let fk: i64 = conn
+        .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
+        .expect("fk");
+    assert_eq!(fk, 1, "foreign_keys restored after failure");
 }

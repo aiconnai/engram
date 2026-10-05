@@ -10,7 +10,7 @@ use crate::types::EmbeddingConfig;
 /// Capability category for model providers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ModelCapability {
+pub enum ProviderCapability {
     Embeddings,
     Reranking,
     Vision,
@@ -21,7 +21,7 @@ pub enum ModelCapability {
 /// Status and health report for an individual model provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderStatus {
-    pub capability: ModelCapability,
+    pub capability: ProviderCapability,
     pub name: String,
     pub model_id: String,
     pub dimensions: Option<usize>,
@@ -47,7 +47,7 @@ pub fn inspect_model_routing(config: &EmbeddingConfig) -> ModelRoutingReport {
 
     // 1. TF-IDF Provider (Always present)
     providers.push(ProviderStatus {
-        capability: ModelCapability::Embeddings,
+        capability: ProviderCapability::Embeddings,
         name: "tfidf".to_string(),
         model_id: "built-in-sparse-tfidf".to_string(),
         dimensions: Some(config.dimensions),
@@ -60,7 +60,7 @@ pub fn inspect_model_routing(config: &EmbeddingConfig) -> ModelRoutingReport {
     // 2. Local ONNX Provider
     let onnx_available = cfg!(feature = "onnx-embed");
     providers.push(ProviderStatus {
-        capability: ModelCapability::Embeddings,
+        capability: ProviderCapability::Embeddings,
         name: "onnx".to_string(),
         model_id: "all-MiniLM-L6-v2".to_string(),
         dimensions: Some(384),
@@ -83,7 +83,7 @@ pub fn inspect_model_routing(config: &EmbeddingConfig) -> ModelRoutingReport {
         .map(|k| !k.is_empty())
         .unwrap_or(false);
     providers.push(ProviderStatus {
-        capability: ModelCapability::Embeddings,
+        capability: ProviderCapability::Embeddings,
         name: "openai".to_string(),
         model_id: config
             .embedding_model
@@ -106,7 +106,7 @@ pub fn inspect_model_routing(config: &EmbeddingConfig) -> ModelRoutingReport {
     // 4. Multimodal / CLIP Provider
     let clip_available = cfg!(feature = "clip-embeddings");
     providers.push(ProviderStatus {
-        capability: ModelCapability::Vision,
+        capability: ProviderCapability::Vision,
         name: "clip".to_string(),
         model_id: "clip-vit-base-patch32".to_string(),
         dimensions: Some(512),
@@ -124,7 +124,7 @@ pub fn inspect_model_routing(config: &EmbeddingConfig) -> ModelRoutingReport {
     // 5. Neural Reranker
     let rerank_available = cfg!(feature = "neural-rerank");
     providers.push(ProviderStatus {
-        capability: ModelCapability::Reranking,
+        capability: ProviderCapability::Reranking,
         name: "neural_rerank".to_string(),
         model_id: "ms-marco-MiniLM-L-6-v2".to_string(),
         dimensions: None,

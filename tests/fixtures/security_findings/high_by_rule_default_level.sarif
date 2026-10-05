@@ -1,0 +1,45 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "CodeQL",
+          "rules": [
+            {
+              "id": "rs/synthetic-default",
+              "name": "rs/synthetic-default",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "rs/synthetic-default",
+          "ruleIndex": 0,
+          "message": {
+            "text": "synthetic fixture finding"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "versionControlProvenance": [
+        {
+          "repositoryUri": "https://example.invalid/engram",
+          "revisionId": "0123456789abcdef0123456789abcdef01234567"
+        }
+      ]
+    }
+  ]
+}

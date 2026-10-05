@@ -273,7 +273,7 @@ impl StorageBackend for MeilisearchBackend {
                         "Cannot set expiration on a Permanent tier memory. Permanent memories cannot expire.".to_string(),
                     ));
                 }
-                memory.expires_at = Some(now + chrono::Duration::seconds(ttl));
+                memory.expires_at = Some(crate::storage::queries::expiry_after(now, ttl)?);
             }
             changed = true;
         }

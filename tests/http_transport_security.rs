@@ -14,6 +14,9 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 use tempfile::TempDir;
 
+#[path = "http_transport_security/workspace_auth.rs"]
+mod workspace_auth;
+
 const READY_TIMEOUT: Duration = Duration::from_secs(60);
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
 static HTTP_SECURITY_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -499,7 +502,21 @@ impl ServerProcess {
     }
 
     fn spawn_with_env(args: &[&str], env: &[(&str, &str)]) -> std::io::Result<Self> {
+        Self::spawn_in(tempfile::tempdir()?, args, env)
+    }
+
+    /// Spawn against a database prepared by `seed` before the server opens it.
+    fn spawn_seeded(args: &[&str], seed: impl FnOnce(&std::path::Path)) -> std::io::Result<Self> {
         let temp_dir = tempfile::tempdir()?;
+        seed(&db_path_in(&temp_dir));
+        Self::spawn_in(temp_dir, args, &[])
+    }
+
+    fn db_path(&self) -> PathBuf {
+        db_path_in(&self._temp_dir)
+    }
+
+    fn spawn_in(temp_dir: TempDir, args: &[&str], env: &[(&str, &str)]) -> std::io::Result<Self> {
         let mut command = base_command_in_tempdir(&temp_dir);
         command.args(args);
         command.envs(env.iter().copied());
@@ -779,8 +796,12 @@ fn tool_call_request(arguments: serde_json::Value) -> serde_json::Value {
     })
 }
 
+fn db_path_in(temp_dir: &TempDir) -> PathBuf {
+    temp_dir.path().join("http-security.db")
+}
+
 fn base_command_in_tempdir(temp_dir: &TempDir) -> Command {
-    let db_path = temp_dir.path().join("http-security.db");
+    let db_path = db_path_in(temp_dir);
     let mut command = Command::new(cargo_bin_path());
     command.env_clear();
     preserve_process_env(&mut command, "PATH");

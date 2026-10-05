@@ -72,7 +72,16 @@ impl<'a> ApiKeyManager<'a> {
         let (key_salt, key_hash) = hash_key(&raw_key);
         let key_prefix = &raw_key[..12]; // Show first 12 chars for identification
 
-        let expires_at = expires_in_days.map(|days| Utc::now() + chrono::Duration::days(days));
+        let expires_at = expires_in_days
+            .map(|days| {
+                let delta = chrono::Duration::try_days(days).ok_or_else(|| {
+                    EngramError::InvalidInput("expires_in_days out of range".into())
+                })?;
+                Utc::now()
+                    .checked_add_signed(delta)
+                    .ok_or_else(|| EngramError::InvalidInput("expires_in_days out of range".into()))
+            })
+            .transpose()?;
 
         let permissions_json = serde_json::to_string(&permissions)?;
 
@@ -113,10 +122,11 @@ impl<'a> ApiKeyManager<'a> {
     /// Validate an API key and return claims
     pub fn validate_key(&self, raw_key: &str) -> Result<Option<TokenClaims>> {
         // Use the key prefix to narrow the DB search, then verify the hash in-process.
-        if raw_key.len() < 12 {
+        // `get` is `None` both for keys shorter than 12 bytes and for keys whose
+        // byte 12 is not a char boundary (such keys can never be ours).
+        let Some(key_prefix) = raw_key.get(..12) else {
             return Ok(None);
-        }
-        let key_prefix = &raw_key[..12];
+        };
 
         let mut stmt = self.conn.prepare(
             r#"
@@ -343,6 +353,26 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         init_auth_tables(&conn).unwrap();
         conn
+    }
+
+    #[test]
+    fn test_validate_key_rejects_short_and_non_ascii_keys_without_panic() {
+        let conn = setup_db();
+        let manager = ApiKeyManager::new(&conn);
+
+        // Byte 12 falls inside a multibyte char; length is >= 12 bytes.
+        let split = format!("eng_abcdefg{}tail", "é");
+        assert!(split.len() >= 12 && !split.is_char_boundary(12));
+        for key in [
+            "",
+            "eng_",
+            "short",
+            split.as_str(),
+            "\u{202e}\u{200d}ééééééééé",
+            "e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}",
+        ] {
+            assert!(manager.validate_key(key).unwrap().is_none(), "key {key:?}");
+        }
     }
 
     #[test]

@@ -1,0 +1,600 @@
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 7 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -shm flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -wal flags=0x1000302 -> 6 
+stock_open -shm flags=0x1000302 -> 7 
+stock_open -wal flags=0x1000302 -> 8 
+stock_open -wal flags=0x1000302 -> 9 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 5 
+stock_open -shm flags=0x1000302 -> 11 
+stock_open -wal flags=0x1000302 -> 14 
+stock_open -wal flags=0x1000302 -> 8 
+stock_open -wal flags=0x1000302 -> 10 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 10 
+stock_open -wal flags=0x1000302 -> 11 
+stock_open -wal flags=0x1000302 -> 16 
+stock_open -shm flags=0x1000302 -> 7 
+stock_open -wal flags=0x1000302 -> 13 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -shm flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 7 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 11 
+stock_open -wal flags=0x1000302 -> 9 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 16 
+stock_open -shm flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 10 
+stock_open -wal flags=0x1000302 -> 11 
+stock_open -shm flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 15 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 21 
+stock_open -shm flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 4 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -wal flags=0x1000302 -> 8 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 10 
+stock_open -shm flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 6 
+stock_open -wal flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 9 
+stock_open -shm flags=0x1000302 -> 10 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -shm flags=0x1000302 -> 3 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 3 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -wal flags=0x1000302 -> 7 
+stock_open -wal flags=0x1000302 -> 9 
+stock_open -shm flags=0x1000302 -> 11 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 3 
+stock_open -wal flags=0x1000302 -> 10 
+stock_open -shm flags=0x1000302 -> 12 
+stock_open -wal flags=0x1000302 -> 8 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 15 
+stock_open -shm flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 7 
+stock_open -shm flags=0x1000302 -> 6 
+stock_open -wal flags=0x1000302 -> 9 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 11 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -shm flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 6 
+stock_open -wal flags=0x1000302 -> 8 
+stock_open -shm flags=0x1000302 -> 7 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -shm flags=0x1000302 -> 3 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 3 
+stock_open -shm flags=0x1000302 -> 4 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -shm flags=0x1000302 -> 4 
+stock_open -wal flags=0x1000302 -> 3 
+stock_open -wal flags=0x1000302 -> 8 
+stock_open -wal flags=0x1000302 -> 10 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -shm flags=0x1000302 -> 3 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 6 
+stock_open -wal flags=0x1000302 -> 8 
+stock_open -shm flags=0x1000302 -> 10 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 16 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 3 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -wal flags=0x1000302 -> 19 
+stock_open -shm flags=0x1000302 -> 6 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 17 
+stock_open -wal flags=0x1000302 -> 20 
+stock_open -shm flags=0x1000302 -> 19 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 21 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 18 
+stock_open -wal flags=0x1000302 -> 8 
+stock_open -wal flags=0x1000302 -> 14 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+
+running 1 test
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 5 
+stock_open -wal flags=0x1000302 -> 7 
+stock_open -shm flags=0x1000302 -> 12 
+stock_open -wal flags=0x1000302 -> 9 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -wal flags=0x1000302 -> 4 
+stock_open -shm flags=0x1000302 -> 5 
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+

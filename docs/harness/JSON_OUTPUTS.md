@@ -75,6 +75,12 @@ Tool-specific fields should be shallow, stable, and non-secret. Prefer:
 - short status summaries that use the common status vocabulary or a
   documented tool-specific vocabulary.
 
+`validate-evidence.py --json` adds `trust` (always `structure_only`), `jsonschema`
+(`used`, `absent` or `disabled`), `expectations_applied`, `expectations_complete`, `notes` and a
+per-file `files` array. `status` reflects structural validity only; `expectations_complete`
+says whether every caller-supplied expectation required for the artifact kind was verified
+(`--require-expectations` turns an incomplete set into `usage_error`, exit `2`).
+
 Avoid:
 
 - raw command logs;

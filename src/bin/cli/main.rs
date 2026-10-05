@@ -5,6 +5,7 @@
 mod args;
 #[cfg(feature = "attestation")]
 mod attest;
+mod compress;
 mod core;
 mod graph;
 mod interactive;
@@ -16,6 +17,7 @@ mod model;
 
 mod palace;
 mod portability;
+mod routing;
 mod session;
 #[cfg(feature = "snapshot")]
 mod snapshot;
@@ -31,6 +33,10 @@ use args::{Cli, Commands};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Commands::Routing { action } = cli.command {
+        return routing::handle(action);
+    }
 
     #[cfg(feature = "onnx-embed")]
     if let Commands::Model { action } = &cli.command {
@@ -87,6 +93,13 @@ fn main() -> Result<()> {
         Commands::Mcp { action } => mcp::handle(&storage, action)?,
         Commands::Export { action } => portability::handle_export(&storage, action)?,
         Commands::Import { action } => portability::handle_import(&storage, action)?,
+        Commands::Compress {
+            input,
+            file,
+            memory_id,
+            mode,
+        } => compress::handle_compress(&storage, input, file, memory_id, &mode)?,
+        Commands::Decompress { input, file } => compress::handle_decompress(input, file)?,
         Commands::Palace { action } => palace::handle(&storage, action)?,
         Commands::Graph {
             format,
@@ -100,6 +113,9 @@ fn main() -> Result<()> {
         } => core::link(&storage, from, to, edge_type)?,
         Commands::Versions { id } => core::versions(&storage, id)?,
         Commands::Interactive => interactive::run(&storage)?,
+        Commands::Routing { .. } => {
+            unreachable!("routing commands are handled before storage opens")
+        }
         #[cfg(feature = "snapshot")]
         Commands::Snapshot { action } => snapshot::handle(&storage, action)?,
         #[cfg(feature = "attestation")]

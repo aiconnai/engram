@@ -1,0 +1,20 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Semgrep OSS",
+          "rules": []
+        }
+      },
+      "results": [],
+      "versionControlProvenance": [
+        {
+          "repositoryUri": "https://example.invalid/engram",
+          "revisionId": "0123456789abcdef0123456789abcdef01234567"
+        }
+      ]
+    }
+  ]
+}

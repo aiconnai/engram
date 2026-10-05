@@ -35,12 +35,36 @@ cargo bench --bench search search_index_v2_report
 
 | File | Layer | What it measures |
 |------|-------|-----------------|
-| [`memory_ops.rs`](memory_ops.rs) | Storage | Create, get, list, cross-reference, and stats queries |
+| [`memory_ops.rs`](memory_ops.rs) | Storage | Create, get, list, cross-reference, and stats queries (in-memory); `storage_modes/*` (in-memory vs on-disk WAL vs on-disk cloud-safe), `storage_concurrency/*` (WAL pool readers, readers + writer), opt-in `latency_percentiles` |
 | [`search.rs`](search.rs) | Search | BM25, hybrid (BM25+vector), semantic-only scan, TF-IDF embedding, fuzzy correction, scale tests, RFC 0003 report |
-| [`mcp_dispatch.rs`](mcp_dispatch.rs) | MCP | End-to-end tool dispatch latency (JSON params through handler to response) |
+| [`mcp_dispatch.rs`](mcp_dispatch.rs) | MCP | End-to-end tool dispatch latency (JSON params through handler to response); `memory_search_uncached` bypasses the result cache, in-memory vs disk WAL |
 | [`entity_extraction.rs`](entity_extraction.rs) | Intelligence | NER construction cost and extraction throughput |
 | [`community_detection.rs`](community_detection.rs) | Graph | Louvain-style community detection on clustered synthetic graphs |
 | [`traversal.rs`](traversal.rs) | Graph | Multi-hop BFS traversal on balanced trees |
+
+## Candidate evidence (Q7)
+
+Local Criterion output is only candidate evidence when captured with
+`scripts/capture-criterion-candidate.py` (fixed argv, marker bound to the
+candidate SHA/tree, features, toolchain and supervisor) and verified by
+`scripts/run-quality-candidate.py`; see
+[`../docs/quality/retrieval-performance-policy.md`](../docs/quality/retrieval-performance-policy.md).
+Storage groups are intentionally separate ids: never compare `in_memory` with
+`disk_wal` or `disk_cloud_safe`. `storage_concurrency/*` times a fixed batch
+(200 reads per thread), not one operation. For percentiles and an explicit
+warmup:
+
+```bash
+ENGRAM_BENCH_PERCENTILES=1 ENGRAM_BENCH_PERCENTILE_WARMUP=200 \
+ENGRAM_BENCH_PERCENTILE_SAMPLES=2000 cargo bench --bench memory_ops latency_percentiles
+```
+
+Criterion reports mean/median and confidence intervals, not percentiles; the
+`percentile_report` lines are separate manual timings. Record host load
+(`uptime`) with every run: results on a loaded machine are not comparable.
+Reduced `--sample-size`/`--warm-up-time`/`--measurement-time` runs are for
+smoke checks and must say so wherever their numbers are quoted. Results here are
+local engineering evidence, not hosted SLOs.
 
 ## Performance Targets
 

@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "scanner": "codeql",
+  "tool": "CodeQL",
+  "expected_sha": "0123456789abcdef0123456789abcdef01234567",
+  "today": "2026-10-05",
+  "scenarios": [
+    {
+      "name": "clean-passes",
+      "case": "clean",
+      "sarif": "clean.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "pass",
+      "why": "zero findings, fresh identity"
+    },
+    {
+      "name": "low-and-note-findings-pass",
+      "case": "clean",
+      "sarif": "low_only.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "pass",
+      "why": "only sub-high findings"
+    },
+    {
+      "name": "high-finding-blocks-even-with-scanner-exit-0",
+      "case": "high-finding-exit0",
+      "sarif": "high_error.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": "scanner exit 0 is not absence of findings"
+    },
+    {
+      "name": "high-by-security-severity-blocks",
+      "case": "high-finding-exit0",
+      "sarif": "high_by_security_severity.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": "security-severity >= 7.0"
+    },
+    {
+      "name": "high-by-rule-default-level-blocks",
+      "case": "high-finding-exit0",
+      "sarif": "high_by_rule_default_level.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": "level resolved from rule defaultConfiguration"
+    },
+    {
+      "name": "payload-self-suppression-is-ignored",
+      "case": "self-declaration",
+      "sarif": "self_suppressed_high.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": "SARIF suppressions are payload self-declaration, not an approved exception"
+    },
+    {
+      "name": "approved-exception-passes",
+      "case": "approved-exception",
+      "sarif": "high_error.sarif",
+      "scanner_exit": "0",
+      "exceptions": "exceptions_valid.toml",
+      "allowed_skip": null,
+      "expected": "pass",
+      "why": "owner+approver+unexpired"
+    },
+    {
+      "name": "expired-exception-blocks",
+      "case": "expired-exception",
+      "sarif": "high_error.sarif",
+      "scanner_exit": "0",
+      "exceptions": "exceptions_expired.toml",
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "exception-without-owner-blocks",
+      "case": "invalid-exception",
+      "sarif": "high_error.sarif",
+      "scanner_exit": "0",
+      "exceptions": "exceptions_no_owner.toml",
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "exception-without-expiry-blocks",
+      "case": "invalid-exception",
+      "sarif": "high_error.sarif",
+      "scanner_exit": "0",
+      "exceptions": "exceptions_no_expiry.toml",
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "exception-for-another-rule-blocks",
+      "case": "invalid-exception",
+      "sarif": "high_error.sarif",
+      "scanner_exit": "0",
+      "exceptions": "exceptions_other_rule.toml",
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "exception-beyond-90-days-blocks",
+      "case": "invalid-exception",
+      "sarif": "high_error.sarif",
+      "scanner_exit": "0",
+      "exceptions": "exceptions_too_far.toml",
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "missing-sarif-blocks",
+      "case": "sarif-missing",
+      "sarif": "does_not_exist.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "stale-sha-blocks",
+      "case": "sarif-stale",
+      "sarif": "stale_sha.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "one-stale-run-among-fresh-blocks",
+      "case": "sarif-stale",
+      "sarif": "mixed_runs_one_stale.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "no-provenance-blocks",
+      "case": "sarif-stale",
+      "sarif": "no_provenance.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": "identity unverifiable"
+    },
+    {
+      "name": "malformed-json-blocks",
+      "case": "sarif-malformed",
+      "sarif": "malformed.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "non-object-root-blocks",
+      "case": "sarif-malformed",
+      "sarif": "not_object.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "empty-runs-blocks",
+      "case": "sarif-malformed",
+      "sarif": "empty_runs.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": "no run means no evidence a scan happened"
+    },
+    {
+      "name": "bad-results-shape-blocks",
+      "case": "sarif-malformed",
+      "sarif": "bad_shape_results.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "unsupported-sarif-version-blocks",
+      "case": "sarif-malformed",
+      "sarif": "bad_version.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "wrong-tool-blocks",
+      "case": "wrong-tool",
+      "sarif": "wrong_tool.sarif",
+      "scanner_exit": "0",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": "SARIF from another scanner must not stand in"
+    },
+    {
+      "name": "scanner-not-run-blocks",
+      "case": "scanner-not-run",
+      "sarif": null,
+      "scanner_exit": "not-run",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "scanner-not-run-with-leftover-clean-sarif-blocks",
+      "case": "scanner-not-run",
+      "sarif": "clean.sarif",
+      "scanner_exit": "not-run",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": "a leftover report is not a scan"
+    },
+    {
+      "name": "scanner-skipped-without-authorization-blocks",
+      "case": "scanner-not-run",
+      "sarif": null,
+      "scanner_exit": "skipped",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "scanner-failed-blocks-despite-clean-sarif",
+      "case": "scanner-failed",
+      "sarif": "clean.sarif",
+      "scanner_exit": "1",
+      "exceptions": null,
+      "allowed_skip": null,
+      "expected": "block",
+      "why": ""
+    },
+    {
+      "name": "explicitly-allowed-skip-is-neutral",
+      "case": "allowed-skip",
+      "sarif": null,
+      "scanner_exit": "not-run",
+      "exceptions": null,
+      "allowed_skip": "synthetic: scanner not applicable to this event",
+      "expected": "neutral",
+      "why": "neutral, never pass"
+    }
+  ]
+}

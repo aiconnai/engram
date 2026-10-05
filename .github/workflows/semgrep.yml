@@ -6,14 +6,18 @@ on:
   pull_request:
     branches: ["main"]
 
+# Least privilege by default. Publication needs security-events: write, which is granted only to
+# the `publish` job and never on pull_request events.
 permissions:
   contents: read
-  security-events: write
 
 jobs:
+  # Read-only measurement: runs on every event, retains the SARIF, never uploads it.
   scan:
     name: Semgrep
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
@@ -21,12 +25,37 @@ jobs:
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/src" \
-            semgrep/semgrep:1.169.0 \
+            semgrep/semgrep:1.169.0@sha256:2b33f46ba66cf8cc2ad59ccfa7d22951fd00c632c38f1339e84ec8e6e641a942 \
             semgrep --config p/ci --error --sarif --output /src/semgrep.sarif /src
 
-      - name: Upload SARIF result
+      - name: Retain SARIF result
         if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: error
+          retention-days: 30
+
+  # Trusted publication: only push events reach this job.
+  publish:
+    name: Semgrep SARIF publish
+    runs-on: ubuntu-latest
+    needs: scan
+    # always(): publish findings even when the scan step failed on findings (--error).
+    if: always() && github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Download SARIF produced by the read-only scan
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: semgrep-sarif
+          path: sarif-results
+
+      - name: Upload SARIF result
         uses: github/codeql-action/upload-sarif@1ad29ea4a422cce9a242a9fae469541dcd08addc # v4
         with:
-          sarif_file: semgrep.sarif
+          sarif_file: sarif-results/semgrep.sarif
           category: semgrep

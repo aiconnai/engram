@@ -1,0 +1,17 @@
+[package]
+name = "engram-types"
+version = "0.23.0"
+edition = "2021"
+authors = ["Ronaldo Lima"]
+description = "Core domain types and data models for Engram"
+license = "MIT"
+repository = "https://github.com/aiconnai/engram"
+homepage = "https://github.com/aiconnai/engram"
+readme = "README.md"
+keywords = ["ai", "memory", "types", "models"]
+categories = ["data-structures"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }

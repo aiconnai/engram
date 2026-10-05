@@ -1,0 +1,10 @@
+### P1 — Fix measured performance regressions found by Q7 [P1; core/perf; added by controller]
+
+Source: Q7 report ($W/task-Q7-report.md). Candidate runner measured `entity_extraction/extract_mixed` at ~212.8 µs vs 17.144 µs baseline (ratio 12.4 vs ceiling 1.15), reproduced 3×. Probable cause: commit bf45c0b (#90) replaced one `to_lowercase()` + `find` with `find_case_insensitive_match`, allocating at every char position. Q7 also observed WAL-pool reads not scaling with reader count, likely due to the per-operation SQLite file-permission re-assert in src/storage (G1 made it path-based lstat+fchmodat on every storage call).
+
+- [ ] Reproduce with the Criterion bench (`entity_extraction/extract_mixed`) and record before numbers (same machine, sequential runs, documented params).
+- [ ] Fix find_case_insensitive_match (or its caller) to be O(n) without per-position allocation while preserving C3's Unicode correctness (char-boundary safety, ẞ/İ/combining cases — reuse src/text_util.rs and C3's tests; tests/unicode_adverse_parsers_tests.rs + property tests must stay green). Add a micro-regression test or bench assertion if feasible.
+- [ ] Storage permission re-assert: determine with a measurement whether per-op restrict_sqlite_artifact_mode is the bottleneck; if so, restrict once at open/creation and when -wal/-shm are (re)created (e.g. after checkpoint/open), not on every call — WITHOUT reintroducing any descriptor open/close on live artifacts (G1 invariant #27) and keeping 0600 guarantees (tests in connection.rs and storage_posix_lock_regression_tests.rs must stay green).
+- [ ] Re-run the Q7 candidate runner (scripts/capture-criterion-candidate.py + scripts/run-quality-candidate.py) on a clean detached worktree of the fix commit and report ratio vs ceiling. Do not rebaseline or relax the 1.15 ceiling. If entity_extractor_new/default baseline is stale (predates lazy regex), propose a rebaseline only as a separate, clearly-labeled commit for review — do not apply it silently.
+
+**Aceite:** extract_mixed within ceiling or a documented, reviewed explanation; no Unicode or lock-safety regression. **Rollback:** revert per commit.

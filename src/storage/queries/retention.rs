@@ -86,6 +86,35 @@ pub fn list_retention_policies(conn: &Connection) -> Result<Vec<RetentionPolicy>
     Ok(policies)
 }
 
+/// Day fields must be in `0..=MAX_OFFSET_DAYS` and `max_memories` non-negative:
+/// a negative day count puts the cutoff in the future (every archived row
+/// qualifies) and a negative cap archives the whole workspace.
+fn validate_policy_fields(
+    max_age_days: Option<i64>,
+    max_memories: Option<i64>,
+    compress_after_days: Option<i64>,
+    auto_delete_after_days: Option<i64>,
+) -> Result<()> {
+    let max_days = crate::storage::queries::MAX_OFFSET_DAYS;
+    for (field, value) in [
+        ("max_age_days", max_age_days),
+        ("compress_after_days", compress_after_days),
+        ("auto_delete_after_days", auto_delete_after_days),
+    ] {
+        if let Some(days) = value.filter(|days| !(0..=max_days).contains(days)) {
+            return Err(EngramError::InvalidInput(format!(
+                "{field} {days} is out of range (must be within 0..={max_days})"
+            )));
+        }
+    }
+    if let Some(count) = max_memories.filter(|count| *count < 0) {
+        return Err(EngramError::InvalidInput(format!(
+            "max_memories {count} must not be negative"
+        )));
+    }
+    Ok(())
+}
+
 /// Upsert a retention policy for a workspace.
 pub fn set_retention_policy(
     conn: &Connection,
@@ -100,6 +129,12 @@ pub fn set_retention_policy(
 ) -> Result<RetentionPolicy> {
     let workspace = crate::types::normalize_workspace(workspace)
         .map_err(|e| EngramError::InvalidInput(format!("Invalid workspace: {}", e)))?;
+    validate_policy_fields(
+        max_age_days,
+        max_memories,
+        compress_after_days,
+        auto_delete_after_days,
+    )?;
 
     let now = Utc::now().to_rfc3339();
     let exclude_str = exclude_types.map(|v| v.join(","));
@@ -152,6 +187,22 @@ pub fn apply_retention_policies(conn: &Connection) -> Result<i64> {
     let mut total_affected = 0i64;
 
     for policy in &policies {
+        // Rows stored before validation existed may be out of range; skip them
+        // loudly instead of letting one workspace block every other one.
+        if let Err(error) = validate_policy_fields(
+            policy.max_age_days,
+            policy.max_memories,
+            policy.compress_after_days,
+            policy.auto_delete_after_days,
+        ) {
+            tracing::warn!(
+                workspace = %policy.workspace,
+                %error,
+                "skipping retention policy with out-of-range fields"
+            );
+            continue;
+        }
+
         if let Some(compress_days) = policy.compress_after_days {
             let compressed = compress_old_memories(
                 conn,
@@ -195,7 +246,8 @@ pub fn apply_retention_policies(conn: &Connection) -> Result<i64> {
 
         // 3. Auto-delete very old archived memories
         if let Some(delete_days) = policy.auto_delete_after_days {
-            let cutoff = (Utc::now() - chrono::Duration::days(delete_days)).to_rfc3339();
+            let cutoff =
+                crate::storage::queries::cutoff_days_ago(Utc::now(), delete_days)?.to_rfc3339();
             let now = Utc::now().to_rfc3339();
             let deleted = conn.execute(
                 "UPDATE memories SET valid_to = ?
@@ -220,7 +272,7 @@ pub fn compress_old_memories(
     min_access_count: i32,
     batch_limit: usize,
 ) -> Result<i64> {
-    let cutoff = (Utc::now() - chrono::Duration::days(max_age_days)).to_rfc3339();
+    let cutoff = crate::storage::queries::cutoff_days_ago(Utc::now(), max_age_days)?.to_rfc3339();
     let now = Utc::now().to_rfc3339();
 
     let mut stmt = conn.prepare(
@@ -449,6 +501,82 @@ mod tests {
                 Ok(())
             })
             .expect("retention compression should be archived-only");
+    }
+
+    #[test]
+    fn set_retention_policy_rejects_out_of_range_day_and_count_fields() {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        storage
+            .with_transaction(|conn| {
+                let too_far = crate::storage::queries::MAX_OFFSET_DAYS + 1;
+                let cases: [(Option<i64>, Option<i64>, Option<i64>, Option<i64>); 6] = [
+                    (Some(too_far), None, None, None),
+                    (Some(-1), None, None, None),
+                    (None, Some(-1), None, None),
+                    (None, None, Some(too_far), None),
+                    (None, None, None, Some(99_999)),
+                    (None, None, None, Some(-1)),
+                ];
+                for (max_age, max_memories, compress_after, auto_delete) in cases {
+                    let result = set_retention_policy(
+                        conn,
+                        "default",
+                        max_age,
+                        max_memories,
+                        compress_after,
+                        None,
+                        None,
+                        auto_delete,
+                        None,
+                    );
+                    assert!(
+                        matches!(result, Err(EngramError::InvalidInput(_))),
+                        "accepted {max_age:?}/{max_memories:?}/{compress_after:?}/{auto_delete:?}"
+                    );
+                }
+                assert!(get_retention_policy(conn, "default")?.is_none());
+                Ok(())
+            })
+            .expect("out-of-range policies must be rejected");
+    }
+
+    #[test]
+    fn apply_retention_skips_a_stored_out_of_range_policy_and_runs_the_rest() {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        storage
+            .with_transaction(|conn| {
+                let id = seed_old_memory(conn, "archived")?;
+                // A row written before validation existed; sorts before "default".
+                conn.execute(
+                    "INSERT INTO retention_policies
+                        (workspace, auto_delete_after_days, created_at, updated_at)
+                     VALUES ('aaa-legacy', 99999, ?1, ?1)",
+                    params![Utc::now().to_rfc3339()],
+                )?;
+                set_retention_policy(
+                    conn,
+                    "default",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(90),
+                    None,
+                )?;
+
+                let affected = apply_retention_policies(conn)?;
+
+                assert_eq!(affected, 1, "the valid workspace must still be processed");
+                let valid_to: Option<String> = conn.query_row(
+                    "SELECT valid_to FROM memories WHERE id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                )?;
+                assert!(valid_to.is_some());
+                Ok(())
+            })
+            .expect("one bad stored policy must not block the others");
     }
 
     #[test]

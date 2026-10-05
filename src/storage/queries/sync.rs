@@ -437,7 +437,7 @@ pub fn update_agent_sync_state(conn: &Connection, agent_id: &str, version: i64) 
 
 /// Cleanup old sync data
 pub fn cleanup_sync_data(conn: &Connection, older_than_days: i64) -> Result<i64> {
-    let cutoff = Utc::now() - chrono::Duration::days(older_than_days);
+    let cutoff = crate::storage::queries::cutoff_days_ago(Utc::now(), older_than_days)?;
     let deleted = conn.execute(
         "DELETE FROM memory_events WHERE created_at < ?",
         params![cutoff.to_rfc3339()],

@@ -16,6 +16,10 @@ mod encryption;
 pub mod key_config;
 #[cfg(all(test, feature = "cloud"))]
 mod key_config_tests;
+pub mod wal_chain;
+pub mod wal_recovery;
+mod wal_recovery_staging;
+pub mod wal_replay_guard;
 pub mod wal_replication;
 #[cfg(feature = "cloud")]
 mod worker;
@@ -26,6 +30,7 @@ pub use conflict::{
     Conflict, ConflictDetector, ConflictInfo, ConflictQueue, ConflictResolver, ConflictType,
     MergeResult, Resolution, ResolutionStrategy, SyncMemoryVersion, ThreeWayMerge,
 };
+pub use wal_replay_guard::{preflight_replay, ReplayLimits, ReplayPreflight};
 pub use wal_replication::{
     compute_wal_checksum, RecoveryOptions, RecoveryReport, ReplicationLag,
     ReplicationStatus as WalReplicationStatus, WalDelta, WalDeltaPack, WalDeltaReader, WalFrame,

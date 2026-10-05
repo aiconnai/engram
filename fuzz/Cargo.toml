@@ -1,0 +1,53 @@
+[package]
+name = "engram-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+description = "cargo-fuzz targets for engram-core (nightly lane only; not part of the root workspace)"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+
+# `engram-core` is the root package (lib name `engram`). Default features are
+# disabled on purpose: the targets exercise pure parsing/boundary code and must
+# not pull the HTTP client stack into the sanitizer build.
+[dependencies.engram-core]
+path = ".."
+default-features = false
+
+# Supply chain: this crate has its own lockfile, so the root `cargo audit` job
+# does not see it. The nightly fuzz job runs `cargo audit --file fuzz/Cargo.lock`.
+#
+# This directory is its own cargo workspace. It is NOT listed in the root
+# `[workspace] members` and has its own Cargo.lock (seeded from the root lock),
+# so required CI gates and the root `Cargo.lock` are unaffected.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "entity_extraction"
+path = "fuzz_targets/entity_extraction.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "workspace_normalization"
+path = "fuzz_targets/workspace_normalization.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "text_util_boundaries"
+path = "fuzz_targets/text_util_boundaries.rs"
+test = false
+doc = false
+bench = false

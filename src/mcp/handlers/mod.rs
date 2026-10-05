@@ -14,6 +14,7 @@ use crate::realtime::RealtimeManager;
 use crate::search::{FuzzyEngine, HnswIndex, SearchConfig, SearchResultCache};
 use crate::storage::Storage;
 
+pub mod aaak;
 pub mod agent;
 pub mod agent_memory_contract;
 #[cfg(feature = "dream-phase")]
@@ -146,6 +147,17 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         });
 
     if let Some(denial) = auth_denial {
+        return denial;
+    }
+
+    // Authorize referenced memory rows by their persisted workspace, never by
+    // the workspace the request claims (anti-IDOR, before any side effect).
+    if let Some(denial) = crate::mcp::workspace_guard::denial_for_memory_arguments(
+        &ctx.storage,
+        ctx.principal.as_ref(),
+        tool_name,
+        &params,
+    ) {
         return denial;
     }
 
@@ -330,7 +342,11 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_events_clear" => sync::memory_events_clear(ctx, params),
         "replication_status" => sync::replication_status(ctx, params),
         "replication_sync_now" => sync::replication_sync_now(ctx, params),
-        "replication_recover" => sync::replication_recover(ctx, params),
+        "replication_recover" => {
+            let started = std::time::Instant::now();
+            let (result, outcome) = sync::replication_recover_classified(ctx, params);
+            crate::observability::observe_recovery(started, outcome, result)
+        }
 
         // ── Stats / Versions / Cache / Compact ───────────────────────────────
         "memory_stats" => stats::memory_stats(ctx, params),
@@ -411,6 +427,10 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_migrate_images" => misc::memory_migrate_images(ctx, params),
         "memory_suggest_tags" => misc::memory_suggest_tags(ctx, params),
         "memory_auto_tag" => misc::memory_auto_tag(ctx, params),
+
+        // ── Model Routing (RFC 0011) ──────────────────────────────────────────
+        "model_route_resolve" => model_routing::model_route_resolve(ctx, params),
+        "model_routes_list" => model_routing::model_routes_list(ctx, params),
 
         // ── Langfuse (feature-gated) ──────────────────────────────────────────
         #[cfg(feature = "langfuse")]
@@ -530,9 +550,11 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_expand" => search::memory_expand(ctx, params),
         "recent_activity" => search::recent_activity(ctx, params),
 
-        // ── Compression (semantic compression + context packing + consolidation) ─
+        // ── Compression (semantic compression + context packing + consolidation + AAAK) ─
         "memory_compress" => compression::memory_compress(ctx, params),
         "memory_decompress" => compression::memory_decompress(ctx, params),
+        "memory_compress_aaak" => aaak::memory_compress_aaak(ctx, params),
+        "memory_decompress_aaak" => aaak::memory_decompress_aaak(ctx, params),
         "memory_compress_for_context" => compression::memory_compress_for_context(ctx, params),
         "memory_consolidate" => compression::memory_consolidate(ctx, params),
         "memory_synthesis" => compression::memory_synthesis(ctx, params),
@@ -591,6 +613,12 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
 
         // ── Model Routing (RFC 0011) ─────────────────────────────────────────
         "model_routing_status" => model_routing::model_routing_status(ctx, params),
+
+        // ── Permission Modes (RFC 0010) ───────────────────────────────────────
+        "permission_mode_status" => {
+            let tool_opt = params.get("tool").and_then(|v| v.as_str());
+            crate::mcp::permission::permission_mode_status_report(tool_opt)
+        }
 
         _ => crate::mcp::error::ToolError::tool_not_found(tool_name).into_value(),
     }

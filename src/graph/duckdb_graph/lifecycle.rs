@@ -15,6 +15,14 @@ impl TemporalGraph {
     /// - Attempt to install + load `duckpgq`; failures are non-fatal.
     /// - If PGQ loaded, register a property graph over `graph_entities` /
     ///   `temporal_edges`.
+    ///
+    /// G1 (INVARIANTS #27): DuckDB's `sqlite` scanner uses its own SQLite
+    /// library copy, whose lock bookkeeping is separate from rusqlite's. When
+    /// it closes its descriptor on a database that this process also has
+    /// open through `Storage`, the process's POSIX locks on that file are
+    /// dropped (sqlite.org "How To Corrupt", multiple copies of SQLite).
+    /// Never pass the active database: attach `Storage::snapshot_copy()`, as
+    /// the MCP handlers do.
     pub fn new(sqlite_path: &str) -> Result<Self> {
         validate_sqlite_path(sqlite_path)?;
 

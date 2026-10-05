@@ -6,14 +6,39 @@ on:
   pull_request:
     branches: ["main"]
 
+# Least privilege by default. The action uploads SARIF itself, so measurement and publication are
+# two jobs with the same pinned action and arguments: the pull_request job is read-only and does
+# not upload; the push job is the only one with security-events: write.
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   scan:
     name: Security scan
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Run AgentShield (read-only, no SARIF upload)
+        uses: aiconnai/agentshield@663cf4bf3c7a633c5caad398105264eb8680679d # v0.8.7
+        with:
+          path: .
+          fail-on: high
+          ignore-tests: true
+          format: sarif
+          upload-sarif: false
+          version: v0.8.7
+
+  scan-publish:
+    name: Security scan (publish)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 

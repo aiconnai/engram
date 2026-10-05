@@ -20,6 +20,10 @@ const UPDATED: &str = "Canonical journey remembers the updated cobalt launch che
 const PRIVATE: &str = "private workspace sentinel must never cross the boundary";
 static JOURNEY_LOCK: Mutex<()> = Mutex::new(());
 
+// Q4 contract journey: rejection matrix, no-mutation proof, pagination, lifecycle.
+#[path = "canonical_journey/contract.rs"]
+mod contract;
+
 enum Transport {
     Stdio,
     Http,
@@ -31,6 +35,8 @@ fn canonical_real_binary_journey_over_stdio_and_authenticated_http() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
+    // An inherited ENGRAM_PERMISSION_MODE would deny the journey's writes; children inherit env.
+    let _mode = contract::ModeEnv::set(None);
     let state = tempfile::tempdir().expect("create shared canonical journey state");
     let db_path = state.path().join("canonical-journey.db");
 

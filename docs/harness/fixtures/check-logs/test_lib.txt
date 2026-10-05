@@ -1,0 +1,2 @@
+synthetic fixture log for check test_lib
+exit=0

@@ -1,0 +1,11 @@
+### G1 — SQLite lock-dropping permission restriction (critical data-loss fix) [P0; storage; added by controller from Q4 finding G-1]
+
+**Source finding (Q4 report, reproduced):** `restrict_sqlite_artifact_permissions` in `src/storage/connection.rs` (~line 701; introduced by #189, present on origin/main) opens a separate `std::fs::File` on the db, `-wal` and `-shm` and closes it after every call. Closing ANY descriptor of a file drops all POSIX (fcntl) advisory locks the process holds on it, bypassing SQLite's unix-VFS inode lock bookkeeping. A second process opening/closing the live DB can then delete the WAL and the server's later writes are lost on restart. Repro script: `.superpowers/sdd/2026-10-02-engram-comprehensive-improvement-plan/task-Q4-g1-wal-lock-repro.py`.
+
+- [ ] RED first: a Rust integration test (real files in a caller-owned temp dir) that reproduces the lost-lock / lost-WAL scenario through the public Storage API (two Storage handles or a child process, whichever reproduces deterministically), asserting committed writes survive reopen. Also keep/port the Python repro as evidence.
+- [ ] Fix without opening/closing descriptors on SQLite artifacts while SQLite may hold locks: e.g. restrict mode by path (lstat + chmod/fchmodat with AT_SYMLINK_NOFOLLOW where supported; refuse symlinks), and/or ensure the main DB file is created 0600 before SQLite opens it (SQLite creates -wal/-shm with the main file's mode). Preserve the existing security properties: never follow symlinks, never widen permissions, 0600 result, Windows no-op. Document any TOCTOU residual.
+- [ ] Audit every other place in src/ that opens and closes descriptors on the live DB/-wal/-shm (including C2's recovery staging and integrity checks, snapshot/backup code, lock.rs) for the same hazard; fix or document each.
+- [ ] Re-verify C1's HTTP "state unchanged" assertions in tests/http_transport_security/workspace_auth.rs are not vacuous after the fix (read state through a path that sees committed WAL content).
+- [ ] Full required-features --tests + clippy -D warnings. INVARIANTS/ERRORS_AND_LESSONS entry for the POSIX-lock pitfall.
+
+**Aceite:** reproducer green; no descriptor open/close on live artifacts remains unaccounted. **Rollback:** revert; never silently drop the permission restriction.

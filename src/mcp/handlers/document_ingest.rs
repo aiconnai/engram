@@ -41,6 +41,10 @@ pub fn ingest_document(ctx: &HandlerContext, params: Value) -> Value {
         extra_tags: input.tags.unwrap_or_default(),
     };
 
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&input.path) {
+        return json!({"error": e.to_string()});
+    }
+
     let ingestor = DocumentIngestor::new(&ctx.storage);
     match ingestor.ingest_file(&input.path, config) {
         Ok(result) => {
@@ -57,9 +61,9 @@ pub fn ingest_document(ctx: &HandlerContext, params: Value) -> Value {
                 if let Ok(bytes) = std::fs::read(&input.path) {
                     if let Err(e) = chain.log_document(&bytes, &doc_name, None, &[], None) {
                         tracing::warn!(
-                            "Attestation hook (ingest_document): failed to log '{}': {}",
-                            doc_name,
-                            e
+                            document = %crate::observability::redact::opaque(&doc_name),
+                            error = %crate::observability::redact::redacted(&e),
+                            "Attestation hook (ingest_document): failed to log document"
                         );
                     }
                 }

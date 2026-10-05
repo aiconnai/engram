@@ -542,7 +542,7 @@ fn create_candidate_memory(
         metadata.insert("dream_source_memory_ids".to_string(), json!(source_ids));
     }
 
-    create_memory(
+    let memory = create_memory(
         conn,
         &CreateMemoryInput {
             content: required_candidate_content(candidate)?,
@@ -554,7 +554,10 @@ fn create_candidate_memory(
             defer_embedding: true,
             ..Default::default()
         },
-    )
+    )?;
+    // Deferred means "background queue": enqueue in the caller's transaction.
+    crate::embedding::enqueue_embedding_job(conn, memory.id)?;
+    Ok(memory)
 }
 
 fn demote_policy(conn: &rusqlite::Connection, memory_id: MemoryId) -> Result<()> {

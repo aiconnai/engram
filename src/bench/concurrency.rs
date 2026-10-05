@@ -154,6 +154,7 @@ impl Benchmark for ConcurrencyBenchmark {
                     global: false,
                     rerank_strategy: None,
                     policy_rerank: false,
+                    ..Default::default()
                 };
 
                 while !stop_clone.load(Ordering::Relaxed) {

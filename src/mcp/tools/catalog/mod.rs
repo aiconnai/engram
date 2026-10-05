@@ -1,5 +1,6 @@
 //! MCP tool catalog: domain definitions, feature gating, and categorizations.
 
+pub mod aaak;
 pub mod admin;
 pub mod context;
 pub mod graph;

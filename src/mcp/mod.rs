@@ -7,14 +7,20 @@ pub mod error;
 pub mod grpc_transport;
 pub mod handlers;
 pub mod http_transport;
+pub mod log_labels;
+#[cfg(test)]
+mod observability_tests;
 pub mod permission;
 pub mod progress;
 pub mod prompts;
 pub mod protocol;
+#[cfg(test)]
+mod redaction_tests;
 pub mod resources;
 pub mod shutdown;
 #[path = "tools/mod.rs"]
 pub mod tools;
+pub mod workspace_guard;
 
 pub use error::{HandlerResult, ToolError, ToolErrorCode, ToolResult};
 pub use prompts::{get_prompt, list_prompts};
@@ -26,7 +32,8 @@ pub use protocol::{
     ToolsCapability, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
 };
 pub use resources::{
-    list_resources, read_resource, validate_resource_uri, ResourceSubscriptionManager,
+    list_resources, read_resource, read_resource_as, validate_resource_uri,
+    ResourceSubscriptionManager,
 };
 pub use shutdown::shutdown_signal;
 pub use tools::{get_tool_definitions, get_tool_definitions_tiered, TOOL_DEFINITIONS};

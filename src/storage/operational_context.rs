@@ -4,7 +4,7 @@
 //! Context summaries are derived, lossy or lossless reducer outputs with
 //! explicit source provenance back to the event they summarized.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -301,8 +301,8 @@ pub fn create_context_artifact(
         .map(|bytes| bytes.len() as i64)
         .or(input.byte_len);
     let now = Utc::now();
-    let stale_at = seconds_from_now(now, input.retention.stale_after_seconds);
-    let expires_at = seconds_from_now(now, input.retention.ttl_seconds);
+    let stale_at = seconds_from_now(now, input.retention.stale_after_seconds)?;
+    let expires_at = seconds_from_now(now, input.retention.ttl_seconds)?;
     let metadata = serde_json::to_string(&input.metadata)?;
 
     conn.execute(
@@ -646,7 +646,12 @@ fn record_artifact_access(
         Some(&changes),
         None,
     )
-    .map_err(|err| tracing::warn!("artifact audit_log emit failed: {err}"));
+    .map_err(|err| {
+        tracing::warn!(
+            error = %crate::observability::redact::redacted(&err),
+            "artifact audit_log emit failed"
+        )
+    });
 
     Ok(())
 }
@@ -788,14 +793,15 @@ fn artifact_conversion_error(message: String) -> rusqlite::Error {
     )
 }
 
-fn seconds_from_now(now: DateTime<Utc>, seconds: Option<i64>) -> Option<DateTime<Utc>> {
-    seconds.and_then(|seconds| {
-        if seconds > 0 {
-            Some(now + Duration::seconds(seconds))
-        } else {
-            None
+/// Non-positive values mean "no deadline"; out-of-range values are an
+/// `InvalidInput` error instead of a chrono overflow panic.
+fn seconds_from_now(now: DateTime<Utc>, seconds: Option<i64>) -> Result<Option<DateTime<Utc>>> {
+    match seconds {
+        Some(seconds) if seconds > 0 => {
+            crate::storage::queries::expiry_after(now, seconds).map(Some)
         }
-    })
+        _ => Ok(None),
+    }
 }
 
 fn sha256_bytes(bytes: &[u8]) -> String {

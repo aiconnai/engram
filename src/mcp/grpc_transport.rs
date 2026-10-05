@@ -35,6 +35,7 @@ use super::permission::{
 };
 use super::protocol::{McpHandler, McpRequest, McpResponse};
 use crate::auth::{TransportPrincipal, TransportPrincipalError};
+use crate::observability::redact;
 use crate::realtime::{EventType, RealtimeManager};
 
 // Include generated tonic stubs.
@@ -283,9 +284,19 @@ impl McpService for GrpcMcpService {
         let handler_req = proto_to_handler_request(request.into_inner());
         authorize_request(&principal, &handler_req)?;
         let handler = self.handler.clone();
-        let handler_resp = tokio::task::spawn_blocking(move || handler.handle_request(handler_req))
-            .await
-            .map_err(|e| Status::internal(format!("MCP handler task failed or panicked: {e}")))?;
+        let handler_resp = tokio::task::spawn_blocking(move || {
+            handler.handle_request_as(handler_req, Some(principal))
+        })
+        .await
+        .map_err(|e| {
+            // The join error text carries the panic payload (request content, paths):
+            // log its class only and return a fixed message, as the HTTP transport does.
+            tracing::error!(
+                error_class = redact::join_error_class(&e),
+                "MCP handler task failed or panicked"
+            );
+            Status::internal("MCP handler task failed or panicked")
+        })?;
         let proto_resp = handler_to_proto_response(handler_resp);
         Ok(Response::new(proto_resp))
     }
@@ -434,6 +445,15 @@ mod tests {
     impl McpHandler for EchoHandler {
         fn handle_request(&self, request: McpRequest) -> McpResponse {
             McpResponse::success(request.id, serde_json::json!({"method": request.method}))
+        }
+    }
+
+    /// Panics with a payload that stands in for request content and a local path.
+    struct PanickingHandler;
+
+    impl McpHandler for PanickingHandler {
+        fn handle_request(&self, _request: McpRequest) -> McpResponse {
+            panic!("panic-payload-secret-7f3a /home/someone/private.db");
         }
     }
 
@@ -632,6 +652,25 @@ mod tests {
             .insert("authorization", "Bearer wrong-token".parse().unwrap());
         let err = svc.call(req).await.unwrap_err();
         assert_eq!(err.code(), tonic::Code::Unauthenticated);
+    }
+
+    #[tokio::test]
+    async fn grpc_call_handler_panic_returns_internal_without_the_panic_payload() {
+        let svc = GrpcMcpService::new(Arc::new(PanickingHandler), None, None);
+        let mut req = Request::new(ProtoRequest {
+            id: "3".to_string(),
+            method: methods::INITIALIZE.to_string(),
+            params_json: "{}".to_string(),
+        });
+        req.extensions_mut()
+            .insert(TransportPrincipal::anonymous_loopback());
+
+        let err = svc.call(req).await.unwrap_err();
+
+        assert_eq!(err.code(), tonic::Code::Internal);
+        assert_eq!(err.message(), "MCP handler task failed or panicked");
+        assert!(!err.message().contains("panic-payload-secret"));
+        assert!(!err.message().contains("/home/someone"));
     }
 
     #[tokio::test]

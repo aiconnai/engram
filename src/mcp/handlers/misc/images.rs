@@ -17,6 +17,10 @@ pub fn memory_upload_image(ctx: &HandlerContext, params: Value) -> Value {
         None => return json!({"error": "file_path is required"}),
     };
 
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(file_path) {
+        return json!({"error": e.to_string()});
+    }
+
     let image_index = params
         .get("image_index")
         .and_then(|v| v.as_i64())

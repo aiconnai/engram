@@ -4,6 +4,9 @@ use serde_json::{json, Value};
 
 use super::HandlerContext;
 
+/// Upper bound for `session_index.ttl_days` (100 years).
+const MAX_TTL_DAYS: i64 = 36_500;
+
 pub fn session_index(ctx: &HandlerContext, params: Value) -> Value {
     use crate::intelligence::session_indexing::{index_conversation, ChunkingConfig, Message};
 
@@ -44,6 +47,16 @@ pub fn session_index(ctx: &HandlerContext, params: Value) -> Value {
     let workspace = params.get("workspace").and_then(|v| v.as_str());
     let agent_id = params.get("agent_id").and_then(|v| v.as_str());
 
+    // Bound `ttl_days`: the TTL is later added to a timestamp by chrono, which
+    // panics when the second count is out of range (and an unchecked multiply
+    // overflowed first).
+    let ttl_days = params.get("ttl_days").and_then(|v| v.as_i64()).unwrap_or(7);
+    if !(0..=MAX_TTL_DAYS).contains(&ttl_days) {
+        return json!({
+            "error": format!("ttl_days must be between 0 and {}", MAX_TTL_DAYS)
+        });
+    }
+
     let config = ChunkingConfig {
         max_messages: params
             .get("max_messages")
@@ -54,10 +67,7 @@ pub fn session_index(ctx: &HandlerContext, params: Value) -> Value {
             .get("max_chars")
             .and_then(|v| v.as_i64())
             .unwrap_or(8000) as usize,
-        default_ttl_seconds: params.get("ttl_days").and_then(|v| v.as_i64()).unwrap_or(7)
-            * 24
-            * 60
-            * 60,
+        default_ttl_seconds: ttl_days * 24 * 60 * 60, // bounded above
     };
 
     ctx.storage

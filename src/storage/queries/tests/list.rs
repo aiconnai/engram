@@ -114,3 +114,69 @@ fn test_list_memories_metadata_filter_types() {
         })
         .unwrap();
 }
+
+#[test]
+fn list_memories_errors_instead_of_dropping_an_undecodable_row() {
+    let storage = open_test_storage();
+    storage
+        .with_connection(|conn| {
+            let good = create_memory(conn, &test_memory_input("healthy row"))?;
+            let bad = create_memory(conn, &test_memory_input("corrupt row"))?;
+            conn.execute(
+                "UPDATE memories SET importance = 'not-a-number' WHERE id = ?",
+                [bad.id],
+            )?;
+            let total: i64 = conn.query_row("SELECT COUNT(*) FROM memories", [], |r| r.get(0))?;
+            assert_eq!(total, 2);
+
+            let result = list_memories(conn, &ListOptions::default());
+
+            let error = result
+                .as_ref()
+                .err()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "an undecodable row must surface an error, not shrink the list: {:?}",
+                        result
+                            .as_ref()
+                            .map(|rows| rows.iter().map(|m| m.id).collect::<Vec<_>>())
+                    )
+                })
+                .to_string();
+            assert!(
+                error.contains(&format!("id {}", bad.id)),
+                "the error must name the corrupt row: {error}"
+            );
+            // Rows that decode are still listed once the corruption is gone.
+            conn.execute(
+                "UPDATE memories SET importance = 0.5 WHERE id = ?",
+                [bad.id],
+            )?;
+            let ids: Vec<i64> = list_memories(conn, &ListOptions::default())?
+                .iter()
+                .map(|m| m.id)
+                .collect();
+            assert!(ids.contains(&good.id) && ids.contains(&bad.id));
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[test]
+fn list_memories_errors_when_tags_cannot_be_loaded() {
+    let storage = open_test_storage();
+    storage
+        .with_connection(|conn| {
+            create_memory(conn, &test_memory_input("tag table will vanish"))?;
+            conn.execute_batch("DROP TABLE memory_tags;")?;
+
+            let result = list_memories(conn, &ListOptions::default());
+
+            assert!(
+                result.is_err(),
+                "a failed tag load must not be swallowed into an empty tag list"
+            );
+            Ok(())
+        })
+        .unwrap();
+}

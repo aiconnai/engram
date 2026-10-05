@@ -1,9 +1,13 @@
 # ADR: Agent harness hardening v1
 
-- **Status:** Proposed — requires human acceptance and a dedicated governance PR
-- **Date:** 2026-07-21
+- **Status:** Accepted — 2026-10-05, by the decision owner (see "Acceptance record")
+- **Date:** 2026-07-21 (proposed); 2026-10-05 (accepted)
 - **Decision owner:** Ronaldo
 - **Review basis:** The pre-change Engram harness gates and review contract
+- **Status history:** Proposed on 2026-07-21 (Wave 0 governance proposal,
+  commit `6064847`) → Accepted on 2026-10-05. The text of the Decision, Phased
+  rollout, Failure and rollback, and Consequences sections is unchanged by the
+  acceptance.
 
 ## Context
 
@@ -124,6 +128,31 @@ fallback.
 
 ## Acceptance
 
-This ADR becomes **Accepted** only after the owner explicitly approves it and
-the dedicated Wave 0 PR passes bootstrap, doctor, full sensors, diff checks,
-and independent review using the pre-change gates.
+Original acceptance condition (as proposed on 2026-07-21): this ADR becomes
+**Accepted** only after the owner explicitly approves it and the dedicated Wave 0
+PR passes bootstrap, doctor, full sensors, diff checks, and independent review
+using the pre-change gates.
+
+### Acceptance record (2026-10-05)
+
+| Field | Value |
+|---|---|
+| Previous status | Proposed (2026-07-21) |
+| New status | Accepted |
+| Date | 2026-10-05 |
+| Decision owner | Ronaldo |
+| Source | The owner's chat answer of 2026-10-05, in which he authorized all waves of the comprehensive improvement plan including Wave 4 (his words in chat, "Tudo, inclusive Onda 4", are **not** text of the plan). The plan records the resulting authorization note (`docs/harness/plans/2026-10-02-engram-comprehensive-improvement-plan.md`, authorization note at the top: execution of waves 0-4 authorized, "incluindo aceite do ADR"). Recorded by task E0; attribution corrected by task H6 (the quoted phrase had been attributed to the plan note). |
+| Scope of acceptance | Phased rollout Waves 0-4 as written above. Wave 4 runner/sandbox work uses a **fake writer only, offline**. |
+| Not granted by this acceptance | Real coding-agent adapter; autonomous execution against Engram; host-execution fallback; production or cloud access; deployment; auto-merge; branch-protection changes; push, PR, or package publication. Human merge authority is unchanged. |
+| Pre-acceptance gate evidence | The Wave 0 governance content (commit `6064847`) and its marker-based independent review `docs/harness/reviews/2026-07-22-agent-harness-hardening-v1-v3-post.md` (PASS) predate this acceptance and are already in `main`'s history. E0 baseline gate evidence (bootstrap, doctor, sensors) is recorded in `docs/harness/audits/2026-10-02-improvement-baseline.md`. |
+| Deviation from the text above | The original acceptance sentence assumed a dedicated Wave 0 PR. The owner accepted directly in chat; no PR was opened, and this program delivers local commits only (no push). The owner's explicit approval is the acceptance; gate results are recorded as evidence, not as a substitute for it. |
+
+Acceptance authorizes the **phased work** described in this ADR. It does not
+retroactively approve code that landed earlier (for example the Wave 1 schemas
+and validator introduced in commit `2313d8a`): those artifacts stay
+unactivated and outside the trusted computing base until the corresponding
+wave task (H2 onward) hardens and the owner approves them, as inventoried in
+the E0 baseline audit.
+
+Rollback: revert the commit that records this acceptance; the status returns to
+Proposed and no executable work is authorized.

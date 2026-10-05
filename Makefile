@@ -30,14 +30,22 @@ clippy:
 
 .PHONY: test
 test:
-	cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --lib --tests
-	cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-server
-	cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-watcher
+	@if command -v cargo-nextest >/dev/null 2>&1; then \
+		cargo nextest run --cargo-profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --lib --tests --bin engram-server --bin engram-watcher; \
+	else \
+		cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --lib --tests; \
+		cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-server; \
+		cargo test --profile ci --no-default-features --features $(CI_REQUIRED_FEATURES) --bin engram-watcher; \
+	fi
 
 .PHONY: full-feature-check
 full-feature-check:
 	cargo clippy --all-targets --all-features -- -D warnings
-	cargo test --profile ci --all-features --lib --tests
+	@if command -v cargo-nextest >/dev/null 2>&1; then \
+		cargo nextest run --cargo-profile ci --all-features --lib --tests; \
+	else \
+		cargo test --profile ci --all-features --lib --tests; \
+	fi
 
 .PHONY: backend-smoke
 backend-smoke:
@@ -61,4 +69,13 @@ version-refresh-matrix:
 .PHONY: loop-security
 loop-security:
 	@bash scripts/run-agentshield-loop.sh
+
+.PHONY: deny
+deny:
+	cargo deny check advisories bans licenses sources
+
+.PHONY: audit
+audit:
+	python3 scripts/check-security-exceptions.py --config docs/security/advisory-exceptions.toml --audit-config .cargo/audit.toml --deny-config deny.toml
+	cargo audit
 

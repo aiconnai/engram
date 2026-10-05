@@ -1,0 +1,17 @@
+{
+  "schema_version": "evidence-v1",
+  "timestamp": "2026-07-21T18:00:00Z",
+  "commit_sha": "not-a-valid-sha-xyz-0123456789abcdef",
+  "task_id": "task-20260721-agent-harness-001",
+  "verdict": "pass",
+  "checks": [
+    {
+      "id": "fmt",
+      "status": "pass",
+      "exit_code": 0
+    }
+  ],
+  "sha256_manifest": {
+    "docs/harness/SPEC.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

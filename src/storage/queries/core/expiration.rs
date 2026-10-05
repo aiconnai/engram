@@ -24,7 +24,7 @@ pub fn set_memory_expiration(
         }
         Some(ttl) => {
             // Set new expiration
-            let expires_at = (Utc::now() + chrono::Duration::seconds(ttl)).to_rfc3339();
+            let expires_at = expiry_after(Utc::now(), ttl)?.to_rfc3339();
             conn.execute(
                 "UPDATE memories SET expires_at = ?, updated_at = ? WHERE id = ?",
                 params![expires_at, Utc::now().to_rfc3339(), id],

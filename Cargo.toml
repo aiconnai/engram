@@ -25,6 +25,7 @@ exclude = [
     "Cargo.toml.orig",
     "LAZYCODEX_USAGE.md",
     "benchmark_*.txt",
+    "crates/**",
     "docs/harness/**",
     "docs/private/**",
     "engram-wasm/**",
@@ -36,7 +37,7 @@ exclude = [
 ignored = ["prost"]
 
 [workspace]
-members = [".", "engram-wasm"]
+members = [".", "crates/engram-types", "engram-wasm"]
 default-members = ["."]
 resolver = "2"
 
@@ -81,7 +82,7 @@ required-features = ["pdf"]
 bench = false
 
 [features]
-default = ["cloud", "openai"]
+default = ["openai"]
 
 # Shared HTTP client dependency for optional integrations.
 http-client = ["dep:reqwest"]
@@ -176,8 +177,20 @@ grpc = ["dep:tonic", "dep:prost", "dep:tonic-build"]
 full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "clip-embeddings", "emergent-graph", "hooks", "dream-phase", "ollama", "cohere", "voyage", "local-embeddings", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "snapshot", "attestation", "agent-portability", "grpc"]
 
 [dependencies]
+# Core domain types (Phase 1 Workspace Modularization)
+engram-types = { path = "crates/engram-types", version = "0.23.0" }
+
 # Async runtime
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.35", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "sync",
+    "time",
+    "io-util",
+    "fs",
+    "signal",
+] }
 
 # Database
 rusqlite = { version = "0.31", features = ["bundled", "vtab", "functions", "trace"] }
@@ -194,7 +207,7 @@ serde_json = "1.0"
 # HTTP/WebSocket server
 axum = { version = "0.7", features = ["ws"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
 
 # Shell expansion for paths
 shellexpand = "3.1"
@@ -206,7 +219,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart"], de
 async-trait = { version = "0.1", optional = true }
 
 # Cloud storage (S3/R2/GCS) - optional, feature-gated
-aws-sdk-s3 = { version = "1.12", optional = true }
+aws-sdk-s3 = { version = "1.12", default-features = false, features = ["default-https-client", "rt-tokio", "sigv4a"], optional = true }
 aws-config = { version = "1.1", optional = true }
 
 # Encryption (for cloud sync)
@@ -234,7 +247,7 @@ clap = { version = "4.4", features = ["derive", "env"] }
 thiserror = "1.0"
 
 # Utilities
-dirs = "5.0"
+dirs = "6.0"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.6", features = ["v4", "serde"] }
 parking_lot = "0.12"
@@ -334,11 +347,27 @@ harness = false
 name = "token_reduction"
 harness = false
 
+[profile.dev]
+opt-level = 0
+debug = "line-tables-only"
+incremental = true
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
 [profile.release]
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[profile.ci-release]
+inherits = "release"
+lto = "off"
+codegen-units = 16
 
 [profile.bench]
 lto = true

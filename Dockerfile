@@ -5,7 +5,8 @@
 # Pin builder to bookworm to match the runtime glibc (2.36).
 # rust:latest drifts to newer base images and can link GLIBC_2.39+
 # which crashes on debian:bookworm-slim at startup.
-FROM rust:1-bookworm AS builder
+# Pinned by index digest (2026-10-05: rust:1-bookworm = Rust 1.99.0); bump digest deliberately.
+FROM rust:1-bookworm@sha256:59037199c44290f2befcdd58dcc540164763fc296950255aaefeef096a1866b0 AS builder
 
 WORKDIR /build
 COPY . .
@@ -14,7 +15,8 @@ RUN cargo build --release --bin engram-server --bin engram-cli \
     && strip target/release/engram-server \
     && strip target/release/engram-cli
 
-FROM debian:bookworm-slim
+# Pinned by index digest (2026-10-05); bump together with the builder base.
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251
 
 # Install ca-certificates and curl for container health check
 RUN apt-get update \

@@ -48,8 +48,7 @@ pub fn load_tags(conn: &Connection, memory_id: i64) -> Result<Vec<String>> {
 
     let tags: Vec<String> = stmt
         .query_map([memory_id], |row| row.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<std::result::Result<_, _>>()?;
 
     Ok(tags)
 }

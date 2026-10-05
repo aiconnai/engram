@@ -111,7 +111,9 @@ check confiável.
 | `.claude/fp-rules.txt`         | Tuning versionado para exclusões conservadoras de falso positivo |
 | `canvas/`                      | Evidência estruturada para mudanças complexas |
 | `audits/`                      | Relatórios evidence-only de auditoria periódica |
-| `progress.md`                  | Estado vivo curto: sprint, task, último review, último sensor, commit |
+| `progress.md`                  | Resumo vivo curto (≤150 linhas): campos de estado, retomada (escopo/limites/última evidência), tabela de tasks |
+| `progress-history.md`          | Histórico anterior a H6, byte a byte, com índice de seções e âncoras estáveis (nunca apagar) |
+| `context-budget.md`            | Orçamento de contexto, medição (bytes/tokens), retenção e decisão #152 (chars ≠ tokens) |
 | `progress/*.md`                | Logs permanentes por sprint/tarefa (detalhados) |
 | `known-issues/*.md`            | Incidentes externos que justificam exclusão auditável de sensor |
 | `reviews/*.md`                 | Artefatos permanentes de pre/post review (versionados por iteração) |
@@ -124,6 +126,11 @@ check confiável.
 | `bin/harness-decision-log.sh`  | Registro de decisões com IDs estáveis e justificativas |
 | `bin/harness-risk-register.sh` | Registro de riscos com score, status, owner e monitoramento |
 | `bin/review-gate.sh`           | Gate de review cross-CLI / cross-model (generalizado) |
+| `bin/run-offline-lane.sh`      | Lane offline obrigatória (validator, fixtures, live-state, review-gate, sandbox, context budget); fail-closed, ligada a sensors quick/full, `scripts/ci.sh` e ao job required `Test (ubuntu-latest)` |
+| `bin/measure-context.py`       | Mede o conjunto de leitura obrigatória (bytes/linhas/tokens, tokenizer identificado) e lê uma seção histórica inteira (`--section`) |
+| `bin/check-doc-links.py`       | Checker offline de links relativos e âncoras Markdown (lib: `bin/doc_links.py`) |
+| `bin/validate-evidence.py`     | Validador estrito de task/evidence/review (estrutura e semântica; nunca prova autenticidade) |
+| `schemas/`, `fixtures/`, `tests/` | Schemas v1 (históricos) e v2 (endurecidos), catálogo de check IDs, fixtures sintéticas e testes do validator/lane |
 | `bin/baseline.sh`              | Snapshot estático barato em `.baseline-last` para drift review |
 | `bin/quarterly-audit.sh`       | Auditoria evidence-only; nunca apaga, arquiva ou reescreve |
 | `bin/vc-gate.sh`               | Gate opcional de version control para issue boundaries, `jj` local e releases Git/Cargo |
@@ -168,8 +175,9 @@ bash docs/harness/bin/vc-gate.sh start <task-id>
 # 5. Rodar sensores determinísticos (hard gate)
 bash docs/harness/bin/sensors.sh
 
-# 6. Review pós-mudança (hard gate — PASS exigido)
-bash docs/harness/bin/review-gate.sh post <task-id>
+# 6. Review pós-mudança (hard gate — PASS exigido; escopo explícito + receipt do operador).
+#    O PASS só vale se o gate for uma cópia fora do worktree (runbook em GATES.md):
+bash "$OPDIR/review-gate.sh" post <task-id> --repo . --base <BASE> --head <HEAD>
 
 # 7. Atualizar memória canônica (obrigatório)
 $EDITOR docs/harness/progress.md
@@ -192,6 +200,10 @@ bash docs/harness/bin/vc-gate.sh done <task-id>
 ```
 
 Não pule a atualização de progresso. `progress.md` + o log da sprint são a **memória canônica** do repositório para agentes futuros.
+
+Em `progress.md` atualize só os campos, a tabela de tasks e a seção de retomada (≤150 linhas);
+o detalhe da task vai para o log do active plan. Não acrescente histórico ao resumo: o histórico
+é retido em `progress-history.md` e nos logs, nunca apagado (regras em `context-budget.md`).
 
 ## Task IDs, Scopes e Commits
 
@@ -283,8 +295,9 @@ Exclusões documentadas (apenas para dependências externas temporárias, ex.: A
 
 Modos opcionais existem apenas como atalhos de desenvolvimento:
 
-- `full` — equivalente ao default: CI local completo + `doctor.sh`.
-- `quick` — `cargo fmt --all -- --check`, `cargo check` e `doctor.sh`.
+- `full` — equivalente ao default: CI local completo (inclui o passo `offline_lane`) + `doctor.sh`.
+- `quick` — `cargo fmt --all -- --check`, `cargo check`, a lane offline obrigatória
+  (`run-offline-lane.sh`) e `doctor.sh`.
 - `docs` — referência MCP gerada, rustdoc com warnings como erro e `doctor.sh`.
 - `mcp` — referência MCP gerada, testes de protocolo MCP e `doctor.sh`.
 - `baseline` — `baseline.sh` + `doctor.sh`.
@@ -306,9 +319,14 @@ Essas lanes opcionais não substituem o gate completo para merge, handoff ou cla
 
 Modos:
 
-- `pre <task-id>` — advisory (sempre sai 0). Findings viram input obrigatório antes de codar.
-- `post <task-id>` — hard gate. `FAIL` bloqueia commit/PR.
-- `post <task-id> --range=main..HEAD` — para fechamento de sprint/PR.
+- `pre <task-id>` — advisory (`GATE_STATUS: ADVISORY`, exit 0; nunca aprova). Escopo padrão: working
+  tree vs `HEAD`, incluindo staged-only e untracked. Findings viram input obrigatório antes de codar.
+- `scope <task-id> (--base REV --head REV | --range A..B | --prepare)` — somente leitura; imprime
+  shas, sha256 do diff e paths que o review precisa cobrir.
+- `post <task-id> --repo DIR --base REV --head REV` (ou `--range A..B`) — hard gate fail-closed, a partir de uma cópia do gate fora do worktree, sobre
+  `base..candidate`. Exit 0 só com receipt confiável + `REVIEW_VERDICT: PASS`; `PENDING` é exit 3
+  (nunca PASS). Códigos de saída, receipt manual e runbook em `GATES.md` ("Review gate fail-closed").
+  Não existe default de range.
 
 O script:
 
@@ -381,10 +399,10 @@ O harness é agnóstico a CLI. O bootstrap funciona em qualquer um.
 
 Para review cross-CLI (o cenário atual do usuário):
 
-- Rode `review-gate.sh post ...` — ele prepara o prompt completo.
+- Rode `review-gate.sh post <task> --base REV --head REV` (sem `--review-file`) — ele prepara o prompt completo e sai `PENDING` (exit 3).
 - Cole o prompt no outro CLI (o "reviewer").
 - Salve a resposta completa em `reviews/YYYY-MM-DD-<task>-vN-post.md`.
-- O parser extrai o `PASS`/`FAIL` do artefato.
+- O parser extrai o `PASS`/`FAIL` do marcador `REVIEW_VERDICT:`; o operador então registra o receipt fora do worktree (runbook em `GATES.md`).
 
 Para o reviewer Claude Sonnet, use uma sessão/processo separado do Claude Code
 com `--model sonnet`. Abra o `.raw` gerado pelo `review-gate.sh`, cole ou passe

@@ -1,0 +1,124 @@
+   Compiling zerocopy v0.8.59
+   Compiling version_check v0.9.5
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling vcpkg v0.2.15
+   Compiling cfg-if v1.0.5
+   Compiling pkg-config v0.3.34
+   Compiling once_cell v1.21.4
+   Compiling libc v0.2.180
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling smallvec v1.16.2
+   Compiling bitflags v2.13.2
+   Compiling fallible-iterator v0.3.0
+   Compiling cc v1.5.1
+   Compiling ahash v0.8.12
+   Compiling libsqlite3-sys v0.28.0
+   Compiling hashbrown v0.14.5
+   Compiling hashlink v0.9.1
+   Compiling rusqlite v0.31.0
+   Compiling c4spike v0.0.0 (/tmp/w)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.90s
+     Running unittests src/lib.rs (target/debug/deps/c4spike-404c396c4e35b82f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/peer.rs (target/debug/deps/peer-96c5f8e9406d5f7a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/alt_vfs.rs (target/debug/deps/alt_vfs-dd99a5db70cd3a55)
+
+running 2 tests
+test dotfile_vfs_cannot_enter_shared_memory_wal_mode ... ok
+test dotfile_and_none_writers_are_invisible_to_a_stock_unix_peer ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/create_unlink_race.rs (target/debug/deps/create_unlink_race-fcc90ce1cdfb982e)
+
+running 1 test
+test create_vs_concurrent_unlink_enoent_rates ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+
+     Running tests/fd_alias.rs (target/debug/deps/fd_alias-f72f492929e83150)
+
+running 3 tests
+test proc_fd_alias_without_nofollow_resolves_back_to_the_mutable_pathname ... ok
+test verbatim_proc_fd_alias_without_nofollow_hits_unixopen_o_nofollow ... ok
+test proc_fd_alias_is_refused_by_nofollow ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/lock_hazard.rs (target/debug/deps/lock_hazard-eba692b45e49638f)
+
+running 2 tests
+test closing_a_directory_descriptor_keeps_the_sqlite_reserved_lock ... ok
+test closing_an_extra_descriptor_drops_the_sqlite_reserved_lock ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/shim.rs (target/debug/deps/shim-ffdf94eca689360c)
+
+running 12 tests
+test shim_refuses_directory_writable_by_others ... ok
+test vacuum_into_an_unbound_target_works_from_a_pinned_connection ... ok
+test shim_pool_and_stock_peer_process_share_wal_locks_and_checkpoint ... ok
+test shim_refuses_regular_file_swapped_over_main ... ok
+test in_process_stock_openers_of_the_bound_pathname_are_redirected_too ... ok
+test shim_refuses_symlinked_main_file ... ok
+test shim_new_database_is_created_owner_only_in_pinned_dir ... ok
+test shim_rollback_journal_mode_keeps_journal_in_pinned_dir ... ok
+test shim_open_reads_original_after_parent_directory_rename_swap ... ok
+test shim_wal_sidecars_stay_in_pinned_directory_after_swap ... ok
+test unbound_databases_keep_the_stock_path_behaviour ... ok
+test shim_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/stock_race.rs (target/debug/deps/stock_race-725a396896250105)
+
+running 3 tests
+test stock_nofollow_rejects_a_symlinked_parent_seen_by_full_pathname ... ok
+test stock_open_follows_a_directory_rename_swap_after_engram_checked_the_path ... ok
+test stock_nofollow_does_not_close_the_window_before_open ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/stress_control.rs (target/debug/deps/stress_control-24d843de570135fb)
+
+running 1 test
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/trust_chain.rs (target/debug/deps/trust_chain-ebbee8e27b91ecb7)
+
+running 11 tests
+test a_permissive_main_file_is_rejected ... ok
+test a_planted_group_or_world_readable_sidecar_is_rejected ... ok
+test database_directory_itself_must_not_be_writable_by_others ... ok
+test symlinked_component_is_rejected ... ok
+test group_writable_ancestor_is_rejected ... ok
+test owner_only_artifacts_are_accepted_and_missing_sidecars_are_fine ... ok
+test private_directory_under_the_test_temp_dir_is_trusted ... ok
+test a_symlinked_or_non_regular_sidecar_is_rejected ... ok
+test sticky_world_writable_ancestor_with_owned_child_is_trusted ... ok
+test world_writable_non_sticky_ancestor_is_rejected ... ok
+test the_post_open_fstat_recheck_rejects_a_permissive_handle ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests c4spike
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+exit=0
+RACE-RESULT os=linux open(path,O_CREAT): 0/50000 ENOENT; openat(dirfd,O_CREAT): 0/50000 ENOENT

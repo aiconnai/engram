@@ -2,8 +2,13 @@ name: Nightly
 
 on:
   schedule:
-    # Run at 3 AM UTC daily
-    - cron: '0 3 * * *'
+    # Daily lane: Monday-Saturday at 3 AM UTC.
+    - cron: '0 3 * * 1-6'
+    # Weekly lane: Sunday at 3 AM UTC (adds mutation testing). Daily and weekly
+    # crons never fire on the same day, so every jobs below runs exactly once per
+    # night. `github.event.schedule` carries the cron string that fired; the
+    # `plan` job maps it to a lane and fails on an unmapped value.
+    - cron: '0 3 * * 0'
   workflow_dispatch:
 
 # Least-privilege default for GITHUB_TOKEN. bench-full opts into contents:write
@@ -14,30 +19,98 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Dated nightly shared by the fuzz and Miri lanes (the toolchain used for the
+  # local Q3 runs: rustc 1.97.0-nightly 66da6cae1 2026-04-20). Bump deliberately.
+  NIGHTLY_TOOLCHAIN: nightly-2026-04-21
 
 jobs:
   # =============================================================================
-  # Fuzz Testing (critical for parsers + entity extraction)
+  # Lane resolution (daily / weekly / manual)
+  # =============================================================================
+
+  plan:
+    name: Resolve nightly lane
+    runs-on: ubuntu-latest
+    outputs:
+      lane: ${{ steps.lane.outputs.lane }}
+      run_mutants: ${{ steps.lane.outputs.run_mutants }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Resolve lane
+        id: lane
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          case "${EVENT_NAME}:${EVENT_SCHEDULE}" in
+            "schedule:0 3 * * 1-6") lane=daily;  run_mutants=false ;;
+            "schedule:0 3 * * 0")   lane=weekly; run_mutants=true ;;
+            "workflow_dispatch:")   lane=manual; run_mutants=true ;;
+            *)
+              echo "unmapped trigger '${EVENT_NAME}:${EVENT_SCHEDULE}'; refusing to guess a lane" >&2
+              exit 1
+              ;;
+          esac
+          echo "lane=${lane}" >> "$GITHUB_OUTPUT"
+          echo "run_mutants=${run_mutants}" >> "$GITHUB_OUTPUT"
+
+      # The optional-lane contract (fail-closed runners, schedule mapping, scoped
+      # mutants) is verified on every nightly so the lanes cannot drift silently.
+      - name: Verify optional lane contracts
+        run: python3 -m unittest scripts/test_optional_lane_contracts.py
+
+  # =============================================================================
+  # Fuzz smoke (parsers + entity extraction + workspace identifiers)
+  #
+  # scripts/run-fuzz-smoke.sh requires the declared inventory
+  # (fuzz/targets.inventory) to equal `cargo fuzz list`, the compiled targets and
+  # the executed targets, runs each target for 60s with memory/wall-time limits,
+  # and exits non-zero for fail / not-run / unsupported. No step masks failure.
   # =============================================================================
 
   fuzz:
-    name: Fuzz Testing
+    name: Fuzz Smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@efcb852328a9f50117170cc43094fb6f09eaf1ae # nightly
+        with:
+          toolchain: ${{ env.NIGHTLY_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          workspaces: |
+            fuzz
 
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+      - name: Install cargo-fuzz (pinned)
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
 
-      - name: Run fuzz targets (60s each)
-        run: |
-          for target in $(cargo fuzz list 2>/dev/null || echo ""); do
-            echo "Fuzzing: $target"
-            cargo +nightly fuzz run "$target" -- -max_total_time=60 || true
-          done
-        continue-on-error: true
+      # fuzz/Cargo.lock is a separate lockfile, so the root `cargo audit` job
+      # does not cover it. Uses the same .cargo/audit.toml exceptions.
+      - name: Install cargo-audit (pinned)
+        run: cargo install cargo-audit --version 0.22.0 --locked
+
+      - name: Audit fuzz dependencies
+        run: cargo audit --file fuzz/Cargo.lock
+
+      - name: Run fuzz smoke (60s per target)
+        run: bash scripts/run-fuzz-smoke.sh
+        env:
+          FUZZ_SMOKE_MAX_TOTAL_TIME: '60'
+          FUZZ_SMOKE_WALL_GRACE: '120'
+          FUZZ_SMOKE_RSS_LIMIT_MB: '2048'
+          FUZZ_SMOKE_TOOLCHAIN: ${{ env.NIGHTLY_TOOLCHAIN }}
+
+      - name: Upload fuzz report and reproducers
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-smoke-report
+          path: |
+            target/fuzz-smoke/
+            fuzz/artifacts/
+          if-no-files-found: warn
 
   # =============================================================================
   # Mutation Testing (weekly quality check)
@@ -46,25 +119,32 @@ jobs:
   mutants:
     name: Mutation Testing
     runs-on: ubuntu-latest
-    # Only run on Sundays
-    if: github.event.schedule == '0 3 * * 0' || github.event_name == 'workflow_dispatch'
+    needs: plan
+    # Weekly (Sunday cron) and manual runs only; `plan` maps github.event.schedule.
+    if: needs.plan.outputs.run_mutants == 'true'
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
 
-      - name: Install cargo-mutants
-        run: cargo install cargo-mutants
+      - name: Install cargo-mutants (pinned)
+        run: cargo install cargo-mutants --version 27.1.0 --locked
 
+      # Scope comes from the committed .cargo/mutants.toml (examine_globs: a few
+      # pure, well-tested modules; owner and how to widen are documented there).
+      # A non-zero exit (missed/timed-out mutants, failing baseline) fails the
+      # job: the surviving-mutant report is evidence, never a synthetic green.
       - name: Run mutation testing
         run: cargo mutants --timeout 300 --jobs 2 -- --lib
-        continue-on-error: true
 
       - name: Upload mutation report
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mutation-report
           path: mutants.out/
+          if-no-files-found: warn
 
   # =============================================================================
   # Extended Property Tests
@@ -88,19 +168,33 @@ jobs:
   # =============================================================================
 
   miri:
-    name: Miri (Undefined Behavior Check)
+    name: Miri (pure-Rust unit tests)
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@efcb852328a9f50117170cc43094fb6f09eaf1ae # nightly
         with:
-          components: miri
+          toolchain: ${{ env.NIGHTLY_TOOLCHAIN }}
+          components: miri, rust-src
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
 
-      - name: Run Miri on critical modules
-        run: |
-          cargo +nightly miri test --lib -- workspace:: tier:: || true
-        continue-on-error: true
+      # Nominal inventory in scripts/miri-inventory.txt: SQLite-free tests only
+      # (Miri cannot run the bundled SQLite C library). An empty inventory, a
+      # filter matching zero tests, or a failing test is a non-pass; this is not
+      # a claim of full undefined-behaviour coverage.
+      - name: Run Miri on the nominal inventory
+        run: bash scripts/run-miri-smoke.sh
+        env:
+          MIRI_SMOKE_TOOLCHAIN: ${{ env.NIGHTLY_TOOLCHAIN }}
+
+      - name: Upload Miri report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: miri-smoke-report
+          path: target/miri-smoke/
+          if-no-files-found: warn
 
   # =============================================================================
   # Dependency freshness

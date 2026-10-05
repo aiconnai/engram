@@ -16,6 +16,26 @@ use super::HandlerContext;
 #[cfg(feature = "duckdb-graph")]
 use crate::graph::duckdb_graph::TemporalGraph;
 
+/// Open DuckDB on a private `VACUUM INTO` copy of the active database.
+///
+/// DuckDB's `sqlite` scanner links its own SQLite copy, whose lock
+/// bookkeeping is separate from rusqlite's: attaching the active file and
+/// closing it would drop this process's POSIX locks on it, and another
+/// process could then delete the live WAL (G1). The copy is removed when the
+/// returned snapshot is dropped, which must happen after the graph: bind as
+/// `let (_snapshot, graph) = ...` so `graph` is dropped first.
+#[cfg(feature = "duckdb-graph")]
+fn open_graph_on_snapshot(
+    ctx: &HandlerContext,
+) -> crate::error::Result<(crate::storage::ActiveDbSnapshot, TemporalGraph)> {
+    let snapshot = ctx.storage.snapshot_copy()?;
+    let path = snapshot.path().to_str().ok_or_else(|| {
+        crate::error::EngramError::Internal("snapshot path is not valid UTF-8".to_string())
+    })?;
+    let graph = TemporalGraph::new(path)?;
+    Ok((snapshot, graph))
+}
+
 // ── memory_graph_path ────────────────────────────────────────────────────────
 
 /// Find all shortest paths between two memory nodes within a scope.
@@ -50,10 +70,10 @@ pub fn handle_memory_graph_path(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or(4)
         .min(255) as u8;
 
-    let db_path = ctx.storage.db_path().to_string();
-
-    let graph = match TemporalGraph::new(&db_path) {
-        Ok(g) => g,
+    // Bindings drop in reverse order: `graph` (declared last) closes before
+    // `_snapshot` removes the copy, so the temp dir is deletable on Windows.
+    let (_snapshot, graph) = match open_graph_on_snapshot(ctx) {
+        Ok(opened) => opened,
         Err(e) => return json!({"error": format!("failed to open DuckDB graph: {}", e)}),
     };
 
@@ -84,10 +104,10 @@ pub fn handle_memory_temporal_snapshot(ctx: &HandlerContext, params: Value) -> V
         None => return json!({"error": "missing required param: timestamp"}),
     };
 
-    let db_path = ctx.storage.db_path().to_string();
-
-    let graph = match TemporalGraph::new(&db_path) {
-        Ok(g) => g,
+    // Bindings drop in reverse order: `graph` (declared last) closes before
+    // `_snapshot` removes the copy, so the temp dir is deletable on Windows.
+    let (_snapshot, graph) = match open_graph_on_snapshot(ctx) {
+        Ok(opened) => opened,
         Err(e) => return json!({"error": format!("failed to open DuckDB graph: {}", e)}),
     };
 
@@ -131,10 +151,10 @@ pub fn handle_memory_scope_snapshot(ctx: &HandlerContext, params: Value) -> Valu
         None => return json!({"error": "missing required param: to_timestamp"}),
     };
 
-    let db_path = ctx.storage.db_path().to_string();
-
-    let graph = match TemporalGraph::new(&db_path) {
-        Ok(g) => g,
+    // Bindings drop in reverse order: `graph` (declared last) closes before
+    // `_snapshot` removes the copy, so the temp dir is deletable on Windows.
+    let (_snapshot, graph) = match open_graph_on_snapshot(ctx) {
+        Ok(opened) => opened,
         Err(e) => return json!({"error": format!("failed to open DuckDB graph: {}", e)}),
     };
 

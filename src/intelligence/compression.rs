@@ -266,7 +266,7 @@ pub fn check_context_budget(
 
         // Create preview (first 50 chars)
         let preview = if content.len() > 50 {
-            format!("{}...", &content[..50])
+            format!("{}...", crate::text_util::truncate_bytes(content, 50))
         } else {
             content.clone()
         };

@@ -1,0 +1,6 @@
+# Declared fuzz target inventory (one target per line, `#` comments allowed).
+# scripts/run-fuzz-smoke.sh requires this set to be non-empty and to equal
+# `cargo fuzz list`, the targets that compile, and the targets that execute.
+entity_extraction
+workspace_normalization
+text_util_boundaries

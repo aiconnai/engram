@@ -1,0 +1,2 @@
+Linux 11de1c4e992a 7.0.14-orbstack-00380-ga7e0a2dc9535 #1 SMP PREEMPT Fri Aug  7 03:48:40 UTC 2026 aarch64 GNU/Linux
+ldd (Debian GLIBC 2.36-9+deb12u14) 2.36

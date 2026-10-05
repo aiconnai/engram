@@ -29,7 +29,10 @@ pub fn acquire_dream_lock(
     ttl_secs: u64,
 ) -> Result<bool> {
     let now = Utc::now();
-    let expires_at = now + chrono::Duration::seconds(ttl_secs as i64);
+    let ttl = i64::try_from(ttl_secs).map_err(|_| {
+        EngramError::InvalidInput(format!("dream lock ttl_secs {ttl_secs} is out of range"))
+    })?;
+    let expires_at = expiry_after(now, ttl)?;
 
     // Cleanup expired locks first
     conn.execute(

@@ -159,8 +159,12 @@ pub fn soft_trim(content: &str, config: &SoftTrimConfig) -> SoftTrimResult {
     let mut tail_start = tail_byte_start;
     if config.preserve_words && tail_start > 0 && tail_start < content.len() {
         // Find first space after tail_start
-        if let Some(first_space) = content[tail_start..].find(|c: char| c.is_whitespace()) {
-            let new_start = tail_start + first_space + 1;
+        if let Some((first_space, space)) = content[tail_start..]
+            .char_indices()
+            .find(|(_, c)| c.is_whitespace())
+        {
+            // Skip the whole whitespace char: it may be multibyte (NBSP, U+3000, ...).
+            let new_start = tail_start + first_space + space.len_utf8();
             if new_start < content.len() {
                 tail_start = new_start;
             }
@@ -409,5 +413,62 @@ mod tests {
         let (preview, truncated) = compact_preview("   \n  \n  ", 100);
         assert!(preview.is_empty());
         assert!(!truncated);
+    }
+
+    #[test]
+    fn soft_trim_word_boundary_handles_multibyte_whitespace() {
+        // U+00A0 (2 bytes), U+3000 (3 bytes) and U+2003 (3 bytes) are whitespace for
+        // `char::is_whitespace`; skipping "one byte" past them split the char.
+        for sep in ['\u{00A0}', '\u{3000}', '\u{2003}'] {
+            for max_chars in [20, 33, 50, 101] {
+                for len in [60, 61, 99, 150, 301] {
+                    let content: String = (0..len)
+                        .map(|i| if i % 4 == 3 { sep } else { 'a' })
+                        .collect();
+                    let config = SoftTrimConfig {
+                        max_chars,
+                        ..Default::default()
+                    };
+                    let result = soft_trim(&content, &config);
+                    assert!(result.was_trimmed || content.chars().count() <= max_chars);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn soft_trim_cuts_at_multibyte_whitespace_with_exact_output() {
+        // 30-char budget: 5-char ellipsis leaves 25 -> head 15 chars, tail 7 chars.
+        // The head is cut back to the last whitespace (U+3000) and the tail starts
+        // after the NBSP that follows its first partial word; both are multibyte.
+        let content = "alpha\u{00A0}beta\u{3000}gamma\u{2003}delta epsilon\u{00A0}zeta\u{3000}eta\u{2003}theta iota\u{00A0}kappa";
+        let config = SoftTrimConfig {
+            max_chars: 30,
+            ..Default::default()
+        };
+
+        let result = soft_trim(content, &config);
+
+        assert!(result.was_trimmed);
+        assert_eq!(result.content, "alpha\u{00A0}beta\n...\nkappa");
+        assert_eq!(result.trimmed_chars, 20);
+        assert_eq!(result.original_chars, content.chars().count());
+        assert_eq!(result.chars_removed, result.original_chars - 10 - 5);
+    }
+
+    #[test]
+    fn compact_preview_exact_output_on_multibyte_text() {
+        let line = "é".repeat(12);
+        assert_eq!(compact_preview(&line, 5), ("ééééé...".to_string(), true));
+        let mixed = format!("{} {}", "é".repeat(8), "ü".repeat(8));
+        assert_eq!(
+            compact_preview(&mixed, 12),
+            ("éééééééé...".to_string(), true)
+        );
+        assert_eq!(
+            compact_preview(&line, 12),
+            (line.clone(), false),
+            "a line that fits is returned whole"
+        );
     }
 }

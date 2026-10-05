@@ -17,6 +17,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+use crate::text_util::LowercaseIndex;
 use crate::types::MemoryId;
 
 // =============================================================================
@@ -407,6 +408,9 @@ impl EntityExtractor {
     pub fn extract(&self, text: &str) -> ExtractionResult {
         let start = std::time::Instant::now();
         let mut entities = Vec::new();
+        // Lowercased once for every known organization and concept (P1: a
+        // per-position lowercase made extraction O(text x terms) allocations).
+        let text_lower = LowercaseIndex::new(text);
 
         // Extract @mentions (high confidence)
         if self.config.extract_people {
@@ -456,7 +460,7 @@ impl EntityExtractor {
 
             // Check for known organizations
             for org in &self.known_organizations {
-                if let Some((pos, original)) = find_case_insensitive_match(text, org) {
+                if let Some((pos, original)) = text_lower.find_window(org) {
                     // Avoid duplicates
                     if !entities.iter().any(|e| e.offset == pos) {
                         entities.push(ExtractedEntity {
@@ -518,7 +522,7 @@ impl EntityExtractor {
         // Extract concepts
         if self.config.extract_concepts {
             for concept in &self.known_concepts {
-                if let Some((pos, original)) = find_case_insensitive_match(text, concept) {
+                if let Some((pos, original)) = text_lower.find_window(concept) {
                     entities.push(ExtractedEntity {
                         text: original.to_string(),
                         normalized: concept.clone(),
@@ -590,27 +594,6 @@ impl Default for EntityExtractor {
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-fn find_case_insensitive_match<'a>(text: &'a str, needle: &str) -> Option<(usize, &'a str)> {
-    let needle_len = needle.chars().count();
-    if needle_len == 0 {
-        return None;
-    }
-
-    for (start, _) in text.char_indices() {
-        let end = match text[start..].char_indices().nth(needle_len) {
-            Some((offset, _)) => start + offset,
-            None => text.len(),
-        };
-        let candidate = &text[start..end];
-
-        if candidate.chars().count() == needle_len && candidate.to_lowercase() == needle {
-            return Some((start, candidate));
-        }
-    }
-
-    None
-}
 
 /// Normalize a name for matching
 fn normalize_name(name: &str) -> String {

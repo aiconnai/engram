@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::extract::{DefaultBodyLimit, Request};
 use axum::http::{HeaderValue, StatusCode};
@@ -19,11 +19,14 @@ use tower_http::cors::{Any, CorsLayer};
 use super::super::protocol::McpHandler;
 use super::events::handle_events;
 use super::mcp_handler::handle_mcp;
+use super::metrics::RequestCounted;
 use super::rate_limit::{
     RateLimiterConfig, RateLimiterState, RATE_LIMIT_MAX_BUCKETS, RATE_LIMIT_STALE_AFTER_SECS,
 };
+use super::request_id::{attach_request_id, RequestId};
 use super::security_config::HttpSecurityConfig;
 use super::{authenticate_transport_principal, normalize_api_key, AppState, HttpTransportMetrics};
+use crate::observability::{CorrelationId, OperationEvent};
 use crate::realtime::RealtimeManager;
 
 /// `GET /health` -- lightweight liveness / readiness probe.
@@ -51,7 +54,7 @@ async fn handle_health(State(state): State<AppState>) -> impl IntoResponse {
     };
 
     let transport_metrics = state.metrics.snapshot();
-    Json(json!({
+    let mut body = json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
         "protocol": "2025-11-25",
@@ -59,7 +62,13 @@ async fn handle_health(State(state): State<AppState>) -> impl IntoResponse {
         "transport": {
             "http": transport_metrics
         }
-    }))
+    });
+    // Extra export (critical-path counters). `ENGRAM_OBSERVABILITY_EXPORT=off`
+    // removes it; counters, logs and error envelopes are unaffected.
+    if crate::observability::export_enabled() {
+        body["observability"] = json!(crate::observability::counters().snapshot());
+    }
+    Json(body)
 }
 
 // ---------------------------------------------------------------------------
@@ -176,7 +185,9 @@ pub(super) fn build_router(
         .layer(middleware::from_fn_with_state(
             state.clone(),
             enforce_request_timeout,
-        ));
+        ))
+        // Outermost: every response, including rejections, carries x-request-id.
+        .layer(middleware::from_fn(attach_request_id));
 
     let event_routes = Router::new()
         .route("/v1/events", get(handle_events))
@@ -187,7 +198,8 @@ pub(super) fn build_router(
         .layer(middleware::from_fn_with_state(
             state.clone(),
             enforce_request_timeout,
-        ));
+        ))
+        .layer(middleware::from_fn(attach_request_id));
 
     Ok(Router::new()
         .merge(mcp_routes)
@@ -210,16 +222,42 @@ async fn enforce_auth(
     next.run(request).await
 }
 
+/// Correlation id the request-id layer attached (or a fresh one).
+fn correlation_of(request: &Request) -> CorrelationId {
+    request
+        .extensions()
+        .get::<RequestId>()
+        .map(|id| id.0.clone())
+        .unwrap_or_else(CorrelationId::generate)
+}
+
 async fn enforce_auth_mcp(
     State(state): State<AppState>,
     request: Request,
     next: Next,
 ) -> axum::response::Response {
+    let started = Instant::now();
+    let correlation = correlation_of(&request);
+    let route = if request.uri().path() == "/v1/mcp" {
+        "/v1/mcp"
+    } else {
+        "/mcp"
+    };
+    let counted = request.extensions().get::<RequestCounted>().cloned();
     enforce_auth(
         state,
         request,
         |state| {
-            state.metrics.on_mcp_preparse_unauthorized();
+            let latency = started.elapsed();
+            if let Some(counted) = &counted {
+                counted.mark();
+            }
+            state.metrics.on_mcp_preparse_unauthorized(latency);
+            OperationEvent::new("http.mcp", correlation.as_str(), "unauthorized", latency)
+                .route(route)
+                .http(None, None, StatusCode::UNAUTHORIZED.as_u16())
+                .failed(true)
+                .emit();
             (
                 StatusCode::UNAUTHORIZED,
                 Json(super::super::protocol::McpResponse::error(
@@ -240,11 +278,22 @@ async fn enforce_auth_sse(
     request: Request,
     next: Next,
 ) -> axum::response::Response {
+    let started = Instant::now();
+    let correlation = correlation_of(&request);
     enforce_auth(
         state,
         request,
         |state| {
             state.metrics.on_events_request(true, false);
+            OperationEvent::new(
+                "http.events",
+                correlation.as_str(),
+                "unauthorized",
+                started.elapsed(),
+            )
+            .http(None, None, StatusCode::UNAUTHORIZED.as_u16())
+            .failed(true)
+            .emit();
             StatusCode::UNAUTHORIZED.into_response()
         },
         next,
@@ -254,11 +303,29 @@ async fn enforce_auth_sse(
 
 async fn enforce_request_timeout(
     State(state): State<AppState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> axum::response::Response {
+    // Stages that count the request in `mcp_requests_total` mark this, so a
+    // timeout knows whether it still has to count the request itself.
+    let counted = RequestCounted::default();
+    request.extensions_mut().insert(counted.clone());
     let is_mcp = request.uri().path() == "/mcp" || request.uri().path() == "/v1/mcp";
-    match tokio::time::timeout(state.security.request_timeout, next.run(request)).await {
+    let started = Instant::now();
+    let correlation = correlation_of(&request);
+    let operation = if is_mcp { "http.mcp" } else { "http.events" };
+    let result = tokio::time::timeout(state.security.request_timeout, next.run(request)).await;
+    if result.is_err() {
+        let latency = started.elapsed();
+        if is_mcp {
+            state.metrics.on_mcp_timeout(latency, counted.is_marked());
+        }
+        OperationEvent::new(operation, correlation.as_str(), "timeout", latency)
+            .http(None, None, StatusCode::REQUEST_TIMEOUT.as_u16())
+            .failed(true)
+            .emit();
+    }
+    match result {
         Ok(response) => response,
         Err(_) if is_mcp => (
             StatusCode::REQUEST_TIMEOUT,

@@ -175,7 +175,9 @@ fn strip_intent_markers(query: &str) -> String {
         "ligados a ",
         "ligadas a ",
     ];
-    let lower = query.to_lowercase();
+    // ASCII lowercasing keeps byte offsets identical to `query` (full Unicode
+    // lowercasing can change byte length). All markers are ASCII.
+    let lower = query.to_ascii_lowercase();
     for m in MARKERS {
         if let Some(idx) = lower.find(m) {
             return query[idx + m.len()..].trim().to_string();
@@ -356,6 +358,25 @@ mod tests {
     fn portuguese_path() {
         let intents = classify("como engram e tokio estão conectados");
         assert!(intents.contains(&Intent::Path));
+    }
+
+    #[test]
+    fn strip_intent_markers_unicode_case_folding_keeps_offsets() {
+        // `İ` lowercases to a longer string, so offsets found in a lowercased
+        // copy used to point past (or into) the original.
+        assert_eq!(
+            strip_intent_markers("İİİİ related to engram"),
+            "engram".to_string()
+        );
+        assert_eq!(
+            strip_intent_markers("ẞ similar a tokio"),
+            "tokio".to_string()
+        );
+        assert_eq!(
+            strip_intent_markers("ligado a \u{202e}é\u{200d}"),
+            "\u{202e}é\u{200d}"
+        );
+        assert_eq!(strip_intent_markers("no marker é"), "no marker é");
     }
 
     #[test]

@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 
 use crate::graph::KnowledgeGraph;
+use crate::mcp::workspace_guard::ensure_memory_access;
 use crate::storage::queries::*;
 use crate::types::*;
 
@@ -16,6 +17,8 @@ pub fn memory_link(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_transaction(|conn| {
+            ensure_memory_access(conn, ctx.principal.as_ref(), input.from_id)?;
+            ensure_memory_access(conn, ctx.principal.as_ref(), input.to_id)?;
             let crossref = create_crossref(conn, &input)?;
             Ok(json!(crossref))
         })
@@ -33,6 +36,8 @@ pub fn memory_unlink(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_transaction(|conn| {
+            ensure_memory_access(conn, ctx.principal.as_ref(), from_id)?;
+            ensure_memory_access(conn, ctx.principal.as_ref(), to_id)?;
             delete_crossref(conn, from_id, to_id, edge_type)?;
             Ok(json!({"unlinked": true}))
         })

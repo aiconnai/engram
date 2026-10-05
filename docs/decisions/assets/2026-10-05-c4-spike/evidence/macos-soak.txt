@@ -1,0 +1,3 @@
+macos soak: shim failures 0/50, stock failures 0/50
+RACE-RESULT os=macos open(path,O_CREAT): 0/50000 ENOENT; openat(dirfd,O_CREAT): 1/50000 ENOENT
+ProductName:		macOS ProductVersion:		27.0.1 BuildVersion:		26A434 arm64

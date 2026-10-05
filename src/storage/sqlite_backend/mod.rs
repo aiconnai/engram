@@ -18,6 +18,7 @@ use super::backend::{
     StorageBackend, StorageStats, SyncDelta, SyncResult, SyncState, TransactionalBackend,
 };
 use super::connection::Storage;
+use super::db::DbConnectionExt;
 use super::queries::{
     self, delete_memory_batch, get_related, get_sync_delta, get_sync_version, list_tags,
 };
@@ -214,7 +215,7 @@ impl StorageBackend for SqliteBackend {
             sql.push_str(&conditions.join(" AND "));
 
             let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
-            let count: i64 = conn.query_row(&sql, param_refs.as_slice(), |row| row.get(0))?;
+            let count: i64 = conn.query_scalar(&sql, param_refs.as_slice())?;
 
             Ok(count)
         })
@@ -264,8 +265,12 @@ impl StorageBackend for SqliteBackend {
             // We use queries::delete_crossref which takes an edge type.
             // We'll delete all edge types for this pair.
             for edge_type in EdgeType::all() {
-                // Ignore result (might not exist for all types)
-                let _ = queries::delete_crossref(conn, from_id, to_id, *edge_type);
+                // A missing edge of this type is expected (NotFound); any other
+                // error (locked, I/O, schema) must roll the transaction back.
+                match queries::delete_crossref(conn, from_id, to_id, *edge_type) {
+                    Ok(()) | Err(EngramError::NotFound(_)) => {}
+                    Err(e) => return Err(e),
+                }
             }
             Ok(())
         })
@@ -344,9 +349,7 @@ impl StorageBackend for SqliteBackend {
     fn schema_version(&self) -> Result<i32> {
         self.storage.with_connection(|conn| {
             let version: i32 = conn
-                .query_row("SELECT MAX(version) FROM schema_version", [], |row| {
-                    row.get(0)
-                })
+                .query_scalar_0("SELECT MAX(version) FROM schema_version")
                 .unwrap_or(0);
             Ok(version)
         })
@@ -583,9 +586,7 @@ mod tests {
         let count = backend
             .storage()
             .with_connection(|conn| {
-                let count = conn.query_row("SELECT COUNT(*) FROM savepoint_probe", [], |row| {
-                    row.get::<_, i64>(0)
-                })?;
+                let count: i64 = conn.query_scalar_0("SELECT COUNT(*) FROM savepoint_probe")?;
                 Ok(count)
             })
             .unwrap();
@@ -605,5 +606,30 @@ mod tests {
         assert!(
             matches!(pull, Err(EngramError::Sync(message)) if message.contains("SQLite backend"))
         );
+    }
+
+    #[test]
+    fn delete_crossref_surfaces_statement_errors() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        backend
+            .storage()
+            .with_connection(|conn| {
+                conn.execute_batch("DROP TABLE crossrefs;")?;
+                Ok(())
+            })
+            .unwrap();
+
+        let result = backend.delete_crossref(1, 2);
+
+        assert!(
+            matches!(&result, Err(EngramError::Database(e)) if e.to_string().contains("crossrefs")),
+            "a failing UPDATE must not be reported as success: {result:?}"
+        );
+    }
+
+    #[test]
+    fn delete_crossref_remains_idempotent_for_missing_edges() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        backend.delete_crossref(1, 2).unwrap();
     }
 }

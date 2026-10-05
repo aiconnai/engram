@@ -1,0 +1,103 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/c4spike-54da4b6720693a16)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/peer.rs (target/debug/deps/peer-63e5f259dc4c7cae)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/alt_vfs.rs (target/debug/deps/alt_vfs-a9412382d4574c89)
+
+running 2 tests
+test dotfile_vfs_cannot_enter_shared_memory_wal_mode ... ok
+test dotfile_and_none_writers_are_invisible_to_a_stock_unix_peer ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/create_unlink_race.rs (target/debug/deps/create_unlink_race-26ce3015c62cbcbd)
+
+running 1 test
+test create_vs_concurrent_unlink_enoent_rates ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.88s
+
+     Running tests/fd_alias.rs (target/debug/deps/fd_alias-b5895afbba764ad4)
+
+running 3 tests
+test dev_fd_alias_full_pathname_is_kept_verbatim ... ok
+test verbatim_dev_fd_alias_without_nofollow_opens_the_pinned_main_file ... ok
+test dev_fd_alias_binds_main_file_but_sidecars_are_unusable ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lock_hazard.rs (target/debug/deps/lock_hazard-810ba20c078cf0fe)
+
+running 2 tests
+test closing_a_directory_descriptor_keeps_the_sqlite_reserved_lock ... ok
+test closing_an_extra_descriptor_drops_the_sqlite_reserved_lock ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/shim.rs (target/debug/deps/shim-54ee15c29c549b6f)
+
+running 12 tests
+test shim_refuses_directory_writable_by_others ... ok
+test shim_rollback_journal_mode_keeps_journal_in_pinned_dir ... ok
+test shim_refuses_symlinked_main_file ... ok
+test vacuum_into_an_unbound_target_works_from_a_pinned_connection ... ok
+test shim_refuses_regular_file_swapped_over_main ... ok
+test unbound_databases_keep_the_stock_path_behaviour ... ok
+test shim_open_reads_original_after_parent_directory_rename_swap ... ok
+test shim_new_database_is_created_owner_only_in_pinned_dir ... ok
+test shim_wal_sidecars_stay_in_pinned_directory_after_swap ... ok
+test in_process_stock_openers_of_the_bound_pathname_are_redirected_too ... ok
+test shim_pool_and_stock_peer_process_share_wal_locks_and_checkpoint ... ok
+test shim_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/stock_race.rs (target/debug/deps/stock_race-26fcc0115487d488)
+
+running 3 tests
+test stock_open_follows_a_directory_rename_swap_after_engram_checked_the_path ... ok
+test stock_nofollow_rejects_a_symlinked_parent_seen_by_full_pathname ... ok
+test stock_nofollow_does_not_close_the_window_before_open ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/stress_control.rs (target/debug/deps/stress_control-ac6f6d402102da2d)
+
+running 1 test
+test stock_concurrent_pool_threads_and_peer_processes_keep_integrity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/trust_chain.rs (target/debug/deps/trust_chain-75b39eb68970d4d2)
+
+running 11 tests
+test private_directory_under_the_test_temp_dir_is_trusted ... ok
+test a_permissive_main_file_is_rejected ... ok
+test database_directory_itself_must_not_be_writable_by_others ... ok
+test a_planted_group_or_world_readable_sidecar_is_rejected ... ok
+test group_writable_ancestor_is_rejected ... ok
+test the_post_open_fstat_recheck_rejects_a_permissive_handle ... ok
+test sticky_world_writable_ancestor_with_owned_child_is_trusted ... ok
+test symlinked_component_is_rejected ... ok
+test world_writable_non_sticky_ancestor_is_rejected ... ok
+test owner_only_artifacts_are_accepted_and_missing_sidecars_are_fine ... ok
+test a_symlinked_or_non_regular_sidecar_is_rejected ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests c4spike
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+macos exit=0

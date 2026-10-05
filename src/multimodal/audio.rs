@@ -83,7 +83,7 @@ impl WhisperTranscriber {
     pub fn new(api_key: String) -> Self {
         Self {
             api_key,
-            client: reqwest::Client::new(),
+            client: super::http_client(),
             model: "whisper-1".to_string(),
         }
     }
@@ -92,7 +92,7 @@ impl WhisperTranscriber {
     pub fn with_model(api_key: String, model: String) -> Self {
         Self {
             api_key,
-            client: reqwest::Client::new(),
+            client: super::http_client(),
             model,
         }
     }
