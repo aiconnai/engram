@@ -88,9 +88,20 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("workflow supply-chain: PASS", proc.stdout)
 
     def test_ledger_entries_are_owned_and_expire(self) -> None:
-        text = LEDGER.read_text()
-        self.assertIn("owner", text)
-        self.assertIn("expires", text)
+        import datetime
+        import tomllib
+
+        data = tomllib.loads(LEDGER.read_text())
+        self.assertIsInstance(data.get("owner"), str)
+        entries = data.get("unpinned_images")
+        self.assertIsInstance(entries, list, "ledger must declare unpinned_images (may be empty)")
+        as_of = data["as_of"]
+        for entry in entries:
+            with self.subTest(image=entry.get("image")):
+                for key in ("image", "reason", "owner"):
+                    self.assertTrue(str(entry.get(key, "")).strip(), key)
+                self.assertIsInstance(entry.get("expires"), datetime.date)
+                self.assertLessEqual((entry["expires"] - as_of).days, 90)
 
 
 class UsesPinTests(unittest.TestCase):

@@ -11,20 +11,7 @@ schema_version = 1
 as_of = 2026-10-05
 owner = "Ronaldo"
 
-[[unpinned_images]]
-image = "semgrep/semgrep:1.169.0"
-reason = "Digest needs a registry lookup; Q5 ran offline and the image is not in the local Docker store. Used by ci.yml (semgrep-security) and semgrep.yml."
-owner = "Ronaldo"
-expires = 2026-11-05
-
-[[unpinned_images]]
-image = "rust:1-bookworm"
-reason = "Dockerfile builder base; floating major tag by design (see Dockerfile comment). Pin together with a deliberate toolchain bump; not in the local Docker store, so no digest could be verified offline."
-owner = "Ronaldo"
-expires = 2026-11-05
-
-[[unpinned_images]]
-image = "debian:bookworm-slim"
-reason = "Dockerfile runtime base; floating tag. Pin together with the builder base in a release-image task (Dockerfile is outside Q5)."
-owner = "Ronaldo"
-expires = 2026-11-05
+# Empty: semgrep/semgrep:1.169.0, rust:1-bookworm and debian:bookworm-slim were pinned by
+# index digest on 2026-10-05 (issue #241). Add a record here only for a new image whose
+# digest truly cannot be resolved yet, with owner, reason and expiry <= 90 days.
+unpinned_images = []

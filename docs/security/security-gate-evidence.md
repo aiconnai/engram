@@ -26,9 +26,11 @@ CI run of PR #234), so the `codeql-security` job passes `--checkout-dir .`.
   `security-gate` job).
 - Images: pinned by `@sha256:` digest. `zricethezav/gitleaks:v8.23.3` is pinned to the
   digest recorded by the local Docker store (overlay2, so the registry index digest).
-  Images that could not be resolved offline (`semgrep/semgrep:1.169.0`, Dockerfile bases)
-  are in `docs/security/supply-chain-pins.toml` with owner and expiry; the checker fails
-  once an entry expires or stops matching.
+  `semgrep/semgrep:1.169.0` and the Dockerfile bases (`rust:1-bookworm`,
+  `debian:bookworm-slim`) are pinned by registry index digest (resolved 2026-10-05 with
+  `docker buildx imagetools inspect`; the gitleaks digest was re-verified against the
+  registry the same day). `docs/security/supply-chain-pins.toml` is empty; the checker
+  fails on any new unpinned image without an unexpired ledger entry.
 - Updates keep provenance: bump the SHA/digest together with the version comment and
   run `python3 scripts/check-workflow-supply-chain.py` plus the gate contract tests.
 
@@ -81,7 +83,5 @@ reqwest 0.12.28.
 
 ## Ledger entries that need online action
 
-The three entries in `supply-chain-pins.toml` (`semgrep/semgrep:1.169.0`,
-`rust:1-bookworm`, `debian:bookworm-slim`) expire **2026-11-05**. Each needs its digest
-resolved online (`docker buildx imagetools inspect <image:tag>`, index digest) and pinned
-in the workflow/Dockerfile before then; the supply-chain check fails after that date.
+None. The three entries that expired on 2026-11-05 were resolved early (issue #241):
+digests pinned in `ci.yml`, `semgrep.yml` and the `Dockerfile`, and the ledger emptied.
