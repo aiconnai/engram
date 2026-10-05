@@ -32,12 +32,12 @@ pub const TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "replication_recover",
-        description: "Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into a target database.",
+        description: "Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into a target database. When the source is the active storage database (the default), only its latest committed state is recovered, via a SQLite snapshot (frames_replayed 0, last_frame_applied null); target_frame, target_time and source_wal_path are refused for the active database and require a closed copy. The target must not be the active database or one of its side files.",
         schema: r#"{
             "type": "object",
             "properties": {
                 "target_db_path": {"type": "string", "description": "Destination file path for the recovered SQLite database"},
-                "source_db_path": {"type": "string", "description": "Source SQLite database path (defaults to active storage database)"},
+                "source_db_path": {"type": "string", "description": "Source SQLite database path (defaults to active storage database; the active database supports latest-state recovery only)"},
                 "source_wal_path": {"type": "string", "description": "Source .db-wal path (defaults to source_db_path + '-wal')"},
                 "target_frame": {"type": "integer", "description": "Target frame sequence number to stop recovery at (inclusive)"},
                 "target_time": {"type": "string", "format": "date-time", "description": "Target timestamp (ISO-8601 / RFC3339) to stop recovery at"},

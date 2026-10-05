@@ -191,6 +191,12 @@ pub fn palace_visualize(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or("html");
     let output_path = params.get("output_path").and_then(|v| v.as_str());
 
+    if let Some(path) = output_path {
+        if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(path) {
+            return json!({"error": e.to_string()});
+        }
+    }
+
     let format = match format_str.parse::<crate::spatial::PalaceFormat>() {
         Ok(fmt) => fmt,
         Err(e) => return json!({"error": e.to_string()}),

@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 
 use super::tools::TOOL_DEFINITIONS;
 use crate::auth::{Permission, PermissionSet, ResourceType, TransportPrincipal};
+use crate::observability::{record_permission_denied, PermissionDeniedReason};
 
 const MODE_ENV: &str = "ENGRAM_PERMISSION_MODE";
 
@@ -74,7 +75,31 @@ impl PermissionMode {
     }
 }
 
+/// Names the dispatcher routes to the same handler as a catalog tool. They must
+/// be classified exactly like their canonical tool (never fail open).
+const DISPATCH_ALIASES: &[(&str, &str)] = &[
+    ("graph_predict_links", "memory_predict_links"),
+    ("graph_cluster_concepts", "memory_cluster_concepts"),
+];
+
+/// Parameters that make an otherwise read-only tool write. A call carrying a
+/// truthy value requires `scoped_write`.
+const WRITE_FLAG_PARAMS: &[(&str, &str)] = &[
+    ("memory_predict_links", "auto_apply"),
+    ("sync_state", "update_version"),
+];
+
+/// Resolve a dispatcher alias to the catalog tool it executes.
+pub fn canonical_tool_name(tool_name: &str) -> &str {
+    DISPATCH_ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == tool_name)
+        .map(|(_, canonical)| *canonical)
+        .unwrap_or(tool_name)
+}
+
 pub fn required_mode(tool_name: &str) -> Option<PermissionMode> {
+    let tool_name = canonical_tool_name(tool_name);
     let tool = TOOL_DEFINITIONS
         .iter()
         .find(|tool| tool.name == tool_name)?;
@@ -95,15 +120,58 @@ pub fn required_mode(tool_name: &str) -> Option<PermissionMode> {
     Some(PermissionMode::ScopedWrite)
 }
 
+/// Mode required for one concrete call. Unknown tools require `admin` (fail
+/// closed); write flags raise a read-only tool to `scoped_write`. Flags are
+/// read from the arguments or, for transport pre-checks, `params.arguments`.
+pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode {
+    let base = required_mode(tool_name).unwrap_or(PermissionMode::Admin);
+    let canonical = canonical_tool_name(tool_name);
+    let writes = WRITE_FLAG_PARAMS
+        .iter()
+        .filter(|(tool, _)| *tool == canonical)
+        .any(|(_, flag)| {
+            [
+                params.get(*flag),
+                params.get("arguments").and_then(|a| a.get(*flag)),
+            ]
+            .into_iter()
+            .flatten()
+            .any(|value| !matches!(value, Value::Null | Value::Bool(false)))
+        });
+    if writes && base < PermissionMode::ScopedWrite {
+        PermissionMode::ScopedWrite
+    } else {
+        base
+    }
+}
+
+fn permission_denial_for_call(
+    tool_name: &str,
+    params: &Value,
+    current: PermissionMode,
+) -> Option<Value> {
+    let required = required_mode_for_call(tool_name, params);
+    if current.allows(required) {
+        return None;
+    }
+    record_permission_denied(PermissionDeniedReason::ModeInsufficient);
+    Some(permission_denied(tool_name, current, required))
+}
+
 pub fn permission_denial_for_mode(tool_name: &str, current: PermissionMode) -> Option<Value> {
     let required = required_mode(tool_name)?;
     if current.allows(required) {
         return None;
     }
+    record_permission_denied(PermissionDeniedReason::ModeInsufficient);
     Some(permission_denied(tool_name, current, required))
 }
 
 pub fn permission_denial_from_env(tool_name: &str) -> Option<Value> {
+    permission_denial_from_env_for_call(tool_name, &Value::Null)
+}
+
+fn permission_denial_from_env_for_call(tool_name: &str, params: &Value) -> Option<Value> {
     let raw = match std::env::var(MODE_ENV) {
         Ok(value) if !value.trim().is_empty() => value,
         Ok(_) | Err(std::env::VarError::NotPresent) => return None,
@@ -116,7 +184,7 @@ pub fn permission_denial_from_env(tool_name: &str) -> Option<Value> {
         return Some(invalid_permission_mode(tool_name, &raw));
     };
 
-    permission_denial_for_mode(tool_name, mode)
+    permission_denial_for_call(tool_name, params, mode)
 }
 
 /// Returns the active permission mode configured in the process environment, if any.
@@ -175,16 +243,45 @@ fn permission_denied(tool_name: &str, current: PermissionMode, required: Permiss
         .into_value()
 }
 
+/// Conservative denial for a workspace-restricted principal calling a tool that
+/// a workspace claim cannot scope. Same envelope as other permission denials;
+/// `details.reason` distinguishes it from a permission-mode mismatch.
+fn workspace_unscoped_tool_denied(tool_name: &str, principal: &TransportPrincipal) -> Value {
+    record_permission_denied(PermissionDeniedReason::ToolNotWorkspaceScoped);
+    crate::mcp::error::ToolError::permission_denied(
+        tool_name,
+        principal_permission_mode(&principal.auth_context().permissions).as_str(),
+        required_mode(tool_name)
+            .unwrap_or(PermissionMode::Admin)
+            .as_str(),
+    )
+    .with_details(json!({"reason": "tool_not_workspace_scoped"}))
+    .into_value()
+}
+
 pub fn permission_denial_for_principal(
     tool_name: &str,
     principal: &TransportPrincipal,
     requested_workspace: Option<&str>,
 ) -> Option<Value> {
-    let required = required_mode(tool_name)?;
+    principal_denial_for_call(tool_name, &Value::Null, principal, requested_workspace)
+}
+
+fn principal_denial_for_call(
+    tool_name: &str,
+    params: &Value,
+    principal: &TransportPrincipal,
+    requested_workspace: Option<&str>,
+) -> Option<Value> {
+    let required = required_mode_for_call(tool_name, params);
     let current = principal_permission_mode(&principal.auth_context().permissions);
-    if !principal.allows_workspace(requested_workspace)
-        || !principal_allows_mode(principal, required)
-    {
+    let workspace_allowed = principal.allows_workspace(requested_workspace);
+    if !workspace_allowed || !principal_allows_mode(principal, required) {
+        record_permission_denied(if workspace_allowed {
+            PermissionDeniedReason::ModeInsufficient
+        } else {
+            PermissionDeniedReason::WorkspaceNotAllowed
+        });
         return Some(permission_denied(tool_name, current, required));
     }
     None
@@ -288,6 +385,7 @@ pub fn check_scope_authorization(
                 let current_mode = principal
                     .map(|p| principal_permission_mode(&p.auth_context().permissions).as_str())
                     .unwrap_or("unauthorized_scope");
+                record_permission_denied(PermissionDeniedReason::ScopeGrantMissing);
                 return Some(
                     crate::mcp::error::ToolError::permission_denied(
                         tool_name,
@@ -304,6 +402,7 @@ pub fn check_scope_authorization(
                 );
             }
             Err(e) => {
+                record_permission_denied(PermissionDeniedReason::AuthorizationCheckFailed);
                 return Some(crate::mcp::error::ToolError::from(e).into_value());
             }
         }
@@ -322,6 +421,9 @@ pub fn check_tool_authorization(
     params: &Value,
     principal: Option<&TransportPrincipal>,
 ) -> Option<Value> {
+    // Denominator for the permission-denied alert rule.
+    crate::observability::record_authorization_check();
+
     // 0. Per-call explicit permission mode override (RFC 0010 per-request override)
     if let Some(mode_str) = params
         .get("_permission_mode")
@@ -329,20 +431,33 @@ pub fn check_tool_authorization(
         .and_then(|v| v.as_str())
     {
         if let Some(mode) = PermissionMode::parse(mode_str) {
-            if let Some(denial) = permission_denial_for_mode(tool_name, mode) {
+            if let Some(denial) = permission_denial_for_call(tool_name, params, mode) {
                 return Some(denial);
             }
         }
     }
 
     // 1. Env-level permission mode
-    if let Some(denial) = permission_denial_from_env(tool_name) {
+    if let Some(denial) = permission_denial_from_env_for_call(tool_name, params) {
         return Some(denial);
     }
 
     // 2. Principal workspace & permission mode
-    if let Some(p) = principal {
+    let metadata_only = crate::mcp::workspace_guard::is_catalog_metadata_tool(tool_name);
+    if let Some(p) = principal.filter(|_| metadata_only) {
+        // Catalog metadata carries no workspace data: only the mode applies.
+        let required = required_mode_for_call(tool_name, params);
+        if !principal_allows_mode(p, required) {
+            record_permission_denied(PermissionDeniedReason::ModeInsufficient);
+            return Some(permission_denied(
+                tool_name,
+                principal_permission_mode(&p.auth_context().permissions),
+                required,
+            ));
+        }
+    } else if let Some(p) = principal {
         if requests_all_workspaces(params) && !allows_all_workspaces(p) {
+            record_permission_denied(PermissionDeniedReason::GlobalScopeRequested);
             return Some(permission_denied(
                 tool_name,
                 principal_permission_mode(&p.auth_context().permissions),
@@ -350,21 +465,30 @@ pub fn check_tool_authorization(
             ));
         }
 
+        // A workspace claim only scopes tools that accept a workspace argument
+        // or that are limited to verified memory IDs (see `workspace_guard`).
+        if !allows_all_workspaces(p)
+            && !crate::mcp::workspace_guard::tool_honors_workspace_claim(tool_name)
+        {
+            return Some(workspace_unscoped_tool_denied(tool_name, p));
+        }
+
         let workspaces = requested_workspaces(params);
         if workspaces.is_empty() {
             if matches!(p, crate::auth::TransportPrincipal::AnonymousLoopback(_)) {
+                record_permission_denied(PermissionDeniedReason::WorkspaceClaimMissing);
                 return Some(permission_denied(
                     tool_name,
                     principal_permission_mode(&p.auth_context().permissions),
-                    required_mode(tool_name).unwrap_or(PermissionMode::ReadOnly),
+                    required_mode_for_call(tool_name, params),
                 ));
             }
-            if let Some(denial) = permission_denial_for_principal(tool_name, p, None) {
+            if let Some(denial) = principal_denial_for_call(tool_name, params, p, None) {
                 return Some(denial);
             }
         } else {
             for ws in workspaces {
-                if let Some(denial) = permission_denial_for_principal(tool_name, p, Some(ws)) {
+                if let Some(denial) = principal_denial_for_call(tool_name, params, p, Some(ws)) {
                     return Some(denial);
                 }
             }
@@ -465,6 +589,7 @@ fn principal_permission_mode(permissions: &PermissionSet) -> PermissionMode {
 }
 
 fn invalid_permission_mode(tool_name: &str, raw: &str) -> Value {
+    record_permission_denied(PermissionDeniedReason::InvalidModeConfig);
     json!({
         "error": {
             "code": "invalid_permission_mode",

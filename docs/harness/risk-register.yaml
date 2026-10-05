@@ -1,5 +1,5 @@
 schema_version: harness-risk-register-v1
-updated_at: 2026-06-26T11:46:09Z
+updated_at: 2026-10-05T15:11:37Z
 entries:
 
   - id: RISK-0001
@@ -15,3 +15,17 @@ entries:
     monitoring:
       - falhas repetidas em mesmas etapas
       - CI_TIMEOUT
+
+  - id: RISK-0002
+    date: 2026-10-05
+    status: monitoring
+    description: "Logs fora dos caminhos criticos da O1 (cerca de 250 sites, incl. sync/cloud, hooks, multimodal e watcher) ainda podem imprimir paths ou texto de erro; so os caminhos criticos foram redigidos"
+    probability: 3
+    impact: 3
+    score: 9
+    owner: "@team"
+    mitigation: "Usar observability::redact (redacted/path_label/opaque) em todo novo log; varrer os sites restantes por lane; teste de captura em cada modulo dono"
+    contingency: "Operar com RUST_LOG em nivel info e nao reter logs compartilhados ate a varredura completa"
+    monitoring:
+      - "novo log com %err ou path.display()"
+      - "ENGRAM_LOG_ERROR_DETAIL ativo em ambiente compartilhado"

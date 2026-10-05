@@ -1,0 +1,685 @@
+{
+  "schema_version": 1,
+  "class": "review-raw",
+  "description": "review-gate.sh prompt/diff dumps (.raw) next to each review verdict artifact",
+  "generated_at": "2026-10-05T15:07:42Z",
+  "source_commit": "f96b2008f9d9706da89dbe92358bdcc166b6ac33",
+  "totals": {
+    "files": 73,
+    "bytes": 4249732
+  },
+  "entries": [
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-pre.md.raw",
+      "size": 4106,
+      "sha256": "384daef6f457a8e60daa486d87cacb9965585cb65e8ff8509607f78ff1639974",
+      "git_blob": "1631c36cc3dbe2bd536d47da801476f51f50bf64",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v10-post.md.raw",
+      "size": 22123,
+      "sha256": "5937537d3708f8b7000a3ef853979d16d4f77f049c32365fba7b6bcb4b40bb07",
+      "git_blob": "9c5818ce35fa865f8babca2efc4cd33b1bc8fab8",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v2-pre.md.raw",
+      "size": 4106,
+      "sha256": "384daef6f457a8e60daa486d87cacb9965585cb65e8ff8509607f78ff1639974",
+      "git_blob": "1631c36cc3dbe2bd536d47da801476f51f50bf64",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v3-post.md.raw",
+      "size": 4347,
+      "sha256": "7698ecec2037e267e87f12d36fcb1429e6ef4ad719a28e2792e97096221587db",
+      "git_blob": "155a43df73ce7f1a59c79ee42984bc18be19b7ce",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v3-pre.md.raw",
+      "size": 4346,
+      "sha256": "9215759da40ce01b596bd1b88ccef4b53556d593898578fd954e84149e57a2ef",
+      "git_blob": "02a6ffbc8d96503bd5a70e20912f9b17a101c389",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v4-pre.md.raw",
+      "size": 4346,
+      "sha256": "9215759da40ce01b596bd1b88ccef4b53556d593898578fd954e84149e57a2ef",
+      "git_blob": "02a6ffbc8d96503bd5a70e20912f9b17a101c389",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v5-pre.md.raw",
+      "size": 4346,
+      "sha256": "9215759da40ce01b596bd1b88ccef4b53556d593898578fd954e84149e57a2ef",
+      "git_blob": "02a6ffbc8d96503bd5a70e20912f9b17a101c389",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v6-post.md.raw",
+      "size": 4347,
+      "sha256": "7698ecec2037e267e87f12d36fcb1429e6ef4ad719a28e2792e97096221587db",
+      "git_blob": "155a43df73ce7f1a59c79ee42984bc18be19b7ce",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v6-pre.md.raw",
+      "size": 4346,
+      "sha256": "9215759da40ce01b596bd1b88ccef4b53556d593898578fd954e84149e57a2ef",
+      "git_blob": "02a6ffbc8d96503bd5a70e20912f9b17a101c389",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v7-post.md.raw",
+      "size": 2481,
+      "sha256": "f78f006786e59051951063d1780a4a83836ae40cdf9a3d23bc533bd1b4070d34",
+      "git_blob": "34cf0b865bcf22892b4c06c072a48a40165763b0",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v7-pre.md.raw",
+      "size": 4346,
+      "sha256": "9215759da40ce01b596bd1b88ccef4b53556d593898578fd954e84149e57a2ef",
+      "git_blob": "02a6ffbc8d96503bd5a70e20912f9b17a101c389",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v8-post.md.raw",
+      "size": 4347,
+      "sha256": "7698ecec2037e267e87f12d36fcb1429e6ef4ad719a28e2792e97096221587db",
+      "git_blob": "155a43df73ce7f1a59c79ee42984bc18be19b7ce",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v8-pre.md.raw",
+      "size": 4579,
+      "sha256": "e6bd2c2f70e04f7df22c08f087d4acebe44135868ca625f7f960c50bc69e8b88",
+      "git_blob": "79d9ba303870d391966f1f862786bf652fec32d2",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-05-31-harness-bootstrap-v9-post.md.raw",
+      "size": 22123,
+      "sha256": "5937537d3708f8b7000a3ef853979d16d4f77f049c32365fba7b6bcb4b40bb07",
+      "git_blob": "9c5818ce35fa865f8babca2efc4cd33b1bc8fab8",
+      "introduced_commit": "0fb0fabcd6d0ef51cf1edc8d32eb6b5a526c4952",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-06-memory-policy-layer-post.md.raw",
+      "size": 82549,
+      "sha256": "b5fb954a3973ffcbf41d0b6f802cddd141e0e584a10bb93866ce2e0e36bf65b2",
+      "git_blob": "b836440f51dde614c56e1e1a8362809754beed36",
+      "introduced_commit": "c77cc6bcbd3f9ca0247ad65bfed3710a93f203c9",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-06-memory-policy-layer-v2-post.md.raw",
+      "size": 83072,
+      "sha256": "6503476a689c3a5f0053913656adf846d5ed3564b6e45d5dbda357272b08c12d",
+      "git_blob": "548203ba5278cb49419080b1b5eeff6c1bc16035",
+      "introduced_commit": "c77cc6bcbd3f9ca0247ad65bfed3710a93f203c9",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-08-dream-snapshot-review-pipeline-post.md.raw",
+      "size": 45160,
+      "sha256": "98bd94554fa6bbc850644018507a6d88c0d71518e659b6a52b9e4c2cdea2cbe3",
+      "git_blob": "97981dcb247c44f4fbe3f886ad7770c21f46e242",
+      "introduced_commit": "e0ac9f2807fee7896dc75ba2f3a1510473157e57",
+      "sensitive": true,
+      "sensitive_flags": [
+        "credential-assignment",
+        "email-address"
+      ]
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-16-code-quality-maintenance-pre.md.raw",
+      "size": 15833,
+      "sha256": "0b4ea3ddedf0ae55babbc4033487242b57e9ad5a423fb8fd87c1f9a5ec10c49f",
+      "git_blob": "4aaca3f0494a2382a37064f85c5f4d9a6194b7cf",
+      "introduced_commit": "bf45c0bb8590d1027026b0b1a259141c1b008094",
+      "sensitive": true,
+      "sensitive_flags": [
+        "email-address"
+      ]
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md.raw",
+      "size": 33289,
+      "sha256": "dcf0cefc7b86300c6edcbf9a4bd78da85276a69b1fce5a397b5238865ac3581f",
+      "git_blob": "9822a5f091bdee843714966e5fc7441fa7f9e47b",
+      "introduced_commit": "bf45c0bb8590d1027026b0b1a259141c1b008094",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b1-pr-title-policy-post.md.raw",
+      "size": 17309,
+      "sha256": "499500bf10de8b77cadd40e9f235184ccf2526c3b114552bde70568be0325d5d",
+      "git_blob": "41b8e8a8a6c9ba2be24a62f975914ff7b6511dbc",
+      "introduced_commit": "4a27698fc769e9d3b72526940bad480aff5c9bc0",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-post.md.raw",
+      "size": 24323,
+      "sha256": "7c87ef1e44c50c848f2980e3024832e14bd3ac13c806aeac1368da968809b7c5",
+      "git_blob": "745900ad191e4ce429e1931d4fc994fdc6481bc9",
+      "introduced_commit": "3c534d9dca960f9a77566f44d1d5fe206b98d8e3",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v2-post.md.raw",
+      "size": 32624,
+      "sha256": "d15e06d9111ad7094a8476c9362a5bda400a370db7c1166aaa519f9ddf19a95a",
+      "git_blob": "94528d8fabc996dfba9b69f463008c666b708f89",
+      "introduced_commit": "3c534d9dca960f9a77566f44d1d5fe206b98d8e3",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v3-post.md.raw",
+      "size": 37006,
+      "sha256": "66f98f4098b5fbf29af67e814d66bf427c672256c46d9a5578d2529bfc925b31",
+      "git_blob": "eeeadc77f9860aaf83dbfc3b5f41b7cac12c40d1",
+      "introduced_commit": "3c534d9dca960f9a77566f44d1d5fe206b98d8e3",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v4-post.md.raw",
+      "size": 36442,
+      "sha256": "5339a27ce1e6210a8dc691e291c3542a066540dde1548f2056da3545cc03e460",
+      "git_blob": "b2bfeb031eaac9c296d90cc44e4a3c63d029f73a",
+      "introduced_commit": "3c534d9dca960f9a77566f44d1d5fe206b98d8e3",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v5-post.md.raw",
+      "size": 37859,
+      "sha256": "0f5dc55f76ea2b2aaf598c86be93eb7121f212837a536d03ffbc6cd0fb783162",
+      "git_blob": "45a968bd80c9f1d38e3daa1eceff69e8c6405ea8",
+      "introduced_commit": "3c534d9dca960f9a77566f44d1d5fe206b98d8e3",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v6-post.md.raw",
+      "size": 39378,
+      "sha256": "f9f1bf74efb97699a921e51674ed674b1b0768e1a6e1df14661bf2f06274453f",
+      "git_blob": "0fedfb964578ad87a9d219444ab655217b0a53c1",
+      "introduced_commit": "3c534d9dca960f9a77566f44d1d5fe206b98d8e3",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v7-post.md.raw",
+      "size": 41595,
+      "sha256": "a3fa5be7d94f69c09842f83fa031cf57209527fb666eaa25771e563b9fe58d21",
+      "git_blob": "a176307f020e5f2fe8b0964732fde1eb75fb598f",
+      "introduced_commit": "3c534d9dca960f9a77566f44d1d5fe206b98d8e3",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v8-post.md.raw",
+      "size": 42500,
+      "sha256": "ab0e7da3a24636646c786826300e5f63997b05b1f7d55ba9700c00d90d174896",
+      "git_blob": "7a4f1c938f51cd8364b452d8788b7ab934466e7c",
+      "introduced_commit": "3c534d9dca960f9a77566f44d1d5fe206b98d8e3",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-enrichment-audit-subsecond-replay-pre.md.raw",
+      "size": 23654,
+      "sha256": "6201ff52b9b821437461666c09445d2dc0c78e44b5296a5483c774021387bafb",
+      "git_blob": "0b8beefd7df07eb2d2d285297e9926d727527cbf",
+      "introduced_commit": "3325e7695078bfa8350c3dd6fcf3d0ee1df6d62f",
+      "sensitive": true,
+      "sensitive_flags": [
+        "email-address"
+      ]
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-enrichment-audit-subsecond-replay-v2-post.md.raw",
+      "size": 8765,
+      "sha256": "f2803bd7ac80e706f0389a9c74e88fe1ca086dbb94e4b1fa4ab72756f8297b2d",
+      "git_blob": "adfc56d160007589b536d3c03b017926128ca418",
+      "introduced_commit": "3325e7695078bfa8350c3dd6fcf3d0ee1df6d62f",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-final-harness-parity-post.md.raw",
+      "size": 70281,
+      "sha256": "1354d61b13e0b5110ad45481e3b660d09261cb43ef6ebddf9ac332bc2d21da88",
+      "git_blob": "e6ca769b4fcb0bd0794832d24946fda4d153d64d",
+      "introduced_commit": "e9ac318b8aeaef0e747d37eb74cd82cddeff0491",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-final-harness-parity-v2-post.md.raw",
+      "size": 78337,
+      "sha256": "685b8f0f6c7a617770d3ad92d9b1239c05a61320b7d95dd6085a7b0855821029",
+      "git_blob": "e4e888638ac6a7ff2f58ee77909ab5a7f6898b48",
+      "introduced_commit": "e9ac318b8aeaef0e747d37eb74cd82cddeff0491",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-21-final-harness-parity-v3-post.md.raw",
+      "size": 78621,
+      "sha256": "2d7e7364aaba66ed037bb86cd802dd1aaedddbc564caa64ba20304dd5a0c4556",
+      "git_blob": "d44d9d9cac6b79e08849fb9256fc7f049caa234a",
+      "introduced_commit": "e9ac318b8aeaef0e747d37eb74cd82cddeff0491",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-22-ENGRA-150-pre.md.raw",
+      "size": 20936,
+      "sha256": "1728be21d57116bdea79e6854cd3bd72598dafb2e163660cb9eb153523e26865",
+      "git_blob": "38165db17f2f746d04d3682e1f3662cc0a0b2d66",
+      "introduced_commit": "acaf1c853d81ccca0bd94664e51f110c22c7a0e7",
+      "sensitive": true,
+      "sensitive_flags": [
+        "email-address"
+      ]
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md.raw",
+      "size": 20367,
+      "sha256": "74d87550b2a7c2cd40fca4312ccc1d8311398c92debebefe67b72d39f323d351",
+      "git_blob": "56e759935440b5ffb4a89312a2d5675c36ad7ce3",
+      "introduced_commit": "acaf1c853d81ccca0bd94664e51f110c22c7a0e7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-22-reviewer-cli-gemini-substitution-v3-post.md.raw",
+      "size": 11089,
+      "sha256": "f2e0b208cd5dbf9d9c6c0aa95bafe0ced2547b627ed6081f5cbdf6ed390e49e0",
+      "git_blob": "e182444a05537507db37834206d23124f24c29c6",
+      "introduced_commit": "37936bd8deec8d0556cea965abd57d3dc429b443",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-22-zed-gemini-reviewer-path-v2-post.md.raw",
+      "size": 11697,
+      "sha256": "fe91d69fe1d663f2f23805fea39e83dadc7caee3f92ad4d5294c1e4771d1fa4a",
+      "git_blob": "dac97158f3bd5fb5016e8fe7c9ead79e17d14279",
+      "introduced_commit": "9e3ccbc7ed291e813840510c7706c307b744f83e",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-25-harness-12207-wave0-pre.md.raw",
+      "size": 4678,
+      "sha256": "1d57d20a5a68f14921d46a029d1bb69bec2948ee87742d3516b914acb431935f",
+      "git_blob": "f82f0b698c66573de8f698fa0cc959e2551fd25a",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-harness-12207-tailoring-v2-post.md.raw",
+      "size": 16986,
+      "sha256": "06c64aa4804cfa57ea8f9dd534953ae08a49fa30163f0952dc84e61bc9e01e3f",
+      "git_blob": "0e66ff695e2a40683f60b2f0cb25581bbb7d1fc3",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-harness-12207-wave0-v2-post.md.raw",
+      "size": 19927,
+      "sha256": "1c3ab8973bbac5fcfaf627d55f063f9cdb38ebd237a31d60803748be849d0dde",
+      "git_blob": "faff32d9bf1e6a890912f3db60935a85aba6cd0a",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-harness-12207-wave0-v3-post.md.raw",
+      "size": 31378,
+      "sha256": "a25fc01e854cfbefd39173ebdafafd489abc6e0c4cf4760139730d0bd11b9595",
+      "git_blob": "e388c3dcc678e82845bc15c17e7482e92c5f46e1",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-harness-12207-wave0-v4-post.md.raw",
+      "size": 33328,
+      "sha256": "e29dbb329e18ed8277a168209e38a12e11f4a819eab982295939a71ec5fe946c",
+      "git_blob": "907287885e991ec8c26bc4c4f9b639ff6b82fd78",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md.raw",
+      "size": 20434,
+      "sha256": "5f2c239ce55f17e0ebf33d5f2bb3f11856524bab1e556be34e04cbcd5012a246",
+      "git_blob": "f028f4e52f9fe686cbc8b6c4a4db5f55794f07df",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-harness-review-perspectives-v2-post.md.raw",
+      "size": 12609,
+      "sha256": "f2f46956a0b3a4bd99127c5eb5d3e1728724ad339c80a679dbbf90f4230eeee5",
+      "git_blob": "b34fb7d41c8c1d91126f0121dfdbcfa2f07f6eb0",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-mcp-registry-hygiene-v2-post.md.raw",
+      "size": 63259,
+      "sha256": "88dd899e7d83fb1853a8c794858a63f0fb2b386d2fbc8bc8aa78329b7f8b8936",
+      "git_blob": "74f540f018984a9913d1232565cf6395ca625ce3",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-pending-worktree-fixes-v2-post.md.raw",
+      "size": 18221,
+      "sha256": "502f09ba7655b382ed3c53ea71f335d81e4ba781754c545874759866e62d8b24",
+      "git_blob": "eb254e8e3df71e4d4f29a5dedc540c3f92e307a3",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-worktree-closeout-v4-post.md.raw",
+      "size": 27279,
+      "sha256": "35a6a4d86c3bf9c8308fe902b6da0780f1981af6dbe557c834acbc441d2585eb",
+      "git_blob": "6d29dfb149fe9444946f640afb92efec109b36ff",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-worktree-closeout-v5-post.md.raw",
+      "size": 31799,
+      "sha256": "11b63ef6e744921e0d1b02400c17ac53f554f90108ae9a6fb77e521467bdf9c4",
+      "git_blob": "45069f8de52799dd7473f4fa2ffc004b33c877cd",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-26-worktree-closeout-v6-post.md.raw",
+      "size": 31799,
+      "sha256": "11b63ef6e744921e0d1b02400c17ac53f554f90108ae9a6fb77e521467bdf9c4",
+      "git_blob": "45069f8de52799dd7473f4fa2ffc004b33c877cd",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-harness-live-state-closeout-v2-post.md.raw",
+      "size": 10300,
+      "sha256": "d91f7ab016b47008940dd6e27579295d0bcf150f231e08c18c7682cdc6112005",
+      "git_blob": "b6169cce17609ba7f3281d010935008ec6a1dda4",
+      "introduced_commit": "d32379703ab85e688abc6b212d80c3fc142d2dba",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-claude-sonnet-v3.md.raw",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex-v2.md.raw",
+      "size": 559757,
+      "sha256": "e6aabc58b9006ccf0284c457b09427ff772a6b40e9a1ea96a8da99ddc69c2736",
+      "git_blob": "be01c85a1eb0890a0af5a91dc21928f8a9350f86",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": true,
+      "sensitive_flags": [
+        "abs-home-path"
+      ]
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex-v3.md.raw",
+      "size": 563590,
+      "sha256": "689a96fc31980e3792d1d392384b626394c3b6bd5f1ebca3db1a868c31127cf0",
+      "git_blob": "d6c76137034ac6992d75c840e27f6e4d91fb8104",
+      "introduced_commit": "e1568104d826b67805e6c624df2e77089b22d66d",
+      "sensitive": true,
+      "sensitive_flags": [
+        "abs-home-path"
+      ]
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex.raw",
+      "size": 506944,
+      "sha256": "3f357cb5a641b4afc2efc1ba3fc843f9b1e4755487ad68a4b023c1225aff0fd3",
+      "git_blob": "7fbf1af2372920636efed4c5e1d8c4018be8c192",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": true,
+      "sensitive_flags": [
+        "abs-home-path"
+      ]
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-grok-v2.md.raw",
+      "size": 302,
+      "sha256": "219542562cc1b083a5b6e2f087ab2b2bd9fb28edeeac0c5b3dcaea38d9bbc036",
+      "git_blob": "38f3f75144cef025b163113bb4cbba9bcbfd8cd8",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-grok-v3.md.raw",
+      "size": 302,
+      "sha256": "240fc100fee9ccbe4300cc2ea81790148afc7d1a385e9d0750fde3ae868da7cb",
+      "git_blob": "a87a8619bb9f648202528f50fa4fb4bce82e0462",
+      "introduced_commit": "e1568104d826b67805e6c624df2e77089b22d66d",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-post.md.raw",
+      "size": 74380,
+      "sha256": "4da78f84560945e72284e59b502d25f5e12e83b7d043362df7bbe8cd8244b83d",
+      "git_blob": "44f903124500fce11e036f6b72d6000c4054e525",
+      "introduced_commit": "e1568104d826b67805e6c624df2e77089b22d66d",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-v2-post.md.raw",
+      "size": 75112,
+      "sha256": "89b883434663e0edee94e047c83865247e7101414e7c398cb88782145819320f",
+      "git_blob": "6cebd10c2c8acc4483a8aada538d764cdf980704",
+      "introduced_commit": "e1568104d826b67805e6c624df2e77089b22d66d",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-v3-post.md.raw",
+      "size": 79012,
+      "sha256": "7ce261cdf70d4ffa5aa276ce81bd87c3859e6b019bff1de97418934bb0cc33af",
+      "git_blob": "6d575a62bdd19b692e5232098713332a36baadd1",
+      "introduced_commit": "e1568104d826b67805e6c624df2e77089b22d66d",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-v4-post.md.raw",
+      "size": 79241,
+      "sha256": "0c324e1efc2be4e12797aeac3e8f402f7d9ed57db290f00ad10eb7b830ebcc5f",
+      "git_blob": "18c3cfbd7c4f6c08afd2d699b4136bd40fa00061",
+      "introduced_commit": "e1568104d826b67805e6c624df2e77089b22d66d",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-v5-post.md.raw",
+      "size": 79241,
+      "sha256": "ee26eb13ca8e44bb1efa3947d926e038f9fdad8550df5384d60ff394e9c50734",
+      "git_blob": "28503bba0e77648a7e1207edee5aa0ffafed7620",
+      "introduced_commit": "e1568104d826b67805e6c624df2e77089b22d66d",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-06-27-reference-intake-checklist-v3-post.md.raw",
+      "size": 41800,
+      "sha256": "fdcae1057856324d862e2aa7b217ce66a884f6e9916edf03b976456f38ac25a0",
+      "git_blob": "d17254eee3e8ba8919202424a83ff22d3701f1de",
+      "introduced_commit": "1aa14e5a34e2cb59e18a2479c69edde4e70f09f7",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-02-c0-mcp-registry-baseline-pre.md.raw",
+      "size": 208908,
+      "sha256": "e694463d7cf82ec16279b9692d79bb5b52b94a5db408095f5854db47f6f767e4",
+      "git_blob": "15d69ce4394b9032c860a6b28295b3cae453c2e2",
+      "introduced_commit": "74c7404dba080f24c6e1b9b5bb11af68c83a6e36",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-03-agent-memory-contract-post.md.raw",
+      "size": 24291,
+      "sha256": "63d3757054e4cfda37eb0d45dcea77cf8ed8f5ebc346b6aeaadb3f3767197acc",
+      "git_blob": "2ae1806ae99d474bc8b6e91b399503259b2908dc",
+      "introduced_commit": "e62c8a42d104de742a349b48c8ba028f56a809db",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-03-c1-agent-writeback-candidates-post.md.raw",
+      "size": 54850,
+      "sha256": "09577247e22b6dde8627e8a8156e043aecf312a5073372e5e3653b40df28c773",
+      "git_blob": "900de78f4816ab9ff52001a3e53f078dc708cb7c",
+      "introduced_commit": "881976a976f71a49dd8b4746f93ce926550015eb",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-03-c1-agent-writeback-candidates-v2-post.md.raw",
+      "size": 47440,
+      "sha256": "3f6f84ce4c8a3682ae352b91467441d4e1c29f0558509e075a190141b9b88751",
+      "git_blob": "e7ae5b90061f88b95a2bbe1680280af47d003696",
+      "introduced_commit": "881976a976f71a49dd8b4746f93ce926550015eb",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-08-embedding-queue-split-post.md.raw",
+      "size": 200511,
+      "sha256": "5004d3a3b7bce199898ea9b41a42cdbf6e3033a4496dac7da35e8c048767d5f0",
+      "git_blob": "85d61a836b269761430aa8e1d27c7516dc2bba77",
+      "introduced_commit": "f996c10bf16358ca16327691e2418411049b63a5",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-08-misc-split-post.md.raw",
+      "size": 85283,
+      "sha256": "af6792227e8951f7b579a998dddc692002c8f4c7f2f86de61dcf63b9d8779726",
+      "git_blob": "7404d4e166241e32128a2138d2c8700204db4394",
+      "introduced_commit": "43dbbf657c9e1e942efb83054df3d8bb3afe6123",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-08-misc-split-v2-post.md.raw",
+      "size": 85283,
+      "sha256": "af6792227e8951f7b579a998dddc692002c8f4c7f2f86de61dcf63b9d8779726",
+      "git_blob": "7404d4e166241e32128a2138d2c8700204db4394",
+      "introduced_commit": "43dbbf657c9e1e942efb83054df3d8bb3afe6123",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-09-harness-split-post.md.raw",
+      "size": 118945,
+      "sha256": "fa62ad2d6e3cf1f5f960e7eca1302fdb63c5428c8d0a39b5feaf313ff3f8bd38",
+      "git_blob": "4d57cc44128feb65ed6a65ff0b8662c98c567dcb",
+      "introduced_commit": "f1e5986625555a77761a00654ec1dec287969c73",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-12-harness-contract-yaml-repair-post.md.raw",
+      "size": 6095,
+      "sha256": "11cba9cbd4fea5dd4aee61c8f7b20f9667c8b80785d358e3c8a7382e82119eed",
+      "git_blob": "fe359ce5e1d8b3076253ddf2cff71319bb83b681",
+      "introduced_commit": "9b832146a3c3cc326aaa9e12d0e72de679e7f75f",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-07-22-agent-harness-hardening-v1-v3-post.md.raw",
+      "size": 20353,
+      "sha256": "964ec56500455e7b996f73b066b473556b0d9c89ac23cf8c3c8946a3b24f1d4b",
+      "git_blob": "45ca4baec6706fd9a27ebfa5deac6a8d8d0f3f01",
+      "introduced_commit": "6064847bdf9b45ee8b6f66b2e582b2058a6168d6",
+      "sensitive": false,
+      "sensitive_flags": []
+    },
+    {
+      "path": "docs/harness/reviews/2026-08-16-harness-bootstrap-pre.md.raw",
+      "size": 29120,
+      "sha256": "c13e9b6361612692ece99cc81b1de850d72d1e10d26448bd274e0e58081a9752",
+      "git_blob": "0d9caad69ae857b4d2648bbbe46f1de9a5675aae",
+      "introduced_commit": "9336bad102a5d8f41cdef37381d611aba0448245",
+      "sensitive": false,
+      "sensitive_flags": []
+    }
+  ]
+}

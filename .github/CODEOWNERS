@@ -40,3 +40,23 @@
 /scripts/ci-features.env           @aiconnai/core
 /scripts/ci-required-features.env  @aiconnai/core
 /scripts/generate-mcp-reference.sh @aiconnai/core
+
+# --- SDK/registry contract ratchet (baseline may only shrink; see the checker) ---
+/docs/quality/sdk-contract-drift-baseline.json   @aiconnai/core
+/scripts/check-sdk-contract-alignment.py         @aiconnai/core
+/scripts/test_check_sdk_contract_alignment.py    @aiconnai/core
+
+# --- Security gate policy, exceptions and checkers ---
+/docs/security/*.toml                          @aiconnai/core
+/scripts/check-security-*.py                   @aiconnai/core
+/tests/fixtures/security_gate_matrix.json      @aiconnai/core
+
+# --- Candidate quality verifier and budgets (trusted-anchor verifier code) ---
+/scripts/quality_candidate/                    @aiconnai/core
+/scripts/run-quality-candidate.py              @aiconnai/core
+/scripts/capture-criterion-candidate.py        @aiconnai/core
+/scripts/consume-quality-candidate.py          @aiconnai/core
+/docs/quality/budgets.json                     @aiconnai/core
+
+# --- Diff/whitespace attributes (change what diffs and checks see) ---
+/.gitattributes                                @aiconnai/core

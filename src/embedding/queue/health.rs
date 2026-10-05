@@ -75,13 +75,11 @@ pub fn get_embedding_queue_health_with_config(
         Some("COALESCE(completed_at, started_at, queued_at)"),
     )?;
 
-    let max_retry_count = conn
-        .query_row(
-            "SELECT COALESCE(MAX(retry_count), 0) FROM embedding_queue",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap_or(0);
+    let max_retry_count = conn.query_row(
+        "SELECT COALESCE(MAX(retry_count), 0) FROM embedding_queue",
+        [],
+        |row| row.get(0),
+    )?;
 
     let retry_count_0 = conn.query_row(
         "SELECT COUNT(*) FROM embedding_queue WHERE status = 'failed' AND retry_count = 0",

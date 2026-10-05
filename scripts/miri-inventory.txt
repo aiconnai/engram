@@ -1,0 +1,19 @@
+# Nominal Miri test inventory (one libtest name filter per line, `#` comments).
+#
+# scripts/run-miri-smoke.sh runs `cargo +nightly miri test --lib <filter>` for
+# each line; every filter must match at least one test and all matched tests
+# must pass. An empty inventory, a filter matching zero tests, or a missing
+# Miri toolchain is NOT a pass.
+#
+# Scope and limits (not a claim of full UB coverage):
+#   * Only pure-Rust, SQLite-free unit tests are listed. Miri cannot execute
+#     the bundled SQLite C library (FFI), so any test that opens a rusqlite
+#     Connection is out of scope and must not be added here.
+#   * Miri checks the executed paths for undefined behaviour in unsafe code and
+#     for aliasing/provenance violations; it does not prove the absence of UB
+#     elsewhere, and it does not cover the fuzz targets.
+text_util::tests::
+storage::scoping::tests::test_parse
+storage::scoping::tests::test_parent
+storage::scoping::tests::test_ancestors
+storage::scoping::tests::test_contains

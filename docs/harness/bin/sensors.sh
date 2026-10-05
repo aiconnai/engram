@@ -454,6 +454,14 @@ run_pr_title_policy() {
     bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] fix: bad title" || return 1
 }
 
+# Mandatory offline lane (H2): validator unit tests + self-test, fixtures, live-state and review-gate
+# regression suites. Fail-closed (zero tests / skips / missing components fail). doctor.sh verifies
+# that this wiring stays in both quick and full modes.
+run_offline_lane() {
+  run_step "offline lane (validator, fixtures, live-state, review-gate regressions)" \
+    bash docs/harness/bin/run-offline-lane.sh
+}
+
 normalize_plan_path() {
   local path="$1"
   case "$path" in
@@ -668,12 +676,12 @@ case "$MODE" in
     exit 1
     ;;
   quick)
-    if run_step "fmt" cargo fmt --all -- --check && run_step "cargo check" cargo check && run_pr_title_policy && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
-      write_sensors_last "pass" "pass" "pass" "$MODE" "cargo fmt + cargo check + pr-title-policy"
+    if run_step "fmt" cargo fmt --all -- --check && run_step "cargo check" cargo check && run_pr_title_policy && run_offline_lane && run_step "harness doctor" bash docs/harness/bin/doctor.sh; then
+      write_sensors_last "pass" "pass" "pass" "$MODE" "cargo fmt + cargo check + pr-title-policy + offline-lane"
       echo "PASS (quick lane green)"
       exit 0
     fi
-    write_sensors_last "fail" "fail" "fail" "$MODE" "cargo fmt + cargo check + pr-title-policy"
+    write_sensors_last "fail" "fail" "fail" "$MODE" "cargo fmt + cargo check + pr-title-policy + offline-lane"
     echo "FAIL"
     exit 1
     ;;
@@ -722,7 +730,7 @@ fi
 echo "==> [harness] running granular CI steps"
 CI_OUTPUT="$(mktemp)"
 CI_STATUS="pass"
-CI_COMMAND_LABEL="fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check"
+CI_COMMAND_LABEL="fmt + clippy + test_lib + test_integration + test_integration_watch + wasm_target + wasm_all_targets + wasm_wasm_target + doc + ref_check + offline_lane"
 CI_FEATURE_ARGS="$(ci_feature_args)"
 
 # shellcheck disable=SC2086  # intentional word splitting: env pairs + feature args
@@ -771,6 +779,10 @@ fi
 
 if [ "$CI_STATUS" = "pass" ]; then
   run_ci_step "ref_check" "ref_check" ./scripts/generate-mcp-reference.sh --check || CI_STATUS="fail"
+fi
+
+if [ "$CI_STATUS" = "pass" ]; then
+  run_ci_step "offline_lane" "offline_lane" bash docs/harness/bin/run-offline-lane.sh || CI_STATUS="fail"
 fi
 
 if [ "$CI_STATUS" != "pass" ]; then

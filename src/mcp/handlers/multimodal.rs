@@ -22,7 +22,7 @@ use super::HandlerContext;
 ///
 /// Returns: `{ text, model, provider }`
 #[cfg(feature = "multimodal")]
-pub fn memory_describe_image(_ctx: &HandlerContext, params: Value) -> Value {
+pub fn memory_describe_image(ctx: &HandlerContext, params: Value) -> Value {
     use crate::multimodal::vision::{VisionInput, VisionOptions, VisionProviderFactory};
 
     let image_path = match params.get("image_path").and_then(|v| v.as_str()) {
@@ -44,6 +44,9 @@ pub fn memory_describe_image(_ctx: &HandlerContext, params: Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
     };
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&validated_path) {
+        return json!({"error": e.to_string()});
+    }
 
     let image_bytes = match std::fs::read(&validated_path) {
         Ok(bytes) => bytes,
@@ -88,7 +91,7 @@ pub fn memory_describe_image(_ctx: &HandlerContext, params: Value) -> Value {
 ///
 /// Returns: `{ text, language, duration_secs, segments }`
 #[cfg(feature = "multimodal")]
-pub fn memory_transcribe_audio(_ctx: &HandlerContext, params: Value) -> Value {
+pub fn memory_transcribe_audio(ctx: &HandlerContext, params: Value) -> Value {
     use crate::multimodal::audio::AudioTranscriberFactory;
 
     let audio_path = match params.get("audio_path").and_then(|v| v.as_str()) {
@@ -100,6 +103,9 @@ pub fn memory_transcribe_audio(_ctx: &HandlerContext, params: Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
     };
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&validated_audio) {
+        return json!({"error": e.to_string()});
+    }
 
     let transcriber = match AudioTranscriberFactory::from_env() {
         Ok(t) => t,
@@ -189,7 +195,7 @@ pub fn memory_capture_screenshot(_ctx: &HandlerContext, params: Value) -> Value 
 ///
 /// Returns: `{ metadata, keyframe_descriptions, summary }`
 #[cfg(feature = "multimodal")]
-pub fn memory_process_video(_ctx: &HandlerContext, params: Value) -> Value {
+pub fn memory_process_video(ctx: &HandlerContext, params: Value) -> Value {
     use crate::multimodal::video::VideoProcessor;
     use crate::multimodal::vision::VisionProviderFactory;
 
@@ -207,6 +213,9 @@ pub fn memory_process_video(_ctx: &HandlerContext, params: Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
     };
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&validated_video) {
+        return json!({"error": e.to_string()});
+    }
 
     let processor = VideoProcessor::new();
 
@@ -375,6 +384,9 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
     };
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&validated_image) {
+        return json!({"error": e.to_string()});
+    }
 
     let image_bytes = match std::fs::read(&validated_image) {
         Ok(b) => b,
@@ -407,7 +419,10 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
         match rt.block_on(provider.describe_image(input, opts)) {
             Ok(desc) => Some(desc.text),
             Err(e) => {
-                tracing::warn!("Vision model failed, falling back to filename hint: {}", e);
+                tracing::warn!(
+                    error = %crate::observability::redact::redacted(&e),
+                    "Vision model failed, falling back to filename hint"
+                );
                 None
             }
         }
@@ -438,7 +453,10 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
                     Some(v)
                 }
                 Err(e) => {
-                    tracing::warn!("CLIP embedding failed, falling back to description: {}", e);
+                    tracing::warn!(
+                        error = %crate::observability::redact::redacted(&e),
+                        "CLIP embedding failed, falling back to description"
+                    );
                     strategy_used = "description";
                     ctx.embedder.embed(&query_text).ok()
                 }
@@ -541,6 +559,7 @@ pub fn memory_sync_media(ctx: &HandlerContext, params: Value) -> Value {
 pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::create_memory;
     use crate::types::{CreateMemoryInput, MemoryType};
+    use rusqlite::OptionalExtension;
     use sha2::{Digest, Sha256};
 
     let media_path = match params
@@ -557,6 +576,9 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
     };
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&validated_path) {
+        return json!({"error": e.to_string()});
+    }
 
     let file_bytes = match std::fs::read(&validated_path) {
         Ok(bytes) => bytes,
@@ -624,7 +646,56 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
 
     let media_url = format!("local://{}", media_path);
 
+    // Storage keys memories by the normalised workspace ("WS-A" -> "ws-a"), so
+    // the dedup lookup must use the same form or a case/whitespace variant
+    // would create a duplicate and orphan the first asset.
+    let requested_ws = match workspace.as_deref() {
+        Some(ws) => match crate::types::normalize_workspace(ws) {
+            Ok(normalized) => normalized,
+            Err(e) => return json!({"error": format!("Invalid workspace: {e}")}),
+        },
+        None => "default".to_string(),
+    };
+
     let res = ctx.storage.with_transaction(|conn| {
+        // Retry idempotence: the same bytes already ingested into the same
+        // (normalised) workspace and still backed by a live memory return that memory
+        // instead of creating a second one and re-pointing the asset row.
+        // Only live rows are matched, so a deleted memory is never revived, and
+        // only the requested workspace, so another workspace's memory is never
+        // returned. Not exactly-once: it is a content-hash dedupe.
+        let existing: Option<(i64, i64, String, String)> = conn
+            .query_row(
+                "SELECT a.id, m.id, m.workspace, m.created_at
+                 FROM media_assets a JOIN memories m ON m.id = a.memory_id
+                 WHERE a.file_hash = ?1 AND m.valid_to IS NULL AND m.workspace = ?2",
+                rusqlite::params![file_hash, requested_ws],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        if let Some((asset_id, memory_id, ws, created_at)) = existing {
+            // Same response shape as a first ingest; the perceptual hash is
+            // derived from the bytes, not stored.
+            let phash = (media_type_str == "image").then(|| {
+                crate::multimodal::hashing::format_phash(
+                    crate::multimodal::hashing::compute_perceptual_hash(&file_bytes),
+                )
+            });
+            return Ok(json!({
+                "memory_id": memory_id,
+                "asset_id": asset_id,
+                "media_type": media_type_str,
+                "media_url": media_url,
+                "file_hash": file_hash,
+                "perceptual_hash": phash,
+                "file_size": file_size,
+                "mime_type": mime_type,
+                "workspace": ws,
+                "created_at": created_at,
+                "deduplicated": true
+            }));
+        }
+
         let input = CreateMemoryInput {
             content,
             memory_type,
@@ -656,7 +727,12 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
             ],
         )?;
 
-        let asset_id: i64 = conn.last_insert_rowid();
+        // `last_insert_rowid` is stale after an upsert that updated; ask the row.
+        let asset_id: i64 = conn.query_row(
+            "SELECT id FROM media_assets WHERE file_hash = ?1",
+            rusqlite::params![file_hash],
+            |row| row.get(0),
+        )?;
 
         let phash = if media_type_str == "image" {
             let h = crate::multimodal::hashing::compute_perceptual_hash(&file_bytes);
@@ -675,7 +751,8 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
             "file_size": file_size,
             "mime_type": mime_type,
             "workspace": memory.workspace,
-            "created_at": memory.created_at
+            "created_at": memory.created_at,
+            "deduplicated": false
         }))
     });
 
@@ -1041,5 +1118,156 @@ mod tests {
         assert_eq!(res["media_type"].as_str(), Some("image"));
         assert_eq!(res["mime_type"].as_str(), Some("image/png"));
         assert_eq!(res["workspace"].as_str(), Some("research"));
+    }
+
+    fn ingest(ctx: &HandlerContext, path: &std::path::Path, workspace: Option<&str>) -> Value {
+        let mut params = json!({"media_path": path.to_string_lossy()});
+        if let Some(ws) = workspace {
+            params["workspace"] = json!(ws);
+        }
+        memory_ingest_media(ctx, params)
+    }
+
+    fn count(ctx: &HandlerContext, sql: &str) -> i64 {
+        ctx.storage
+            .with_connection(|c| Ok(c.query_row(sql, [], |r| r.get::<_, i64>(0))?))
+            .unwrap()
+    }
+
+    #[test]
+    fn ingest_retry_of_same_file_does_not_duplicate_the_memory() {
+        let ctx = make_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("retry.png");
+        std::fs::write(&file, b"retry payload bytes").unwrap();
+
+        let first = ingest(&ctx, &file, None);
+        let second = ingest(&ctx, &file, None);
+
+        assert!(first.get("error").is_none(), "{first:?}");
+        assert_eq!(
+            second["memory_id"], first["memory_id"],
+            "a retried ingest must return the original memory"
+        );
+        assert_eq!(second["asset_id"], first["asset_id"]);
+        assert_eq!(second["deduplicated"], json!(true));
+        assert_eq!(first["deduplicated"], json!(false));
+        assert_eq!(count(&ctx, "SELECT COUNT(*) FROM memories"), 1);
+        assert_eq!(count(&ctx, "SELECT COUNT(*) FROM media_assets"), 1);
+    }
+
+    #[test]
+    fn ingest_reports_the_real_asset_id() {
+        let ctx = make_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("id.png");
+        std::fs::write(&file, b"asset id payload").unwrap();
+
+        let res = ingest(&ctx, &file, None);
+
+        let actual = count(&ctx, "SELECT id FROM media_assets");
+        assert_eq!(res["asset_id"].as_i64(), Some(actual));
+    }
+
+    #[test]
+    fn ingest_after_delete_creates_a_fresh_live_memory() {
+        let ctx = make_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("again.png");
+        std::fs::write(&file, b"delete then ingest").unwrap();
+
+        let first = ingest(&ctx, &file, None);
+        let first_id = first["memory_id"].as_i64().unwrap();
+        ctx.storage
+            .with_connection(|c| crate::storage::queries::delete_memory(c, first_id))
+            .unwrap();
+
+        let second = ingest(&ctx, &file, None);
+
+        assert!(second.get("error").is_none(), "{second:?}");
+        let second_id = second["memory_id"].as_i64().unwrap();
+        assert_ne!(second_id, first_id, "a deleted memory must not be revived");
+        assert_eq!(second["deduplicated"], json!(false));
+        assert_eq!(
+            count(&ctx, "SELECT memory_id FROM media_assets"),
+            second_id,
+            "asset must point at the live memory"
+        );
+        assert_eq!(
+            second["asset_id"].as_i64(),
+            Some(count(&ctx, "SELECT id FROM media_assets"))
+        );
+    }
+
+    #[test]
+    fn ingest_never_returns_another_workspaces_memory() {
+        let ctx = make_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("shared.png");
+        std::fs::write(&file, b"same bytes two workspaces").unwrap();
+
+        let a = ingest(&ctx, &file, Some("ws-a"));
+        let b = ingest(&ctx, &file, Some("ws-b"));
+
+        assert_ne!(a["memory_id"], b["memory_id"]);
+        assert_eq!(b["workspace"].as_str(), Some("ws-b"));
+        assert_eq!(b["deduplicated"], json!(false));
+    }
+
+    #[test]
+    fn ingest_dedup_normalizes_the_workspace_before_lookup() {
+        let ctx = make_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("norm.png");
+        std::fs::write(&file, b"normalised workspace payload").unwrap();
+
+        let first = ingest(&ctx, &file, Some("WS-A"));
+        let second = ingest(&ctx, &file, Some("ws-a"));
+        let third = ingest(&ctx, &file, Some(" ws-a "));
+
+        assert_eq!(first["workspace"].as_str(), Some("ws-a"));
+        assert_eq!(second["memory_id"], first["memory_id"], "{second:?}");
+        assert_eq!(second["deduplicated"], json!(true));
+        assert_eq!(third["memory_id"], first["memory_id"], "{third:?}");
+        assert_eq!(count(&ctx, "SELECT COUNT(*) FROM memories"), 1);
+        assert_eq!(count(&ctx, "SELECT COUNT(*) FROM media_assets"), 1);
+    }
+
+    #[test]
+    fn ingest_rejects_an_invalid_workspace_with_a_typed_error() {
+        let ctx = make_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("bad-ws.png");
+        std::fs::write(&file, b"bad workspace payload").unwrap();
+
+        let res = ingest(&ctx, &file, Some("not a workspace!"));
+
+        assert!(
+            res["error"]
+                .as_str()
+                .is_some_and(|e| e.contains("workspace")),
+            "{res:?}"
+        );
+        assert_eq!(count(&ctx, "SELECT COUNT(*) FROM memories"), 0);
+    }
+
+    #[test]
+    fn dedup_response_has_the_same_shape_as_the_first_ingest() {
+        let ctx = make_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("shape.png");
+        std::fs::write(&file, b"shape payload bytes 0123456789").unwrap();
+
+        let first = ingest(&ctx, &file, None);
+        let second = ingest(&ctx, &file, None);
+
+        assert!(first["perceptual_hash"].is_string(), "{first:?}");
+        assert_eq!(second["perceptual_hash"], first["perceptual_hash"]);
+        let keys = |v: &Value| {
+            let mut k: Vec<_> = v.as_object().unwrap().keys().cloned().collect();
+            k.sort();
+            k
+        };
+        assert_eq!(keys(&second), keys(&first));
     }
 }

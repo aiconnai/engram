@@ -1,0 +1,11 @@
+# Synthetic fixture: valid record that covers a different rule than the finding.
+schema_version = 1
+
+[[exceptions]]
+scanner = "codeql"
+rule_id = "rs/some-other-rule"
+path = "src/lib.rs"
+owner = "Ronaldo"
+approved_by = "Ronaldo"
+expires = 2026-12-31
+rationale = "Synthetic fixture rationale: other rule."

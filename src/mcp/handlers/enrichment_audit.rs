@@ -510,7 +510,7 @@ pub fn memory_replay_at_time(ctx: &HandlerContext, params: Value) -> Value {
                 .inspect_err(|e| {
                     tracing::warn!(
                         memory_id,
-                        error = %e,
+                        error = %crate::observability::redact::redacted(e),
                         "temporal_edges query failed in memory_replay_at_time"
                     );
                 })

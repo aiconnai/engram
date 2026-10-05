@@ -17,3 +17,13 @@ pub(super) fn complete_retention_cutoff_rfc3339(complete_retention: Duration) ->
     })?;
     Ok((Utc::now() - complete_retention).to_rfc3339())
 }
+
+pub(super) fn embedding_queue_db_write_error(
+    operation: &str,
+    memory_id: crate::types::MemoryId,
+    error: rusqlite::Error,
+) -> EngramError {
+    EngramError::Embedding(format!(
+        "database write failed while {operation} for memory_id={memory_id}: {error}"
+    ))
+}

@@ -44,7 +44,9 @@ pub fn workspace_move(ctx: &HandlerContext, params: Value) -> Value {
     };
 
     ctx.storage
-        .with_connection(|conn| {
+        .with_transaction(|conn| {
+            // Authorize the source row in the same transaction as the move.
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             let memory = move_to_workspace(conn, id, workspace)?;
             Ok(json!({"success": true, "memory": memory}))
         })

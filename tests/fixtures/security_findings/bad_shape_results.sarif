@@ -1,0 +1,18 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "CodeQL"
+        }
+      },
+      "results": "none",
+      "versionControlProvenance": [
+        {
+          "revisionId": "0123456789abcdef0123456789abcdef01234567"
+        }
+      ]
+    }
+  ]
+}

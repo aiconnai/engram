@@ -225,7 +225,7 @@ pub fn context_budget_check(ctx: &HandlerContext, params: Value) -> Value {
 pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::{create_memory, list_memories};
     use crate::types::{CreateMemoryInput, LifecycleState, ListOptions, MemoryTier, MemoryType};
-    use chrono::{Duration, Utc};
+    use chrono::Utc;
 
     let max_age_days = params
         .get("max_age_days")
@@ -245,7 +245,10 @@ pub fn memory_archive_old(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let cutoff_date = Utc::now() - Duration::days(max_age_days);
+    let cutoff_date = match crate::storage::queries::cutoff_days_ago(Utc::now(), max_age_days) {
+        Ok(cutoff) => cutoff,
+        Err(e) => return crate::mcp::error::ToolError::from(e).into_value(),
+    };
 
     ctx.storage
         .with_connection(|conn| {

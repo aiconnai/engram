@@ -26,6 +26,7 @@ pub mod intelligence;
 pub mod mcp;
 #[cfg(feature = "multimodal")]
 pub mod multimodal;
+pub mod observability;
 pub mod portability;
 pub mod realtime;
 pub mod routing;
@@ -36,6 +37,7 @@ pub mod snapshot;
 pub mod spatial;
 pub mod storage;
 pub mod sync;
+pub mod text_util;
 pub mod types;
 #[cfg(feature = "watcher")]
 pub mod watcher;

@@ -94,7 +94,7 @@ impl<'a> Drop for DreamLockGuard<'a> {
         if let Err(e) = res {
             tracing::error!(
                 target = "engram::dream",
-                error = %e,
+                error = %crate::observability::redact::redacted(&e),
                 owner_id = %self.owner_id,
                 "Failed to release dream-phase advisory lock — lock may persist until TTL expires"
             );
@@ -174,7 +174,7 @@ pub fn run_once_workspace(
                 tracing::warn!(
                     target = "engram::dream",
                     workspace = %workspace,
-                    error = %e,
+                    error = %crate::observability::redact::redacted(&e),
                     "Failed to emit dream-phase digest memory"
                 );
             }
@@ -210,7 +210,7 @@ pub fn run_once_workspace(
             tracing::warn!(
                 target = "engram::dream",
                 workspace = %workspace,
-                error = %e,
+                error = %crate::observability::redact::redacted(&e),
                 "auto-consolidate phase failed; continuing"
             );
         }
@@ -244,7 +244,7 @@ pub fn run_once_all(storage: &Storage, config: &DreamConfig) -> DreamReport {
         Err(e) => {
             tracing::error!(
                 target = "engram::dream",
-                error = %e,
+                error = %crate::observability::redact::redacted(&e),
                 "acquire_dream_lock failed"
             );
             return DreamReport {
@@ -297,7 +297,7 @@ pub fn run_once_all(storage: &Storage, config: &DreamConfig) -> DreamReport {
     {
         tracing::error!(
             target = "engram::dream",
-            error = %e,
+            error = %crate::observability::redact::redacted(&e),
             "Failed to persist dream_runs history row"
         );
     }
@@ -327,10 +327,9 @@ pub fn spawn_scheduler(storage: Arc<Storage>, config: DreamConfig) -> tokio::tas
             {
                 Ok(r) => r,
                 Err(e) => {
-                    let err_msg = e.to_string();
                     tracing::error!(
                         target = "engram::dream",
-                        error = %err_msg,
+                        error_class = crate::observability::redact::join_error_class(&e),
                         "Dream Phase pass panicked"
                     );
                     continue;
@@ -344,8 +343,11 @@ pub fn spawn_scheduler(storage: Arc<Storage>, config: DreamConfig) -> tokio::tas
                 "Dream Phase pass complete"
             );
             for err in &report.errors {
-                let err_msg = err.to_string();
-                tracing::warn!(target = "engram::dream", error = %err_msg, "Dream Phase workspace failed");
+                tracing::warn!(
+                    target = "engram::dream",
+                    error = %crate::observability::redact::opaque(err),
+                    "Dream Phase workspace failed"
+                );
             }
         }
     })

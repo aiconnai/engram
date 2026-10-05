@@ -457,7 +457,11 @@ impl ProjectContextEngine {
                     Ok(Some(file)) => discovered.push(file),
                     Ok(None) => skipped += 1, // Skipped (too large, etc.)
                     Err(e) => {
-                        tracing::warn!("Error reading {}: {}", file_path.display(), e);
+                        tracing::warn!(
+                            path = %crate::observability::redact::path_label(&file_path),
+                            error = %crate::observability::redact::redacted(&e),
+                            "Error reading instruction file"
+                        );
                     }
                 }
             }
@@ -485,10 +489,10 @@ impl ProjectContextEngine {
         // Skip if too large
         if size > self.config.max_file_size {
             tracing::info!(
-                "Skipping {} (size {} > max {})",
-                path.display(),
+                path = %crate::observability::redact::path_label(path),
                 size,
-                self.config.max_file_size
+                max = self.config.max_file_size,
+                "Skipping instruction file over the size limit"
             );
             return Ok(None);
         }
@@ -919,5 +923,33 @@ Nested content.
             memory.metadata.get("parent_memory_id"),
             Some(&serde_json::Value::Number(123.into()))
         );
+    }
+
+    #[test]
+    fn scan_logs_do_not_contain_the_project_path() {
+        use crate::observability::test_capture::{assert_logs_exclude, install};
+        install();
+        let dir = tempfile::tempdir().expect("tempdir");
+        let project = dir.path().join("project-path-sentinel-4a5b");
+        std::fs::create_dir_all(&project).expect("mkdir");
+        // Not UTF-8: reading fails and the failure is logged.
+        std::fs::write(project.join("CLAUDE.md"), [0xff, 0xfe, 0xfd]).expect("write");
+        // Over the size limit: skipping is logged.
+        std::fs::write(project.join("AGENTS.md"), "x".repeat(64)).expect("write");
+        let engine = ProjectContextEngine::with_config(ProjectContextConfig {
+            max_file_size: 16,
+            ..ProjectContextConfig::default()
+        });
+
+        let (files, skipped) = engine
+            .scan_directory_with_stats(&project)
+            .expect("scan keeps its result shape");
+
+        assert!(files.is_empty());
+        assert_eq!(skipped, 1);
+        let logs = crate::observability::test_capture::captured();
+        assert!(logs.contains("Error reading instruction file"));
+        assert!(logs.contains("Skipping instruction file over the size limit"));
+        assert_logs_exclude(&["project-path-sentinel-4a5b"]);
     }
 }

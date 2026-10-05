@@ -2,6 +2,7 @@
 use serde_json::{json, Value};
 
 use super::super::HandlerContext;
+use crate::mcp::error::ToolError;
 
 pub fn memory_promote_to_permanent(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::promote_to_permanent;
@@ -82,7 +83,7 @@ pub fn set_expiration(ctx: &HandlerContext, params: Value) -> Value {
     let ttl_seconds = params.get("ttl_seconds").and_then(|v| v.as_i64());
 
     if ttl_seconds.is_none() {
-        return json!({"error": "ttl_seconds is required"});
+        return ToolError::missing_argument("ttl_seconds").into_value();
     }
 
     ctx.storage
@@ -101,7 +102,7 @@ pub fn set_expiration(ctx: &HandlerContext, params: Value) -> Value {
                 "message": message
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn cleanup_expired(ctx: &HandlerContext, params: Value) -> Value {

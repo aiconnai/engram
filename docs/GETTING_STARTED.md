@@ -120,6 +120,15 @@ Add to `.cursor/mcp.json` in your project root:
 
 Use the same `mcpServers.engram` JSON block in your client's MCP config location.
 
+### Automatic Install (`engram-cli mcp install`)
+
+`engram-cli mcp install --client <claude|cursor|antigravity|windsurf|all>` adds the `engram` entry to each client's config file and keeps every other server in it.
+
+- Client configs must be strict JSON objects. If an existing file cannot be parsed (for example it has comments or a trailing comma), the command refuses to touch it, prints the path, and exits non-zero.
+- `--force` replaces such a file anyway. It never skips the backup.
+- Before any edit the previous content is saved next to the config as `<file>.bak`. An existing backup is never overwritten: later backups are `<file>.bak.<unix-time>`, and a backup identical to an existing one is not duplicated.
+- The new config is written to a temporary file and renamed into place, so an interrupted run cannot leave a truncated config.
+
 ### Verify Connection
 
 Once configured, your AI tool will have access to the MCP tools listed in [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Ask it to run `memory_stats` to verify the connection is working and to confirm it can read the shared memory layer.

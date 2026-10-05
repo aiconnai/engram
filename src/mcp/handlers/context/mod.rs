@@ -11,14 +11,7 @@
 /// Truncate `s` to at most `max_bytes` bytes, always landing on a valid UTF-8
 /// char boundary. Avoids panics on multibyte (emoji, CJK, accented) input.
 fn safe_truncate(s: &str, max_bytes: usize) -> &str {
-    if s.len() <= max_bytes {
-        return s;
-    }
-    let mut boundary = max_bytes;
-    while boundary > 0 && !s.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    &s[..boundary]
+    crate::text_util::truncate_bytes(s, max_bytes)
 }
 
 // ── Operational Context retrieval ────────────────────────────────────────────

@@ -167,7 +167,7 @@ pub(super) fn build_memory_from_input(
         }
         MemoryTier::Daily => {
             let ttl = input.ttl_seconds.filter(|&t| t > 0).unwrap_or(86400);
-            Some(now + chrono::Duration::seconds(ttl))
+            Some(crate::storage::queries::expiry_after(now, ttl)?)
         }
     };
 

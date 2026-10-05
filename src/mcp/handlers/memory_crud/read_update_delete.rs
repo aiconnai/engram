@@ -5,6 +5,7 @@ use super::super::HandlerContext;
 use super::strip_private_content;
 use crate::mcp::error::ToolError;
 use crate::mcp::progress::ProgressReporterExt;
+use crate::mcp::workspace_guard::ensure_memory_access;
 use crate::realtime::RealtimeEvent;
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
@@ -21,6 +22,8 @@ pub fn memory_get(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or(false);
     ctx.storage
         .with_connection(|conn| {
+            // Authorize the persisted row before access tracking/reinforcement.
+            ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             let mut memory = get_memory(conn, id)?;
             if let Ok(Some(new_stability)) =
                 crate::intelligence::stability::record_reinforcement(conn, id, chrono::Utc::now())
@@ -45,6 +48,7 @@ pub fn memory_get_public(ctx: &HandlerContext, params: Value) -> Value {
     }
     ctx.storage
         .with_connection(|conn| {
+            ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             let mut memory = get_memory(conn, id)?;
             if let Ok(Some(new_stability)) =
                 crate::intelligence::stability::record_reinforcement(conn, id, chrono::Utc::now())
@@ -85,6 +89,9 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
     }
 
     let result = ctx.storage.with_transaction(|conn| {
+        // Same transaction as the mutation: the row cannot change workspace
+        // between authorization and update.
+        ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
         let memory = update_memory(conn, id, &input)?;
         let op_id = uuid::Uuid::new_v4().to_string();
         emit_best_effort(
@@ -137,6 +144,7 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
     if cascade_chain {
         let result = ctx.storage.with_transaction(|conn| {
             let chain = collect_supersedes_chain(conn, id)?;
+            ensure_chain_access(conn, ctx, id, &chain)?;
             // Capture workspace from the root before any deletion.
             let workspace = get_memory(conn, id).ok().map(|m| m.workspace);
             let op_id = uuid::Uuid::new_v4().to_string();
@@ -180,6 +188,7 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
         }
     } else {
         let result = ctx.storage.with_transaction(|conn| {
+            ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             // Capture workspace before deletion while the row still exists.
             let workspace = get_memory(conn, id).ok().map(|m| m.workspace);
             delete_memory(conn, id)?;
@@ -267,6 +276,7 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
                     ),
                 );
                 let chain = collect_supersedes_chain(conn, id)?;
+                ensure_chain_access(conn, ctx, id, &chain)?;
                 for chain_id in chain {
                     if seen.insert(chain_id) {
                         expanded.push(chain_id);
@@ -275,6 +285,9 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
             }
             expanded
         } else {
+            for &id in &ids {
+                ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
+            }
             ids.clone()
         };
 
@@ -347,4 +360,21 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
         }
         Err(e) => ToolError::from(e).into_value(),
     }
+}
+
+/// Authorize every member of a supersedes chain inside the deleting
+/// transaction. A foreign member is reported as the requested root not being
+/// found, so the error never names a row the caller did not supply.
+fn ensure_chain_access(
+    conn: &rusqlite::Connection,
+    ctx: &HandlerContext,
+    root_id: i64,
+    chain: &[i64],
+) -> crate::error::Result<()> {
+    for &member in chain {
+        if ensure_memory_access(conn, ctx.principal.as_ref(), member).is_err() {
+            return Err(crate::error::EngramError::NotFound(root_id));
+        }
+    }
+    Ok(())
 }

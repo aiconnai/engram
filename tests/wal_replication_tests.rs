@@ -192,6 +192,7 @@ fn test_delta_pack_compression_and_integrity() {
         total_wal_frames: 4,
         checkpoint_seq: 1,
         frames: frames.clone(),
+        chain_seed: None,
     };
 
     // Pack with gzip compression

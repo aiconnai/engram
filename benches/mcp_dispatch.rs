@@ -18,6 +18,7 @@ use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResul
 use engram::storage::queries::*;
 use engram::storage::Storage;
 use engram::types::*;
+use tempfile::tempdir;
 
 // ---------------------------------------------------------------------------
 // Benchmark Handler Setup
@@ -163,6 +164,58 @@ fn bench_dispatch_memory_search(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
+// Benchmark: memory_search, cache and storage mode separated (Q7)
+// ---------------------------------------------------------------------------
+
+/// `memory_search` dispatch with the result cache bypassed (`skip_cache`).
+///
+/// `bench_dispatch_memory_search` repeats one query without `skip_cache`, so
+/// after the first iteration it mostly measures the exact-match cache hit.
+/// This group measures the real search path, once on an in-memory database and
+/// once on an on-disk WAL database (`StorageMode::Local`), kept as separate ids.
+fn bench_dispatch_memory_search_uncached(c: &mut Criterion) {
+    let mut group = c.benchmark_group("mcp_dispatch_memory_search_uncached");
+    group.throughput(Throughput::Elements(1));
+
+    let in_memory = create_benchmark_context(Storage::open_in_memory().expect("in-memory storage"));
+    seed_memories(&in_memory.storage, 100);
+
+    let dir = tempdir().expect("bench tempdir");
+    let disk_storage = Storage::open(StorageConfig {
+        db_path: dir
+            .path()
+            .join("dispatch.sqlite")
+            .to_string_lossy()
+            .to_string(),
+        storage_mode: StorageMode::Local,
+        cloud_uri: None,
+        encrypt_cloud: false,
+        confidence_half_life_days: 30.0,
+        auto_sync: false,
+        sync_debounce_ms: 5000,
+    })
+    .expect("disk storage");
+    seed_memories(&disk_storage, 100);
+    let disk_wal = create_benchmark_context(disk_storage);
+
+    for (label, ctx) in [("in_memory", &in_memory), ("disk_wal", &disk_wal)] {
+        group.bench_function(label, |b| {
+            b.iter(|| {
+                let params = black_box(json!({
+                    "query": "benchmark memory",
+                    "limit": 10,
+                    "workspace": "default",
+                    "skip_cache": true,
+                }));
+                handlers::dispatch(ctx, "memory_search", params)
+            })
+        });
+    }
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
 // Benchmark: memory_list (read path)
 // ---------------------------------------------------------------------------
 
@@ -257,6 +310,7 @@ criterion_group!(
     benches,
     bench_dispatch_memory_create,
     bench_dispatch_memory_search,
+    bench_dispatch_memory_search_uncached,
     bench_dispatch_memory_list,
     bench_dispatch_memory_stats,
     bench_dispatch_unknown_tool,

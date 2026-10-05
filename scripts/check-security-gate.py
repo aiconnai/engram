@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Validate the aggregate security gate and its required-context chain."""
+"""Validate the aggregate security gate and its required-context chain.
+
+The aggregate decision is tri-state: ``pass`` (every constituent succeeded), ``neutral`` (only
+explicitly allowed skips, reported as NEUTRAL and never as PASS) and ``block`` (anything else).
+The findings policy for individual scanner reports lives in check-security-findings.py.
+"""
 
 from __future__ import annotations
 
@@ -77,15 +82,53 @@ def parse_jobs(path: Path) -> dict[str, dict[str, object]]:
     return jobs
 
 
-def evaluate(results: dict[str, str], constituents: list[str], allowed: set[str]) -> bool:
+PASS = "pass"
+NEUTRAL = "neutral"
+BLOCK = "block"
+LEGACY_EXPECTED = {"success": PASS, "failure": BLOCK}
+REQUIRED_CASES = frozenset(
+    {
+        "all-pass",
+        "constituent-failure",
+        "cancelled",
+        "timed-out",
+        "missing",
+        "unauthorized-skip",
+        "allowed-skip-neutral",
+    }
+)
+# A skip on these events would let a pull request bypass a scanner, so no skip is ever allowed.
+NO_SKIP_EVENTS = ("pull_request", "push", "schedule", "workflow_dispatch")
+
+
+def verdict(
+    results: dict[str, str], constituents: list[str], allowed: set[str]
+) -> tuple[str, list[str]]:
+    """Decide pass / neutral / block for the aggregate.
+
+    Only ``success`` is a pass. ``skipped`` is neutral solely for a job in ``allowed``;
+    every other state (failure, cancelled, timed_out, missing, unknown) blocks.
+    """
+
+    reasons: list[str] = []
+    skipped: list[str] = []
     for job in constituents:
         result = results.get(job, "missing")
         if result == "success":
             continue
         if result == "skipped" and job in allowed:
+            skipped.append(job)
             continue
-        return False
-    return True
+        reasons.append(f"{job}={result}")
+    if reasons:
+        return BLOCK, reasons
+    if skipped:
+        return NEUTRAL, [f"allowed skip: {job}" for job in skipped]
+    return PASS, []
+
+
+def evaluate(results: dict[str, str], constituents: list[str], allowed: set[str]) -> bool:
+    return verdict(results, constituents, allowed)[0] != BLOCK
 
 
 def validate_matrix(matrix: dict) -> None:
@@ -97,20 +140,38 @@ def validate_matrix(matrix: dict) -> None:
         raise CheckError("matrix constituent IDs must be non-empty strings")
     if not isinstance(scenarios, list) or not scenarios:
         raise CheckError("matrix needs scenarios")
+    allowed_by_event = matrix.get("allowed_skips_by_event", {})
+    for event in NO_SKIP_EVENTS:
+        if allowed_by_event.get(event):
+            raise CheckError(f"event {event} must not allow any skipped constituent")
+    cases: set[str] = set()
     for scenario in scenarios:
+        name = scenario.get("name")
         results = scenario.get("results", {})
         allowed = set(scenario.get("allowed_skips", []))
-        expected = scenario.get("expected") == "success"
-        if evaluate(results, constituents, allowed) != expected:
-            raise CheckError(f"matrix scenario disagrees with gate policy: {scenario.get('name')}")
+        event = scenario.get("event")
+        if allowed and not allowed <= set(allowed_by_event.get(event, [])):
+            raise CheckError(f"scenario grants skips its event does not allow: {name}")
+        declared = scenario.get("expected")
+        declared = LEGACY_EXPECTED.get(declared, declared)
+        if declared not in (PASS, NEUTRAL, BLOCK):
+            raise CheckError(f"scenario has no valid expected verdict: {name}")
+        if verdict(results, constituents, allowed)[0] != declared:
+            raise CheckError(f"matrix scenario disagrees with gate policy: {name}")
+        if isinstance(scenario.get("case"), str):
+            cases.add(scenario["case"])
+    absent = REQUIRED_CASES - cases
+    if absent:
+        raise CheckError(f"matrix lost required cases: {', '.join(sorted(absent))}")
     baseline = {job: "success" for job in constituents}
-    if not evaluate(baseline, constituents, set()):
+    if verdict(baseline, constituents, set())[0] != PASS:
         raise CheckError("all-success matrix must pass")
     for job in constituents:
-        failed = dict(baseline)
-        failed[job] = "failure"
-        if evaluate(failed, constituents, set()):
-            raise CheckError(f"constituent failure did not fail closed: {job}")
+        for state in ("failure", "cancelled", "timed_out", "skipped", "missing"):
+            changed = dict(baseline)
+            changed[job] = state
+            if verdict(changed, constituents, set())[0] != BLOCK:
+                raise CheckError(f"constituent {state} did not fail closed: {job}")
 
 
 def required_context_names(payload: dict) -> set[str]:
@@ -138,6 +199,19 @@ def has_path(jobs: dict[str, dict[str, object]], start: str, target: str) -> boo
     return False
 
 
+def has_always_condition(workflow_text: str, job: str) -> bool:
+    """True when the job block declares `if: always()` before its `needs:`/`steps:`."""
+
+    match = re.search(rf"^  {re.escape(job)}:\s*$", workflow_text, re.MULTILINE)
+    if match is None:
+        return False
+    block = workflow_text[match.end() :]
+    following = re.search(r"^  [A-Za-z0-9_-]+:\s*$", block, re.MULTILINE)
+    if following is not None:
+        block = block[: following.start()]
+    return re.search(r"^    if:\s*always\(\)\s*$", block, re.MULTILINE) is not None
+
+
 def validate_workflow(
     matrix: dict, jobs: dict[str, dict[str, object]], workflow_text: str
 ) -> None:
@@ -157,6 +231,17 @@ def validate_workflow(
     absent = [token for token in required_tokens if token not in workflow_text]
     if absent:
         raise CheckError(f"aggregate runtime enforcement missing: {', '.join(absent)}")
+    if not has_always_condition(workflow_text, str(aggregate)):
+        raise CheckError(f"aggregate job {aggregate} must run with `if: always()`")
+    dependent = matrix.get("required_dependency_job")
+    if dependent is not None:
+        if dependent not in jobs:
+            raise CheckError(f"workflow missing required-context job {dependent}")
+        if dependent == aggregate or not has_path(jobs, str(dependent), str(aggregate)):
+            raise CheckError(
+                f"required-context job {dependent} no longer depends on {aggregate} "
+                f"(needs: -> {aggregate} was removed); the required check would pass without the gate"
+            )
 
 
 def validate_required_chain(matrix: dict, jobs: dict[str, dict[str, object]], payload: dict) -> None:
@@ -198,9 +283,15 @@ def main() -> int:
             }
             allowed_by_event = matrix.get("allowed_skips_by_event", {})
             allowed = set(allowed_by_event.get(args.event, []))
-            if not evaluate(results, matrix["constituents"], allowed):
-                raise CheckError(f"security constituents failed for event {args.event}")
-            print("security-gate runtime results: PASS")
+            outcome, reasons = verdict(results, matrix["constituents"], allowed)
+            if outcome == BLOCK:
+                raise CheckError(
+                    f"security constituents failed for event {args.event}: {', '.join(reasons)}"
+                )
+            if outcome == NEUTRAL:
+                print(f"security-gate runtime results: NEUTRAL ({'; '.join(reasons)})")
+            else:
+                print("security-gate runtime results: PASS")
             return 0
         if args.self_test_failure:
             for state in ("failure", "cancelled", "timed_out"):
@@ -211,6 +302,10 @@ def main() -> int:
             missing = {job: "success" for job in matrix["constituents"][1:]}
             if evaluate(missing, matrix["constituents"], set()):
                 raise CheckError("missing-result self-test unexpectedly passed")
+            unauthorized = {job: "success" for job in matrix["constituents"]}
+            unauthorized[matrix["constituents"][0]] = "skipped"
+            if evaluate(unauthorized, matrix["constituents"], set()):
+                raise CheckError("unauthorized-skip self-test unexpectedly passed")
             print("security-gate failure self-test: PASS")
             return 0
         if args.self_test_unrequired:

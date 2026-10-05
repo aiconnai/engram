@@ -64,3 +64,33 @@ fn test_aaak_jsonl_transcript_compaction() {
     assert!(res.compressed.contains("cfg'd"));
     assert!(res.compressed.contains("w/"));
 }
+
+/// Task C3: explicit Unicode and adversarial inputs (no panic, sizes reported on the
+/// original bytes, lossless decompression of plain non-abbreviable text is the identity).
+#[test]
+fn test_aaak_unicode_and_adversarial_inputs_do_not_panic() {
+    let cases = [
+        "",
+        " ",
+        "ß ẞ İ ı ς Σ ﬃ \u{212a}",
+        "e\u{301}\u{308}\u{327} combining marks",
+        "👨\u{200d}👩\u{200d}👧\u{200d}👦 family and 🏳\u{fe0f}\u{200d}🌈 flag",
+        "\u{202e}bidi override\u{202c} \u{2066}isolate\u{2069}",
+        "\u{0}\u{7}\u{1b}\u{7f}\u{85}\u{200b}\u{feff}",
+        "The database İİİ configuration ẞ implementation requires authentication",
+        &"é".repeat(10_001),
+    ];
+    for text in cases {
+        for mode in [AaakMode::Lossless, AaakMode::UltraDense] {
+            let res = AaakCompressor::compress(text, mode);
+            assert_eq!(res.original_bytes, text.len(), "input {text:?}");
+            let _ = AaakCompressor::decompress(&res.compressed);
+        }
+    }
+
+    // Text with nothing to abbreviate survives a lossless round trip verbatim.
+    for text in ["ß ẞ İ", "👨\u{200d}👩\u{200d}👧", "e\u{301}\u{308}"] {
+        let res = AaakCompressor::compress(text, AaakMode::Lossless);
+        assert_eq!(AaakCompressor::decompress(&res.compressed), text);
+    }
+}

@@ -36,6 +36,7 @@ mod session;
 mod stats;
 mod tag_links;
 mod tier;
+mod ttl;
 mod versions;
 mod workspace;
 
@@ -63,6 +64,7 @@ pub use session::search_sessions;
 pub use stats::get_stats;
 use tag_links::ensure_tag;
 pub use tier::promote_to_permanent;
+pub use ttl::{cutoff_days_ago, expiry_after, MAX_OFFSET_DAYS, MAX_TTL_SECONDS};
 pub use versions::get_memory_versions;
 pub use workspace::{delete_workspace, get_workspace_stats, list_workspaces, move_to_workspace};
 

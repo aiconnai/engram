@@ -313,7 +313,7 @@ impl MemoryGardener {
             if m.content.len() > MAX_CONTENT {
                 let truncated = format!(
                     "{} [compressed]",
-                    &m.content[..MAX_CONTENT.min(m.content.len())]
+                    crate::text_util::truncate_bytes(&m.content, MAX_CONTENT)
                 );
                 let freed = m.content.len().saturating_sub(truncated.len());
                 tokens_freed += freed;

@@ -160,7 +160,7 @@ impl DreamPipeline {
                     tracing::warn!(
                         target = "engram::dream::worker",
                         workspace = %ws,
-                        error = %e,
+                        error = %crate::observability::redact::redacted(&e),
                         "Consolidation pass failed for workspace"
                     );
                 }
@@ -704,7 +704,10 @@ impl DreamPipeline {
 
 /// Helper to parse procedural patterns/solutions from episodic memory text safely.
 fn extract_procedural_lesson(text: &str) -> Option<String> {
-    let lower = text.to_lowercase();
+    // ASCII lowercasing keeps byte offsets identical to `text`, so a match
+    // position in `lower` is directly a valid char boundary of the original.
+    // All keywords are ASCII.
+    let lower = text.to_ascii_lowercase();
     let keywords = [
         "solution:",
         "lesson:",
@@ -717,15 +720,7 @@ fn extract_procedural_lesson(text: &str) -> Option<String> {
 
     for kw in &keywords {
         if let Some(pos) = lower.find(kw) {
-            // Map character count in lower to character indices in original text
-            // to prevent invalid UTF-8 byte slice panics.
-            let char_count = lower[..pos].chars().count();
-            let byte_pos = text
-                .char_indices()
-                .nth(char_count)
-                .map(|(idx, _)| idx)
-                .unwrap_or(0);
-            let snippet = text[byte_pos..].trim();
+            let snippet = text[pos..].trim();
             if snippet.len() >= 20 {
                 return Some(snippet.to_string());
             }
@@ -737,4 +732,24 @@ fn extract_procedural_lesson(text: &str) -> Option<String> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn procedural_lesson_unicode_case_folding_keeps_offsets() {
+        // `İ` lowercases to 2 chars, which made the old char-count mapping land
+        // on the wrong char of the original text.
+        let text = "İİİİ solution: restart the worker after rotating credentials";
+        assert_eq!(
+            extract_procedural_lesson(text).as_deref(),
+            Some("solution: restart the worker after rotating credentials")
+        );
+        assert_eq!(extract_procedural_lesson("ẞ fix: é"), None); // < 20 bytes
+        assert!(
+            extract_procedural_lesson("\u{202e}\u{200d} lesson: \u{0}ééé tail tail tail").is_some()
+        );
+    }
 }

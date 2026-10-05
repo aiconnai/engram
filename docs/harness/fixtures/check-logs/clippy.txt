@@ -1,0 +1,2 @@
+synthetic fixture log for check clippy
+exit=0

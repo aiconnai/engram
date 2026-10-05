@@ -67,7 +67,19 @@ pub enum HookResult {
     Abort { reason: String },
 }
 
-/// Hook manager that dispatches events to registered handlers
+/// Hook manager that dispatches events to registered handlers.
+///
+/// Failure semantics: a handler that returns `Err` is logged and skipped, and
+/// later handlers still run. A handler that panics gets the same treatment only
+/// when panics unwind (the default, and every test/dev build). The release
+/// profile sets `panic = "abort"`, where a handler panic terminates the process
+/// and `catch_unwind` cannot intercept it; do not rely on panic isolation in
+/// release binaries. An `Abort` result short-circuits
+/// dispatch and discards results collected from earlier handlers. Hooks are
+/// fire-and-forget side effects, not a delivery guarantee: the
+/// SessionEnd -> SessionStart queue (`storage::pending_injections`) is
+/// at-most-once, and a replayed event is only de-duplicated where a handler
+/// says so (SessionEnd per session while queued).
 pub struct HookManager {
     handlers: HashMap<
         LifecycleHook,
@@ -103,14 +115,24 @@ impl HookManager {
 
         if let Some(handlers) = self.handlers.get(&hook) {
             for handler in handlers {
-                match handler(hook, context) {
-                    Ok(HookResult::Abort { reason }) => {
+                // Under panic=unwind a panicking handler is treated like an
+                // erroring one: it must not unwind through the tool-call path
+                // or skip the handlers registered after it. (No effect under
+                // the release profile's panic=abort.)
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handler(hook, context)
+                }));
+                match outcome {
+                    Ok(Ok(HookResult::Abort { reason })) => {
                         return Ok(vec![HookResult::Abort { reason }]);
                     }
-                    Ok(result) => results.push(result),
-                    Err(e) => {
+                    Ok(Ok(result)) => results.push(result),
+                    Ok(Err(e)) => {
                         // Log error but continue with other handlers
                         eprintln!("Hook handler error for {:?}: {}", hook, e);
+                    }
+                    Err(_) => {
+                        eprintln!("Hook handler panicked for {:?}; continuing", hook);
                     }
                 }
             }
@@ -132,6 +154,8 @@ impl Default for HookManager {
 }
 
 // Module declarations for individual hook implementations
+#[cfg(test)]
+mod failure_tests;
 pub mod post_tool_use;
 pub mod session_end;
 pub mod session_start;

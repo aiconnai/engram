@@ -39,7 +39,13 @@ pub(crate) fn create(
         media_url: None,
     };
 
-    let memory = storage.with_transaction(|conn| create_memory(conn, &input))?;
+    // `defer_embedding: true` means "embed in the background": the job is
+    // enqueued in the same transaction so the memory is never left unembedded.
+    let memory = storage.with_transaction(|conn| {
+        let memory = create_memory(conn, &input)?;
+        engram::embedding::enqueue_embedding_job(conn, memory.id)?;
+        Ok(memory)
+    })?;
     println!("Created memory #{}", memory.id);
     println!("{}", serde_json::to_string_pretty(&memory)?);
     Ok(())
@@ -153,4 +159,42 @@ pub(crate) fn versions(storage: &Storage, id: i64) -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use engram::storage::{health_check_storage, DerivedIndexStatus};
+
+    #[test]
+    fn create_enqueues_embedding_job_instead_of_leaving_memory_unembedded() {
+        let storage = Storage::open_in_memory().unwrap();
+
+        create(
+            &storage,
+            "cli memory to embed".to_string(),
+            "note".to_string(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let pending: i64 = storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM embedding_queue WHERE status = 'pending'",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(pending, 1, "CLI create must leave a pending embedding job");
+        let embeddings = health_check_storage(&storage)
+            .unwrap()
+            .derived_indexes
+            .into_iter()
+            .find(|index| index.name == "embeddings")
+            .unwrap();
+        assert_eq!(embeddings.status, DerivedIndexStatus::Backlogged);
+    }
 }

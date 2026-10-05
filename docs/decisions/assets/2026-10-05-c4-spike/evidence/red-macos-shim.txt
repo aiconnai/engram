@@ -1,0 +1,60 @@
+
+running 9 tests
+test shim_refuses_directory_writable_by_others ... FAILED
+test shim_refuses_symlinked_main_file ... ok
+test shim_refuses_regular_file_swapped_over_main ... FAILED
+test unbound_databases_keep_the_stock_path_behaviour ... ok
+test shim_open_reads_original_after_parent_directory_rename_swap ... FAILED
+test shim_new_database_is_created_owner_only_in_pinned_dir ... FAILED
+test in_process_stock_openers_of_the_bound_pathname_are_redirected_too ... FAILED
+test shim_wal_sidecars_stay_in_pinned_directory_after_swap ... FAILED
+test shim_pool_and_stock_peer_process_share_wal_locks_and_checkpoint ... ok
+
+failures:
+
+---- shim_refuses_directory_writable_by_others stdout ----
+
+thread 'shim_refuses_directory_writable_by_others' (29233076) panicked at tests/shim.rs:111:5:
+bound a database in a world-writable directory
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- shim_refuses_regular_file_swapped_over_main stdout ----
+
+thread 'shim_refuses_regular_file_swapped_over_main' (29233077) panicked at tests/shim.rs:102:5:
+opened a swapped-in main file: Ok("attacker")
+
+---- shim_open_reads_original_after_parent_directory_rename_swap stdout ----
+
+thread 'shim_open_reads_original_after_parent_directory_rename_swap' (29233074) panicked at tests/shim.rs:38:5:
+assertion `left == right` failed: opened the attacker's database
+  left: "attacker"
+ right: "original"
+
+---- shim_new_database_is_created_owner_only_in_pinned_dir stdout ----
+
+thread 'shim_new_database_is_created_owner_only_in_pinned_dir' (29233073) panicked at tests/shim.rs:168:6:
+called `Result::unwrap()` on an `Err` value: SqlInputError { error: Error { code: Unknown, extended_code: 1 }, msg: "table t already exists", sql: " CREATE TABLE t(v TEXT NOT NULL); INSERT INTO t(v) VALUES ('fresh');", offset: 14 }
+
+---- in_process_stock_openers_of_the_bound_pathname_are_redirected_too stdout ----
+
+thread 'in_process_stock_openers_of_the_bound_pathname_are_redirected_too' (29233072) panicked at tests/shim.rs:198:5:
+assertion `left == right` failed
+  left: "attacker"
+ right: "original"
+
+---- shim_wal_sidecars_stay_in_pinned_directory_after_swap stdout ----
+
+thread 'shim_wal_sidecars_stay_in_pinned_directory_after_swap' (29233079) panicked at tests/shim.rs:55:5:
+WAL not in pinned dir
+
+
+failures:
+    in_process_stock_openers_of_the_bound_pathname_are_redirected_too
+    shim_new_database_is_created_owner_only_in_pinned_dir
+    shim_open_reads_original_after_parent_directory_rename_swap
+    shim_refuses_directory_writable_by_others
+    shim_refuses_regular_file_swapped_over_main
+    shim_wal_sidecars_stay_in_pinned_directory_after_swap
+
+test result: FAILED. 3 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+

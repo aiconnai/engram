@@ -150,6 +150,17 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         return denial;
     }
 
+    // Authorize referenced memory rows by their persisted workspace, never by
+    // the workspace the request claims (anti-IDOR, before any side effect).
+    if let Some(denial) = crate::mcp::workspace_guard::denial_for_memory_arguments(
+        &ctx.storage,
+        ctx.principal.as_ref(),
+        tool_name,
+        &params,
+    ) {
+        return denial;
+    }
+
     match tool_name {
         // ── Memory CRUD ──────────────────────────────────────────────────────
         "memory_create" => memory_crud::memory_create(ctx, params),
@@ -331,7 +342,11 @@ pub fn dispatch(ctx: &HandlerContext, tool_name: &str, params: Value) -> Value {
         "memory_events_clear" => sync::memory_events_clear(ctx, params),
         "replication_status" => sync::replication_status(ctx, params),
         "replication_sync_now" => sync::replication_sync_now(ctx, params),
-        "replication_recover" => sync::replication_recover(ctx, params),
+        "replication_recover" => {
+            let started = std::time::Instant::now();
+            let (result, outcome) = sync::replication_recover_classified(ctx, params);
+            crate::observability::observe_recovery(started, outcome, result)
+        }
 
         // ── Stats / Versions / Cache / Compact ───────────────────────────────
         "memory_stats" => stats::memory_stats(ctx, params),

@@ -54,7 +54,12 @@ pub fn emit(conn: &Connection, event: &EnrichmentEvent<'_>) -> Result<i64> {
 
 pub fn emit_best_effort(conn: &Connection, event: &EnrichmentEvent<'_>) -> Option<i64> {
     emit(conn, event)
-        .map_err(|e| tracing::warn!("enrichment_events emit failed: {e}"))
+        .map_err(|e| {
+            tracing::warn!(
+                error = %crate::observability::redact::redacted(&e),
+                "enrichment_events emit failed"
+            )
+        })
         .ok()
 }
 

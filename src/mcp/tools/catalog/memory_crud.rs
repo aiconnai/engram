@@ -199,7 +199,7 @@ pub const TOOLS: &[ToolDef] = &[
         },
     ToolDef {
             name: "memory_list",
-            description: "List memories with filtering and pagination. Supports workspace isolation, tier filtering, and advanced filter syntax with AND/OR and comparison operators.",
+            description: "List memories with filtering and pagination. Supports workspace isolation, tier filtering, and advanced filter syntax with AND/OR and comparison operators. Never returns a silently shortened page: a stored row that cannot be decoded (corruption or schema drift) fails the call with an internal_error naming the row id.",
             schema: r#"{
                 "type": "object",
                 "properties": {

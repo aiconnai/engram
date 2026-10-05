@@ -68,3 +68,14 @@ pub struct EmbeddingQueueHygieneReport {
     pub requeued_failed: i64,
     pub pruned_complete: i64,
 }
+
+/// Result of one background drain cycle (stale-lease recovery + drain).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EmbeddingDrainReport {
+    /// `processing` jobs past their lease moved back to `pending`.
+    pub requeued_stale: i64,
+    /// `processing` jobs past their lease and retry budget moved to `failed`.
+    pub failed_exhausted: i64,
+    /// Memories handled by the drain (persisted or superseded).
+    pub drained: usize,
+}

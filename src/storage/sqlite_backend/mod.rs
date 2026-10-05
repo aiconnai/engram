@@ -265,8 +265,12 @@ impl StorageBackend for SqliteBackend {
             // We use queries::delete_crossref which takes an edge type.
             // We'll delete all edge types for this pair.
             for edge_type in EdgeType::all() {
-                // Ignore result (might not exist for all types)
-                let _ = queries::delete_crossref(conn, from_id, to_id, *edge_type);
+                // A missing edge of this type is expected (NotFound); any other
+                // error (locked, I/O, schema) must roll the transaction back.
+                match queries::delete_crossref(conn, from_id, to_id, *edge_type) {
+                    Ok(()) | Err(EngramError::NotFound(_)) => {}
+                    Err(e) => return Err(e),
+                }
             }
             Ok(())
         })
@@ -602,5 +606,30 @@ mod tests {
         assert!(
             matches!(pull, Err(EngramError::Sync(message)) if message.contains("SQLite backend"))
         );
+    }
+
+    #[test]
+    fn delete_crossref_surfaces_statement_errors() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        backend
+            .storage()
+            .with_connection(|conn| {
+                conn.execute_batch("DROP TABLE crossrefs;")?;
+                Ok(())
+            })
+            .unwrap();
+
+        let result = backend.delete_crossref(1, 2);
+
+        assert!(
+            matches!(&result, Err(EngramError::Database(e)) if e.to_string().contains("crossrefs")),
+            "a failing UPDATE must not be reported as success: {result:?}"
+        );
+    }
+
+    #[test]
+    fn delete_crossref_remains_idempotent_for_missing_edges() {
+        let backend = SqliteBackend::in_memory().unwrap();
+        backend.delete_crossref(1, 2).unwrap();
     }
 }

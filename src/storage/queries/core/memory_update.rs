@@ -85,7 +85,7 @@ pub fn update_memory(conn: &Connection, id: i64, input: &UpdateMemoryInput) -> R
                     "Cannot set expiration on a Permanent tier memory. Permanent memories cannot expire.".to_string()
                 ));
             }
-            let expires_at = (Utc::now() + chrono::Duration::seconds(ttl)).to_rfc3339();
+            let expires_at = expiry_after(Utc::now(), ttl)?.to_rfc3339();
             updates.push("expires_at = ?".to_string());
             values.push(Box::new(expires_at));
         }

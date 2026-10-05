@@ -4,3 +4,5 @@ sdks/typescript/node_modules/
 sdks/typescript/dist/
 docs/*.js
 docs/*.html
+# C4 spike evidence (standalone, not product code; see its README)
+docs/decisions/assets/2026-10-05-c4-spike/

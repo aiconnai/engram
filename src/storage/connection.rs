@@ -9,6 +9,7 @@ use std::path::Path;
 #[cfg(unix)]
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use super::db::DbConnectionExt;
 use super::migrations::run_migrations;
@@ -17,10 +18,43 @@ use crate::error::EngramError;
 use crate::error::Result;
 use crate::types::{CompactOp, CompactReport, StorageConfig, StorageMode};
 
+/// Upper bound for retrying a journal-mode switch that reports SQLITE_BUSY.
+const JOURNAL_MODE_RETRY_BUDGET: Duration = Duration::from_secs(30);
+
+/// Longest pause between journal-mode switch attempts.
+const JOURNAL_MODE_MAX_BACKOFF: Duration = Duration::from_millis(100);
+
+/// Set `PRAGMA journal_mode`, retrying on SQLITE_BUSY/LOCKED within a bound.
+///
+/// SQLite may return SQLITE_BUSY for a journal-mode change without consulting
+/// the busy handler (for example while another connection is opening or
+/// migrating the same file), so `busy_timeout` alone is not enough.
+fn set_journal_mode_with_retry(conn: &Connection, mode: &'static str) -> Result<()> {
+    let deadline = Instant::now() + JOURNAL_MODE_RETRY_BUDGET;
+    let mut backoff = Duration::from_millis(5);
+    let sql = format!("PRAGMA journal_mode={mode}");
+    loop {
+        match conn.query_row(&sql, [], |row| row.get::<_, String>(0)) {
+            Ok(_) => return Ok(()),
+            Err(err)
+                if crate::observability::redact::is_sqlite_busy(&err)
+                    && Instant::now() < deadline =>
+            {
+                std::thread::sleep(backoff);
+                backoff = (backoff * 2).min(JOURNAL_MODE_MAX_BACKOFF);
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
+}
+
 #[cfg(unix)]
 const SQLITE_FILE_MODE: u32 = 0o600;
 #[cfg(unix)]
 const ENGRAM_OWNED_DIR_MODE: u32 = 0o700;
+
+/// Serializes database file preparation and opening within this process.
+static DATABASE_OPEN_LOCK: Mutex<()> = Mutex::new(());
 
 /// Storage engine wrapping SQLite with connection pooling
 pub struct Storage {
@@ -76,6 +110,10 @@ impl Storage {
             Connection::open_in_memory()?
         } else {
             ensure_filesystem_database_supported()?;
+            // Serialize file preparation and SQLite's open within the process
+            // so no connection opens a brand-new database file while
+            // `prepare_database_file` still holds its creation descriptor (G1).
+            let _open_guard = DATABASE_OPEN_LOCK.lock();
             let db_path = Path::new(&config.db_path);
             prepare_database_path(db_path)?;
             #[cfg(unix)]
@@ -100,12 +138,12 @@ impl Storage {
         match mode {
             StorageMode::Local => {
                 // WAL mode for better concurrency and crash recovery
+                conn.execute_batch("PRAGMA busy_timeout=30000;")?;
+                set_journal_mode_with_retry(conn, "WAL")?;
                 conn.execute_batch(
                     r#"
-                    PRAGMA journal_mode=WAL;
                     PRAGMA synchronous=NORMAL;
                     PRAGMA wal_autocheckpoint=1000;
-                    PRAGMA busy_timeout=30000;
                     PRAGMA cache_size=-64000;
                     PRAGMA temp_store=MEMORY;
                     PRAGMA mmap_size=268435456;
@@ -115,11 +153,11 @@ impl Storage {
             }
             StorageMode::CloudSafe => {
                 // Single-file mode for cloud sync (Dropbox, OneDrive, iCloud)
+                conn.execute_batch("PRAGMA busy_timeout=30000;")?;
+                set_journal_mode_with_retry(conn, "DELETE")?;
                 conn.execute_batch(
                     r#"
-                    PRAGMA journal_mode=DELETE;
                     PRAGMA synchronous=FULL;
-                    PRAGMA busy_timeout=30000;
                     PRAGMA cache_size=-32000;
                     PRAGMA temp_store=MEMORY;
                     PRAGMA foreign_keys=ON;
@@ -152,6 +190,7 @@ impl Storage {
     }
 
     fn with_connection_dyn(&self, f: &mut dyn FnMut(&Connection) -> Result<()>) -> Result<()> {
+        crate::observability::record_storage_operation();
         let result = {
             let conn = self.conn.lock();
             f(&conn)
@@ -176,9 +215,14 @@ impl Storage {
     }
 
     fn with_transaction_dyn(&self, f: &mut dyn FnMut(&Connection) -> Result<()>) -> Result<()> {
+        crate::observability::record_storage_operation();
         let result = {
             let mut conn = self.conn.lock();
-            let tx = conn.transaction()?;
+            // IMMEDIATE takes the write lock up front, so a concurrent writer
+            // (another process) makes us wait up to busy_timeout. A DEFERRED
+            // transaction that reads first gets SQLITE_BUSY immediately on the
+            // read->write upgrade, without the busy handler.
+            let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
             match f(&tx) {
                 Ok(()) => tx.commit().map_err(Into::into),
                 Err(err) => Err(err),
@@ -500,6 +544,7 @@ impl StoragePool {
     }
 
     fn with_connection_dyn(&self, f: &mut dyn FnMut(&Connection) -> Result<()>) -> Result<()> {
+        crate::observability::record_storage_operation();
         let result = {
             let conn_arc = self.get();
             let conn = conn_arc.lock();
@@ -559,11 +604,23 @@ fn prepare_database_parent(parent: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Make sure the database file exists as an owner-only regular file before
+/// SQLite opens it. SQLite creates `-wal` and `-shm` with the database file's
+/// mode, so a `0600` database yields `0600` side files.
+///
+/// An existing database may already be open by SQLite in this process (a
+/// second `Storage::open`, `StoragePool`), so it is checked by path and never
+/// opened here: closing a descriptor would drop SQLite's POSIX locks (G1).
+/// A new file is created with `O_CREAT | O_EXCL`; that descriptor is closed
+/// before any SQLite connection can know the new inode: `create_connection`
+/// holds a process-wide lock across this and SQLite's open (residual: a
+/// SQLite connection opened in this process by other code, outside
+/// `Storage`, during that window).
 #[cfg(unix)]
 fn prepare_database_file(db_path: &Path) -> Result<()> {
     use std::os::unix::fs::OpenOptionsExt;
 
-    let opened = std::fs::OpenOptions::new()
+    let created = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create_new(true)
@@ -571,30 +628,29 @@ fn prepare_database_file(db_path: &Path) -> Result<()> {
         .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
         .open(db_path);
 
-    let file = match opened {
-        Ok(file) => file,
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-            open_sqlite_artifact_no_follow(db_path).map_err(|open_err| {
-                if open_err.raw_os_error() == Some(libc::ELOOP) {
-                    EngramError::Storage(format!(
-                        "refusing to open symlink SQLite database '{}'",
-                        db_path.display()
-                    ))
-                } else {
-                    open_err.into()
-                }
-            })?
+    match created {
+        Ok(file) => {
+            drop(file);
+            Ok(())
         }
-        Err(err) => return Err(err.into()),
-    };
-
-    if !file.metadata()?.is_file() {
-        return Err(EngramError::Storage(format!(
-            "refusing to open non-regular SQLite database '{}'",
-            db_path.display()
-        )));
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            let metadata = std::fs::symlink_metadata(db_path)?;
+            if metadata.file_type().is_symlink() {
+                return Err(EngramError::Storage(format!(
+                    "refusing to open symlink SQLite database '{}'",
+                    db_path.display()
+                )));
+            }
+            if !metadata.is_file() {
+                return Err(EngramError::Storage(format!(
+                    "refusing to open non-regular SQLite database '{}'",
+                    db_path.display()
+                )));
+            }
+            restrict_sqlite_artifact_mode(db_path, || {})
+        }
+        Err(err) => Err(err.into()),
     }
-    restrict_open_regular_file_permissions(&file)
 }
 
 #[cfg(unix)]
@@ -647,7 +703,7 @@ fn warn_if_parent_is_permissive(parent: &Path) -> Result<()> {
     let mode = std::fs::metadata(parent)?.permissions().mode() & 0o777;
     if mode & 0o077 != 0 {
         tracing::warn!(
-            path = %parent.display(),
+            path = %crate::observability::redact::path_label(parent),
             mode = %format_args!("{mode:03o}"),
             "Database parent directory is accessible by group or others; Engram will not chmod \
              pre-existing directories recursively. Move the database under an Engram-owned \
@@ -657,50 +713,163 @@ fn warn_if_parent_is_permissive(parent: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Narrow the database, `-wal` and `-shm` to at most `0600`, by path only.
+///
+/// This runs after every storage call, while SQLite holds POSIX (fcntl)
+/// advisory locks on these files. Those locks belong to the (process, inode)
+/// pair: closing ANY descriptor of the file drops every lock the process
+/// holds on it, behind the back of SQLite's unix VFS. Another process that
+/// then opens and closes the database deletes the live WAL, and later commits
+/// are lost (G1). So this function never opens the artifacts; it uses
+/// `lstat` + `fchmodat`, which take no descriptor.
 #[cfg(unix)]
 fn restrict_sqlite_artifact_permissions(db_path: &Path) -> Result<()> {
     for path in sqlite_artifact_paths(db_path) {
-        match open_sqlite_artifact_no_follow(&path) {
-            Ok(file) => restrict_open_regular_file_permissions(&file)?,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) if err.raw_os_error() == Some(libc::ELOOP) => {
-                return Err(EngramError::Storage(format!(
-                    "refusing to chmod symlink SQLite artifact '{}'",
-                    path.display()
-                )));
-            }
-            Err(err) => return Err(err.into()),
-        }
+        restrict_sqlite_artifact_mode(&path, || {})?;
     }
     Ok(())
 }
 
+/// Narrow one artifact's mode to `mode & 0600` without opening it.
+///
+/// Missing files and non-regular files are left alone; symlinks are refused.
+/// The mode is only ever narrowed relative to what `lstat` saw.
+///
+/// TOCTOU residual: the `lstat` and the chmod are separate path lookups. The
+/// chmod itself never follows a symlink where `AT_SYMLINK_NOFOLLOW` works
+/// (macOS; Linux with glibc >= 2.32 or musl, via `fchmodat2` or an `O_PATH`
+/// descriptor, and the kernel does not release POSIX locks when an `O_PATH`
+/// descriptor closes). Where the flag is unsupported (older glibc, seccomp),
+/// the fallback re-checks that the path is still the same regular file
+/// (device + inode) and then calls `chmod`, which could follow a symlink
+/// swapped in between those two calls. In every case, a process that can
+/// rename entries in the database directory can make the chmod hit another
+/// file owned by this user and set it to the mode computed for the artifact
+/// (owner-only, but possibly adding owner bits that file lacked). That
+/// process can already replace the database itself, so Engram-owned database
+/// directories are created `0700`.
+///
+/// `before_chmod` runs between the check and the chmod (a test seam for the
+/// race above; production passes a no-op).
 #[cfg(unix)]
-fn open_sqlite_artifact_no_follow(path: &Path) -> std::io::Result<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-
-    std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(path)
-}
-
-#[cfg(unix)]
-fn restrict_open_regular_file_permissions(file: &std::fs::File) -> Result<()> {
+fn restrict_sqlite_artifact_mode(path: &Path, before_chmod: impl FnOnce()) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
-    let metadata = file.metadata()?;
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err.into()),
+    };
+    if metadata.file_type().is_symlink() {
+        return Err(refuse_symlink_artifact(path));
+    }
     if !metadata.is_file() {
         return Ok(());
     }
 
     let current = metadata.permissions().mode() & 0o777;
     let restricted = current & SQLITE_FILE_MODE;
-    if restricted != current {
-        file.set_permissions(std::fs::Permissions::from_mode(restricted))?;
+    if restricted == current {
+        return Ok(());
+    }
+    before_chmod();
+    chmod_artifact_no_follow(path, restricted, &metadata)
+}
+
+#[cfg(unix)]
+fn chmod_artifact_no_follow(path: &Path, mode: u32, seen: &std::fs::Metadata) -> Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let c_path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {
+        EngramError::Storage(format!(
+            "SQLite artifact path '{}' contains a NUL byte",
+            path.display()
+        ))
+    })?;
+    // `mode` is at most 0o777, so it fits `mode_t` on every Unix (u16 on macOS).
+    #[allow(clippy::unnecessary_cast)]
+    let c_mode = mode as libc::mode_t;
+    // SAFETY: `c_path` is a valid NUL-terminated path for the whole call;
+    // fchmodat does not retain the pointer.
+    let rc = unsafe {
+        libc::fchmodat(
+            libc::AT_FDCWD,
+            c_path.as_ptr(),
+            c_mode,
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    };
+    if rc == 0 {
+        warn_if_replaced_by_symlink(path);
+        return Ok(());
     }
 
+    let err = std::io::Error::last_os_error();
+    match err.raw_os_error() {
+        // The artifact vanished (for example a WAL deleted by a checkpoint).
+        Some(libc::ENOENT) => Ok(()),
+        // Old glibc without no-follow chmod (ENOTSUP), a seccomp filter that
+        // rejects `fchmodat2` with ENOSYS/EPERM instead of letting glibc fall
+        // back, or (newer Linux) the path became a symlink after the lstat
+        // above (EOPNOTSUPP). Re-check, then chmod by path; a genuine EPERM
+        // (not the owner) fails again there and is reported.
+        // (A slice, not a pattern: ENOTSUP == EOPNOTSUPP on Linux.)
+        Some(code)
+            if [libc::ENOTSUP, libc::EOPNOTSUPP, libc::ENOSYS, libc::EPERM].contains(&code) =>
+        {
+            chmod_artifact_after_recheck(path, mode, seen)
+        }
+        _ => Err(err.into()),
+    }
+}
+
+/// macOS applies `AT_SYMLINK_NOFOLLOW` to a symlink swapped in after the
+/// lstat by changing the link's own mode; the target is untouched, but the
+/// artifact was not narrowed, so say so.
+#[cfg(unix)]
+fn warn_if_replaced_by_symlink(path: &Path) {
+    if let Ok(now) = std::fs::symlink_metadata(path) {
+        if now.file_type().is_symlink() {
+            tracing::warn!(
+                path = %crate::observability::redact::path_label(path),
+                "SQLite artifact was replaced by a symlink while its permissions were being \
+                 restricted; the link was not followed"
+            );
+        }
+    }
+}
+
+/// Fallback when no-follow chmod is unavailable: chmod by path only if the
+/// path is still the regular file `seen` (same device and inode).
+#[cfg(unix)]
+fn chmod_artifact_after_recheck(path: &Path, mode: u32, seen: &std::fs::Metadata) -> Result<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    let now = match std::fs::symlink_metadata(path) {
+        Ok(now) => now,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err.into()),
+    };
+    if now.file_type().is_symlink() {
+        return Err(refuse_symlink_artifact(path));
+    }
+    if !now.is_file() || now.dev() != seen.dev() || now.ino() != seen.ino() {
+        return Err(EngramError::Storage(format!(
+            "SQLite artifact '{}' changed while restricting its permissions",
+            path.display()
+        )));
+    }
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))?;
     Ok(())
+}
+
+#[cfg(unix)]
+fn refuse_symlink_artifact(path: &Path) -> EngramError {
+    EngramError::Storage(format!(
+        "refusing to chmod symlink SQLite artifact '{}'",
+        path.display()
+    ))
 }
 
 #[cfg(not(unix))]
@@ -918,36 +1087,112 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn unix_path_replacement_after_open_cannot_redirect_chmod() {
+    fn unix_symlink_swapped_in_before_chmod_is_not_followed() {
         let temp = tempfile::tempdir().unwrap();
         let artifact_path = temp.path().join("memory.db");
-        let opened_inode_path = temp.path().join("opened-memory.db");
+        let moved_inode_path = temp.path().join("moved-memory.db");
         let symlink_target = temp.path().join("unrelated-target");
 
-        std::fs::write(&artifact_path, b"opened inode").unwrap();
+        std::fs::write(&artifact_path, b"checked inode").unwrap();
         std::fs::set_permissions(&artifact_path, std::fs::Permissions::from_mode(0o666)).unwrap();
         std::fs::write(&symlink_target, b"unrelated target").unwrap();
         std::fs::set_permissions(&symlink_target, std::fs::Permissions::from_mode(0o644)).unwrap();
 
-        let opened_artifact = open_sqlite_artifact_no_follow(&artifact_path).unwrap();
-        std::fs::rename(&artifact_path, &opened_inode_path).unwrap();
-        std::os::unix::fs::symlink(&symlink_target, &artifact_path).unwrap();
+        // Swap the checked path for a symlink between the lstat and the chmod.
+        let result = restrict_sqlite_artifact_mode(&artifact_path, || {
+            std::fs::rename(&artifact_path, &moved_inode_path).unwrap();
+            std::os::unix::fs::symlink(&symlink_target, &artifact_path).unwrap();
+        });
 
-        restrict_open_regular_file_permissions(&opened_artifact).unwrap();
-
-        let opened_inode_mode = std::fs::metadata(&opened_inode_path)
-            .unwrap()
-            .permissions()
-            .mode()
-            & 0o777;
-        assert_eq!(opened_inode_mode, 0o600);
-
+        // macOS changes the link's own mode (lchmod); Linux refuses the link.
+        if let Err(err) = result {
+            assert!(
+                err.to_string().contains("refusing to chmod symlink"),
+                "unexpected error: {err}"
+            );
+        }
         let target_mode = std::fs::metadata(&symlink_target)
             .unwrap()
             .permissions()
             .mode()
             & 0o777;
-        assert_eq!(target_mode, 0o644);
+        assert_eq!(target_mode, 0o644, "chmod followed the swapped-in symlink");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_recheck_fallback_chmods_only_the_checked_inode() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("memory.db-wal");
+        let other = temp.path().join("other");
+        let target = temp.path().join("target");
+        std::fs::write(&path, b"wal").unwrap();
+        std::fs::write(&other, b"other").unwrap();
+        std::fs::write(&target, b"target").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let mode_of = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+
+        // Same inode: narrowed.
+        let seen = std::fs::symlink_metadata(&path).unwrap();
+        chmod_artifact_after_recheck(&path, 0o600, &seen).unwrap();
+        assert_eq!(mode_of(&path), 0o600);
+
+        // Replaced by another regular file: refused, replacement untouched.
+        std::fs::set_permissions(&other, std::fs::Permissions::from_mode(0o400)).unwrap();
+        std::fs::rename(&other, &path).unwrap();
+        let err = chmod_artifact_after_recheck(&path, 0o600, &seen).unwrap_err();
+        assert!(
+            err.to_string().contains("changed while restricting"),
+            "{err}"
+        );
+        assert_eq!(mode_of(&path), 0o400);
+
+        // Replaced by a symlink: refused, target untouched.
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        let err = chmod_artifact_after_recheck(&path, 0o600, &seen).unwrap_err();
+        assert!(
+            err.to_string().contains("refusing to chmod symlink"),
+            "{err}"
+        );
+        assert_eq!(mode_of(&target), 0o644);
+
+        // Vanished: nothing to do.
+        std::fs::remove_file(&path).unwrap();
+        chmod_artifact_after_recheck(&path, 0o600, &seen).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_permissive_artifact_is_narrowed_by_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("memory.db");
+        let wal_path = temp.path().join("memory.db-wal");
+        std::fs::write(&db_path, b"db").unwrap();
+        std::fs::write(&wal_path, b"wal").unwrap();
+        std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::set_permissions(&wal_path, std::fs::Permissions::from_mode(0o660)).unwrap();
+
+        restrict_sqlite_artifact_permissions(&db_path).unwrap();
+
+        assert_sqlite_artifact_modes(&db_path, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_non_regular_artifact_is_left_alone() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("memory.db");
+        let shm_dir = temp.path().join("memory.db-shm");
+        std::fs::write(&db_path, b"db").unwrap();
+        std::fs::create_dir(&shm_dir).unwrap();
+        std::fs::set_permissions(&shm_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        restrict_sqlite_artifact_permissions(&db_path).unwrap();
+
+        let mode = std::fs::metadata(&shm_dir).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o755);
     }
 
     #[cfg(unix)]

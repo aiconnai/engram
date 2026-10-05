@@ -2,12 +2,157 @@
 use serde_json::{json, Value};
 
 use super::super::HandlerContext;
+use crate::embedding::{enqueue_embedding_job, persist_computed_embedding};
+use crate::error::Result;
 use crate::mcp::error::ToolError;
 use crate::mcp::progress::ProgressReporterExt;
 use crate::realtime::RealtimeEvent;
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
 use crate::types::*;
+
+/// Compute and persist the embedding of a just-committed memory (the
+/// `defer_embedding = false` path).
+///
+/// The provider call runs outside any transaction. The embedding row, the
+/// `has_embedding` flag and the completion of the memory's queue job (enqueued
+/// by `create_memory` for non-deferred inputs) commit in one transaction, and
+/// the vector index is only updated once that commit succeeded. If the provider
+/// or the local write fails, the memory stays durable with an explicit
+/// `pending` job: health reports the backlog and the background drain converges
+/// it. Failures are logged, not returned, to keep the create response unchanged.
+fn embed_after_commit(ctx: &HandlerContext, memory: &Memory) {
+    if memory.has_embedding {
+        // Dedup (skip/merge) returned an already-embedded memory: nothing to do.
+        return;
+    }
+    crate::observability::record_provider_call(crate::observability::ProviderCall::Embedding);
+    let embedding = match ctx.embedder.embed(&memory.content) {
+        Ok(embedding) => embedding,
+        Err(e) => {
+            crate::observability::record_provider_failure(
+                crate::observability::ProviderCall::Embedding,
+                &e,
+            );
+            tracing::warn!(
+                memory_id = memory.id,
+                error = %crate::observability::redact::redacted(&e),
+                "Immediate embedding failed; memory left with a pending embedding job"
+            );
+            return;
+        }
+    };
+    let model = ctx.embedder.model_name();
+    match ctx.storage.with_transaction(|conn| {
+        persist_computed_embedding(conn, memory.id, &memory.content, &embedding, model)
+    }) {
+        Ok(true) => ctx.hnsw_index.write().insert(memory.id, &embedding),
+        Ok(false) => tracing::warn!(
+            memory_id = memory.id,
+            "Immediate embedding not persisted (memory changed or job already settled); \
+             the queue job, if any, owns it"
+        ),
+        Err(e) => tracing::error!(
+            memory_id = memory.id,
+            error = %crate::observability::redact::redacted(&e),
+            "Persisting immediate embedding failed; memory left with a pending embedding job"
+        ),
+    }
+}
+
+/// Persist a new memory in a single transaction (`defer_embedding` aware).
+///
+/// Only local writes happen here: the memory insert, the queue job for
+/// `defer_embedding = true` (atomic with the insert, so a memory promised to
+/// the queue can never exist without its job) and the audit event. Nothing
+/// outside the database is touched, so a failed commit leaves no trace in
+/// process memory either; vocabulary, vector index, caches and realtime events
+/// are updated by the caller after the commit succeeded.
+fn insert_memory_transaction(ctx: &HandlerContext, input: &CreateMemoryInput) -> Result<Memory> {
+    ctx.storage.with_transaction(|conn| {
+        let memory = create_memory(conn, input)?;
+        if input.defer_embedding {
+            enqueue_embedding_job(conn, memory.id)?;
+        }
+        let op_id = uuid::Uuid::new_v4().to_string();
+        emit_best_effort(
+            conn,
+            &EnrichmentEvent {
+                operation_id: &op_id,
+                event_type: "memory_created",
+                memory_id: Some(memory.id),
+                version_id: None,
+                triggered_by: "memory_create",
+                agent_id: None,
+                workspace: Some(memory.workspace.as_str()),
+                params: json!({}),
+                outcome: json!({"id": memory.id}),
+                status: "completed",
+                dry_run: false,
+            },
+        );
+        Ok(memory)
+    })
+}
+
+/// Mirror an already-persisted embedding into the vector index (deferred path:
+/// dedup may have returned an existing, already embedded memory).
+fn mirror_existing_embedding(ctx: &HandlerContext, memory: &Memory) {
+    match ctx
+        .storage
+        .with_connection(|conn| crate::embedding::get_embedding(conn, memory.id))
+    {
+        Ok(Some(emb)) => ctx.hnsw_index.write().insert(memory.id, &emb),
+        Ok(None) => {}
+        Err(e) => tracing::warn!(
+            memory_id = memory.id,
+            error = %crate::observability::redact::redacted(&e),
+            "Could not read existing embedding for the vector index"
+        ),
+    }
+}
+
+/// `dedup_mode = merge`: fold the new input's tags/metadata/ttl into the
+/// existing memory inside one transaction.
+fn merge_into_existing(
+    ctx: &HandlerContext,
+    existing: &Memory,
+    input: &CreateMemoryInput,
+) -> Value {
+    let merge_result = ctx.storage.with_transaction(|conn| {
+        let mut merged_tags = existing.tags.clone();
+        for tag in &input.tags {
+            if !merged_tags.contains(tag) {
+                merged_tags.push(tag.clone());
+            }
+        }
+
+        let mut merged_metadata = existing.metadata.clone();
+        for (key, value) in &input.metadata {
+            merged_metadata.insert(key.clone(), value.clone());
+        }
+
+        let update_input = UpdateMemoryInput {
+            content: None,
+            memory_type: None,
+            tags: Some(merged_tags),
+            metadata: Some(merged_metadata),
+            importance: input.importance,
+            scope: None,
+            ttl_seconds: input.ttl_seconds,
+            event_time: None,
+            trigger_pattern: None,
+            media_url: input.media_url.clone().map(Some),
+        };
+
+        update_memory(conn, existing.id, &update_input)
+    });
+
+    match merge_result {
+        Ok(memory) => json!(memory),
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
 
 pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::find_similar_by_embedding;
@@ -48,41 +193,7 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
                         DedupMode::Skip => {
                             return json!(existing);
                         }
-                        DedupMode::Merge => {
-                            let merge_result = ctx.storage.with_transaction(|conn| {
-                                let mut merged_tags = existing.tags.clone();
-                                for tag in &input.tags {
-                                    if !merged_tags.contains(tag) {
-                                        merged_tags.push(tag.clone());
-                                    }
-                                }
-
-                                let mut merged_metadata = existing.metadata.clone();
-                                for (key, value) in &input.metadata {
-                                    merged_metadata.insert(key.clone(), value.clone());
-                                }
-
-                                let update_input = UpdateMemoryInput {
-                                    content: None,
-                                    memory_type: None,
-                                    tags: Some(merged_tags),
-                                    metadata: Some(merged_metadata),
-                                    importance: input.importance,
-                                    scope: None,
-                                    ttl_seconds: input.ttl_seconds,
-                                    event_time: None,
-                                    trigger_pattern: None,
-                                    media_url: input.media_url.map(Some),
-                                };
-
-                                update_memory(conn, existing.id, &update_input)
-                            });
-
-                            return match merge_result {
-                                Ok(memory) => json!(memory),
-                                Err(e) => json!({"error": e.to_string()}),
-                            };
-                        }
+                        DedupMode::Merge => return merge_into_existing(ctx, &existing, &input),
                         DedupMode::Allow => {}
                     }
                 }
@@ -90,59 +201,18 @@ pub fn memory_create(ctx: &HandlerContext, params: Value) -> Value {
         }
     }
 
-    let result = ctx.storage.with_transaction(|conn| {
-        let memory = create_memory(conn, &input)?;
-        let mut fuzzy = ctx.fuzzy_engine.lock();
-        fuzzy.add_to_vocabulary(&memory.content);
-        let op_id = uuid::Uuid::new_v4().to_string();
-        emit_best_effort(
-            conn,
-            &EnrichmentEvent {
-                operation_id: &op_id,
-                event_type: "memory_created",
-                memory_id: Some(memory.id),
-                version_id: None,
-                triggered_by: "memory_create",
-                agent_id: None,
-                workspace: Some(memory.workspace.as_str()),
-                params: json!({}),
-                outcome: json!({"id": memory.id}),
-                status: "completed",
-                dry_run: false,
-            },
-        );
-        Ok(memory)
-    });
+    let result = insert_memory_transaction(ctx, &input);
 
     match result {
         Ok(memory) => {
-            if !input.defer_embedding {
-                if let Ok(emb) = ctx.embedder.embed(&memory.content) {
-                    let _ = ctx.storage.with_connection(|conn| {
-                        let mut bytes = Vec::with_capacity(emb.len() * 4);
-                        for f in &emb {
-                            bytes.extend_from_slice(&f.to_le_bytes());
-                        }
-                        conn.execute(
-                            "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
-                             VALUES (?1, ?2, 'default', ?3, datetime('now'))",
-                            rusqlite::params![memory.id, bytes, emb.len()],
-                        )?;
-                        conn.execute(
-                            "UPDATE memories SET has_embedding = 1 WHERE id = ?",
-                            rusqlite::params![memory.id],
-                        )?;
-                        Ok(())
-                    });
-                    ctx.hnsw_index.write().insert(memory.id, &emb);
-                }
+            // Committed: only now touch process-local derived state.
+            ctx.fuzzy_engine.lock().add_to_vocabulary(&memory.content);
+            if input.defer_embedding {
+                // The job drains in the background; if the memory already has an
+                // embedding (dedup returned an existing one), mirror it.
+                mirror_existing_embedding(ctx, &memory);
             } else {
-                let _ = ctx.storage.with_connection(|conn| {
-                    if let Ok(Some(emb)) = crate::embedding::get_embedding(conn, memory.id) {
-                        ctx.hnsw_index.write().insert(memory.id, &emb);
-                    }
-                    Ok(())
-                });
+                embed_after_commit(ctx, &memory);
             }
             ctx.search_cache
                 .invalidate_for_workspace(Some(memory.workspace.as_str()));
@@ -337,27 +407,9 @@ pub fn context_seed(ctx: &HandlerContext, params: Value) -> Value {
                 ),
             );
 
-            let _ = ctx.storage.with_connection(|conn| {
-                for memory in &batch.created {
-                    if let Ok(emb) = ctx.embedder.embed(&memory.content) {
-                        let mut bytes = Vec::with_capacity(emb.len() * 4);
-                        for f in &emb {
-                            bytes.extend_from_slice(&f.to_le_bytes());
-                        }
-                        let _ = conn.execute(
-                            "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
-                             VALUES (?1, ?2, 'default', ?3, datetime('now'))",
-                            rusqlite::params![memory.id, bytes, emb.len()],
-                        );
-                        let _ = conn.execute(
-                            "UPDATE memories SET has_embedding = 1 WHERE id = ?",
-                            rusqlite::params![memory.id],
-                        );
-                        ctx.hnsw_index.write().insert(memory.id, &emb);
-                    }
-                }
-                Ok(())
-            });
+            for memory in &batch.created {
+                embed_after_commit(ctx, memory);
+            }
 
             ctx.search_cache
                 .invalidate_for_workspace(input.workspace.as_deref());
@@ -645,6 +697,8 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
     let result = ctx.storage.with_transaction(|conn| {
         let mut created = Vec::new();
         let mut failed = Vec::new();
+        // Ids of items that asked for background embedding (`defer_embedding`).
+        let mut deferred_ids = std::collections::HashSet::new();
 
         for (index, m) in memories.iter().enumerate() {
             let step_num = (index + 1) as u64;
@@ -667,6 +721,12 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
 
             match create_memory(conn, &input) {
                 Ok(memory) => {
+                    if input.defer_embedding {
+                        // Atomic with the item's insert: an enqueue failure aborts
+                        // the whole batch transaction rather than orphaning it.
+                        enqueue_embedding_job(conn, memory.id)?;
+                        deferred_ids.insert(memory.id);
+                    }
                     ctx.reporter().step(
                         step_num,
                         total,
@@ -689,37 +749,26 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
             }
         }
 
-        Ok(BatchCreateResult {
-            total_created: created.len(),
-            total_failed: failed.len(),
-            created,
-            failed,
-        })
+        Ok((
+            BatchCreateResult {
+                total_created: created.len(),
+                total_failed: failed.len(),
+                created,
+                failed,
+            },
+            deferred_ids,
+        ))
     });
 
     match result {
-        Ok(batch) => {
-            let _ = ctx.storage.with_connection(|conn| {
-                for memory in &batch.created {
-                    if let Ok(emb) = ctx.embedder.embed(&memory.content) {
-                        let mut bytes = Vec::with_capacity(emb.len() * 4);
-                        for f in &emb {
-                            bytes.extend_from_slice(&f.to_le_bytes());
-                        }
-                        let _ = conn.execute(
-                            "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
-                             VALUES (?1, ?2, 'default', ?3, datetime('now'))",
-                            rusqlite::params![memory.id, bytes, emb.len()],
-                        );
-                        let _ = conn.execute(
-                            "UPDATE memories SET has_embedding = 1 WHERE id = ?",
-                            rusqlite::params![memory.id],
-                        );
-                        ctx.hnsw_index.write().insert(memory.id, &emb);
-                    }
-                }
-                Ok(())
-            });
+        Ok((batch, deferred_ids)) => {
+            for memory in batch
+                .created
+                .iter()
+                .filter(|memory| !deferred_ids.contains(&memory.id))
+            {
+                embed_after_commit(ctx, memory);
+            }
 
             ctx.reporter().complete(
                 total,

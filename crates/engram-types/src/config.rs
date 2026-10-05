@@ -126,7 +126,13 @@ pub struct CreateMemoryInput {
     /// Memory tier (permanent or daily)
     #[serde(default)]
     pub tier: MemoryTier,
-    /// Defer embedding computation to background queue
+    /// Defer embedding computation to the background queue.
+    ///
+    /// MCP create handlers: `true` enqueues a job (atomically with the insert)
+    /// and returns without calling the embedding provider; `false` embeds right
+    /// after commit and completes the job. Storage-level `create_memory` only
+    /// enqueues for `false`; callers passing `true` own the enqueue
+    /// (`embedding::enqueue_embedding_job`).
     #[serde(default)]
     pub defer_embedding: bool,
     /// Time-to-live in seconds (None = use tier default, Some(0) = never expires)

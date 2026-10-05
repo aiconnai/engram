@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+use crate::text_util::{floor_char_boundary, truncate_bytes};
 use crate::types::{Memory, MemoryType};
 
 /// Configuration for auto-capture behavior
@@ -380,7 +381,11 @@ impl AutoCaptureEngine {
 
     /// Extract the relevant content for capture
     fn extract_content(&self, text: &str, capture_type: CaptureType) -> String {
-        let text_lower = text.to_lowercase();
+        // ASCII-only lowercasing keeps byte offsets identical to `text` (full
+        // Unicode lowercasing can change byte length, which made `pos` below
+        // point into the wrong place, or into the middle of a char, of the
+        // original). All markers are ASCII.
+        let text_lower = text.to_ascii_lowercase();
 
         // Try to extract after common markers
         let markers = match capture_type {
@@ -401,7 +406,7 @@ impl AutoCaptureEngine {
                 // Take until end of sentence or paragraph
                 let end = extracted
                     .find(|c: char| c == '\n' || c == '.' && extracted.len() > 10)
-                    .unwrap_or(extracted.len().min(500));
+                    .unwrap_or_else(|| floor_char_boundary(extracted, 500));
                 return extracted[..end].trim().to_string();
             }
         }
@@ -411,7 +416,7 @@ impl AutoCaptureEngine {
         if text.len() <= max_len {
             text.trim().to_string()
         } else {
-            format!("{}...", text[..max_len].trim())
+            format!("{}...", truncate_bytes(text, max_len).trim())
         }
     }
 
@@ -610,6 +615,36 @@ impl ConversationTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extract_content_unicode_does_not_panic_or_misplace_offsets() {
+        let engine = AutoCaptureEngine::with_default_config();
+
+        // `İ` lowercases to a LONGER string (2 -> 3 bytes), shifting every offset
+        // found in a fully lowercased copy of the text.
+        let text = "İİİİİ We decided to use Rust. More text follows here";
+        let content = engine.extract_content(text, CaptureType::Decision);
+        assert!(content.starts_with("use Rust"), "got {content:?}");
+
+        // No marker: 500-byte cut lands inside a multibyte char.
+        let long = format!("{}{}", "a".repeat(499), "é".repeat(20));
+        let content = engine.extract_content(&long, CaptureType::Decision);
+        assert!(content.ends_with("..."));
+        assert!(content.len() <= 503);
+
+        // Marker found, long sentence without terminator: fallback cut at 500.
+        let long = format!("decision: {}{}", "a".repeat(489), "é".repeat(20));
+        let _ = engine.extract_content(&long, CaptureType::Decision);
+
+        // Controls, bidi, ZWJ.
+        for t in [
+            "decided to \u{202e}\u{200d}👨\u{200d}👩",
+            "TODO:\u{0}\u{7f}",
+            "ß ẞ İ decision:",
+        ] {
+            let _ = engine.analyze(t, "conversation");
+        }
+    }
 
     #[test]
     fn test_auto_capture_decision() {

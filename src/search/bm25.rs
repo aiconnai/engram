@@ -8,6 +8,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 use crate::storage::filter::{parse_filter, SqlBuilder};
 use crate::storage::queries::{load_tags, memory_from_row};
+use crate::text_util::{ceil_char_boundary, floor_char_boundary};
 use crate::types::{MatchInfo, Memory, MemoryScope, SearchStrategy};
 
 /// BM25 search result with score
@@ -405,9 +406,31 @@ fn extract_matched_terms(query: &str, content: &str) -> Vec<String> {
         .collect()
 }
 
+/// Lowercase `text` char by char, remembering for every byte of the lowercased
+/// copy the byte range of the ORIGINAL char it came from.
+///
+/// Case folding can change byte length (`ẞ` is 3 bytes, `ß` is 2; `İ` is 2 bytes,
+/// its lowercase `i̇` is 3), so an offset found in the lowercased copy is only
+/// meaningful in the original through this map.
+fn lowercase_with_origin(text: &str) -> (String, Vec<(usize, usize)>) {
+    let mut lowered = String::with_capacity(text.len());
+    let mut origin = Vec::with_capacity(text.len());
+    for (start, ch) in text.char_indices() {
+        let end = start + ch.len_utf8();
+        for lower in ch.to_lowercase() {
+            lowered.push(lower);
+            origin.extend(std::iter::repeat_n((start, end), lower.len_utf8()));
+        }
+    }
+    (lowered, origin)
+}
+
 /// Generate highlight snippets from content (since FTS5 snippet() doesn't work with external content)
+///
+/// Matching is case-insensitive, but every offset used to cut the snippet is a
+/// char boundary of the original `content` (never an offset into the lowercased
+/// copy).
 fn generate_highlights(query: &str, content: &str) -> Vec<String> {
-    let content_lower = content.to_lowercase();
     let terms: Vec<&str> = query
         .split_whitespace()
         .map(|t| t.trim_matches(|c| c == '"' || c == '*' || c == '+' || c == '-'))
@@ -418,27 +441,34 @@ fn generate_highlights(query: &str, content: &str) -> Vec<String> {
         return vec![];
     }
 
+    let (content_lower, origin) = lowercase_with_origin(content);
+
     // Find the first matching term and extract context around it
     for term in &terms {
-        let term_lower = term.to_lowercase();
-        if let Some(pos) = content_lower.find(&term_lower) {
-            let start = pos.saturating_sub(30);
-            let end = (pos + term.len() + 30).min(content.len());
+        let (term_lower, _) = lowercase_with_origin(term);
+        let Some(pos) = content_lower.find(&term_lower) else {
+            continue;
+        };
+        // Both ends are in-bounds: `term_lower` is non-empty and matched at `pos`.
+        let match_start = origin[pos].0;
+        let match_end = origin[pos + term_lower.len() - 1].1;
 
-            // Find word boundaries
-            let snippet_start = content[..start].rfind(' ').map(|p| p + 1).unwrap_or(start);
-            let snippet_end = content[end..].find(' ').map(|p| end + p).unwrap_or(end);
+        let start = floor_char_boundary(content, match_start.saturating_sub(30));
+        let end = ceil_char_boundary(content, match_end.saturating_add(30));
 
-            let mut snippet = String::new();
-            if snippet_start > 0 {
-                snippet.push_str("...");
-            }
-            snippet.push_str(content[snippet_start..snippet_end].trim());
-            if snippet_end < content.len() {
-                snippet.push_str("...");
-            }
-            return vec![snippet];
+        // Find word boundaries
+        let snippet_start = content[..start].rfind(' ').map(|p| p + 1).unwrap_or(start);
+        let snippet_end = content[end..].find(' ').map(|p| end + p).unwrap_or(end);
+
+        let mut snippet = String::new();
+        if snippet_start > 0 {
+            snippet.push_str("...");
         }
+        snippet.push_str(content[snippet_start..snippet_end].trim());
+        if snippet_end < content.len() {
+            snippet.push_str("...");
+        }
+        return vec![snippet];
     }
 
     vec![]
@@ -610,6 +640,40 @@ mod tests {
         let highlights = generate_highlights("test", "This is a test string for testing");
         assert!(!highlights.is_empty());
         assert!(highlights[0].contains("test"));
+    }
+
+    #[test]
+    fn test_generate_highlights_case_folding_changes_byte_length() {
+        // `ẞ` (3 bytes) lowercases to `ß` (2 bytes): offsets from the lowercased
+        // text must not be applied to the original string.
+        let content = format!("{}ẞ{}target", "x".repeat(100), "a".repeat(30));
+        let highlights = generate_highlights("target", &content);
+        assert_eq!(highlights, vec![format!("...{}target", "a".repeat(30))]);
+    }
+
+    #[test]
+    fn test_generate_highlights_lengthening_fold_keeps_char_boundaries() {
+        // `İ` (2 bytes) lowercases to `i̇` (3 bytes): the lowercased text is LONGER.
+        let content = format!(
+            "{}İ {} target {}",
+            "x".repeat(40),
+            "y".repeat(5),
+            "z".repeat(40)
+        );
+        let highlights = generate_highlights("TARGET", &content);
+        assert_eq!(highlights.len(), 1);
+        assert!(highlights[0].contains("target"));
+        assert!(content.contains(highlights[0].trim_matches('.')));
+    }
+
+    #[test]
+    fn test_generate_highlights_context_window_inside_multibyte_run() {
+        // The 30-byte window edges land inside multibyte chars on both sides.
+        let content = format!("{}target{}", "é".repeat(40), "é".repeat(40));
+        let highlights = generate_highlights("target", &content);
+        assert_eq!(highlights.len(), 1);
+        assert!(highlights[0].contains("target"));
+        assert!(highlights[0].starts_with("...") && highlights[0].ends_with("..."));
     }
 
     #[test]

@@ -67,6 +67,16 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
             .unwrap_or("")
             .to_string();
 
+        // A `*.md` entry may be a symlink to the active database (G1).
+        if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(file_path) {
+            files_detail.push(json!({
+                "file": filename,
+                "status": "error",
+                "reason": e.to_string()
+            }));
+            continue;
+        }
+
         let raw = match fs::read_to_string(file_path) {
             Ok(s) => s,
             Err(e) => {

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://engram.local/schemas/quality/holdout-case.schema.json",
+  "title": "Probabilistic evaluator holdout case (advisory, non-gating)",
+  "description": "One human-labeled case for scoring advisory probabilistic evaluators. Synthetic or sanitized content only. Not consumed by any test, gate or CI job.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case_id", "split", "task", "risk_class", "claim", "evidence", "label", "labelers", "phrasings", "synthetic"],
+  "properties": {
+    "case_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$" },
+    "split": { "enum": ["dev", "holdout"] },
+    "task": { "type": "string", "minLength": 1 },
+    "risk_class": { "enum": ["low", "medium", "high"] },
+    "claim": { "type": "string", "minLength": 1 },
+    "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "label": { "enum": ["supported", "refuted", "unknown"] },
+    "labelers": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Human labeler ids. Must not include the policy author or the evaluator configurer."
+    },
+    "phrasings": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The two predefined, frozen wordings of the question."
+    },
+    "synthetic": { "const": true, "description": "Fixtures must be synthetic or sanitized; never production or customer data." }
+  }
+}

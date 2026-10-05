@@ -271,3 +271,172 @@ fn test_permission_mode_status_tool() {
 
     std::env::remove_var("ENGRAM_PERMISSION_MODE");
 }
+
+/// C1: permission modes and the persisted-workspace guard compose. The mode
+/// check runs first and does not depend on the target row (no existence
+/// oracle); a mode that allows the tool never lets a restricted principal
+/// reach a foreign row.
+#[test]
+fn test_permission_mode_and_workspace_guard_compose_on_foreign_id() {
+    use engram::auth::{PermissionSet, TokenClaims, TransportPrincipal, UserId};
+
+    let _guard = ENV_LOCK.lock();
+    std::env::remove_var("ENGRAM_PERMISSION_MODE");
+    let mut ctx = setup_test_context();
+    let foreign = dispatch(
+        &ctx,
+        "memory_create",
+        json!({"content": "foreign payroll", "workspace": "tenant-b"}),
+    )["id"]
+        .as_i64()
+        .expect("seed foreign memory");
+    let missing = foreign + 10_000;
+
+    let principal = |permissions: PermissionSet| {
+        TransportPrincipal::from_token_claims(TokenClaims {
+            user_id: UserId::from_string("agent-a"),
+            key_id: "key-agent-a".to_string(),
+            permissions,
+            namespace: Some("tenant-a".to_string()),
+            issued_at: chrono::Utc::now(),
+            expires_at: None,
+        })
+        .expect("token principal")
+    };
+
+    // Insufficient mode: identical permission_denied for foreign and missing.
+    ctx.principal = Some(principal(PermissionSet::read_only()));
+    for id in [foreign, missing] {
+        let denied = dispatch(
+            &ctx,
+            "memory_delete",
+            json!({"id": id, "workspace": "tenant-a"}),
+        );
+        assert_eq!(denied["error"]["code"], "permission_denied", "{denied}");
+        assert_eq!(denied["error"]["required_mode"], "admin");
+    }
+
+    // Per-request override narrows an admin principal before any lookup.
+    ctx.principal = Some(principal(PermissionSet::admin()));
+    let narrowed = dispatch(
+        &ctx,
+        "memory_update",
+        json!({"id": foreign, "workspace": "tenant-a", "content": "x", "_permission_mode": "read_only"}),
+    );
+    assert_eq!(narrowed["error"]["code"], "permission_denied", "{narrowed}");
+
+    // Sufficient mode: the workspace guard still refuses the foreign row.
+    let refused = dispatch(
+        &ctx,
+        "memory_delete",
+        json!({"id": foreign, "workspace": "tenant-a"}),
+    );
+    assert_eq!(refused["error"]["code"], "not_found", "{refused}");
+
+    ctx.principal = None;
+    let still_there = dispatch(&ctx, "memory_get", json!({"id": foreign}));
+    assert_eq!(still_there["content"], "foreign payroll", "{still_there}");
+}
+
+/// Every name the dispatcher routes, as written in `dispatch`.
+fn dispatchable_tool_names() -> Vec<String> {
+    let source = include_str!("../src/mcp/handlers/mod.rs");
+    let body = source
+        .split("pub fn dispatch(")
+        .nth(1)
+        .expect("dispatch function");
+    let mut names = Vec::new();
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with('"') || !trimmed.contains("=>") {
+            continue;
+        }
+        let arms = trimmed.split("=>").next().unwrap_or_default();
+        for part in arms.split('|') {
+            let name = part.trim().trim_matches('"');
+            if !name.is_empty() {
+                names.push(name.to_string());
+            }
+        }
+    }
+    assert!(
+        names.len() > 200,
+        "dispatch parse found only {}",
+        names.len()
+    );
+    names
+}
+
+/// C1 review: a dispatchable name must never skip the permission mode. Alias
+/// arms inherit the canonical tool's mode; nothing dispatchable maps to `None`.
+#[test]
+fn test_every_dispatchable_name_has_a_permission_mode() {
+    for name in dispatchable_tool_names() {
+        assert!(
+            required_mode(&name).is_some(),
+            "dispatchable tool `{name}` has no permission mode (fail-open)"
+        );
+    }
+    for (alias, canonical) in [
+        ("graph_predict_links", "memory_predict_links"),
+        ("graph_cluster_concepts", "memory_cluster_concepts"),
+        ("memory_seed", "context_seed"),
+    ] {
+        assert_eq!(required_mode(alias), required_mode(canonical), "{alias}");
+    }
+}
+
+/// C1 review: read_only mode must not let predict-links write crossrefs
+/// through either name, nor sync_state persist a version.
+#[test]
+fn test_read_only_mode_blocks_write_flags_on_read_tools_and_aliases() {
+    let _guard = ENV_LOCK.lock();
+    let ctx = setup_test_context();
+    for content in ["rust async runtime tokio", "rust async runtime tokio tasks"] {
+        dispatch(&ctx, "memory_create", json!({"content": content}));
+    }
+    let crossrefs = |ctx: &HandlerContext| -> i64 {
+        ctx.storage
+            .with_connection(|conn| {
+                Ok(conn.query_row("SELECT COUNT(*) FROM crossrefs", [], |r| r.get(0))?)
+            })
+            .expect("crossref count")
+    };
+    let before = crossrefs(&ctx);
+
+    std::env::set_var("ENGRAM_PERMISSION_MODE", "read_only");
+    let mut responses = Vec::new();
+    for tool in ["graph_predict_links", "memory_predict_links"] {
+        responses.push((
+            tool,
+            dispatch(
+                &ctx,
+                tool,
+                json!({"auto_apply": true, "min_confidence": 0.0}),
+            ),
+        ));
+    }
+    responses.push((
+        "sync_state",
+        dispatch(
+            &ctx,
+            "sync_state",
+            json!({"agent_id": "a", "update_version": 9}),
+        ),
+    ));
+    let plain = dispatch(&ctx, "memory_predict_links", json!({}));
+    std::env::remove_var("ENGRAM_PERMISSION_MODE");
+
+    for (tool, response) in responses {
+        assert_eq!(
+            response["error"]["code"], "permission_denied",
+            "{tool}: {response}"
+        );
+        assert_eq!(response["error"]["required_mode"], "scoped_write", "{tool}");
+    }
+    assert_eq!(before, crossrefs(&ctx), "crossrefs written under read_only");
+    assert_ne!(
+        plain["error"]["code"], "permission_denied",
+        "read-only prediction stays allowed: {plain}"
+    );
+}

@@ -91,7 +91,7 @@ pub const TOOLS: &[ToolDef] = &[
                     "max_messages": {"type": "integer", "default": 10, "description": "Max messages per chunk"},
                     "max_chars": {"type": "integer", "default": 8000, "description": "Max characters per chunk"},
                     "overlap": {"type": "integer", "default": 2, "description": "Overlap messages between chunks"},
-                    "ttl_days": {"type": "integer", "default": 7, "description": "TTL for transcript chunks in days"}
+                    "ttl_days": {"type": "integer", "default": 7, "minimum": 0, "maximum": 36500, "description": "TTL for transcript chunks in days; out-of-range values are rejected"}
                 },
                 "required": ["session_id", "messages"]
             }"#,

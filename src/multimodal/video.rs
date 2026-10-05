@@ -27,12 +27,17 @@
 //! # }
 //! ```
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
 use crate::error::{EngramError, Result};
+use crate::multimodal::process::{run_bounded, BoundedOutput, RunError};
 use crate::multimodal::vision::{VisionInput, VisionOptions, VisionProvider};
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -66,8 +71,97 @@ pub struct VideoMemory {
     /// descriptions.
     pub summary: String,
     /// Paths to the extracted keyframe image files inside the temp directory.
+    ///
+    /// Ownership: the files live in a private `engram_frames_*` directory that
+    /// is removed when the last clone of `frames_dir` (i.e. of this
+    /// `VideoMemory`) is dropped. Copy anything you need to keep before then;
+    /// do not store these paths beyond the lifetime of the value.
     pub frames_path: Vec<PathBuf>,
+    /// Owner of the frames directory. Cleanup happens on the last drop.
+    pub frames_dir: FramesDir,
 }
+
+/// Owner of a temporary `engram_frames_*` directory.
+///
+/// The directory is removed when the last clone is dropped, including when an
+/// error or the cancellation (drop) of the future that created it unwinds the
+/// pipeline. [`FramesDir::release`] hands ownership to the caller instead.
+#[derive(Debug, Clone)]
+pub struct FramesDir {
+    inner: Arc<FramesDirInner>,
+}
+
+#[derive(Debug)]
+struct FramesDirInner {
+    path: PathBuf,
+    keep: AtomicBool,
+}
+
+impl FramesDir {
+    fn create_in(base: Option<&Path>) -> Result<Self> {
+        let base = base
+            .map(Path::to_path_buf)
+            .unwrap_or_else(std::env::temp_dir);
+        let path = base.join(format!("engram_frames_{}", uuid::Uuid::new_v4()));
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        builder.create(&path).map_err(|e| {
+            EngramError::Storage(format!("Cannot create temp directory for frames: {e}"))
+        })?;
+        Ok(Self {
+            inner: Arc::new(FramesDirInner {
+                path,
+                keep: AtomicBool::new(false),
+            }),
+        })
+    }
+
+    /// The directory path.
+    pub fn path(&self) -> &Path {
+        &self.inner.path
+    }
+
+    /// Give up ownership: the directory is no longer removed on drop and the
+    /// caller becomes responsible for deleting it.
+    pub fn release(&self) -> PathBuf {
+        self.inner.keep.store(true, Ordering::SeqCst);
+        self.inner.path.clone()
+    }
+}
+
+impl Drop for FramesDirInner {
+    fn drop(&mut self) {
+        if self.keep.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Err(error) = std::fs::remove_dir_all(&self.path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(
+                    target = "engram::multimodal::video",
+                    path = %self.path.display(),
+                    %error,
+                    "failed to remove keyframe directory"
+                );
+            }
+        }
+    }
+}
+
+/// Default deadline for `ffprobe` / `ffmpeg -version`.
+pub const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default deadline for one `ffmpeg` keyframe extraction.
+pub const DEFAULT_EXTRACT_TIMEOUT: Duration = Duration::from_secs(300);
+/// Default deadline for one vision-provider call on one frame.
+pub const DEFAULT_VISION_FRAME_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Captured-output caps for child processes.
+const PROBE_STDOUT_CAP: usize = 4 * 1024 * 1024;
+const STDERR_CAP: usize = 16 * 1024;
 
 // ── VideoProcessor ────────────────────────────────────────────────────────────
 
@@ -81,6 +175,15 @@ pub struct VideoProcessor {
     pub(crate) ffprobe_bin: String,
     /// Override for the `ffmpeg` binary name / path.  Used in tests.
     pub(crate) ffmpeg_bin: String,
+    /// Deadline for `ffprobe` (and the availability checks).
+    pub(crate) probe_timeout: Duration,
+    /// Deadline for `ffmpeg` keyframe extraction.
+    pub(crate) extract_timeout: Duration,
+    /// Deadline for each vision-provider call.
+    pub(crate) vision_timeout: Duration,
+    /// Parent of the `engram_frames_*` directory; `None` = system temp dir.
+    /// Tests point it at a private directory.
+    pub(crate) frames_base: Option<PathBuf>,
 }
 
 impl Default for VideoProcessor {
@@ -95,7 +198,33 @@ impl VideoProcessor {
         Self {
             ffprobe_bin: "ffprobe".to_string(),
             ffmpeg_bin: "ffmpeg".to_string(),
+            probe_timeout: DEFAULT_PROBE_TIMEOUT,
+            extract_timeout: DEFAULT_EXTRACT_TIMEOUT,
+            vision_timeout: DEFAULT_VISION_FRAME_TIMEOUT,
+            frames_base: None,
         }
+    }
+
+    /// Override the deadlines for `ffprobe`, `ffmpeg` extraction and each
+    /// vision call. A child that outlives its deadline is killed and reaped.
+    pub fn with_timeouts(mut self, probe: Duration, extract: Duration, vision: Duration) -> Self {
+        self.probe_timeout = probe;
+        self.extract_timeout = extract;
+        self.vision_timeout = vision;
+        self
+    }
+
+    fn run(&self, bin: &str, command: &mut Command, timeout: Duration) -> Result<BoundedOutput> {
+        run_bounded(command, timeout, PROBE_STDOUT_CAP, STDERR_CAP).map_err(|e| match e {
+            RunError::Spawn(e) => EngramError::Config(format!(
+                "Failed to run {bin}: {e}. Ensure {bin} is installed and on PATH."
+            )),
+            RunError::Timeout(d) => EngramError::Internal(format!(
+                "{bin} timed out after {} ms and was killed",
+                d.as_millis()
+            )),
+            RunError::Wait(e) => EngramError::Internal(format!("{bin} wait failed: {e}")),
+        })
     }
 
     /// Check that both `ffprobe` and `ffmpeg` are available on `PATH`.
@@ -104,14 +233,15 @@ impl VideoProcessor {
     /// binary cannot be found.
     pub fn check_availability(&self) -> Result<()> {
         for bin in [&self.ffprobe_bin, &self.ffmpeg_bin] {
-            let status = Command::new(bin)
-                .arg("-version")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status();
+            let status = run_bounded(
+                Command::new(bin).arg("-version"),
+                self.probe_timeout,
+                STDERR_CAP,
+                STDERR_CAP,
+            );
 
             match status {
-                Ok(s) if s.success() => {}
+                Ok(out) if out.status.success() => {}
                 _ => {
                     return Err(EngramError::Config(format!(
                         "'{bin}' not found or not executable. \
@@ -158,8 +288,9 @@ impl VideoProcessor {
         let file_hash = hash_file(path)?;
 
         // ffprobe JSON output
-        let output = Command::new(&self.ffprobe_bin)
-            .args([
+        let output = self.run(
+            &self.ffprobe_bin,
+            Command::new(&self.ffprobe_bin).args([
                 "-v",
                 "quiet",
                 "-print_format",
@@ -167,14 +298,9 @@ impl VideoProcessor {
                 "-show_streams",
                 "-show_format",
                 &path.to_string_lossy(),
-            ])
-            .output()
-            .map_err(|e| {
-                EngramError::Config(format!(
-                    "Failed to run ffprobe: {e}. \
-                     Ensure ffprobe is installed and on PATH."
-                ))
-            })?;
+            ]),
+            self.probe_timeout,
+        )?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -232,8 +358,12 @@ impl VideoProcessor {
 
     /// Extract `count` evenly-spaced keyframes from a video file using `ffmpeg`.
     ///
-    /// Frames are saved as PNG files (`frame_001.png`, …) inside a temporary
-    /// directory.  The caller owns the directory via the returned paths.
+    /// Frames are saved as PNG files (`frame_001.png`, …) inside a private
+    /// temporary directory. **Ownership transfers to the caller**: the
+    /// directory is not removed by this call, so the caller must delete the
+    /// parent directory of the returned paths once the last consumer is done.
+    /// Prefer [`extract_keyframes_owned`](Self::extract_keyframes_owned), which
+    /// returns a guard that cleans up automatically.
     ///
     /// The filter used is:
     /// ```text
@@ -244,11 +374,28 @@ impl VideoProcessor {
     /// # Errors
     ///
     /// - `EngramError::Config` — `ffmpeg` binary not found.
-    /// - `EngramError::InvalidInput` — path does not exist, `count` is zero, or
-    ///   `ffmpeg` fails.
+    /// - `EngramError::Internal` — `ffmpeg`/`ffprobe` exceeded its deadline
+    ///   (killed and reaped).
+    /// - `EngramError::InvalidInput` — path does not exist, `count` is zero,
+    ///   `ffmpeg` fails, or it produced no frames.
     /// - `EngramError::Storage` — cannot create temp directory or list output
     ///   files.
+    ///
+    /// On every error the temporary directory has already been removed.
     pub fn extract_keyframes(&self, path: &Path, count: usize) -> Result<Vec<PathBuf>> {
+        let (dir, frames) = self.extract_keyframes_owned(path, count)?;
+        dir.release();
+        Ok(frames)
+    }
+
+    /// Like [`extract_keyframes`](Self::extract_keyframes) but returns the
+    /// [`FramesDir`] owner: the directory is removed when the last clone is
+    /// dropped (also on error paths and when the caller is cancelled).
+    pub fn extract_keyframes_owned(
+        &self,
+        path: &Path,
+        count: usize,
+    ) -> Result<(FramesDir, Vec<PathBuf>)> {
         if count == 0 {
             return Err(EngramError::InvalidInput(
                 "count must be greater than 0".to_string(),
@@ -266,22 +413,14 @@ impl VideoProcessor {
         let meta = self.extract_metadata(path)?;
         let interval = (meta.duration_secs / count as f64).max(1.0);
 
-        // Create a unique temp directory for frames using stdlib primitives
-        let tmp_dir = {
-            let base = std::env::temp_dir();
-            let unique = uuid::Uuid::new_v4().to_string();
-            let dir = base.join(format!("engram_frames_{unique}"));
-            std::fs::create_dir_all(&dir).map_err(|e| {
-                EngramError::Storage(format!("Cannot create temp directory for frames: {e}"))
-            })?;
-            dir
-        };
-
-        let frame_pattern = tmp_dir.join("frame_%03d.png");
+        // From here on `dir` owns the directory: every early return removes it.
+        let dir = FramesDir::create_in(self.frames_base.as_deref())?;
+        let frame_pattern = dir.path().join("frame_%03d.png");
         let fps_filter = format!("fps=1/{interval:.6}");
 
-        let output = Command::new(&self.ffmpeg_bin)
-            .args([
+        let output = self.run(
+            &self.ffmpeg_bin,
+            Command::new(&self.ffmpeg_bin).args([
                 "-i",
                 &path.to_string_lossy(),
                 "-vf",
@@ -289,21 +428,12 @@ impl VideoProcessor {
                 "-vsync",
                 "vfr",
                 &frame_pattern.to_string_lossy(),
-            ])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
-            .output()
-            .map_err(|e| {
-                EngramError::Config(format!(
-                    "Failed to run ffmpeg: {e}. \
-                     Ensure ffmpeg is installed and on PATH."
-                ))
-            })?;
+            ]),
+            self.extract_timeout,
+        )?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            // Clean up the temp directory on failure
-            let _ = std::fs::remove_dir_all(&tmp_dir);
             return Err(EngramError::InvalidInput(format!(
                 "ffmpeg failed for '{}': {stderr}",
                 path.display()
@@ -311,7 +441,7 @@ impl VideoProcessor {
         }
 
         // Collect generated frame files, sorted by name
-        let mut frames: Vec<PathBuf> = std::fs::read_dir(&tmp_dir)
+        let mut frames: Vec<PathBuf> = std::fs::read_dir(dir.path())
             .map_err(|e| EngramError::Storage(format!("Cannot read temp directory: {e}")))?
             .filter_map(|entry| {
                 let entry = entry.ok()?;
@@ -326,7 +456,14 @@ impl VideoProcessor {
 
         frames.sort();
 
-        Ok(frames)
+        if frames.is_empty() {
+            return Err(EngramError::InvalidInput(format!(
+                "ffmpeg produced no frames for '{}'",
+                path.display()
+            )));
+        }
+
+        Ok((dir, frames))
     }
 
     /// Full pipeline: extract metadata → extract keyframes → describe each frame
@@ -348,7 +485,10 @@ impl VideoProcessor {
 
         let metadata = self.extract_metadata(path)?;
 
-        let frames_path = self.extract_keyframes(path, DEFAULT_KEYFRAME_COUNT)?;
+        // `frames_dir` owns the temp directory for the rest of the pipeline: a
+        // vision failure/timeout, or dropping this future, removes it.
+        let (frames_dir, frames_path) =
+            self.extract_keyframes_owned(path, DEFAULT_KEYFRAME_COUNT)?;
 
         // Describe each keyframe using the vision provider
         let mut keyframe_descriptions = Vec::with_capacity(frames_path.len());
@@ -370,7 +510,24 @@ impl VideoProcessor {
                 max_tokens: Some(256),
             };
 
-            let description = vision.describe_image(input, opts).await?;
+            let description =
+                tokio::time::timeout(self.vision_timeout, vision.describe_image(input, opts))
+                    .await
+                    .map_err(|_| {
+                        EngramError::Internal(format!(
+                            "vision provider timed out after {} ms on frame {} of {}",
+                            self.vision_timeout.as_millis(),
+                            keyframe_descriptions.len() + 1,
+                            frames_path.len()
+                        ))
+                    })?
+                    .map_err(|e| {
+                        EngramError::Internal(format!(
+                            "vision provider failed on frame {} of {}: {e}",
+                            keyframe_descriptions.len() + 1,
+                            frames_path.len()
+                        ))
+                    })?;
             keyframe_descriptions.push(description.text);
         }
 
@@ -382,6 +539,7 @@ impl VideoProcessor {
             keyframe_descriptions,
             summary,
             frames_path,
+            frames_dir,
         })
     }
 }
@@ -390,10 +548,19 @@ impl VideoProcessor {
 
 /// Compute SHA-256 hex digest of a file, returning `"sha256:<hex>"`.
 fn hash_file(path: &Path) -> Result<String> {
-    let bytes = std::fs::read(path)
-        .map_err(|e| EngramError::Storage(format!("Cannot read '{}': {e}", path.display())))?;
+    // Streamed: a multi-gigabyte video must not be loaded into memory.
+    let read_err =
+        |e: std::io::Error| EngramError::Storage(format!("Cannot read '{}': {e}", path.display()));
+    let mut file = std::fs::File::open(path).map_err(read_err)?;
     let mut hasher = Sha256::new();
-    hasher.update(&bytes);
+    let mut chunk = vec![0_u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut chunk).map_err(read_err)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&chunk[..n]);
+    }
     Ok(format!("sha256:{}", hex::encode(hasher.finalize())))
 }
 
@@ -430,6 +597,9 @@ fn build_summary(descriptions: &[String], meta: &VideoMetadata) -> String {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(all(test, unix))]
+mod failure_tests;
 
 #[cfg(test)]
 mod tests {
@@ -722,6 +892,7 @@ mod tests {
         let processor = VideoProcessor {
             ffprobe_bin: "this_binary_does_not_exist_engram_ffprobe".to_string(),
             ffmpeg_bin: "this_binary_does_not_exist_engram_ffmpeg".to_string(),
+            ..VideoProcessor::new()
         };
         let err = processor.check_availability().unwrap_err();
         assert!(

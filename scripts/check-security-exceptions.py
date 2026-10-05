@@ -32,6 +32,7 @@ AUDIT_WARNING: Final = "cargo-audit:allowed-warning"
 DENY_IGNORE: Final = "cargo-deny:ignore"
 ALLOWED_TOOLS: Final = frozenset({AUDIT_IGNORE, AUDIT_WARNING, DENY_IGNORE})
 PDF_ADVISORY: Final = "RUSTSEC-2026-0192"
+MAX_HORIZON_DAYS: Final = 90
 
 
 @dataclass(frozen=True)  # noqa: SLOTS_OK
@@ -230,6 +231,11 @@ def validate_records(
     for record in records:
         if record.expires < today:
             errors.append(f"{record.advisory}: expired on {record.expires.isoformat()}")
+        if record.expires > today + timedelta(days=MAX_HORIZON_DAYS):
+            errors.append(
+                f"{record.advisory}: expiry {record.expires.isoformat()} is more than "
+                f"{MAX_HORIZON_DAYS} days ahead; renewals need fresh review"
+            )
         if not record.owner.strip():
             errors.append(f"{record.advisory}: missing owner")
         if AUDIT_WARNING in record.tools and AUDIT_IGNORE in record.tools:

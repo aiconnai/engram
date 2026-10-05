@@ -17,6 +17,7 @@
 //! - `TransactionalBackend` - For backends that support ACID transactions
 //! - `CloudSyncBackend` - For backends with cloud synchronization
 
+mod active_artifacts;
 pub mod agent_registry;
 mod audit;
 pub mod auto_linker;
@@ -40,6 +41,8 @@ pub mod migrations;
 pub mod operational_context;
 pub mod pending_injections;
 pub mod queries;
+#[cfg(test)]
+mod redaction_tests;
 pub mod scope_grants;
 pub mod scoping;
 pub mod sqlite_backend;
@@ -57,6 +60,7 @@ pub use crate::context::{
     ArtifactAccessPolicy, ArtifactRedactionStatus, ArtifactRetentionPolicy,
     ArtifactRetrievalRequest, ContextArtifact, NewContextArtifact, RetrievedContextArtifact,
 };
+pub use active_artifacts::ActiveDbSnapshot;
 pub use agent_registry::{
     deregister_agent, get_agent, get_agents_in_namespace, heartbeat_agent, list_agents,
     register_agent, update_agent_capabilities, Agent, RegisterAgentInput,

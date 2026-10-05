@@ -139,7 +139,11 @@ impl NaturalLanguageParser {
         let edge_type = self.extract_edge_type(&input_lower);
 
         // Extract date filter
-        let date_filter = self.extract_date_filter(&input_lower);
+        let (date_filter, ignored_date_filter) = self.extract_date_filter(&input_lower);
+        let mut params = HashMap::new();
+        if let Some(reason) = ignored_date_filter {
+            params.insert("ignored_date_filter".to_string(), reason);
+        }
 
         // Extract limit
         let limit = self.extract_limit(&input_lower);
@@ -156,7 +160,7 @@ impl NaturalLanguageParser {
             limit,
             original_input: input.to_string(),
             confidence,
-            params: HashMap::new(),
+            params,
         }
     }
 
@@ -386,14 +390,26 @@ impl NaturalLanguageParser {
     }
 
     /// Extract date filter from input
-    fn extract_date_filter(&self, input: &str) -> Option<DateFilter> {
+    ///
+    /// The second value is a human-readable reason when a "last N ..." lookback
+    /// was recognised but is out of range: the filter is then NOT applied and
+    /// the caller is told (see `ParsedCommand::params["ignored_date_filter"]`)
+    /// instead of silently searching everything.
+    fn extract_date_filter(&self, input: &str) -> (Option<DateFilter>, Option<String>) {
         let mut after = None;
         let mut before = None;
+        let mut ignored = None;
 
         // Look for "last X days/weeks"
         if input.contains("last") {
             if let Some(days) = self.extract_duration_days(input) {
-                after = Some(Utc::now() - chrono::Duration::days(days));
+                // Out-of-range lookbacks (e.g. "last 9223372036854775807 days") would
+                // panic inside chrono: do not apply a filter, and say so.
+                after = chrono::Duration::try_days(days)
+                    .and_then(|delta| Utc::now().checked_sub_signed(delta));
+                if after.is_none() {
+                    ignored = Some(format!("lookback of {days} days is out of range"));
+                }
             }
         }
 
@@ -418,9 +434,9 @@ impl NaturalLanguageParser {
         }
 
         if after.is_some() || before.is_some() {
-            Some(DateFilter { after, before })
+            (Some(DateFilter { after, before }), ignored)
         } else {
-            None
+            (None, ignored)
         }
     }
 
@@ -432,9 +448,9 @@ impl NaturalLanguageParser {
                 if input.contains("day") {
                     return Some(num);
                 } else if input.contains("week") {
-                    return Some(num * 7);
+                    return Some(num.saturating_mul(7));
                 } else if input.contains("month") {
-                    return Some(num * 30);
+                    return Some(num.saturating_mul(30));
                 }
             }
         }
@@ -545,5 +561,27 @@ mod tests {
 
         let cmd = parser.parse("What is the database password?");
         assert_eq!(cmd.command_type, CommandType::Search);
+    }
+
+    #[test]
+    fn huge_lookback_does_not_panic() {
+        let parser = NaturalLanguageParser::new();
+        for input in [
+            "search notes from the last 9223372036854775807 days",
+            "search notes from the last 9223372036854775807 weeks",
+            "search notes from the last 9223372036854775807 months",
+            "search notes from the last 400000000000 days",
+        ] {
+            let cmd = parser.parse(input);
+            assert!(cmd.date_filter.is_none(), "{input}");
+            let reason = cmd
+                .params
+                .get("ignored_date_filter")
+                .unwrap_or_else(|| panic!("ignored filter must be reported: {input}"));
+            assert!(reason.contains("out of range"), "{reason}");
+        }
+        let ok = parser.parse("search notes from the last 7 days");
+        assert!(!ok.params.contains_key("ignored_date_filter"));
+        assert!(ok.date_filter.and_then(|f| f.after).is_some());
     }
 }

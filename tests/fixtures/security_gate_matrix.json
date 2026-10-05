@@ -16,11 +16,14 @@
     "push": [],
     "schedule": [],
     "workflow_dispatch": [],
-    "not_applicable_fixture": ["semgrep-security"]
+    "not_applicable_fixture": [
+      "semgrep-security"
+    ]
   },
   "scenarios": [
     {
       "name": "all-security-checks-pass",
+      "case": "all-pass",
       "results": {
         "audit": "success",
         "deny": "success",
@@ -31,10 +34,103 @@
         "agentshield-security": "success"
       },
       "allowed_skips": [],
-      "expected": "success"
+      "expected": "pass"
+    },
+    {
+      "name": "constituent-failure-blocks",
+      "case": "constituent-failure",
+      "results": {
+        "audit": "success",
+        "deny": "success",
+        "security-exceptions": "success",
+        "codeql-security": "failure",
+        "semgrep-security": "success",
+        "gitleaks-security": "success",
+        "agentshield-security": "success"
+      },
+      "allowed_skips": [],
+      "expected": "block"
+    },
+    {
+      "name": "cancelled-constituent-blocks",
+      "case": "cancelled",
+      "results": {
+        "audit": "success",
+        "deny": "success",
+        "security-exceptions": "success",
+        "codeql-security": "success",
+        "semgrep-security": "success",
+        "gitleaks-security": "cancelled",
+        "agentshield-security": "success"
+      },
+      "allowed_skips": [],
+      "expected": "block"
+    },
+    {
+      "name": "timed-out-constituent-blocks",
+      "case": "timed-out",
+      "results": {
+        "audit": "success",
+        "deny": "success",
+        "security-exceptions": "success",
+        "codeql-security": "success",
+        "semgrep-security": "success",
+        "gitleaks-security": "success",
+        "agentshield-security": "timed_out"
+      },
+      "allowed_skips": [],
+      "expected": "block"
+    },
+    {
+      "name": "missing-constituent-blocks",
+      "case": "missing",
+      "results": {
+        "audit": "success",
+        "security-exceptions": "success",
+        "codeql-security": "success",
+        "semgrep-security": "success",
+        "gitleaks-security": "success",
+        "agentshield-security": "success"
+      },
+      "allowed_skips": [],
+      "expected": "block"
+    },
+    {
+      "name": "unauthorized-skip-blocks",
+      "case": "unauthorized-skip",
+      "results": {
+        "audit": "success",
+        "deny": "success",
+        "security-exceptions": "success",
+        "codeql-security": "success",
+        "semgrep-security": "skipped",
+        "gitleaks-security": "success",
+        "agentshield-security": "success"
+      },
+      "allowed_skips": [],
+      "expected": "block"
+    },
+    {
+      "name": "skip-of-a-different-job-than-the-allowed-one-blocks",
+      "case": "unauthorized-skip",
+      "event": "not_applicable_fixture",
+      "results": {
+        "audit": "skipped",
+        "deny": "success",
+        "security-exceptions": "success",
+        "codeql-security": "success",
+        "semgrep-security": "success",
+        "gitleaks-security": "success",
+        "agentshield-security": "success"
+      },
+      "allowed_skips": [
+        "semgrep-security"
+      ],
+      "expected": "block"
     },
     {
       "name": "legitimate-event-skip-is-neutral",
+      "case": "allowed-skip-neutral",
       "event": "not_applicable_fixture",
       "results": {
         "audit": "success",
@@ -45,8 +141,10 @@
         "gitleaks-security": "success",
         "agentshield-security": "success"
       },
-      "allowed_skips": ["semgrep-security"],
-      "expected": "success"
+      "allowed_skips": [
+        "semgrep-security"
+      ],
+      "expected": "neutral"
     }
   ]
 }

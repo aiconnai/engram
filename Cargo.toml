@@ -247,7 +247,7 @@ clap = { version = "4.4", features = ["derive", "env"] }
 thiserror = "1.0"
 
 # Utilities
-dirs = "5.0"
+dirs = "6.0"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.6", features = ["v4", "serde"] }
 parking_lot = "0.12"

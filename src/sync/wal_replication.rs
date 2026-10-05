@@ -5,20 +5,31 @@
 //! - Frame delta reader for extracting dirty frames appended to `.db-wal`.
 //! - Compressed, SHA-256 checksummed delta package serializer.
 //! - `WalReplicationStreamer` for tracking replication offsets and computing lag.
-//! - `WalRecoveryEngine` for point-in-time recovery replaying delta frames.
+//! - `WalRecoveryEngine` (re-exported from `wal_recovery`) for point-in-time
+//!   recovery replaying delta frames.
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use flate2::read::{GzDecoder, GzEncoder};
 use flate2::Compression;
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::EngramError;
+
+use super::wal_chain::chain_step;
+pub use super::wal_chain::{
+    stored_checksum, validate_frame_order, validate_pack_chain, verify_header_bytes,
+    wal_frame_checksum, WalChainContext,
+};
+pub use super::wal_recovery::{RecoveryOptions, RecoveryReport, WalRecoveryEngine};
+pub use super::wal_replay_guard::{
+    preflight_replay, ReplayLimits, ReplayPreflight, DEFAULT_MAX_REPLAY_TARGET_BYTES,
+    MAX_ALLOWED_DB_PAGES, MAX_WAL_PAGE_SIZE, MIN_WAL_PAGE_SIZE,
+};
 
 /// SQLite WAL magic numbers
 pub const WAL_MAGIC_BE: u32 = 0x377f0682;
@@ -48,6 +59,8 @@ pub enum WalReplicationError {
     IntegrityCheckFailed(String),
     #[error("Recovery error: {0}")]
     RecoveryError(String),
+    #[error("Replay budget exceeded: {0}")]
+    ReplayBudgetExceeded(String),
     #[error("Replication error: {0}")]
     Other(String),
 }
@@ -351,6 +364,10 @@ pub struct WalDelta {
     pub total_wal_frames: u32,
     pub checkpoint_seq: u32,
     pub frames: Vec<WalFrame>,
+    /// Stored running checksum preceding `start_frame` (seed of the chain),
+    /// when the reader verified the chain up to that point.
+    #[serde(default)]
+    pub chain_seed: Option<(u32, u32)>,
 }
 
 /// Extracts delta frames from a `.db-wal` file.
@@ -383,6 +400,12 @@ impl WalDeltaReader {
     }
 
     /// Extract dirty frames from raw WAL bytes.
+    ///
+    /// Follows SQLite's recovery semantics: the header checksum must verify
+    /// (otherwise `InvalidHeader`), and the valid WAL ends at the first frame
+    /// whose salts or checksum chain do not match. Frames after that point
+    /// (stale or torn writes) are never returned. The chain verifies integrity
+    /// of the WAL bytes, not authenticity of whoever produced them.
     pub fn extract_delta_frames_from_bytes(
         bytes: &[u8],
         from_frame: u32,
@@ -396,35 +419,40 @@ impl WalDeltaReader {
         }
 
         let header = WalHeader::parse(&bytes[0..WAL_HEADER_SIZE])?;
+        let header_seed = verify_header_bytes(&bytes[0..WAL_HEADER_SIZE])?;
         let frame_size = WAL_FRAME_HEADER_SIZE + header.page_size as usize;
-        let total_frames = ((bytes.len() - WAL_HEADER_SIZE) / frame_size) as u32;
+        let total_frames =
+            u32::try_from((bytes.len() - WAL_HEADER_SIZE) / frame_size).unwrap_or(u32::MAX);
+        let max_frames = max_frames.unwrap_or(usize::MAX);
 
         let mut frames = Vec::new();
-        let start_idx = (from_frame + 1).max(1);
-        let end_idx = match max_frames {
-            Some(max) => (start_idx + max as u32 - 1).min(total_frames),
-            None => total_frames,
-        };
+        let mut running = header_seed;
+        let mut chain_seed = (from_frame == 0).then_some(header_seed);
+        for idx in 1..=total_frames {
+            if frames.len() >= max_frames {
+                break;
+            }
+            let offset = WAL_HEADER_SIZE + (idx as usize - 1) * frame_size;
+            let frame = WalFrame::parse(
+                &bytes[offset..offset + frame_size],
+                idx,
+                header.page_size,
+                header.is_little_endian_checksum,
+            )?;
 
-        if start_idx <= total_frames {
-            for idx in start_idx..=end_idx {
-                let offset = WAL_HEADER_SIZE + (idx as usize - 1) * frame_size;
-                if offset + frame_size > bytes.len() {
-                    break;
-                }
-                let frame_bytes = &bytes[offset..offset + frame_size];
-                let frame = WalFrame::parse(
-                    frame_bytes,
-                    idx,
-                    header.page_size,
-                    header.is_little_endian_checksum,
-                )?;
-
-                // If salts do not match header salts, frame is from an older checkpoint cycle
-                if frame.salt1 != header.salt1 || frame.salt2 != header.salt2 {
-                    break;
-                }
-
+            // Salt mismatch: frame belongs to an older checkpoint cycle.
+            if frame.salt1 != header.salt1 || frame.salt2 != header.salt2 {
+                break;
+            }
+            // Chain mismatch: end of the valid WAL (torn or stale frame).
+            let Some(next) = chain_step(&frame, header.magic, running) else {
+                break;
+            };
+            running = next;
+            if idx == from_frame {
+                chain_seed = Some(running);
+            }
+            if idx > from_frame {
                 frames.push(frame);
             }
         }
@@ -439,6 +467,7 @@ impl WalDeltaReader {
             total_wal_frames: total_frames,
             checkpoint_seq: header.checkpoint_seq,
             frames,
+            chain_seed,
         })
     }
 }
@@ -467,6 +496,10 @@ pub struct WalDeltaPack {
     pub checksum_sha256: String,
     /// Serialized (and optionally gzip-compressed) frames payload
     pub payload: Vec<u8>,
+    /// SQLite checksum-chain context required to verify frames at replay.
+    /// Packs without it (pre-C2 format) are refused by recovery.
+    #[serde(default)]
+    pub chain: Option<WalChainContext>,
 }
 
 impl WalDeltaPack {
@@ -518,10 +551,33 @@ impl WalDeltaPack {
             compressed: compress,
             checksum_sha256,
             payload,
+            chain: Self::chain_context(delta),
+        })
+    }
+
+    /// Chain context for a delta: the reader's verified seed, or the header
+    /// checksum when the delta starts at frame 1. `None` makes the pack
+    /// unreplayable (recovery refuses packs it cannot verify).
+    fn chain_context(delta: &WalDelta) -> Option<WalChainContext> {
+        let header = &delta.header;
+        let seed = delta.chain_seed.or_else(|| {
+            (delta.start_frame == 1).then(|| {
+                let le = header.is_little_endian_checksum;
+                (
+                    stored_checksum(header.checksum1, le),
+                    stored_checksum(header.checksum2, le),
+                )
+            })
+        })?;
+        Some(WalChainContext {
+            magic: header.magic,
+            seed,
         })
     }
 
     /// Verify the SHA-256 checksum of this package payload.
+    ///
+    /// This is an integrity check only: it does not authenticate the emitter.
     pub fn verify_checksum(&self) -> std::result::Result<(), WalReplicationError> {
         let mut hasher = Sha256::new();
         hasher.update(&self.payload);
@@ -540,41 +596,56 @@ impl WalDeltaPack {
         Self::unpack_frames_with_limit(self, Self::DEFAULT_MAX_DECOMPRESSED_BYTES)
     }
 
-    /// Default decompression limit (64 MiB).
-    const DEFAULT_MAX_DECOMPRESSED_BYTES: u64 = 64 * 1024 * 1024;
+    /// Default per-pack decompression limit (64 MiB).
+    pub(crate) const DEFAULT_MAX_DECOMPRESSED_BYTES: u64 = 64 * 1024 * 1024;
 
     /// Unpack frames with a configurable decompression byte limit.
     fn unpack_frames_with_limit(
         &self,
         max_decompressed_bytes: u64,
     ) -> std::result::Result<Vec<WalFrame>, WalReplicationError> {
+        match self.unpack_frames_counted(max_decompressed_bytes)? {
+            Some((frames, _)) => Ok(frames),
+            None => Err(WalReplicationError::DecompressionFailed(format!(
+                "Decompressed payload exceeds {} byte limit",
+                max_decompressed_bytes
+            ))),
+        }
+    }
+
+    /// Unpack frames, returning them with the decoded payload size, or
+    /// `None` when the decoded payload would exceed `max_decoded_bytes`
+    /// (decoding stops at `max_decoded_bytes + 1`; uncompressed payloads are
+    /// measured directly).
+    pub(crate) fn unpack_frames_counted(
+        &self,
+        max_decoded_bytes: u64,
+    ) -> std::result::Result<Option<(Vec<WalFrame>, u64)>, WalReplicationError> {
         use std::io::Read;
 
         self.verify_checksum()?;
 
         let raw_json = if self.compressed {
             let decoder = GzDecoder::new(&self.payload[..]);
-            let mut limited = decoder.take(max_decompressed_bytes + 1);
+            let mut limited = decoder.take(max_decoded_bytes.saturating_add(1));
             let mut decompressed = Vec::new();
             limited.read_to_end(&mut decompressed).map_err(|e| {
                 WalReplicationError::DecompressionFailed(format!("Decompression failed: {}", e))
             })?;
-            if decompressed.len() as u64 > max_decompressed_bytes {
-                return Err(WalReplicationError::DecompressionFailed(format!(
-                    "Decompressed payload exceeds {} byte limit",
-                    max_decompressed_bytes
-                )));
-            }
             decompressed
         } else {
             self.payload.clone()
         };
+        let decoded_len = raw_json.len() as u64;
+        if decoded_len > max_decoded_bytes {
+            return Ok(None);
+        }
 
         let frames: Vec<WalFrame> = serde_json::from_slice(&raw_json).map_err(|e| {
             WalReplicationError::SerializationFailed(format!("Failed to deserialize frames: {}", e))
         })?;
 
-        Ok(frames)
+        Ok(Some((frames, decoded_len)))
     }
 
     /// Serialize the entire package to bytes (JSON format).
@@ -633,6 +704,9 @@ pub struct WalReplicationStreamer {
     last_replicated_frame: u32,
     last_checkpoint_seq: u32,
     last_salt: (u32, u32),
+    /// True once a WAL header has been observed. `last_checkpoint_seq == 0` is a
+    /// legitimate value (never checkpointed), so it cannot double as "no baseline".
+    baseline_seen: bool,
     last_replicated_at: Option<DateTime<Utc>>,
     total_packs_replicated: u64,
     total_bytes_replicated: u64,
@@ -653,6 +727,7 @@ impl WalReplicationStreamer {
             last_replicated_frame: 0,
             last_checkpoint_seq: 0,
             last_salt: (0, 0),
+            baseline_seen: false,
             last_replicated_at: None,
             total_packs_replicated: 0,
             total_bytes_replicated: 0,
@@ -675,7 +750,14 @@ impl WalReplicationStreamer {
         self
     }
 
-    /// Reset replication frame pointer.
+    /// Reset the replication frame pointer.
+    ///
+    /// Only the frame number is restored; the WAL generation identity
+    /// (checkpoint sequence and salts) is not. After a restart this is a safe
+    /// resume only if the WAL was not checkpointed/reset while the process was
+    /// down; otherwise frames of the new generation numbered below `frame`
+    /// would be skipped. When in doubt resume from frame 0 and de-duplicate
+    /// downstream.
     pub fn reset_offset(&mut self, frame: u32) {
         self.last_replicated_frame = frame;
     }
@@ -769,6 +851,19 @@ impl WalReplicationStreamer {
             return Ok(None);
         }
 
+        // A WAL shorter than its header (e.g. just truncated by a checkpoint)
+        // holds no frames: nothing to replicate, and not an error. The next
+        // generation is detected by its new salts / checkpoint sequence.
+        match fs::metadata(&self.wal_path) {
+            Ok(m) if m.len() < WAL_HEADER_SIZE as u64 => return Ok(None),
+            Ok(_) => {}
+            Err(e) => {
+                let e = WalReplicationError::from(e);
+                self.last_error = Some(e.to_string());
+                return Err(e);
+            }
+        }
+
         let header = match WalDeltaReader::read_header(&self.wal_path) {
             Ok(h) => h,
             Err(e) => {
@@ -778,13 +873,14 @@ impl WalReplicationStreamer {
         };
 
         // Check if database was checkpointed and salts/checkpoint seq reset
-        if self.last_checkpoint_seq != 0
+        if self.baseline_seen
             && (header.checkpoint_seq != self.last_checkpoint_seq
                 || (header.salt1, header.salt2) != self.last_salt)
         {
             self.last_replicated_frame = 0;
         }
 
+        self.baseline_seen = true;
         self.last_checkpoint_seq = header.checkpoint_seq;
         self.last_salt = (header.salt1, header.salt2);
 
@@ -820,240 +916,6 @@ impl WalReplicationStreamer {
         self.last_error = None;
 
         Ok(Some(pack))
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 5. WalRecoveryEngine: Point-In-Time Recovery (PITR) & Replay
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Configuration options for point-in-time recovery.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecoveryOptions {
-    /// Target frame sequence index to stop recovery at (inclusive)
-    pub target_frame: Option<u32>,
-    /// Target timestamp (UTC) to stop recovery at
-    pub target_time: Option<DateTime<Utc>>,
-    /// If true, only apply changes up to the last commit frame boundary
-    pub commit_boundary_only: bool,
-    /// Verify database integrity after recovery using PRAGMA integrity_check
-    pub verify_integrity: bool,
-}
-
-impl Default for RecoveryOptions {
-    fn default() -> Self {
-        Self {
-            target_frame: None,
-            target_time: None,
-            commit_boundary_only: true,
-            verify_integrity: true,
-        }
-    }
-}
-
-/// Recovery execution report.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecoveryReport {
-    pub success: bool,
-    pub target_db_path: String,
-    pub frames_replayed: usize,
-    pub commits_applied: usize,
-    pub last_frame_applied: Option<u32>,
-    pub final_db_size_bytes: u64,
-    pub integrity_check: String,
-    pub duration_ms: u64,
-    pub error: Option<String>,
-}
-
-/// Point-in-time recovery engine for SQLite databases.
-pub struct WalRecoveryEngine;
-
-impl WalRecoveryEngine {
-    /// Replay an ordered list of `WalFrame`s directly into a target SQLite database file.
-    pub fn replay_frames_to_db(
-        target_db_path: &Path,
-        page_size: u32,
-        frames: &[WalFrame],
-        options: &RecoveryOptions,
-    ) -> std::result::Result<RecoveryReport, WalReplicationError> {
-        let start_time = std::time::Instant::now();
-
-        if let Some(parent) = target_db_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        let mut candidate_frames: Vec<&WalFrame> = frames.iter().collect();
-
-        // 1. Filter by target frame limit
-        if let Some(max_frame) = options.target_frame {
-            candidate_frames.retain(|f| f.frame_index <= max_frame);
-        }
-
-        // 2. Filter to last commit boundary if requested
-        if options.commit_boundary_only && !candidate_frames.is_empty() {
-            if let Some(last_commit_idx) = candidate_frames.iter().rposition(|f| f.is_commit()) {
-                candidate_frames.truncate(last_commit_idx + 1);
-            } else {
-                // No commit frame found; if commit_boundary_only is strictly requested, apply none
-                candidate_frames.clear();
-            }
-        }
-
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(target_db_path)?;
-
-        let mut commits_applied = 0;
-        let mut last_frame_applied = None;
-
-        const MAX_ALLOWED_DB_PAGES: u32 = 100_000_000;
-
-        for frame in &candidate_frames {
-            if frame.page_number == 0 || frame.page_number > MAX_ALLOWED_DB_PAGES {
-                return Err(WalReplicationError::InvalidFrame {
-                    index: frame.page_number,
-                    reason: format!("invalid frame page_number: {}", frame.page_number),
-                });
-            }
-            let offset = (frame.page_number as u64 - 1) * page_size as u64;
-            file.seek(SeekFrom::Start(offset))?;
-            file.write_all(&frame.data)?;
-
-            if frame.is_commit() {
-                commits_applied += 1;
-                if frame.db_size_pages > 0 {
-                    let expected_len = frame.db_size_pages as u64 * page_size as u64;
-                    file.set_len(expected_len)?;
-                }
-            }
-
-            last_frame_applied = Some(frame.frame_index);
-        }
-
-        file.flush()?;
-        drop(file);
-
-        let final_db_size = fs::metadata(target_db_path)?.len();
-
-        // 3. Verify integrity if requested
-        let integrity_check = if options.verify_integrity && final_db_size > 0 {
-            match Connection::open(target_db_path) {
-                Ok(conn) => {
-                    let check_result: std::result::Result<String, rusqlite::Error> =
-                        conn.query_row("PRAGMA integrity_check;", [], |row| row.get(0));
-                    match check_result {
-                        Ok(res) if res == "ok" => "ok".to_string(),
-                        Ok(res) => {
-                            return Err(WalReplicationError::IntegrityCheckFailed(res));
-                        }
-                        Err(e) => {
-                            return Err(WalReplicationError::Sqlite(e));
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(WalReplicationError::Sqlite(e));
-                }
-            }
-        } else {
-            "skipped".to_string()
-        };
-
-        let duration_ms = start_time.elapsed().as_millis() as u64;
-
-        Ok(RecoveryReport {
-            success: true,
-            target_db_path: target_db_path.to_string_lossy().to_string(),
-            frames_replayed: candidate_frames.len(),
-            commits_applied,
-            last_frame_applied,
-            final_db_size_bytes: final_db_size,
-            integrity_check,
-            duration_ms,
-            error: None,
-        })
-    }
-
-    /// Recover database from a base database snapshot and a sequence of delta packages.
-    pub fn recover_from_delta_packs(
-        base_db_path: Option<&Path>,
-        target_db_path: &Path,
-        packs: &[WalDeltaPack],
-        options: &RecoveryOptions,
-    ) -> std::result::Result<RecoveryReport, WalReplicationError> {
-        // If base snapshot exists, copy it to target
-        if let Some(base) = base_db_path {
-            if base.exists() {
-                if let Some(parent) = target_db_path.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::copy(base, target_db_path)?;
-            }
-        }
-
-        // Filter packs by target time if specified
-        let mut sorted_packs: Vec<&WalDeltaPack> = packs.iter().collect();
-        sorted_packs.sort_by_key(|p| (p.checkpoint_seq, p.start_frame));
-
-        if let Some(target_time) = options.target_time {
-            sorted_packs.retain(|p| p.created_at <= target_time);
-        }
-
-        let mut all_frames = Vec::new();
-        let mut page_size = 4096;
-
-        for pack in sorted_packs {
-            page_size = pack.page_size;
-            let mut frames = pack.unpack_frames()?;
-            all_frames.append(&mut frames);
-        }
-
-        Self::replay_frames_to_db(target_db_path, page_size, &all_frames, options)
-    }
-
-    /// Point-In-Time Recovery replaying from source database and its active WAL file.
-    pub fn point_in_time_recovery(
-        source_db: &Path,
-        source_wal: &Path,
-        target_db: &Path,
-        options: &RecoveryOptions,
-    ) -> std::result::Result<RecoveryReport, WalReplicationError> {
-        if !source_db.exists() {
-            return Err(WalReplicationError::RecoveryError(format!(
-                "Source database not found: {}",
-                source_db.display()
-            )));
-        }
-
-        if let Some(parent) = target_db.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        // 1. Copy base database file
-        fs::copy(source_db, target_db)?;
-
-        // 2. If WAL file does not exist, recovery is simply the base DB
-        if !source_wal.exists() {
-            let metadata = fs::metadata(target_db)?;
-            return Ok(RecoveryReport {
-                success: true,
-                target_db_path: target_db.to_string_lossy().to_string(),
-                frames_replayed: 0,
-                commits_applied: 0,
-                last_frame_applied: None,
-                final_db_size_bytes: metadata.len(),
-                integrity_check: "ok".to_string(),
-                duration_ms: 0,
-                error: None,
-            });
-        }
-
-        // 3. Extract frames from source WAL and replay
-        let delta = WalDeltaReader::extract_delta_frames(source_wal, 0, None)?;
-        Self::replay_frames_to_db(target_db, delta.header.page_size, &delta.frames, options)
     }
 }
 
@@ -1139,6 +1001,7 @@ mod tests {
             compressed: true,
             checksum_sha256: checksum,
             payload: compressed,
+            chain: None,
         };
 
         // Normal unpack should succeed (within 64 MiB limit)

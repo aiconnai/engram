@@ -195,7 +195,8 @@ pub fn apply_retention_policies(conn: &Connection) -> Result<i64> {
 
         // 3. Auto-delete very old archived memories
         if let Some(delete_days) = policy.auto_delete_after_days {
-            let cutoff = (Utc::now() - chrono::Duration::days(delete_days)).to_rfc3339();
+            let cutoff =
+                crate::storage::queries::cutoff_days_ago(Utc::now(), delete_days)?.to_rfc3339();
             let now = Utc::now().to_rfc3339();
             let deleted = conn.execute(
                 "UPDATE memories SET valid_to = ?
@@ -220,7 +221,7 @@ pub fn compress_old_memories(
     min_access_count: i32,
     batch_limit: usize,
 ) -> Result<i64> {
-    let cutoff = (Utc::now() - chrono::Duration::days(max_age_days)).to_rfc3339();
+    let cutoff = crate::storage::queries::cutoff_days_ago(Utc::now(), max_age_days)?.to_rfc3339();
     let now = Utc::now().to_rfc3339();
 
     let mut stmt = conn.prepare(

@@ -440,7 +440,7 @@ Delete a memory (soft delete)
 
 ### `memory_list`
 
-List memories with filtering and pagination. Supports workspace isolation, tier filtering, and advanced filter syntax with AND/OR and comparison operators.
+List memories with filtering and pagination. Supports workspace isolation, tier filtering, and advanced filter syntax with AND/OR and comparison operators. Never returns a silently shortened page: a stored row that cannot be decoded (corruption or schema drift) fails the call with an internal_error naming the row id.
 
 - Tier: `standard`
 - Group: `memory.core`
@@ -1268,7 +1268,7 @@ Index a conversation into searchable memory chunks. Uses dual-limiter chunking (
 | `max_messages` | `integer` | no | Max messages per chunk Default: `10`. |
 | `max_chars` | `integer` | no | Max characters per chunk Default: `8000`. |
 | `overlap` | `integer` | no | Overlap messages between chunks Default: `2`. |
-| `ttl_days` | `integer` | no | TTL for transcript chunks in days Default: `7`. |
+| `ttl_days` | `integer` | no | TTL for transcript chunks in days; out-of-range values are rejected Default: `7`. Minimum: `0`. Maximum: `36500`. |
 
 ### `session_index_delta`
 
@@ -4374,7 +4374,7 @@ List media assets stored in the media_assets table, optionally filtered by type 
 
 ### `memory_ingest_media`
 
-Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets.
+Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets. Retrying with the same file bytes in the same workspace is idempotent: it returns the existing live memory with deduplicated=true and ignores the retry's content, tags and importance (a deleted memory is not revived). Known limitation: media_assets keys assets by file hash across all workspaces, so ingesting the same bytes in another workspace creates a memory there and re-points the shared asset row to it; a later retry in the first workspace then creates a new memory instead of deduplicating.
 
 - Tier: `standard`
 - Group: `memory.core`
@@ -4451,7 +4451,7 @@ Force an immediate WAL delta extraction and replication flush, generating a comp
 
 ### `replication_recover`
 
-Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into a target database.
+Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into a target database. When the source is the active storage database (the default), only its latest committed state is recovered, via a SQLite snapshot (frames_replayed 0, last_frame_applied null); target_frame, target_time and source_wal_path are refused for the active database and require a closed copy. The target must not be the active database or one of its side files.
 
 - Tier: `advanced`
 - Group: `misc`
@@ -4462,7 +4462,7 @@ Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `target_db_path` | `string` | yes | Destination file path for the recovered SQLite database |
-| `source_db_path` | `string` | no | Source SQLite database path (defaults to active storage database) |
+| `source_db_path` | `string` | no | Source SQLite database path (defaults to active storage database; the active database supports latest-state recovery only) |
 | `source_wal_path` | `string` | no | Source .db-wal path (defaults to source_db_path + '-wal') |
 | `target_frame` | `integer` | no | Target frame sequence number to stop recovery at (inclusive) |
 | `target_time` | `string` | no | Target timestamp (ISO-8601 / RFC3339) to stop recovery at Format: `date-time`. |

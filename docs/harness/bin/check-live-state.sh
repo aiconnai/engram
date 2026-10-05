@@ -4,11 +4,26 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: bash docs/harness/bin/check-live-state.sh --progress PROGRESS_PATH
+Usage: bash docs/harness/bin/check-live-state.sh --progress PROGRESS_PATH [--structural [--require-ancestor]]
+
+Default (strict): Last commit must be HEAD, its first parent or an approved live-state baseline, and
+Last sensors must match docs/harness/.sensors-last. This is the check that closes a task.
+
+--structural: the churn-free check doctor.sh enforces on the real progress file. Required fields, the
+active plan, the authoritative PASS review, the workflow reconciliation rows and a well-formed Last
+commit id (7-40 hex digits). Ancestry of HEAD is verified when possible and reported as
+ancestor_check=ancestor|unreachable|skipped-shallow|invalid|not-ancestor. A well-formed id that HEAD
+cannot reach (squash/rebase merges rewrite SHAs) and a shallow clone (ancestry unprovable) are WARN
+lines and still exit 0; doctor.sh turns them into warnings. It does not compare Last sensors with
+.sensors-last.
+--require-ancestor (with --structural): an unreachable Last commit becomes a hard failure
+(ancestor_check=not-ancestor). Used by hermetic fixtures, not by doctor.sh or the required lane.
 EOF
 }
 
 PROGRESS_PATH=""
+STRUCTURAL=0
+REQUIRE_ANCESTOR=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --progress)
@@ -19,6 +34,14 @@ while [ "$#" -gt 0 ]; do
       fi
       PROGRESS_PATH="${2:-}"
       shift 2
+      ;;
+    --structural)
+      STRUCTURAL=1
+      shift
+      ;;
+    --require-ancestor)
+      REQUIRE_ANCESTOR=1
+      shift
       ;;
     -h|--help)
       usage
@@ -186,7 +209,29 @@ if [ -n "$LAST_REVIEW" ]; then
   fi
 fi
 
-if [ -n "$LAST_COMMIT" ]; then
+ANCESTOR_CHECK=""
+WARNINGS=()
+if [ -n "$LAST_COMMIT" ] && [ "$STRUCTURAL" -eq 1 ]; then
+  # Structural mode: the Last commit must be a well-formed id; ancestry of HEAD is verified when it can be.
+  # An unreachable well-formed id is only a warning (squash/rebase merges rewrite SHAs) unless --require-ancestor.
+  if ! printf '%s' "$LAST_COMMIT" | grep -Eq '^[0-9a-f]{7,40}$'; then
+    ANCESTOR_CHECK="invalid"
+    add_failure "Last commit $LAST_COMMIT is not a commit id (7-40 hex digits)"
+  elif [ "$LAST_COMMIT" = "$HEAD_FULL" ] || [ "$LAST_COMMIT" = "$HEAD_SHORT" ]; then
+    ANCESTOR_CHECK="ancestor"
+  elif [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+    ANCESTOR_CHECK="skipped-shallow"
+    WARNINGS+=("WARN ancestry not verified (shallow clone): Last commit $LAST_COMMIT may be absent from this checkout")
+  elif git cat-file -e "$LAST_COMMIT^{commit}" 2>/dev/null && git merge-base --is-ancestor "$LAST_COMMIT" HEAD 2>/dev/null; then
+    ANCESTOR_CHECK="ancestor"
+  elif [ "$REQUIRE_ANCESTOR" -eq 1 ]; then
+    ANCESTOR_CHECK="not-ancestor"
+    add_failure "Last commit $LAST_COMMIT is not an ancestor of HEAD $HEAD_SHORT (unknown object, diverged or rewritten history)"
+  else
+    ANCESTOR_CHECK="unreachable"
+    WARNINGS+=("WARN Last commit $LAST_COMMIT is not reachable from HEAD $HEAD_SHORT (squash or rebase merges rewrite SHAs; a diverged history also lands here); refresh Last commit")
+  fi
+elif [ -n "$LAST_COMMIT" ]; then
   if [ "$LAST_COMMIT" = "$HEAD_FULL" ] || [ "$LAST_COMMIT" = "$HEAD_SHORT" ]; then
     SNAPSHOT_COMMIT="$HEAD_FULL"
   elif [ -n "$PARENT_FULL" ] \
@@ -204,7 +249,9 @@ if [ -n "$LAST_COMMIT" ] && [ -n "$SNAPSHOT_COMMIT" ] && [ "$LAST_COMMIT" != "$H
   require_progress_text "- **Approved live-state snapshot commit**: \`$SNAPSHOT_COMMIT\`" "approved live-state snapshot commit row"
 fi
 
-if [ ! -f docs/harness/.sensors-last ]; then
+if [ "$STRUCTURAL" -eq 1 ]; then
+  : # structural mode: .sensors-last changes on every sensors run, so it is not compared here
+elif [ ! -f docs/harness/.sensors-last ]; then
   add_failure "missing docs/harness/.sensors-last"
 else
   SENSOR_STATUS="$(read_sensor_field status)"
@@ -248,6 +295,13 @@ require_progress_text "| \`Harness Contract\` | not in \`required_status_checks.
 require_progress_text "| \`Harness Doctor Advisory\` | advisory workflow job | \`.github/workflows/harness-contract.yml\` |" "Harness Doctor advisory row"
 
 echo "head=$HEAD_SHORT"
+if [ "$STRUCTURAL" -eq 1 ]; then
+  echo "mode=structural"
+  echo "ancestor_check=${ANCESTOR_CHECK:-none}"
+  for warning in "${WARNINGS[@]+"${WARNINGS[@]}"}"; do
+    echo "$warning"
+  done
+fi
 if [ -n "$SNAPSHOT_COMMIT" ] && [ "$SNAPSHOT_COMMIT" != "$HEAD_FULL" ]; then
   echo "approved_baseline=$LAST_COMMIT"
   echo "snapshot_commit=$(git rev-parse --short "$SNAPSHOT_COMMIT")"
@@ -259,10 +313,19 @@ if [ "${#FAILURES[@]}" -gt 0 ]; then
   for failure in "${FAILURES[@]}"; do
     echo "$failure"
   done
+  if [ "$STRUCTURAL" -eq 1 ]; then
+    echo "remediation: set Last commit in $PROGRESS_PATH to a commit id reachable from HEAD (rtk git rev-parse --short HEAD)"
+    echo "remediation: restore the progress live-state field table, the active plan and the workflow reconciliation rows"
+    exit 1
+  fi
   echo "remediation: update Last commit in $PROGRESS_PATH to $HEAD_SHORT or the approved live-state baseline after running rtk git rev-parse HEAD and checking the live-state canvas/review snapshot"
   echo "remediation: update Last sensors in $PROGRESS_PATH from docs/harness/.sensors-last after running rtk bash docs/harness/bin/sensors.sh quick or full"
   echo "remediation: restore the progress live-state field table and required/advisory workflow reconciliation rows"
   exit 1
 fi
 
+if [ "$STRUCTURAL" -eq 1 ]; then
+  echo "PASS live state structure is consistent (structural mode; strict HEAD and sensors binding not checked)"
+  exit 0
+fi
 echo "PASS live state matches current repository facts"

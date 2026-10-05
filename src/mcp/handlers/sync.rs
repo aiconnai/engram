@@ -208,6 +208,17 @@ pub fn memory_events_clear(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+/// The streamer opens `{db_path}-wal`. Reading the active WAL is lock-safe
+/// (SQLite holds no POSIX locks on it), but a crafted `db_path` could make
+/// that name alias the active database or `-shm`, whose descriptor close
+/// would drop SQLite's locks (G1).
+fn refuse_lock_bearing_wal_source(ctx: &HandlerContext, db_path: &str) -> Result<(), Value> {
+    let wal_path = format!("{db_path}-wal");
+    ctx.storage
+        .refuse_lock_bearing_sqlite_file(&wal_path)
+        .map_err(|e| json!({"error": e.to_string()}))
+}
+
 pub fn replication_status(ctx: &HandlerContext, params: Value) -> Value {
     use crate::sync::WalReplicationStreamer;
 
@@ -222,6 +233,10 @@ pub fn replication_status(ctx: &HandlerContext, params: Value) -> Value {
             "message": "In-memory database does not produce disk WAL files",
             "lag": null
         });
+    }
+
+    if let Err(e) = refuse_lock_bearing_wal_source(ctx, db_path) {
+        return e;
     }
 
     let streamer = WalReplicationStreamer::new(db_path);
@@ -248,6 +263,10 @@ pub fn replication_sync_now(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
     let identifier = params.get("identifier").and_then(|v| v.as_str());
+
+    if let Err(e) = refuse_lock_bearing_wal_source(ctx, db_path) {
+        return e;
+    }
 
     let mut streamer = WalReplicationStreamer::new(db_path).with_compression(compress);
     if let Some(id) = identifier {
@@ -277,13 +296,34 @@ pub fn replication_sync_now(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn replication_recover(ctx: &HandlerContext, params: Value) -> Value {
+    replication_recover_classified(ctx, params).0
+}
+
+/// `replication_recover` plus how the call ended, for observability. Input
+/// validation failures are `Rejected` (the recovery engine never ran); only an
+/// error from the engine itself is `Failed`.
+pub fn replication_recover_classified(
+    ctx: &HandlerContext,
+    params: Value,
+) -> (Value, crate::observability::RecoveryOutcome) {
+    use crate::observability::RecoveryOutcome as Outcome;
     use crate::sync::{RecoveryOptions, WalRecoveryEngine};
     use chrono::DateTime;
     use std::path::{Path, PathBuf};
 
+    let rejected = |value: Value| (value, Outcome::Rejected);
+    fn engine_result<E: std::fmt::Display>(
+        result: std::result::Result<crate::sync::RecoveryReport, E>,
+    ) -> (Value, Outcome) {
+        match result {
+            Ok(report) => (json!(report), Outcome::Succeeded),
+            Err(e) => (json!({"error": e.to_string()}), Outcome::Failed),
+        }
+    }
+
     let target_db_path = match params.get("target_db_path").and_then(|v| v.as_str()) {
         Some(p) => p,
-        None => return json!({"error": "target_db_path is required"}),
+        None => return rejected(json!({"error": "target_db_path is required"})),
     };
 
     let default_source = ctx.storage.db_path();
@@ -293,7 +333,7 @@ pub fn replication_recover(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or(default_source);
 
     if source_db_path == ":memory:" {
-        return json!({"error": "Cannot recover from in-memory database"});
+        return rejected(json!({"error": "Cannot recover from in-memory database"}));
     }
 
     let default_wal = format!("{}-wal", source_db_path);
@@ -328,13 +368,38 @@ pub fn replication_recover(ctx: &HandlerContext, params: Value) -> Value {
         verify_integrity,
     };
 
-    match WalRecoveryEngine::point_in_time_recovery(
+    // G1: never open/close the server's own database files with a raw File.
+    let target_path = Path::new(target_db_path);
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(target_path) {
+        return rejected(json!({"error": format!("Invalid target_db_path: {}", e)}));
+    }
+    if ctx.storage.is_active_sqlite_artifact(source_db_path) {
+        let explicit_wal = params.get("source_wal_path").is_some();
+        if target_frame.is_some() || target_time.is_some() || explicit_wal {
+            return rejected(
+                json!({"error": "point-in-time recovery from the active database to an \
+                earlier frame or time is not supported while it is open; recover from a \
+                closed copy (source_db_path + source_wal_path), or omit target_frame, \
+                target_time and source_wal_path to recover its latest committed state"}),
+            );
+        }
+        return engine_result(WalRecoveryEngine::recover_active_database(
+            &ctx.storage,
+            target_path,
+            &options,
+        ));
+    }
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(source_db_path) {
+        return rejected(json!({"error": format!("Invalid source_db_path: {}", e)}));
+    }
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&source_wal_path) {
+        return rejected(json!({"error": format!("Invalid source_wal_path: {}", e)}));
+    }
+
+    engine_result(WalRecoveryEngine::point_in_time_recovery(
         Path::new(source_db_path),
         &source_wal_path,
         Path::new(target_db_path),
         &options,
-    ) {
-        Ok(report) => json!(report),
-        Err(e) => json!({"error": e.to_string()}),
-    }
+    ))
 }

@@ -14,9 +14,9 @@ use engram::embedding::create_embedder;
 use engram::error::Result;
 use engram::mcp::{
     get_prompt, get_tool_definitions_tiered, handlers, http_transport, list_prompts,
-    list_resources, methods, read_resource, InitializeResult, McpHandler, McpRequest, McpResponse,
-    McpServer, PromptCapabilities, ResourceCapabilities, ServerCapabilities, ToolCallResult,
-    ToolsCapability, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
+    list_resources, methods, read_resource_as, InitializeResult, McpHandler, McpRequest,
+    McpResponse, McpServer, PromptCapabilities, ResourceCapabilities, ServerCapabilities,
+    ToolCallResult, ToolsCapability, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
 };
 use engram::realtime::{RealtimeManager, RealtimeServer};
 use engram::search::{FuzzyEngine, SearchConfig};
@@ -360,7 +360,11 @@ impl EngramHandler {
     fn trigger_hook(&self, hook: engram::hooks::LifecycleHook, ctx: engram::hooks::HookContext) {
         if let Some(ref hm) = self.hook_manager {
             if let Err(e) = hm.trigger(hook, &ctx) {
-                tracing::warn!(target = "engram::hooks", error = %e, "hook dispatch failed");
+                tracing::warn!(
+                    target = "engram::hooks",
+                    error = %engram::observability::redact::opaque(&e),
+                    "hook dispatch failed"
+                );
             }
         }
     }
@@ -372,8 +376,9 @@ impl EngramHandler {
         name: &str,
         params: Value,
         progress_reporter: Option<Arc<dyn engram::mcp::ProgressReporter>>,
+        principal: Option<engram::auth::TransportPrincipal>,
     ) -> Value {
-        let mut ctx = self.make_context();
+        let mut ctx = self.make_context().with_principal(principal);
         ctx.progress_reporter = progress_reporter;
         handlers::dispatch(&ctx, name, params)
     }
@@ -404,7 +409,16 @@ impl EngramHandler {
 }
 
 impl McpHandler for EngramHandler {
+    /// stdio entry point: no transport principal, i.e. the local process owner.
     fn handle_request(&self, request: McpRequest) -> McpResponse {
+        self.handle_request_as(request, None)
+    }
+
+    fn handle_request_as(
+        &self,
+        request: McpRequest,
+        principal: Option<engram::auth::TransportPrincipal>,
+    ) -> McpResponse {
         match request.method.as_str() {
             methods::INITIALIZE => {
                 // Negotiate protocol version: if the client requests the legacy version, respond
@@ -487,7 +501,7 @@ impl McpHandler for EngramHandler {
                         )) as Arc<dyn engram::mcp::ProgressReporter>
                     });
 
-                let result = self.handle_tool_call(name, arguments, progress_reporter);
+                let result = self.handle_tool_call(name, arguments, progress_reporter, principal);
 
                 #[cfg(feature = "hooks")]
                 {
@@ -528,7 +542,7 @@ impl McpHandler for EngramHandler {
                     }
                 };
 
-                match read_resource(&self.storage, &uri) {
+                match read_resource_as(&self.storage, &uri, principal.as_ref()) {
                     Ok(content) => {
                         let text = serde_json::to_string_pretty(&content)
                             .unwrap_or_else(|_| content.to_string());
@@ -620,6 +634,9 @@ fn main() -> Result<()> {
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    // Panic payloads can hold request content; keep them out of stderr logs.
+    engram::observability::redact::install_redacting_panic_hook();
+
     let args = Args::parse();
 
     // Expand ~ in path
@@ -651,7 +668,11 @@ fn main() -> Result<()> {
 
     // Check for storage mode warning
     if let Some(warning) = storage.storage_mode_warning() {
-        tracing::warn!("{}", warning);
+        // The warning embeds the database path; keep it out of the log stream.
+        tracing::warn!(
+            warning = %engram::observability::redact::opaque(&warning),
+            "storage mode warning"
+        );
     }
 
     #[cfg(feature = "meilisearch")]
@@ -761,7 +782,10 @@ fn main() -> Result<()> {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Error cleaning up expired memories: {}", e);
+                        tracing::error!(
+                            error = %engram::observability::redact::redacted(&e),
+                            "Error cleaning up expired memories"
+                        );
                     }
                 }
             }
@@ -771,9 +795,14 @@ fn main() -> Result<()> {
     // Start background embedding drain thread if enabled. This drains the
     // SQL `embedding_queue` table — without it, memories accumulate with
     // status='pending' forever and never get embeddings (issue #10).
+    //
+    // Each cycle first recovers `processing` jobs whose lease expired (for
+    // example after a crash/restart; see `run_embedding_drain_cycle`), then
+    // drains until empty. The cycle runs once on start and then every interval.
     if args.embedding_drain_interval_seconds > 0 {
         let drain_storage = storage.clone();
         let drain_embedder = embedder.clone();
+        let drain_hnsw = handler.hnsw_index.clone();
         let interval = std::time::Duration::from_secs(args.embedding_drain_interval_seconds);
         let batch_size = args.embedding_drain_batch_size;
 
@@ -783,37 +812,27 @@ fn main() -> Result<()> {
                 interval.as_secs(),
                 batch_size,
             );
+            let hygiene = engram::embedding::EmbeddingQueueHygieneConfig::default();
+            // Drained embeddings are mirrored into the in-memory vector index
+            // only after their transaction committed.
+            let index_persisted = move |memory_id: i64, embedding: &[f32]| {
+                drain_hnsw.write().insert(memory_id, embedding)
+            };
 
             loop {
-                std::thread::sleep(interval);
-
-                // Drain in a loop until the queue is empty (or we hit one
-                // batch that returns 0). This catches up faster after a
-                // backlog without waiting `interval` between batches.
-                // drain_pending_embeddings owns its lock discipline — it
+                // run_embedding_drain_cycle owns its lock discipline — it
                 // releases the connection lock around the embed_batch call
                 // so other DB ops aren't blocked by the network round-trip.
-                loop {
-                    let result = engram::embedding::drain_pending_embeddings(
-                        &drain_storage,
-                        drain_embedder.as_ref(),
-                        batch_size,
-                    );
-
-                    match result {
-                        Ok(0) => break,
-                        Ok(n) => {
-                            tracing::info!("Embedding drain processed {} memories", n);
-                            if n < batch_size {
-                                break;
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Embedding drain error: {}", e);
-                            break;
-                        }
-                    }
-                }
+                // Logs the outcome with the error class only (provider
+                // messages can echo memory text); see `observability::redact`.
+                engram::embedding::run_embedding_drain_cycle_logged(
+                    &drain_storage,
+                    drain_embedder.as_ref(),
+                    batch_size,
+                    &hygiene,
+                    &index_persisted,
+                );
+                std::thread::sleep(interval);
             }
         });
     }
@@ -852,7 +871,10 @@ fn main() -> Result<()> {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Compression scheduler error: {}", e);
+                        tracing::error!(
+                            error = %engram::observability::redact::redacted(&e),
+                            "Compression scheduler error"
+                        );
                     }
                 }
             }
@@ -1047,6 +1069,7 @@ mod tests {
                 "format": "md"
             }),
             None,
+            None,
         );
         assert!(first.get("error").is_none(), "first ingest error: {first}");
         assert!(
@@ -1063,6 +1086,7 @@ mod tests {
                 "path": file_path.to_string_lossy(),
                 "format": "md"
             }),
+            None,
             None,
         );
         assert!(

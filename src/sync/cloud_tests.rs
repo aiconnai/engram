@@ -182,6 +182,8 @@ async fn encrypted_upload_download_reconstructed_client_persists_key_identity() 
 
 #[path = "cloud_tests_compat.rs"]
 mod compatibility;
+#[path = "cloud_tests_failure.rs"]
+mod failure;
 #[path = "cloud_tests_rotation.rs"]
 mod rotation;
 #[path = "cloud_tests_security.rs"]

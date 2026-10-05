@@ -1,0 +1,13 @@
+[package]
+name = "c4spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Throwaway viability spike for Engram task C4 (descriptor-bound SQLite open).
+# Pins the same rusqlite / bundled SQLite (3.45.0) that Engram ships.
+[dependencies]
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
+libc = "=0.2.180"
+
+[workspace]

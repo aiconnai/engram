@@ -167,6 +167,29 @@ pub(super) fn test_app_with_handler(
     .expect("test router")
 }
 
+/// Router with an explicit handler, realtime manager and security limits, for
+/// transport observability tests (timeouts, body limits, SSE).
+pub(super) fn test_app_with_limits(
+    handler: Arc<dyn McpHandler>,
+    api_key: Option<&str>,
+    realtime: Option<crate::realtime::RealtimeManager>,
+    security: HttpSecurityConfig,
+    http_rate_limit_rps: u64,
+    http_rate_limit_burst: u64,
+) -> Router {
+    let _guard = ENV_LOCK.lock().unwrap();
+    build_router(
+        handler,
+        api_key.map(str::to_string),
+        realtime,
+        http_rate_limit_rps,
+        http_rate_limit_burst,
+        None,
+        Some(security),
+    )
+    .expect("test router")
+}
+
 pub(super) fn test_rate_limiter_state(
     max_buckets: usize,
     stale_after: Duration,

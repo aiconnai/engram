@@ -12,7 +12,9 @@
 
 use serde_json::{json, Value};
 
+use crate::auth::TransportPrincipal;
 use crate::mcp::protocol::ResourceTemplate;
+use crate::mcp::workspace_guard::{ensure_memory_access, is_workspace_restricted};
 use crate::storage::queries::{get_memory, get_stats, get_workspace_stats, list_memories};
 use crate::storage::{entity_queries::list_entities, Storage};
 use crate::types::ListOptions;
@@ -94,6 +96,45 @@ pub fn read_resource(storage: &Storage, uri: &str) -> Result<Value, String> {
     } else {
         Err(format!("Unknown resource URI: {}", uri))
     }
+}
+
+/// Read a resource on behalf of a transport principal.
+///
+/// Unrestricted principals and `None` (stdio owner) read like [`read_resource`].
+/// A workspace-restricted principal may read only:
+/// - `engram://memory/{id}` when the row's persisted workspace is allowed; a
+///   foreign row fails exactly like a missing one, before access tracking;
+/// - `engram://workspace/{name}[/memories]` when `name` is allowed.
+///
+/// Global resources (`stats`, `entities`) and unknown URIs are denied.
+pub fn read_resource_as(
+    storage: &Storage,
+    uri: &str,
+    principal: Option<&TransportPrincipal>,
+) -> Result<Value, String> {
+    let Some(principal) = principal.filter(|p| is_workspace_restricted(p)) else {
+        return read_resource(storage, uri);
+    };
+    let (path, _) = split_uri(uri);
+
+    if let Some(rest) = path.strip_prefix("engram://memory/") {
+        let id: i64 = rest
+            .parse()
+            .map_err(|_| format!("Invalid memory ID: {}", rest))?;
+        return storage
+            .with_connection(|conn| {
+                ensure_memory_access(conn, Some(principal), id)?;
+                Ok(json!(get_memory(conn, id)?))
+            })
+            .map_err(|e| e.to_string());
+    }
+    if let Some(rest) = path.strip_prefix("engram://workspace/") {
+        let name = rest.strip_suffix("/memories").unwrap_or(rest);
+        if principal.allows_workspace(Some(name)) {
+            return read_resource(storage, uri);
+        }
+    }
+    Err(format!("Permission denied for resource URI: {uri}"))
 }
 
 /// Validate whether a given URI is a supported engram resource URI.

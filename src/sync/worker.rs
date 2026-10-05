@@ -39,26 +39,58 @@ impl SyncWorker {
         debounce_ms: u64,
         conn: Arc<Mutex<Connection>>,
     ) -> Result<Self> {
-        let (sender, mut receiver) = mpsc::channel::<SyncCommand>(100);
-
         let cloud = CloudStorage::from_uri(&cloud_uri, encrypt).await?;
+        Ok(Self::start_with_cloud(db_path, cloud, debounce_ms, conn))
+    }
+
+    /// Start the worker around an already-constructed storage backend.
+    ///
+    /// Restart semantics: a previous process that died mid-sync leaves
+    /// `sync_state.is_syncing = 1`; nothing is syncing now, so that flag is
+    /// cleared and `last_error` records the interruption (see
+    /// [`reset_interrupted_sync`]). The interrupted push is not resumed; the
+    /// next `MarkDirty`/`Sync` redoes it from scratch (uploads replace the
+    /// whole object, so a repeat is idempotent).
+    ///
+    /// Retry policy for debounced pushes: a failed push is retried with
+    /// exponential backoff (`debounce * 2^failures`, capped at
+    /// [`MAX_BACKOFF`]) at most [`MAX_PUSH_ATTEMPTS`] times in a row, after
+    /// which the worker stops retrying until the next `MarkDirty`. Explicit
+    /// `Sync` commands are never retried automatically.
+    pub(crate) fn start_with_cloud(
+        db_path: PathBuf,
+        cloud: CloudStorage,
+        debounce_ms: u64,
+        conn: Arc<Mutex<Connection>>,
+    ) -> Self {
+        let (sender, mut receiver) = mpsc::channel::<SyncCommand>(100);
         let debounce = Duration::from_millis(debounce_ms);
+
+        {
+            let guard = conn.lock();
+            match reset_interrupted_sync(&guard) {
+                Ok(true) => tracing::warn!("previous sync was interrupted; cleared is_syncing"),
+                Ok(false) => {}
+                Err(e) => warn_sync_state_write_failed("restart", SyncDirection::Push, &e),
+            }
+        }
 
         // Spawn worker task
         tokio::spawn(async move {
-            let mut last_dirty: Option<Instant> = None;
-            let mut check_interval = interval(Duration::from_secs(1));
+            let mut dirty = DirtyTracker::new(debounce);
+            let tick = debounce.clamp(Duration::from_millis(10), Duration::from_secs(1));
+            let mut check_interval = interval(tick);
 
             loop {
                 tokio::select! {
                     Some(cmd) = receiver.recv() => {
                         match cmd {
                             SyncCommand::Sync(direction, force) => {
-                                Self::do_sync(&db_path, &cloud, &conn, direction, force).await;
-                                last_dirty = None;
+                                let ok = Self::do_sync(&db_path, &cloud, &conn, direction, force).await;
+                                dirty.on_explicit_sync(ok);
                             }
                             SyncCommand::MarkDirty => {
-                                last_dirty = Some(Instant::now());
+                                dirty.mark_dirty(Instant::now());
                             }
                             SyncCommand::Stop => {
                                 // Final sync before stopping
@@ -68,11 +100,15 @@ impl SyncWorker {
                         }
                     }
                     _ = check_interval.tick() => {
-                        // Check if debounce period has passed
-                        if let Some(dirty_time) = last_dirty {
-                            if dirty_time.elapsed() >= debounce {
-                                Self::do_sync(&db_path, &cloud, &conn, SyncDirection::Push, false).await;
-                                last_dirty = None;
+                        if dirty.is_due(Instant::now()) {
+                            let ok = Self::do_sync(&db_path, &cloud, &conn, SyncDirection::Push, false).await;
+                            if ok {
+                                dirty.on_success();
+                            } else if let RetryDecision::GiveUp = dirty.on_failure(Instant::now()) {
+                                tracing::error!(
+                                    "Sync push failed {} times in a row; not retrying until the next change",
+                                    MAX_PUSH_ATTEMPTS
+                                );
                             }
                         }
                     }
@@ -82,7 +118,7 @@ impl SyncWorker {
             tracing::info!("Sync worker stopped");
         });
 
-        Ok(Self { sender })
+        Self { sender }
     }
 
     /// Perform the actual sync operation
@@ -92,7 +128,7 @@ impl SyncWorker {
         conn: &Arc<Mutex<Connection>>,
         direction: SyncDirection,
         _force: bool,
-    ) {
+    ) -> bool {
         let started_at = Utc::now();
 
         if let Err(e) = {
@@ -104,7 +140,10 @@ impl SyncWorker {
 
         let result = match direction {
             SyncDirection::Push => cloud.upload(db_path).await,
-            SyncDirection::Pull => cloud.download(db_path).await,
+            SyncDirection::Pull => match refuse_live_database(conn, db_path) {
+                Ok(()) => cloud.download(db_path).await,
+                Err(e) => Err(e),
+            },
             SyncDirection::Bidirectional => {
                 // Check which is newer
                 match cloud.metadata().await {
@@ -153,9 +192,11 @@ impl SyncWorker {
                     bytes,
                     completed_at - started_at
                 );
+                true
             }
             Err(e) => {
                 tracing::error!("Sync {:?} failed: {}", direction, e);
+                false
             }
         }
     }
@@ -186,6 +227,121 @@ impl SyncWorker {
             .map_err(|_| EngramError::Sync("Worker channel closed".to_string()))?;
         Ok(())
     }
+}
+
+/// Longest wait between two automatic push retries.
+pub(crate) const MAX_BACKOFF: Duration = Duration::from_secs(300);
+/// Consecutive failed automatic pushes before the worker stops retrying.
+pub(crate) const MAX_PUSH_ATTEMPTS: u32 = 5;
+
+/// Whether to keep retrying after a failed automatic push.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum RetryDecision {
+    Retry,
+    GiveUp,
+}
+
+/// Debounce + bounded-backoff state for automatic pushes. Pure (the clock is
+/// passed in) so the retry policy is testable without a runtime.
+pub(crate) struct DirtyTracker {
+    debounce: Duration,
+    dirty_since: Option<Instant>,
+    failures: u32,
+}
+
+impl DirtyTracker {
+    pub(crate) fn new(debounce: Duration) -> Self {
+        Self {
+            debounce,
+            dirty_since: None,
+            failures: 0,
+        }
+    }
+
+    /// Local data changed: (re)start the quiet-period timer. Failures are kept,
+    /// so a steady stream of changes cannot reset the backoff.
+    pub(crate) fn mark_dirty(&mut self, now: Instant) {
+        self.dirty_since = Some(now);
+    }
+
+    fn delay(&self) -> Duration {
+        let factor = 1u32 << self.failures.min(16);
+        self.debounce
+            .saturating_mul(factor)
+            .min(MAX_BACKOFF.max(self.debounce))
+    }
+
+    pub(crate) fn is_due(&self, now: Instant) -> bool {
+        self.dirty_since
+            .is_some_and(|since| now.saturating_duration_since(since) >= self.delay())
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.dirty_since = None;
+    }
+
+    /// Outcome of an explicit `Sync` command: success proves the remote works
+    /// (backoff resets); failure only drops the pending marker, because explicit
+    /// syncs are never retried automatically.
+    pub(crate) fn on_explicit_sync(&mut self, ok: bool) {
+        if ok {
+            self.on_success();
+        } else {
+            self.clear();
+        }
+    }
+
+    pub(crate) fn on_success(&mut self) {
+        self.dirty_since = None;
+        self.failures = 0;
+    }
+
+    pub(crate) fn on_failure(&mut self, now: Instant) -> RetryDecision {
+        self.failures = self.failures.saturating_add(1);
+        if self.failures >= MAX_PUSH_ATTEMPTS {
+            self.dirty_since = None;
+            RetryDecision::GiveUp
+        } else {
+            self.dirty_since = Some(now);
+            RetryDecision::Retry
+        }
+    }
+}
+
+/// A pull replaces the target file by rename; doing that to the database this
+/// worker's own connection has open orphans the open connection and drops its
+/// locks (G1). Refuse when `db_path` is the connection's database.
+fn refuse_live_database(conn: &Arc<Mutex<Connection>>, db_path: &std::path::Path) -> Result<()> {
+    let live = conn.lock().path().map(std::path::PathBuf::from);
+    let Some(live) = live else {
+        return Ok(()); // in-memory connection: no file to protect
+    };
+    let canon = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    if canon(&live) == canon(db_path) {
+        return Err(EngramError::Sync(format!(
+            "refusing to pull over '{}': it is the live database of this process",
+            db_path.display()
+        )));
+    }
+    Ok(())
+}
+
+/// Clear a stale `is_syncing` flag left by a process that died mid-sync.
+/// Returns whether a stale flag was found. `last_error` records it so the
+/// partial state is visible instead of silently looking idle.
+pub(crate) fn reset_interrupted_sync(conn: &Connection) -> Result<bool> {
+    let changed = conn.execute(
+        "UPDATE sync_state SET
+            is_syncing = 0,
+            last_error = CASE
+                WHEN last_error IS NULL OR last_error = ''
+                    THEN 'previous sync was interrupted before completing'
+                ELSE last_error || '; previous sync was interrupted before completing'
+            END
+         WHERE id = 1 AND is_syncing = 1",
+        [],
+    )?;
+    Ok(changed > 0)
 }
 
 fn mark_sync_started(conn: &Connection) -> Result<()> {

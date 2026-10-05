@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{EngramError, Result};
 use crate::storage::queries::create_memory;
+use crate::text_util::{suffix_bytes, truncate_bytes};
 use crate::types::{CreateMemoryInput, MemoryTier, MemoryType};
 
 /// Configuration for conversation chunking
@@ -184,7 +185,12 @@ pub fn chunk_conversation(messages: &[Message], config: &ChunkingConfig) -> Vec<
     chunks
 }
 
-/// Truncate content with a marker preserving head and tail
+/// Truncate content with a marker preserving head and tail.
+///
+/// `max_chars` is a byte budget (it is compared against `str::len`), and the
+/// result is never longer than it: head and tail are cut on char boundaries and
+/// never split a multibyte char. When the budget cannot even hold the marker,
+/// the content is cut to the budget without one.
 fn truncate_with_marker(content: &str, max_chars: usize) -> String {
     if content.len() <= max_chars {
         return content.to_string();
@@ -192,19 +198,14 @@ fn truncate_with_marker(content: &str, max_chars: usize) -> String {
 
     // Preserve 60% head, 30% tail, 10% for marker
     let marker = "\n[...truncated...]\n";
-    let available = max_chars - marker.len();
-    let head_len = (available * 60) / 100;
+    let Some(available) = max_chars.checked_sub(marker.len()) else {
+        return truncate_bytes(content, max_chars).to_string();
+    };
+    let head_len = available.saturating_mul(60) / 100;
     let tail_len = available - head_len;
 
-    let head: String = content.chars().take(head_len).collect();
-    let tail: String = content
-        .chars()
-        .rev()
-        .take(tail_len)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect();
+    let head = truncate_bytes(content, head_len);
+    let tail = suffix_bytes(content, tail_len);
 
     format!("{}{}{}", head, marker, tail)
 }

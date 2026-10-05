@@ -1,0 +1,10 @@
+# Synthetic fixture: invalid record (no owner); the file as a whole must be rejected.
+schema_version = 1
+
+[[exceptions]]
+scanner = "codeql"
+rule_id = "rs/synthetic-high"
+path = "src/lib.rs"
+approved_by = "Ronaldo"
+expires = 2026-12-31
+rationale = "Synthetic fixture rationale: no owner."

@@ -1,0 +1,15 @@
+{
+  "schema_version": "goal-v1",
+  "policy_version": "harness-hardening-v1",
+  "goals": [
+    {
+      "id": "pr-title-policy-daily",
+      "check_id": "pr_title_policy",
+      "owner": "harness-maintainers",
+      "schedule": "daily",
+      "timeout_seconds": 60,
+      "on_failure": "alert_only",
+      "runbook": "docs/harness/goals/README.md"
+    }
+  ]
+}

@@ -971,3 +971,83 @@ fn test_mcp_merge_candidate_uses_derived_from_edges_without_superseding_sources(
         })
         .unwrap();
 }
+
+#[cfg(feature = "dream-phase")]
+#[test]
+fn test_mcp_dream_promotion_enqueues_embedding_job_and_drains() {
+    use engram::mcp::handlers::dispatch;
+    use engram::storage::{
+        create_dream_candidate, create_dream_job, health_check_storage, DerivedIndexStatus,
+        NewDreamCandidate, NewDreamJob, Storage,
+    };
+    use serde_json::json;
+
+    let storage = Storage::open_in_memory().unwrap();
+    storage
+        .with_connection(|conn| {
+            create_dream_job(
+                conn,
+                &NewDreamJob {
+                    id: Some("embed-job"),
+                    workspace: "default",
+                    instructions: Some("promotion must be embedded"),
+                    model_profile: None,
+                    input_summary: &json!({}),
+                },
+            )?;
+            create_dream_candidate(
+                conn,
+                &NewDreamCandidate {
+                    id: Some("embed-candidate"),
+                    job_id: "embed-job",
+                    workspace: "default",
+                    kind: "summary",
+                    proposed_action: "create",
+                    confidence: 0.8,
+                    freshness_state: "current",
+                    content_preview: "Promoted summary to embed.",
+                    proposed_content: Some("Promoted summary to embed."),
+                    reason_codes: &json!(["embedding_regression"]),
+                    policy_explanation: &json!({}),
+                    metadata: &json!({}),
+                },
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+    let ctx = test_handler_context(storage.clone());
+    let reviewed = dispatch(
+        &ctx,
+        "dream_candidate_review",
+        json!({"id": "embed-candidate", "review_state": "accepted"}),
+    );
+    assert_eq!(reviewed.get("status").unwrap(), "success");
+    let applied = dispatch(
+        &ctx,
+        "dream_candidate_apply",
+        json!({"id": "embed-candidate", "confirm": true}),
+    );
+    assert_eq!(applied.get("status").unwrap(), "completed");
+
+    let embeddings_health = |storage: &Storage| {
+        health_check_storage(storage)
+            .unwrap()
+            .derived_indexes
+            .into_iter()
+            .find(|index| index.name == "embeddings")
+            .unwrap()
+    };
+    let pending = embeddings_health(&storage);
+    assert_eq!(
+        pending.pending_count, 1,
+        "promoted memory needs a pending job"
+    );
+    assert_eq!(pending.status, DerivedIndexStatus::Backlogged);
+
+    engram::embedding::drain_pending_embeddings(&storage, ctx.embedder.as_ref(), 10).unwrap();
+    assert_eq!(
+        embeddings_health(&storage).status,
+        DerivedIndexStatus::Healthy
+    );
+}

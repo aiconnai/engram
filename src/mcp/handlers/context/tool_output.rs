@@ -244,7 +244,7 @@ pub fn memory_get_archived_output(ctx: &HandlerContext, params: Value) -> Value 
 pub fn memory_get_working_memory(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::list_memories;
     use crate::types::{ListOptions, SortField, SortOrder};
-    use chrono::{Duration, Utc};
+    use chrono::Utc;
 
     let session_id = match params.get("session_id").and_then(|v| v.as_str()) {
         Some(s) => s.to_string(),
@@ -267,10 +267,23 @@ pub fn memory_get_working_memory(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_default();
 
     // Optional recency filter: only observations created within the last N minutes.
-    let since_cutoff = params
-        .get("since_minutes")
-        .and_then(|v| v.as_u64())
-        .map(|mins| Utc::now() - Duration::minutes(mins as i64));
+    let since_cutoff = match params.get("since_minutes").and_then(|v| v.as_u64()) {
+        None => None,
+        Some(mins) => {
+            let seconds = i64::try_from(mins).ok().and_then(|m| m.checked_mul(60));
+            let cutoff = seconds
+                .ok_or_else(|| {
+                    crate::error::EngramError::InvalidInput(format!(
+                        "since_minutes {mins} is out of range"
+                    ))
+                })
+                .and_then(|s| crate::storage::queries::expiry_after(Utc::now(), -s));
+            match cutoff {
+                Ok(cutoff) => Some(cutoff),
+                Err(e) => return crate::mcp::error::ToolError::from(e).into_value(),
+            }
+        }
+    };
 
     let session_tag = format!("session:{}", session_id);
 

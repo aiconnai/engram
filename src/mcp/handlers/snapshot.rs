@@ -12,11 +12,9 @@ fn parse_hex_key(hex_str: &str) -> std::result::Result<[u8; 32], String> {
             hex_str.len()
         ));
     }
-    let bytes: Vec<u8> = (0..hex_str.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&hex_str[i..i + 2], 16))
-        .collect::<std::result::Result<Vec<u8>, _>>()
-        .map_err(|e| format!("Invalid hex: {}", e))?;
+    // `hex::decode` rejects non-ASCII and sign chars without byte-slicing the
+    // input (a 64-byte string may contain multibyte chars).
+    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
     if bytes.len() != 32 {
         return Err(format!("Key must be 32 bytes, got {}", bytes.len()));
     }
@@ -102,6 +100,12 @@ pub fn snapshot_create(ctx: &HandlerContext, params: Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({"error": format!("Invalid output_path: {}", e)}),
     };
+    if let Err(e) = ctx
+        .storage
+        .refuse_active_sqlite_artifact(&validated_output_path)
+    {
+        return json!({"error": e.to_string()});
+    }
 
     // Build the snapshot builder with optional filters
     let mut builder = SnapshotBuilder::new(ctx.storage.clone());
@@ -202,6 +206,9 @@ pub fn snapshot_load(ctx: &HandlerContext, params: Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({"error": format!("Invalid path: {}", e)}),
     };
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&validated_path) {
+        return json!({"error": e.to_string()});
+    }
 
     let strategy_str = match params.get("strategy").and_then(|v| v.as_str()) {
         Some(s) => s.to_string(),
@@ -252,9 +259,9 @@ pub fn snapshot_load(ctx: &HandlerContext, params: Value) -> Value {
                         chain.log_document(&archive_bytes, &snapshot_name, None, &[], None)
                     {
                         tracing::warn!(
-                            "Attestation hook (snapshot_load): failed to log '{}': {}",
-                            snapshot_name,
-                            e
+                            snapshot = %crate::observability::redact::opaque(&snapshot_name),
+                            error = %crate::observability::redact::redacted(&e),
+                            "Attestation hook (snapshot_load): failed to log document"
                         );
                     }
                 }
@@ -278,7 +285,7 @@ pub fn snapshot_load(ctx: &HandlerContext, params: Value) -> Value {
 /// Inspect a .egm snapshot archive and return metadata without loading.
 ///
 /// Returns manifest information, file list, and file size.
-pub fn snapshot_inspect(_ctx: &HandlerContext, params: Value) -> Value {
+pub fn snapshot_inspect(ctx: &HandlerContext, params: Value) -> Value {
     use crate::snapshot::SnapshotLoader;
 
     let path_str = match params.get("path").and_then(|v| v.as_str()) {
@@ -290,6 +297,9 @@ pub fn snapshot_inspect(_ctx: &HandlerContext, params: Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({"error": format!("Invalid path: {}", e)}),
     };
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&validated_path) {
+        return json!({"error": e.to_string()});
+    }
 
     match SnapshotLoader::inspect(validated_path.as_path()) {
         Ok(info) => {

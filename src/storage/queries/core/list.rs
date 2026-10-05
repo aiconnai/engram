@@ -107,14 +107,24 @@ pub fn list_memories(conn: &Connection, options: &ListOptions) -> Result<Vec<Mem
     let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
     let mut stmt = conn.prepare(&sql)?;
 
-    let memories: Vec<Memory> = stmt
-        .query_map(param_refs.as_slice(), memory_from_row)?
-        .filter_map(|r| r.ok())
-        .map(|mut m| {
-            m.tags = load_tags(conn, m.id).unwrap_or_default();
-            m
-        })
-        .collect();
+    // A row that cannot be decoded (corruption, schema drift) is an error, not a
+    // silently shorter page: callers would otherwise treat the list as complete.
+    let mut memories: Vec<Memory> = Vec::new();
+    // Read the id separately so a decode failure can name the offending row.
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok((row.get::<_, i64>("id").ok(), memory_from_row(row)))
+    })?;
+    for row in rows {
+        let (row_id, decoded) = row?;
+        let mut memory = decoded.map_err(|e| {
+            let id = row_id.map_or_else(|| "unknown".to_string(), |id| id.to_string());
+            EngramError::Storage(format!(
+                "list_memories: undecodable memory row (id {id}): {e}"
+            ))
+        })?;
+        memory.tags = load_tags(conn, memory.id)?;
+        memories.push(memory);
+    }
 
     Ok(memories)
 }

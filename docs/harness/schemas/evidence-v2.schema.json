@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiconnai.github.io/engram/schemas/evidence-v2.schema.json",
+  "title": "Engram Harness Evidence Receipt v2",
+  "description": "Hardened evidence receipt. Structure only: a valid receipt is not authentic and is never trusted without an external recorder, expected candidate SHA and policy version.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "policy_version",
+    "timestamp",
+    "task_id",
+    "commit_sha",
+    "base_sha",
+    "tree_sha",
+    "verdict",
+    "checks",
+    "sha256_manifest",
+    "recorder"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Schema version identifier.",
+      "type": "string",
+      "const": "evidence-v2"
+    },
+    "policy_version": {
+      "description": "Policy version the artifact was produced under. The validator never trusts this value: the caller passes the expected policy version out of band.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "timestamp": {
+      "description": "UTC RFC 3339 timestamp when evidence was collected, ending with Z.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$",
+      "minLength": 20,
+      "maxLength": 30
+    },
+    "task_id": {
+      "description": "Task identifier of the executed task specification.",
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "commit_sha": {
+      "description": "Candidate Git commit SHA.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "base_sha": {
+      "description": "Base Git commit SHA.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "tree_sha": {
+      "description": "Git tree SHA of the verified state.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "verdict": {
+      "description": "Overall verdict; must agree with the checks.",
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "warn"
+      ]
+    },
+    "checks": {
+      "description": "Individual check results.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "exit_code",
+          "duration_ms",
+          "command",
+          "log_hash",
+          "log_path"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Check ID present in the check catalog.",
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_:.-]+$",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "status": {
+            "description": "Execution status of the check.",
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "warn",
+              "skipped",
+              "timeout"
+            ]
+          },
+          "exit_code": {
+            "description": "Exit code returned by the check command.",
+            "type": "integer",
+            "minimum": -255,
+            "maximum": 255
+          },
+          "duration_ms": {
+            "description": "Duration of the check in milliseconds.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "command": {
+            "description": "Command label or approved argv representation.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "message": {
+            "description": "Short human-readable summary.",
+            "type": "string",
+            "maxLength": 2048
+          },
+          "log_hash": {
+            "description": "SHA-256 of the full command log; verified against --logs-dir when provided.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "log_path": {
+            "description": "Log file path relative to the logs directory.",
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[a-zA-Z0-9_./-]+$",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      }
+    },
+    "sha256_manifest": {
+      "description": "Map of repo-relative paths to their verified SHA-256 digest.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 4096,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[a-zA-Z0-9_./-]+$",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "additionalProperties": {
+        "description": "SHA-256 digest.",
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$",
+        "minLength": 64,
+        "maxLength": 64
+      }
+    },
+    "recorder": {
+      "description": "Identity claimed by the evidence recorder (not verified here).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "toolchain": {
+      "description": "Toolchain version information.",
+      "type": "string",
+      "maxLength": 256
+    },
+    "environment": {
+      "description": "Sanitized runtime environment metadata.",
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9_.-]+$",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 512
+      }
+    }
+  }
+}

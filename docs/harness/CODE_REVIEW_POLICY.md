@@ -92,13 +92,34 @@ Todo finding substantivo deve incluir:
 - **Primeira linha**: exatamente `PASS <resumo curto>` ou `FAIL <resumo curto>`
 - **Linha obrigatória para parser**: exatamente `REVIEW_VERDICT: PASS <resumo curto>` ou `REVIEW_VERDICT: FAIL <resumo curto>`
 - Depois: lista concisa de findings prefixados por `[BLOCKER]`, `[HIGH]`, `[MED]`, ou `[LOW]`
-- A linha `REVIEW_VERDICT:` é obrigatória para fechamento de `review-gate.sh post`.
+- A linha `REVIEW_VERDICT:` é obrigatória para fechamento de `review-gate.sh post`, deve aparecer **exatamente uma vez** (zero, duas ou o placeholder `<one-line summary>` do prompt tornam o artefato inválido) e, sozinha, é apenas histórico: ver "Semântica do post-gate" abaixo.
 - Review deve ser conciso e baseado em evidência
 - Se o reviewer não consegue explicar por que a mudança é segura → fail closed
 - Se nenhum issue substantivo encontrado, use **exatamente um bullet**:
   ```
   - [LOW] No issues found. Checked for bugs, regressions, security, tests for changed behavior, documentation, MCP protocol stability, SDK contracts, and scoped project instructions.
   ```
+
+## Semântica do post-gate (fail-closed)
+
+Fonte de verdade operacional: `GATES.md` → "Review gate fail-closed (H1)". Resumo para reviewers e
+consumidores:
+
+- O escopo revisado é explícito: `base..candidate` (todos os commits) no modo final; working tree +
+  index + untracked não ignorados no modo preparação (`pre`). Paths de rename/delete aparecem nos dois
+  lados. O diff e o sha256 que o reviewer recebe são os mesmos que o gate recomputa.
+- Um PASS só vale para o escopo exato: o operador humano registra um receipt **fora** de qualquer
+  worktree (task, base, head, tree, sha256 do diff, path+sha256 do review, sha256 do script do gate,
+  identidade) e informa os valores esperados na linha de comando. O gate deve ser uma cópia mantida fora
+  de qualquer worktree (`--repo`); um gate dentro do worktree julgado não produz PASS. Review ausente, receipt ausente/não confiável/divergente →
+  `PENDING` (exit 3), nunca PASS, mesmo com `REVIEW_VERDICT: PASS` no artefato. Mudar um byte depois do
+  review invalida o receipt.
+- Falha ao calcular o diff (`git diff`/`git show`, range inválido, commit ausente) é exit 4 antes de
+  qualquer leitura de verdict. Texto de erro nunca é tratado como diff revisado.
+- O reviewer deve tratar `docs/harness/bin/*` como sempre exigindo reviewer, e não deve aceitar que o
+  script alterado julgue a própria mudança (o gate é executado a partir de uma cópia confiável do base).
+- Parecer de IA, PASS em prosa e número de rodadas não concedem autorização de merge; a decisão
+  humana canônica não é substituída pelo gate nem pelo receipt.
 
 ## O que Flaggear Primeiro (Ordem de Prioridade)
 

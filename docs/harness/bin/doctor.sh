@@ -12,7 +12,8 @@
 # - Active plan file exists
 # - Latest review for active task has parseable PASS/FAIL and explicit REVIEW_VERDICT marker (if present)
 # - .sensors-last format (if present)
-# - bootstrap.sh output size and exit code
+# - bootstrap.sh output size (<= 50 lines) and exit code
+# - Live summary budget (progress.md <= 150 lines) and the churn-free structural live-state check (H6)
 # - Exclusion records (if sensors-last indicates pass_with_exclusion)
 
 set -euo pipefail
@@ -308,6 +309,7 @@ require_exec docs/harness/bin/pr-title-policy.sh
 require_exec docs/harness/bin/harness-stats.sh
 require_exec docs/harness/bin/harness-decision-log.sh
 require_exec docs/harness/bin/harness-risk-register.sh
+require_exec docs/harness/bin/run-offline-lane.sh
 
 # If the advanced scripts exist, they should be executable
 SCRIPT_PATHS=(
@@ -320,6 +322,7 @@ SCRIPT_PATHS=(
   docs/harness/bin/harness-stats.sh
   docs/harness/bin/harness-decision-log.sh
   docs/harness/bin/harness-risk-register.sh
+  docs/harness/bin/run-offline-lane.sh
 )
 OPTIONAL_SCRIPT_PATHS=(
   docs/harness/bin/sensors.sh
@@ -476,6 +479,150 @@ require_grep docs/harness/security/anthropic-reference-harness.md 'NO_CREDENTIAL
 require_grep docs/harness/security/anthropic-reference-harness.md 'TUNING_FILES=\.claude/scan-extras\.txt,\.claude/fp-rules\.txt' 'security contract tuning anchor'
 require_grep .claude/scan-extras.txt 'scan-extras' 'scan tuning file identifies itself'
 require_grep .claude/fp-rules.txt 'fp-rules' 'false-positive tuning file identifies itself'
+
+# Offline mandatory lane (H2). The lane, its suites and its wiring into sensors.sh (quick AND full),
+# scripts/ci.sh and the required "Test (ubuntu-latest)" CI job must all stay in place; removing any
+# of them is a doctor failure. Fixtures or manual runs are not a substitute for the lane.
+require_file docs/harness/tests/test_validate_evidence.py
+require_file docs/harness/tests/test_offline_lane.py
+# H6 short, resumable context: live summary + byte-exact history, budget doc, link checker, measure tool.
+require_file docs/harness/context-budget.md
+require_file docs/harness/progress-history.md
+require_file docs/harness/tests/test_context_budget.py
+require_file docs/harness/bin/doc_links.py
+require_exec docs/harness/bin/check-doc-links.py
+require_exec docs/harness/bin/measure-context.py
+# H3 sandbox adapter, registry and fake-writer fixtures. The unit tests run in the offline lane; the
+# real-Docker smoke (run-sandbox-smoke.sh) is deliberately NOT wired into the lane or CI.
+require_file docs/harness/checks/registry.json
+require_file docs/harness/tests/fake_writer.py
+require_file docs/harness/tests/sandbox_test_support.py
+require_file docs/harness/tests/test_sandbox_adapter.py
+require_file docs/harness/tests/test_sandbox_smoke.py
+require_exec docs/harness/bin/sandbox-adapter.py
+require_file docs/harness/bin/sandbox_registry.py
+require_exec docs/harness/bin/run-sandbox-smoke.sh
+# H4 trusted runner (fake writer only), scope checker and external evidence. Offline tests run in the lane;
+# the real-Docker smoke (run-runner-smoke.sh) is deliberately NOT wired into the lane or CI.
+require_exec docs/harness/bin/run-task.py
+require_exec docs/harness/bin/check-scope.py
+require_exec docs/harness/bin/record-evidence.py
+require_file docs/harness/bin/harness_git.py
+require_exec docs/harness/bin/run-runner-smoke.sh
+require_file docs/harness/tests/runner_test_support.py
+require_file docs/harness/tests/test_runner.py
+require_file docs/harness/tests/test_scope.py
+require_file docs/harness/tests/test_evidence_integrity.py
+require_file docs/harness/tests/test_runner_smoke.py
+require_file docs/harness/bin/validate-evidence.py
+require_file docs/harness/bin/test-fixtures.sh
+require_file docs/harness/bin/test-check-live-state.sh
+require_file docs/harness/bin/test-review-gate.sh
+require_grep docs/harness/bin/run-offline-lane.sh "unittest discover -s docs/harness/tests -p 'test_validate_evidence\.py'" 'offline lane runs the validator unit tests'
+require_grep docs/harness/bin/run-offline-lane.sh 'validate-evidence\.py --self-test' 'offline lane runs the validator self-test'
+require_grep docs/harness/bin/run-offline-lane.sh 'bash docs/harness/bin/test-fixtures\.sh' 'offline lane runs the fixtures suite'
+require_grep docs/harness/bin/run-offline-lane.sh 'bash docs/harness/bin/test-check-live-state\.sh' 'offline lane runs the live-state suite'
+require_grep docs/harness/bin/run-offline-lane.sh 'bash docs/harness/bin/test-review-gate\.sh' 'offline lane runs the review-gate suite'
+require_grep docs/harness/bin/run-offline-lane.sh "unittest discover -s docs/harness/tests -p 'test_offline_lane\.py'" 'offline lane runs its own fail-closed contract tests'
+require_grep docs/harness/bin/run-offline-lane.sh "unittest discover -s docs/harness/tests -p 'test_sandbox_adapter\.py'" 'offline lane runs the sandbox adapter unit tests (H3, no Docker needed)'
+require_grep docs/harness/bin/run-offline-lane.sh "unittest discover -s docs/harness/tests -p 'test_context_budget\.py'" 'offline lane runs the context budget and routing tests (H6)'
+require_grep docs/harness/bin/run-offline-lane.sh 'unittest -v docs/harness/tests/test_runner\.py docs/harness/tests/test_scope\.py docs/harness/tests/test_evidence_integrity\.py' 'offline lane runs the runner, scope and evidence tests (H4, no Docker needed)'
+
+# H5 read-only merge-policy evaluator: its tests are a mandatory lane component, and the
+# workflow that runs it in CI stays read-only (contents: read only, no pull_request_target, no
+# secrets, evaluator from the base checkout).
+require_exec docs/harness/bin/merge-gate.py
+require_file docs/harness/tests/test_merge_gate.py
+require_file docs/harness/bin/merge_gate_ci.py
+require_file docs/harness/tests/merge_gate_test_support.py
+require_grep docs/harness/bin/run-offline-lane.sh \
+  "unittest discover -s docs/harness/tests -p 'test_merge_gate\.py'" \
+  'offline lane runs the merge-gate evaluator tests (H5)'
+
+# O2 retention manifest/backup/restore tool: its hermetic tests are a mandatory lane component.
+require_exec docs/harness/bin/retention-manifest.py
+require_file docs/harness/tests/test_retention.py
+require_file docs/harness/retention/review-raw.manifest.json
+require_file docs/OPERATIONS_GIT_RETENTION.md
+require_grep docs/harness/bin/run-offline-lane.sh "unittest discover -s docs/harness/tests -p 'test_retention\.py'" 'offline lane runs the retention tests (O2)'
+
+# O4 read-only standing checks with ownership (alert-only): runner, goals registry + schema, runbook and their hermetic
+# tests are a mandatory lane component; the scheduled workflow stays read-only and alert-only.
+require_exec docs/harness/bin/run-standing-checks.py
+require_file docs/harness/tests/test_standing_checks.py
+require_file docs/harness/goals/registry.json
+require_file docs/harness/goals/README.md
+require_file docs/harness/schemas/goal-v1.schema.json
+require_grep docs/harness/bin/run-offline-lane.sh "unittest discover -s docs/harness/tests -p 'test_standing_checks\.py'" 'offline lane runs the standing-checks tests (O4)'
+STANDING_WF=.github/workflows/standing-checks.yml
+STANDING_CODE="$(grep -v '^[[:space:]]*#' "$STANDING_WF" 2>/dev/null || true)"
+if [ ! -f "$STANDING_WF" ]; then
+  fail "standing-checks workflow is missing" "standing_checks_workflow:read_only" "$STANDING_WF"
+elif grep -Eq 'pull_request|secrets\.|write|git (commit|push)|gh (pr|issue)' <<<"$STANDING_CODE" \
+  || [ "$(grep -A2 '^permissions:$' <<<"$STANDING_CODE" | sed -n 2,3p)" != "  contents: read" ] \
+  || ! grep -Eq 'run-standing-checks\.py run --mode scheduled' <<<"$STANDING_CODE"; then
+  fail "standing-checks workflow is not read-only/alert-only (pull_request trigger, secrets, write permission, commit/push/gh or runner missing)" "standing_checks_workflow:read_only" "$STANDING_WF"
+else
+  add_check "standing_checks_workflow:read_only" "pass" "standing-checks workflow is read-only, alert-only and runs the standing-checks runner" "$STANDING_WF"
+fi
+AGENT_EVIDENCE_WF=.github/workflows/agent-evidence.yml
+AE_ID=merge_gate_workflow
+AGENT_EVIDENCE_CODE="$(grep -v '^[[:space:]]*#' "$AGENT_EVIDENCE_WF" 2>/dev/null || true)"
+AE_PERMS="$(grep -A2 '^permissions:$' <<<"$AGENT_EVIDENCE_CODE" | sed -n 2,3p)"
+AE_EVAL='^[[:space:]]+python3 trusted/docs/harness/bin/merge-gate\.py'
+if [ ! -f "$AGENT_EVIDENCE_WF" ]; then
+  fail "agent-evidence workflow is missing" "$AE_ID:read_only" "$AGENT_EVIDENCE_WF"
+elif grep -Eq 'pull_request_target|secrets\.|write' <<<"$AGENT_EVIDENCE_CODE" \
+  || [ "$AE_PERMS" != "  contents: read" ] \
+  || ! grep -Eq "$AE_EVAL" <<<"$AGENT_EVIDENCE_CODE"; then
+  AE_MSG="agent-evidence workflow is not read-only (pull_request_target, secrets, write"
+  AE_MSG="$AE_MSG permission, extra permissions or evaluator outside trusted/)"
+  fail "$AE_MSG" "$AE_ID:read_only" "$AGENT_EVIDENCE_WF"
+else
+  add_check "$AE_ID:read_only" "pass" \
+    "agent-evidence workflow is read-only and runs the base-revision evaluator" "$AGENT_EVIDENCE_WF"
+fi
+# Injection guard: a ${{ }} expression inside a run: script (inline or block) would splice
+# PR-controlled text into shell; expressions must reach scripts through env:.
+if [ -f "$AGENT_EVIDENCE_WF" ] && ! awk '
+  { match($0, /^ */); w = RLENGTH; s = substr($0, w + 1)
+    if (inrun && s != "" && w > ind) { if (index($0, "${{")) bad = 1; next }
+    inrun = 0; k = s; sub(/^- /, "", k)
+    if (k ~ /^run:/) { inrun = 1; ind = w; if (index(k, "${{")) bad = 1 } }
+  END { exit bad ? 1 : 0 }' <<<"$AGENT_EVIDENCE_CODE"; then
+  fail "agent-evidence workflow has a \${{ }} expression inside a run: script (use env:)" \
+    "$AE_ID:no_inline_expressions" "$AGENT_EVIDENCE_WF"
+else
+  add_check "$AE_ID:no_inline_expressions" "pass" \
+    "agent-evidence run: scripts take expressions only through env" "$AGENT_EVIDENCE_WF"
+fi
+
+# Active (non-comment) call sites only: a mention in a comment must not satisfy the check.
+lane_wiring_check() {
+  local id="$1" path="$2" text="$3" pattern="$4" label="$5"
+  if [ -f "$path" ] && grep -Eq "^[^#]*${pattern}" <<<"$text"; then
+    add_check "offline_lane_wiring:${id}" "pass" "offline lane is wired: ${label}" "$path"
+  else
+    fail "offline lane wiring missing: ${label} ($path)" "offline_lane_wiring:${id}" "$path"
+  fi
+}
+SENSORS_QUICK_BLOCK="$(awk '/^  quick\)$/{f=1;next} /^  docs\)$/{f=0} f' docs/harness/bin/sensors.sh 2>/dev/null || true)"
+SENSORS_FULL_BLOCK="$(awk '/^resolve_ci_required_features$/{f=1} f' docs/harness/bin/sensors.sh 2>/dev/null || true)"
+SENSORS_HELPER_BLOCK="$(awk '/^run_offline_lane\(\) \{$/{f=1} f{print} /^\}$/{if(f) exit}' docs/harness/bin/sensors.sh 2>/dev/null || true)"
+CI_TEST_JOB_BLOCK="$(awk '/^  test:$/{f=1;next} f && /^  [A-Za-z0-9_-]+:$/{f=0} f' .github/workflows/ci.yml 2>/dev/null || true)"
+CI_LANE_STEP_BLOCK="$(awk '/^      - name: Offline harness lane \(/{f=1;print;next} f && /^      - /{f=0} f' .github/workflows/ci.yml 2>/dev/null || true)"
+lane_wiring_check "sensors_helper" docs/harness/bin/sensors.sh "$SENSORS_HELPER_BLOCK" 'bash docs/harness/bin/run-offline-lane\.sh' 'sensors.sh run_offline_lane helper runs the runner'
+lane_wiring_check "sensors_quick" docs/harness/bin/sensors.sh "$SENSORS_QUICK_BLOCK" '\brun_offline_lane\b' 'sensors.sh quick mode'
+lane_wiring_check "sensors_full" docs/harness/bin/sensors.sh "$SENSORS_FULL_BLOCK" 'bash docs/harness/bin/run-offline-lane\.sh' 'sensors.sh full mode'
+lane_wiring_check "ci_script" scripts/ci.sh "$(cat scripts/ci.sh 2>/dev/null || true)" 'bash .*docs/harness/bin/run-offline-lane\.sh' 'scripts/ci.sh'
+lane_wiring_check "ci_job_name" .github/workflows/ci.yml "$CI_TEST_JOB_BLOCK" 'name: Test \(ubuntu-latest\)' 'ci.yml test job keeps the required name "Test (ubuntu-latest)"'
+lane_wiring_check "ci_step" .github/workflows/ci.yml "$CI_LANE_STEP_BLOCK" 'run: bash docs/harness/bin/run-offline-lane\.sh' 'ci.yml required Test job step'
+if grep -Eq '^[[:space:]]*(continue-on-error|if):' <<<"$CI_LANE_STEP_BLOCK" \
+  || grep -Eq '^    (continue-on-error|if):' <<<"$CI_TEST_JOB_BLOCK"; then
+  fail "offline lane CI step or the Test job is conditional/continue-on-error; the lane must be unconditional" "offline_lane_wiring:ci_unconditional" ".github/workflows/ci.yml"
+else
+  add_check "offline_lane_wiring:ci_unconditional" "pass" "offline lane CI step is unconditional" ".github/workflows/ci.yml"
+fi
 
 # Repository skills inventory and frontmatter validation
 require_grep docs/harness/README.md 'SKILLS\.md' 'README mentions SKILLS.md'
@@ -776,6 +923,40 @@ else
   warn ".sensors-log missing (run sensors.sh at least once for historical measurements)" "sensors_log:format" "docs/harness/.sensors-log"
 fi
 
+# Live summary budget (H6): progress.md stays a short, resumable summary; history lives in progress-history.md.
+PROGRESS_LINES="$(wc -l <docs/harness/progress.md 2>/dev/null | tr -d ' ' || echo 999)"
+if [ "${PROGRESS_LINES:-999}" -gt 150 ]; then
+  fail "progress.md has ${PROGRESS_LINES} lines (live summary budget <= 150; move history to progress-history.md, see context-budget.md)" "live_summary:budget" "docs/harness/progress.md"
+else
+  add_check "live_summary:budget" "pass" "progress.md live summary is within 150 lines (${PROGRESS_LINES})" "docs/harness/progress.md"
+fi
+
+# Churn-free live-state enforcement on the real progress.md (H6): required fields, active plan, authoritative
+# review, reconciliation rows and a well-formed Last commit id. Ancestry is verified when possible; a shallow clone or
+# a SHA-rewriting merge (squash/rebase) is a WARN here, never a failure. The strict check (HEAD/parent + sensors
+# timestamp, `check-live-state.sh --progress docs/harness/progress.md`) stays the task-closing check.
+if [ -f docs/harness/bin/check-live-state.sh ] && [ -f docs/harness/progress.md ]; then
+  if LIVE_STATE_OUTPUT="$(bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md --structural 2>&1)"; then
+    LIVE_STATE_ANCESTRY="$(printf '%s\n' "$LIVE_STATE_OUTPUT" | sed -n 's/^ancestor_check=//p' | head -1)"
+    case "$LIVE_STATE_ANCESTRY" in
+      ancestor)
+        add_check "live_state:structural" "pass" "progress.md live state is structurally consistent with the repository" "docs/harness/progress.md"
+        ;;
+      skipped-shallow)
+        warn "ancestry not verified (shallow clone): progress.md Last commit could not be checked against HEAD" "live_state:structural" "docs/harness/progress.md"
+        ;;
+      unreachable)
+        warn "progress.md Last commit is not reachable from HEAD (squash/rebase merges rewrite SHAs, or history diverged); refresh Last commit" "live_state:structural" "docs/harness/progress.md"
+        ;;
+      *)
+        fail "progress.md live state structural check gave no usable ancestry verdict (ancestor_check='${LIVE_STATE_ANCESTRY}')" "live_state:structural" "docs/harness/progress.md"
+        ;;
+    esac
+  else
+    fail "progress.md live state is structurally inconsistent: $(printf '%s' "$LIVE_STATE_OUTPUT" | grep -v '^head=\|^mode=\|^ancestor_check=\|^worktree_status=\|^remediation:' | tr '\n' ' ')" "live_state:structural" "docs/harness/progress.md"
+  fi
+fi
+
 # Bootstrap contract: runs and produces limited output
 if BOOTSTRAP_OUTPUT="$(bash docs/harness/bin/bootstrap.sh 2>/dev/null)"; then
   add_check "bootstrap_contract:exec" "pass" "bootstrap.sh executed cleanly" "docs/harness/bin/bootstrap.sh"
@@ -784,8 +965,8 @@ else
   fail "bootstrap.sh failed to execute cleanly" "bootstrap_contract:exec" "docs/harness/bin/bootstrap.sh"
   BOOTSTRAP_LINES=999
 fi
-if [ "$BOOTSTRAP_LINES" -gt 60 ]; then
-  fail "bootstrap output too long: ${BOOTSTRAP_LINES} lines (contract <= ~55)" "bootstrap_contract:output_size" "docs/harness/bin/bootstrap.sh"
+if [ "$BOOTSTRAP_LINES" -gt 50 ]; then
+  fail "bootstrap output too long: ${BOOTSTRAP_LINES} lines (contract <= 50, docs/harness/context-budget.md)" "bootstrap_contract:output_size" "docs/harness/bin/bootstrap.sh"
 else
   add_check "bootstrap_contract:output_size" "pass" "bootstrap output size is within contract" "docs/harness/bin/bootstrap.sh"
 fi

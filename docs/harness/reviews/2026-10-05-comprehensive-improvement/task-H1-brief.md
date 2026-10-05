@@ -1,0 +1,12 @@
+### H1 — Review gate fail-closed e diff completo [P1; harness; depende E0 e escopo aprovado]
+
+**Files:** modificar `docs/harness/bin/review-gate.sh`; criar `docs/harness/bin/test-review-gate.sh`; atualizar GATES/POLICY em PR dedicado.
+**Interfaces:** enquanto vigente, preservar marcador legado exigido; `post` zero somente com verdict válido e escopo verificado. `pre` advisory e geração de prompt não aprovam merge.
+
+- [ ] Fixtures em repo temporário: review ausente → nonzero; prose PASS sem marcador → nonzero; FAIL → nonzero; somente staged → path incluído; rename/delete → ambos os paths; range explícito cobre todos os commits. Testar docs-only skip allowlisted sem ampliá-lo e alterações a scripts sempre exigindo reviewer.
+- [ ] Tornar pending distinguível de PASS; especificar a fonte do diff (base/candidate para final, index/working tree para preparação) em vez de adivinhar último commit. Não tratar untracked relevante como invisível.
+- [ ] Fixtures `test_stale_review_rejected`, `test_invalid_range_rejected`, `test_missing_commit_rejected`: reaproveitar PASS após mudar um byte → recusa; falha de `git diff`/`git show` → nonzero antes de consultar verdict. Vincular task/base/head/tree/diff e identidade de captura externa ao writer. Marcador legado sozinho só é histórico, nunca evidência atual; não converter texto de erro de diff em escopo revisado.
+- [ ] Antes de H4/H5, procedência usa procedimento manual aprovado: operador humano autenticado confere task/base/head/tree/diff e origem do review, registra aceite vinculado em serviço/receipt externo aprovado fora da autoridade do writer; gate compara com valores esperados fornecidos por esse operador. Nenhum JSON ou marcador do writer se autentica sozinho. Sem receipt/identidade externa verificável → pending/nonzero, inclusive para PASS textual. Fixtures simulam trusted/untrusted receipt; H4/H5 automatizam depois esse boundary, não são pré-requisito para implementar a recusa de H1. A aprovação manual continua sujeita à política canônica, não é substituída por estes seis pareceres.
+- [ ] Rodar `rtk proxy bash docs/harness/bin/test-review-gate.sh`, self-test existente e doctor. Revisor independente inspeciona fonte/fixtures e não deixa o script alterado autorizar a própria alteração.
+
+**Aceite:** consumidores não aceitam pending como PASS; staged-only demonstrado. **Rollback:** manter guard externo recusando pending; nunca restaurar falso verde silenciosamente.

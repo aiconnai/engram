@@ -89,6 +89,12 @@ impl CloudStorage {
     ///
     /// Existing objects are read and validated before replacement, so callers
     /// need `HeadObject`, `GetObject`, and conditional `PutObject` permission.
+    ///
+    /// Known G1 hazard (INVARIANTS #27): the file is read through a descriptor
+    /// that is closed afterwards. Uploading a database that this process has
+    /// open through rusqlite drops SQLite's POSIX locks on it (and the raw
+    /// bytes may miss WAL content). `SyncWorker` does this but is not started
+    /// by any binary today; checkpoint/snapshot to a separate file first.
     pub async fn upload(&self, local_path: &Path) -> Result<u64> {
         let condition = self.ensure_remote_object_is_replaceable().await?;
         let data = tokio::fs::read(local_path).await?;
@@ -123,7 +129,15 @@ impl CloudStorage {
     }
 
     /// Download from cloud to local file
+    ///
+    /// The object is validated first (key identity, format) and then written
+    /// to a sibling temp file, fsynced and renamed over `local_path`, so an
+    /// interrupted or failed download leaves the previous file intact (no
+    /// partial or truncated database) and no temp file behind. Rename swaps
+    /// the directory entry: never point it at a database that is open (in this
+    /// or another process); see the G1 note on [`Self::upload`].
     pub async fn download(&self, local_path: &Path) -> Result<u64> {
+        refuse_hot_sqlite_target(local_path)?;
         let object = self.backend.get_object(&self.bucket, &self.key).await?;
 
         let decrypted = if self.encrypt {
@@ -147,7 +161,7 @@ impl CloudStorage {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        tokio::fs::write(local_path, &decrypted).await?;
+        replace_file_atomically(local_path, &decrypted).await?;
 
         tracing::info!(
             "Downloaded {} bytes from s3://{}/{}",
@@ -156,6 +170,18 @@ impl CloudStorage {
             self.key
         );
         Ok(size)
+    }
+
+    /// [`Self::download`] for callers that hold the open [`crate::storage::Storage`]:
+    /// additionally refuses a target that is the live database or one of its
+    /// side files (G1: replacing or closing those drops SQLite's locks).
+    pub async fn download_checked(
+        &self,
+        local_path: &Path,
+        storage: &crate::storage::Storage,
+    ) -> Result<u64> {
+        storage.refuse_active_sqlite_artifact(local_path)?;
+        self.download(local_path).await
     }
 
     /// Check if remote file exists
@@ -216,6 +242,97 @@ impl CloudStorage {
             key_provider: None,
         }
     }
+}
+
+/// Refuse a download target that looks like an open database: a non-empty
+/// `-wal`, or a `-shm` / `-journal` file, next to it means another connection
+/// (or an unclean shutdown) still owns state that a replacement would corrupt.
+fn refuse_hot_sqlite_target(target: &Path) -> Result<()> {
+    let sidecar = |suffix: &str| {
+        let mut name = target.as_os_str().to_os_string();
+        name.push(suffix);
+        std::path::PathBuf::from(name)
+    };
+    let hot_wal = std::fs::metadata(sidecar("-wal")).is_ok_and(|m| m.len() > 0);
+    let hot_other = ["-shm", "-journal"]
+        .iter()
+        .any(|suffix| sidecar(suffix).exists());
+    if hot_wal || hot_other {
+        return Err(EngramError::Sync(format!(
+            "refusing to replace '{}': it has a hot -wal/-shm/-journal side file \
+             (database open or not cleanly closed)",
+            target.display()
+        )));
+    }
+    Ok(())
+}
+
+/// Make the rename durable. Best effort: the file is already replaced, so a
+/// failure only weakens crash durability and is logged, not returned.
+async fn sync_parent_dir(target: &Path) {
+    #[cfg(unix)]
+    {
+        let parent = match target.parent() {
+            Some(p) if !p.as_os_str().is_empty() => p,
+            _ => Path::new("."),
+        };
+        let result = async {
+            let dir = tokio::fs::File::open(parent).await?;
+            dir.sync_all().await
+        }
+        .await;
+        if let Err(error) = result {
+            tracing::warn!(
+                path = %crate::observability::redact::path_label(parent),
+                error_class = %crate::observability::redact::io_class(&error),
+                "fsync of download directory failed"
+            );
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = target;
+}
+
+/// Write `bytes` to a sibling temp file, fsync it, and rename it over `target`.
+/// The temp file is removed on every failure path. An existing target keeps its
+/// permissions; a new one is owner-only.
+async fn replace_file_atomically(target: &Path, bytes: &[u8]) -> Result<()> {
+    use tokio::io::AsyncWriteExt;
+
+    let file_name = target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| EngramError::Config("download target has no file name".to_string()))?;
+    let temp = target.with_file_name(format!(
+        ".{file_name}.download-{}.tmp",
+        uuid::Uuid::new_v4().simple()
+    ));
+
+    let outcome: Result<()> = async {
+        let mut options = tokio::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&temp).await?;
+        file.write_all(bytes).await?;
+        file.sync_all().await?;
+        drop(file);
+        if let Ok(existing) = tokio::fs::metadata(target).await {
+            if existing.is_file() {
+                tokio::fs::set_permissions(&temp, existing.permissions()).await?;
+            }
+        }
+        tokio::fs::rename(&temp, target).await?;
+        sync_parent_dir(target).await;
+        Ok(())
+    }
+    .await;
+
+    if outcome.is_err() {
+        // Best-effort teardown: the business error is already in `outcome`.
+        let _ = tokio::fs::remove_file(&temp).await;
+    }
+    outcome
 }
 
 /// Cloud file metadata

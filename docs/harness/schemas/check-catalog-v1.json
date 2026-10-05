@@ -1,0 +1,44 @@
+{
+  "catalog_version": "check-catalog-v1",
+  "checks": {
+    "fmt": {
+      "description": "cargo fmt --all -- --check (sensors.sh step fmt)"
+    },
+    "clippy": {
+      "description": "cargo clippy with required features, -D warnings (sensors.sh step clippy)"
+    },
+    "test_lib": {
+      "description": "cargo test --lib --tests with required features (sensors.sh step test_lib)"
+    },
+    "test_integration": {
+      "description": "cargo test --bin engram-server (sensors.sh step test_integration)"
+    },
+    "test_integration_watch": {
+      "description": "cargo test --bin engram-watcher (sensors.sh step test_integration_watch)"
+    },
+    "wasm_target": {
+      "description": "wasm32-unknown-unknown target installed (sensors.sh step wasm_target)"
+    },
+    "wasm_all_targets": {
+      "description": "cargo check -p engram-wasm --all-targets (sensors.sh step wasm_all_targets)"
+    },
+    "wasm_wasm_target": {
+      "description": "cargo check -p engram-wasm --target wasm32-unknown-unknown (sensors.sh step wasm_wasm_target)"
+    },
+    "doc": {
+      "description": "cargo doc --no-deps --document-private-items with -D warnings (sensors.sh step doc)"
+    },
+    "ref_check": {
+      "description": "scripts/generate-mcp-reference.sh --check (sensors.sh step ref_check)"
+    },
+    "pr_title_policy": {
+      "description": "docs/harness/bin/pr-title-policy.sh accept and reject cases"
+    },
+    "doctor": {
+      "description": "docs/harness/bin/doctor.sh"
+    },
+    "harness_offline_lane": {
+      "description": "docs/harness/bin/run-offline-lane.sh (validator, fixtures, live-state and review-gate regression suites)"
+    }
+  }
+}

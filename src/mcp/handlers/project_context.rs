@@ -349,7 +349,10 @@ pub fn scan_project(ctx: &HandlerContext, params: Value) -> Value {
                         .with_transaction(|conn| delete_memory(conn, existing.id))
                     {
                         Ok(_) => {
-                            tracing::info!("Deleted stale section: {}", path);
+                            tracing::info!(
+                                section = %crate::observability::redact::opaque(path),
+                                "Deleted stale section"
+                            );
                         }
                         Err(e) => {
                             result
@@ -372,9 +375,9 @@ pub fn scan_project(ctx: &HandlerContext, params: Value) -> Value {
             let content_bytes = file.content.as_bytes();
             if let Err(e) = chain.log_document(content_bytes, &file.filename, None, &[], None) {
                 tracing::warn!(
-                    "Attestation hook (scan_project): failed to log '{}': {}",
-                    file.filename,
-                    e
+                    file = %crate::observability::redact::opaque(&file.filename),
+                    error = %crate::observability::redact::redacted(&e),
+                    "Attestation hook (scan_project): failed to log document"
                 );
             }
         }

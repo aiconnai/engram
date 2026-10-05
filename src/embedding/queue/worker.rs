@@ -8,7 +8,9 @@ use std::time::Duration;
 use tokio::time::interval;
 
 use super::core::EmbeddingQueue;
+use super::jobs::persist_computed_embedding;
 use super::types::EmbeddingRequest;
+use super::util::embedding_queue_db_write_error;
 use crate::embedding::{create_embedder, Embedder};
 use crate::error::{EngramError, Result};
 use crate::types::{EmbeddingConfig, MemoryId};
@@ -56,7 +58,10 @@ impl EmbeddingWorker {
                     // Process if batch is full
                     if batch.len() >= self.batch_size {
                         if let Err(e) = self.process_batch(&mut batch).await {
-                            tracing::error!("Embedding batch processing failed: {}", e);
+                            tracing::error!(
+                                error = %crate::observability::redact::redacted(&e),
+                                "Embedding batch processing failed"
+                            );
                         }
                     }
                 }
@@ -65,7 +70,10 @@ impl EmbeddingWorker {
                 _ = batch_timer.tick() => {
                     if !batch.is_empty() {
                         if let Err(e) = self.process_batch(&mut batch).await {
-                            tracing::error!("Embedding batch processing failed: {}", e);
+                            tracing::error!(
+                                error = %crate::observability::redact::redacted(&e),
+                                "Embedding batch processing failed"
+                            );
                         }
                     }
                 }
@@ -104,75 +112,91 @@ impl EmbeddingWorker {
                 }
             }
 
-            // Generate embeddings
+            // Generate embeddings (no lock held, no transaction open).
+            crate::observability::record_provider_call(
+                crate::observability::ProviderCall::Embedding,
+            );
             match self.embedder.embed_batch(&contents) {
-                Ok(embeddings) => {
-                    let conn = self.conn.lock();
-                    let now = Utc::now().to_rfc3339();
+                Ok(embeddings) if embeddings.len() == memory_ids.len() => {
                     let model = self.embedder.model_name();
-                    let dimensions = self.embedder.dimensions();
+                    let mut conn = self.conn.lock();
+                    let mut failures: Vec<(MemoryId, String)> = Vec::new();
 
-                    for (id, embedding) in memory_ids.iter().zip(embeddings.iter()) {
-                        // Serialize embedding to bytes
-                        let embedding_bytes: Vec<u8> =
-                            embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
-
-                        // Store embedding
-                        conn.execute(
-                            "INSERT OR REPLACE INTO embeddings (memory_id, embedding, model, dimensions, created_at)
-                         VALUES (?, ?, ?, ?, ?)",
-                            params![id, embedding_bytes, model, dimensions, now],
-                        )
-                        .map_err(|e| embedding_queue_db_write_error("store embedding row", *id, e))?;
-
-                        // Update memory
-                        conn.execute(
-                            "UPDATE memories SET has_embedding = 1 WHERE id = ?",
-                            params![id],
-                        )
-                        .map_err(|e| {
-                            embedding_queue_db_write_error(
-                                "mark memory as having embedding",
-                                *id,
-                                e,
-                            )
-                        })?;
-
-                        // Mark as complete
-                        conn.execute(
-                            "UPDATE embedding_queue SET status = 'complete', completed_at = ? WHERE memory_id = ?",
-                            params![now, id],
-                        )
-                        .map_err(|e| {
-                            embedding_queue_db_write_error(
-                                "mark embedding queue row as complete",
-                                *id,
-                                e,
-                            )
-                        })?;
+                    // One transaction per memory: embedding row + flag + job
+                    // completion commit together or not at all.
+                    for ((id, content), embedding) in
+                        memory_ids.iter().zip(&contents).zip(&embeddings)
+                    {
+                        let outcome = conn
+                            .transaction()
+                            .map_err(|e| {
+                                embedding_queue_db_write_error(
+                                    "begin embedding persistence transaction",
+                                    *id,
+                                    e,
+                                )
+                            })
+                            .and_then(|tx| {
+                                let persisted = persist_computed_embedding(
+                                    &tx, *id, content, embedding, model,
+                                )?;
+                                tx.commit().map_err(|e| {
+                                    embedding_queue_db_write_error(
+                                        "commit embedding persistence transaction",
+                                        *id,
+                                        e,
+                                    )
+                                })?;
+                                Ok(persisted)
+                            });
+                        if let Err(e) = outcome {
+                            failures.push((*id, e.to_string()));
+                        }
                     }
 
-                    tracing::info!("Processed {} embeddings", memory_ids.len());
-                    Ok(())
+                    if failures.is_empty() {
+                        tracing::info!("Processed {} embeddings", memory_ids.len());
+                        return Ok(());
+                    }
+                    let first = failures[0].1.clone();
+                    let total = failures.len();
+                    for (id, message) in &failures {
+                        mark_job_failed(&conn, *id, message)?;
+                    }
+                    Err(EngramError::Embedding(format!(
+                        "{total} of {} embeddings failed to persist (first: {first})",
+                        memory_ids.len()
+                    )))
                 }
-                Err(e) => {
-                    tracing::error!("Embedding batch failed: {}", e);
+                other => {
+                    // `error_msg` is persisted on the job and returned to the
+                    // caller; logs only get the class (provider bodies echo prompts).
+                    let (error_msg, error_class) = match other {
+                        Ok(embeddings) => (
+                            format!(
+                                "embedding provider returned {} embeddings for {} texts",
+                                embeddings.len(),
+                                memory_ids.len()
+                            ),
+                            "embedding",
+                        ),
+                        Err(e) => {
+                            crate::observability::record_provider_failure(
+                                crate::observability::ProviderCall::Embedding,
+                                &e,
+                            );
+                            (e.to_string(), crate::observability::redact::error_class(&e))
+                        }
+                    };
+                    tracing::error!(
+                        error_class,
+                        batch = memory_ids.len(),
+                        "Embedding batch failed"
+                    );
 
                     let conn = self.conn.lock();
-                    let error_msg = e.to_string();
-
                     for &id in &memory_ids {
-                        conn.execute(
-                            "UPDATE embedding_queue SET status = 'failed', error = ?, retry_count = retry_count + 1 WHERE memory_id = ?",
-                            params![error_msg, id],
-                        )
-                        .map_err(|db_error| {
-                            embedding_queue_db_write_error(
-                                "mark embedding queue row as failed",
-                                id,
-                                db_error,
-                            )
-                        })?;
+                        mark_job_failed(&conn, id, &error_msg)?;
                     }
 
                     Err(EngramError::Embedding(error_msg))
@@ -185,12 +209,16 @@ impl EmbeddingWorker {
     }
 }
 
-fn embedding_queue_db_write_error(
-    operation: &str,
-    memory_id: MemoryId,
-    error: rusqlite::Error,
-) -> EngramError {
-    EngramError::Embedding(format!(
-        "database write failed while {operation} for memory_id={memory_id}: {error}"
-    ))
+/// Mark a job failed (retry_count + 1). Only a job still in `processing` is
+/// touched, so a job re-queued by a content update is not clobbered.
+fn mark_job_failed(conn: &Connection, memory_id: MemoryId, error: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE embedding_queue SET status = 'failed', error = ?, retry_count = retry_count + 1
+         WHERE memory_id = ? AND status = 'processing'",
+        params![error, memory_id],
+    )
+    .map_err(|db_error| {
+        embedding_queue_db_write_error("mark embedding queue row as failed", memory_id, db_error)
+    })?;
+    Ok(())
 }

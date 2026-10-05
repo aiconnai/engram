@@ -107,7 +107,13 @@ fn create_note(storage: &Storage, line: &str) -> Result<()> {
         summary_of_id: None,
         media_url: None,
     };
-    match storage.with_transaction(|conn| create_memory(conn, &input)) {
+    // Deferred embedding is enqueued atomically with the insert.
+    let created = storage.with_transaction(|conn| {
+        let memory = create_memory(conn, &input)?;
+        engram::embedding::enqueue_embedding_job(conn, memory.id)?;
+        Ok(memory)
+    });
+    match created {
         Ok(memory) => println!("Created #{}", memory.id),
         Err(e) => println!("Error: {}", e),
     }
@@ -142,4 +148,26 @@ fn search_memories(storage: &Storage, line: &str) -> Result<()> {
         Err(e) => println!("Error: {}", e),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use engram::storage::{health_check_storage, DerivedIndexStatus};
+
+    #[test]
+    fn create_note_enqueues_embedding_job() {
+        let storage = Storage::open_in_memory().unwrap();
+
+        create_note(&storage, "create interactive note to embed").unwrap();
+
+        let embeddings = health_check_storage(&storage)
+            .unwrap()
+            .derived_indexes
+            .into_iter()
+            .find(|index| index.name == "embeddings")
+            .unwrap();
+        assert_eq!(embeddings.pending_count, 1);
+        assert_eq!(embeddings.status, DerivedIndexStatus::Backlogged);
+    }
 }

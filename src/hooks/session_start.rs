@@ -62,8 +62,29 @@ impl SessionStartHandler {
             return Ok(HookResult::Continue);
         }
 
-        let injection_value = build_injection(workspace, &drained);
+        // At most `MAX_DRAIN_ROWS` rows are drained per start; tell the consumer
+        // how many remain queued so a partial delivery is visible.
+        let remaining = remaining_value(
+            storage.with_connection(|conn| pending_injections::pending_count(conn, workspace)),
+        );
+        let injection_value = build_injection(workspace, &drained, remaining);
         Ok(HookResult::Modify(injection_value))
+    }
+}
+
+/// `remaining` for the injection payload. A failed count is logged and reported
+/// as `null` ("unknown"), never as `0`, which would claim the queue is empty.
+pub(super) fn remaining_value(count: Result<i64>) -> Value {
+    match count {
+        Ok(n) => json!(n),
+        Err(e) => {
+            tracing::warn!(
+                target = "engram::hooks::session_start",
+                error = %e,
+                "could not count remaining pending_injections; reporting remaining as null"
+            );
+            Value::Null
+        }
     }
 }
 
@@ -71,7 +92,11 @@ impl SessionStartHandler {
 /// caller (the MCP server hook plumbing) can hand to whatever rendering
 /// path applies. Kept as structured JSON rather than a pre-rendered
 /// string so the consumer can choose a Markdown/plain/structured shape.
-fn build_injection(workspace: &str, items: &[pending_injections::PendingInjection]) -> Value {
+fn build_injection(
+    workspace: &str,
+    items: &[pending_injections::PendingInjection],
+    remaining: Value,
+) -> Value {
     let parsed: Vec<Value> = items
         .iter()
         .map(|row| {
@@ -81,6 +106,7 @@ fn build_injection(workspace: &str, items: &[pending_injections::PendingInjectio
                     "source_session_id": p.source_session_id,
                     "ended_at": p.ended_at,
                     "notes": p.notes,
+                    "notes_truncated": p.notes_truncated,
                 }),
                 Err(_) => {
                     // Unknown payload shape — surface raw so the next
@@ -98,6 +124,7 @@ fn build_injection(workspace: &str, items: &[pending_injections::PendingInjectio
         "kind": "session_start_injection",
         "workspace": workspace,
         "count": parsed.len(),
+        "remaining": remaining,
         "items": parsed,
     })
 }

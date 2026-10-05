@@ -21,6 +21,12 @@ use crate::storage::{
 };
 use crate::Result;
 
+/// Largest `notes` string kept in a queued payload. Longer notes are cut at a
+/// character boundary and the payload carries `notes_truncated = true`; the
+/// handoff is delivered as a partial result, never dropped or silently kept
+/// at full size.
+pub const MAX_NOTES_BYTES: usize = 8 * 1024;
+
 /// Default payload shape written to `pending_injections`. Tools that
 /// consume the queue can parse this struct; future producers may write
 /// richer payloads — the consumer should treat unknown fields as opaque
@@ -32,6 +38,8 @@ pub struct SessionEndPayload {
     pub workspace: String,
     pub ended_at: String,
     pub notes: Option<String>,
+    #[serde(default)]
+    pub notes_truncated: bool,
 }
 
 pub struct SessionEndHandler {
@@ -110,16 +118,14 @@ impl SessionEndHandler {
             return Ok(HookResult::Continue);
         }
 
+        let (notes, notes_truncated) = bounded_notes(context);
         let payload = SessionEndPayload {
             kind: "session_end".to_string(),
             source_session_id: context.session_id.clone(),
             workspace: workspace.to_string(),
             ended_at: context.timestamp.clone(),
-            notes: context
-                .metadata
-                .get("notes")
-                .and_then(|v| v.as_str())
-                .map(str::to_string),
+            notes,
+            notes_truncated,
         };
         let payload_json = serde_json::to_string(&payload).unwrap_or_else(|_| {
             // Falling back to a hand-rolled JSON keeps the queue write
@@ -133,21 +139,33 @@ impl SessionEndHandler {
             .to_string()
         });
 
-        let result = storage.with_connection(|conn| {
-            pending_injections::enqueue(
+        // A replayed SessionEnd for the same session must not queue a second
+        // injection while the first is still waiting (retry idempotence).
+        let result = storage.with_connection(|conn| match context.session_id.as_deref() {
+            Some(session_id) => pending_injections::enqueue_once_for_session(
                 conn,
                 workspace,
                 &payload_json,
-                context.session_id.as_deref(),
+                session_id,
                 None,
-            )
+            ),
+            None => {
+                pending_injections::enqueue(conn, workspace, &payload_json, None, None).map(Some)
+            }
         });
         let queued = match result {
-            Ok(id) => {
+            Ok(Some(id)) => {
                 tracing::debug!(
                     target = "engram::hooks::session_end",
                     queue_id = id,
                     "enqueued session-end payload"
+                );
+                true
+            }
+            Ok(None) => {
+                tracing::debug!(
+                    target = "engram::hooks::session_end",
+                    "session-end payload already queued for this session; not duplicated"
                 );
                 true
             }
@@ -165,6 +183,22 @@ impl SessionEndHandler {
 
         Ok(HookResult::Continue)
     }
+}
+
+/// `notes` from the hook metadata, cut to [`MAX_NOTES_BYTES`] on a character
+/// boundary. The flag says whether anything was cut.
+fn bounded_notes(context: &HookContext) -> (Option<String>, bool) {
+    let Some(notes) = context.metadata.get("notes").and_then(|v| v.as_str()) else {
+        return (None, false);
+    };
+    if notes.len() <= MAX_NOTES_BYTES {
+        return (Some(notes.to_string()), false);
+    }
+    let mut end = MAX_NOTES_BYTES;
+    while !notes.is_char_boundary(end) {
+        end -= 1;
+    }
+    (Some(notes[..end].to_string()), true)
 }
 
 fn emit_session_end_policy_summary(

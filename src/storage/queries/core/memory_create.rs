@@ -97,7 +97,7 @@ pub fn create_memory(conn: &Connection, input: &CreateMemoryInput) -> Result<Mem
         MemoryTier::Daily => {
             // Daily memories must have an expiration (default: 24 hours)
             let ttl = input.ttl_seconds.filter(|&t| t > 0).unwrap_or(86400); // 24h default
-            Some((now + chrono::Duration::seconds(ttl)).to_rfc3339())
+            Some(expiry_after(now, ttl)?.to_rfc3339())
         }
     };
 

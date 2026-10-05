@@ -3,8 +3,8 @@
 #
 # Contract (Engram):
 #   - Exits 0 even if files are missing (degrades gracefully)
-#   - Prints <= 55 lines to stdout (slightly higher than reference due to Rust/MCP specifics)
-#   - Completes in < 800 ms
+#   - Prints <= 50 lines to stdout (H6 budget; enforced by doctor.sh and test_context_budget.py)
+#   - Completes in < 500 ms (median of 5 runs is asserted by test_context_budget.py)
 #   - Output contains: "engram harness state", "Branch:", "Active sprint", "Read next"
 #   - No side effects (read-only)
 #   - Security contract remains static/read-only first; see docs/harness/security/anthropic-reference-harness.md
@@ -70,6 +70,8 @@ if [ -f docs/harness/progress.md ]; then
   echo "Sprint: $(field_value docs/harness/progress.md "Active sprint")"
   echo "Task: $ACTIVE_TASK"
   echo "Active plan: $(field_value docs/harness/progress.md "Active plan")"
+  echo "Last review: $(field_value docs/harness/progress.md "Last review")"
+  echo "Resume: progress.md '## Retomada rápida' (scope, limits, last evidence); history: progress-history.md"
 else
   echo "(progress.md missing — run doctor.sh)"
 fi

@@ -1,0 +1,16 @@
+{
+  "schema_version": "evidence-v2",
+  "policy_version": "harness-hardening-v1",
+  "timestamp": "2026-07-21T18:00:00Z",
+  "task_id": "task-20260721-agent-harness-001",
+  "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+  "base_sha": "abcdef0123456789abcdef0123456789abcdef01",
+  "tree_sha": "fedcba9876543210fedcba9876543210fedcba98",
+  "verdict": "pass",
+  "checks": [],
+  "sha256_manifest": {
+    "docs/harness/SPEC.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "docs/harness/schemas/task-v2.schema.json": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+  },
+  "recorder": "synthetic-test-fixture"
+}

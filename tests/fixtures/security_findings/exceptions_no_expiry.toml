@@ -1,0 +1,10 @@
+# Synthetic fixture: invalid record (no expiry).
+schema_version = 1
+
+[[exceptions]]
+scanner = "codeql"
+rule_id = "rs/synthetic-high"
+path = "src/lib.rs"
+owner = "Ronaldo"
+approved_by = "Ronaldo"
+rationale = "Synthetic fixture rationale: no expiry."
