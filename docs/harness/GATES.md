@@ -156,6 +156,10 @@ Findings policy (mechanical, fail-closed; fixtures in
   differs from the expected SHA) blocks.
 - Identity comes from the supervisor on the command line (`--scanner`, `--tool`,
   `--expected-sha`, `--scanner-exit`, `--allowed-skip`), never from the payload.
+- A run with no revision provenance (CodeQL with `upload: never` omits it) is accepted
+  only when the supervisor passes `--checkout-dir` and that checkout's HEAD equals
+  `--expected-sha` (job-checkout attestation, recorded in the reasons). Explicit
+  provenance, when present, must still match; attestation never excuses findings.
 - Exit codes: 0 for `pass`/`neutral`, 1 for `block`, 2 for usage errors.
 
 #### Workflow supply chain and pull-request exposure

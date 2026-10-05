@@ -27,6 +27,7 @@ EXPECTED_FINDINGS_ARGV = {
     "--expected-sha": "${{ github.sha }}",
     "--scanner-exit": "0",
     "--exceptions": "docs/security/finding-exceptions.toml",
+    "--checkout-dir": ".",
 }
 GATE_COMMANDS = (
     "python3 scripts/test_check_security_gate.py",

@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -160,12 +161,55 @@ def run_revisions(run: dict[str, Any]) -> list[str]:
     ]
 
 
-def check_identity(document: dict[str, Any], tool: str, expected_sha: str, decision: Decision) -> None:
+def checkout_head(checkout_dir: Path) -> str | None:
+    """HEAD of the supervisor's own checkout, or None when it cannot be read."""
+
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(checkout_dir), "rev-parse", "--verify", "HEAD^{commit}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    head = proc.stdout.strip()
+    return head if proc.returncode == 0 and SHA_RE.fullmatch(head) else None
+
+
+def check_identity(
+    document: dict[str, Any],
+    tool: str,
+    expected_sha: str,
+    decision: Decision,
+    checkout_dir: Path | None = None,
+) -> None:
+    attested: bool | None = None  # resolved lazily, only for runs without provenance
     for index, run in enumerate(document["runs"], start=1):
         name = run["tool"]["driver"]["name"]
         if tool.lower() not in name.lower():
             decision.block(f"run #{index} is from tool {name!r}, expected {tool!r}")
         revisions = run_revisions(run)
+        if not revisions and checkout_dir is not None:
+            # Scanners that do not upload (e.g. CodeQL `upload: never`) omit
+            # versionControlProvenance. The supervisor job can attest identity instead: the
+            # SARIF was produced in this job from its own checkout, whose HEAD must equal the
+            # expected SHA. Explicit provenance, when present, is still checked below.
+            if attested is None:
+                head = checkout_head(checkout_dir)
+                attested = head == expected_sha
+                if not attested:
+                    decision.block(
+                        f"job checkout {checkout_dir} is at {head[:12] if head else 'no readable HEAD'}, "
+                        f"expected {expected_sha[:12]}: report identity cannot be attested"
+                    )
+            if attested:
+                decision.reasons.append(
+                    f"run #{index}: no SARIF provenance; identity attested by job checkout "
+                    f"HEAD == {expected_sha[:12]}"
+                )
+            continue
         if not revisions:
             decision.block(
                 f"run #{index} carries no revision provenance: report identity cannot be verified "
@@ -245,6 +289,7 @@ def decide(
     exceptions_path: Path | None,
     allowed_skip: str | None,
     today: date,
+    checkout_dir: Path | None = None,
 ) -> Decision:
     decision = Decision("pass")
     if scanner_exit in NOT_RUN_STATES:
@@ -259,7 +304,7 @@ def decide(
         document = parse_sarif(sarif)
     except (FileNotFoundError, ValueError) as exc:
         return decision.block(str(exc))
-    check_identity(document, tool, expected_sha, decision)
+    check_identity(document, tool, expected_sha, decision, checkout_dir)
     try:
         exceptions = load_exceptions(exceptions_path, today)
     except ValueError as exc:
@@ -302,6 +347,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--expected-sha", required=True, type=parse_expected_sha)
     parser.add_argument("--scanner-exit", required=True, type=parse_scanner_exit)
     parser.add_argument("--exceptions", type=Path, help="governed finding exceptions (TOML)")
+    parser.add_argument(
+        "--checkout-dir",
+        type=Path,
+        help="supervisor's own checkout; when a SARIF run has no provenance, its HEAD must equal "
+        "--expected-sha for the report identity to be attested",
+    )
     parser.add_argument("--allowed-skip", help="supervisor-provided reason that authorizes a skip")
     parser.add_argument("--today", type=date.fromisoformat, default=None)
     parser.add_argument("--json", action="store_true", help="print one JSON object")
@@ -322,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
         exceptions_path=args.exceptions,
         allowed_skip=args.allowed_skip,
         today=args.today or date.today(),
+        checkout_dir=args.checkout_dir,
     )
     if args.json:
         print(

@@ -15,7 +15,10 @@ evidence model behind it. Nothing here changes branch protection.
 | Approved exceptions | `docs/security/finding-exceptions.toml` (owner, approver, expiry) | SARIF `suppressions` |
 
 A SARIF run must carry `versionControlProvenance[].revisionId` equal to the
-expected SHA; a run with no revision is treated as unverifiable and blocks.
+expected SHA; a run with no revision is treated as unverifiable and blocks, unless the
+supervisor attests identity with `--checkout-dir`: the job's own checkout HEAD must equal
+the expected SHA. CodeQL with `upload: never` writes no provenance (confirmed on the first
+CI run of PR #234), so the `codeql-security` job passes `--checkout-dir .`.
 
 ## Pinning
 

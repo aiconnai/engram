@@ -178,5 +178,83 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(json.loads(proc.stdout)["verdict"], "block")
 
 
+class JobCheckoutProvenanceTests(unittest.TestCase):
+    """CodeQL with `upload: never` writes SARIF without versionControlProvenance.
+
+    The supervisor may then attest identity from the job's own checkout: the checkout HEAD
+    must equal --expected-sha. Explicit SARIF provenance, when present, still has to match.
+    """
+
+    def setUp(self) -> None:
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.checkout = self.tmp / "checkout"
+        self.checkout.mkdir()
+        git = ["git", "-C", str(self.checkout), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+        subprocess.run([*git[:3], "init", "-q"], check=True)
+        (self.checkout / "f.txt").write_text("x\n")
+        subprocess.run([*git, "add", "f.txt"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "c"], check=True)
+        self.head = subprocess.run(
+            ["git", "-C", str(self.checkout), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def sarif(self, results: list | None = None, revision: str | None = None) -> Path:
+        run: dict = {"tool": {"driver": {"name": "CodeQL", "rules": []}}, "results": results or []}
+        if revision is not None:
+            run["versionControlProvenance"] = [{"repositoryUri": "x", "revisionId": revision}]
+        path = self.tmp / "r.sarif"
+        path.write_text(json.dumps({"version": "2.1.0", "runs": [run]}))
+        return path
+
+    def decide(self, sarif: Path, expected: str, checkout: Path | None) -> tuple[int, dict]:
+        args = [
+            "--scanner", "codeql", "--tool", "CodeQL", "--sarif", str(sarif),
+            "--expected-sha", expected, "--scanner-exit", "0", "--today", "2026-10-05", "--json",
+        ]
+        if checkout is not None:
+            args += ["--checkout-dir", str(checkout)]
+        proc = run_cli(args)
+        return proc.returncode, json.loads(proc.stdout) if proc.stdout.strip() else {}
+
+    def test_missing_provenance_is_attested_by_a_matching_job_checkout(self) -> None:
+        rc, out = self.decide(self.sarif(), self.head, self.checkout)
+        self.assertEqual((rc, out["verdict"]), (0, "pass"), out)
+        self.assertTrue(any("job checkout" in r for r in out["reasons"]), out)
+
+    def test_missing_provenance_without_checkout_dir_still_blocks(self) -> None:
+        rc, out = self.decide(self.sarif(), self.head, None)
+        self.assertEqual((rc, out["verdict"]), (1, "block"))
+
+    def test_checkout_at_another_commit_blocks(self) -> None:
+        rc, out = self.decide(self.sarif(), "f" * 40, self.checkout)
+        self.assertEqual((rc, out["verdict"]), (1, "block"))
+        self.assertTrue(any("checkout" in r for r in out["reasons"]), out)
+
+    def test_checkout_dir_that_is_not_a_git_checkout_blocks(self) -> None:
+        plain = self.tmp / "plain"
+        plain.mkdir()
+        rc, out = self.decide(self.sarif(), self.head, plain)
+        self.assertEqual((rc, out["verdict"]), (1, "block"))
+
+    def test_explicit_stale_provenance_blocks_even_with_matching_checkout(self) -> None:
+        rc, out = self.decide(self.sarif(revision="f" * 40), self.head, self.checkout)
+        self.assertEqual((rc, out["verdict"]), (1, "block"))
+
+    def test_attested_identity_does_not_excuse_high_findings(self) -> None:
+        high = [{"ruleId": "r", "level": "error", "message": {"text": "m"}}]
+        rc, out = self.decide(self.sarif(results=high), self.head, self.checkout)
+        self.assertEqual((rc, out["verdict"]), (1, "block"))
+        self.assertEqual(out["high_findings"], 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

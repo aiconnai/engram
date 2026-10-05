@@ -431,6 +431,8 @@ jobs:
           retention-days: 30
       # CodeQL exits 0 even with high findings, so the exit code is not the verdict. The
       # supervisor (this job) provides identity: scanner, tool and the commit SHA under test.
+      # `upload: never` SARIF has no versionControlProvenance, so the job attests identity from
+      # its own checkout (--checkout-dir .): HEAD must equal github.sha or the policy blocks.
       # Nothing inside the SARIF can approve itself; exceptions come only from the governed file.
       - name: Enforce CodeQL findings policy (high finding blocks even with exit 0)
         run: >-
@@ -441,6 +443,7 @@ jobs:
           --expected-sha "${{ github.sha }}"
           --scanner-exit 0
           --exceptions docs/security/finding-exceptions.toml
+          --checkout-dir .
 
   semgrep-security:
     name: Semgrep security
