@@ -13,7 +13,9 @@
 //! Distinguishing business failure from best-effort teardown: a non-zero exit
 //! status is returned to the caller (`BoundedOutput::status`) for it to turn
 //! into a domain error; `kill`/`wait` failures during teardown are best-effort
-//! and only logged.
+//! and only logged. Output that could not be captured completely (a pipe read
+//! error, a reader that never reported) is [`RunError::Output`], never an empty
+//! or silently truncated buffer; only the documented byte cap truncates.
 
 use std::io::Read;
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -45,6 +47,11 @@ pub(crate) enum RunError {
     Timeout(Duration),
     /// Polling the child failed; the child was killed and reaped.
     Wait(std::io::Error),
+    /// The child exited but one of its output streams could not be captured.
+    Output {
+        stream: &'static str,
+        reason: String,
+    },
 }
 
 /// Run `command` to completion or until `timeout`, capturing at most
@@ -92,19 +99,38 @@ pub(crate) fn run_bounded(
     // leader, so the readers see EOF.
     Ok(BoundedOutput {
         status,
-        stdout: stdout_rx.recv_timeout(READER_GRACE).unwrap_or_default(),
-        stderr: stderr_rx.recv_timeout(READER_GRACE).unwrap_or_default(),
+        stdout: collect_output(&stdout_rx, "stdout", READER_GRACE)?,
+        stderr: collect_output(&stderr_rx, "stderr", READER_GRACE)?,
     })
+}
+
+/// Wait up to `grace` for a reader's result. A read error, a reader that never
+/// reports, or one that vanished (spawn failure) is an error: an empty buffer
+/// would be indistinguishable from a child that printed nothing.
+fn collect_output(
+    rx: &mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    stream: &'static str,
+    grace: Duration,
+) -> Result<Vec<u8>, RunError> {
+    let reason = match rx.recv_timeout(grace) {
+        Ok(Ok(bytes)) => return Ok(bytes),
+        Ok(Err(error)) => format!("read failed: {error}"),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            format!("reader did not finish within {grace:?} (a descendant may still hold the pipe)")
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => "output reader unavailable".to_string(),
+    };
+    Err(RunError::Output { stream, reason })
 }
 
 fn drain<R: Read + Send + 'static>(
     stream: Option<R>,
     cap: usize,
     name: &'static str,
-) -> mpsc::Receiver<Vec<u8>> {
+) -> mpsc::Receiver<std::io::Result<Vec<u8>>> {
     let (tx, rx) = mpsc::channel();
     let Some(mut stream) = stream else {
-        let _ = tx.send(Vec::new());
+        let _ = tx.send(Ok(Vec::new()));
         return rx;
     };
     let spawned = std::thread::Builder::new()
@@ -112,20 +138,23 @@ fn drain<R: Read + Send + 'static>(
         .spawn(move || {
             let mut kept = Vec::new();
             let mut chunk = [0_u8; 8192];
-            loop {
+            let outcome = loop {
                 match stream.read(&mut chunk) {
-                    Ok(0) | Err(_) => break,
+                    Ok(0) => break Ok(kept),
                     Ok(n) => {
                         let room = cap.saturating_sub(kept.len());
                         kept.extend_from_slice(&chunk[..n.min(room)]);
                     }
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(error) => break Err(error),
                 }
-            }
+            };
             // A closed receiver only means the supervisor stopped waiting.
-            let _ = tx.send(kept);
+            let _ = tx.send(outcome);
         });
     if let Err(error) = spawned {
-        tracing::warn!(target = "engram::multimodal::process", %error, stream = name, "output reader spawn failed; output discarded");
+        // The sender was dropped with the closure, so `collect_output` reports it.
+        tracing::warn!(target = "engram::multimodal::process", %error, stream = name, "output reader spawn failed");
     }
     rx
 }
@@ -332,6 +361,81 @@ mod tests {
             let pid = read_pid(file);
             assert!(!pid_alive(pid), "{what} straggler {pid} survived");
         }
+    }
+
+    struct FailingReader;
+
+    impl Read for FailingReader {
+        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("pipe broke"))
+        }
+    }
+
+    struct InterruptedOnce(bool, &'static [u8]);
+
+    impl Read for InterruptedOnce {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if !self.0 {
+                self.0 = true;
+                return Err(std::io::ErrorKind::Interrupted.into());
+            }
+            let n = self.1.len().min(buf.len());
+            buf[..n].copy_from_slice(&self.1[..n]);
+            self.1 = &self.1[n..];
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn a_pipe_read_error_is_an_output_error_not_eof() {
+        let rx = drain(Some(FailingReader), 64, "stdout");
+        let err = collect_output(&rx, "stdout", READER_GRACE).expect_err("read error");
+        assert!(
+            matches!(&err, RunError::Output { stream: "stdout", reason } if reason.contains("pipe broke")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn an_interrupted_read_is_retried() {
+        let rx = drain(Some(InterruptedOnce(false, b"data")), 64, "stdout");
+        assert_eq!(
+            collect_output(&rx, "stdout", READER_GRACE).unwrap(),
+            b"data"
+        );
+    }
+
+    #[test]
+    fn a_reader_that_never_reports_is_an_output_error_not_empty_output() {
+        let (_tx, rx) = mpsc::channel::<std::io::Result<Vec<u8>>>();
+        let err = collect_output(&rx, "stderr", Duration::from_millis(20)).expect_err("grace");
+        assert!(
+            matches!(
+                err,
+                RunError::Output {
+                    stream: "stderr",
+                    ..
+                }
+            ),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn a_vanished_reader_is_an_output_error_not_empty_output() {
+        let (tx, rx) = mpsc::channel::<std::io::Result<Vec<u8>>>();
+        drop(tx);
+        let err = collect_output(&rx, "stdout", READER_GRACE).expect_err("disconnected");
+        assert!(
+            matches!(
+                err,
+                RunError::Output {
+                    stream: "stdout",
+                    ..
+                }
+            ),
+            "{err:?}"
+        );
     }
 
     #[test]

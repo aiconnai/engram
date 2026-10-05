@@ -224,6 +224,9 @@ impl VideoProcessor {
                 d.as_millis()
             )),
             RunError::Wait(e) => EngramError::Internal(format!("{bin} wait failed: {e}")),
+            RunError::Output { stream, reason } => {
+                EngramError::Internal(format!("{bin} {stream} capture failed: {reason}"))
+            }
         })
     }
 

@@ -6,6 +6,10 @@
 //!
 //! Compression Modes:
 //! - `Lossless`: Reversible dictionary substitution using canonical technical shorthands.
+//!   Reversibility is checked on every call: when the substituted text would not
+//!   decompress to the exact input (it already contains shorthands, uses a word
+//!   form the dictionary cannot restore, or has surrounding whitespace), the
+//!   input is stored unchanged under the `[AAAK:v1:verbatim]` header instead.
 //! - `UltraDense`: Aggressive token reduction stripping conversational filler,
 //!   collapsing whitespace, and contracting software engineering terminology.
 //! - `Transcript`: Dialogue compressor compacting `user:` / `assistant:` turns into
@@ -21,7 +25,8 @@ use crate::intelligence::token_counter::TiktokenCounter;
 /// Compression mode for AAAK engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AaakMode {
-    /// Reversible dictionary substitution
+    /// Reversible dictionary substitution (falls back to verbatim when the
+    /// substitution would not round-trip exactly)
     Lossless,
     /// Maximum density token reduction (~20x-30x)
     UltraDense,
@@ -555,6 +560,11 @@ static CONVERSATIONAL_FILLERS: &[&str] = &[
     "to summarize,",
 ];
 
+/// Header of a `Lossless` result whose dictionary substitution round-trips exactly.
+const LOSSLESS_HEADER: &str = "[AAAK:v1:lossless]\n";
+/// Header of a `Lossless` result stored unchanged because substitution would not round-trip.
+const VERBATIM_HEADER: &str = "[AAAK:v1:verbatim]\n";
+
 // Precompiled Regexes
 static RE_WHITESPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[ \t]+").unwrap());
 static RE_MULTILINE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n{3,}").unwrap());
@@ -590,19 +600,21 @@ impl AaakCompressor {
         let counter = TiktokenCounter::default();
         let original_tokens = counter.count_tokens(text);
 
-        let processed = match mode {
-            AaakMode::Lossless => Self::compress_lossless(text),
-            AaakMode::UltraDense => Self::compress_ultra_dense(text),
-            AaakMode::Transcript => Self::compress_transcript(text),
+        let compressed = match mode {
+            AaakMode::Lossless => Self::encode_lossless(text),
+            AaakMode::UltraDense => {
+                format!(
+                    "[AAAK:v1:dense]\n{}",
+                    Self::compress_ultra_dense(text).trim()
+                )
+            }
+            AaakMode::Transcript => {
+                format!(
+                    "[AAAK:v1:transcript]\n{}",
+                    Self::compress_transcript(text).trim()
+                )
+            }
         };
-
-        let header = match mode {
-            AaakMode::Lossless => "[AAAK:v1:lossless]\n",
-            AaakMode::UltraDense => "[AAAK:v1:dense]\n",
-            AaakMode::Transcript => "[AAAK:v1:transcript]\n",
-        };
-
-        let compressed = format!("{}{}", header, processed.trim());
         let compressed_bytes = compressed.len();
         let compressed_tokens = counter.count_tokens(&compressed);
 
@@ -633,6 +645,9 @@ impl AaakCompressor {
 
     /// Decompresses an AAAK-encoded text back to standard prose.
     pub fn decompress(text: &str) -> String {
+        if let Some(raw) = text.strip_prefix(VERBATIM_HEADER) {
+            return raw.to_string();
+        }
         let stripped = text
             .strip_prefix("[AAAK:v1:lossless]\n")
             .or_else(|| text.strip_prefix("[AAAK:v1:lossless]\r\n"))
@@ -719,7 +734,18 @@ impl AaakCompressor {
         result
     }
 
-    /// Compresses text using lossless deterministic substitution.
+    /// Lossless encoding: dictionary substitution when it decompresses to exactly
+    /// `text`, otherwise `text` unchanged under [`VERBATIM_HEADER`].
+    fn encode_lossless(text: &str) -> String {
+        let candidate = format!("{LOSSLESS_HEADER}{}", Self::compress_lossless(text).trim());
+        if Self::decompress(&candidate) == text {
+            candidate
+        } else {
+            format!("{VERBATIM_HEADER}{text}")
+        }
+    }
+
+    /// Compresses text using deterministic dictionary substitution.
     fn compress_lossless(text: &str) -> String {
         let mut result = text.to_string();
         for (re, short) in ABBREV_REGEXES.iter() {
@@ -908,6 +934,38 @@ mod tests {
 
         // Leading 'A' must remain 'A', not expand to 'Assistant'
         assert!(decompressed.starts_with("A database"));
+    }
+
+    #[test]
+    fn test_lossless_round_trip_is_exact_for_text_that_already_uses_shorthands() {
+        let inputs = [
+            "see w/ docs and msg handler",
+            "w/o retries, i.e. e.g. tmout .: done",
+            "fetch https://example.com/w/page",
+            "implement the implementation",
+            "Database CONFIGURATION for the repo",
+            "  leading and trailing whitespace  ",
+            "[U] user marker written by hand",
+            "[AAAK:v1:lossless]\nalready looks encoded",
+        ];
+        for input in inputs {
+            let res = AaakCompressor::compress(input, AaakMode::Lossless);
+            assert_eq!(
+                AaakCompressor::decompress(&res.compressed),
+                input,
+                "lossless round trip altered the text (encoded as {:?})",
+                res.compressed
+            );
+        }
+    }
+
+    #[test]
+    fn test_lossless_still_abbreviates_when_the_round_trip_is_exact() {
+        let input = "The database configuration function requires authentication parameters.";
+        let res = AaakCompressor::compress(input, AaakMode::Lossless);
+        assert!(res.compressed.starts_with("[AAAK:v1:lossless]\n"));
+        assert!(res.compressed.contains("db cfg fn"));
+        assert_eq!(AaakCompressor::decompress(&res.compressed), input);
     }
 
     #[test]
