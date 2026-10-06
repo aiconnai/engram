@@ -124,8 +124,14 @@ mod crash_and_cleanup {
 
     #[test]
     fn worker_that_exits_zero_with_garbage_is_rejected() {
-        let error = run(sh("echo not-json"), &[1], Duration::from_secs(5))
-            .expect_err("garbage output must fail");
+        // Consume the input first, like a real worker: a worker that exits before
+        // reading races the parent's write (EPIPE vs. "invalid response").
+        let error = run(
+            sh("cat >/dev/null; echo not-json"),
+            &[1],
+            Duration::from_secs(5),
+        )
+        .expect_err("garbage output must fail");
         assert!(error.to_string().contains("invalid response"), "{error}");
     }
 

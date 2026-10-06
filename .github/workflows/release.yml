@@ -164,6 +164,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # rust-toolchain.toml pins the compiler, so cargo runs that toolchain, not the action's
+      # `stable`; the cross target must be installed on the pinned toolchain too.
+      - name: Add the build target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
+
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           key: release-${{ matrix.target }}
