@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791800017881,
+  "lastUpdate": 1791886106333,
   "repoUrl": "https://github.com/aiconnai/engram",
   "entries": {
     "Engram Performance (Nightly)": [
@@ -46401,6 +46401,460 @@ window.BENCHMARK_DATA = {
             "name": "traversal/bfs_depth_3",
             "value": 1247737,
             "range": "± 19226",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Ronaldo Martins",
+            "username": "limaronaldo",
+            "email": "ron@ldinho.com.br"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1decdffe13ab8f1c9905bdda314c0d9982ddf6e8",
+          "message": "Merge pull request #242 from aiconnai/fix/ci-pinned-toolchain-targets\n\nfix(ci): add cross targets to the pinned toolchain and deflake pdf test",
+          "timestamp": "2026-10-06T16:17:44Z",
+          "url": "https://github.com/aiconnai/engram/commit/1decdffe13ab8f1c9905bdda314c0d9982ddf6e8"
+        },
+        "date": 1791886104669,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "community_detection/detect_communities_500_nodes",
+            "value": 5391857,
+            "range": "± 47949",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extractor_new/default",
+            "value": 3588,
+            "range": "± 21",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extraction/extract_mixed",
+            "value": 8664,
+            "range": "± 22",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_create/memory_create",
+            "value": 926898,
+            "range": "± 27727",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search/memory_search",
+            "value": 92895,
+            "range": "± 2541",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search_uncached/in_memory",
+            "value": 550212,
+            "range": "± 6159",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search_uncached/disk_wal",
+            "value": 607140,
+            "range": "± 5333",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_list/memory_list",
+            "value": 304154,
+            "range": "± 2416",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_stats/memory_stats",
+            "value": 122551,
+            "range": "± 958",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_error_path/unknown_tool",
+            "value": 506,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_create/no_embedding",
+            "value": 338147,
+            "range": "± 13049",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_get/by_id",
+            "value": 49092,
+            "range": "± 1656",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/10",
+            "value": 118486,
+            "range": "± 831",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/10",
+            "value": 293391,
+            "range": "± 4963",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/50",
+            "value": 464025,
+            "range": "± 4867",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/50",
+            "value": 710158,
+            "range": "± 4291",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/100",
+            "value": 909975,
+            "range": "± 10321",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/100",
+            "value": 1121551,
+            "range": "± 106906",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/create",
+            "value": 36111,
+            "range": "± 905",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/get_related",
+            "value": 22136,
+            "range": "± 308",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "get_stats",
+            "value": 330252,
+            "range": "± 1949",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/create/in_memory",
+            "value": 262483,
+            "range": "± 12625",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/create/disk_wal",
+            "value": 594673,
+            "range": "± 53730",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/create/disk_cloud_safe",
+            "value": 1779171,
+            "range": "± 84721",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/get/in_memory",
+            "value": 51160,
+            "range": "± 1093",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/get/disk_wal",
+            "value": 126064,
+            "range": "± 17554",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/get/disk_cloud_safe",
+            "value": 1023372,
+            "range": "± 77796",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/search/in_memory",
+            "value": 1043839,
+            "range": "± 10442",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/search/disk_wal",
+            "value": 1065310,
+            "range": "± 24726",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/search/disk_cloud_safe",
+            "value": 1100743,
+            "range": "± 14007",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_1",
+            "value": 38617440,
+            "range": "± 759992",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_1_one_writer",
+            "value": 69777085,
+            "range": "± 2898246",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_4",
+            "value": 239610402,
+            "range": "± 5356417",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_4_one_writer",
+            "value": 264983752,
+            "range": "± 13332117",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_8",
+            "value": 475992315,
+            "range": "± 16951478",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_8_one_writer",
+            "value": 521495794,
+            "range": "± 22431762",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/authentication",
+            "value": 255063,
+            "range": "± 3096",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/database migration",
+            "value": 293777,
+            "range": "± 1724",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/React hooks optimization",
+            "value": 325564,
+            "range": "± 2398",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/API rate limiting Redis",
+            "value": 361185,
+            "range": "± 1876",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/short",
+            "value": 45237,
+            "range": "± 329",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/medium",
+            "value": 12705393,
+            "range": "± 296701",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/long",
+            "value": 11565717,
+            "range": "± 201993",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/short",
+            "value": 854,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/medium",
+            "value": 2312,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/long",
+            "value": 5274,
+            "range": "± 71",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/batch_100",
+            "value": 192036,
+            "range": "± 2309",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/1_char_typo",
+            "value": 18566,
+            "range": "± 55",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/2_char_typo",
+            "value": 17469,
+            "range": "± 38",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/transposition",
+            "value": 18503,
+            "range": "± 53",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/100",
+            "value": 1368265,
+            "range": "± 5056",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/100",
+            "value": 1100247,
+            "range": "± 7867",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/1000",
+            "value": 11678366,
+            "range": "± 262465",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/1000",
+            "value": 11063204,
+            "range": "± 159116",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/10000",
+            "value": 122468526,
+            "range": "± 1500319",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/10000",
+            "value": 117408237,
+            "range": "± 1177634",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_index_v2_report/noop",
+            "value": 0,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/100",
+            "value": 6642,
+            "range": "± 83",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/500",
+            "value": 34061,
+            "range": "± 136",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/2000",
+            "value": 138366,
+            "range": "± 4536",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/20",
+            "value": 619,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/100",
+            "value": 623,
+            "range": "± 25",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/500",
+            "value": 620,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/tight_500/500",
+            "value": 2860,
+            "range": "± 17",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/medium_2k/2000",
+            "value": 9946,
+            "range": "± 73",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/loose_8k/8000",
+            "value": 39185,
+            "range": "± 162",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/200",
+            "value": 13257,
+            "range": "± 77",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/1000",
+            "value": 67416,
+            "range": "± 219",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/semantic_compression/fixed_corpus_ratio_recall",
+            "value": 80670581,
+            "range": "± 217343",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/50",
+            "value": 5542419,
+            "range": "± 43042",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/200",
+            "value": 20066790,
+            "range": "± 80586",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "traversal/bfs_depth_3",
+            "value": 1263930,
+            "range": "± 19451",
             "unit": "ns/iter"
           }
         ]
