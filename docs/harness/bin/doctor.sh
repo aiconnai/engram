@@ -558,9 +558,9 @@ STANDING_WF=.github/workflows/standing-checks.yml
 STANDING_CODE="$(grep -v '^[[:space:]]*#' "$STANDING_WF" 2>/dev/null || true)"
 if [ ! -f "$STANDING_WF" ]; then
   fail "standing-checks workflow is missing" "standing_checks_workflow:read_only" "$STANDING_WF"
-elif grep -Eq 'pull_request|secrets\.|write|git (commit|push)|gh (pr|issue)' <<<"$STANDING_CODE" \
-  || [ "$(grep -A2 '^permissions:$' <<<"$STANDING_CODE" | sed -n 2,3p)" != "  contents: read" ] \
-  || ! grep -Eq 'run-standing-checks\.py run --mode scheduled' <<<"$STANDING_CODE"; then
+elif printf '%s\n' "$STANDING_CODE" | grep -Ec 'pull_request|secrets\.|write|git (commit|push)|gh (pr|issue)' >/dev/null \
+  || [ "$(printf '%s\n' "$STANDING_CODE" | grep -A2 '^permissions:$' | sed -n 2,3p)" != "  contents: read" ] \
+  || ! printf '%s\n' "$STANDING_CODE" | grep -Ec 'run-standing-checks\.py run --mode scheduled' >/dev/null; then
   fail "standing-checks workflow is not read-only/alert-only (pull_request trigger, secrets, write permission, commit/push/gh or runner missing)" "standing_checks_workflow:read_only" "$STANDING_WF"
 else
   add_check "standing_checks_workflow:read_only" "pass" "standing-checks workflow is read-only, alert-only and runs the standing-checks runner" "$STANDING_WF"
@@ -568,13 +568,13 @@ fi
 AGENT_EVIDENCE_WF=.github/workflows/agent-evidence.yml
 AE_ID=merge_gate_workflow
 AGENT_EVIDENCE_CODE="$(grep -v '^[[:space:]]*#' "$AGENT_EVIDENCE_WF" 2>/dev/null || true)"
-AE_PERMS="$(grep -A2 '^permissions:$' <<<"$AGENT_EVIDENCE_CODE" | sed -n 2,3p)"
+AE_PERMS="$(printf '%s\n' "$AGENT_EVIDENCE_CODE" | grep -A2 '^permissions:$' | sed -n 2,3p)"
 AE_EVAL='^[[:space:]]+python3 trusted/docs/harness/bin/merge-gate\.py'
 if [ ! -f "$AGENT_EVIDENCE_WF" ]; then
   fail "agent-evidence workflow is missing" "$AE_ID:read_only" "$AGENT_EVIDENCE_WF"
-elif grep -Eq 'pull_request_target|secrets\.|write' <<<"$AGENT_EVIDENCE_CODE" \
+elif printf '%s\n' "$AGENT_EVIDENCE_CODE" | grep -Ec 'pull_request_target|secrets\.|write' >/dev/null \
   || [ "$AE_PERMS" != "  contents: read" ] \
-  || ! grep -Eq "$AE_EVAL" <<<"$AGENT_EVIDENCE_CODE"; then
+  || ! printf '%s\n' "$AGENT_EVIDENCE_CODE" | grep -Ec "$AE_EVAL" >/dev/null; then
   AE_MSG="agent-evidence workflow is not read-only (pull_request_target, secrets, write"
   AE_MSG="$AE_MSG permission, extra permissions or evaluator outside trusted/)"
   fail "$AE_MSG" "$AE_ID:read_only" "$AGENT_EVIDENCE_WF"
@@ -584,12 +584,12 @@ else
 fi
 # Injection guard: a ${{ }} expression inside a run: script (inline or block) would splice
 # PR-controlled text into shell; expressions must reach scripts through env:.
-if [ -f "$AGENT_EVIDENCE_WF" ] && ! awk '
+if [ -f "$AGENT_EVIDENCE_WF" ] && ! printf '%s\n' "$AGENT_EVIDENCE_CODE" | awk '
   { match($0, /^ */); w = RLENGTH; s = substr($0, w + 1)
     if (inrun && s != "" && w > ind) { if (index($0, "${{")) bad = 1; next }
     inrun = 0; k = s; sub(/^- /, "", k)
     if (k ~ /^run:/) { inrun = 1; ind = w; if (index(k, "${{")) bad = 1 } }
-  END { exit bad ? 1 : 0 }' <<<"$AGENT_EVIDENCE_CODE"; then
+  END { exit bad ? 1 : 0 }'; then
   fail "agent-evidence workflow has a \${{ }} expression inside a run: script (use env:)" \
     "$AE_ID:no_inline_expressions" "$AGENT_EVIDENCE_WF"
 else
@@ -600,7 +600,7 @@ fi
 # Active (non-comment) call sites only: a mention in a comment must not satisfy the check.
 lane_wiring_check() {
   local id="$1" path="$2" text="$3" pattern="$4" label="$5"
-  if [ -f "$path" ] && grep -Eq "^[^#]*${pattern}" <<<"$text"; then
+  if [ -f "$path" ] && printf '%s\n' "$text" | grep -Ec "^[^#]*${pattern}" >/dev/null; then
     add_check "offline_lane_wiring:${id}" "pass" "offline lane is wired: ${label}" "$path"
   else
     fail "offline lane wiring missing: ${label} ($path)" "offline_lane_wiring:${id}" "$path"
@@ -617,8 +617,8 @@ lane_wiring_check "sensors_full" docs/harness/bin/sensors.sh "$SENSORS_FULL_BLOC
 lane_wiring_check "ci_script" scripts/ci.sh "$(cat scripts/ci.sh 2>/dev/null || true)" 'bash .*docs/harness/bin/run-offline-lane\.sh' 'scripts/ci.sh'
 lane_wiring_check "ci_job_name" .github/workflows/ci.yml "$CI_TEST_JOB_BLOCK" 'name: Test \(ubuntu-latest\)' 'ci.yml test job keeps the required name "Test (ubuntu-latest)"'
 lane_wiring_check "ci_step" .github/workflows/ci.yml "$CI_LANE_STEP_BLOCK" 'run: bash docs/harness/bin/run-offline-lane\.sh' 'ci.yml required Test job step'
-if grep -Eq '^[[:space:]]*(continue-on-error|if):' <<<"$CI_LANE_STEP_BLOCK" \
-  || grep -Eq '^    (continue-on-error|if):' <<<"$CI_TEST_JOB_BLOCK"; then
+if printf '%s\n' "$CI_LANE_STEP_BLOCK" | grep -Ec '^[[:space:]]*(continue-on-error|if):' >/dev/null \
+  || printf '%s\n' "$CI_TEST_JOB_BLOCK" | grep -Ec '^    (continue-on-error|if):' >/dev/null; then
   fail "offline lane CI step or the Test job is conditional/continue-on-error; the lane must be unconditional" "offline_lane_wiring:ci_unconditional" ".github/workflows/ci.yml"
 else
   add_check "offline_lane_wiring:ci_unconditional" "pass" "offline lane CI step is unconditional" ".github/workflows/ci.yml"

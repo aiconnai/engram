@@ -12,10 +12,10 @@
 //! LLM-enhanced extraction for higher quality.
 
 use chrono::{DateTime, Utc};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 use crate::text_util::LowercaseIndex;
 use crate::types::MemoryId;
@@ -253,7 +253,7 @@ pub struct EntityExtractor {
 }
 
 // Compiled regex patterns
-static PERSON_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static PERSON_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?x)
         @[\w-]+                           # @username mentions
@@ -264,7 +264,7 @@ static PERSON_PATTERN: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-static ORG_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static ORG_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?x)
         [A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*\s+(?:Inc\.?|Corp\.?|LLC|Ltd\.?|Co\.?|Team|Group|Labs?)
@@ -274,7 +274,7 @@ static ORG_PATTERN: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-static PROJECT_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static PROJECT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?x)
         [a-z][a-z0-9]*(?:-[a-z0-9]+)+     # kebab-case project names
@@ -286,10 +286,10 @@ static PROJECT_PATTERN: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-static URL_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"https?://[^\s<>\[\]()]+|www\.[^\s<>\[\]]+").unwrap());
+static URL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"https?://[^\s<>\[\]()]+|www\.[^\s<>\[\]]+").unwrap());
 
-static PATH_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?x)
         (?:/[\w.-]+)+                     # Unix paths
@@ -300,7 +300,7 @@ static PATH_PATTERN: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-static DATETIME_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static DATETIME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?x)
         \d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?  # ISO dates
@@ -313,9 +313,9 @@ static DATETIME_PATTERN: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-static MENTION_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"@[\w-]+").unwrap());
+static MENTION_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"@[\w-]+").unwrap());
 
-static KNOWN_ORGANIZATIONS: Lazy<HashSet<String>> = Lazy::new(|| {
+static KNOWN_ORGANIZATIONS: LazyLock<HashSet<String>> = LazyLock::new(|| {
     [
         "Anthropic",
         "OpenAI",
@@ -343,7 +343,7 @@ static KNOWN_ORGANIZATIONS: Lazy<HashSet<String>> = Lazy::new(|| {
     .collect()
 });
 
-static KNOWN_CONCEPTS: Lazy<HashSet<String>> = Lazy::new(|| {
+static KNOWN_CONCEPTS: LazyLock<HashSet<String>> = LazyLock::new(|| {
     [
         "machine learning",
         "deep learning",

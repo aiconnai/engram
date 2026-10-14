@@ -18,8 +18,8 @@
 //! - Short content below `min_content_length` is returned verbatim
 
 use std::collections::HashSet;
+use std::sync::LazyLock;
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -81,26 +81,28 @@ const HEDGING_PHRASES: &[&str] = &[
 ];
 
 // =============================================================================
-// Regex patterns (compiled once via Lazy)
+// Regex patterns (compiled once via LazyLock)
 // =============================================================================
 
 /// Matches capitalized words that could be proper nouns.
 /// We use a simple pattern and filter sentence-start words in post-processing.
-static PROPER_NOUN_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*)\b").expect("valid regex"));
+static PROPER_NOUN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*)\b").expect("valid regex")
+});
 
 /// Matches numbers (integers, decimals) and common date-like patterns.
-static NUMBER_DATE_RE: Lazy<Regex> = Lazy::new(|| {
+static NUMBER_DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(\d{1,4}[/-]\d{1,2}[/-]\d{1,4}|\d{4}|\d+\.\d+|\d{1,3}(?:,\d{3})*(?:\.\d+)?)\b")
         .expect("valid regex")
 });
 
 /// Matches sentence-terminating punctuation followed by whitespace.
 /// Used to split sentences without requiring look-behind.
-static SENTENCE_SPLIT_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[.!?]\s+").expect("valid regex"));
+static SENTENCE_SPLIT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[.!?]\s+").expect("valid regex"));
 
 /// Verb word list used to identify the predicate in an SVO triple.
-static COMMON_VERBS: Lazy<Regex> = Lazy::new(|| {
+static COMMON_VERBS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(is|are|was|were|has|have|had|will|can|could|should|would|does|did|do|provides|uses|returns|creates|stores|contains|supports|requires|enables|implements|defines|allows|includes|handles|manages)\b")
         .expect("valid regex")
 });

@@ -21,8 +21,8 @@
 //! - Bounded output: max 100 entities per text
 
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -38,19 +38,19 @@ const MAX_ENTITIES_PER_TEXT: usize = 100;
 const MIN_CONFIDENCE: f32 = 0.3;
 
 /// Compiled regex patterns (compiled once, reused)
-static MENTION_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"@([a-zA-Z][a-zA-Z0-9_-]{1,30})").expect("valid regex"));
+static MENTION_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"@([a-zA-Z][a-zA-Z0-9_-]{1,30})").expect("valid regex"));
 
-static EMAIL_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").expect("valid regex")
 });
 
-static URL_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"https?://([a-zA-Z0-9.-]+)(?:/[^\s]*)?").expect("valid regex"));
+static URL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"https?://([a-zA-Z0-9.-]+)(?:/[^\s]*)?").expect("valid regex"));
 
 /// Pattern for capitalized names (2+ words starting with capitals)
-static NAME_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b").expect("valid regex"));
+static NAME_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b").expect("valid regex"));
 
 /// An extracted entity from text
 #[derive(Debug, Clone, Serialize, Deserialize)]

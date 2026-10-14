@@ -10,9 +10,9 @@
 //! - `Heavy`  — key facts only (entities, numbers, dates)
 
 use crate::intelligence::token_counter::TiktokenCounter;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 use tracing::warn;
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ const FILLER_PHRASES: &[&str] = &[
     "sort of",
 ];
 
-static FILLER_PHRASE_REGEXES: Lazy<Vec<Regex>> = Lazy::new(|| {
+static FILLER_PHRASE_REGEXES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     FILLER_PHRASES
         .iter()
         .map(|phrase| Regex::new(&format!(r"(?i)\b{}\b", regex::escape(phrase))).unwrap())

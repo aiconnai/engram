@@ -15,10 +15,10 @@
 //! - `Transcript`: Dialogue compressor compacting `user:` / `assistant:` turns into
 //!   `[U]` / `[A]` markers and collapsing tool call noise.
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use crate::intelligence::token_counter::TiktokenCounter;
 
@@ -566,19 +566,19 @@ const LOSSLESS_HEADER: &str = "[AAAK:v1:lossless]\n";
 const VERBATIM_HEADER: &str = "[AAAK:v1:verbatim]\n";
 
 // Precompiled Regexes
-static RE_WHITESPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[ \t]+").unwrap());
-static RE_MULTILINE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n{3,}").unwrap());
-static RE_TRANSCRIPT_ROLE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"(?im)^\[?(user|assistant|system|developer)\]?[:\s]+"#).unwrap());
+static RE_WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[ \t]+").unwrap());
+static RE_MULTILINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").unwrap());
+static RE_TRANSCRIPT_ROLE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(?im)^\[?(user|assistant|system|developer)\]?[:\s]+"#).unwrap());
 
-static FILLER_REGEXES: Lazy<Vec<Regex>> = Lazy::new(|| {
+static FILLER_REGEXES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     CONVERSATIONAL_FILLERS
         .iter()
         .map(|f| Regex::new(&format!(r"(?i){}", regex::escape(f))).unwrap())
         .collect()
 });
 
-static ABBREV_REGEXES: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
+static ABBREV_REGEXES: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
     ABBREVIATIONS
         .iter()
         .map(|pair| {

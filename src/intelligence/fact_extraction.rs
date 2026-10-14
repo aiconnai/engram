@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 use crate::error::Result;
 
@@ -68,13 +68,13 @@ pub trait FactExtractor: Send + Sync {
 // =============================================================================
 
 /// "{subject} is a {object}"  — more specific, checked before plain "is"
-static IS_A_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static IS_A_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+is\s+an?\s+([A-Za-z][A-Za-z\s]{0,60}?)\b(?:[,\.\!]|$)")
         .expect("valid regex")
 });
 
 /// "{subject} is {object}"
-static IS_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static IS_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+is\s+([A-Za-z][A-Za-z\s]{0,60}?)\b(?:[,\.\!]|$)",
     )
@@ -82,19 +82,19 @@ static IS_PATTERN: Lazy<Regex> = Lazy::new(|| {
 });
 
 /// "{subject} works at {object}"
-static WORKS_AT_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static WORKS_AT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+works?\s+at\s+([A-Za-z0-9][A-Za-z0-9\s\.\-]{0,60}?)\b(?:[,\.\!]|$)")
         .expect("valid regex")
 });
 
 /// "{subject} lives in {object}"
-static LIVES_IN_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static LIVES_IN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+lives?\s+in\s+([A-Za-z][A-Za-z\s]{0,60}?)\b(?:[,\.\!]|$)")
         .expect("valid regex")
 });
 
 /// "{subject} likes {object}"
-static LIKES_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static LIKES_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+likes?\s+([A-Za-z][A-Za-z\s]{0,60}?)\b(?:[,\.\!]|$)",
     )
@@ -102,31 +102,31 @@ static LIKES_PATTERN: Lazy<Regex> = Lazy::new(|| {
 });
 
 /// "{subject} was born in {object}"
-static BORN_IN_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static BORN_IN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+was\s+born\s+in\s+([A-Za-z][A-Za-z\s]{0,60}?)\b(?:[,\.\!]|$)")
         .expect("valid regex")
 });
 
 /// "{subject} manages {object}"
-static MANAGES_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static MANAGES_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+manages?\s+([A-Za-z][A-Za-z\s]{0,60}?)\b(?:[,\.\!]|$)")
         .expect("valid regex")
 });
 
 /// "{subject} reports to {object}"
-static REPORTS_TO_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static REPORTS_TO_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+reports?\s+to\s+([A-Za-z][A-Za-z\s]{0,60}?)\b(?:[,\.\!]|$)")
         .expect("valid regex")
 });
 
 /// "{subject} created {object}"
-static CREATED_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static CREATED_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b([A-Za-z][A-Za-z\s]{0,40}?)\s+created?\s+([A-Za-z][A-Za-z\s]{0,60}?)\b(?:[,\.\!]|$)")
         .expect("valid regex")
 });
 
 /// Structured "Key: value" patterns
-static STRUCTURED_PATTERN: Lazy<Regex> = Lazy::new(|| {
+static STRUCTURED_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?m)^(?:Name|Role|Location|Title|Company|Organization|Department|Team)\s*:\s*(.+)$",
     )

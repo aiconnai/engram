@@ -5,46 +5,47 @@
 //! durable storage, and sensitive commands default to ephemeral/no-raw behavior
 //! unless a caller explicitly opts out through policy parameters.
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::env;
 use std::fmt;
+use std::sync::LazyLock;
 
-static PRIVATE_KEY_RE: Lazy<std::result::Result<Regex, regex::Error>> = Lazy::new(|| {
+static PRIVATE_KEY_RE: LazyLock<std::result::Result<Regex, regex::Error>> = LazyLock::new(|| {
     Regex::new(r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----")
 });
-static JWT_RE: Lazy<std::result::Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"));
-static BEARER_RE: Lazy<std::result::Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{16,}"));
-static OAUTH_RE: Lazy<std::result::Result<Regex, regex::Error>> = Lazy::new(|| {
+static JWT_RE: LazyLock<std::result::Result<Regex, regex::Error>> = LazyLock::new(|| {
+    Regex::new(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")
+});
+static BEARER_RE: LazyLock<std::result::Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{16,}"));
+static OAUTH_RE: LazyLock<std::result::Result<Regex, regex::Error>> = LazyLock::new(|| {
     Regex::new(
         r"\b(?:ya29\.[A-Za-z0-9_-]+|gh[opsu]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b",
     )
 });
-static CLOUD_CREDENTIAL_RE: Lazy<std::result::Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b|\bAIza[0-9A-Za-z_-]{35}\b"));
-static DATABASE_URL_RE: Lazy<std::result::Result<Regex, regex::Error>> = Lazy::new(|| {
+static CLOUD_CREDENTIAL_RE: LazyLock<std::result::Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b|\bAIza[0-9A-Za-z_-]{35}\b"));
+static DATABASE_URL_RE: LazyLock<std::result::Result<Regex, regex::Error>> = LazyLock::new(|| {
     Regex::new(r#"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s'"]+"#)
 });
-static COOKIE_RE: Lazy<std::result::Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"(?i)\b(?:cookie|set-cookie)\s*[:=]\s*[^\n]+"));
-static ENV_SECRET_RE: Lazy<std::result::Result<Regex, regex::Error>> = Lazy::new(|| {
+static COOKIE_RE: LazyLock<std::result::Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"(?i)\b(?:cookie|set-cookie)\s*[:=]\s*[^\n]+"));
+static ENV_SECRET_RE: LazyLock<std::result::Result<Regex, regex::Error>> = LazyLock::new(|| {
     Regex::new(
         r#"(?mi)^(\s*[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PWD|CREDENTIAL|AUTH)[A-Z0-9_]*\s*=\s*)['"]?[^\s'"]+"#,
     )
 });
-static API_KEY_RE: Lazy<std::result::Result<Regex, regex::Error>> = Lazy::new(|| {
+static API_KEY_RE: LazyLock<std::result::Result<Regex, regex::Error>> = LazyLock::new(|| {
     Regex::new(
         r#"(?i)\b([A-Z0-9_]*(?:api[_-]?key|apikey|token|secret|password|passwd|pwd|client_secret|access_token|refresh_token)[A-Z0-9_]*\b\s*[:=]\s*)['"]?[^\s'",;]{8,}"#,
     )
 });
-static EMAIL_RE: Lazy<std::result::Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"));
-static PHONE_RE: Lazy<std::result::Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"\b\+?\d[\d .()/-]{7,}\d\b"));
+static EMAIL_RE: LazyLock<std::result::Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"));
+static PHONE_RE: LazyLock<std::result::Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"\b\+?\d[\d .()/-]{7,}\d\b"));
 
 /// Runtime policy for Operational Context redaction.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -533,7 +534,7 @@ pub fn command_hint_from_archive(params: &Value, tool_name: &str) -> Option<Stri
 
 fn apply_lazy_regex(
     text: &mut String,
-    regex: &Lazy<std::result::Result<Regex, regex::Error>>,
+    regex: &LazyLock<std::result::Result<Regex, regex::Error>>,
     replacement: &str,
     class: &str,
     classes: &mut BTreeSet<String>,
