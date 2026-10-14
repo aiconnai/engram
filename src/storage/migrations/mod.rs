@@ -6,6 +6,7 @@ mod v26_v33;
 mod v34_v46;
 mod v47;
 mod v48;
+mod v49;
 
 #[cfg(test)]
 mod tests;
@@ -19,9 +20,10 @@ use v26_v33::*;
 use v34_v46::*;
 use v47::*;
 use v48::*;
+use v49::*;
 
 /// Current schema version
-pub const SCHEMA_VERSION: i32 = 48;
+pub const SCHEMA_VERSION: i32 = 49;
 
 /// A single schema migration step.
 type Migration = fn(&Connection) -> Result<()>;
@@ -76,6 +78,7 @@ const MIGRATIONS: [(i32, Migration); SCHEMA_VERSION as usize] = [
     (46, migrate_v46),
     (47, migrate_v47),
     (48, migrate_v48),
+    (49, migrate_v49),
 ];
 
 /// Migrations whose SQL toggles `PRAGMA foreign_keys`. That pragma is a no-op

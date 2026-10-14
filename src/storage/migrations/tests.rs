@@ -17,12 +17,12 @@ fn test_fresh_db_reaches_current_version() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
 }
 
 #[test]
 fn test_schema_version_constant() {
-    assert_eq!(SCHEMA_VERSION, 48);
+    assert_eq!(SCHEMA_VERSION, 49);
 }
 
 #[test]
@@ -98,15 +98,26 @@ fn test_media_assets_hash_uniqueness() {
         .query_row("SELECT id FROM memories LIMIT 1", [], |row| row.get(0))
         .expect("get memory id");
     conn.execute(
-        "INSERT INTO media_assets (memory_id, media_type, file_hash) VALUES (?1, 'image', 'dup_hash')",
+        "INSERT INTO media_assets (memory_id, workspace, media_type, file_hash) VALUES (?1, 'default', 'image', 'dup_hash')",
         rusqlite::params![memory_id],
     )
     .expect("first insert");
     let dup = conn.execute(
-        "INSERT INTO media_assets (memory_id, media_type, file_hash) VALUES (?1, 'audio', 'dup_hash')",
+        "INSERT INTO media_assets (memory_id, workspace, media_type, file_hash) VALUES (?1, 'default', 'audio', 'dup_hash')",
         rusqlite::params![memory_id],
     );
-    assert!(dup.is_err(), "duplicate file_hash should fail");
+    assert!(
+        dup.is_err(),
+        "duplicate file_hash in same workspace should fail"
+    );
+    let other_ws = conn.execute(
+        "INSERT INTO media_assets (memory_id, workspace, media_type, file_hash) VALUES (?1, 'ws-b', 'image', 'dup_hash')",
+        rusqlite::params![memory_id],
+    );
+    assert!(
+        other_ws.is_ok(),
+        "same file_hash in a different workspace should succeed"
+    );
 }
 
 #[test]
@@ -215,7 +226,7 @@ fn test_upgrade_from_v17_to_v19() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 48, "should reach v48 after full migration");
+    assert_eq!(version, 49, "should reach v49 after full migration");
 
     // Verify both new tables exist
     let auto_links_exists: i32 = conn
@@ -596,7 +607,7 @@ fn test_v45_preserves_existing_dream_candidate_data() {
             |row| row.get(0),
         )
         .expect("query schema version");
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
 
     let retained: i64 = conn
         .query_row(
@@ -793,4 +804,55 @@ fn test_fk_off_step_refuses_new_foreign_key_violations() {
         .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
         .expect("fk");
     assert_eq!(fk, 1, "foreign_keys restored after failure");
+}
+
+#[test]
+fn test_v49_backfills_media_assets_workspace_and_scopes_unique_index() {
+    let conn = Connection::open_in_memory().expect("open in-memory db");
+    run_migrations(&conn).expect("run migrations");
+
+    // Simulate pre-v49 state with a memory in workspace 'research' and a media_asset row.
+    conn.execute_batch(
+        "DELETE FROM schema_version WHERE version = 49;
+         DROP INDEX IF EXISTS idx_media_assets_workspace_hash;
+         ALTER TABLE media_assets DROP COLUMN workspace;
+         CREATE UNIQUE INDEX idx_media_assets_hash ON media_assets(file_hash);
+         INSERT INTO memories (content, memory_type, importance, visibility, metadata, workspace, valid_from)
+         VALUES ('research diagram', 'image', 0.5, 'private', '{}', 'research', CURRENT_TIMESTAMP);
+         INSERT INTO media_assets (memory_id, media_type, file_hash)
+         VALUES ((SELECT id FROM memories LIMIT 1), 'image', 'hash_to_backfill');",
+    )
+    .expect("setup pre-v49 fixture");
+
+    run_migrations(&conn).expect("apply v49 migration");
+
+    let ws: String = conn
+        .query_row(
+            "SELECT workspace FROM media_assets WHERE file_hash = 'hash_to_backfill'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("read backfilled workspace");
+    assert_eq!(
+        ws, "research",
+        "v49 must backfill workspace from linked memory"
+    );
+
+    let old_idx: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_media_assets_hash'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("check old index");
+    assert_eq!(old_idx, 0, "global hash index must be dropped");
+
+    let new_idx: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_media_assets_workspace_hash'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("check new index");
+    assert_eq!(new_idx, 1, "workspace-scoped hash index must exist");
 }

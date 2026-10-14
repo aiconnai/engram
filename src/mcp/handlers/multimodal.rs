@@ -48,7 +48,7 @@ pub fn memory_describe_image(ctx: &HandlerContext, params: Value) -> Value {
         return json!({"error": e.to_string()});
     }
 
-    let image_bytes = match std::fs::read(&validated_path) {
+    let image_bytes = match read_media_file_bounded(&validated_path, MAX_MEDIA_FILE_BYTES) {
         Ok(bytes) => bytes,
         Err(e) => {
             return json!({"error": format!("Failed to read image file '{}': {}", image_path, e)})
@@ -388,7 +388,7 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
         return json!({"error": e.to_string()});
     }
 
-    let image_bytes = match std::fs::read(&validated_image) {
+    let image_bytes = match read_media_file_bounded(&validated_image, MAX_MEDIA_FILE_BYTES) {
         Ok(b) => b,
         Err(e) => {
             return json!({"error": format!("Failed to read image file '{}': {}", image_path, e)})
@@ -580,7 +580,7 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
         return json!({"error": e.to_string()});
     }
 
-    let file_bytes = match std::fs::read(&validated_path) {
+    let file_bytes = match read_media_file_bounded(&validated_path, MAX_MEDIA_FILE_BYTES) {
         Ok(bytes) => bytes,
         Err(e) => {
             return json!({"error": format!("Failed to read media file '{}': {}", media_path, e)})
@@ -668,8 +668,8 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
             .query_row(
                 "SELECT a.id, m.id, m.workspace, m.created_at
                  FROM media_assets a JOIN memories m ON m.id = a.memory_id
-                 WHERE a.file_hash = ?1 AND m.valid_to IS NULL AND m.workspace = ?2",
-                rusqlite::params![file_hash, requested_ws],
+                 WHERE a.workspace = ?1 AND a.file_hash = ?2 AND m.valid_to IS NULL AND m.workspace = ?1",
+                rusqlite::params![requested_ws, file_hash],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
             .optional()?;
@@ -710,15 +710,17 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
 
         conn.execute(
             "INSERT INTO media_assets (
-                memory_id, media_type, file_hash, file_path, file_size, mime_type
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(file_hash) DO UPDATE SET
+                memory_id, workspace, media_type, file_hash, file_path, file_size, mime_type
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(workspace, file_hash) DO UPDATE SET
                 memory_id = excluded.memory_id,
+                media_type = excluded.media_type,
                 file_path = excluded.file_path,
                 file_size = excluded.file_size,
                 mime_type = excluded.mime_type",
             rusqlite::params![
                 memory.id,
+                &memory.workspace,
                 media_type_str,
                 file_hash,
                 media_path,
@@ -729,8 +731,8 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
 
         // `last_insert_rowid` is stale after an upsert that updated; ask the row.
         let asset_id: i64 = conn.query_row(
-            "SELECT id FROM media_assets WHERE file_hash = ?1",
-            rusqlite::params![file_hash],
+            "SELECT id FROM media_assets WHERE workspace = ?1 AND file_hash = ?2",
+            rusqlite::params![memory.workspace, file_hash],
             |row| row.get(0),
         )?;
 
@@ -760,6 +762,39 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Maximum media file size read into memory (50 MiB).
+#[cfg(feature = "multimodal")]
+pub(crate) const MAX_MEDIA_FILE_BYTES: u64 = 50 * 1024 * 1024;
+
+/// Read a media file with a strict upper bound on byte size to prevent OOM.
+#[cfg(feature = "multimodal")]
+fn read_media_file_bounded(
+    path: &std::path::Path,
+    max_bytes: u64,
+) -> crate::error::Result<Vec<u8>> {
+    use crate::error::EngramError;
+    use std::io::Read;
+
+    let file = std::fs::File::open(path)?;
+    if file.metadata()?.len() > max_bytes {
+        return Err(EngramError::InvalidInput(format!(
+            "media file '{}' exceeds maximum allowed size of {} bytes",
+            path.display(),
+            max_bytes
+        )));
+    }
+    let mut buf = Vec::new();
+    file.take(max_bytes + 1).read_to_end(&mut buf)?;
+    if buf.len() as u64 > max_bytes {
+        return Err(EngramError::InvalidInput(format!(
+            "media file '{}' exceeds maximum allowed size of {} bytes",
+            path.display(),
+            max_bytes
+        )));
+    }
+    Ok(buf)
+}
 
 /// Validate a user-supplied media file path.
 ///
@@ -1269,5 +1304,55 @@ mod tests {
             k
         };
         assert_eq!(keys(&second), keys(&first));
+    }
+
+    #[test]
+    fn ingest_same_file_across_two_workspaces_keeps_both_assets_and_deduplicates_each() {
+        let ctx = make_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("shared.png");
+        std::fs::write(&file, b"shared file bytes across workspaces").unwrap();
+
+        let a1 = ingest(&ctx, &file, Some("ws-a"));
+        let b1 = ingest(&ctx, &file, Some("ws-b"));
+        let a2 = ingest(&ctx, &file, Some("ws-a"));
+        let b2 = ingest(&ctx, &file, Some("ws-b"));
+
+        assert!(a1.get("error").is_none(), "{a1:?}");
+        assert!(b1.get("error").is_none(), "{b1:?}");
+        assert_eq!(a1["deduplicated"], json!(false));
+        assert_eq!(b1["deduplicated"], json!(false));
+        assert_ne!(a1["memory_id"], b1["memory_id"]);
+        assert_ne!(a1["asset_id"], b1["asset_id"]);
+
+        assert_eq!(count(&ctx, "SELECT COUNT(*) FROM memories"), 2);
+        assert_eq!(count(&ctx, "SELECT COUNT(*) FROM media_assets"), 2);
+
+        assert_eq!(a2["deduplicated"], json!(true));
+        assert_eq!(a2["memory_id"], a1["memory_id"]);
+        assert_eq!(a2["asset_id"], a1["asset_id"]);
+
+        assert_eq!(b2["deduplicated"], json!(true));
+        assert_eq!(b2["memory_id"], b1["memory_id"]);
+        assert_eq!(b2["asset_id"], b1["asset_id"]);
+    }
+
+    #[test]
+    fn read_media_file_bounded_rejects_oversized_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("oversized.png");
+        std::fs::write(&file, [0u8; 32]).unwrap();
+
+        let err = super::read_media_file_bounded(&file, 16)
+            .expect_err("32-byte file must fail with 16-byte limit");
+        match err {
+            crate::error::EngramError::InvalidInput(msg) => {
+                assert!(
+                    msg.contains("exceeds maximum allowed size"),
+                    "unexpected error message: {msg}"
+                );
+            }
+            other => panic!("expected InvalidInput error, got: {other:?}"),
+        }
     }
 }

@@ -8,8 +8,8 @@
 | Active plan | `docs/harness/progress/2026-10-05-improvement-lane-p.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md (último review-gate post com marcador). Programa 2026-10-05: revisões SDD independentes + revisão final Opus (Ready with fixes), sem receipt do review-gate post: docs/harness/reviews/2026-10-05-comprehensive-improvement/README.md` |
 | Last sensors | `2026-10-05 — FINALFIX (HEAD bdf4620): full status=pass (mode=full; timestamp 2026-10-05T19:07:34Z, 328s) after make ci exit 0; receipts not committed. Earlier: INT full status=pass (2026-10-05T18:11:26Z). Committed receipt .sensors-last (not refreshed, to avoid telemetry churn): status=pass mode=quick timestamp 2026-09-03T13:11:41Z` |
-| Last commit | `1decdff` |
-| Last live-state check | `2026-10-13 — post-squash sync (HEAD 1decdff): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
+| Last commit | `661b140` |
+| Last live-state check | `2026-10-14 — P1 wave (HEAD 661b140): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido

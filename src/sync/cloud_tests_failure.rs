@@ -156,6 +156,135 @@ async fn worker_pull_refuses_to_overwrite_its_own_live_database() {
 }
 
 #[tokio::test]
+async fn upload_refuses_a_target_with_hot_sqlite_side_files() {
+    let store = InMemoryCloudStore::default();
+    let cloud = CloudStorage::test_fixture_plaintext("bucket", "path.db", store.clone());
+    let dir = tempfile::tempdir().unwrap();
+
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let source = dir.path().join(format!("live{suffix}.db"));
+        write(&source, b"local database");
+        let side = dir.path().join(format!("live{suffix}.db{suffix}"));
+        write(&side, b"hot state");
+
+        let error = cloud.upload(&source).await.unwrap_err();
+
+        assert!(error.to_string().contains("hot"), "{suffix}: {error}");
+        assert!(store.snapshot().is_none(), "{suffix}: remote was written");
+    }
+
+    // An empty -wal (clean checkpoint) is not hot.
+    let clean = dir.path().join("clean.db");
+    write(&clean, b"clean database bytes");
+    write(&dir.path().join("clean.db-wal"), b"");
+    cloud.upload(&clean).await.unwrap();
+    assert_eq!(store.snapshot().unwrap().body, b"clean database bytes");
+}
+
+#[tokio::test]
+async fn upload_checked_refuses_the_live_database() {
+    let storage_dir = tempfile::tempdir().unwrap();
+    let live = storage_dir.path().join("live.db");
+    let storage = crate::storage::Storage::open(crate::types::StorageConfig {
+        db_path: live.to_string_lossy().into_owned(),
+        storage_mode: crate::types::StorageMode::Local,
+        cloud_uri: None,
+        encrypt_cloud: false,
+        confidence_half_life_days: 30.0,
+        auto_sync: false,
+        sync_debounce_ms: 5000,
+    })
+    .unwrap();
+    let store = InMemoryCloudStore::default();
+    let cloud = CloudStorage::test_fixture_plaintext("bucket", "path.db", store.clone());
+
+    let error = cloud.upload_checked(&live, &storage).await.unwrap_err();
+
+    assert!(
+        error.to_string().to_lowercase().contains("active"),
+        "{error}"
+    );
+    assert!(store.snapshot().is_none());
+
+    let other = storage_dir.path().join("elsewhere.db");
+    write(&other, b"closed copy bytes");
+    cloud.upload_checked(&other, &storage).await.unwrap();
+    assert_eq!(store.snapshot().unwrap().body, b"closed copy bytes");
+}
+
+#[tokio::test]
+async fn upload_snapshot_uploads_committed_wal_rows_without_touching_live_file() {
+    let storage_dir = tempfile::tempdir().unwrap();
+    let live = storage_dir.path().join("live.db");
+    let storage = crate::storage::Storage::open(crate::types::StorageConfig {
+        db_path: live.to_string_lossy().into_owned(),
+        storage_mode: crate::types::StorageMode::Local,
+        cloud_uri: None,
+        encrypt_cloud: false,
+        confidence_half_life_days: 30.0,
+        auto_sync: false,
+        sync_debounce_ms: 5000,
+    })
+    .unwrap();
+    storage
+        .with_connection(|c| {
+            c.execute_batch(
+                "CREATE TABLE snapshot_probe(v TEXT); INSERT INTO snapshot_probe VALUES('wal-row');",
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+    let store = InMemoryCloudStore::default();
+    let cloud = CloudStorage::test_fixture_plaintext("bucket", "path.db", store);
+    let uploaded = cloud.upload_snapshot(&storage).await.unwrap();
+    assert!(uploaded > 0);
+
+    let restored = storage_dir.path().join("restored.db");
+    cloud.download(&restored).await.unwrap();
+    let conn = rusqlite::Connection::open(&restored).unwrap();
+    let value: String = conn
+        .query_row("SELECT v FROM snapshot_probe", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(value, "wal-row");
+}
+
+#[tokio::test]
+async fn worker_push_snapshots_live_database_without_dropping_wal_or_failing_on_hot_sidecars() {
+    let dir = tempfile::tempdir().unwrap();
+    let live = dir.path().join("live.db");
+    let conn = rusqlite::Connection::open(&live).unwrap();
+    conn.execute_batch("PRAGMA journal_mode = WAL;").unwrap();
+    run_migrations(&conn).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE worker_probe(v TEXT); INSERT INTO worker_probe VALUES('live-wal-row');",
+    )
+    .unwrap();
+    assert!(dir.path().join("live.db-wal").exists());
+
+    let conn = Arc::new(PlMutex::new(conn));
+    let store = InMemoryCloudStore::default();
+    let cloud = CloudStorage::test_fixture_plaintext("bucket", "p.db", store.clone());
+    let worker = SyncWorker::start_with_cloud(live.clone(), cloud, 50, conn.clone());
+    worker.sync(SyncDirection::Push, false).await.unwrap();
+    wait_until(|| get_sync_status(&conn.lock()).unwrap().last_sync.is_some()).await;
+
+    let status = get_sync_status(&conn.lock()).unwrap();
+    assert!(status.last_sync.is_some());
+    assert!(status.last_error.is_none(), "{:?}", status.last_error);
+
+    let reader = CloudStorage::test_fixture_plaintext("bucket", "p.db", store);
+    let restored = dir.path().join("restored.db");
+    reader.download(&restored).await.unwrap();
+    let restored_conn = rusqlite::Connection::open(&restored).unwrap();
+    let value: String = restored_conn
+        .query_row("SELECT v FROM worker_probe", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(value, "live-wal-row");
+    worker.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn repeated_upload_is_idempotent_and_the_object_stays_readable() {
     let store = InMemoryCloudStore::default();
     let cloud =

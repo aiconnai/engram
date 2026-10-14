@@ -139,7 +139,7 @@ impl SyncWorker {
         }
 
         let result = match direction {
-            SyncDirection::Push => cloud.upload(db_path).await,
+            SyncDirection::Push => push_database(conn, db_path, cloud).await,
             SyncDirection::Pull => match refuse_live_database(conn, db_path) {
                 Ok(()) => cloud.download(db_path).await,
                 Err(e) => Err(e),
@@ -152,11 +152,11 @@ impl SyncWorker {
                             std::fs::metadata(db_path).and_then(|m| m.modified()).ok();
 
                         // Simple heuristic: push if local is newer or no remote
-                        cloud.upload(db_path).await
+                        push_database(conn, db_path, cloud).await
                     }
                     Err(_) => {
                         // No remote, push
-                        cloud.upload(db_path).await
+                        push_database(conn, db_path, cloud).await
                     }
                 }
             }
@@ -308,22 +308,91 @@ impl DirtyTracker {
     }
 }
 
+fn is_live_database(conn: &Arc<Mutex<Connection>>, db_path: &std::path::Path) -> bool {
+    let live = conn
+        .lock()
+        .path()
+        .filter(|p| !p.is_empty())
+        .map(std::path::PathBuf::from);
+    let Some(live) = live else {
+        return false; // in-memory connection: no file to protect
+    };
+    let canon = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    canon(&live) == canon(db_path)
+}
+
 /// A pull replaces the target file by rename; doing that to the database this
 /// worker's own connection has open orphans the open connection and drops its
 /// locks (G1). Refuse when `db_path` is the connection's database.
 fn refuse_live_database(conn: &Arc<Mutex<Connection>>, db_path: &std::path::Path) -> Result<()> {
-    let live = conn.lock().path().map(std::path::PathBuf::from);
-    let Some(live) = live else {
-        return Ok(()); // in-memory connection: no file to protect
-    };
-    let canon = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-    if canon(&live) == canon(db_path) {
+    if is_live_database(conn, db_path) {
         return Err(EngramError::Sync(format!(
             "refusing to pull over '{}': it is the live database of this process",
             db_path.display()
         )));
     }
     Ok(())
+}
+
+/// Push `db_path` to `cloud`. When `db_path` is the database that `conn` has
+/// open, snapshot it via `VACUUM INTO` first so `CloudStorage::upload` never
+/// opens/closes the live database file (preserving SQLite's POSIX locks and
+/// capturing committed WAL frames, INVARIANTS #27).
+async fn push_database(
+    conn: &Arc<Mutex<Connection>>,
+    db_path: &std::path::Path,
+    cloud: &CloudStorage,
+) -> Result<u64> {
+    if is_live_database(conn, db_path) {
+        let dir = SyncSnapshotDir::create()?;
+        let snapshot_path = dir.snapshot_path();
+        let snapshot_str = snapshot_path.to_str().ok_or_else(|| {
+            EngramError::InvalidInput(format!(
+                "snapshot path '{}' is not valid UTF-8",
+                snapshot_path.display()
+            ))
+        })?;
+        {
+            let guard = conn.lock();
+            guard.execute("VACUUM INTO ?1", [snapshot_str])?;
+        }
+        let uploaded = cloud.upload(&snapshot_path).await;
+        drop(dir);
+        uploaded
+    } else {
+        cloud.upload(db_path).await
+    }
+}
+
+struct SyncSnapshotDir(PathBuf);
+
+impl SyncSnapshotDir {
+    fn create() -> Result<Self> {
+        let raw_dir = std::env::temp_dir().join(format!(
+            "engram-sync-snapshot-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4().simple()
+        ));
+        let mut builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        builder.create(&raw_dir)?;
+        let canonical = std::fs::canonicalize(&raw_dir).unwrap_or(raw_dir);
+        Ok(Self(canonical))
+    }
+
+    fn snapshot_path(&self) -> PathBuf {
+        self.0.join("snapshot.db")
+    }
+}
+
+impl Drop for SyncSnapshotDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 /// Clear a stale `is_syncing` flag left by a process that died mid-sync.

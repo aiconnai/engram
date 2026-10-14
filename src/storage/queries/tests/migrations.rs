@@ -42,35 +42,37 @@ fn test_failed_migration_rolls_back_and_reruns_from_predecessor() {
     let conn = rusqlite::Connection::open_in_memory().expect("in-memory db");
     run_migrations(&conn).expect("migrate to current");
 
-    // Return to the supported predecessor (v47) state.
+    // Return to the supported predecessor (v48) state.
     conn.execute_batch(
-        "DELETE FROM schema_version WHERE version = 48;
-         ALTER TABLE attestation_log DROP COLUMN hash_version;",
+        "DELETE FROM schema_version WHERE version = 49;
+         DROP INDEX IF EXISTS idx_media_assets_workspace_hash;
+         ALTER TABLE media_assets DROP COLUMN workspace;
+         CREATE UNIQUE INDEX IF NOT EXISTS idx_media_assets_hash ON media_assets(file_hash);",
     )
-    .expect("downgrade fixture to v47");
+    .expect("downgrade fixture to v48");
     assert_eq!(max_schema_version(&conn), SCHEMA_VERSION - 1);
 
-    // Inject a failure after v48's ALTER TABLE but before it records itself.
+    // Inject a failure after v49's ALTER TABLE but before it records itself.
     conn.execute_batch(
-        "CREATE TRIGGER fail_v48 BEFORE INSERT ON schema_version
-         WHEN NEW.version = 48
-         BEGIN SELECT RAISE(ABORT, 'injected v48 failure'); END;",
+        "CREATE TRIGGER fail_v49 BEFORE INSERT ON schema_version
+         WHEN NEW.version = 49
+         BEGIN SELECT RAISE(ABORT, 'injected v49 failure'); END;",
     )
     .expect("install failure trigger");
-    let err = run_migrations(&conn).expect_err("v48 must fail");
-    assert!(err.to_string().contains("injected v48 failure"), "{err}");
+    let err = run_migrations(&conn).expect_err("v49 must fail");
+    assert!(err.to_string().contains("injected v49 failure"), "{err}");
     assert!(
-        !has_column(&conn, "attestation_log", "hash_version"),
+        !has_column(&conn, "media_assets", "workspace"),
         "failed step must be rolled back entirely"
     );
     assert_eq!(max_schema_version(&conn), SCHEMA_VERSION - 1);
     assert!(conn.is_autocommit(), "no transaction left open");
 
     // Re-running after the cause is removed completes the upgrade.
-    conn.execute_batch("DROP TRIGGER fail_v48;")
+    conn.execute_batch("DROP TRIGGER fail_v49;")
         .expect("drop trigger");
     run_migrations(&conn).expect("rerun succeeds");
-    assert!(has_column(&conn, "attestation_log", "hash_version"));
+    assert!(has_column(&conn, "media_assets", "workspace"));
     assert_eq!(max_schema_version(&conn), SCHEMA_VERSION);
 }
 

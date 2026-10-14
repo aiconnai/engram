@@ -90,12 +90,14 @@ impl CloudStorage {
     /// Existing objects are read and validated before replacement, so callers
     /// need `HeadObject`, `GetObject`, and conditional `PutObject` permission.
     ///
-    /// Known G1 hazard (INVARIANTS #27): the file is read through a descriptor
-    /// that is closed afterwards. Uploading a database that this process has
-    /// open through rusqlite drops SQLite's POSIX locks on it (and the raw
-    /// bytes may miss WAL content). `SyncWorker` does this but is not started
-    /// by any binary today; checkpoint/snapshot to a separate file first.
+    /// Refuses files with hot SQLite sidecars (`-wal`, `-shm`, `-journal`)
+    /// because opening and closing a live database file drops SQLite's POSIX
+    /// locks on it (G1 / INVARIANTS #27) and raw bytes miss uncheckpointed WAL
+    /// frames. Callers holding an open [`crate::storage::Storage`] should use
+    /// [`Self::upload_snapshot`] (to upload the live database) or
+    /// [`Self::upload_checked`] (to upload a separate file).
     pub async fn upload(&self, local_path: &Path) -> Result<u64> {
+        refuse_hot_sqlite_target(local_path)?;
         let condition = self.ensure_remote_object_is_replaceable().await?;
         let data = tokio::fs::read(local_path).await?;
         let size = data.len() as u64;
@@ -126,6 +128,28 @@ impl CloudStorage {
             self.key
         );
         Ok(size)
+    }
+
+    /// [`Self::upload`] for callers that hold the open [`crate::storage::Storage`]:
+    /// additionally refuses a source that is the live database or one of its
+    /// side files (G1: opening and closing those drops SQLite's locks).
+    pub async fn upload_checked(
+        &self,
+        local_path: &Path,
+        storage: &crate::storage::Storage,
+    ) -> Result<u64> {
+        storage.refuse_active_sqlite_artifact(local_path)?;
+        self.upload(local_path).await
+    }
+
+    /// Snapshot the live [`crate::storage::Storage`] via `VACUUM INTO` and
+    /// upload the self-contained copy without opening the live database file
+    /// outside SQLite (G1 / INVARIANTS #27).
+    pub async fn upload_snapshot(&self, storage: &crate::storage::Storage) -> Result<u64> {
+        let snapshot = storage.snapshot_copy()?;
+        let result = self.upload(snapshot.path()).await;
+        drop(snapshot);
+        result
     }
 
     /// Download from cloud to local file
@@ -244,9 +268,10 @@ impl CloudStorage {
     }
 }
 
-/// Refuse a download target that looks like an open database: a non-empty
-/// `-wal`, or a `-shm` / `-journal` file, next to it means another connection
-/// (or an unclean shutdown) still owns state that a replacement would corrupt.
+/// Refuse an upload source or download target that looks like an open
+/// database: a non-empty `-wal`, or a `-shm` / `-journal` file, next to it
+/// means another connection (or an unclean shutdown) still owns state that
+/// opening/closing or replacing would corrupt (G1 / INVARIANTS #27).
 fn refuse_hot_sqlite_target(target: &Path) -> Result<()> {
     let sidecar = |suffix: &str| {
         let mut name = target.as_os_str().to_os_string();
@@ -259,7 +284,7 @@ fn refuse_hot_sqlite_target(target: &Path) -> Result<()> {
         .any(|suffix| sidecar(suffix).exists());
     if hot_wal || hot_other {
         return Err(EngramError::Sync(format!(
-            "refusing to replace '{}': it has a hot -wal/-shm/-journal side file \
+            "refusing to touch '{}': it has a hot -wal/-shm/-journal side file \
              (database open or not cleanly closed)",
             target.display()
         )));

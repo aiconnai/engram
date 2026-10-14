@@ -1116,7 +1116,7 @@ fn memory_agent_contract_dispatches_governance_contract() {
             .as_bool(),
         Some(false)
     );
-    assert_eq!(contract["baseline"]["schema_version"].as_i64(), Some(48));
+    assert_eq!(contract["baseline"]["schema_version"].as_i64(), Some(49));
     assert_eq!(
         contract["recall"]["primary_tools"][0].as_str(),
         Some("memory_smart_retrieve")
