@@ -115,6 +115,14 @@ fn set_journal_mode_with_retry(conn: &Connection, mode: &'static str) -> Result<
     }
 }
 
+/// Sample SQLite's per-connection total_changes counter.
+fn connection_total_changes(conn: &Connection) -> i64 {
+    // SAFETY: `conn` is a live, valid SQLite connection handle.
+    // `sqlite3_total_changes64` reads SQLite's per-connection change counter
+    // without retaining the handle pointer or mutating SQLite internal state.
+    unsafe { rusqlite::ffi::sqlite3_total_changes64(conn.handle()) }
+}
+
 #[cfg(unix)]
 const SQLITE_FILE_MODE: u32 = 0o600;
 #[cfg(unix)]
@@ -279,11 +287,14 @@ impl Storage {
 
     fn with_connection_dyn(&self, f: &mut dyn FnMut(&Connection) -> Result<()>) -> Result<()> {
         crate::observability::record_storage_operation();
-        let result = {
+        let (result, writes_occurred) = {
             let conn = self.conn.lock();
-            f(&conn)
+            let before = connection_total_changes(&conn);
+            let res = f(&conn);
+            let after = connection_total_changes(&conn);
+            (res, before != after)
         };
-        self.reassert_sqlite_artifact_permissions_after(result)
+        self.reassert_permissions_after_connection(result, writes_occurred)
     }
 
     /// Execute a function with a transaction
@@ -546,6 +557,40 @@ impl Storage {
         &self.config
     }
 
+    fn reassert_permissions_after_connection(
+        &self,
+        result: Result<()>,
+        writes_occurred: bool,
+    ) -> Result<()> {
+        Self::reassert_permissions_after_connection_for_config(
+            &self.config,
+            result,
+            writes_occurred,
+        )
+    }
+
+    fn reassert_permissions_after_connection_for_config(
+        config: &StorageConfig,
+        result: Result<()>,
+        writes_occurred: bool,
+    ) -> Result<()> {
+        if config.db_path == ":memory:" {
+            return result;
+        }
+        let reassert_res =
+            reassert_connection_artifact_permissions(Path::new(&config.db_path), writes_occurred);
+        match result {
+            Ok(()) => {
+                reassert_res?;
+                Ok(())
+            }
+            Err(err) => {
+                let _ = reassert_res;
+                Err(err)
+            }
+        }
+    }
+
     fn reassert_sqlite_artifact_permissions_after(&self, result: Result<()>) -> Result<()> {
         match result {
             Ok(()) => {
@@ -633,21 +678,19 @@ impl StoragePool {
 
     fn with_connection_dyn(&self, f: &mut dyn FnMut(&Connection) -> Result<()>) -> Result<()> {
         crate::observability::record_storage_operation();
-        let result = {
+        let (result, writes_occurred) = {
             let conn_arc = self.get();
             let conn = conn_arc.lock();
-            f(&conn)
+            let before = connection_total_changes(&conn);
+            let res = f(&conn);
+            let after = connection_total_changes(&conn);
+            (res, before != after)
         };
-        match result {
-            Ok(()) => {
-                Storage::reassert_sqlite_artifact_permissions_for_config(&self.config)?;
-                Ok(())
-            }
-            Err(err) => {
-                let _ = Storage::reassert_sqlite_artifact_permissions_for_config(&self.config);
-                Err(err)
-            }
-        }
+        Storage::reassert_permissions_after_connection_for_config(
+            &self.config,
+            result,
+            writes_occurred,
+        )
     }
 
     /// Get configuration
@@ -735,7 +778,8 @@ fn prepare_database_file(db_path: &Path) -> Result<()> {
                     db_path.display()
                 )));
             }
-            restrict_sqlite_artifact_mode(db_path, || {})
+            let _ = restrict_sqlite_artifact_mode(db_path, || {})?;
+            Ok(())
         }
         Err(err) => Err(err.into()),
     }
@@ -801,6 +845,35 @@ fn warn_if_parent_is_permissive(parent: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Reassert permissions after a connection call.
+///
+/// On pure read-only queries where the primary database file mode is already `0600`
+/// and `total_changes` has not changed on this handle, redundant `lstat` checks on
+/// sidecar `-wal` and `-shm` artifacts are skipped. If writes occurred or the main
+/// database file mode was broadened, sidecars are rechecked and narrowed as well.
+#[cfg(unix)]
+fn reassert_connection_artifact_permissions(db_path: &Path, writes_occurred: bool) -> Result<()> {
+    let db_mode_narrowed = restrict_sqlite_artifact_mode(db_path, || {})?;
+    if db_mode_narrowed || writes_occurred {
+        restrict_sqlite_sidecar_permissions(db_path)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn reassert_connection_artifact_permissions(_db_path: &Path, _writes_occurred: bool) -> Result<()> {
+    Ok(())
+}
+
+/// Narrow sidecars (`-wal` and `-shm`) to at most `0600`, by path only.
+#[cfg(unix)]
+fn restrict_sqlite_sidecar_permissions(db_path: &Path) -> Result<()> {
+    for path in sqlite_sidecar_paths(db_path) {
+        let _ = restrict_sqlite_artifact_mode(&path, || {})?;
+    }
+    Ok(())
+}
+
 /// Narrow the database, `-wal` and `-shm` to at most `0600`, by path only.
 ///
 /// This runs after every storage call, while SQLite holds POSIX (fcntl)
@@ -813,12 +886,15 @@ fn warn_if_parent_is_permissive(parent: &Path) -> Result<()> {
 #[cfg(unix)]
 fn restrict_sqlite_artifact_permissions(db_path: &Path) -> Result<()> {
     for path in sqlite_artifact_paths(db_path) {
-        restrict_sqlite_artifact_mode(&path, || {})?;
+        let _ = restrict_sqlite_artifact_mode(&path, || {})?;
     }
     Ok(())
 }
 
 /// Narrow one artifact's mode to `mode & 0600` without opening it.
+///
+/// Returns `Ok(true)` if the mode was narrowed from a broader mode,
+/// or `Ok(false)` if the mode was already restricted or untouched.
 ///
 /// Missing files and non-regular files are left alone; symlinks are refused.
 /// The mode is only ever narrowed relative to what `lstat` saw.
@@ -840,28 +916,29 @@ fn restrict_sqlite_artifact_permissions(db_path: &Path) -> Result<()> {
 /// `before_chmod` runs between the check and the chmod (a test seam for the
 /// race above; production passes a no-op).
 #[cfg(unix)]
-fn restrict_sqlite_artifact_mode(path: &Path, before_chmod: impl FnOnce()) -> Result<()> {
+fn restrict_sqlite_artifact_mode(path: &Path, before_chmod: impl FnOnce()) -> Result<bool> {
     use std::os::unix::fs::PermissionsExt;
 
     let metadata = match std::fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
         Err(err) => return Err(err.into()),
     };
     if metadata.file_type().is_symlink() {
         return Err(refuse_symlink_artifact(path));
     }
     if !metadata.is_file() {
-        return Ok(());
+        return Ok(false);
     }
 
     let current = metadata.permissions().mode() & 0o777;
     let restricted = current & SQLITE_FILE_MODE;
     if restricted == current {
-        return Ok(());
+        return Ok(false);
     }
     before_chmod();
-    chmod_artifact_no_follow(path, restricted, &metadata)
+    chmod_artifact_no_follow(path, restricted, &metadata)?;
+    Ok(true)
 }
 
 #[cfg(unix)]
@@ -966,14 +1043,21 @@ fn restrict_sqlite_artifact_permissions(_db_path: &Path) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn sqlite_artifact_paths(db_path: &Path) -> Vec<PathBuf> {
-    let mut paths = Vec::with_capacity(3);
-    paths.push(db_path.to_path_buf());
+fn sqlite_sidecar_paths(db_path: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::with_capacity(2);
     for suffix in ["-wal", "-shm"] {
         let mut path = db_path.as_os_str().to_os_string();
         path.push(suffix);
         paths.push(PathBuf::from(path));
     }
+    paths
+}
+
+#[cfg(unix)]
+fn sqlite_artifact_paths(db_path: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::with_capacity(3);
+    paths.push(db_path.to_path_buf());
+    paths.extend(sqlite_sidecar_paths(db_path));
     paths
 }
 

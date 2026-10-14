@@ -54,6 +54,47 @@ async def post_tool_call(
     return decode_tool_result(result.get("result", {}))
 
 
+async def post_rpc_call(
+    client: httpx.AsyncClient,
+    *,
+    request_id: int,
+    method: str,
+    params: dict[str, Any] | None,
+) -> Any:
+    """POST a JSON-RPC request and decode the result."""
+    payload = {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": method,
+        "params": params or {},
+    }
+    try:
+        resp = await client.post("/v1/mcp", json=payload)
+    except httpx.RequestError as exc:
+        raise EngramError(f"Engram request failed: {exc}") from exc
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise EngramError(
+            f"HTTP {exc.response.status_code}: {exc.response.text}"
+        ) from exc
+    try:
+        result = resp.json()
+    except ValueError as exc:
+        raise EngramError("Engram returned invalid JSON") from exc
+    if not isinstance(result, dict):
+        raise EngramError("Engram returned an invalid JSON-RPC response")
+    if "error" in result:
+        error = result["error"]
+        message = (
+            error.get("message", "Unknown error")
+            if isinstance(error, dict)
+            else error
+        )
+        raise EngramError(str(message))
+    return result.get("result", {})
+
+
 def error_message(error: Any) -> str:
     """Extract a human-readable message from an MCP/JSON-RPC error payload."""
     if isinstance(error, dict):

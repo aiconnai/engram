@@ -33,11 +33,37 @@ impl PolicyRerankInfo {
     }
 }
 
+fn validate_non_negative_int(
+    params: &Value,
+    name: &str,
+) -> std::result::Result<Option<i64>, Value> {
+    match params.get(name) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => match v.as_i64() {
+            Some(val) if val >= 0 => Ok(Some(val)),
+            _ => Err(
+                ToolError::invalid_params(format!("{name} must be a non-negative integer"))
+                    .into_value(),
+            ),
+        },
+    }
+}
+
 pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
     use crate::search::result_cache::CacheFilterParams;
 
+    if let Err(err) = validate_non_negative_int(&params, "limit") {
+        return err;
+    }
+    if let Err(err) = validate_non_negative_int(&params, "offset") {
+        return err;
+    }
+
     let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
-    let mut options: SearchOptions = serde_json::from_value(params.clone()).unwrap_or_default();
+    let mut options: SearchOptions = match serde_json::from_value(params.clone()) {
+        Ok(opts) => opts,
+        Err(e) => return ToolError::invalid_params(e.to_string()).into_value(),
+    };
     let policy_rerank = params
         .get("policy_rerank")
         .and_then(|v| v.as_bool())

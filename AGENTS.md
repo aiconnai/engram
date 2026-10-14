@@ -80,7 +80,7 @@ O Engram expõe as ferramentas MCP documentadas em [`docs/MCP_TOOLS.md`](docs/MC
 - `memory_create`, `memory_search`, `memory_list`
 - `memory_create_daily` (memórias efêmeras)
 - `identity_create`, `identity_resolve`
-- `memory_temporal_contradictions`, `memory_scope_set`
+- `temporal_contradictions`, `scope_set`
 
 ## Huly
 Se o skill `huly` estiver disponível no seu ambiente (`.claude/skills/huly/SKILL.md`, não versionado), leia-o primeiro. Caso contrário, as regras abaixo são auto-suficientes.

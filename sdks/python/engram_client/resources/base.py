@@ -12,3 +12,8 @@ class ResourceMixin:
         self, method: str, params: dict[str, Any] | None = None
     ) -> Any:
         raise NotImplementedError
+
+    async def _rpc_call(
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> Any:
+        raise NotImplementedError

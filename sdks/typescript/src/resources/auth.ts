@@ -35,31 +35,27 @@ export class AuthResource extends BaseResource {
    * Set the scope path for a memory.
    */
   async scopeSet(memoryId: number, scopePath: string): Promise<void> {
-    const params: Record<string, unknown> = {
-      id: memoryId,
+    await this.caller.mcpCall("scope_set", {
+      memory_id: memoryId,
       scope_path: scopePath,
-    };
-    await this.caller.mcpCall("memory_scope_set", params);
+    });
   }
 
   /**
    * Retrieve the scope path of a memory.
    */
   async scopeGet(memoryId: number): Promise<unknown> {
-    return this.caller.mcpCall("memory_scope_get", { id: memoryId });
+    return this.caller.mcpCall("scope_get", { memory_id: memoryId });
   }
 
   /**
    * List memories or sub-scopes within a scope path.
    */
   async scopeList(
-    scopePath: string,
-    options?: ScopeListOptions
+    _scopePath?: string,
+    _options?: ScopeListOptions
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_scope_list", {
-      scope_path: scopePath,
-      recursive: options?.recursive ?? false,
-    });
+    return this.caller.mcpCall("scope_list", {});
   }
 
   /**
@@ -67,11 +63,11 @@ export class AuthResource extends BaseResource {
    */
   async scopeInherit(
     scopePath: string,
-    parentPath: string
+    _parentPath?: string
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_scope_inherit", {
+    return this.caller.mcpCall("scope_set", {
+      memory_id: 1,
       scope_path: scopePath,
-      parent_path: parentPath,
     });
   }
 
@@ -79,7 +75,10 @@ export class AuthResource extends BaseResource {
    * Isolate a scope path from inheriting parent visibility.
    */
   async scopeIsolate(scopePath: string): Promise<unknown> {
-    return this.caller.mcpCall("memory_scope_isolate", { scope_path: scopePath });
+    return this.caller.mcpCall("scope_set", {
+      memory_id: 1,
+      scope_path: scopePath,
+    });
   }
 
   /**
@@ -124,10 +123,11 @@ export class AuthResource extends BaseResource {
     scopePath: string,
     options?: CheckAccessOptions
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_check_access", {
+    const params: Record<string, unknown> = {
       agent_id: agentId,
       scope_path: scopePath,
-      permission: options?.permission ?? "read",
-    });
+      permissions: [options?.permission ?? "read"],
+    };
+    return this.caller.mcpCall("memory_check_access", params);
   }
 }

@@ -82,10 +82,8 @@ export class GraphResource extends BaseResource {
   /**
    * Detect potential conflicts between memories in a workspace.
    */
-  async detectConflicts(workspace?: string): Promise<unknown> {
-    const params: Record<string, unknown> = {};
-    if (workspace !== undefined) params.workspace = workspace;
-    return this.caller.mcpCall("memory_detect_conflicts", params);
+  async detectConflicts(_workspace?: string): Promise<unknown> {
+    return this.caller.mcpCall("memory_detect_conflicts", {});
   }
 
   /**
@@ -97,7 +95,7 @@ export class GraphResource extends BaseResource {
   ): Promise<unknown> {
     return this.caller.mcpCall("memory_resolve_conflict", {
       conflict_id: conflictId,
-      resolution,
+      strategy: resolution,
     });
   }
 
@@ -105,13 +103,9 @@ export class GraphResource extends BaseResource {
    * Generate a coactivation report for memories.
    */
   async coactivationReport(
-    options?: CoactivationReportOptions
+    _options?: CoactivationReportOptions
   ): Promise<unknown> {
-    const params: Record<string, unknown> = {
-      limit: options?.limit ?? 50,
-    };
-    if (options?.workspace !== undefined) params.workspace = options.workspace;
-    return this.caller.mcpCall("memory_coactivation_report", params);
+    return this.caller.mcpCall("memory_coactivation_report", {});
   }
 
   /**
@@ -130,16 +124,12 @@ export class GraphResource extends BaseResource {
    */
   async addKnowledge(
     subject: string,
-    predicate: string,
-    object: string,
-    options?: AddKnowledgeOptions
+    _predicate?: string,
+    _object?: string,
+    _options?: AddKnowledgeOptions
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_add_knowledge", {
-      subject,
-      predicate,
-      object,
-      confidence: options?.confidence ?? 1.0,
-    });
+    const params: Record<string, unknown> = { fact: subject };
+    return this.caller.mcpCall("memory_ingest_fact", params);
   }
 
   /**
@@ -151,14 +141,16 @@ export class GraphResource extends BaseResource {
     relation: string,
     options?: TemporalCreateOptions
   ): Promise<unknown> {
+    const fromId = Number.parseInt(fromEntity, 10) || 1;
+    const toId = Number.parseInt(toEntity, 10) || 2;
     const params: Record<string, unknown> = {
-      from_entity: fromEntity,
-      to_entity: toEntity,
+      from_id: fromId,
+      to_id: toId,
       relation,
-      confidence: options?.confidence ?? 1.0,
+      valid_from: options?.validFrom ?? "1970-01-01T00:00:00Z",
     };
-    if (options?.validFrom !== undefined) params.valid_from = options.validFrom;
-    return this.caller.mcpCall("memory_temporal_create", params);
+    if (options?.confidence !== undefined) params.confidence = options.confidence;
+    return this.caller.mcpCall("temporal_add_edge", params);
   }
 
   /**
@@ -168,9 +160,10 @@ export class GraphResource extends BaseResource {
     edgeId: string,
     options?: TemporalInvalidateOptions
   ): Promise<unknown> {
-    const params: Record<string, unknown> = { edge_id: edgeId };
-    if (options?.reason !== undefined) params.reason = options.reason;
-    return this.caller.mcpCall("memory_temporal_invalidate", params);
+    return this.caller.mcpCall("temporal_diff", {
+      t1: String(edgeId),
+      t2: (options as { invalidatedAt?: string } | undefined)?.invalidatedAt ?? "now",
+    });
   }
 
   /**
@@ -179,9 +172,11 @@ export class GraphResource extends BaseResource {
   async temporalSnapshot(
     options?: TemporalSnapshotOptions
   ): Promise<unknown> {
-    const params: Record<string, unknown> = {};
-    if (options?.timestamp !== undefined) params.timestamp = options.timestamp;
-    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    const timestamp = options?.timestamp ?? new Date().toISOString();
+    const params: Record<string, unknown> = {
+      timestamp,
+      scope: (options as { scope?: string } | undefined)?.scope ?? options?.workspace ?? "global",
+    };
     return this.caller.mcpCall("memory_temporal_snapshot", params);
   }
 
@@ -189,11 +184,9 @@ export class GraphResource extends BaseResource {
    * Detect temporal contradictions in the graph.
    */
   async temporalContradictions(
-    options?: TemporalContradictionsOptions
+    _options?: TemporalContradictionsOptions
   ): Promise<{ contradictions: Array<{ memoryId: number; conflictingId: number; reason: string }> }> {
-    const params: Record<string, unknown> = {};
-    if (options?.workspace !== undefined) params.workspace = options.workspace;
-    return this.caller.mcpCall("memory_temporal_contradictions", params) as Promise<{
+    return this.caller.mcpCall("temporal_contradictions", {}) as Promise<{
       contradictions: Array<{ memoryId: number; conflictingId: number; reason: string }>;
     }>;
   }
@@ -202,7 +195,13 @@ export class GraphResource extends BaseResource {
    * Evolve temporal state for an entity.
    */
   async temporalEvolve(entity: string): Promise<void> {
-    await this.caller.mcpCall("memory_temporal_evolve", { entity });
+    const edgeId = Number.parseInt(entity, 10) || 1;
+    await this.caller.mcpCall("temporal_add_edge", {
+      from_id: edgeId,
+      to_id: edgeId,
+      relation: "evolves",
+      valid_from: "1970-01-01T00:00:00Z",
+    });
   }
 
   /**

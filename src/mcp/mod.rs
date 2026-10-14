@@ -3,6 +3,7 @@
 //! JSON-RPC over stdio for AI tool integration.
 
 pub mod error;
+pub mod error_normalizer;
 #[cfg(feature = "grpc")]
 pub mod grpc_transport;
 pub mod handlers;
@@ -23,6 +24,7 @@ pub mod tools;
 pub mod workspace_guard;
 
 pub use error::{HandlerResult, ToolError, ToolErrorCode, ToolResult};
+pub use error_normalizer::{infer_error_code, normalize_tool_output};
 pub use prompts::{get_prompt, list_prompts};
 pub use protocol::{
     methods, InitializeResult, McpHandler, McpRequest, McpResponse, McpServer, PromptArgument,

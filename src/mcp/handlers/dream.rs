@@ -6,6 +6,7 @@ use crate::dream::candidates::{run_candidate_generation, DreamCandidateGeneratio
 use crate::dream::eval::{run_dream_eval, DreamEvalOptions};
 use crate::dream::{run_once_all, DreamConfig, DreamPipeline, DreamPipelineConfig};
 use crate::error::{EngramError, Result};
+use crate::mcp::error::ToolError;
 use crate::mcp::handlers::HandlerContext;
 use crate::storage::queries::{
     create_crossref, create_memory, get_policy_record, record_reinforcement, update_memory,
@@ -211,7 +212,7 @@ pub fn dream_get(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_connection(|conn| get_dream_job(conn, &id))
         .map(|job| json!({"job": job}))
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn dream_list(ctx: &HandlerContext, params: Value) -> Value {
@@ -221,7 +222,7 @@ pub fn dream_list(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_connection(|conn| list_dream_jobs(conn, workspace, status, limit))
         .map(|jobs| json!({"jobs": jobs, "count": jobs.len()}))
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn dream_cancel(ctx: &HandlerContext, params: Value) -> Value {
@@ -232,7 +233,7 @@ pub fn dream_cancel(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_connection(|conn| transition_dream_job(conn, &id, "canceled", None, None))
         .map(|job| json!({"status": "success", "job": job}))
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn dream_archive(ctx: &HandlerContext, params: Value) -> Value {
@@ -243,7 +244,7 @@ pub fn dream_archive(ctx: &HandlerContext, params: Value) -> Value {
     ctx.storage
         .with_connection(|conn| transition_dream_job(conn, &id, "archived", None, None))
         .map(|job| json!({"status": "success", "job": job}))
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn dream_candidates_list(ctx: &HandlerContext, params: Value) -> Value {
@@ -728,5 +729,5 @@ fn required_string(params: &Value, key: &str) -> std::result::Result<String, Val
         .and_then(|v| v.as_str())
         .filter(|value| !value.trim().is_empty())
         .map(ToString::to_string)
-        .ok_or_else(|| json!({"error": format!("{} is required", key)}))
+        .ok_or_else(|| ToolError::missing_argument(key).into_value())
 }

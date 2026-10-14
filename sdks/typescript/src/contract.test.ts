@@ -205,9 +205,7 @@ describe("envelopes and errors", () => {
     expect(decode(result)).toEqual({ id: 7, content: "x" });
   });
 
-  it("does NOT throw on a tool error envelope (isError); it is returned as data", async () => {
-    // Characterization. The Python SDK raises EngramError here; this one does not
-    // (coverage-map gap G-4). If the TypeScript SDK ever decodes isError, update this test.
+  it("throws EngramError on a tool error envelope (isError: true)", async () => {
     const normalized = {
       error: {
         code: "permission_denied",
@@ -219,10 +217,12 @@ describe("envelopes and errors", () => {
     };
     stub.responder = () => ({ body: rpcResult(toolResult(normalized, true)) });
 
-    const result = (await makeClient().delete(9)) as { isError?: boolean };
+    const error = await makeClient().delete(9).catch((caught: unknown) => caught);
 
-    expect(result.isError).toBe(true);
-    expect(decode(result)).toEqual(normalized);
+    expect(error).toBeInstanceOf(EngramError);
+    expect((error as EngramError).message).toBe("memory_delete requires admin mode");
+    expect((error as EngramError).code).toBe("permission_denied");
+    expect((error as EngramError).details).toEqual(normalized.error);
   });
 
   it("throws EngramError with the JSON-RPC message on a JSON-RPC error", async () => {
@@ -260,11 +260,8 @@ describe("timeout, connection failure and lifecycle", () => {
     const error = await client.get(1).catch((caught: unknown) => caught);
 
     expect(Date.now() - started).toBeLessThan(1200);
-    // Characterization: the abort surfaces as the platform AbortError, not EngramError
-    // (the Python SDK wraps it; coverage-map gap G-5).
-    expect(error).toBeInstanceOf(Error);
-    expect(error).not.toBeInstanceOf(EngramError);
-    expect((error as Error).name).toBe("AbortError");
+    expect(error).toBeInstanceOf(EngramError);
+    expect((error as EngramError).code).toBe("timeout");
     expect(decode(await client.get(2))).toEqual({ id: 2 });
   });
 

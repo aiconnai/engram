@@ -10,10 +10,10 @@
 //!   same operation on `:memory:`, an on-disk WAL database (`StorageMode::Local`,
 //!   synchronous=NORMAL) and an on-disk rollback-journal database
 //!   (`StorageMode::CloudSafe`, synchronous=FULL).
-//! - `storage_concurrency/{readers_N,readers_N_one_writer}`: N threads sharing a
-//!   WAL `StoragePool` (one connection per thread slot). One iteration is a
-//!   fixed batch per thread, so the time is wall time for the whole batch, not
-//!   per operation.
+//! - `storage_concurrency/{readers_N,readers_N_one_writer,readers_readonly_N,readers_readonly_N_one_writer}`:
+//!   N threads sharing a WAL `StoragePool` (one connection per thread slot).
+//!   One iteration is a fixed batch per thread, so the time is wall time for
+//!   the whole batch, not per operation.
 //! - `latency_percentiles`: opt-in (`ENGRAM_BENCH_PERCENTILES=1`) manual timing
 //!   that prints p50/p95/p99 per mode and operation after an explicit warmup.
 //!   Criterion itself reports mean/median and confidence intervals, not
@@ -593,6 +593,57 @@ fn run_concurrent_batch(
     }
 }
 
+/// Read-only memory lookup that avoids mutating `access_count` or `last_accessed_at`.
+///
+/// In contrast to `get_memory` (which issues an `UPDATE memories SET access_count = access_count + 1`
+/// on each read, forcing readers to serialize on SQLite's exclusive write lock), this query
+/// executes a pure `SELECT` so concurrent readers execute in parallel under SQLite's WAL mode.
+fn get_memory_readonly_bench(conn: &rusqlite::Connection, id: i64) -> engram::error::Result<usize> {
+    let len: usize = conn.query_row(
+        "SELECT length(content) FROM memories WHERE id = ?1",
+        [id],
+        |row| row.get(0),
+    )?;
+    Ok(len)
+}
+
+/// Run one batch: `readers` threads each doing `CONCURRENT_OPS_PER_THREAD`
+/// read-only queries on the shared pool, plus an optional writer thread doing
+/// `WRITER_OPS` creates.
+fn run_concurrent_readonly_batch(
+    pool: &Arc<StoragePool>,
+    ids: &Arc<Vec<i64>>,
+    readers: usize,
+    writer: bool,
+) {
+    let mut handles = Vec::new();
+    for t in 0..readers {
+        let pool = Arc::clone(pool);
+        let ids = Arc::clone(ids);
+        handles.push(thread::spawn(move || {
+            for i in 0..CONCURRENT_OPS_PER_THREAD {
+                let id = ids[(t * 31 + i) % ids.len()];
+                pool.with_connection(|conn| get_memory_readonly_bench(conn, black_box(id)))
+                    .expect("concurrent read");
+            }
+        }));
+    }
+    if writer {
+        let pool = Arc::clone(pool);
+        handles.push(thread::spawn(move || {
+            for i in 0..WRITER_OPS {
+                pool.with_connection(|conn| {
+                    create_memory(conn, &bench_input(format!("concurrent writer {i}")))
+                })
+                .expect("concurrent write");
+            }
+        }));
+    }
+    for handle in handles {
+        handle.join().expect("bench thread must not panic");
+    }
+}
+
 /// WAL concurrency: reader scaling and readers with one writer.
 fn bench_storage_concurrency(c: &mut Criterion) {
     let dir = tempdir().expect("bench tempdir");
@@ -620,6 +671,12 @@ fn bench_storage_concurrency(c: &mut Criterion) {
         });
         group.bench_function(format!("readers_{readers}_one_writer"), |b| {
             b.iter(|| run_concurrent_batch(&pool, &ids, readers, true))
+        });
+        group.bench_function(format!("readers_readonly_{readers}"), |b| {
+            b.iter(|| run_concurrent_readonly_batch(&pool, &ids, readers, false))
+        });
+        group.bench_function(format!("readers_readonly_{readers}_one_writer"), |b| {
+            b.iter(|| run_concurrent_readonly_batch(&pool, &ids, readers, true))
         });
     }
     group.finish();

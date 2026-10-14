@@ -470,6 +470,12 @@ impl ToolCallResult {
         }
     }
 
+    /// Create a result from tool output value with legacy error normalization.
+    pub fn from_tool_output_normalized(value: &Value) -> Self {
+        let normalized = crate::mcp::error_normalizer::normalize_tool_output(value.clone());
+        Self::from_tool_output(&normalized)
+    }
+
     /// Create an error result
     pub fn error(message: impl Into<String>) -> Self {
         Self {

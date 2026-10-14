@@ -82,10 +82,6 @@ class DreamMixin(ResourceMixin):
             params["job_id"] = job_id
         if review_state is not None:
             params["review_state"] = review_state
-        if kind is not None:
-            params["kind"] = kind
-        if proposed_action is not None:
-            params["proposed_action"] = proposed_action
         if limit is not None:
             params["limit"] = limit
         return await self._mcp_call("dream_candidates_list", params)
@@ -101,13 +97,14 @@ class DreamMixin(ResourceMixin):
         *,
         edited_content: str | None = None,
         notes: str | None = None,
+        metadata_patch: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Review a candidate (accept, edit, reject, archive)."""
         params: dict[str, Any] = {"id": id, "review_state": review_state}
         if edited_content is not None:
             params["edited_content"] = edited_content
-        if notes is not None:
-            params["notes"] = notes
+        if metadata_patch is not None:
+            params["metadata_patch"] = metadata_patch
         return await self._mcp_call("dream_candidate_review", params)
 
     async def dream_candidate_apply(
@@ -116,14 +113,15 @@ class DreamMixin(ResourceMixin):
         *,
         confirm: bool = True,
         reviewer_notes: str | None = None,
+        dry_run: bool | None = None,
     ) -> dict[str, Any]:
         """Apply an accepted or edited candidate to canonical memory.
 
         Requires ``confirm=True``.
         """
         params: dict[str, Any] = {"id": id, "confirm": confirm}
-        if reviewer_notes is not None:
-            params["reviewer_notes"] = reviewer_notes
+        if dry_run is not None:
+            params["dry_run"] = dry_run
         return await self._mcp_call("dream_candidate_apply", params)
 
     async def dream_eval_run(
@@ -131,13 +129,15 @@ class DreamMixin(ResourceMixin):
         *,
         workspace: str | None = None,
         lane: str | None = None,
+        fixtures: list[str] | None = None,
+        include_details: bool | None = None,
     ) -> dict[str, Any]:
         """Run deterministic local dream snapshot evaluation fixtures."""
         params: dict[str, Any] = {}
-        if workspace is not None:
-            params["workspace"] = workspace
-        if lane is not None:
-            params["lane"] = lane
+        if fixtures is not None:
+            params["fixtures"] = fixtures
+        if include_details is not None:
+            params["include_details"] = include_details
         return await self._mcp_call("dream_eval_run", params)
 
     async def dream_run_now(

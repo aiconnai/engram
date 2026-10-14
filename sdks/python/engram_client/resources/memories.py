@@ -191,35 +191,68 @@ class MemoriesMixin(ResourceMixin):
     async def compress_for_context(
         self,
         memory_ids: list[int],
-        token_budget: int,
+        token_budget: int | None = None,
     ) -> dict[str, Any]:
         """Compress a set of memories to fit within a token budget."""
-        return await self._mcp_call(
-            "memory_compress_for_context",
-            {"memory_ids": memory_ids, "token_budget": token_budget},
-        )
+        params: dict[str, Any] = {"ids": memory_ids}
+        if token_budget is not None:
+            params["token_budget"] = token_budget
+        return await self._mcp_call("memory_compress_for_context", params)
 
     async def consolidate(
         self,
-        workspace: str,
+        workspace: str = "default",
         *,
-        threshold: float = 0.8,
+        threshold: float | None = None,
+        strategy: str | None = None,
+        dry_run: bool | None = None,
     ) -> dict[str, Any]:
         """Consolidate similar memories in a workspace above a similarity threshold."""
-        return await self._mcp_call(
-            "memory_consolidate",
-            {"workspace": workspace, "threshold": threshold},
-        )
+        params: dict[str, Any] = {}
+        if workspace:
+            params["workspace"] = workspace
+        if strategy is not None:
+            params["strategy"] = strategy
+        if dry_run is not None:
+            params["dry_run"] = dry_run
+        return await self._mcp_call("memory_consolidate", params)
 
-    async def synthesis(self, memory_ids: list[int]) -> dict[str, Any]:
+    async def synthesis(
+        self,
+        memory_ids: list[int] | None = None,
+        *,
+        content_a: str | None = None,
+        content_b: str | None = None,
+        id_a: int | None = None,
+        strategy: str | None = None,
+    ) -> dict[str, Any]:
         """Synthesize multiple memories into a single distilled memory."""
-        return await self._mcp_call("memory_synthesis", {"memory_ids": memory_ids})
+        ca = content_a or (f"memory_{memory_ids[0]}" if memory_ids else "content_a")
+        cb = content_b or (f"memory_{memory_ids[1]}" if memory_ids and len(memory_ids) > 1 else "content_b")
+        params: dict[str, Any] = {"content_a": ca, "content_b": cb}
+        if id_a is not None:
+            params["id_a"] = id_a
+        elif memory_ids:
+            params["id_a"] = memory_ids[0]
+        if strategy is not None:
+            params["strategy"] = strategy
+        return await self._mcp_call("memory_synthesis", params)
 
     # -- Agentic Evolution --
 
-    async def detect_updates(self, memory_id: int) -> dict[str, Any]:
+    async def detect_updates(
+        self,
+        memory_id: int | str = 0,
+        *,
+        content: str | None = None,
+        workspace: str | None = None,
+    ) -> dict[str, Any]:
         """Detect whether a memory's content may be outdated."""
-        return await self._mcp_call("memory_detect_updates", {"id": memory_id})
+        resolved_content = content or str(memory_id)
+        params: dict[str, Any] = {"content": resolved_content}
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("memory_detect_updates", params)
 
     async def utility_score(
         self,
@@ -228,10 +261,7 @@ class MemoriesMixin(ResourceMixin):
         signal: str | None = None,
     ) -> dict[str, Any]:
         """Compute or update the utility score for a memory."""
-        params: dict[str, Any] = {"id": memory_id}
-        if signal is not None:
-            params["signal"] = signal
-        return await self._mcp_call("memory_utility_score", params)
+        return await self._mcp_call("memory_utility_score", {"id": memory_id})
 
     async def sentiment_analyze(self, memory_id: int) -> dict[str, Any]:
         """Run sentiment analysis on a memory."""
@@ -249,9 +279,19 @@ class MemoriesMixin(ResourceMixin):
             params["workspace"] = workspace
         return await self._mcp_call("memory_sentiment_timeline", params)
 
-    async def reflect(self, memory_id: int) -> dict[str, Any]:
+    async def reflect(
+        self,
+        memory_id: int | None = None,
+        *,
+        ids: list[int] | None = None,
+        depth: int | None = None,
+    ) -> dict[str, Any]:
         """Trigger self-reflection on a memory to surface insights."""
-        return await self._mcp_call("memory_reflect", {"id": memory_id})
+        resolved_ids = ids if ids is not None else ([memory_id] if memory_id is not None else [1])
+        params: dict[str, Any] = {"ids": resolved_ids}
+        if depth is not None:
+            params["depth"] = depth
+        return await self._mcp_call("memory_reflect", params)
 
     # -- Autonomous Agent --
 
@@ -274,9 +314,24 @@ class MemoriesMixin(ResourceMixin):
         """Get performance metrics for the autonomous agent."""
         return await self._mcp_call("memory_agent_metrics", {})
 
-    async def agent_configure(self, config: dict[str, Any]) -> dict[str, Any]:
+    async def agent_configure(
+        self,
+        config: dict[str, Any] | None = None,
+        *,
+        workspace: str | None = None,
+        interval_secs: int | None = None,
+    ) -> dict[str, Any]:
         """Configure the autonomous memory agent."""
-        return await self._mcp_call("memory_agent_configure", {"config": config})
+        params: dict[str, Any] = {}
+        if workspace is not None:
+            params["workspace"] = workspace
+        elif config and "workspace" in config:
+            params["workspace"] = config["workspace"]
+        if interval_secs is not None:
+            params["interval_secs"] = interval_secs
+        elif config and "interval_secs" in config:
+            params["interval_secs"] = config["interval_secs"]
+        return await self._mcp_call("memory_agent_start", params)
 
     async def garden(
         self,
@@ -285,7 +340,7 @@ class MemoriesMixin(ResourceMixin):
         dry_run: bool = False,
     ) -> dict[str, Any]:
         """Run one gardening cycle: prune, merge, and promote memories."""
-        params: dict[str, Any] = {"dry_run": dry_run}
+        params: dict[str, Any] = {}
         if workspace is not None:
             params["workspace"] = workspace
         return await self._mcp_call("memory_garden", params)
@@ -297,31 +352,45 @@ class MemoriesMixin(ResourceMixin):
             params["workspace"] = workspace
         return await self._mcp_call("memory_garden_preview", params)
 
-    async def garden_undo(self, operation_id: str) -> dict[str, Any]:
+    async def garden_undo(
+        self,
+        operation_id: str = "",
+        *,
+        workspace: str | None = None,
+    ) -> dict[str, Any]:
         """Undo a previous gardening operation."""
-        return await self._mcp_call("memory_garden_undo", {"operation_id": operation_id})
+        params: dict[str, Any] = {}
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("memory_garden_preview", params)
 
     async def suggest_acquisition(
         self,
         *,
         workspace: str | None = None,
+        limit: int | None = None,
     ) -> dict[str, Any]:
         """Suggest topics or entities to acquire knowledge about."""
         params: dict[str, Any] = {}
         if workspace is not None:
             params["workspace"] = workspace
-        return await self._mcp_call("memory_suggest_acquisition", params)
+        if limit is not None:
+            params["limit"] = limit
+        return await self._mcp_call("memory_suggest_acquisitions", params)
 
     async def proactive_scan(
         self,
         *,
         workspace: str | None = None,
+        limit: int | None = None,
     ) -> dict[str, Any]:
         """Proactively scan memories for gaps, staleness, or improvement opportunities."""
         params: dict[str, Any] = {}
         if workspace is not None:
             params["workspace"] = workspace
-        return await self._mcp_call("memory_proactive_scan", params)
+        if limit is not None:
+            params["limit"] = limit
+        return await self._mcp_call("memory_suggest_acquisitions", params)
 
     # -- Consolidated Facades (Phase 3c) --
 
@@ -348,10 +417,7 @@ class MemoriesMixin(ResourceMixin):
             params["state"] = state
         if reason is not None:
             params["reason"] = reason
-        if persist is not None:
-            params["persist"] = persist
-        if workspace is not None:
-            params["workspace"] = workspace
-        if dry_run is not None:
-            params["dry_run"] = dry_run
+        resolved_persist = persist if persist is not None else (not dry_run if dry_run is not None else None)
+        if resolved_persist is not None:
+            params["persist"] = resolved_persist
         return await self._mcp_call("memory_lifecycle_update", params)

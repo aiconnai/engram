@@ -1,6 +1,6 @@
 # RFC 0009: MCP Contract Validation JSON Report
 
-Status: proposed
+Status: accepted (implemented)
 
 Date: 2026-06-09
 
@@ -247,3 +247,14 @@ Exit-code mapping:
   build.
 - Whether alias handling should live in the validator script or in a small
   versioned metadata file.
+
+## Implementation & Verification Status (2026-10-14)
+
+- **Status**: accepted (implemented)
+- **Implementation**:
+  - [`scripts/validate_mcp_contract.py`](../../scripts/validate_mcp_contract.py)
+  - [`scripts/check-sdk-contract-alignment.py`](../../scripts/check-sdk-contract-alignment.py)
+- **Verification Suites**:
+  - [`scripts/test_validate_mcp_contract.py`](../../scripts/test_validate_mcp_contract.py)
+  - [`scripts/test_check_sdk_contract_alignment.py`](../../scripts/test_check_sdk_contract_alignment.py)
+  - [`tests/mcp_protocol_tests/contract_matrix.rs`](../../tests/mcp_protocol_tests/contract_matrix.rs)

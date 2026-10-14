@@ -142,7 +142,7 @@ export class EngramClient implements McpCaller {
     this.modelRouting = new ModelRoutingResource(this);
   }
 
-  async mcpCall(
+  async rpcCall(
     method: string,
     params: Record<string, unknown> = {}
   ): Promise<unknown> {
@@ -151,38 +151,115 @@ export class EngramClient implements McpCaller {
     const payload = {
       jsonrpc: "2.0",
       id,
-      method: "tools/call",
-      params: { name: method, arguments: params },
+      method,
+      params,
     };
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const resp = await fetch(`${this.baseUrl}/v1/mcp`, {
-        method: "POST",
-        headers: this.headers,
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+      let resp: Response;
+      try {
+        resp = await fetch(`${this.baseUrl}/v1/mcp`, {
+          method: "POST",
+          headers: this.headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } catch (err: unknown) {
+        if (err instanceof EngramError) {
+          throw err;
+        }
+        if (err instanceof Error) {
+          throw new EngramError(
+            `Engram request failed: ${err.message}`,
+            err.name === "AbortError" ? "timeout" : "connection_error"
+          );
+        }
+        throw new EngramError(
+          `Engram request failed: ${String(err)}`,
+          "connection_error"
+        );
+      }
 
       if (!resp.ok) {
         throw new EngramError(`HTTP ${resp.status}: ${resp.statusText}`);
       }
 
       const result = (await resp.json()) as {
-        error?: { message?: string };
+        error?: { message?: string; code?: string | number; data?: unknown };
         result?: unknown;
       };
 
       if (result.error) {
-        throw new EngramError(result.error.message ?? "Unknown error");
+        throw new EngramError(
+          result.error.message ?? "Unknown error",
+          result.error.code !== undefined ? String(result.error.code) : undefined,
+          result.error.data
+        );
+      }
+
+      const res = result.result;
+      if (
+        res !== null &&
+        typeof res === "object" &&
+        (res as { isError?: boolean }).isError === true &&
+        Array.isArray((res as { content?: unknown[] }).content)
+      ) {
+        const blocks = (res as { content: unknown[] }).content;
+        const textBlock = blocks.find(
+          (b): b is { type: string; text: string } =>
+            b !== null &&
+            typeof b === "object" &&
+            (b as { type?: unknown }).type === "text" &&
+            typeof (b as { text?: unknown }).text === "string"
+        );
+        const rawText = textBlock?.text ?? "";
+        let parsed: unknown = null;
+        try {
+          parsed = JSON.parse(rawText);
+        } catch {
+          parsed = null;
+        }
+
+        let message = rawText || "Tool execution failed";
+        let code: string | undefined;
+        let details: unknown;
+
+        if (parsed !== null && typeof parsed === "object") {
+          const p = parsed as Record<string, unknown>;
+          if (p.error !== null && typeof p.error === "object") {
+            const errObj = p.error as Record<string, unknown>;
+            message =
+              typeof errObj.message === "string" ? errObj.message : message;
+            code = typeof errObj.code === "string" ? errObj.code : undefined;
+            details = errObj.details ?? errObj;
+          } else if (typeof p.error === "string") {
+            message = p.error;
+            code = typeof p.code === "string" ? p.code : undefined;
+            details = p.details;
+          } else if (typeof p.message === "string") {
+            message = p.message;
+            code = typeof p.code === "string" ? p.code : undefined;
+            details = p.details;
+          }
+        }
+
+        throw new EngramError(message, code, details);
       }
 
       return result.result;
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async mcpCall(
+    method: string,
+    params: Record<string, unknown> = {}
+  ): Promise<unknown> {
+    return this.rpcCall("tools/call", { name: method, arguments: params });
   }
 
   // ==========================================

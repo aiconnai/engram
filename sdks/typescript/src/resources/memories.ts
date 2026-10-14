@@ -114,10 +114,9 @@ export class MemoriesResource extends BaseResource {
     memoryIds: number[],
     tokenBudget: number
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_compress_for_context", {
-      memory_ids: memoryIds,
-      token_budget: tokenBudget,
-    });
+    const params: Record<string, unknown> = { ids: memoryIds };
+    if (tokenBudget !== undefined) params.token_budget = tokenBudget;
+    return this.caller.mcpCall("memory_compress_for_context", params);
   }
 
   /**
@@ -125,26 +124,38 @@ export class MemoriesResource extends BaseResource {
    */
   async consolidate(
     workspace: string,
-    options?: ConsolidateOptions
+    options?: ConsolidateOptions & { strategy?: string; dryRun?: boolean }
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_consolidate", {
+    const params: Record<string, unknown> = {
       workspace,
-      threshold: options?.threshold ?? 0.8,
-    });
+    };
+    if (options?.strategy !== undefined) params.strategy = options.strategy;
+    if (options?.dryRun !== undefined) params.dry_run = options.dryRun;
+    return this.caller.mcpCall("memory_consolidate", params);
   }
 
   /**
    * Synthesize insights from multiple memories.
    */
-  async synthesis(memoryIds: number[]): Promise<unknown> {
-    return this.caller.mcpCall("memory_synthesis", { memory_ids: memoryIds });
+  async synthesis(
+    memoryIds: number[],
+    strategy?: string
+  ): Promise<unknown> {
+    const params: Record<string, unknown> = {
+      content_a: String(memoryIds[0] ?? ""),
+      content_b: String(memoryIds[1] ?? ""),
+    };
+    if (strategy !== undefined) params.strategy = strategy;
+    return this.caller.mcpCall("memory_synthesis", params);
   }
 
   /**
    * Detect potential updates for a memory.
    */
   async detectUpdates(memoryId: number): Promise<unknown> {
-    return this.caller.mcpCall("memory_detect_updates", { id: memoryId });
+    return this.caller.mcpCall("memory_detect_updates", {
+      content: String(memoryId),
+    });
   }
 
   /**
@@ -154,9 +165,7 @@ export class MemoriesResource extends BaseResource {
     memoryId: number,
     options?: UtilityScoreOptions
   ): Promise<unknown> {
-    const params: Record<string, unknown> = { id: memoryId };
-    if (options?.signal !== undefined) params.signal = options.signal;
-    return this.caller.mcpCall("memory_utility_score", params);
+    return this.caller.mcpCall("memory_utility_score", { id: memoryId });
   }
 
   /**
@@ -182,8 +191,10 @@ export class MemoriesResource extends BaseResource {
   /**
    * Generate a reflection based on a memory.
    */
-  async reflect(memoryId: number): Promise<unknown> {
-    return this.caller.mcpCall("memory_reflect", { id: memoryId });
+  async reflect(memoryId: number, depth?: number): Promise<unknown> {
+    const params: Record<string, unknown> = { ids: [memoryId] };
+    if (depth !== undefined) params.depth = depth;
+    return this.caller.mcpCall("memory_reflect", params);
   }
 
   /**

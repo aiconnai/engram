@@ -248,7 +248,7 @@ fn unknown_tool_for_restricted_principals_is_permission_denied() {
 #[test]
 fn invalid_params_return_normalized_envelopes_with_is_error() {
     let handler = ProtocolHandler::new();
-    let cases: [(&str, Value, &[&str]); 8] = [
+    let cases: [(&str, Value, &[&str]); 10] = [
         (
             "memory_create",
             json!({"content": 123}),
@@ -271,17 +271,25 @@ fn invalid_params_return_normalized_envelopes_with_is_error() {
         ),
         ("memory_get", json!({}), &["missing_argument"]),
         ("memory_delete", json!({}), &["missing_argument"]),
-        // Known gap: a wrong-typed `id` is reported as a missing argument, not
-        // `invalid_params`. Either is a rejection; neither may succeed.
         (
             "memory_get",
             json!({"id": "not-a-number"}),
-            &["missing_argument", "invalid_params"],
+            &["invalid_params"],
         ),
         (
             "memory_update",
             json!({"id": true, "content": "x"}),
-            &["missing_argument", "invalid_params"],
+            &["invalid_params"],
+        ),
+        (
+            "memory_list",
+            json!({"limit": "not-an-int"}),
+            &["invalid_params"],
+        ),
+        (
+            "memory_search",
+            json!({"query": "x", "limit": -5}),
+            &["invalid_params"],
         ),
     ];
 
@@ -349,17 +357,14 @@ fn success_envelope_has_no_error_flag_and_text_json() {
 
 #[test]
 fn legacy_string_errors_are_still_flagged_is_error() {
-    // Several handlers predate the normalized contract and return
-    // `{"error": "<string>"}`. Clients rely on `isError`, which both shapes set.
     let handler = ProtocolHandler::new();
-    let envelope = handler.call("memory_block_create", json!({}));
+    let block_envelope = handler.call("memory_block_create", json!({}));
+    assert_normalized_error(&block_envelope, "memory_block_create missing name");
+    assert_eq!(block_envelope.code(), "missing_argument");
 
-    assert!(envelope.is_error(), "{}", envelope.raw);
-    assert!(
-        envelope.payload.get("error").is_some(),
-        "legacy error payload must still carry `error`: {}",
-        envelope.payload
-    );
+    let synth_envelope = handler.call("memory_synthesis", json!({}));
+    assert_normalized_error(&synth_envelope, "memory_synthesis missing content_a");
+    assert_eq!(synth_envelope.code(), "missing_argument");
 }
 
 #[test]

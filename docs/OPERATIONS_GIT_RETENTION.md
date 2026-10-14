@@ -10,6 +10,9 @@
 
 ## 1. Estado desta política
 
+- **Status operacional (2026-10-14):**
+  - All 73 `review-raw` artifacts (`4,249,732` bytes) are verified byte-for-byte against `docs/harness/retention/review-raw.manifest.json` (`VERIFY: OK files=73 ok=73`).
+  - **Owner decision (`2026-10-14`):** keep the 73 `.raw` artifacts tracked in-tree with SHA-256 manifest verification enforced by the offline harness lane (`retention` component, 21 tests), deferring `untrack --apply` until an external cold-storage bucket is provisioned.
 - **Proposta técnica pronta e provada; migração real não aplicada.** A classe `review-raw` foi
   migrada **somente em clones descartáveis** (seção 6). No repositório real, nenhum arquivo foi
   destracked, nenhuma regra nova entrou no `.gitignore` e nenhum objeto foi tocado. Aplicar a migração
@@ -89,7 +92,7 @@ Garantias: `restore` confere `sha256` e tamanho **antes** de escrever e escreve 
 mexe em histórico, refs nem object store; caminhos do manifest absolutos, com `..` ou via symlink são
 recusados. `verify` com tudo ausente sai com 4 (nunca "passa" em silêncio).
 
-## 5. Migração de uma classe (`review-raw`) e decisão pendente do owner
+## 5. Migração de uma classe (`review-raw`) e decisão do owner
 
 Procedimento recomendado, nesta ordem, **numa worktree/branch dedicada, com writers concorrentes
 excluídos** (`review-gate.sh` grava novos `.raw` a cada execução):
@@ -102,8 +105,13 @@ excluídos** (`review-gate.sh` grava novos `.raw` a cada execução):
 3. Só então, com autorização do owner: `untrack --apply` na branch real + commit explícito de
    `.gitignore` e remoção do índice. Rollback: `git revert` desse commit e/ou `restore`.
 
-Não feito nesta task de propósito: a regra `docs/harness/reviews/*.raw` no `.gitignore` altera o que
-`review-gate.sh` deixa para commit e pertence à mesma decisão (H1/H5 estão em andamento).
+Não feito no início desta task de propósito: a regra `docs/harness/reviews/*.raw` no `.gitignore` altera o que
+`review-gate.sh` deixa para commit e pertencia à mesma decisão (H1/H5 estavam em andamento).
+
+### Decisão do owner (2026-10-14)
+
+- **Status operacional (`2026-10-14`):** All 73 `review-raw` artifacts (`4,249,732` bytes) are verified byte-for-byte against `docs/harness/retention/review-raw.manifest.json` (`VERIFY: OK files=73 ok=73`).
+- **Owner decision (`2026-10-14`):** keep the 73 `.raw` artifacts tracked in-tree with SHA-256 manifest verification enforced by the offline harness lane (`retention` component, 21 tests), deferring `untrack --apply` until an external cold-storage bucket is provisioned.
 
 ## 6. Prova em clone descartável (2026-10-05)
 

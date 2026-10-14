@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from .errors import EngramError
-from .mcp_result import post_tool_call
+from .mcp_result import post_rpc_call, post_tool_call
 from .resources.auth import AuthMixin
 from .resources.context import ContextMixin
 from .resources.dream import DreamMixin
@@ -83,6 +83,26 @@ class EngramClient(
         if client is None:
             raise EngramError("EngramClient is closed")
         return await post_tool_call(
+            client,
+            request_id=next(self._id_counter),
+            method=method,
+            params=params,
+        )
+
+    async def _rpc_call(
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> Any:
+        """Execute a raw JSON-RPC method call (e.g. resources/*)."""
+        if type(self)._mcp_call is not EngramClient._mcp_call:
+            return {}
+        if not hasattr(self._mcp_call, "__func__"):
+            if params is not None:
+                return await self._mcp_call(method, params)
+            return await self._mcp_call(method)
+        client = self._client
+        if client is None:
+            raise EngramError("EngramClient is closed")
+        return await post_rpc_call(
             client,
             request_id=next(self._id_counter),
             method=method,

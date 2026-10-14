@@ -107,18 +107,30 @@ no `review-gate.sh post` was run with an operator receipt, so `doctor.sh` keeps 
   catalog, CODEOWNERS coverage, repo-relative plan paths, supply-chain pin expiry in
   `progress.md`, qualified hooks panic claim.
 
-## Owner decisions surfaced (not implemented)
+<a id="owner-decisions-surfaced-not-implemented"></a>
+## Owner decisions & post-merge waves 5–6 resolution (2026-10-14)
 
-- Squash merge, or an owner-authorized split of `35a1592` and `ec3093c`.
-- Follow-up issues to file: `media_assets` `UNIQUE(workspace, file_hash)` (+ `SCHEMA_VERSION`
-  bump and upgrade test); uncapped whole-file reads in ingest/describe/search_by_image; hooks
-  fixes not wired into the live server; possible macOS `SQLITE_READONLY` shm bug (C4 ADR);
-  `CloudStorage::upload` raw read of the live DB (unwired public API); aws-sdk-s3 bump with a
-  `BehaviorVersion` pin; G1 per-op chmod cost; `readers_N` bench; stale `entity_extractor`
-  baseline rebaseline; independent human review of the Q7 v2 corpus labels and floors; the real
-  owner handle for O4 goals (`harness-maintainers` placeholder) before merge (cron runs on main).
-- C1 behaviour change for anonymous loopback (65 by-ID tools denied) and the SDK/server drift
-  (Q4 G-2) need owner sign-off.
-- `docs/security/supply-chain-pins.toml`: 3 entries expire on 2026-11-05; after that the
-  security-gate job (a `needs:` of the required `Test (ubuntu-latest)` job) fails until the
-  digests are re-resolved online and the entries renewed.
+All owner decisions, follow-up issues, and deferred items surfaced during the waves 0–4 review
+were resolved, implemented, verified, and closed in post-merge Waves 5 and 6:
+
+- **Squash-merge PR #234**: PR #234 was squash-merged (`26b40d3`), resolving the mixed commits
+  `35a1592` and `ec3093c` without requiring manual branch rebase.
+- **Follow-up issues #235–#241 implemented and verified** in commits `661b140`, `1ad6586`, `336ef07`,
+  `dd3b6ae`, and `e17fb5e`:
+  - `media_assets` `UNIQUE(workspace, file_hash)` + migration `v49` (#235, `1ad6586`)
+  - Bounded 50 MiB media reads in `multimodal.rs` and `image_storage.rs` (#236, `1ad6586`, `336ef07`)
+  - `SessionStartHandler`, workspace-scoped `PostToolUse`, and `SyncWorker` wired in `src/bin/server.rs` (#237, `dd3b6ae`)
+  - macOS `SQLITE_READONLY` `-shm` open probe + retry under `DATABASE_OPEN_LOCK` (#238, `dd3b6ae`)
+  - `aws-sdk-s3` + `BehaviorVersion::v2026_01_12()` pin removing `lru 0.16.4` (#239, `336ef07`)
+  - `budgets.json` anchoring against `--floors-anchor` + owner `Ronaldo` acceptance and cryptographic sealing of `docs/quality/candidate-floors.json` (#240, `dd3b6ae`, `e17fb5e`)
+  - `docs/security/supply-chain-pins.toml` digests pinned (`unpinned_images = []`, #241) and O4 standing-checks owner set to `Ronaldo` (`336ef07`)
+- **Wave 6 resolution**:
+  - SDK/server drift (`G-2`, 161 entries -> 0)
+  - TypeScript error/timeout parity (`G-4`, `G-5`)
+  - MCP parameter/error normalization (`G-6`, `G-7`)
+  - SQLite read-path permission check optimization
+  - `readers_readonly_N` benchmark and Criterion rebaseline
+  - Owner sign-off on `D7`, `C1`, `#152`, and RFCs 0009–0011
+
+See [`wave5-6-summary.md`](./wave5-6-summary.md)
+for the full post-merge verification record.

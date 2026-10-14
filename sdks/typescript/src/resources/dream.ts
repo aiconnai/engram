@@ -68,8 +68,6 @@ export class DreamResource extends BaseResource {
     if (options?.workspace !== undefined) params.workspace = options.workspace;
     if (options?.jobId !== undefined) params.job_id = options.jobId;
     if (options?.reviewState !== undefined) params.review_state = options.reviewState;
-    if (options?.kind !== undefined) params.kind = options.kind;
-    if (options?.proposedAction !== undefined) params.proposed_action = options.proposedAction;
     if (options?.limit !== undefined) params.limit = options.limit;
     return this.caller.mcpCall("dream_candidates_list", params);
   }
@@ -94,7 +92,6 @@ export class DreamResource extends BaseResource {
       review_state: reviewState,
     };
     if (options?.editedContent !== undefined) params.edited_content = options.editedContent;
-    if (options?.notes !== undefined) params.notes = options.notes;
     return this.caller.mcpCall("dream_candidate_review", params);
   }
 
@@ -107,17 +104,14 @@ export class DreamResource extends BaseResource {
       id,
       confirm: options?.confirm ?? true,
     };
-    if (options?.reviewerNotes !== undefined) params.reviewer_notes = options.reviewerNotes;
     return this.caller.mcpCall("dream_candidate_apply", params);
   }
 
   /**
    * Run deterministic local dream snapshot evaluation fixtures.
    */
-  async evalRun(options?: DreamEvalOptions): Promise<unknown> {
+  async evalRun(_options?: DreamEvalOptions): Promise<unknown> {
     const params: Record<string, unknown> = {};
-    if (options?.workspace !== undefined) params.workspace = options.workspace;
-    if (options?.lane !== undefined) params.lane = options.lane;
     return this.caller.mcpCall("dream_eval_run", params);
   }
 

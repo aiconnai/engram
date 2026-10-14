@@ -11,11 +11,43 @@ use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
 use crate::types::*;
 
-pub fn memory_get(ctx: &HandlerContext, params: Value) -> Value {
-    let id = params.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-    if id <= 0 {
-        return ToolError::missing_argument("id").into_value();
+pub(crate) fn extract_id(params: &Value, name: &str) -> std::result::Result<i64, Value> {
+    match params.get(name) {
+        None | Some(Value::Null) => Err(ToolError::missing_argument(name).into_value()),
+        Some(v) => match v.as_i64() {
+            Some(id) if id > 0 => Ok(id),
+            Some(_) => Err(
+                ToolError::invalid_params(format!("{name} must be a positive integer"))
+                    .into_value(),
+            ),
+            None => {
+                Err(ToolError::invalid_params(format!("{name} must be an integer")).into_value())
+            }
+        },
     }
+}
+
+pub(crate) fn validate_non_negative_int(
+    params: &Value,
+    name: &str,
+) -> std::result::Result<Option<i64>, Value> {
+    match params.get(name) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => match v.as_i64() {
+            Some(val) if val >= 0 => Ok(Some(val)),
+            _ => Err(
+                ToolError::invalid_params(format!("{name} must be a non-negative integer"))
+                    .into_value(),
+            ),
+        },
+    }
+}
+
+pub fn memory_get(ctx: &HandlerContext, params: Value) -> Value {
+    let id = match extract_id(&params, "id") {
+        Ok(id) => id,
+        Err(err) => return err,
+    };
     let do_strip = params
         .get("strip_private")
         .and_then(|v| v.as_bool())
@@ -42,10 +74,10 @@ pub fn memory_get(ctx: &HandlerContext, params: Value) -> Value {
 ///
 /// Equivalent to calling `memory_get` with `strip_private: true`.
 pub fn memory_get_public(ctx: &HandlerContext, params: Value) -> Value {
-    let id = params.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-    if id <= 0 {
-        return ToolError::missing_argument("id").into_value();
-    }
+    let id = match extract_id(&params, "id") {
+        Ok(id) => id,
+        Err(err) => return err,
+    };
     ctx.storage
         .with_connection(|conn| {
             ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
@@ -62,10 +94,10 @@ pub fn memory_get_public(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
-    let id = params.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-    if id <= 0 {
-        return ToolError::missing_argument("id").into_value();
-    }
+    let id = match extract_id(&params, "id") {
+        Ok(id) => id,
+        Err(err) => return err,
+    };
     let input: UpdateMemoryInput = match serde_json::from_value(params.clone()) {
         Ok(i) => i,
         Err(e) => return ToolError::invalid_params(e.to_string()).into_value(),
@@ -132,10 +164,10 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
 pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::collect_supersedes_chain;
 
-    let id = params.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-    if id <= 0 {
-        return ToolError::missing_argument("id").into_value();
-    }
+    let id = match extract_id(&params, "id") {
+        Ok(id) => id,
+        Err(err) => return err,
+    };
     let cascade_chain = params
         .get("cascade_chain")
         .and_then(|v| v.as_bool())
@@ -226,7 +258,16 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn memory_list(ctx: &HandlerContext, params: Value) -> Value {
-    let options: ListOptions = serde_json::from_value(params).unwrap_or_default();
+    if let Err(err) = validate_non_negative_int(&params, "limit") {
+        return err;
+    }
+    if let Err(err) = validate_non_negative_int(&params, "offset") {
+        return err;
+    }
+    let options: ListOptions = match serde_json::from_value(params) {
+        Ok(opts) => opts,
+        Err(e) => return ToolError::invalid_params(e.to_string()).into_value(),
+    };
     ctx.storage
         .with_connection(|conn| {
             let memories = list_memories(conn, &options)?;
@@ -240,10 +281,24 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
         collect_supersedes_chain, get_memory, BatchDeleteResult, BatchError,
     };
 
-    let ids: Vec<i64> = match params.get("ids").and_then(|v| v.as_array()) {
-        Some(arr) => arr.iter().filter_map(|v| v.as_i64()).collect(),
-        None => return ToolError::missing_argument("ids").into_value(),
+    let ids_val = match params.get("ids") {
+        None | Some(Value::Null) => return ToolError::missing_argument("ids").into_value(),
+        Some(v) => v,
     };
+    let arr = match ids_val.as_array() {
+        Some(arr) => arr,
+        None => return ToolError::invalid_params("ids must be an array of integers").into_value(),
+    };
+    let mut ids: Vec<i64> = Vec::with_capacity(arr.len());
+    for item in arr {
+        match item.as_i64() {
+            Some(id) if id > 0 => ids.push(id),
+            _ => {
+                return ToolError::invalid_params("ids array must contain positive integers")
+                    .into_value()
+            }
+        }
+    }
 
     if ids.is_empty() {
         return ToolError::invalid_params("No valid IDs provided").into_value();

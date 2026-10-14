@@ -2,6 +2,7 @@
 use serde_json::{json, Value};
 
 use super::super::HandlerContext;
+use crate::mcp::error::ToolError;
 
 /// Get a memory block by name.
 ///
@@ -12,15 +13,15 @@ pub fn memory_block_get(ctx: &HandlerContext, params: Value) -> Value {
 
     let name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n.to_string(),
-        None => return json!({"error": "name is required"}),
+        None => return ToolError::missing_argument("name").into_value(),
     };
 
     ctx.storage
         .with_connection(|conn| match get_block(conn, &name)? {
             Some(block) => Ok(json!(block)),
-            None => Ok(json!({"error": format!("block '{}' not found", name)})),
+            None => Ok(ToolError::not_found("block", &name).into_value()),
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Edit (update) a memory block's content.
@@ -34,12 +35,12 @@ pub fn memory_block_edit(ctx: &HandlerContext, params: Value) -> Value {
 
     let name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n.to_string(),
-        None => return json!({"error": "name is required"}),
+        None => return ToolError::missing_argument("name").into_value(),
     };
 
     let content = match params.get("content").and_then(|v| v.as_str()) {
         Some(c) => c.to_string(),
-        None => return json!({"error": "content is required"}),
+        None => return ToolError::missing_argument("content").into_value(),
     };
 
     let reason = params
@@ -53,7 +54,7 @@ pub fn memory_block_edit(ctx: &HandlerContext, params: Value) -> Value {
             let block = update_block(conn, &name, &content, &reason)?;
             Ok(json!(block))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// List all memory blocks.
@@ -65,7 +66,7 @@ pub fn memory_block_list(ctx: &HandlerContext, _params: Value) -> Value {
             let blocks = list_blocks(conn)?;
             Ok(json!({"blocks": blocks, "count": blocks.len()}))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Create a new memory block.
@@ -79,7 +80,7 @@ pub fn memory_block_create(ctx: &HandlerContext, params: Value) -> Value {
 
     let name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n.to_string(),
-        None => return json!({"error": "name is required"}),
+        None => return ToolError::missing_argument("name").into_value(),
     };
 
     let content = params
@@ -98,7 +99,7 @@ pub fn memory_block_create(ctx: &HandlerContext, params: Value) -> Value {
             let block = create_block(conn, &name, &content, max_tokens)?;
             Ok(json!(block))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 /// Archive a memory block (delete it and return the final content).
@@ -110,7 +111,7 @@ pub fn memory_block_archive(ctx: &HandlerContext, params: Value) -> Value {
 
     let name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n.to_string(),
-        None => return json!({"error": "name is required"}),
+        None => return ToolError::missing_argument("name").into_value(),
     };
 
     ctx.storage
@@ -123,7 +124,7 @@ pub fn memory_block_archive(ctx: &HandlerContext, params: Value) -> Value {
             let final_version = block.as_ref().map(|b| b.version).unwrap_or(0);
 
             if block.is_none() {
-                return Ok(json!({"error": format!("block '{}' not found", name)}));
+                return Ok(ToolError::not_found("block", &name).into_value());
             }
 
             delete_block(conn, &name)?;
@@ -135,7 +136,7 @@ pub fn memory_block_archive(ctx: &HandlerContext, params: Value) -> Value {
                 "final_version": final_version
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 // ── Injection prompt ──────────────────────────────────────────────────────────
@@ -150,7 +151,7 @@ pub fn memory_block_history(ctx: &HandlerContext, params: Value) -> Value {
 
     let name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n.to_string(),
-        None => return json!({"error": "name is required"}),
+        None => return ToolError::missing_argument("name").into_value(),
     };
 
     let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
@@ -160,7 +161,5 @@ pub fn memory_block_history(ctx: &HandlerContext, params: Value) -> Value {
             let history = get_block_history(conn, &name, limit)?;
             Ok(json!({"name": name, "history": history, "count": history.len()}))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
-
-// ── RTK-inspired context preparation ──────────────────────────────────────────

@@ -6,6 +6,7 @@
 use serde_json::{json, Value};
 
 use super::HandlerContext;
+use crate::mcp::error::ToolError;
 use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 
 // ── memory_compress ───────────────────────────────────────────────────────────
@@ -17,7 +18,7 @@ pub fn memory_compress(ctx: &HandlerContext, params: Value) -> Value {
 
     let id = match params.get("id").and_then(|v| v.as_i64()) {
         Some(id) => id,
-        None => return json!({"error": "id is required"}),
+        None => return ToolError::missing_argument("id").into_value(),
     };
     let target_ratio: f32 = params
         .get("target_ratio")
@@ -44,7 +45,7 @@ pub fn memory_compress(ctx: &HandlerContext, params: Value) -> Value {
                 "key_facts": result.key_facts,
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 // ── memory_decompress ─────────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ pub fn memory_decompress(ctx: &HandlerContext, params: Value) -> Value {
 
     let id = match params.get("id").and_then(|v| v.as_i64()) {
         Some(id) => id,
-        None => return json!({"error": "id is required"}),
+        None => return ToolError::missing_argument("id").into_value(),
     };
 
     ctx.storage
@@ -67,7 +68,7 @@ pub fn memory_decompress(ctx: &HandlerContext, params: Value) -> Value {
                 "status": "ok",
             }))
         })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+        .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 // ── memory_compress_for_context ───────────────────────────────────────────────
@@ -85,7 +86,7 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
         .unwrap_or_default();
 
     if ids.is_empty() {
-        return json!({"error": "ids array is required and must not be empty"});
+        return ToolError::missing_argument("ids").into_value();
     }
 
     let token_budget: usize = params
@@ -123,7 +124,7 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
         }))
     });
 
-    result.unwrap_or_else(|e| json!({"error": e.to_string()}))
+    result.unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 // ── memory_consolidate ────────────────────────────────────────────────────────
@@ -231,11 +232,11 @@ pub fn memory_synthesis(_ctx: &HandlerContext, params: Value) -> Value {
 
     let content_a = match params.get("content_a").and_then(|v| v.as_str()) {
         Some(c) => c.to_string(),
-        None => return json!({"error": "content_a is required"}),
+        None => return ToolError::missing_argument("content_a").into_value(),
     };
     let content_b = match params.get("content_b").and_then(|v| v.as_str()) {
         Some(c) => c.to_string(),
-        None => return json!({"error": "content_b is required"}),
+        None => return ToolError::missing_argument("content_b").into_value(),
     };
     let id_a: i64 = params.get("id_a").and_then(|v| v.as_i64()).unwrap_or(0);
     let strategy_str = params

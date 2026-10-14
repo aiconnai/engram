@@ -27,8 +27,6 @@ class MultimodalMixin(ResourceMixin):
         params: dict[str, Any] = {"image_path": image_path}
         if prompt is not None:
             params["prompt"] = prompt
-        if max_tokens is not None:
-            params["max_tokens"] = max_tokens
         return await self._mcp_call("memory_describe_image", params)
 
     async def transcribe_audio(
@@ -47,17 +45,19 @@ class MultimodalMixin(ResourceMixin):
         *,
         display_index: int = 0,
         delay_seconds: int = 0,
+        app_name: str | None = None,
     ) -> dict[str, Any]:
         """Capture a desktop or display screenshot.
 
         Args:
             display_index: Index of the display to capture.
             delay_seconds: Delay before capture in seconds.
+            app_name: Optional application name to capture.
         """
-        return await self._mcp_call(
-            "memory_capture_screenshot",
-            {"display_index": display_index, "delay_seconds": delay_seconds},
-        )
+        params: dict[str, Any] = {}
+        if app_name is not None:
+            params["app_name"] = app_name
+        return await self._mcp_call("memory_capture_screenshot", params)
 
     async def process_video(
         self,
@@ -75,11 +75,7 @@ class MultimodalMixin(ResourceMixin):
         """
         return await self._mcp_call(
             "memory_process_video",
-            {
-                "video_path": video_path,
-                "extract_frames": extract_frames,
-                "max_frames": max_frames,
-            },
+            {"video_path": video_path},
         )
 
     async def list_media(

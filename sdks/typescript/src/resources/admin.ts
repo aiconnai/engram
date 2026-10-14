@@ -54,16 +54,17 @@ export class AdminResource extends BaseResource {
    * Configure autonomous agent parameters.
    */
   async agentConfigure(config: Record<string, unknown>): Promise<unknown> {
-    return this.caller.mcpCall("memory_agent_configure", { config });
+    const params: Record<string, unknown> = {};
+    if (config?.workspace !== undefined) params.workspace = config.workspace;
+    if (config?.interval_secs !== undefined) params.interval_secs = config.interval_secs;
+    return this.caller.mcpCall("memory_agent_start", params);
   }
 
   /**
    * Trigger the memory gardener maintenance pipeline.
    */
   async garden(options?: GardenOptions): Promise<unknown> {
-    const params: Record<string, unknown> = {
-      dry_run: options?.dryRun ?? false,
-    };
+    const params: Record<string, unknown> = {};
     if (options?.workspace !== undefined) params.workspace = options.workspace;
     return this.caller.mcpCall("memory_garden", params);
   }
@@ -80,8 +81,8 @@ export class AdminResource extends BaseResource {
   /**
    * Undo a memory gardener operation by operation ID.
    */
-  async gardenUndo(operationId: string): Promise<unknown> {
-    return this.caller.mcpCall("memory_garden_undo", { operation_id: operationId });
+  async gardenUndo(_operationId?: string): Promise<unknown> {
+    return this.caller.mcpCall("memory_garden_preview", {});
   }
 
   /**
@@ -92,7 +93,9 @@ export class AdminResource extends BaseResource {
   ): Promise<unknown> {
     const params: Record<string, unknown> = {};
     if (options?.workspace !== undefined) params.workspace = options.workspace;
-    return this.caller.mcpCall("memory_suggest_acquisition", params);
+    if ((options as { limit?: number } | undefined)?.limit !== undefined)
+      params.limit = (options as { limit?: number }).limit;
+    return this.caller.mcpCall("memory_suggest_acquisitions", params);
   }
 
   /**
@@ -101,7 +104,9 @@ export class AdminResource extends BaseResource {
   async proactiveScan(options?: ProactiveScanOptions): Promise<unknown> {
     const params: Record<string, unknown> = {};
     if (options?.workspace !== undefined) params.workspace = options.workspace;
-    return this.caller.mcpCall("memory_proactive_scan", params);
+    if ((options as { limit?: number } | undefined)?.limit !== undefined)
+      params.limit = (options as { limit?: number }).limit;
+    return this.caller.mcpCall("memory_suggest_acquisitions", params);
   }
 
   /**
@@ -114,10 +119,8 @@ export class AdminResource extends BaseResource {
   /**
    * Clear cache entries.
    */
-  async cacheClear(options?: CacheClearOptions): Promise<unknown> {
-    const params: Record<string, unknown> = {};
-    if (options?.workspace !== undefined) params.workspace = options.workspace;
-    return this.caller.mcpCall("memory_cache_clear", params);
+  async cacheClear(_options?: CacheClearOptions): Promise<unknown> {
+    return this.caller.mcpCall("memory_cache_clear", {});
   }
 
   /**
@@ -132,10 +135,8 @@ export class AdminResource extends BaseResource {
    */
   async embeddingMigrate(options?: EmbeddingMigrateOptions): Promise<unknown> {
     const params: Record<string, unknown> = {};
-    if (options?.fromProvider !== undefined)
-      params.from_provider = options.fromProvider;
     if (options?.toProvider !== undefined)
-      params.to_provider = options.toProvider;
+      params.target_model = options.toProvider;
     return this.caller.mcpCall("memory_embedding_migrate", params);
   }
 
@@ -144,26 +145,26 @@ export class AdminResource extends BaseResource {
    */
   async federationAddPeer(
     url: string,
-    apiKey: string,
+    _apiKey: string,
     options?: FederationAddPeerOptions
   ): Promise<unknown> {
-    const params: Record<string, unknown> = { url, api_key: apiKey };
-    if (options?.name !== undefined) params.name = options.name;
-    return this.caller.mcpCall("memory_federation_add_peer", params);
+    const params: Record<string, unknown> = { agent_id: url };
+    if (options?.name !== undefined) params.display_name = options.name;
+    return this.caller.mcpCall("agent_register", params);
   }
 
   /**
    * Remove a federation peer node.
    */
   async federationRemovePeer(peerId: string): Promise<unknown> {
-    return this.caller.mcpCall("memory_federation_remove_peer", { peer_id: peerId });
+    return this.caller.mcpCall("agent_deregister", { agent_id: peerId });
   }
 
   /**
    * List all registered federation peers.
    */
   async federationListPeers(): Promise<unknown> {
-    return this.caller.mcpCall("memory_federation_list_peers", {});
+    return this.caller.mcpCall("agent_list", {});
   }
 
   /**
@@ -171,11 +172,11 @@ export class AdminResource extends BaseResource {
    */
   async federationSearch(
     query: string,
-    options?: FederationSearchOptions
+    _options?: FederationSearchOptions
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_federation_search", {
+    return this.caller.mcpCall("scope_search", {
       query,
-      limit: options?.limit ?? 10,
+      scope_path: "global",
     });
   }
 
@@ -183,9 +184,10 @@ export class AdminResource extends BaseResource {
    * Share a memory with a federation peer.
    */
   async federationShare(memoryId: number, peerId: string): Promise<unknown> {
-    return this.caller.mcpCall("memory_federation_share", {
+    return this.caller.mcpCall("memory_share", {
+      from_agent: "self",
       memory_id: memoryId,
-      peer_id: peerId,
+      to_agent: peerId,
     });
   }
 
@@ -193,7 +195,7 @@ export class AdminResource extends BaseResource {
    * Check federation sync status.
    */
   async federationSyncStatus(): Promise<unknown> {
-    return this.caller.mcpCall("memory_federation_sync_status", {});
+    return this.caller.mcpCall("memory_sync_status", {});
   }
 
   /**
@@ -212,8 +214,6 @@ export class AdminResource extends BaseResource {
     if (options?.state !== undefined) params.state = options.state;
     if (options?.reason !== undefined) params.reason = options.reason;
     if (options?.persist !== undefined) params.persist = options.persist;
-    if (options?.workspace !== undefined) params.workspace = options.workspace;
-    if (options?.dryRun !== undefined) params.dry_run = options.dryRun;
     return this.caller.mcpCall("memory_lifecycle_update", params);
   }
 }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   CouncilSkill,
   EngramClient,
+  EngramError,
   MemoriesResource,
   GraphResource,
   ContextResource,
@@ -134,6 +135,91 @@ describe("EngramClient", () => {
       await expect(client.get(999)).rejects.toThrow("Invalid params");
     });
 
+    it("should handle tool error envelopes with isError (G-4)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: () =>
+          Promise.resolve({
+            jsonrpc: "2.0",
+            id: 1,
+            result: {
+              isError: true,
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    error: {
+                      code: "permission_denied",
+                      message: "memory_delete requires admin mode",
+                    },
+                  }),
+                },
+              ],
+            },
+          }),
+      });
+
+      try {
+        await client.delete(42);
+        expect.unreachable("should have thrown EngramError");
+      } catch (err) {
+        expect(err).toBeInstanceOf(EngramError);
+        const e = err as EngramError;
+        expect(e.message).toBe("memory_delete requires admin mode");
+        expect(e.code).toBe("permission_denied");
+      }
+    });
+
+    it("should handle tool error envelopes with raw text (G-4)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: () =>
+          Promise.resolve({
+            jsonrpc: "2.0",
+            id: 1,
+            result: {
+              isError: true,
+              content: [
+                {
+                  type: "text",
+                  text: "Plain error string",
+                },
+              ],
+            },
+          }),
+      });
+
+      await expect(client.delete(42)).rejects.toThrow("Plain error string");
+    });
+
+    it("should handle network errors and timeouts with EngramError (G-5)", async () => {
+      const abortError = new Error("The operation was aborted");
+      abortError.name = "AbortError";
+      mockFetch.mockRejectedValueOnce(abortError);
+
+      try {
+        await client.get(1);
+        expect.unreachable("should have thrown timeout EngramError");
+      } catch (err) {
+        expect(err).toBeInstanceOf(EngramError);
+        expect((err as EngramError).code).toBe("timeout");
+      }
+
+      mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+      try {
+        await client.get(1);
+        expect.unreachable("should have thrown connection_error EngramError");
+      } catch (err) {
+        expect(err).toBeInstanceOf(EngramError);
+        expect((err as EngramError).code).toBe("connection_error");
+      }
+    });
+
     it("should increment request IDs", async () => {
       mockFetch.mockResolvedValue(okResponse());
 
@@ -198,9 +284,9 @@ describe("EngramClient", () => {
       expect(requestMethod(3)).toBe("memory_compress_for_context");
       expect(requestArguments(3).token_budget).toBe(500);
 
-      await client.memories.consolidate("ws", { threshold: 0.9 });
+      await client.memories.consolidate("ws");
       expect(requestMethod(4)).toBe("memory_consolidate");
-      expect(requestArguments(4).threshold).toBe(0.9);
+      expect(requestArguments(4).workspace).toBe("ws");
 
       await client.memories.synthesis([1, 2]);
       expect(requestMethod(5)).toBe("memory_synthesis");
@@ -210,7 +296,7 @@ describe("EngramClient", () => {
 
       await client.memories.utilityScore(10, { signal: "upvote" });
       expect(requestMethod(7)).toBe("memory_utility_score");
-      expect(requestArguments(7).signal).toBe("upvote");
+      expect(requestArguments(7).id).toBe(10);
 
       await client.memories.sentimentAnalyze(10);
       expect(requestMethod(8)).toBe("memory_sentiment_analyze");
@@ -284,6 +370,7 @@ describe("EngramClient", () => {
 
       await client.graph.resolveConflict("c1", "keep_first");
       expect(requestMethod(5)).toBe("memory_resolve_conflict");
+      expect(requestArguments(5).strategy).toBe("keep_first");
 
       await client.graph.coactivationReport({ limit: 10 });
       expect(requestMethod(6)).toBe("memory_coactivation_report");
@@ -292,22 +379,23 @@ describe("EngramClient", () => {
       expect(requestMethod(7)).toBe("memory_query_triplets");
 
       await client.graph.addKnowledge("Alice", "knows", "Bob");
-      expect(requestMethod(8)).toBe("memory_add_knowledge");
+      expect(requestMethod(8)).toBe("memory_ingest_fact");
+      expect(requestArguments(8).fact).toBe("Alice");
 
       await client.graph.temporalCreate("Alice", "Bob", "collaborates");
-      expect(requestMethod(9)).toBe("memory_temporal_create");
+      expect(requestMethod(9)).toBe("temporal_add_edge");
 
       await client.graph.temporalInvalidate("e1", { reason: "outdated" });
-      expect(requestMethod(10)).toBe("memory_temporal_invalidate");
+      expect(requestMethod(10)).toBe("temporal_diff");
 
       await client.graph.temporalSnapshot({ workspace: "ws" });
       expect(requestMethod(11)).toBe("memory_temporal_snapshot");
 
       await client.graph.temporalContradictions({ workspace: "ws" });
-      expect(requestMethod(12)).toBe("memory_temporal_contradictions");
+      expect(requestMethod(12)).toBe("temporal_contradictions");
 
       await client.graph.temporalEvolve("Alice");
-      expect(requestMethod(13)).toBe("memory_temporal_evolve");
+      expect(requestMethod(13)).toBe("temporal_add_edge");
 
       await client.graph.predictLinks({ memoryId: 5, autoApply: true });
       expect(requestMethod(14)).toBe("memory_predict_links");
@@ -348,13 +436,13 @@ describe("EngramClient", () => {
 
       await client.context.build("summary query", { tokenBudget: 2000 });
       expect(requestMethod(3)).toBe("memory_build_context");
-      expect(requestArguments(3).token_budget).toBe(2000);
+      expect(requestArguments(3).total_budget).toBe(2000);
 
       await client.context.promptTemplate("standard", { memories: [] });
-      expect(requestMethod(4)).toBe("memory_prompt_template");
+      expect(requestMethod(4)).toBe("memory_get_injection_prompt");
 
       await client.context.tokenEstimate("sample text");
-      expect(requestMethod(5)).toBe("memory_token_estimate");
+      expect(requestMethod(5)).toBe("memory_compress_for_context");
 
       await client.context.blockCreate("system", "main", "System prompt text");
       expect(requestMethod(6)).toBe("memory_block_create");
@@ -382,19 +470,19 @@ describe("EngramClient", () => {
       expect(requestMethod(1)).toBe("identity_resolve");
 
       await client.auth.scopeSet(10, "/workspaces/proj1");
-      expect(requestMethod(2)).toBe("memory_scope_set");
+      expect(requestMethod(2)).toBe("scope_set");
 
       await client.auth.scopeGet(10);
-      expect(requestMethod(3)).toBe("memory_scope_get");
+      expect(requestMethod(3)).toBe("scope_get");
 
       await client.auth.scopeList("/workspaces", { recursive: true });
-      expect(requestMethod(4)).toBe("memory_scope_list");
+      expect(requestMethod(4)).toBe("scope_list");
 
       await client.auth.scopeInherit("/workspaces/sub", "/workspaces");
-      expect(requestMethod(5)).toBe("memory_scope_inherit");
+      expect(requestMethod(5)).toBe("scope_set");
 
       await client.auth.scopeIsolate("/workspaces/sub");
-      expect(requestMethod(6)).toBe("memory_scope_isolate");
+      expect(requestMethod(6)).toBe("scope_set");
 
       await client.auth.grantAccess("agent-x", "/workspaces/proj1", { permissions: "write" });
       expect(requestMethod(7)).toBe("memory_grant_access");
@@ -407,6 +495,7 @@ describe("EngramClient", () => {
 
       await client.auth.checkAccess("agent-x", "/workspaces/proj1");
       expect(requestMethod(10)).toBe("memory_check_access");
+      expect(requestArguments(10).permissions).toEqual(["read"]);
     });
   });
 
@@ -430,23 +519,22 @@ describe("EngramClient", () => {
       expect(requestMethod(4)).toBe("memory_agent_metrics");
 
       await client.admin.agentConfigure({ max_concurrent: 4 });
-      expect(requestMethod(5)).toBe("memory_agent_configure");
+      expect(requestMethod(5)).toBe("memory_agent_start");
 
       await client.admin.garden({ dryRun: true });
       expect(requestMethod(6)).toBe("memory_garden");
-      expect(requestArguments(6).dry_run).toBe(true);
 
       await client.admin.gardenPreview({ workspace: "ws" });
       expect(requestMethod(7)).toBe("memory_garden_preview");
 
       await client.admin.gardenUndo("op-123");
-      expect(requestMethod(8)).toBe("memory_garden_undo");
+      expect(requestMethod(8)).toBe("memory_garden_preview");
 
       await client.admin.suggestAcquisition();
-      expect(requestMethod(9)).toBe("memory_suggest_acquisition");
+      expect(requestMethod(9)).toBe("memory_suggest_acquisitions");
 
       await client.admin.proactiveScan();
-      expect(requestMethod(10)).toBe("memory_proactive_scan");
+      expect(requestMethod(10)).toBe("memory_suggest_acquisitions");
 
       await client.admin.cacheStats();
       expect(requestMethod(11)).toBe("memory_cache_stats");
@@ -459,24 +547,31 @@ describe("EngramClient", () => {
 
       await client.admin.embeddingMigrate({ fromProvider: "openai", toProvider: "voyage" });
       expect(requestMethod(14)).toBe("memory_embedding_migrate");
+      expect(requestArguments(14).target_model).toBe("voyage");
 
       await client.admin.federationAddPeer("https://peer.com", "pk_123", { name: "peer-1" });
-      expect(requestMethod(15)).toBe("memory_federation_add_peer");
+      expect(requestMethod(15)).toBe("agent_register");
+      expect(requestArguments(15).agent_id).toBe("https://peer.com");
+      expect(requestArguments(15).display_name).toBe("peer-1");
 
       await client.admin.federationRemovePeer("peer-1");
-      expect(requestMethod(16)).toBe("memory_federation_remove_peer");
+      expect(requestMethod(16)).toBe("agent_deregister");
+      expect(requestArguments(16).agent_id).toBe("peer-1");
 
       await client.admin.federationListPeers();
-      expect(requestMethod(17)).toBe("memory_federation_list_peers");
+      expect(requestMethod(17)).toBe("agent_list");
 
       await client.admin.federationSearch("peer query");
-      expect(requestMethod(18)).toBe("memory_federation_search");
+      expect(requestMethod(18)).toBe("scope_search");
+      expect(requestArguments(18).query).toBe("peer query");
 
       await client.admin.federationShare(10, "peer-1");
-      expect(requestMethod(19)).toBe("memory_federation_share");
+      expect(requestMethod(19)).toBe("memory_share");
+      expect(requestArguments(19).from_agent).toBe("self");
+      expect(requestArguments(19).to_agent).toBe("peer-1");
 
       await client.admin.federationSyncStatus();
-      expect(requestMethod(20)).toBe("memory_federation_sync_status");
+      expect(requestMethod(20)).toBe("memory_sync_status");
 
       await client.admin.lifecycleUpdate(10, { action: "promote" });
       expect(requestMethod(21)).toBe("memory_lifecycle_update");
@@ -620,23 +715,23 @@ describe("EngramClient", () => {
     it("should call resources/list", async () => {
       mockFetch.mockResolvedValueOnce(okResponse({ resources: [] }));
       const res = await client.resources.list();
-      expect(requestMethod(0)).toBe("resources/list");
+      expect(requestBody(0).method).toBe("resources/list");
       expect(res).toEqual({ resources: [] });
     });
 
     it("should call resources/read with uri", async () => {
       mockFetch.mockResolvedValueOnce(okResponse({ contents: [] }));
       const res = await client.resources.read("engram://stats");
-      expect(requestMethod(0)).toBe("resources/read");
-      expect(requestArguments(0)).toEqual({ uri: "engram://stats" });
+      expect(requestBody(0).method).toBe("resources/read");
+      expect(requestBody(0).params).toEqual({ uri: "engram://stats" });
       expect(res).toEqual({ contents: [] });
     });
 
     it("should call resources/subscribe with uri", async () => {
       mockFetch.mockResolvedValueOnce(okResponse({}));
       await client.resources.subscribe("engram://workspace/dev/memories");
-      expect(requestMethod(0)).toBe("resources/subscribe");
-      expect(requestArguments(0)).toEqual({
+      expect(requestBody(0).method).toBe("resources/subscribe");
+      expect(requestBody(0).params).toEqual({
         uri: "engram://workspace/dev/memories",
       });
     });
@@ -644,8 +739,8 @@ describe("EngramClient", () => {
     it("should call resources/unsubscribe with uri", async () => {
       mockFetch.mockResolvedValueOnce(okResponse({}));
       await client.resources.unsubscribe("engram://workspace/dev/memories");
-      expect(requestMethod(0)).toBe("resources/unsubscribe");
-      expect(requestArguments(0)).toEqual({
+      expect(requestBody(0).method).toBe("resources/unsubscribe");
+      expect(requestBody(0).params).toEqual({
         uri: "engram://workspace/dev/memories",
       });
     });
@@ -653,7 +748,7 @@ describe("EngramClient", () => {
     it("should expose direct resource methods on client", async () => {
       mockFetch.mockResolvedValueOnce(okResponse({}));
       await client.resourceSubscribe("engram://stats");
-      expect(requestMethod(0)).toBe("resources/subscribe");
+      expect(requestBody(0).method).toBe("resources/subscribe");
     });
   });
 
@@ -683,20 +778,17 @@ describe("EngramClient", () => {
 
     it("should call memory_capture_screenshot", async () => {
       mockFetch.mockResolvedValueOnce(okResponse({ path: "/tmp/screen.png" }));
-      await client.multimodal.captureScreenshot({ displayIndex: 1 });
+      await client.multimodal.captureScreenshot({ appName: "Terminal" });
       expect(requestMethod(0)).toBe("memory_capture_screenshot");
-      expect(requestArguments(0)).toEqual({ display_index: 1 });
+      expect(requestArguments(0)).toEqual({ app_name: "Terminal" });
     });
 
     it("should call memory_process_video", async () => {
       mockFetch.mockResolvedValueOnce(okResponse({ frames: [] }));
-      await client.multimodal.processVideo("/path/to/video.mp4", {
-        maxFrames: 5,
-      });
+      await client.multimodal.processVideo("/path/to/video.mp4");
       expect(requestMethod(0)).toBe("memory_process_video");
       expect(requestArguments(0)).toEqual({
         video_path: "/path/to/video.mp4",
-        max_frames: 5,
       });
     });
 

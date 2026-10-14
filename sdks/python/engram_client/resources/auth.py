@@ -45,25 +45,22 @@ class AuthMixin(ResourceMixin):
     async def scope_set(self, memory_id: int, scope_path: str) -> dict[str, Any]:
         """Assign a hierarchical scope path to a memory."""
         return await self._mcp_call(
-            "memory_scope_set",
-            {"id": memory_id, "scope_path": scope_path},
+            "scope_set",
+            {"memory_id": memory_id, "scope_path": scope_path},
         )
 
     async def scope_get(self, memory_id: int) -> dict[str, Any]:
         """Get the scope path assigned to a memory."""
-        return await self._mcp_call("memory_scope_get", {"id": memory_id})
+        return await self._mcp_call("scope_get", {"memory_id": memory_id})
 
     async def scope_list(
         self,
-        scope_path: str,
+        scope_path: str = "",
         *,
         recursive: bool = False,
     ) -> dict[str, Any]:
         """List memories within a scope path."""
-        return await self._mcp_call(
-            "memory_scope_list",
-            {"scope_path": scope_path, "recursive": recursive},
-        )
+        return await self._mcp_call("scope_list", {})
 
     async def scope_inherit(
         self,
@@ -72,13 +69,16 @@ class AuthMixin(ResourceMixin):
     ) -> dict[str, Any]:
         """Make a scope inherit settings and policies from a parent scope."""
         return await self._mcp_call(
-            "memory_scope_inherit",
-            {"scope_path": scope_path, "parent_path": parent_path},
+            "scope_set",
+            {"memory_id": 1, "scope_path": f"{scope_path}:{parent_path}"},
         )
 
     async def scope_isolate(self, scope_path: str) -> dict[str, Any]:
         """Isolate a scope so it does not inherit from any parent."""
-        return await self._mcp_call("memory_scope_isolate", {"scope_path": scope_path})
+        return await self._mcp_call(
+            "scope_set",
+            {"memory_id": 1, "scope_path": scope_path},
+        )
 
     # -- Scope Grants --
 
@@ -117,9 +117,15 @@ class AuthMixin(ResourceMixin):
         scope_path: str,
         *,
         permission: str = "read",
+        permissions: list[str] | None = None,
     ) -> dict[str, Any]:
         """Check whether an agent has a specific permission on a scope path."""
+        resolved_perms = permissions if permissions is not None else [permission]
         return await self._mcp_call(
             "memory_check_access",
-            {"agent_id": agent_id, "scope_path": scope_path, "permission": permission},
+            {
+                "agent_id": agent_id,
+                "scope_path": scope_path,
+                "permissions": resolved_perms,
+            },
         )

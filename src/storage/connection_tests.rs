@@ -492,3 +492,105 @@ fn test_concurrent_wal_open_write_close_churn() {
         .unwrap();
     assert_eq!(total_rows, (THREADS * ITERS_PER_THREAD) as i64);
 }
+
+#[cfg(unix)]
+#[test]
+fn unix_read_only_with_connection_preserves_and_narrows_artifact_permissions() {
+    use std::os::unix::fs::MetadataExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let db_path = temp.path().join("read_only_perm.db");
+    let storage = Storage::open(file_config(&db_path)).unwrap();
+
+    // Create a table and insert a row so WAL mode artifacts are active.
+    storage
+        .with_transaction(|conn| {
+            conn.execute_batch(
+                "CREATE TABLE test_data (id INTEGER PRIMARY KEY, val TEXT);
+                 INSERT INTO test_data (val) VALUES ('item');",
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+    assert_sqlite_artifact_modes(&db_path, 0o600);
+
+    let wal_path = Path::new(&format!("{}-wal", db_path.display())).to_path_buf();
+    let shm_path = Path::new(&format!("{}-shm", db_path.display())).to_path_buf();
+    assert!(db_path.is_file());
+    assert!(wal_path.is_file());
+    assert!(shm_path.is_file());
+
+    // 1. Read-only with_connection preserves 0o600 and does NOT mutate inode ctime
+    // (no unnecessary fchmodat writes when already 0o600).
+    let db_ctime_before = std::fs::symlink_metadata(&db_path).unwrap().ctime_nsec();
+    let wal_ctime_before = std::fs::symlink_metadata(&wal_path).unwrap().ctime_nsec();
+    let shm_ctime_before = std::fs::symlink_metadata(&shm_path).unwrap().ctime_nsec();
+
+    let count: i64 = storage
+        .with_connection(|conn| {
+            Ok(conn.query_row("SELECT COUNT(*) FROM test_data", [], |r| r.get(0))?)
+        })
+        .unwrap();
+    assert_eq!(count, 1);
+
+    assert_sqlite_artifact_modes(&db_path, 0o600);
+
+    let db_ctime_after = std::fs::symlink_metadata(&db_path).unwrap().ctime_nsec();
+    let wal_ctime_after = std::fs::symlink_metadata(&wal_path).unwrap().ctime_nsec();
+    let shm_ctime_after = std::fs::symlink_metadata(&shm_path).unwrap().ctime_nsec();
+
+    assert_eq!(
+        db_ctime_before, db_ctime_after,
+        "db inode was mutated on pure read"
+    );
+    assert_eq!(
+        wal_ctime_before, wal_ctime_after,
+        "wal inode was mutated on pure read"
+    );
+    assert_eq!(
+        shm_ctime_before, shm_ctime_after,
+        "shm inode was mutated on pure read"
+    );
+
+    // 2. Broadening artifacts to 0o644 triggers re-narrowing back to 0o600 on read-only with_connection.
+    std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    std::fs::set_permissions(&wal_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    std::fs::set_permissions(&shm_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let val: String = storage
+        .with_connection(|conn| {
+            Ok(conn.query_row("SELECT val FROM test_data WHERE id = 1", [], |r| r.get(0))?)
+        })
+        .unwrap();
+    assert_eq!(val, "item");
+
+    assert_sqlite_artifact_modes(&db_path, 0o600);
+
+    // 3. Broadening only wal_path followed by a write inside with_connection narrows it back to 0o600.
+    std::fs::set_permissions(&wal_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    storage
+        .with_connection(|conn| {
+            conn.execute("INSERT INTO test_data (val) VALUES ('item2')", [])?;
+            Ok(())
+        })
+        .unwrap();
+    assert_sqlite_artifact_modes(&db_path, 0o600);
+
+    // 4. StoragePool also reasserts and narrows 0o644 artifacts back to 0o600.
+    let pool = StoragePool::new(file_config(&db_path), 2).unwrap();
+    assert_sqlite_artifact_modes(&db_path, 0o600);
+
+    std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    std::fs::set_permissions(&wal_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    std::fs::set_permissions(&shm_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let pool_count: i64 = pool
+        .with_connection(|conn| {
+            Ok(conn.query_row("SELECT COUNT(*) FROM test_data", [], |r| r.get(0))?)
+        })
+        .unwrap();
+    assert_eq!(pool_count, 2);
+
+    assert_sqlite_artifact_modes(&db_path, 0o600);
+}

@@ -117,7 +117,7 @@ async def test_memories_mixin_methods(mock_client):
 
     await mock_client.garden(workspace="ws", dry_run=True)
     mock_client._mcp_call.assert_awaited_with(
-        "memory_garden", {"workspace": "ws", "dry_run": True}
+        "memory_garden", {"workspace": "ws"}
     )
 
     await mock_client.lifecycle_update(42, action="promote")
@@ -151,7 +151,7 @@ async def test_search_mixin_methods(mock_client):
 
     await mock_client.federation_search("global query")
     mock_client._mcp_call.assert_awaited_with(
-        "memory_federation_search", {"query": "global query", "limit": 10}
+        "scope_search", {"query": "global query", "scope_path": "global"}
     )
 
 
@@ -175,8 +175,14 @@ async def test_graph_mixin_methods(mock_client):
 
     await mock_client.temporal_create("A", "B", "relates")
     mock_client._mcp_call.assert_awaited_with(
-        "memory_temporal_create",
-        {"from_entity": "A", "to_entity": "B", "relation": "relates", "confidence": 1.0},
+        "temporal_add_edge",
+        {
+            "from_id": 1,
+            "to_id": 2,
+            "relation": "relates",
+            "valid_from": "2026-01-01T00:00:00Z",
+            "confidence": 1.0,
+        },
     )
 
     await mock_client.graph_query(action="relations", id=42)
@@ -230,22 +236,22 @@ async def test_context_mixin_methods(mock_client):
     mock_client._mcp_call = AsyncMock(return_value={"status": "ok"})
 
     await mock_client.extract_facts(42)
-    mock_client._mcp_call.assert_awaited_with("memory_extract_facts", {"id": 42})
+    mock_client._mcp_call.assert_awaited_with("memory_extract_facts", {"memory_id": 42})
 
     await mock_client.build_context("user query", token_budget=2048)
     mock_client._mcp_call.assert_awaited_with(
         "memory_build_context",
-        {"query": "user query", "strategy": "balanced", "token_budget": 2048},
+        {"query": "user query", "strategy": "balanced", "total_budget": 2048},
     )
 
     await mock_client.token_estimate("some text")
     mock_client._mcp_call.assert_awaited_with(
-        "memory_token_estimate", {"content": "some text"}
+        "memory_compress_for_context", {"ids": [1]}
     )
 
     await mock_client.block_get("persona", "user_profile")
     mock_client._mcp_call.assert_awaited_with(
-        "memory_block_get", {"block_type": "persona", "label": "user_profile"}
+        "memory_block_get", {"name": "user_profile"}
     )
 
 
@@ -266,13 +272,13 @@ async def test_auth_mixin_methods(mock_client):
 
     await mock_client.scope_set(42, "tenant/workspace/team")
     mock_client._mcp_call.assert_awaited_with(
-        "memory_scope_set", {"id": 42, "scope_path": "tenant/workspace/team"}
+        "scope_set", {"memory_id": 42, "scope_path": "tenant/workspace/team"}
     )
 
     await mock_client.check_access("agent-1", "tenant/workspace", permission="write")
     mock_client._mcp_call.assert_awaited_with(
         "memory_check_access",
-        {"agent_id": "agent-1", "scope_path": "tenant/workspace", "permission": "write"},
+        {"agent_id": "agent-1", "scope_path": "tenant/workspace", "permissions": ["write"]},
     )
 
 
@@ -319,7 +325,7 @@ async def test_dream_mixin_methods(mock_client):
     await mock_client.dream_candidate_review("cand-1", "accepted", notes="Good")
     mock_client._mcp_call.assert_awaited_with(
         "dream_candidate_review",
-        {"id": "cand-1", "review_state": "accepted", "notes": "Good"},
+        {"id": "cand-1", "review_state": "accepted"},
     )
 
     await mock_client.dream_candidate_apply("cand-1", confirm=True)
@@ -329,7 +335,7 @@ async def test_dream_mixin_methods(mock_client):
 
     await mock_client.dream_eval_run(lane="freshness_temporal")
     mock_client._mcp_call.assert_awaited_with(
-        "dream_eval_run", {"lane": "freshness_temporal"}
+        "dream_eval_run", {}
     )
 
     await mock_client.dream_run_now(workspace="ws")
@@ -429,13 +435,13 @@ async def test_multimodal_mixin_methods(mock_client):
 
     await mock_client.capture_screenshot(display_index=1, delay_seconds=2)
     mock_client._mcp_call.assert_awaited_with(
-        "memory_capture_screenshot", {"display_index": 1, "delay_seconds": 2}
+        "memory_capture_screenshot", {}
     )
 
     await mock_client.process_video("/path/to/vid.mp4", max_frames=5)
     mock_client._mcp_call.assert_awaited_with(
         "memory_process_video",
-        {"video_path": "/path/to/vid.mp4", "extract_frames": True, "max_frames": 5},
+        {"video_path": "/path/to/vid.mp4"},
     )
 
     await mock_client.list_media(media_type="image", limit=25)

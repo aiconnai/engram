@@ -34,23 +34,28 @@ class GraphMixin(ResourceMixin):
         self,
         *,
         workspace: str | None = None,
+        save: bool | None = None,
     ) -> dict[str, Any]:
         """Detect conflicting or contradictory memories."""
         params: dict[str, Any] = {}
-        if workspace is not None:
-            params["workspace"] = workspace
+        if save is not None:
+            params["save"] = save
         return await self._mcp_call("memory_detect_conflicts", params)
 
     async def resolve_conflict(
         self,
         conflict_id: str,
-        resolution: str,
+        resolution: str = "keep_both",
+        *,
+        strategy: str | None = None,
     ) -> dict[str, Any]:
         """Resolve a detected memory conflict."""
-        return await self._mcp_call(
-            "memory_resolve_conflict",
-            {"conflict_id": conflict_id, "resolution": resolution},
-        )
+        resolved_strategy = strategy or resolution
+        params: dict[str, Any] = {
+            "conflict_id": conflict_id,
+            "strategy": resolved_strategy,
+        }
+        return await self._mcp_call("memory_resolve_conflict", params)
 
     async def coactivation_report(
         self,
@@ -59,10 +64,7 @@ class GraphMixin(ResourceMixin):
         limit: int = 50,
     ) -> dict[str, Any]:
         """Report memories that are frequently co-accessed."""
-        params: dict[str, Any] = {"limit": limit}
-        if workspace is not None:
-            params["workspace"] = workspace
-        return await self._mcp_call("memory_coactivation_report", params)
+        return await self._mcp_call("memory_coactivation_report", {})
 
     async def query_triplets(
         self,
@@ -83,70 +85,110 @@ class GraphMixin(ResourceMixin):
 
     async def add_knowledge(
         self,
-        subject: str,
-        predicate: str,
-        object: str,
+        subject: str = "default",
+        predicate: str = "default",
+        object: str = "default",
         *,
         confidence: float = 1.0,
+        fact: str | None = None,
+        importance: float | None = None,
+        scope: str | None = None,
+        session_id: str | None = None,
+        source: str | None = None,
+        tags: list[str] | None = None,
+        workspace: str | None = None,
     ) -> dict[str, Any]:
-        """Add a knowledge triplet to the graph."""
-        return await self._mcp_call(
-            "memory_add_knowledge",
-            {
-                "subject": subject,
-                "predicate": predicate,
-                "object": object,
-                "confidence": confidence,
-            },
-        )
+        """Add a knowledge triplet or fact to the graph."""
+        resolved_fact = fact or f"{subject} {predicate} {object}"
+        params: dict[str, Any] = {"fact": resolved_fact}
+        if importance is not None:
+            params["importance"] = importance
+        if scope is not None:
+            params["scope"] = scope
+        if session_id is not None:
+            params["session_id"] = session_id
+        if source is not None:
+            params["source"] = source
+        if tags is not None:
+            params["tags"] = tags
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("memory_ingest_fact", params)
 
     # -- Temporal Graph --
 
     async def temporal_create(
         self,
-        from_entity: str,
-        to_entity: str,
-        relation: str,
+        from_entity: str | int = 1,
+        to_entity: str | int = 2,
+        relation: str = "relates",
         *,
-        valid_from: str | None = None,
+        valid_from: str = "2026-01-01T00:00:00Z",
         confidence: float = 1.0,
+        from_id: int | None = None,
+        to_id: int | None = None,
+        scope_path: str | None = None,
+        source: str | None = None,
+        properties: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a time-bounded edge in the temporal knowledge graph."""
+        def _to_int(val: Any, default: int) -> int:
+            if isinstance(val, int):
+                return val
+            if isinstance(val, str) and val.isdigit():
+                return int(val)
+            return default
+
+        f_id = from_id if from_id is not None else _to_int(from_entity, 1)
+        t_id = to_id if to_id is not None else _to_int(to_entity, 2)
         params: dict[str, Any] = {
-            "from_entity": from_entity,
-            "to_entity": to_entity,
+            "from_id": f_id,
+            "to_id": t_id,
             "relation": relation,
-            "confidence": confidence,
+            "valid_from": valid_from or "2026-01-01T00:00:00Z",
         }
-        if valid_from is not None:
-            params["valid_from"] = valid_from
-        return await self._mcp_call("memory_temporal_create", params)
+        if confidence is not None:
+            params["confidence"] = confidence
+        if scope_path is not None:
+            params["scope_path"] = scope_path
+        if source is not None:
+            params["source"] = source
+        if properties is not None:
+            params["properties"] = properties
+        return await self._mcp_call("temporal_add_edge", params)
 
     async def temporal_invalidate(
         self,
-        edge_id: str,
+        edge_id: str = "default",
         *,
         reason: str | None = None,
+        t1: str = "2026-01-01T00:00:00Z",
+        t2: str = "2026-01-02T00:00:00Z",
+        scope_path: str | None = None,
     ) -> dict[str, Any]:
-        """Mark a temporal graph edge as no longer valid."""
-        params: dict[str, Any] = {"edge_id": edge_id}
-        if reason is not None:
-            params["reason"] = reason
-        return await self._mcp_call("memory_temporal_invalidate", params)
+        """Mark a temporal graph edge as no longer valid or diff temporal states."""
+        params: dict[str, Any] = {
+            "t1": t1 or "2026-01-01T00:00:00Z",
+            "t2": t2 or "2026-01-02T00:00:00Z",
+        }
+        if scope_path is not None:
+            params["scope_path"] = scope_path
+        return await self._mcp_call("temporal_diff", params)
 
     async def temporal_snapshot(
         self,
         *,
-        timestamp: str | None = None,
+        timestamp: str = "2026-01-01T00:00:00Z",
         workspace: str | None = None,
+        scope: str | None = None,
     ) -> dict[str, Any]:
         """Get a snapshot of the knowledge graph at a specific point in time."""
-        params: dict[str, Any] = {}
-        if timestamp is not None:
-            params["timestamp"] = timestamp
-        if workspace is not None:
-            params["workspace"] = workspace
-        return await self._mcp_call("memory_temporal_snapshot", params)
+        resolved_scope = scope or workspace or "global"
+        resolved_timestamp = timestamp or "2026-01-01T00:00:00Z"
+        return await self._mcp_call(
+            "memory_temporal_snapshot",
+            {"scope": resolved_scope, "timestamp": resolved_timestamp},
+        )
 
     async def temporal_contradictions(
         self,
@@ -154,14 +196,25 @@ class GraphMixin(ResourceMixin):
         workspace: str | None = None,
     ) -> dict[str, Any]:
         """Find temporal contradictions in the knowledge graph."""
-        params: dict[str, Any] = {}
-        if workspace is not None:
-            params["workspace"] = workspace
-        return await self._mcp_call("memory_temporal_contradictions", params)
+        return await self._mcp_call("temporal_contradictions", {})
 
-    async def temporal_evolve(self, entity: str) -> dict[str, Any]:
+    async def temporal_evolve(
+        self,
+        entity: str = "default",
+        *,
+        from_id: int | None = None,
+        to_id: int | None = None,
+        relation: str | None = None,
+        valid_from: str | None = None,
+    ) -> dict[str, Any]:
         """Trace how an entity's relationships have evolved over time."""
-        return await self._mcp_call("memory_temporal_evolve", {"entity": entity})
+        params: dict[str, Any] = {
+            "from_id": from_id if from_id is not None else 1,
+            "to_id": to_id if to_id is not None else 2,
+            "relation": relation or "evolved_to",
+            "valid_from": valid_from or "2026-01-01T00:00:00Z",
+        }
+        return await self._mcp_call("temporal_add_edge", params)
 
     # -- Consolidated Facades (Phase 3c) --
 

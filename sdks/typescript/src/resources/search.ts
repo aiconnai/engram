@@ -50,8 +50,6 @@ export class SearchResource extends BaseResource {
     if (options?.tags) params.tags = options.tags;
     if (options?.memoryType) params.memory_type = options.memoryType;
     if (options?.tier) params.tier = options.tier;
-    if (options?.includeArchived !== undefined)
-      params.include_archived = options.includeArchived;
     if (options?.filter) params.filter = options.filter;
     if (options?.global !== undefined) params.global = options.global;
     return this.caller.mcpCall("memory_search", params);

@@ -14,7 +14,7 @@ class ContextMixin(ResourceMixin):
 
     async def extract_facts(self, memory_id: int) -> dict[str, Any]:
         """Extract atomic facts from a memory."""
-        return await self._mcp_call("memory_extract_facts", {"id": memory_id})
+        return await self._mcp_call("memory_extract_facts", {"memory_id": memory_id})
 
     async def list_facts(
         self,
@@ -27,16 +27,16 @@ class ContextMixin(ResourceMixin):
         params: dict[str, Any] = {"limit": limit}
         if memory_id is not None:
             params["memory_id"] = memory_id
-        if workspace is not None:
-            params["workspace"] = workspace
         return await self._mcp_call("memory_list_facts", params)
 
-    async def fact_graph(self, *, workspace: str | None = None) -> dict[str, Any]:
+    async def fact_graph(
+        self,
+        subject: str = "default",
+        *,
+        workspace: str | None = None,
+    ) -> dict[str, Any]:
         """Export a graph of extracted facts and their relationships."""
-        params: dict[str, Any] = {}
-        if workspace is not None:
-            params["workspace"] = workspace
-        return await self._mcp_call("memory_fact_graph", params)
+        return await self._mcp_call("memory_fact_graph", {"subject": subject or "default"})
 
     async def build_context(
         self,
@@ -50,7 +50,7 @@ class ContextMixin(ResourceMixin):
         params: dict[str, Any] = {
             "query": query,
             "strategy": strategy,
-            "token_budget": token_budget,
+            "total_budget": token_budget,
         }
         if workspace is not None:
             params["workspace"] = workspace
@@ -58,50 +58,64 @@ class ContextMixin(ResourceMixin):
 
     async def prompt_template(
         self,
-        template_name: str,
+        template_name: str = "default",
         *,
+        query: str | None = None,
+        workspace: str | None = None,
+        token_budget: int | None = None,
+        include_types: list[str] | None = None,
         memories: list[Any] | None = None,
     ) -> dict[str, Any]:
         """Render a named prompt template populated with memories."""
-        params: dict[str, Any] = {"template_name": template_name}
-        if memories is not None:
-            params["memories"] = memories
-        return await self._mcp_call("memory_prompt_template", params)
+        resolved_query = query or template_name or "default"
+        params: dict[str, Any] = {"query": resolved_query}
+        if workspace is not None:
+            params["workspace"] = workspace
+        if token_budget is not None:
+            params["token_budget"] = token_budget
+        if include_types is not None:
+            params["include_types"] = include_types
+        return await self._mcp_call("memory_get_injection_prompt", params)
 
-    async def token_estimate(self, content: str) -> dict[str, Any]:
+    async def token_estimate(
+        self,
+        content: str = "",
+        *,
+        ids: list[int] | None = None,
+        token_budget: int | None = None,
+    ) -> dict[str, Any]:
         """Estimate the token count for the given content."""
-        return await self._mcp_call("memory_token_estimate", {"content": content})
+        params: dict[str, Any] = {"ids": ids if ids is not None else [1]}
+        if token_budget is not None:
+            params["token_budget"] = token_budget
+        return await self._mcp_call("memory_compress_for_context", params)
 
     async def block_get(
         self,
-        block_type: str,
-        label: str,
+        block_type: str = "persona",
+        label: str = "default",
         *,
         workspace: str | None = None,
+        name: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve a named memory block by type and label."""
-        params: dict[str, Any] = {"block_type": block_type, "label": label}
-        if workspace is not None:
-            params["workspace"] = workspace
-        return await self._mcp_call("memory_block_get", params)
+        return await self._mcp_call("memory_block_get", {"name": name or label or "default"})
 
     async def block_edit(
         self,
-        block_type: str,
-        label: str,
-        content: str,
+        block_type: str = "persona",
+        label: str = "default",
+        content: str = "",
         *,
         workspace: str | None = None,
         reason: str | None = None,
+        name: str | None = None,
     ) -> dict[str, Any]:
         """Edit the content of an existing memory block."""
         params: dict[str, Any] = {
-            "block_type": block_type,
-            "label": label,
+            "name": name or label or "default",
             "content": content,
         }
-        if workspace is not None:
-            params["workspace"] = workspace
         if reason is not None:
             params["reason"] = reason
         return await self._mcp_call("memory_block_edit", params)
@@ -113,29 +127,23 @@ class ContextMixin(ResourceMixin):
         workspace: str | None = None,
     ) -> dict[str, Any]:
         """List memory blocks, optionally filtered by type or workspace."""
-        params: dict[str, Any] = {}
-        if block_type is not None:
-            params["block_type"] = block_type
-        if workspace is not None:
-            params["workspace"] = workspace
-        return await self._mcp_call("memory_block_list", params)
+        return await self._mcp_call("memory_block_list", {})
 
     async def block_create(
         self,
-        block_type: str,
-        label: str,
-        content: str,
+        block_type: str = "persona",
+        label: str = "default",
+        content: str = "",
         *,
         workspace: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
+        name: str | None = None,
     ) -> dict[str, Any]:
         """Create a new named memory block."""
         params: dict[str, Any] = {
-            "block_type": block_type,
-            "label": label,
+            "name": name or label or "default",
             "content": content,
-            "max_tokens": max_tokens,
         }
-        if workspace is not None:
-            params["workspace"] = workspace
+        if max_tokens is not None:
+            params["max_tokens"] = max_tokens
         return await self._mcp_call("memory_block_create", params)

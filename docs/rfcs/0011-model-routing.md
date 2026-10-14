@@ -1,6 +1,6 @@
 # RFC 0011: Model Routing Contract
 
-Status: proposed
+Status: accepted (implemented)
 
 Date: 2026-06-09
 
@@ -286,3 +286,14 @@ These should not route to an LLM provider by default:
 - Should embedding vector dimensions be part of every embedding route descriptor?
 - How should multimodal fallback from image embedding to image description be
   represented: one route with fallback, or two explicit routes?
+
+## Implementation & Verification Status (2026-10-14)
+
+- **Status**: accepted (implemented)
+- **Implementation**:
+  - [`src/routing/`](../../src/routing/)
+  - [`src/mcp/handlers/model_routing.rs`](../../src/mcp/handlers/model_routing.rs)
+  - [`src/bin/cli/routing.rs`](../../src/bin/cli/routing.rs)
+  - [`governance/models.toml`](../../governance/models.toml)
+- **Verification Suites**:
+  - [`tests/model_routing_contract_tests.rs`](../../tests/model_routing_contract_tests.rs)

@@ -3,6 +3,10 @@ export interface McpCaller {
     method: string,
     params?: Record<string, unknown>
   ): Promise<unknown>;
+  rpcCall?(
+    method: string,
+    params?: Record<string, unknown>
+  ): Promise<unknown>;
 }
 
 export abstract class BaseResource {

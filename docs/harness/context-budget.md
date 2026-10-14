@@ -186,6 +186,7 @@ e teste multilíngue de budget, em sub-PR independente do harness. **Entrada par
 de ingestão fica "chars" por esse ruling; o owner confirma ou reabre, e só Q7 pode exigir
 tokenizer/modelo conhecido. Esta
 decisão não é implementação e não mistura código de produto com o PR de contexto/harness.
+Em 2026-10-14, o owner `Ronaldo` confirmou formalmente a decisão #152 de chunking por caracteres em [`../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md`](../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md).
 
 ## 7. Verificação em clone limpo
 

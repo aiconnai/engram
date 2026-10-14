@@ -241,3 +241,4 @@ Nenhuma discrepância foi resolvida mudando datas/SHAs para fabricar verde.
 - **D10**: H6 mediu AGENTS.md/CLAUDE.md e **não** consolidou nem alterou
   `INVARIANTS.md` raiz, `STANDARDS.md` ou a lista de leitura; a decisão (duplicação deliberada,
   protegida por teste de ordem) está em `docs/harness/context-budget.md`.
+- **Sign-off do owner (2026-10-14):** Encerramento formal pelo owner `Ronaldo` fechando **D1** (renovada e verificada), **D2** (`rustls 0.23.46`), **D7** (`default = ["openai"]` confirmado como contrato público), e **D9** (RFCs 0009, 0010, 0011 aceitas; ADR [`../../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md`](../../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md)).

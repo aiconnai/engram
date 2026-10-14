@@ -14,7 +14,7 @@
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use crate::text_util::LowercaseIndex;
@@ -239,25 +239,13 @@ impl Default for EntityExtractionConfig {
 /// Entity extraction engine using pattern matching
 pub struct EntityExtractor {
     config: EntityExtractionConfig,
-    // Compiled regex patterns
-    person_pattern: Regex,
-    org_pattern: Regex,
-    project_pattern: Regex,
-    url_pattern: Regex,
-    path_pattern: Regex,
-    datetime_pattern: Regex,
-    mention_pattern: Regex,
-    // Known entities for matching
-    known_organizations: HashSet<String>,
-    known_concepts: HashSet<String>,
 }
 
 // Compiled regex patterns
 static PERSON_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?x)
-        @[\w-]+                           # @username mentions
-        |(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?  # Title + name
+        (?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?  # Title + name
         |[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?  # First Last (Middle)
         ",
     )
@@ -267,8 +255,7 @@ static PERSON_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 static ORG_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"(?x)
-        [A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*\s+(?:Inc\.?|Corp\.?|LLC|Ltd\.?|Co\.?|Team|Group|Labs?)
-        |(?:The\s+)?[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*\s+(?:Company|Organization|Foundation|Institute)
+        (?:The\s+)?[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*\s+(?:Inc\.?|Corp\.?|LLC|Ltd\.?|Co\.?|Team|Group|Labs?|Company|Organization|Foundation|Institute)
         ",
     )
     .unwrap()
@@ -315,93 +302,72 @@ static DATETIME_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 
 static MENTION_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"@[\w-]+").unwrap());
 
-static KNOWN_ORGANIZATIONS: LazyLock<HashSet<String>> = LazyLock::new(|| {
-    [
-        "Anthropic",
-        "OpenAI",
-        "Google",
-        "Microsoft",
-        "Meta",
-        "Amazon",
-        "Apple",
-        "GitHub",
-        "GitLab",
-        "Vercel",
-        "Cloudflare",
-        "AWS",
-        "Azure",
-        "GCP",
-        "Stripe",
-        "Supabase",
-        "Neon",
-        "PlanetScale",
-        "MongoDB",
-        "Redis",
-    ]
-    .iter()
-    .map(|s| s.to_lowercase())
-    .collect()
-});
+const KNOWN_ORGANIZATIONS: &[&str] = &[
+    "anthropic",
+    "openai",
+    "google",
+    "microsoft",
+    "meta",
+    "amazon",
+    "apple",
+    "github",
+    "gitlab",
+    "vercel",
+    "cloudflare",
+    "aws",
+    "azure",
+    "gcp",
+    "stripe",
+    "supabase",
+    "neon",
+    "planetscale",
+    "mongodb",
+    "redis",
+];
 
-static KNOWN_CONCEPTS: LazyLock<HashSet<String>> = LazyLock::new(|| {
-    [
-        "machine learning",
-        "deep learning",
-        "neural network",
-        "transformer",
-        "embedding",
-        "vector database",
-        "semantic search",
-        "rag",
-        "llm",
-        "api",
-        "rest",
-        "graphql",
-        "grpc",
-        "websocket",
-        "microservices",
-        "kubernetes",
-        "docker",
-        "ci/cd",
-        "devops",
-        "serverless",
-        "authentication",
-        "authorization",
-        "oauth",
-        "jwt",
-        "session",
-        "database",
-        "sql",
-        "nosql",
-        "postgresql",
-        "sqlite",
-        "redis",
-        "rust",
-        "python",
-        "typescript",
-        "javascript",
-        "go",
-        "java",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect()
-});
+const KNOWN_CONCEPTS: &[&str] = &[
+    "machine learning",
+    "deep learning",
+    "neural network",
+    "transformer",
+    "embedding",
+    "vector database",
+    "semantic search",
+    "rag",
+    "llm",
+    "api",
+    "rest",
+    "graphql",
+    "grpc",
+    "websocket",
+    "microservices",
+    "kubernetes",
+    "docker",
+    "ci/cd",
+    "devops",
+    "serverless",
+    "authentication",
+    "authorization",
+    "oauth",
+    "jwt",
+    "session",
+    "database",
+    "sql",
+    "nosql",
+    "postgresql",
+    "sqlite",
+    "redis",
+    "rust",
+    "python",
+    "typescript",
+    "javascript",
+    "go",
+    "java",
+];
 
 impl EntityExtractor {
     pub fn new(config: EntityExtractionConfig) -> Self {
-        Self {
-            config,
-            person_pattern: PERSON_PATTERN.clone(),
-            org_pattern: ORG_PATTERN.clone(),
-            project_pattern: PROJECT_PATTERN.clone(),
-            url_pattern: URL_PATTERN.clone(),
-            path_pattern: PATH_PATTERN.clone(),
-            datetime_pattern: DATETIME_PATTERN.clone(),
-            mention_pattern: MENTION_PATTERN.clone(),
-            known_organizations: KNOWN_ORGANIZATIONS.clone(),
-            known_concepts: KNOWN_CONCEPTS.clone(),
-        }
+        Self { config }
     }
 
     /// Extract entities from text
@@ -414,7 +380,7 @@ impl EntityExtractor {
 
         // Extract @mentions (high confidence)
         if self.config.extract_people {
-            for cap in self.mention_pattern.find_iter(text) {
+            for cap in MENTION_PATTERN.find_iter(text) {
                 entities.push(ExtractedEntity {
                     text: cap.as_str().to_string(),
                     normalized: cap.as_str().to_lowercase(),
@@ -427,11 +393,7 @@ impl EntityExtractor {
             }
 
             // Extract person names
-            for cap in self.person_pattern.find_iter(text) {
-                // Skip if already captured as @mention
-                if cap.as_str().starts_with('@') {
-                    continue;
-                }
+            for cap in PERSON_PATTERN.find_iter(text) {
                 entities.push(ExtractedEntity {
                     text: cap.as_str().to_string(),
                     normalized: normalize_name(cap.as_str()),
@@ -446,7 +408,7 @@ impl EntityExtractor {
 
         // Extract organizations
         if self.config.extract_organizations {
-            for cap in self.org_pattern.find_iter(text) {
+            for cap in ORG_PATTERN.find_iter(text) {
                 entities.push(ExtractedEntity {
                     text: cap.as_str().to_string(),
                     normalized: normalize_name(cap.as_str()),
@@ -459,13 +421,13 @@ impl EntityExtractor {
             }
 
             // Check for known organizations
-            for org in &self.known_organizations {
+            for &org in KNOWN_ORGANIZATIONS {
                 if let Some((pos, original)) = text_lower.find_window(org) {
                     // Avoid duplicates
                     if !entities.iter().any(|e| e.offset == pos) {
                         entities.push(ExtractedEntity {
                             text: original.to_string(),
-                            normalized: org.clone(),
+                            normalized: org.to_string(),
                             entity_type: EntityType::Organization,
                             confidence: 0.9,
                             offset: pos,
@@ -479,7 +441,7 @@ impl EntityExtractor {
 
         // Extract URLs
         if self.config.extract_references {
-            for cap in self.url_pattern.find_iter(text) {
+            for cap in URL_PATTERN.find_iter(text) {
                 entities.push(ExtractedEntity {
                     text: cap.as_str().to_string(),
                     normalized: cap.as_str().to_lowercase(),
@@ -491,7 +453,7 @@ impl EntityExtractor {
                 });
             }
 
-            for cap in self.path_pattern.find_iter(text) {
+            for cap in PATH_PATTERN.find_iter(text) {
                 entities.push(ExtractedEntity {
                     text: cap.as_str().to_string(),
                     normalized: cap.as_str().to_string(),
@@ -506,7 +468,7 @@ impl EntityExtractor {
 
         // Extract datetime
         if self.config.extract_datetime {
-            for cap in self.datetime_pattern.find_iter(text) {
+            for cap in DATETIME_PATTERN.find_iter(text) {
                 entities.push(ExtractedEntity {
                     text: cap.as_str().to_string(),
                     normalized: cap.as_str().to_lowercase(),
@@ -521,11 +483,11 @@ impl EntityExtractor {
 
         // Extract concepts
         if self.config.extract_concepts {
-            for concept in &self.known_concepts {
+            for &concept in KNOWN_CONCEPTS {
                 if let Some((pos, original)) = text_lower.find_window(concept) {
                     entities.push(ExtractedEntity {
                         text: original.to_string(),
-                        normalized: concept.clone(),
+                        normalized: concept.to_string(),
                         entity_type: EntityType::Concept,
                         confidence: 0.85,
                         offset: pos,
@@ -538,7 +500,7 @@ impl EntityExtractor {
 
         // Extract project names
         if self.config.extract_projects {
-            for cap in self.project_pattern.find_iter(text) {
+            for cap in PROJECT_PATTERN.find_iter(text) {
                 let matched = cap.as_str();
                 // Skip very short matches and pure version numbers
                 if matched.len() < 3
@@ -597,7 +559,11 @@ impl Default for EntityExtractor {
 
 /// Normalize a name for matching
 fn normalize_name(name: &str) -> String {
-    name.trim()
+    let trimmed = name.trim();
+    if !trimmed.contains(['\t', '\n', '\r']) && !trimmed.contains("  ") {
+        return trimmed.to_lowercase();
+    }
+    trimmed
         .to_lowercase()
         .split_whitespace()
         .collect::<Vec<_>>()

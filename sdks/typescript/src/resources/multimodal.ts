@@ -20,11 +20,11 @@ export class MultimodalResource extends BaseResource {
     imagePath: string,
     options?: DescribeImageOptions
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_describe_image", {
+    const params: Record<string, unknown> = {
       image_path: imagePath,
-      ...(options?.prompt && { prompt: options.prompt }),
-      ...(options?.maxTokens && { max_tokens: options.maxTokens }),
-    });
+    };
+    if (options?.prompt !== undefined) params.prompt = options.prompt;
+    return this.caller.mcpCall("memory_describe_image", params);
   }
 
   /**
@@ -40,16 +40,11 @@ export class MultimodalResource extends BaseResource {
    * Capture a desktop or window screenshot.
    */
   async captureScreenshot(
-    options?: CaptureScreenshotOptions
+    options?: CaptureScreenshotOptions & { appName?: string }
   ): Promise<unknown> {
-    return this.caller.mcpCall("memory_capture_screenshot", {
-      ...(options?.displayIndex !== undefined && {
-        display_index: options.displayIndex,
-      }),
-      ...(options?.delaySeconds !== undefined && {
-        delay_seconds: options.delaySeconds,
-      }),
-    });
+    const params: Record<string, unknown> = {};
+    if (options?.appName !== undefined) params.app_name = options.appName;
+    return this.caller.mcpCall("memory_capture_screenshot", params);
   }
 
   /**
@@ -61,12 +56,6 @@ export class MultimodalResource extends BaseResource {
   ): Promise<unknown> {
     return this.caller.mcpCall("memory_process_video", {
       video_path: videoPath,
-      ...(options?.extractFrames !== undefined && {
-        extract_frames: options.extractFrames,
-      }),
-      ...(options?.maxFrames !== undefined && {
-        max_frames: options.maxFrames,
-      }),
     });
   }
 

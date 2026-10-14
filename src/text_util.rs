@@ -103,18 +103,19 @@ impl<'a> LowercaseIndex<'a> {
     /// `(byte offset, original slice)`. `needle` is compared as given, so pass
     /// it lowercased. An empty needle never matches.
     pub fn find_window(&self, needle: &str) -> Option<(usize, &'a str)> {
-        let needle_chars = needle.chars().count();
-        if needle_chars == 0 {
+        if needle.is_empty() {
             return None;
         }
-        if self.has_capital_sigma {
-            return find_window_exact(self.original, needle, needle_chars);
-        }
-        let Some(char_offsets) = &self.char_offsets else {
+        if !self.has_capital_sigma && self.char_offsets.is_none() {
             // ASCII: a match is ASCII too, so bytes == chars on both sides.
             let start = self.lower.find(needle)?;
             return Some((start, &self.original[start..start + needle.len()]));
-        };
+        }
+        let needle_chars = needle.chars().count();
+        if self.has_capital_sigma {
+            return find_window_exact(self.original, needle, needle_chars);
+        }
+        let char_offsets = self.char_offsets.as_ref()?;
 
         let mut from = 0;
         while let Some(relative) = self.lower[from..].find(needle) {

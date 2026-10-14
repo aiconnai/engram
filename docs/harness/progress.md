@@ -8,8 +8,8 @@
 | Active plan | `docs/harness/progress/2026-10-05-improvement-lane-p.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md (último review-gate post com marcador). Programa 2026-10-05: revisões SDD independentes + revisão final Opus (Ready with fixes), sem receipt do review-gate post: docs/harness/reviews/2026-10-05-comprehensive-improvement/README.md` |
 | Last sensors | `2026-10-05 — FINALFIX (HEAD bdf4620): full status=pass (mode=full; timestamp 2026-10-05T19:07:34Z, 328s) after make ci exit 0; receipts not committed. Earlier: INT full status=pass (2026-10-05T18:11:26Z). Committed receipt .sensors-last (not refreshed, to avoid telemetry churn): status=pass mode=quick timestamp 2026-09-03T13:11:41Z` |
-| Last commit | `dd3b6ae` |
-| Last live-state check | `2026-10-14 — Wave 5 final (#235-#240 + rustls 0.23.46 + autobins, HEAD dd3b6ae): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
+| Last commit | `e17fb5e` |
+| Last live-state check | `2026-10-14 — Wave 6 final (G-2 161->0 SDK drift, G-4/G-5 TS errors, G-6/G-7 MCP normalizer, SQLite read-path, D7/C1/#152/RFCs 0009-0011, HEAD e17fb5e): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -89,22 +89,14 @@ briefs, reports e revisão final: [`reviews/2026-10-05-comprehensive-improvement
 | Revisão final do branch | — | opus Ready with fixes (0 Critical) | `1952f3b..4868d49` |
 | FINALFIX correções da revisão final | — | sem re-revisão ao commitar | [entrada FINALFIX](./progress/2026-10-05-improvement-lane-p.md#finalfix--correções-da-revisão-final-do-branch-2026-10-05) |
 
-- **Discrepâncias de E0** (detalhe na auditoria): resolvidas D2 (`RUSTSEC-2026-0285`, Q6: rustls 0.23.45), D3 (Q1a), D4 (Q5 refrescou o
-  `GATES.md`; H6 verificou a consistência), D5 (classificada/endurecida em H2/H3), D6, D11,
-  D12. Em aberto: D1 renovação de exceções (Q5 renovou até 2026-12-31, owner Ronaldo; INT reconciliou
-  os registros após Q6), D7 `default` features, D8 proteção live sem review
-  obrigatório, D9 commits sem review/Canvas, D10 consolidação de AGENTS/INVARIANTS/STANDARDS
-  (H6 mediu e decidiu: ver `context-budget.md`).
-- **#152 (ruling do controller, 2026-10-05, pendente de confirmação do owner)**: limites de chunk
-  na ingestão de documentos são em **caracteres**, distintos de tokens; nenhum tokenizer/modelo foi
-  adicionado. Entrada para Q7;
-  registro em [`context-budget.md`](./context-budget.md#6-decisão-152--chunks-por-caracteres-não-por-tokens).
+- **Discrepâncias de E0** (detalhe na auditoria): resolvidas D1 (renovada até 2026-12-31, owner Ronaldo), D2 (`rustls` 0.23.46 + exceções governadas `turso`), D3 (Q1a), D4 (Q5/H6), D5 (H2/H3), D6, D7 (`default = ["openai"]` confirmado em ADR), D9 (RFCs 0009–0011 aceitas e implementadas), D10 (`context-budget.md`), D11, D12. Em aberto apenas governança externa: D8 (branch protection GitHub sem review humano obrigatório no plano atual).
+- **#152 (confirmada pelo owner Ronaldo em 2026-10-14)**: limites de chunk na ingestão de documentos são em **caracteres**, distintos de tokens; decisão selada em [`../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md`](../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md) e [`context-budget.md`](./context-budget.md#6-decisão-152--chunks-por-caracteres-não-por-tokens).
 
 ## Próximos passos (owner)
 
-- `supply-chain-pins.toml` zerado (`unpinned_images = []`, pinados em #241); owner de `goals/registry.json` definido como `Ronaldo`.
-- Follow-ups P1/P2/P3 (#235-#240) integrados: `G1 CloudStorage::upload` (Invariante #27), `v49` `media_assets` por workspace (#235), leitura limitada 50 MiB (#236), `aws-sdk-s3` + `BehaviorVersion` pin (#239), hooks/`SyncWorker` em `server.rs` (#237), retry `-shm` read-only (#238) e ancoragem de `budgets.json` (#240).
-- Merge humano: squash ou split autorizado de `35a1592`/`ec3093c`; follow-ups e decisões do owner listados no [registro de revisão](./reviews/2026-10-05-comprehensive-improvement/README.md#owner-decisions-surfaced-not-implemented).
+- `supply-chain-pins.toml` zerado (`unpinned_images = []`, pinados em #241); owner de `goals/registry.json` definido como `Ronaldo`; `candidate-floors.json` aceito e selado (`accepted-independent-review`).
+- Follow-ups Waves 5 e 6 (#235-#240, G-2 `known_drift: []` 161->0, G-4/G-5 TS SDK, G-6/G-7 MCP normalizer, SQLite read-path `total_changes`, `EntityExtractor` 4.75× speedup, `readers_readonly_N` 226× speedup) integrados e verificados.
+- Resumo pós-merge e decisões do owner documentados no [registro de revisão](./reviews/2026-10-05-comprehensive-improvement/README.md#owner-decisions--post-merge-waves-56-resolution-2026-10-14) e no [sumário Waves 5–6](./reviews/2026-10-05-comprehensive-improvement/wave5-6-summary.md).
 
 ## Enforcement do live state
 

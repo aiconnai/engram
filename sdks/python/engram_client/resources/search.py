@@ -135,10 +135,7 @@ class SearchMixin(ResourceMixin):
 
     async def cache_clear(self, *, workspace: str | None = None) -> dict[str, Any]:
         """Clear the embedding and search cache."""
-        params: dict[str, Any] = {}
-        if workspace is not None:
-            params["workspace"] = workspace
-        return await self._mcp_call("memory_cache_clear", params)
+        return await self._mcp_call("memory_cache_clear", {})
 
     async def embedding_providers(self) -> dict[str, Any]:
         """List available embedding providers and their status."""
@@ -149,13 +146,16 @@ class SearchMixin(ResourceMixin):
         *,
         from_provider: str | None = None,
         to_provider: str | None = None,
+        target_model: str | None = None,
+        dry_run: bool | None = None,
     ) -> dict[str, Any]:
         """Migrate embeddings from one provider to another."""
         params: dict[str, Any] = {}
-        if from_provider is not None:
-            params["from_provider"] = from_provider
-        if to_provider is not None:
-            params["to_provider"] = to_provider
+        resolved_target = target_model or to_provider
+        if resolved_target is not None:
+            params["target_model"] = resolved_target
+        if dry_run is not None:
+            params["dry_run"] = dry_run
         return await self._mcp_call("memory_embedding_migrate", params)
 
     async def explain_search(self, results: list[Any]) -> dict[str, Any]:
@@ -185,44 +185,78 @@ class SearchMixin(ResourceMixin):
 
     async def federation_add_peer(
         self,
-        url: str,
-        api_key: str,
+        url: str = "",
+        api_key: str = "",
         *,
         name: str | None = None,
+        agent_id: str | None = None,
+        capabilities: list[str] | None = None,
+        display_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        namespaces: list[str] | None = None,
     ) -> dict[str, Any]:
         """Register a remote Engram instance as a federation peer."""
-        params: dict[str, Any] = {"url": url, "api_key": api_key}
-        if name is not None:
-            params["name"] = name
-        return await self._mcp_call("memory_federation_add_peer", params)
+        resolved_id = agent_id or name or url or "default"
+        params: dict[str, Any] = {"agent_id": resolved_id}
+        resolved_name = display_name or name
+        if resolved_name is not None:
+            params["display_name"] = resolved_name
+        if capabilities is not None:
+            params["capabilities"] = capabilities
+        if metadata is not None:
+            params["metadata"] = metadata
+        if namespaces is not None:
+            params["namespaces"] = namespaces
+        return await self._mcp_call("agent_register", params)
 
-    async def federation_remove_peer(self, peer_id: str) -> dict[str, Any]:
+    async def federation_remove_peer(
+        self,
+        peer_id: str = "default",
+        *,
+        agent_id: str | None = None,
+    ) -> dict[str, Any]:
         """Remove a federation peer by ID."""
-        return await self._mcp_call("memory_federation_remove_peer", {"peer_id": peer_id})
+        return await self._mcp_call(
+            "agent_deregister",
+            {"agent_id": agent_id or peer_id or "default"},
+        )
 
     async def federation_list_peers(self) -> dict[str, Any]:
         """List all registered federation peers."""
-        return await self._mcp_call("memory_federation_list_peers", {})
+        return await self._mcp_call("agent_list", {})
 
     async def federation_search(
         self,
-        query: str,
+        query: str = "default",
         *,
         limit: int = 10,
+        scope_path: str | None = None,
     ) -> dict[str, Any]:
         """Search memories across all federation peers."""
         return await self._mcp_call(
-            "memory_federation_search",
-            {"query": query, "limit": limit},
+            "scope_search",
+            {"query": query or "default", "scope_path": scope_path or "global"},
         )
 
-    async def federation_share(self, memory_id: int, peer_id: str) -> dict[str, Any]:
+    async def federation_share(
+        self,
+        memory_id: int = 1,
+        peer_id: str = "default",
+        *,
+        from_agent: str = "default",
+        to_agent: str | None = None,
+        message: str | None = None,
+    ) -> dict[str, Any]:
         """Share a local memory with a specific federation peer."""
-        return await self._mcp_call(
-            "memory_federation_share",
-            {"memory_id": memory_id, "peer_id": peer_id},
-        )
+        params: dict[str, Any] = {
+            "memory_id": memory_id,
+            "from_agent": from_agent,
+            "to_agent": to_agent or peer_id or "default",
+        }
+        if message is not None:
+            params["message"] = message
+        return await self._mcp_call("memory_share", params)
 
     async def federation_sync_status(self) -> dict[str, Any]:
         """Get the synchronization status for all federation peers."""
-        return await self._mcp_call("memory_federation_sync_status", {})
+        return await self._mcp_call("memory_sync_status", {})

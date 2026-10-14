@@ -1,6 +1,6 @@
 # RFC 0010: Permission Modes for MCP and Harness Operations
 
-Status: proposed
+Status: accepted (implemented)
 
 Date: 2026-06-09
 
@@ -245,3 +245,14 @@ Implemented first step:
 - Should permission mode metadata live in `src/mcp/tools/mod.rs`, a separate
   policy module, or generated metadata consumed by validators?
 - Should future audit entries live in storage, harness artifacts, or both?
+
+## Implementation & Verification Status (2026-10-14)
+
+- **Status**: accepted (implemented)
+- **Implementation**:
+  - [`src/mcp/permission.rs`](../../src/mcp/permission.rs)
+  - [`src/mcp/workspace_guard.rs`](../../src/mcp/workspace_guard.rs)
+- **Verification Suites**:
+  - [`tests/permission_modes_tests.rs`](../../tests/permission_modes_tests.rs)
+  - [`tests/workspace_auth_enforcement_tests.rs`](../../tests/workspace_auth_enforcement_tests.rs)
+  - [`tests/canonical_journey/contract.rs`](../../tests/canonical_journey/contract.rs)
