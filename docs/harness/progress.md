@@ -6,10 +6,10 @@
 | Active sprint | `Engram comprehensive improvement program — waves 0-4` |
 | Active task | `engram-comprehensive-improvement — waves 0-4 execution` |
 | Active plan | `docs/harness/progress/2026-10-05-improvement-lane-p.md` |
-| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md (último review-gate post com marcador). Programa 2026-10-05: revisões SDD independentes + revisão final Opus (Ready with fixes), sem receipt do review-gate post: docs/harness/reviews/2026-10-05-comprehensive-improvement/README.md` |
+| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md (autoridade check-live-state). Programa 2026-10-14 (Waves 0–6): post-gate PASS em docs/harness/reviews/2026-10-14-engram-comprehensive-improvement-post.md e docs/harness/reviews/2026-10-05-comprehensive-improvement/README.md` |
 | Last sensors | `2026-10-05 — FINALFIX (HEAD bdf4620): full status=pass (mode=full; timestamp 2026-10-05T19:07:34Z, 328s) after make ci exit 0; receipts not committed. Earlier: INT full status=pass (2026-10-05T18:11:26Z). Committed receipt .sensors-last (not refreshed, to avoid telemetry churn): status=pass mode=quick timestamp 2026-09-03T13:11:41Z` |
-| Last commit | `e17fb5e` |
-| Last live-state check | `2026-10-14 — Wave 6 final (G-2 161->0 SDK drift, G-4/G-5 TS errors, G-6/G-7 MCP normalizer, SQLite read-path, D7/C1/#152/RFCs 0009-0011, HEAD e17fb5e): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
+| Last commit | `0f12ac18` |
+| Last live-state check | `2026-10-14 — Release v0.24.0 / SDKs v0.7.0, O2 untrack --apply, post-gate PASS (HEAD 0f12ac18): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -40,7 +40,7 @@
 
 ## Programa ativo — comprehensive improvement, ondas 0-4
 
-- **Status**: active desde 2026-10-05. Plano:
+- **Status**: completed (ondas 0-6 encerradas em 2026-10-14). Plano:
   [`plans/2026-10-02-engram-comprehensive-improvement-plan.md`](./plans/2026-10-02-engram-comprehensive-improvement-plan.md).
   Log da lane R (Rust/produto):
   [`progress/2026-10-05-improvement-lane-r.md`](./progress/2026-10-05-improvement-lane-r.md)
@@ -52,7 +52,7 @@
   `origin/main` `949c963` (0 atrás); permanecem locais e sem revisão independente no repositório.
   O commit do plano `630dd26` é documental e fica sobre essa baseline.
 
-Registro (revisões SDD independentes; **nenhum** `review-gate.sh post` com receipt rodado), ledger,
+Registro (revisões SDD independentes e post-gate PASS [`2026-10-14-engram-comprehensive-improvement-post.md`](./reviews/2026-10-14-engram-comprehensive-improvement-post.md)), ledger,
 briefs, reports e revisão final: [`reviews/2026-10-05-comprehensive-improvement/`](./reviews/2026-10-05-comprehensive-improvement/README.md).
 
 | Task | Lane | Revisão → rodadas de correção | Commits |
@@ -95,7 +95,7 @@ briefs, reports e revisão final: [`reviews/2026-10-05-comprehensive-improvement
 ## Próximos passos (owner)
 
 - `supply-chain-pins.toml` zerado (`unpinned_images = []`, pinados em #241); owner de `goals/registry.json` definido como `Ronaldo`; `candidate-floors.json` aceito e selado (`accepted-independent-review`).
-- Follow-ups Waves 5 e 6 (#235-#240, G-2 `known_drift: []` 161->0, G-4/G-5 TS SDK, G-6/G-7 MCP normalizer, SQLite read-path `total_changes`, `EntityExtractor` 4.75× speedup, `readers_readonly_N` 226× speedup) integrados e verificados.
+- Follow-ups Waves 5 e 6 (#235-#240, G-2 `known_drift: []` 161->0, G-4/G-5 TS SDK, G-6/G-7 MCP normalizer, SQLite read-path `total_changes`, `EntityExtractor` 4.75× speedup, `readers_readonly_N` 226× speedup) integrados; `v0.24.0` Core + `v0.7.0` SDKs preparados em `CHANGELOG.md` e `channel-matrix.toml`; `O2` `untrack --apply` executado para os 73 `.raw`.
 - Resumo pós-merge e decisões do owner documentados no [registro de revisão](./reviews/2026-10-05-comprehensive-improvement/README.md#owner-decisions--post-merge-waves-56-resolution-2026-10-14) e no [sumário Waves 5–6](./reviews/2026-10-05-comprehensive-improvement/wave5-6-summary.md).
 
 ## Enforcement do live state

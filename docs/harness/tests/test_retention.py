@@ -379,12 +379,14 @@ class RealRepositoryContract(unittest.TestCase):
         m = json.loads(REAL_MANIFEST.read_text())
         shallow = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "--is-shallow-repository"],
                                  capture_output=True, text=True).stdout.strip() == "true"
+        gi = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8") if (REPO_ROOT / ".gitignore").is_file() else ""
+        migrated = "docs/harness/reviews/*.raw" in gi.splitlines()
         for e in m["entries"]:
             present = (REPO_ROOT / e["path"]).is_file()
             in_git = subprocess.run(["git", "-C", str(REPO_ROOT), "cat-file", "-e", e["git_blob"]],
                                     capture_output=True).returncode == 0
             if shallow:
-                self.assertTrue(present or in_git, e["path"])
+                self.assertTrue(present or in_git or migrated, e["path"])
             else:
                 self.assertTrue(in_git, f"blob {e['git_blob']} for {e['path']} not in the object store")
 

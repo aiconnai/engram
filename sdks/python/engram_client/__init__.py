@@ -3,5 +3,5 @@
 from engram_client.client import EngramClient
 from engram_client.errors import EngramError
 
-__version__ = "0.5.0"
+__version__ = "0.7.0"
 __all__ = ["EngramClient", "EngramError"]

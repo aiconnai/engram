@@ -779,3 +779,16 @@ Escopo: somente O2. O log operacional de O1 (observabilidade) está registrado c
 - **SQLite Read-Path & Concurrency Benchmarks (`G1` / `P1`)**: `reassert_connection_artifact_permissions` em `src/storage/connection.rs` amostra `sqlite3_total_changes64` antes/depois de `with_connection` e evita `lstat` redundantes em `-wal`/`-shm` quando nenhuma escrita ocorreu e `db` já está em `0o600` (`memory_get/by_id` caiu para `15.181 µs`, **17.1% mais rápido**); adicionados benchmarks `readers_readonly_{1,4,8}` em `benches/memory_ops.rs` (`readers_readonly_8` em `2.94 ms` / `544.8 Kelem/s`, **226× mais rápido** que `readers_8`).
 - **Entity Extraction Hot-Path (`P1`)**: `EntityExtractor` (`src/intelligence/entities.rs`) e `LowercaseIndex::find_window` (`src/text_util.rs`) otimizados sem clonagem de `HashSet<String>`/`Regex` por instância (`entity_extractor_new/default` caiu para `1.82 ns` e `entity_extraction/extract_mixed` caiu de `21.37 µs` para `4.50 µs`, **4.75× mais rápido** e `-73.7%` abaixo da baseline).
 - **Governança & RFCs (`D7`, `D9`, `C1`, `#152`, `O2`)**: RFCs 0009, 0010 e 0011 promovidas para `accepted (implemented)`; ADR [`../../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md`](../../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md) criado confirmando `D7`, `C1` e `#152`; `AGENTS.md`, `CLAUDE.md`, `context-budget.md`, `2026-10-02-improvement-baseline.md`, `OPERATIONS_GIT_RETENTION.md` e registros em `docs/harness/reviews/` reconciliados.
+
+## RELEASE & CLOSEOUT — Release `v0.24.0` Core / `v0.7.0` SDKs, `O2` `untrack --apply` e Post-Gate PASS (2026-10-14)
+
+- **Preparação de Release (`v0.24.0` Core + `v0.7.0` SDKs Python/TypeScript)**:
+  - `scripts/bump-version.py --core 0.24.0 --python 0.7.0 --typescript 0.7.0 --refresh-matrix` executado (`Cargo.toml`, `crates/engram-types/Cargo.toml`, `sdks/python/pyproject.toml`, `sdks/python/engram_client/__init__.py`, `sdks/typescript/package.json`, `README.md`, `docs/index.html`, `docs/GETTING_STARTED.md`, `docs/releases/channel-matrix.toml`, `docs/security/advisory-exceptions.toml`).
+  - `CHANGELOG.md` atualizado com a seção `## [0.24.0] - 2026-10-14` cobrindo todas as entregas das Waves 0–6.
+  - Validações: `bump-version.py --check` (`PASS`), `check-release-channels.py --matrix docs/releases/channel-matrix.toml --read-only` (`21/21 OK`), `check-security-exceptions.py` (`PASS`).
+- **Execução de Cold-Storage `O2` (`retention-manifest.py untrack --apply`)**:
+  - Backup verificado de todos os 73 arquivos `docs/harness/reviews/*.raw` (`VERIFY-BACKUP: OK files=73 ok=73 bad=0`).
+  - `retention-manifest.py untrack --apply` executado: 73 `.raw` removidos do índice Git (`git rm --cached`), regra `docs/harness/reviews/*.raw` adicionada ao `.gitignore`, arquivos mantidos em disco localmente e recuperáveis bit-a-bit via `restore --from-git` ou `restore --backup`.
+- **Fechamento Formal do Ciclo no Harness (`review-gate.sh post`)**:
+  - Artefato formal [`../reviews/2026-10-14-engram-comprehensive-improvement-post.md`](../reviews/2026-10-14-engram-comprehensive-improvement-post.md) registrado com `REVIEW_VERDICT: PASS`.
+  - `doctor.sh` passa com `exit 0` e **0 warnings**.

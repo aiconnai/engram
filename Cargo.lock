@@ -2002,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "engram-core"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -2067,7 +2067,7 @@ dependencies = [
 
 [[package]]
 name = "engram-types"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "chrono",
  "serde",

@@ -36,7 +36,7 @@ crate = "rustls-webpki"
 versions = ["0.102.8"]
 tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
 ]
 feature = "turso optional feature; included by cargo-deny all-features"
 exposure = "Optional libSQL/Turso TLS validation path; advisory is CRL revocation handling and no Engram code enables permissive unknown-revocation policy."
@@ -52,7 +52,7 @@ crate = "rustls-webpki"
 versions = ["0.102.8"]
 tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
 ]
 feature = "turso optional feature only (via libsql); the AWS SDK path now resolves rustls 0.23 with a patched rustls-webpki"
 exposure = "TLS certificate URI name-constraint handling in upstream TLS stack; the affected stack is only the optional Turso/libSQL client, and exploitation requires misissued certificates after signature validation."
@@ -68,7 +68,7 @@ crate = "rustls-webpki"
 versions = ["0.102.8"]
 tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
 ]
 feature = "turso optional feature only (via libsql); the AWS SDK path now resolves rustls 0.23 with a patched rustls-webpki"
 exposure = "TLS certificate wildcard DNS name-constraint handling in upstream TLS stack; the affected stack is only the optional Turso/libSQL client, and exploitation requires misissued certificates after signature validation."
@@ -84,7 +84,7 @@ crate = "rustls-webpki"
 versions = ["0.102.8"]
 tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4 -> rustls-webpki 0.102.8",
 ]
 feature = "turso optional feature only (via libsql); the AWS SDK path now resolves rustls 0.23 with a patched rustls-webpki"
 exposure = "TLS CRL parsing denial-of-service in upstream TLS stack; Engram does not parse CRLs directly, but the optional Turso/libSQL TLS stack carries the transitive crate."
@@ -100,8 +100,8 @@ crate = "rustls"
 versions = ["0.22.4"]
 tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4",
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> tokio-rustls 0.25.0 -> rustls 0.22.4",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> tokio-rustls 0.25.0 -> rustls 0.22.4",
 ]
 feature = "turso optional feature only (via libsql); the default/cloud/HTTP stack resolves rustls 0.23.46"
 exposure = "Debug implementations for client session values expose TLS secrets in upstream rustls; affected stack is limited to the optional Turso/libSQL client, and Engram does not format client session values with Debug or use custom ClientSessionStore logging."
@@ -117,8 +117,8 @@ crate = "rustls"
 versions = ["0.22.4"]
 tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4",
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> tokio-rustls 0.25.0 -> rustls 0.22.4",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> tokio-rustls 0.25.0 -> rustls 0.22.4",
 ]
 feature = "turso optional feature only (via libsql); the default/cloud/HTTP stack resolves rustls 0.23.46"
 exposure = "Unauthenticated ServerHello key-share prediction can downgrade later connections to classical key exchange; affected stack is limited to the optional Turso/libSQL client, and exploitation requires an active network attacker and server without HelloRetryRequest."
@@ -134,7 +134,7 @@ crate = "h2"
 versions = ["0.3.27"]
 tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> tonic 0.11.0 -> hyper 0.14.32 -> h2 0.3.27",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> tonic 0.11.0 -> hyper 0.14.32 -> h2 0.3.27",
 ]
 feature = "turso optional feature only (via libsql: tonic 0.11 / hyper 0.14 / hyper-rustls 0.25); no AWS SDK or other path resolves h2 0.3"
 exposure = "Unbounded empty DATA frames in the legacy h2 0.3.27 carried only by the optional libSQL/Turso client stack (tonic 0.11, hyper 0.14); every other h2 user resolves h2 0.4.16+; exploitation requires a malicious peer connection."
@@ -151,7 +151,7 @@ crate = "bincode"
 versions = ["1.3.3"]
 tools = ["cargo-audit:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> bincode 1.3.3",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> bincode 1.3.3",
 ]
 feature = "turso optional feature only"
 exposure = "Unmaintained serialization crate inside optional libSQL/Turso dependency; Engram does not call bincode directly."
@@ -167,8 +167,8 @@ crate = "paste"
 versions = ["1.0.15"]
 tools = ["cargo-audit:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> tokenizers 0.23.1 -> paste 1.0.15",
-  "engram-core 0.23.0 -> tokenizers 0.23.1 -> macro_rules_attribute 0.2.2 -> paste 1.0.15",
+  "engram-core 0.24.0 -> tokenizers 0.23.1 -> paste 1.0.15",
+  "engram-core 0.24.0 -> tokenizers 0.23.1 -> macro_rules_attribute 0.2.2 -> paste 1.0.15",
 ]
 feature = "onnx-embed/local-embeddings optional feature only"
 exposure = "Unmaintained proc-macro dependency in optional local embedding tokenizers stack; not loaded by the default feature graph."
@@ -184,7 +184,7 @@ crate = "rustls-pemfile"
 versions = ["2.2.0"]
 tools = ["cargo-audit:ignore"]
 dependency_path = [
-  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls-native-certs 0.7.3 -> rustls-pemfile 2.2.0",
+  "engram-core 0.24.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls-native-certs 0.7.3 -> rustls-pemfile 2.2.0",
 ]
 feature = "turso optional feature only"
 exposure = "Unmaintained PEM parsing wrapper in optional libSQL/Turso TLS stack; Engram does not parse PEM files through this crate directly."
@@ -201,8 +201,8 @@ versions = ["0.25.1"]
 tools = ["cargo-audit:allowed-warning"]
 url = "https://github.com/harfbuzz/ttf-parser/issues/217"
 dependency_path = [
-  "engram-core 0.23.0 -> pdf-extract 0.12.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
-  "engram-core 0.23.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
+  "engram-core 0.24.0 -> pdf-extract 0.12.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
+  "engram-core 0.24.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
 ]
 feature = "pdf optional feature only"
 exposure = "Feature-gated PDF ingestion font parsing path (the pdf feature is part of the required CI feature set, not the default one); bounded by input bytes before parsing, page-tree traversal before text extraction, and extracted text bytes; not present in the default non-PDF feature graph and not globally ignored in cargo-audit or cargo-deny."

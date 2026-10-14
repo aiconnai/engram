@@ -153,7 +153,7 @@ def self_test_sdk_compatibility_required() -> int:
 def self_test_sdk_package_and_range() -> int:
     policy, channels, compatibility = parse_matrix(DEFAULT_MATRIX)
     wrong_package = [SdkCompatibility("python", "wrong-client", "0.5.0", "0.4.0", "0.20.0", "0.22.x", "wrong package", False), compatibility[1]]
-    high_min = [SdkCompatibility("python", "engram-client", "0.5.0", "0.4.0", "0.23.0", "0.24.x", "bad min", False), compatibility[1]]
+    high_min = [SdkCompatibility("python", "engram-client", "0.5.0", "0.4.0", "0.25.0", "0.26.x", "bad min", False), compatibility[1]]
     low_max = [compatibility[0], SdkCompatibility("typescript", "engram-client", "0.5.0", "0.3.0", "0.20.0", "0.21.x", "bad max", False)]
     rows = (("wrong package", wrong_package), ("high min", high_min), ("low max", low_max))
     checks = [CheckResult(print_results(static_checks(policy, channels, rowset)) != 0, "sdk package/range required", name) for name, rowset in rows]

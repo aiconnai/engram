@@ -11,12 +11,13 @@
 ## 1. Estado desta política
 
 - **Status operacional (2026-10-14):**
-  - All 73 `review-raw` artifacts (`4,249,732` bytes) are verified byte-for-byte against `docs/harness/retention/review-raw.manifest.json` (`VERIFY: OK files=73 ok=73`).
-  - **Owner decision (`2026-10-14`):** keep the 73 `.raw` artifacts tracked in-tree with SHA-256 manifest verification enforced by the offline harness lane (`retention` component, 21 tests), deferring `untrack --apply` until an external cold-storage bucket is provisioned.
-- **Proposta técnica pronta e provada; migração real não aplicada.** A classe `review-raw` foi
-  migrada **somente em clones descartáveis** (seção 6). No repositório real, nenhum arquivo foi
-  destracked, nenhuma regra nova entrou no `.gitignore` e nenhum objeto foi tocado. Aplicar a migração
-  na branch real é decisão do owner (seção 5).
+  - All 73 `review-raw` artifacts (`4,249,732` bytes) are verified byte-for-byte against `docs/harness/retention/review-raw.manifest.json` (`VERIFY: OK files=73 ok=73`) and backed up to a content-addressed store (`VERIFY-BACKUP: OK files=73 ok=73 bad=0`).
+  - **Owner decision (`2026-10-14`):** `retention-manifest.py untrack --apply` executed on the repository index (`UNTRACK: OK class=review-raw untracked=73 ignore_rule='docs/harness/reviews/*.raw'`), keeping working-tree copies intact on disk, adding `docs/harness/reviews/*.raw` to `.gitignore`, and preserving SHA-256 manifest and git object store recoverability (`restore --from-git` / `restore --backup`).
+- **Migração `untrack --apply` aplicada (2026-10-14).** A classe `review-raw` foi validada em
+  clones descartáveis (seção 6) e aplicada no índice do repositório sob autorização explícita do
+  owner (seção 5): os 73 `.raw` deixaram de ser rastreados no HEAD (`git rm --cached`), a regra
+  `docs/harness/reviews/*.raw` entrou no `.gitignore`, e nenhum arquivo em disco ou objeto do
+  histórico git foi apagado.
 - Durações abaixo são **propostas** a ratificar pelo owner; nenhuma é imposta por código hoje.
 - **Não prometemos redução de MB.** Só as medições da seção 3 e 6 valem, com data. O ganho de
   untracking é de *checkout* (tamanho do working tree de um clone novo); o object store não encolhe,
@@ -110,8 +111,8 @@ Não feito no início desta task de propósito: a regra `docs/harness/reviews/*.
 
 ### Decisão do owner (2026-10-14)
 
-- **Status operacional (`2026-10-14`):** All 73 `review-raw` artifacts (`4,249,732` bytes) are verified byte-for-byte against `docs/harness/retention/review-raw.manifest.json` (`VERIFY: OK files=73 ok=73`).
-- **Owner decision (`2026-10-14`):** keep the 73 `.raw` artifacts tracked in-tree with SHA-256 manifest verification enforced by the offline harness lane (`retention` component, 21 tests), deferring `untrack --apply` until an external cold-storage bucket is provisioned.
+- **Status operacional (`2026-10-14`):** All 73 `review-raw` artifacts (`4,249,732` bytes) are verified byte-for-byte against `docs/harness/retention/review-raw.manifest.json` (`VERIFY: OK files=73 ok=73`) and backed up to a verified content-addressed store (`VERIFY-BACKUP: OK files=73 ok=73 bad=0`).
+- **Owner decision (`2026-10-14`):** authorized and executed `retention-manifest.py untrack --apply` (`UNTRACK: OK class=review-raw untracked=73 ignore_rule='docs/harness/reviews/*.raw'`). All 73 `.md` review verdicts remain tracked; all 73 `.raw` prompt/diff dumps remain recoverable byte-for-byte via `retention-manifest.py restore --from-git` or `--backup`, enforced by the offline harness lane (`retention` component, 21 tests).
 
 ## 6. Prova em clone descartável (2026-10-05)
 

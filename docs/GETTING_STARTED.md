@@ -34,7 +34,7 @@ The server deliberately fails PDF ingestion closed if the worker is absent.
 
 ```bash
 # Replace VERSION and TARGET with the release tag and platform target you need.
-VERSION=v0.23.0
+VERSION=v0.24.0
 TARGET=x86_64-unknown-linux-gnu
 
 curl -L "https://github.com/aiconnai/engram/releases/download/${VERSION}/engram-${VERSION}-${TARGET}.tar.gz" -o engram.tar.gz

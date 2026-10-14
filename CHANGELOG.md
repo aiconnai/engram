@@ -12,8 +12,21 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-14
+
+### Added
+
+- **RFC 0009, 0010, and 0011 Implemented** — Promoted and wired MCP Contract Validation (`docs/rfcs/0009-mcp-contract-validation.md`), Permission Modes (`docs/rfcs/0010-permission-modes.md`), and Deterministic Model Routing (`docs/rfcs/0011-model-routing.md`, `governance/models.toml`, `scripts/select-model.py`).
+- **MCP Error Normalizer (`G-6`, `G-7`, `G-10`)** — Added `src/mcp/error_normalizer.rs` and upgraded `context/blocks.rs`, `compression.rs`, `dream.rs`, `memory_crud/read_update_delete.rs`, and `search.rs` so wrong-typed `id`/`limit`/`offset` parameters and domain errors emit RFC 0006 structured `ToolError` payloads (`invalid_params`, `memory_not_found`, `validation_error`).
+- **Zero-Drift Python & TypeScript SDKs (`v0.7.0`, `G-2`, `G-4`, `G-5`)** — Aligned all Python and TypeScript SDK resource methods with the MCP server tool registry, routed `resources/*` calls over JSON-RPC (`_rpc_call` / `rpcCall`), ratcheted `docs/quality/sdk-contract-drift-baseline.json` from 161 entries down to `0` (`known_drift: []`), and added TypeScript `isError: true` structured `EngramError(message, code, details)` plus `timeout`/`connection_error` parity.
+- **Server Lifecycle Hooks & Cloud Sync Worker (`#237`, `C6`)** — Wired `SessionStartHandler`, `PostToolUseHandler`, and `SyncWorker::start_background` into `engram-server` startup and shutdown lifecycle.
+
 ### Changed
 
+- **Workspace-scoped `media_assets` schema migration `v49` (`#235`)** — Rebuilt `media_assets` with composite `PRIMARY KEY (workspace, file_hash)` and `idx_media_assets_workspace_memory` so identical media bytes ingested in different workspaces remain strictly isolated.
+- **Bounded multimodal media reads (`#236`)** — Enforced `MAX_MEDIA_FILE_BYTES = 50 MiB` (`open_bounded_media_file` + `Read::take`) before hashing or reading media files in `src/storage/media_ops.rs` and `src/mcp/handlers/multimodal.rs`.
+- **Cloud sync supply chain & atomic snapshot upload (`#239`, `#240`, `G1`)** — Upgraded `aws-sdk-s3` (`1.129.0`), `aws-config` (`1.8.15`), and `rustls` (`0.23.46`), removing `RUSTSEC-2026-0253`, `RUSTSEC-2026-0346`, and `RUSTSEC-2026-0349` from the default/cloud dependency graph; isolated `CloudStorage::upload` snapshots into unique sibling tempfiles (`Invariante #27`).
+- **SQLite read-path & entity extraction performance (`P1`, `G1`)** — Sampled `sqlite3_total_changes64` around `Storage::with_connection` to skip redundant `-wal`/`-shm` `lstat` syscalls when no writes occurred (`memory_get/by_id` `15.18 µs`), added concurrent `with_read_connection` Criterion benchmarks (`readers_readonly_8` `2.94 ms`, 226× faster than write-serialized `readers_8`), and optimized `EntityExtractor` (`entity_extractor_new` `1.82 ns`, `extract_mixed` `4.50 µs`, 4.75× faster).
 - **WAL replay/recovery hardening (C2)** — Replay validates every frame before touching the target: a 64 GiB byte budget (`ReplayLimits`, injectable via the new `*_with_limits` variants), page caps, the SQLite WAL checksum chain, salts and ordering. Recovery stages to an owner-only (0600) file beside the target and replaces the target atomically only after fsync and `integrity_check`. Rust API: new public fields `WalDelta::chain_seed` and `WalDeltaPack::chain` (both `#[serde(default)]`) and a new `WalReplicationError::ReplayBudgetExceeded` variant. Struct literals and exhaustive matches need updating. **Fail-closed:** delta packs created before this change have no chain context and are refused at replay. Uncompressed packs are now subject to the 64 MiB per-pack decode cap.
 - **Storage concurrency (C2)** — Each migration step runs in its own `BEGIN IMMEDIATE` transaction with a version recheck, so concurrent opens no longer double-apply steps and a failed step is rolled back. `Storage::with_transaction` now uses IMMEDIATE transactions, so a writer waits up to `busy_timeout` instead of failing with "database is locked". A database whose schema version is newer than this build's `SCHEMA_VERSION` is still refused without changes (now pinned by a regression test).
 - **Workspace authorization for restricted principals (C1)** — Restricted principals (anonymous loopback HTTP/gRPC and namespaced tokens) are refused, with `permission_denied` and `details.reason = "tool_not_workspace_scoped"`, on the 65 by-ID tools that take no `workspace` parameter (for example `memory_related`, `memory_traverse`, `graph_query`, `memory_get_full`), which previously ran unscoped. Tool-catalog metadata tools such as `discover_tools` stay allowed. stdio and keyed HTTP clients are unaffected. Memory IDs are authorized against the persisted row's workspace.
@@ -21,7 +34,7 @@ package registries, and dated external sources.
 - **Bounded time inputs (C3, Q2F)** — `session_index.ttl_days` must be within `0..=36500` (negative values used to fall back to 24 h and now return an error). Second- and day-based TTL, age and lookback inputs (`context_record_artifact` `ttl_seconds`/`stale_after_seconds`, `memory_boost` `duration_seconds`, `memory_archive_old` `max_age_days`, `memory_get_working_memory` `since_minutes`, `memory_set_expiration`) are bounded to about 100 years and rejected with an error instead of panicking. A natural-language lookback out of range applies no date filter and sets `ignored_date_filter`.
 - **Byte-bounded truncation (C3)** — Text truncation is char-boundary safe and bounded in bytes: session chunk truncation (`truncate_with_marker`) now guarantees `len() <= max_chars` in bytes, so multibyte text keeps fewer characters than before.
 - **`replication_recover` on a live database (G1)** — When the source is the active database, recovery restores the latest state only (from a `VACUUM INTO` snapshot); frame- or time-based point-in-time recovery from the live database is refused. Copy the database first if PITR is needed.
-- **`memory_ingest_media` retry dedup (C6)** — Re-ingesting the same file bytes in the same (normalized) workspace returns the existing live memory with `deduplicated: true` and ignores the retry's content, tags and importance; deleted memories are not revived. Known limitation: `media_assets` is keyed by file hash across workspaces, so the same bytes ingested in another workspace re-point the shared asset row.
+- **`memory_ingest_media` retry dedup (C6)** — Re-ingesting the same file bytes in the same (normalized) workspace returns the existing live memory with `deduplicated: true` and ignores the retry's content, tags and importance; deleted memories are not revived. With schema `v49` (`#235`), `media_assets` is scoped by `(workspace, file_hash)`.
 - **`defer_embedding = true` enqueues (C7)** — Every producer (MCP `memory_create`, CLI create and interactive create, snapshot load, dream promotion) now enqueues a background embedding job; previously such memories were never embedded while health reported Healthy. With `false`, the memory is embedded right after commit and no stale pending job is left behind. `rebuild_derived_indexes` repairs memories flagged as pending without a job row.
 - **Storage errors are surfaced (Q2F)** — `delete_crossref` returns statement errors instead of `Ok`, and `list_memories` / `memory_list` fail with an error naming the undecodable row id (`undecodable memory row (id N)`) instead of silently omitting it.
 - **`engram-cli mcp install` (Q2F, final fixes)** — Refuses to overwrite a client config that is not a strict-JSON object (or whose `mcpServers` is not an object) unless `--force` is given, keeps every backup under a unique name (an identical backup is reused), writes atomically (temp file + rename), and exits non-zero if any target fails. The temp file and backups carry the config's permission bits (0600 for a new config), and a symlinked config is written through to its target so the link survives.
@@ -32,8 +45,12 @@ package registries, and dated external sources.
 
 ### Fixed
 
+- **PDF worker coverage profile under `RLIMIT_FSIZE = 0`** — Integration tests now spawn `engram-pdf-worker` with `LLVM_PROFILE_FILE=/dev/null` so coverage-instrumented builds do not fail with `SIGXFSZ` on exit.
+- **macOS `SQLITE_READONLY` (`1544`) `-shm` race retry (`#238`)** — `Storage::with_connection` and `Storage::with_read_connection` now retry transient `SQLITE_READONLY` (`1544`) errors when concurrent readers open `-shm` in WAL mode on macOS.
 - **SQLite artifact permission hardening dropped POSIX locks (G1)** — Restricting permissions on the database, WAL and SHM files used open/close on the live files, which drops the process's POSIX locks and could lose WAL frames. Permissions are now set by path (`fchmodat` without following symlinks), and caller-controlled paths that resolve to the active database are refused.
 - **Unicode and hex panics (C3)** — Search compaction, context grouping, gardening, compression budget checks and attestation hex parsing no longer panic on multibyte text or short hex input.
+
+---
 
 ## [0.23.0] - 2026-08-19
 
@@ -984,6 +1001,8 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 
 ## Version History
 
+- **0.24.0** - Comprehensive improvement program (Waves 0–6): WAL/SQLite hardening, workspace authorization, zero-drift Python & TypeScript SDKs (0.7.0), RFCs 0009–0011, and read-path/entity extraction performance
+- **0.23.0** - Dream Phase memory consolidation (RFC 0007), actionable retrieval digest (RFC 0008), MCP resource subscriptions, SSE streaming, and WebAssembly engine
 - **0.22.0** - SDK/client consistency cleanup, release hygiene hardening, and
   docs consistency updates
 - **0.21.2** - Release-note source control, release immutability guard, and public claims hygiene
@@ -1002,6 +1021,8 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 - **0.2.0** - Early feature parity milestone
 - **0.1.0** - Initial release with full feature set
 
+[0.24.0]: https://github.com/aiconnai/engram/compare/v0.23.0...v0.24.0
+[0.23.0]: https://github.com/aiconnai/engram/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/aiconnai/engram/compare/v0.21.2...v0.22.0
 [0.21.2]: https://github.com/aiconnai/engram/compare/v0.21.1...v0.21.2
 [0.21.1]: https://github.com/aiconnai/engram/compare/v0.21.0...v0.21.1
