@@ -1163,5 +1163,5 @@ macro_rules! engram_server_only {
 pub(crate) use engram_server_only;
 
 #[cfg(test)]
-#[path = "server_tests.rs"]
+#[path = "server/tests.rs"]
 mod tests;

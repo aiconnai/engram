@@ -95,6 +95,40 @@ feature_gated = true
 default_graph = false
 
 [[exceptions]]
+advisory = "RUSTSEC-2026-0346"
+crate = "rustls"
+versions = ["0.22.4"]
+tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
+dependency_path = [
+  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4",
+  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> tokio-rustls 0.25.0 -> rustls 0.22.4",
+]
+feature = "turso optional feature only (via libsql); the default/cloud/HTTP stack resolves rustls 0.23.46"
+exposure = "Debug implementations for client session values expose TLS secrets in upstream rustls; affected stack is limited to the optional Turso/libSQL client, and Engram does not format client session values with Debug or use custom ClientSessionStore logging."
+owner = "Ronaldo"
+expires = 2026-12-31
+remediation = "No fix reachable by a dependency update: upstream rustls did not backport a 0.22.x release (requires >=0.23.46) and libsql 0.9.30 (latest stable 0.9.x) pins hyper-rustls 0.25 (rustls 0.22.4). Remove when libsql ships on rustls 0.23 (0.10.0-pre.* is pre-release only) or when the turso feature is dropped; then remove the cargo-audit and cargo-deny ignores."
+feature_gated = true
+default_graph = false
+
+[[exceptions]]
+advisory = "RUSTSEC-2026-0349"
+crate = "rustls"
+versions = ["0.22.4"]
+tools = ["cargo-audit:ignore", "cargo-deny:ignore"]
+dependency_path = [
+  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> rustls 0.22.4",
+  "engram-core 0.23.0 -> libsql 0.9.30 -> hyper-rustls 0.25.0 -> tokio-rustls 0.25.0 -> rustls 0.22.4",
+]
+feature = "turso optional feature only (via libsql); the default/cloud/HTTP stack resolves rustls 0.23.46"
+exposure = "Unauthenticated ServerHello key-share prediction can downgrade later connections to classical key exchange; affected stack is limited to the optional Turso/libSQL client, and exploitation requires an active network attacker and server without HelloRetryRequest."
+owner = "Ronaldo"
+expires = 2026-12-31
+remediation = "No fix reachable by a dependency update: upstream rustls did not backport a 0.22.x release (requires >=0.23.46) and libsql 0.9.30 (latest stable 0.9.x) pins hyper-rustls 0.25 (rustls 0.22.4). Remove when libsql ships on rustls 0.23 (0.10.0-pre.* is pre-release only) or when the turso feature is dropped; then remove the cargo-audit and cargo-deny ignores."
+feature_gated = true
+default_graph = false
+
+[[exceptions]]
 advisory = "RUSTSEC-2026-0258"
 crate = "h2"
 versions = ["0.3.27"]

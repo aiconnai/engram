@@ -11,6 +11,7 @@ documentation = "https://docs.rs/engram-core"
 keywords = ["ai", "memory", "mcp", "semantic-search", "sqlite"]
 categories = ["database", "text-processing"]
 readme = "README.md"
+autobins = false
 exclude = [
     ".air/**",
     ".aider.conf.yml",

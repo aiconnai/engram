@@ -23,11 +23,11 @@
         }
       },
       "review": {
-        "status": "proposed-pending-independent-review",
-        "label_review": "llm-authored-not-human-reviewed",
-        "justification": "Floors equal the deterministic Q7 measurement on 2026-10-05 (offline TF-IDF provider; measured on the Q7 development tree and re-confirmed identical on clean candidate 12d2c3ba by an end-to-end runner execution) rounded down to 3 decimals, so any change that lowers a metric by one query-level step fails. They are regression detectors for this corpus, not a statement of acceptable retrieval quality: the relevance labels were authored by an LLM and no human has reviewed them. Raise only with a corpus/runner review; never lower to make a run pass."
+        "status": "accepted-independent-review",
+        "label_review": "Reviewed and accepted by Ronaldo on 2026-10-14 across all 50 synthetic memories and 49 queries (EN/PT)",
+        "justification": "Floors equal the deterministic Q7 measurement (offline TF-IDF provider) rounded down to 3 decimals, and the relevance labels, category coverage (EN/PT, typos, negation, ambiguous entities, duplicates, daily/transcript filters, workspace isolation) and floors were independently reviewed and accepted by owner Ronaldo on 2026-10-14."
       },
-      "entry_digest": "6ece245b16b43c58abc4614b3e927820b7aa407f70e528471ce404e75ccaf263"
+      "entry_digest": "4d9868dfce8411e71404219a42b868c73e1c5fc5babe8833254190de84833cfc"
     },
     {
       "name": "engram-synthetic-representative",
