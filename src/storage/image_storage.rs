@@ -632,11 +632,14 @@ pub fn sync_to_cloud(
             continue;
         }
 
-        // Read the local file
+        // Read the local file (bounded by MAX_IMAGE_STORAGE_FILE_BYTES)
         // Strip "local://" prefix if present
         let local_path = file_path.strip_prefix("local://").unwrap_or(&file_path);
 
-        let file_data = match std::fs::read(local_path) {
+        let file_data = match read_local_media_bounded(
+            std::path::Path::new(local_path),
+            MAX_IMAGE_STORAGE_FILE_BYTES,
+        ) {
             Ok(d) => d,
             Err(e) => {
                 report.assets_failed += 1;
@@ -670,18 +673,60 @@ pub fn sync_to_cloud(
     Ok(report)
 }
 
+/// Maximum size in bytes for a local media file read by image storage / cloud sync (50 MiB).
+const MAX_IMAGE_STORAGE_FILE_BYTES: u64 = 50 * 1024 * 1024;
+
+/// Read a local media file with a strict upper bound on bytes read.
+fn read_local_media_bounded(
+    path: &std::path::Path,
+    max_bytes: u64,
+) -> crate::error::Result<Vec<u8>> {
+    use std::io::Read;
+
+    let file = std::fs::File::open(path).map_err(|e| {
+        crate::error::EngramError::Storage(format!(
+            "Failed to read local media file '{}': {}",
+            path.display(),
+            e
+        ))
+    })?;
+    if let Ok(meta) = file.metadata() {
+        if meta.len() > max_bytes {
+            return Err(crate::error::EngramError::InvalidInput(format!(
+                "Local media file '{}' is {} bytes, exceeding max allowed {} bytes",
+                path.display(),
+                meta.len(),
+                max_bytes
+            )));
+        }
+    }
+    let mut buf = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut buf)
+        .map_err(|e| {
+            crate::error::EngramError::Storage(format!(
+                "Failed to read local media file '{}': {}",
+                path.display(),
+                e
+            ))
+        })?;
+    if buf.len() as u64 > max_bytes {
+        return Err(crate::error::EngramError::InvalidInput(format!(
+            "Local media file '{}' exceeds max allowed {} bytes",
+            path.display(),
+            max_bytes
+        )));
+    }
+    Ok(buf)
+}
+
 /// Download media bytes from a cloud URL.
 ///
 /// Supports `https://` and `s3://` URLs. Returns the raw bytes of the file.
 pub fn download_from_cloud(file_url: &str) -> crate::error::Result<Vec<u8>> {
     if file_url.starts_with("local://") {
         let path = file_url.strip_prefix("local://").unwrap_or(file_url);
-        return std::fs::read(path).map_err(|e| {
-            crate::error::EngramError::Storage(format!(
-                "Failed to read local media file '{}': {}",
-                path, e
-            ))
-        });
+        return read_local_media_bounded(std::path::Path::new(path), MAX_IMAGE_STORAGE_FILE_BYTES);
     }
 
     if file_url.starts_with("https://") || file_url.starts_with("http://") {
@@ -751,7 +796,8 @@ fn upload_bytes_to_s3_blocking(
     })?;
 
     rt.block_on(async {
-        let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+        let sdk_config =
+            aws_config::load_defaults(aws_config::BehaviorVersion::v2026_01_12()).await;
         let client = aws_sdk_s3::Client::new(&sdk_config);
 
         let body = aws_sdk_s3::primitives::ByteStream::from(data.to_vec());
@@ -866,6 +912,22 @@ mod tests {
         assert!(is_cloud_url("r2://my-bucket/file.png"));
         assert!(!is_cloud_url("local:///tmp/file.png"));
         assert!(!is_cloud_url("/tmp/file.png"));
+    }
+
+    #[test]
+    fn test_read_local_media_bounded_rejects_oversized_file() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("oversized.bin");
+        std::fs::write(&file_path, vec![0xABu8; 64]).unwrap();
+
+        let ok = read_local_media_bounded(&file_path, 64).expect("exact limit should succeed");
+        assert_eq!(ok.len(), 64);
+
+        let err = read_local_media_bounded(&file_path, 63).expect_err("over limit should fail");
+        assert!(
+            matches!(err, crate::error::EngramError::InvalidInput(_)),
+            "expected InvalidInput, got: {err:?}"
+        );
     }
 
     #[cfg(feature = "cloud")]

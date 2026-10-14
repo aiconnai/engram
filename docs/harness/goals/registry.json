@@ -5,7 +5,7 @@
     {
       "id": "pr-title-policy-daily",
       "check_id": "pr_title_policy",
-      "owner": "harness-maintainers",
+      "owner": "Ronaldo",
       "schedule": "daily",
       "timeout_seconds": 60,
       "on_failure": "alert_only",

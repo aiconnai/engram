@@ -177,19 +177,3 @@ expires = 2026-12-31
 remediation = "No fix reachable by a dependency update: lopdf 0.45 drops ttf-parser, but pdf-extract 0.12 pins lopdf ^0.42, so cutting it needs a product change (replace/upgrade pdf-extract or the PDF extraction path). Remove this governed warning when the PDF stack no longer depends on ttf-parser."
 feature_gated = true
 default_graph = false
-
-[[exceptions]]
-advisory = "RUSTSEC-2026-0253"
-crate = "lru"
-versions = ["0.16.4"]
-tools = ["cargo-audit:allowed-warning"]
-dependency_path = [
-  "engram-core 0.23.0 -> aws-sdk-s3 1.120.0 -> lru 0.16.4",
-]
-feature = "cloud optional feature only (aws-sdk-s3); not in the default or required CI feature set"
-exposure = "Unsound warning (panic safety in LruCache::pop) inside the AWS SDK S3 endpoint cache of the optional cloud sync/image storage path; Engram never calls lru directly. Informational warning, not a vulnerability; not globally ignored in cargo-audit or cargo-deny."
-owner = "Ronaldo"
-expires = 2026-12-31
-remediation = "Follow-up task: pin aws_config::BehaviorVersion explicitly (src/sync/cloud.rs and src/storage/image_storage.rs call BehaviorVersion::latest()), then bump aws-sdk-s3 and aws-config together (aws-sdk-s3 >= 1.144 resolves lru ^0.18.2) and verify with an S3/R2 bucket canary. Remove this record when Cargo.lock no longer contains lru 0.16.x."
-feature_gated = true
-default_graph = false

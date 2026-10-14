@@ -762,3 +762,9 @@ Escopo: somente O2. O log operacional de O1 (observabilidade) está registrado c
 - **Desvio**: o assunto de `a896883` usa o escopo `grpc`, fora da lista de
   `check-commit-msg.sh` (sem amend por regra; corrigível no squash).
 - **NOT RUN**: re-revisão independente desta onda; CI real no GitHub; `review-gate.sh post`.
+
+## WAVE5 — pós-merge P1/P2/P3 e sincronização (2026-10-14)
+
+- **`661b140`**: `quinn-proto 0.11.18` (5 RustSec advisories), `doctor.sh` GNU Bash 5.3.15 here-string deadlock fix, migração de `once_cell` -> `std::sync::LazyLock` em 7 módulos.
+- **`1ad6586`**: P1a (`CloudStorage::upload` / `SyncWorker` `VACUUM INTO` fechando a última exceção do Invariante #27 em `INVARIANTS.md`) e P1b (migração `v49` delimitando `media_assets` por `(workspace, file_hash)` + 50 MiB `read_media_file_bounded`).
+- **Onda P2/P3**: upgrade de `aws-sdk-s3` + `aws-config` com pin explícito de `BehaviorVersion` removendo `lru 0.16.4` (`RUSTSEC-2026-0253`), leituras limitadas de mídia local em `image_storage.rs`, extração de `multimodal_tests.rs` / `chain_tests.rs` / `connection_tests.rs`, e `docs/harness/goals/registry.json` owner atualizado de `harness-maintainers` para `Ronaldo`.

@@ -53,7 +53,9 @@ impl CloudStorage {
         let key = parts[1].to_string();
 
         // Load AWS config from environment
-        let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
+        let config = aws_config::defaults(BehaviorVersion::v2026_01_12())
+            .load()
+            .await;
         let client = S3Client::new(&config);
 
         let key_provider = if encrypt {

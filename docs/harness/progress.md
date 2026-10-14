@@ -8,8 +8,8 @@
 | Active plan | `docs/harness/progress/2026-10-05-improvement-lane-p.md` |
 | Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md (último review-gate post com marcador). Programa 2026-10-05: revisões SDD independentes + revisão final Opus (Ready with fixes), sem receipt do review-gate post: docs/harness/reviews/2026-10-05-comprehensive-improvement/README.md` |
 | Last sensors | `2026-10-05 — FINALFIX (HEAD bdf4620): full status=pass (mode=full; timestamp 2026-10-05T19:07:34Z, 328s) after make ci exit 0; receipts not committed. Earlier: INT full status=pass (2026-10-05T18:11:26Z). Committed receipt .sensors-last (not refreshed, to avoid telemetry churn): status=pass mode=quick timestamp 2026-09-03T13:11:41Z` |
-| Last commit | `661b140` |
-| Last live-state check | `2026-10-14 — P1 wave (HEAD 661b140): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
+| Last commit | `1ad6586` |
+| Last live-state check | `2026-10-14 — P2/P3 wave (HEAD 1ad6586): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -102,11 +102,9 @@ briefs, reports e revisão final: [`reviews/2026-10-05-comprehensive-improvement
 
 ## Próximos passos (owner)
 
-- **Prazo 2026-11-05**: 3 entradas de `docs/security/supply-chain-pins.toml` expiram; depois disso
-  o job security-gate (dependência do required `Test (ubuntu-latest)`) reprova até resolver os
-  digests online e renovar as entradas.
-- Merge humano: squash ou split autorizado de `35a1592`/`ec3093c`; follow-ups e decisões do owner
-  listados no [registro de revisão](./reviews/2026-10-05-comprehensive-improvement/README.md#owner-decisions-surfaced-not-implemented).
+- `supply-chain-pins.toml` zerado (`unpinned_images = []`, pinados em #241); owner de `goals/registry.json` definido como `Ronaldo`.
+- Follow-ups P1/P2 integrados localmente: `G1 CloudStorage::upload` (Invariante #27 fechado), `v49` unicidade de `media_assets` por workspace, leituras de mídia delimitadas, e upgrade `aws-sdk-s3` com `BehaviorVersion` pin (eliminando `lru 0.16.4`).
+- Merge humano: squash ou split autorizado de `35a1592`/`ec3093c`; follow-ups e decisões do owner listados no [registro de revisão](./reviews/2026-10-05-comprehensive-improvement/README.md#owner-decisions-surfaced-not-implemented).
 
 ## Enforcement do live state
 
