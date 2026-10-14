@@ -9,7 +9,13 @@ use std::time::{Duration, Instant};
 fn worker() -> Command {
     let path = std::env::var_os("CARGO_BIN_EXE_engram-pdf-worker")
         .expect("Cargo must expose the packaged PDF worker to integration tests");
-    Command::new(path)
+    let mut command = Command::new(path);
+    // The worker sets RLIMIT_FSIZE to 0, so a coverage-instrumented build is
+    // killed by SIGXFSZ when it writes its .profraw at exit (exit 153 with an
+    // empty stderr in the CI Coverage job). Its profile can never be written
+    // under that limit anyway; discard it. Ignored by non-instrumented builds.
+    command.env("LLVM_PROFILE_FILE", "/dev/null");
+    command
 }
 
 /// On macOS the worker fails closed at startup because a hard process memory
