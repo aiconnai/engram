@@ -648,6 +648,89 @@ class CriterionBindingTests(RunnerBase):
             self.assertNotEqual(code, 0, value)
 
 
+class CriterionAnchorTests(RunnerBase):
+    def accept_and_anchor(self, status="accepted-independent-review") -> str:
+        doc = json.loads((self.h.repo / "docs/quality/candidate-floors.json").read_text())
+        sha = sha256_file(self.h.repo / CANDIDATE_CORPUS)
+        for entry in doc["corpora"]:
+            if entry["corpus_sha256"] == sha:
+                entry["review"]["status"] = status
+        self.h.reseal_and_commit(doc, "review accepted")
+        anchor = self.h.sha
+        (self.h.repo / "CHANGELOG.md").write_text("candidate change\n")
+        self.h.commit("candidate")
+        return anchor
+
+    def test_strict_ancestor_with_unchanged_budgets_anchors_criterion(self):
+        anchor = self.accept_and_anchor()
+        code, report = self.h.run(anchor=anchor)
+        self.assertEqual(code, 0, report)
+        self.assertTrue(report["criterion"]["anchored"])
+        self.assertEqual(report["criterion"]["anchor_revision"], anchor)
+        self.assertIsNone(report["criterion"]["anchor_reason"])
+
+    def test_strict_ancestor_with_tightened_hot_path_baseline_anchors_criterion(self):
+        anchor = self.accept_and_anchor()
+        budgets = json.loads((self.h.repo / "docs/quality/budgets.json").read_text())
+        budgets["criterion"]["hot_paths"]["entity_extraction/extract_mixed"]["baseline_value"] = 10.0
+        self.h.write_json("docs/quality/budgets.json", budgets)
+        self.h.commit("tighten hot path baseline")
+        units = {"ns": 1e-9, "us": 1e-6, "ms": 1e-3, "s": 1.0}
+        parts = []
+        for name, raw in budgets["criterion"]["hot_paths"].items():
+            seconds = raw["baseline_value"] * units[raw["baseline_unit"]]
+            parts.append(f"{name}\n                        time:   [{seconds} s {seconds} s {seconds} s]\n")
+        crit_file = self.h.criterion(body="\n".join(parts))
+        code, report = self.h.run(anchor=anchor, criterion=crit_file)
+        self.assertEqual(code, 0, report)
+        self.assertTrue(report["criterion"]["anchored"])
+        self.assertEqual(report["criterion"]["anchor_revision"], anchor)
+        self.assertIsNone(report["criterion"]["anchor_reason"])
+
+    def test_relaxed_hot_path_baseline_fails_run(self):
+        anchor = self.accept_and_anchor()
+        budgets = json.loads((self.h.repo / "docs/quality/budgets.json").read_text())
+        budgets["criterion"]["hot_paths"]["entity_extraction/extract_mixed"]["baseline_value"] = 50.0
+        self.h.write_json("docs/quality/budgets.json", budgets)
+        self.h.commit("relax hot path baseline")
+        code, report = self.h.run(anchor=anchor)
+        self.assertEqual(code, 1)
+        self.assertFails(code, report, "criterion baseline relaxed vs anchor")
+
+    def test_removed_hot_path_fails_run(self):
+        anchor = self.accept_and_anchor()
+        budgets = json.loads((self.h.repo / "docs/quality/budgets.json").read_text())
+        del budgets["criterion"]["hot_paths"]["entity_extraction/extract_mixed"]
+        self.h.write_json("docs/quality/budgets.json", budgets)
+        self.h.commit("remove hot path")
+        code, report = self.h.run(anchor=anchor)
+        self.assertEqual(code, 1)
+        self.assertFails(code, report, "removed vs anchor")
+
+    def test_no_supervisor_anchor_means_criterion_not_anchored(self):
+        code, report = self.h.run()
+        self.assertEqual(code, 0, report)
+        self.assertFalse(report["criterion"]["anchored"])
+        self.assertIn("no supervisor", report["criterion"]["anchor_reason"])
+
+    def test_anchor_equal_to_candidate_commit_means_criterion_not_anchored(self):
+        self.accept_and_anchor()
+        code, report = self.h.run(anchor=self.h.sha)
+        self.assertEqual(code, 0, report)
+        self.assertFalse(report["criterion"]["anchored"])
+        self.assertIn("own commit", report["criterion"]["anchor_reason"])
+
+    def test_relaxed_criterion_ceiling_vs_anchor_fails_run(self):
+        anchor = self.accept_and_anchor()
+        budgets = json.loads((self.h.repo / "docs/quality/budgets.json").read_text())
+        budgets["criterion"]["maximum_regression_ratio"] = 1.25
+        self.h.write_json("docs/quality/budgets.json", budgets)
+        self.h.commit("relax criterion ceiling")
+        code, report = self.h.run(anchor=anchor)
+        self.assertEqual(code, 1)
+        self.assertFails(code, report, "criterion ceiling relaxed vs anchor")
+
+
 class SupervisorAndTrustTests(RunnerBase):
     def env_with(self, **extra):
         env = dict(self.h.environ)

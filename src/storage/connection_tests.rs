@@ -362,3 +362,133 @@ fn assert_sqlite_artifact_modes(db_path: &Path, expected_mode: u32) {
         }
     }
 }
+
+#[test]
+fn test_shm_readonly_sqlite_error_classification_and_retry() {
+    let make_sqlite_err = |code: i32| -> EngramError {
+        EngramError::Database(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(code),
+            Some("simulated sqlite error".to_string()),
+        ))
+    };
+
+    let readonly_err = make_sqlite_err(rusqlite::ffi::SQLITE_READONLY);
+    let cantopen_err = make_sqlite_err(rusqlite::ffi::SQLITE_CANTOPEN);
+    let busy_err = make_sqlite_err(rusqlite::ffi::SQLITE_BUSY);
+    let locked_err = make_sqlite_err(rusqlite::ffi::SQLITE_LOCKED);
+
+    assert!(is_readonly_sqlite_error(&readonly_err));
+    assert!(!is_readonly_sqlite_error(&cantopen_err));
+    assert!(!is_readonly_sqlite_error(&busy_err));
+    assert!(!is_readonly_sqlite_error(&locked_err));
+
+    assert!(is_retryable_shm_open_error(&readonly_err));
+    assert!(is_retryable_shm_open_error(&cantopen_err));
+    assert!(!is_retryable_shm_open_error(&busy_err));
+    assert!(!is_retryable_shm_open_error(&locked_err));
+
+    let db_path = Path::new("/tmp/engram_shm_retry_unit.db");
+
+    // Transient SQLITE_READONLY on initial attempts recovers via drop+reopen retry.
+    let mut attempts = 0usize;
+    let recovered = open_with_shm_readonly_retry(db_path, |attempt| {
+        attempts += 1;
+        if attempt < 2 {
+            Err(make_sqlite_err(rusqlite::ffi::SQLITE_READONLY))
+        } else {
+            Ok("writable-connection")
+        }
+    })
+    .expect("transient SQLITE_READONLY should recover within retry budget");
+    assert_eq!(recovered, "writable-connection");
+    assert_eq!(attempts, 3);
+
+    // SQLITE_BUSY is NOT retried by the -shm read-only retry loop.
+    let mut busy_attempts = 0usize;
+    let err = open_with_shm_readonly_retry::<(), _>(db_path, |_| {
+        busy_attempts += 1;
+        Err(make_sqlite_err(rusqlite::ffi::SQLITE_BUSY))
+    })
+    .unwrap_err();
+    assert_eq!(busy_attempts, 1);
+    assert!(matches!(err, EngramError::Database(_)));
+
+    // Persistent SQLITE_READONLY exhausts MAX_SHM_READONLY_OPEN_RETRIES and fails loudly.
+    let mut exhausted_attempts = 0usize;
+    let err = open_with_shm_readonly_retry::<(), _>(db_path, |_| {
+        exhausted_attempts += 1;
+        Err(make_sqlite_err(rusqlite::ffi::SQLITE_READONLY))
+    })
+    .unwrap_err();
+    assert_eq!(exhausted_attempts, MAX_SHM_READONLY_OPEN_RETRIES + 1);
+    assert!(
+        err.to_string()
+            .contains("SQLite WAL shared-memory (-shm) state is read-only"),
+        "unexpected error message: {err}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_concurrent_wal_open_write_close_churn() {
+    const THREADS: usize = 6;
+    const ITERS_PER_THREAD: usize = 60;
+
+    let temp = tempfile::tempdir().unwrap();
+    let db_path = temp.path().join("wal_churn.db");
+
+    // Seed schema and close so the initial -wal/-shm are unlinked before churn begins.
+    {
+        let storage = Storage::open(file_config(&db_path)).unwrap();
+        storage
+            .with_connection(|conn| {
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS wal_churn_probe (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        thread_id INTEGER NOT NULL,
+                        iter INTEGER NOT NULL
+                    );",
+                )?;
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(THREADS));
+    let mut handles = Vec::with_capacity(THREADS);
+
+    for thread_id in 0..THREADS {
+        let barrier = barrier.clone();
+        let db_path = db_path.clone();
+        handles.push(std::thread::spawn(move || {
+            barrier.wait();
+            for iter in 0..ITERS_PER_THREAD {
+                let storage = Storage::open(file_config(&db_path)).unwrap_or_else(|err| {
+                    panic!("thread {thread_id} iter {iter}: Storage::open failed: {err}")
+                });
+                storage
+                    .with_transaction(|conn| {
+                        conn.execute(
+                            "INSERT INTO wal_churn_probe (thread_id, iter) VALUES (?1, ?2)",
+                            rusqlite::params![thread_id as i64, iter as i64],
+                        )?;
+                        Ok(())
+                    })
+                    .unwrap_or_else(|err| {
+                        panic!("thread {thread_id} iter {iter}: write transaction failed: {err}")
+                    });
+                drop(storage);
+            }
+        }));
+    }
+
+    for handle in handles {
+        handle.join().expect("churn worker thread panicked");
+    }
+
+    let final_storage = Storage::open(file_config(&db_path)).unwrap();
+    let total_rows: i64 = final_storage
+        .with_connection(|conn| Ok(conn.query_scalar_0("SELECT COUNT(*) FROM wal_churn_probe")?))
+        .unwrap();
+    assert_eq!(total_rows, (THREADS * ITERS_PER_THREAD) as i64);
+}

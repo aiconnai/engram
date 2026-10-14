@@ -348,12 +348,24 @@ def evaluate(
             "supervisor": supervisor,
         },
     )
+    crit_anchor = crit.assess_budgets_anchor(
+        repo,
+        trusted,
+        BUDGETS_SCRIPT,
+        candidate["sha"],
+        budgets,
+        BUDGETS_PATH,
+        args.floors_anchor,
+    )
     hot_paths = crit.compare_hot_paths(trusted, BUDGETS_SCRIPT, body, budgets)
     historical = repo / HISTORICAL_CRITERION_PATH
     report["criterion"] = {
         "file_sha256": sha256_bytes(criterion_text.encode("utf-8")),
         "body_sha256": meta["body_sha256"],
         "marker": {k: meta[k] for k in crit.REQUIRED_KEYS if k != "body_sha256"},
+        "anchored": crit_anchor["anchored"],
+        "anchor_revision": crit_anchor["anchor_revision"],
+        "anchor_reason": crit_anchor["reason"],
         "ceiling": CRITERION_CEILING,
         "hot_paths": hot_paths,
         "historical_context": {

@@ -307,9 +307,9 @@ Windows is unchanged: filesystem databases already fail closed on non-Unix platf
 
 1. An implementation plan for Option E (or a recorded "warn-only" decision).
 2. If B is ever chosen: an implementation plan that meets the preconditions in 8.3.
-3. **Potential production availability bug (owner Ronaldo):** can stock Engram on macOS
-   hit F7's `-shm` read-only fallback when several processes start at once? If it does,
-   every connection of the process gets `SQLITE_READONLY` until all of them close.
+3. **Potential production availability bug (owner Ronaldo, resolved in #238):** can stock
+   Engram on macOS hit F7's `-shm` read-only fallback when several processes start at once?
+   If it does, every connection of the process gets `SQLITE_READONLY` until all of them close.
    - **Repro recipe:** in the spike, run `RUNS=200 TMPDIR=... ./soak.sh`. Mode `stock` runs
      `tests/stress_control.rs`, the same workload on the stock VFS: 4 threads × 150 inserts
      plus 2 `peer` processes × 40 inserts, each peer opening and closing per insert, so a
@@ -317,6 +317,12 @@ Windows is unchanged: filesystem databases already fail closed on non-Unix platf
    - **What to look for:** with `C4_TRACE=1`, a line `stock_open -shm ... rdonly=0 -> -1 No
      such file or directory` followed by `stock_open -shm ... rdonly=1 -> <fd>`, and then
      test failures with `SQLITE_READONLY`.
-   - **Current status:** 0 of 140 retained stock runs show it. The shim reproduces it at
-     12/50 without the retry. A fix would be the same bounded retry, which is only possible
-     with a shim, or a startup ordering that keeps one connection open.
+   - **Resolution (`src/storage/connection.rs`):** `Storage::create_connection` now forces
+     `-shm` mapping during connection open via an immediate `BEGIN IMMEDIATE; ROLLBACK;`
+     probe while holding `DATABASE_OPEN_LOCK`, and performs up to 8 bounded drop+reopen
+     retries (`MAX_SHM_READONLY_OPEN_RETRIES = 8` via `open_with_shm_readonly_retry`) if
+     `ErrorCode::ReadOnly` (or `ErrorCode::CannotOpen`) occurs during concurrent `-shm`
+     unlink. Dropping the freshly opened `rusqlite::Connection` before any second in-process
+     connection can share the inode releases SQLite's read-only `unixShmNode` cleanly while
+     preserving Invariant #27. Covered by `test_shm_readonly_sqlite_error_classification_and_retry`
+     and `test_concurrent_wal_open_write_close_churn` in `src/storage/connection_tests.rs`.

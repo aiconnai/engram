@@ -13,9 +13,7 @@ use std::time::{Duration, Instant};
 
 use super::db::DbConnectionExt;
 use super::migrations::run_migrations;
-#[cfg(unix)]
-use crate::error::EngramError;
-use crate::error::Result;
+use crate::error::{EngramError, Result};
 use crate::types::{CompactOp, CompactReport, StorageConfig, StorageMode};
 
 /// Upper bound for retrying a journal-mode switch that reports SQLITE_BUSY.
@@ -23,6 +21,75 @@ const JOURNAL_MODE_RETRY_BUDGET: Duration = Duration::from_secs(30);
 
 /// Longest pause between journal-mode switch attempts.
 const JOURNAL_MODE_MAX_BACKOFF: Duration = Duration::from_millis(100);
+
+/// Maximum number of connection drop-and-reopen retries when concurrent `-shm`
+/// unlinking by a peer process triggers SQLite's read-only shared-memory
+/// fallback (`SQLITE_READONLY` / `SQLITE_CANTOPEN`) on connection open.
+const MAX_SHM_READONLY_OPEN_RETRIES: usize = 8;
+
+/// Brief pause between `-shm` read-only reopen attempts.
+const SHM_READONLY_RETRY_BACKOFF: Duration = Duration::from_millis(2);
+
+/// Returns `true` when `err` is a SQLite `SQLITE_READONLY` failure (including
+/// extended codes such as `SQLITE_READONLY_CANTINIT` / `SQLITE_READONLY_RECOVERY`
+/// which map to `ErrorCode::ReadOnly`).
+fn is_readonly_sqlite_error(err: &EngramError) -> bool {
+    matches!(
+        err,
+        EngramError::Database(rusqlite::Error::SqliteFailure(ffi_err, _))
+            if ffi_err.code == rusqlite::ErrorCode::ReadOnly
+    )
+}
+
+/// Returns `true` when `err` is retryable during initial WAL `-shm` setup
+/// (`ErrorCode::ReadOnly` or `ErrorCode::CannotOpen` caused by a concurrent
+/// last-closer unlinking `-shm` / `-wal`).
+fn is_retryable_shm_open_error(err: &EngramError) -> bool {
+    is_readonly_sqlite_error(err)
+        || matches!(
+            err,
+            EngramError::Database(rusqlite::Error::SqliteFailure(ffi_err, _))
+                if ffi_err.code == rusqlite::ErrorCode::CannotOpen
+        )
+}
+
+/// Run `open_attempt`, retrying up to `MAX_SHM_READONLY_OPEN_RETRIES` times if
+/// SQLite reports `ErrorCode::ReadOnly` or `ErrorCode::CannotOpen` while
+/// initializing WAL shared memory. Each failed attempt drops its `Connection`
+/// before returning `Err`, releasing any process-wide read-only `unixShmNode`
+/// when no other connection holds the inode.
+fn open_with_shm_readonly_retry<T, F>(db_path: &Path, mut open_attempt: F) -> Result<T>
+where
+    F: FnMut(usize) -> Result<T>,
+{
+    let mut attempt = 0;
+    loop {
+        match open_attempt(attempt) {
+            Ok(value) => return Ok(value),
+            Err(err)
+                if is_retryable_shm_open_error(&err) && attempt < MAX_SHM_READONLY_OPEN_RETRIES =>
+            {
+                attempt += 1;
+                tracing::debug!(
+                    path = %crate::observability::redact::path_label(db_path),
+                    attempt,
+                    max_retries = MAX_SHM_READONLY_OPEN_RETRIES,
+                    error = %err,
+                    "SQLite connection open hit transient read-only/cantopen state; dropping connection and retrying"
+                );
+                std::thread::sleep(SHM_READONLY_RETRY_BACKOFF);
+            }
+            Err(err) if is_readonly_sqlite_error(&err) => {
+                return Err(EngramError::Storage(format!(
+                    "SQLite WAL shared-memory (-shm) state is read-only for '{}' after {} retries: {err}",
+                    db_path.display(),
+                    MAX_SHM_READONLY_OPEN_RETRIES
+                )));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
 
 /// Set `PRAGMA journal_mode`, retrying on SQLITE_BUSY/LOCKED within a bound.
 ///
@@ -107,24 +174,45 @@ impl Storage {
         let flags = flags | OpenFlags::SQLITE_OPEN_NOFOLLOW;
 
         let conn = if config.db_path == ":memory:" {
-            Connection::open_in_memory()?
+            let conn = Connection::open_in_memory()?;
+            Self::configure_pragmas(&conn, config.storage_mode)?;
+            conn
         } else {
             ensure_filesystem_database_supported()?;
             // Serialize file preparation and SQLite's open within the process
             // so no connection opens a brand-new database file while
-            // `prepare_database_file` still holds its creation descriptor (G1).
+            // `prepare_database_file` still holds its creation descriptor (G1),
+            // and so a macOS `-shm` read-only fallback retry can drop the
+            // connection and release `unixShmNode` before another in-process
+            // thread pins it.
             let _open_guard = DATABASE_OPEN_LOCK.lock();
             let db_path = Path::new(&config.db_path);
             prepare_database_path(db_path)?;
-            #[cfg(unix)]
-            prepare_database_file(db_path)?;
-            #[cfg(unix)]
-            let db_path = database_open_path(db_path)?;
-            Connection::open_with_flags(db_path, flags)?
+            open_with_shm_readonly_retry(db_path, |_attempt| {
+                #[cfg(unix)]
+                prepare_database_file(db_path)?;
+                #[cfg(unix)]
+                let open_path = database_open_path(db_path)?;
+                #[cfg(not(unix))]
+                let open_path = db_path;
+                let conn = Connection::open_with_flags(open_path, flags)?;
+                // Configure based on storage mode (RML-874, RML-900)
+                Self::configure_pragmas(&conn, config.storage_mode)?;
+                if config.storage_mode == StorageMode::Local {
+                    // Force SQLite to open/map the `-shm` file in read-write mode
+                    // immediately while holding `DATABASE_OPEN_LOCK`. On macOS, a
+                    // concurrent last-closer unlinking `-shm` can cause
+                    // `unixOpenSharedMemory` (`O_RDWR | O_CREAT`) to fail with
+                    // `ENOENT` and fall back to `O_RDONLY`, poisoning the
+                    // process-wide `unixShmNode`. Probing with an immediate
+                    // write transaction detects `SQLITE_READONLY` now so dropping
+                    // `conn` releases `unixShmNode` before returning the connection.
+                    conn.execute_batch("BEGIN IMMEDIATE; ROLLBACK;")?;
+                }
+                Ok(conn)
+            })?
         };
 
-        // Configure based on storage mode (RML-874, RML-900)
-        Self::configure_pragmas(&conn, config.storage_mode)?;
         Self::reassert_sqlite_artifact_permissions_for_config(config)?;
 
         Ok(conn)

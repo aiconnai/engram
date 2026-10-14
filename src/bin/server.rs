@@ -315,26 +315,22 @@ impl EngramHandler {
     /// Enable lifecycle hooks (Phase L - ENG-78 / issue #11).
     ///
     /// Registers the default `SessionStart` / `PostToolUse` / `Stop` /
-    /// `SessionEnd` handlers. After this is called, every successful
-    /// `tools/call` dispatch will fire `PostToolUse`.
+    /// `SessionEnd` handlers. After this is called, `initialize` drains
+    /// workspace-scoped pending injections via `SessionStart` and every
+    /// successful `tools/call` dispatch fires `PostToolUse`.
     #[cfg(feature = "hooks")]
     fn enable_hooks(&mut self) {
         use engram::hooks::{
-            HookManager, HookResult, LifecycleHook, PostToolUseHandler, SessionEndHandler,
+            HookManager, LifecycleHook, PostToolUseHandler, SessionEndHandler, SessionStartHandler,
             StopHandler,
         };
 
         let mut hm = HookManager::new();
         let storage = self.storage.clone();
 
-        hm.register(LifecycleHook::SessionStart, |_hook, ctx| {
-            tracing::info!(
-                target = "engram::hooks",
-                session_id = ?ctx.session_id,
-                workspace = ?ctx.workspace,
-                "SessionStart"
-            );
-            Ok(HookResult::Continue)
+        let session_start_handler = SessionStartHandler::new(storage.clone());
+        hm.register(LifecycleHook::SessionStart, move |hook, ctx| {
+            session_start_handler.handle(hook, ctx)
         });
 
         let post_tool_use_handler = PostToolUseHandler::new(storage.clone());
@@ -355,18 +351,33 @@ impl EngramHandler {
         tracing::info!("Lifecycle hooks enabled");
     }
 
+    /// Fire a hook and return its results if hooks are enabled; empty vec otherwise.
+    #[cfg(feature = "hooks")]
+    fn trigger_hook_results(
+        &self,
+        hook: engram::hooks::LifecycleHook,
+        ctx: &engram::hooks::HookContext,
+    ) -> Vec<engram::hooks::HookResult> {
+        self.hook_manager
+            .as_ref()
+            .and_then(|hm| {
+                hm.trigger(hook, ctx)
+                    .map_err(|e| {
+                        tracing::warn!(
+                            target = "engram::hooks",
+                            error = %engram::observability::redact::opaque(&e),
+                            "hook dispatch failed"
+                        );
+                    })
+                    .ok()
+            })
+            .unwrap_or_default()
+    }
+
     /// Fire a hook if hooks are enabled; no-op otherwise.
     #[cfg(feature = "hooks")]
     fn trigger_hook(&self, hook: engram::hooks::LifecycleHook, ctx: engram::hooks::HookContext) {
-        if let Some(ref hm) = self.hook_manager {
-            if let Err(e) = hm.trigger(hook, &ctx) {
-                tracing::warn!(
-                    target = "engram::hooks",
-                    error = %engram::observability::redact::opaque(&e),
-                    "hook dispatch failed"
-                );
-            }
-        }
+        let _ = self.trigger_hook_results(hook, &ctx);
     }
 
     /// Build a `HandlerContext` from this handler's shared state and delegate
@@ -406,6 +417,43 @@ impl EngramHandler {
             principal: None,
         }
     }
+}
+
+#[cfg(feature = "hooks")]
+fn resolve_hook_workspace(
+    params: &Value,
+    principal: Option<&engram::auth::TransportPrincipal>,
+) -> String {
+    if let Some(p) = principal {
+        if let Some(ns) = p
+            .auth_context()
+            .namespace
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            return ns.to_string();
+        }
+    }
+    if let Some(ws) = params
+        .get("workspace")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        return ws.to_string();
+    }
+    "default".to_string()
+}
+
+#[cfg(feature = "hooks")]
+fn resolve_hook_session_id(params: &Value) -> Option<String> {
+    params
+        .get("session_id")
+        .or_else(|| params.get("sessionId"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(String::from)
 }
 
 impl McpHandler for EngramHandler {
@@ -462,7 +510,25 @@ impl McpHandler for EngramHandler {
                     }
                 };
 
-                McpResponse::success(request.id, json!(result))
+                #[allow(unused_mut)]
+                let mut resp_json = json!(result);
+                #[cfg(feature = "hooks")]
+                {
+                    let workspace = resolve_hook_workspace(&request.params, principal.as_ref());
+                    let session_id = resolve_hook_session_id(&request.params);
+                    let ctx = engram::hooks::HookContext::new(session_id, Some(workspace));
+                    for hook_res in
+                        self.trigger_hook_results(engram::hooks::LifecycleHook::SessionStart, &ctx)
+                    {
+                        if let engram::hooks::HookResult::Modify(injection) = hook_res {
+                            if let Some(obj) = resp_json.as_object_mut() {
+                                obj.insert("pending_injections".to_string(), injection);
+                            }
+                        }
+                    }
+                }
+
+                McpResponse::success(request.id, resp_json)
             }
             methods::INITIALIZED => {
                 // Notification — MCP spec says no response should be sent.
@@ -501,11 +567,17 @@ impl McpHandler for EngramHandler {
                         )) as Arc<dyn engram::mcp::ProgressReporter>
                     });
 
+                #[cfg(feature = "hooks")]
+                let hook_workspace = resolve_hook_workspace(&arguments, principal.as_ref());
+                #[cfg(feature = "hooks")]
+                let hook_session_id = resolve_hook_session_id(&arguments);
+
                 let result = self.handle_tool_call(name, arguments, progress_reporter, principal);
 
                 #[cfg(feature = "hooks")]
                 {
-                    let mut ctx = engram::hooks::HookContext::new(None, None);
+                    let mut ctx =
+                        engram::hooks::HookContext::new(hook_session_id, Some(hook_workspace));
                     ctx.metadata.insert("tool_name".to_string(), json!(name));
                     ctx.metadata
                         .insert("tool_output".to_string(), result.clone());
@@ -898,6 +970,75 @@ fn main() -> Result<()> {
         );
     }
 
+    // Start background cloud sync worker if configured
+    #[cfg(feature = "cloud")]
+    if let Some(ref cloud_uri) = config.cloud_uri {
+        if config.auto_sync && config.sync_debounce_ms > 0 && config.db_path != ":memory:" {
+            let sync_config = config.clone();
+            let cloud_uri = cloud_uri.clone();
+            std::thread::spawn(move || {
+                let pool = match engram::storage::StoragePool::new(sync_config.clone(), 1) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::error!(
+                            error = %engram::observability::redact::redacted(&e),
+                            "Failed to open storage pool for cloud sync worker"
+                        );
+                        return;
+                    }
+                };
+                let conn = pool.get();
+                let rt = match tokio::runtime::Runtime::new() {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        tracing::error!(
+                            error = %engram::observability::redact::io_class(&e),
+                            "Failed to create cloud sync runtime"
+                        );
+                        return;
+                    }
+                };
+                rt.block_on(async move {
+                    let worker = match engram::sync::SyncWorker::start(
+                        std::path::PathBuf::from(&sync_config.db_path),
+                        cloud_uri,
+                        sync_config.encrypt_cloud,
+                        sync_config.sync_debounce_ms,
+                        conn.clone(),
+                    )
+                    .await
+                    {
+                        Ok(w) => w,
+                        Err(e) => {
+                            tracing::error!(
+                                error = %engram::observability::redact::redacted(&e),
+                                "Failed to start cloud sync worker"
+                            );
+                            return;
+                        }
+                    };
+                    let interval =
+                        std::time::Duration::from_millis(sync_config.sync_debounce_ms.max(1000));
+                    tracing::info!(
+                        "Cloud sync worker started (interval: {}ms)",
+                        interval.as_millis()
+                    );
+                    loop {
+                        tokio::time::sleep(interval).await;
+                        if let Err(e) = worker.sync(engram::sync::SyncDirection::Push, false).await
+                        {
+                            tracing::error!(
+                                error = %engram::observability::redact::redacted(&e),
+                                "Cloud sync worker dispatch error"
+                            );
+                            break;
+                        }
+                    }
+                });
+            });
+        }
+    }
+
     let ws_addr = SocketAddr::new(args.ws_bind_address, args.ws_port);
 
     // Start WebSocket server in background if ws_port > 0.
@@ -1012,132 +1153,15 @@ fn main() -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn test_handler() -> EngramHandler {
-        let storage = Storage::open_in_memory().unwrap();
-        let embedder = create_embedder(&EmbeddingConfig::default()).unwrap();
-        let (progress_tx, _progress_rx) = std::sync::mpsc::channel();
-        EngramHandler {
-            storage: storage.clone(),
-            search_cache: Arc::new(engram::search::result_cache::SearchResultCache::new(
-                Default::default(),
-            )),
-            embedder: embedder.clone(),
-            fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
-            search_config: SearchConfig::default(),
-            realtime: None,
-            embedding_cache: Arc::new(engram::embedding::EmbeddingCache::default()),
-            hnsw_index: Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
-                engram::search::HnswConfig::new(
-                    embedder.dimensions(),
-                    engram::search::VectorMetric::Cosine,
-                ),
-            ))),
-            #[cfg(feature = "langfuse")]
-            langfuse_runtime: Arc::new(
-                tokio::runtime::Runtime::new().expect("Failed to create Langfuse runtime"),
-            ),
-            #[cfg(feature = "meilisearch")]
-            meili: None,
-            #[cfg(feature = "meilisearch")]
-            meili_indexer: None,
-            #[cfg(feature = "meilisearch")]
-            meili_sync_interval: 300,
-            #[cfg(feature = "hooks")]
-            hook_manager: None,
-            progress_tx,
-            subscriptions: Arc::new(engram::mcp::ResourceSubscriptionManager::new()),
-        }
-    }
-
-    #[test]
-    fn test_tool_ingest_document_idempotent() {
-        use tempfile::tempdir;
-
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("doc.md");
-        std::fs::write(&file_path, "# Title\n\nHello world.\n").unwrap();
-
-        let handler = test_handler();
-
-        let first = handler.handle_tool_call(
-            "memory_ingest_document",
-            json!({
-                "path": file_path.to_string_lossy(),
-                "format": "md"
-            }),
-            None,
-            None,
-        );
-        assert!(first.get("error").is_none(), "first ingest error: {first}");
-        assert!(
-            first
-                .get("chunks_created")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0)
-                > 0
-        );
-
-        let second = handler.handle_tool_call(
-            "memory_ingest_document",
-            json!({
-                "path": file_path.to_string_lossy(),
-                "format": "md"
-            }),
-            None,
-            None,
-        );
-        assert!(
-            second.get("error").is_none(),
-            "second ingest error: {second}"
-        );
-        assert_eq!(
-            second
-                .get("chunks_created")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(1),
-            0
-        );
-    }
-
-    /// Verifies that `enable_hooks()` populates the manager and that
-    /// `trigger_hook(PostToolUse, …)` succeeds with hooks enabled and is a
-    /// silent no-op when disabled. Indirectly validates the wiring used by
-    /// the `CALL_TOOL` dispatch path.
-    #[cfg(feature = "hooks")]
-    #[test]
-    fn test_hook_wiring() {
-        use engram::hooks::{HookContext, HookResult, LifecycleHook};
-
-        let mut handler = test_handler();
-        assert!(
-            handler.hook_manager.is_none(),
-            "hooks should start disabled"
-        );
-
-        handler.enable_hooks();
-        assert!(
-            handler.hook_manager.is_some(),
-            "enable_hooks should populate the manager"
-        );
-
-        let mut ctx = HookContext::new(Some("test-session".into()), Some("default".into()));
-        ctx.metadata
-            .insert("tool_name".into(), json!("memory_create"));
-        handler.trigger_hook(LifecycleHook::PostToolUse, ctx);
-
-        let stop_context = HookContext::new(Some("test-session".into()), Some("default".into()));
-        let stop_results = handler
-            .hook_manager
-            .as_ref()
-            .expect("hook manager should be enabled")
-            .trigger(LifecycleHook::Stop, &stop_context)
-            .expect("Stop hook should run without error");
-        assert!(
-            matches!(stop_results.as_slice(), [HookResult::Continue]),
-            "Stop hook should be registered and continue, got {stop_results:?}"
-        );
-    }
+macro_rules! engram_server_only {
+    ($($tt:tt)*) => {
+        $($tt)*
+    };
 }
+
+#[cfg(test)]
+pub(crate) use engram_server_only;
+
+#[cfg(test)]
+#[path = "server_tests.rs"]
+mod tests;

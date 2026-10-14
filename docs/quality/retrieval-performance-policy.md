@@ -218,10 +218,10 @@ and `scripts/test_quality_candidate_consume.py`. Promotion of the candidate lane
 a required context needs, first, independent human review of the v2 corpus labels,
 runner and floors (`review.status = accepted-independent-review`, sealed, merged so
 the anchor carries it), a reviewed per-runner-class Criterion baseline, and
-anchoring of the hot-path baselines: `runner.py` still loads
-`docs/quality/budgets.json` from the candidate tree, so a candidate can raise
-its own hot-path baselines until they are read from the trusted anchor the way
-the floors are.
+anchoring of the hot-path baselines: `runner.py` now anchors
+`docs/quality/budgets.json` hot-path baselines against `--floors-anchor`
+(rejecting any removed hot path or raised baseline vs the trusted anchor,
+exactly as floors are anchored).
 
 ### What the runner enforces
 

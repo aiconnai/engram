@@ -16,7 +16,7 @@ import json
 import sys
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from .common import (
     CRITERION_CEILING,
@@ -26,10 +26,12 @@ from .common import (
     SHA_RE,
     CandidateError,
     format_utc,
+    loads_strict,
     parse_utc,
     sha256_bytes,
     utc_now,
 )
+from .gitstate import is_ancestor, show_at
 
 MAGIC = "# engram-criterion-candidate v1"
 SEPARATOR = "# ---"
@@ -173,6 +175,92 @@ def compare_hot_paths(repo: Path, script: str, body: str, budgets: Mapping[str, 
             }
         )
     return report
+
+
+def assess_budgets_anchor(
+    repo: Path,
+    trusted: Path,
+    script: str,
+    candidate_sha: str,
+    budgets: Mapping[str, Any],
+    path: str,
+    anchor: Optional[str],
+) -> Dict[str, Any]:
+    """Verify that hot-path baselines and ceilings are not relaxed relative to a trusted anchor."""
+    result: Dict[str, Any] = {
+        "anchored": False,
+        "anchor_revision": anchor,
+        "reason": None,
+    }
+    if anchor is None:
+        result["reason"] = "no supervisor --floors-anchor supplied"
+        return result
+    if not SHA_RE.fullmatch(anchor):
+        raise CandidateError("--floors-anchor must be a full 40-character lowercase Git SHA")
+    if anchor == candidate_sha:
+        result["reason"] = "anchor is the candidate's own commit"
+        return result
+    if not is_ancestor(repo, anchor, candidate_sha):
+        result["reason"] = "anchor is not an ancestor of the candidate (or is unknown here)"
+        return result
+    try:
+        raw_text = show_at(repo, anchor, path)
+        anchored_budgets = loads_strict(raw_text, "anchored budgets")
+        if not isinstance(anchored_budgets, dict):
+            raise CandidateError("anchored budgets root must be an object")
+        anchored_crit = anchored_budgets.get("criterion")
+        if not isinstance(anchored_crit, dict):
+            raise CandidateError("anchored budgets.criterion must be an object")
+        anchored_ceiling = anchored_crit.get("maximum_regression_ratio")
+        if isinstance(anchored_ceiling, bool) or not isinstance(anchored_ceiling, (int, float)):
+            raise CandidateError("anchored budgets.criterion.maximum_regression_ratio must be a number")
+        anchored_hot_paths = anchored_crit.get("hot_paths")
+        if not isinstance(anchored_hot_paths, dict) or not anchored_hot_paths:
+            raise CandidateError("anchored budgets.criterion.hot_paths must not be empty")
+    except CandidateError as exc:
+        result["reason"] = f"anchor has no valid budgets file: {exc}"
+        return result
+
+    module = _load_budgets_module(trusted, script)
+
+    candidate_crit = budgets.get("criterion")
+    if not isinstance(candidate_crit, dict):
+        raise CandidateError("budgets.criterion: must be an object")
+    candidate_ceiling = candidate_crit.get("maximum_regression_ratio")
+    if isinstance(candidate_ceiling, bool) or not isinstance(candidate_ceiling, (int, float)):
+        raise CandidateError("budgets.criterion.maximum_regression_ratio: must be a number")
+    if float(candidate_ceiling) > float(anchored_ceiling) + 1e-12:
+        raise CandidateError(
+            f"criterion ceiling relaxed vs anchor {anchor[:12]}: "
+            f"{anchored_ceiling} -> {candidate_ceiling}"
+        )
+    candidate_hot_paths = candidate_crit.get("hot_paths")
+    if not isinstance(candidate_hot_paths, dict):
+        raise CandidateError("budgets.criterion.hot_paths: must not be empty")
+
+    for name, raw in anchored_hot_paths.items():
+        if name not in candidate_hot_paths:
+            raise CandidateError(f"criterion hot_path {name} removed vs anchor {anchor[:12]}")
+        try:
+            before_sec = module.parse_budget_timing(raw, f"anchored criterion baseline: {name}")
+        except module.BudgetError as exc:
+            result["reason"] = f"anchor has no valid budgets file: {exc}"
+            return result
+        try:
+            after_sec = module.parse_budget_timing(
+                candidate_hot_paths[name], f"criterion baseline: {name}"
+            )
+        except module.BudgetError as exc:
+            raise CandidateError(str(exc)) from exc
+        if after_sec > before_sec + 1e-12:
+            raise CandidateError(
+                f"criterion baseline relaxed vs anchor {anchor[:12]}: {name} {before_sec}s -> {after_sec}s"
+            )
+
+    result["anchored"] = True
+    result["anchor_revision"] = anchor
+    result["reason"] = None
+    return result
 
 
 def now_stamp() -> str:
