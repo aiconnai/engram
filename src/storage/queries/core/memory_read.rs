@@ -57,3 +57,8 @@ pub fn load_tags(conn: &Connection, memory_id: i64) -> Result<Vec<String>> {
 pub fn get_memory(conn: &Connection, id: i64) -> Result<Memory> {
     get_memory_internal(conn, id, true)
 }
+
+/// Get a memory by ID without mutating `access_count` or `last_accessed_at`.
+pub fn get_memory_readonly(conn: &Connection, id: i64) -> Result<Memory> {
+    get_memory_internal(conn, id, false)
+}

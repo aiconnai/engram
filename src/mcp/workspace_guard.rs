@@ -56,6 +56,8 @@ pub const MEMORY_ID_ARGUMENT_KEYS: &[&str] = &[
 pub const ID_SCOPED_TOOLS: &[&str] = &[
     "memory_get",
     "memory_get_public",
+    "memory_expand",
+    "memory_explain_utility",
     "memory_versions",
     "memory_update",
     "memory_delete",
@@ -153,11 +155,12 @@ pub fn memory_id_arguments(arguments: &Value) -> Vec<i64> {
 }
 
 fn id_value(value: &Value) -> Option<i64> {
-    match value {
+    let raw = match value {
         Value::Number(number) => number.as_i64(),
         Value::String(text) => text.trim().parse().ok(),
         Value::Null | Value::Bool(_) | Value::Array(_) | Value::Object(_) => None,
-    }
+    };
+    raw.filter(|&id| id > 0)
 }
 
 /// Authorize one memory row against the workspace persisted on it.

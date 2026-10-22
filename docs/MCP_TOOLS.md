@@ -51,8 +51,8 @@ Total tools: **301**
 | `search_cache_feedback` | standard | search | always | mutating (no MCP hints) | `positive`, `query` |
 | `search_cache_stats` | advanced | search | always | readOnlyHint | none |
 | `search_cache_clear` | advanced | search | always | destructiveHint | none |
-| `memory_search_by_identity` | standard | memory.search | always | mutating (no MCP hints) | `identity` |
-| `memory_session_search` | standard | memory.search | always | mutating (no MCP hints) | `query` |
+| `memory_search_by_identity` | standard | memory.search | always | readOnlyHint | `identity` |
+| `memory_session_search` | standard | memory.search | always | readOnlyHint | `query` |
 | `meilisearch_search` | advanced | feature.meilisearch | meilisearch | readOnlyHint | `query` |
 | `meilisearch_reindex` | advanced | feature.meilisearch | meilisearch | idempotentHint | none |
 | `meilisearch_status` | advanced | feature.meilisearch | meilisearch | readOnlyHint | none |
@@ -764,7 +764,8 @@ Search memories using hybrid search (keyword + semantic). Automatically selects 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `query` | `string` | yes | Search query |
-| `limit` | `integer` | no | Default: `10`. |
+| `limit` | `integer` | no | Default: `20`. |
+| `offset` | `integer` | no | Number of results to skip Default: `0`. |
 | `min_score` | `number` | no | Default: `0.1`. |
 | `tags` | `array` | no | Items: `string`. |
 | `memory_type` | `string` | no | Filter by memory type (preferred field; alias: type) |
@@ -773,6 +774,7 @@ Search memories using hybrid search (keyword + semantic). Automatically selects 
 | `workspaces` | `array` | no | Filter by multiple workspaces Items: `string`. |
 | `tier` | `string` | no | Filter by memory tier Allowed: `permanent`, `daily`. |
 | `include_transcripts` | `boolean` | no | Include transcript chunk memories (excluded by default) Default: `false`. |
+| `include_archived` | `boolean` | no | Include archived memories in search results (default: false) Default: `false`. |
 | `strategy` | `string` | no | Force specific strategy (auto selects based on query; keyword/semantic are aliases for keyword_only/semantic_only) Allowed: `auto`, `keyword`, `keyword_only`, `semantic`, `semantic_only`, `hybrid`. |
 | `explain` | `boolean` | no | Include match explanations Default: `false`. |
 | `rerank` | `boolean` | no | Apply reranking to improve result quality Default: `true`. |
@@ -873,6 +875,8 @@ Get search suggestions and typo corrections
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `query` | `string` | yes | No description. |
+| `limit` | `integer` | no | Default: `5`. |
+| `workspace` | `string` | no | Filter by workspace (optional) |
 
 ### `memory_find_duplicates`
 
@@ -887,6 +891,7 @@ Find potential duplicate memories
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `threshold` | `number` | no | Default: `0.9`. |
+| `workspace` | `string` | no | Filter by workspace (optional) |
 
 ### `memory_find_semantic_duplicates`
 
@@ -1018,7 +1023,7 @@ Search memories by identity (person, entity, or alias). Finds all mentions of a 
 - Tier: `standard`
 - Group: `memory.search`
 - Required feature: `always`
-- Annotations: mutating (no MCP hints)
+- Annotations: readOnlyHint
 - Required inputs: `identity`
 
 | Input | Type | Required | Summary |
@@ -1034,7 +1039,7 @@ Search within session transcript chunks. Useful for finding content from past co
 - Tier: `standard`
 - Group: `memory.search`
 - Required feature: `always`
-- Annotations: mutating (no MCP hints)
+- Annotations: readOnlyHint
 - Required inputs: `query`
 
 | Input | Type | Required | Summary |
@@ -3676,7 +3681,7 @@ Evict all entries from the semantic search cache. Mutates in-memory cache state.
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| _(none)_ |  | no | No input properties declared. |
+| `workspace` | `string` | no | Only clear cache for this workspace (optional) |
 
 ### `memory_compress_for_context`
 

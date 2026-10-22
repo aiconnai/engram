@@ -20,8 +20,18 @@ pub fn memory_cache_stats(ctx: &HandlerContext, _params: Value) -> Value {
     })
 }
 
-/// Evict all entries from the semantic search cache.
-pub fn memory_cache_clear(ctx: &HandlerContext, _params: Value) -> Value {
+/// Evict entries from the semantic search cache (optionally scoped to a workspace).
+pub fn memory_cache_clear(ctx: &HandlerContext, params: Value) -> Value {
+    if params.get("workspace").is_some_and(|v| !v.is_null()) || ctx.principal.is_some() {
+        let mut res = super::search::search_cache_clear(ctx, params);
+        if let Some(obj) = res.as_object_mut() {
+            if let Some(evicted) = obj.get("evicted").cloned() {
+                obj.insert("success".to_string(), json!(true));
+                obj.insert("entries_cleared".to_string(), evicted);
+            }
+        }
+        return res;
+    }
     let stats_before = ctx.search_cache.stats();
     ctx.search_cache.clear();
     json!({

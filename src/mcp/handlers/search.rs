@@ -49,6 +49,133 @@ fn validate_non_negative_int(
     }
 }
 
+fn validate_threshold(params: &Value, default: f64) -> std::result::Result<f64, Value> {
+    match params.get("threshold") {
+        None | Some(Value::Null) => Ok(default),
+        Some(v) => match v.as_f64() {
+            Some(val) if val.is_finite() && (0.0..=1.0).contains(&val) => Ok(val),
+            _ => Err(
+                ToolError::invalid_params("threshold must be a number between 0.0 and 1.0")
+                    .into_value(),
+            ),
+        },
+    }
+}
+
+/// Extract, normalize, and authorize an optional `workspace` parameter against `ctx.principal`.
+fn extract_optional_workspace(
+    tool_name: &str,
+    params: &Value,
+    ctx: &HandlerContext,
+) -> std::result::Result<Option<String>, Value> {
+    if let Some(p) = ctx.principal.as_ref() {
+        if let Some(denial) =
+            crate::mcp::permission::check_tool_authorization(None, tool_name, params, Some(p))
+        {
+            return Err(denial);
+        }
+    }
+
+    match params.get("workspace") {
+        None | Some(Value::Null) => {
+            if let Some(p) = ctx.principal.as_ref() {
+                if !crate::mcp::permission::allows_all_workspaces(p) {
+                    if let Some(ns) = p.auth_context().namespace.as_deref() {
+                        return Ok(Some(ns.to_string()));
+                    }
+                    return Ok(Some("default".to_string()));
+                }
+            }
+            Ok(None)
+        }
+        Some(Value::String(raw)) => {
+            let normalized = crate::types::normalize_workspace(raw)
+                .map_err(|e| ToolError::invalid_params(e.to_string()).into_value())?;
+            if let Some(p) = ctx.principal.as_ref() {
+                if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+                    tool_name,
+                    p,
+                    Some(&normalized),
+                ) {
+                    return Err(denial);
+                }
+            }
+            Ok(Some(normalized))
+        }
+        Some(_) => Err(ToolError::invalid_params("workspace must be a string").into_value()),
+    }
+}
+
+/// Normalize and enforce workspace bounds on `SearchOptions` against `ctx.principal`.
+fn enforce_search_options_workspace(
+    tool_name: &str,
+    params: &Value,
+    options: &mut SearchOptions,
+    ctx: &HandlerContext,
+) -> std::result::Result<(), Value> {
+    if let Some(ws_val) = params.get("workspace") {
+        if !ws_val.is_null() && !ws_val.is_string() {
+            return Err(ToolError::invalid_params("workspace must be a string").into_value());
+        }
+    }
+    if let Some(wss_val) = params.get("workspaces") {
+        if !wss_val.is_null()
+            && !wss_val
+                .as_array()
+                .is_some_and(|arr| !arr.is_empty() && arr.iter().all(Value::is_string))
+        {
+            return Err(ToolError::invalid_params(
+                "workspaces must be a non-empty array of strings",
+            )
+            .into_value());
+        }
+    }
+
+    if let Some(p) = ctx.principal.as_ref() {
+        if let Some(denial) =
+            crate::mcp::permission::check_tool_authorization(None, tool_name, params, Some(p))
+        {
+            return Err(denial);
+        }
+    }
+
+    if let Some(raw_ws) = options.workspace.take() {
+        let normalized = crate::types::normalize_workspace(&raw_ws)
+            .map_err(|e| ToolError::invalid_params(e.to_string()).into_value())?;
+        options.workspace = Some(normalized);
+    }
+
+    if let Some(raw_list) = options.workspaces.take() {
+        let mut normalized_list = Vec::with_capacity(raw_list.len());
+        for raw_ws in raw_list {
+            let normalized = crate::types::normalize_workspace(&raw_ws)
+                .map_err(|e| ToolError::invalid_params(e.to_string()).into_value())?;
+            normalized_list.push(normalized);
+        }
+        options.workspaces = Some(normalized_list);
+    }
+
+    if let Some(p) = ctx.principal.as_ref() {
+        if !crate::mcp::permission::allows_all_workspaces(p) {
+            options.global = false;
+            if options.workspace.is_none()
+                && options
+                    .workspaces
+                    .as_ref()
+                    .is_none_or(|list| list.is_empty())
+            {
+                if let Some(ns) = p.auth_context().namespace.as_deref() {
+                    options.workspace = Some(ns.to_string());
+                } else {
+                    options.workspace = Some("default".to_string());
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
     use crate::search::result_cache::CacheFilterParams;
 
@@ -74,15 +201,21 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or(false);
 
     // Global search opt-in: when `global` is true, ignore workspace filters.
-    let global = params
+    let global_param = params
         .get("global")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    if global {
+    if global_param {
         options.global = true;
         options.workspace = None;
         options.workspaces = None;
     }
+
+    if let Err(err) = enforce_search_options_workspace("memory_search", &params, &mut options, ctx)
+    {
+        return err;
+    }
+    let global = options.global;
 
     let rerank_enabled = params
         .get("rerank")
@@ -120,6 +253,7 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         workspaces: options.workspaces.clone(),
         scope_path: options.scope_path.clone(),
         filter: options.filter.as_ref().map(|f| f.to_string()),
+        offset: options.offset,
     };
 
     let skip_cache = params
@@ -202,22 +336,26 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         }
     }
 
+    let requested_limit = options.limit.unwrap_or(20).max(0) as usize;
+    let requested_offset = options.offset.unwrap_or(0).max(0) as usize;
+    let mut retrieval_options = options.clone();
+    retrieval_options.limit = Some(requested_limit.saturating_add(requested_offset) as i64);
+    retrieval_options.offset = None;
+
     ctx.storage
         .with_connection(|conn| {
             let mut results = crate::search::hybrid_search_with_hnsw(
                 conn,
                 query,
                 embedding_ref,
-                &options,
+                &retrieval_options,
                 &search_config,
                 Some(&*ctx.hnsw_index.read()),
             )?;
 
-            let mut policy_info_by_memory_id = HashMap::new();
-            if policy_rerank {
-                for result in &mut results {
-                    let hybrid_score = result.score;
-                    let stored_policy = get_policy_record(conn, result.memory.id)?;
+            let compute_policy_info =
+                |memory: &Memory, base_score: f32| -> crate::error::Result<PolicyRerankInfo> {
+                    let stored_policy = get_policy_record(conn, memory.id)?;
                     let (policy_score, source) = if let Some(policy) = stored_policy.as_ref() {
                         (
                             crate::intelligence::memory_policy::PolicyScore {
@@ -231,36 +369,26 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                         )
                     } else {
                         let features = extract_features(PolicyFeatureInput {
-                            memory: &result.memory,
+                            memory,
                             existing_policy: None,
                             event: None,
-                            hybrid_search_score: Some(hybrid_score),
+                            hybrid_search_score: Some(base_score),
                             session_relevance: None,
                         });
                         (score_policy(&features), "heuristic-v1")
                     };
                     let blended_score =
-                        blend_retrieval_priority(hybrid_score, policy_score.retrieval_priority);
+                        blend_retrieval_priority(base_score, policy_score.retrieval_priority);
+                    Ok(PolicyRerankInfo {
+                        score: policy_score.retrieval_priority,
+                        blended_score,
+                        reason: policy_score.policy_reason,
+                        version: policy_score.policy_version,
+                        source,
+                    })
+                };
 
-                    result.score = blended_score;
-                    policy_info_by_memory_id.insert(
-                        result.memory.id,
-                        PolicyRerankInfo {
-                            score: policy_score.retrieval_priority,
-                            blended_score,
-                            reason: policy_score.policy_reason,
-                            version: policy_score.policy_version,
-                            source,
-                        },
-                    );
-                }
-
-                results.sort_by(|a, b| {
-                    b.score
-                        .partial_cmp(&a.score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-            }
+            let mut policy_info_by_memory_id = HashMap::new();
 
             if rerank_enabled && rerank_strategy != RerankStrategy::None {
                 let config = RerankConfig {
@@ -269,7 +397,29 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                     ..Default::default()
                 };
                 let reranker = Reranker::with_config(config);
-                let reranked = reranker.rerank(results, query, Some(conn));
+                let mut reranked = reranker.rerank(results, query, Some(conn));
+
+                if policy_rerank {
+                    for item in &mut reranked {
+                        let info =
+                            compute_policy_info(&item.result.memory, item.rerank_info.final_score)?;
+                        item.rerank_info.final_score = info.blended_score;
+                        item.result.score = info.blended_score;
+                        policy_info_by_memory_id.insert(item.result.memory.id, info);
+                    }
+                    reranked.sort_by(|a, b| {
+                        b.rerank_info
+                            .final_score
+                            .partial_cmp(&a.rerank_info.final_score)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                }
+
+                if requested_offset > 0 {
+                    let skip = requested_offset.min(reranked.len());
+                    reranked.drain(..skip);
+                }
+                reranked.truncate(requested_limit);
 
                 if !skip_cache {
                     let cacheable_results: Vec<SearchResult> = reranked
@@ -332,6 +482,25 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                         .collect::<Vec<_>>()))
                 }
             } else {
+                if policy_rerank {
+                    for result in &mut results {
+                        let info = compute_policy_info(&result.memory, result.score)?;
+                        result.score = info.blended_score;
+                        policy_info_by_memory_id.insert(result.memory.id, info);
+                    }
+                    results.sort_by(|a, b| {
+                        b.score
+                            .partial_cmp(&a.score)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                }
+
+                if requested_offset > 0 {
+                    let skip = requested_offset.min(results.len());
+                    results.drain(..skip);
+                }
+                results.truncate(requested_limit);
+
                 if !skip_cache {
                     ctx.search_cache.put(
                         query,
@@ -341,42 +510,34 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
                     );
                 }
 
-                if global {
-                    // For global search without reranking, add top-level workspace field
-                    Ok(json!(results
-                        .iter()
-                        .map(|r| {
-                            let mut obj = json!({
-                                "memory": r.memory,
-                                "score": r.score,
-                                "match_info": r.match_info,
-                                "workspace": r.memory.workspace
-                            });
-                            if policy_rerank && policy_explain {
-                                if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
-                                    obj["policy"] = policy.to_json();
-                                }
+                let formatted: Vec<Value> = results
+                    .iter()
+                    .map(|r| {
+                        let mut obj = json!({
+                            "memory": r.memory,
+                            "score": r.score,
+                            "match_info": r.match_info
+                        });
+                        if global {
+                            obj["workspace"] = json!(r.memory.workspace);
+                        }
+                        if policy_rerank && policy_explain {
+                            if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
+                                obj["policy"] = policy.to_json();
                             }
-                            obj
-                        })
-                        .collect::<Vec<_>>()))
+                        }
+                        obj
+                    })
+                    .collect();
+
+                if options.explain {
+                    Ok(json!({
+                        "results": formatted,
+                        "reranked": false,
+                        "strategy": "None"
+                    }))
                 } else {
-                    Ok(json!(results
-                        .iter()
-                        .map(|r| {
-                            let mut obj = json!({
-                                "memory": r.memory,
-                                "score": r.score,
-                                "match_info": r.match_info
-                            });
-                            if policy_rerank && policy_explain {
-                                if let Some(policy) = policy_info_by_memory_id.get(&r.memory.id) {
-                                    obj["policy"] = policy.to_json();
-                                }
-                            }
-                            obj
-                        })
-                        .collect::<Vec<_>>()))
+                    Ok(json!(formatted))
                 }
             }
         })
@@ -384,6 +545,12 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn search_suggest(ctx: &HandlerContext, params: Value) -> Value {
+    if let Err(err) = validate_non_negative_int(&params, "limit") {
+        return err;
+    }
+    if let Err(err) = extract_optional_workspace("memory_search_suggest", &params, ctx) {
+        return err;
+    }
     let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
     let fuzzy = ctx.fuzzy_engine.lock();
     let result = fuzzy.correct_query(query);
@@ -393,20 +560,24 @@ pub fn search_suggest(ctx: &HandlerContext, params: Value) -> Value {
 pub fn memory_search_by_identity(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::search_by_identity;
 
+    let limit = match validate_non_negative_int(&params, "limit") {
+        Ok(val) => val.map(|v| v as usize),
+        Err(err) => return err,
+    };
+
     let identity = match params.get("identity").and_then(|v| v.as_str()) {
         Some(i) => i,
         None => return ToolError::missing_argument("identity").into_value(),
     };
 
-    let workspace = params.get("workspace").and_then(|v| v.as_str());
-    let limit = params
-        .get("limit")
-        .and_then(|v| v.as_u64())
-        .map(|v| v as usize);
+    let workspace = match extract_optional_workspace("memory_search_by_identity", &params, ctx) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
 
     ctx.storage
         .with_connection(|conn| {
-            let memories = search_by_identity(conn, identity, workspace, limit)?;
+            let memories = search_by_identity(conn, identity, workspace.as_deref(), limit)?;
             Ok(json!({"memories": memories}))
         })
         .unwrap_or_else(|e| ToolError::from(e).into_value())
@@ -415,37 +586,45 @@ pub fn memory_search_by_identity(ctx: &HandlerContext, params: Value) -> Value {
 pub fn memory_session_search(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::search_sessions;
 
+    let limit = match validate_non_negative_int(&params, "limit") {
+        Ok(val) => val.map(|v| v as usize),
+        Err(err) => return err,
+    };
+
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q,
         None => return ToolError::missing_argument("query").into_value(),
     };
 
     let session_id = params.get("session_id").and_then(|v| v.as_str());
-    let workspace = params.get("workspace").and_then(|v| v.as_str());
-    let limit = params
-        .get("limit")
-        .and_then(|v| v.as_u64())
-        .map(|v| v as usize);
+    let workspace = match extract_optional_workspace("memory_session_search", &params, ctx) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
 
     ctx.storage
         .with_connection(|conn| {
-            let memories = search_sessions(conn, query, session_id, workspace, limit)?;
+            let memories = search_sessions(conn, query, session_id, workspace.as_deref(), limit)?;
             Ok(json!({"memories": memories}))
         })
         .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
 pub fn find_duplicates(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::storage::queries::find_duplicates;
+    use crate::storage::queries::find_duplicates_in_workspace;
 
-    let threshold = params
-        .get("threshold")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.9);
+    let threshold = match validate_threshold(&params, 0.9) {
+        Ok(t) => t,
+        Err(err) => return err,
+    };
+    let workspace = match extract_optional_workspace("memory_find_duplicates", &params, ctx) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
 
     ctx.storage
         .with_connection(|conn| {
-            let duplicates = find_duplicates(conn, threshold)?;
+            let duplicates = find_duplicates_in_workspace(conn, threshold, workspace.as_deref())?;
             Ok(json!({
                 "count": duplicates.len(),
                 "threshold": threshold,
@@ -458,16 +637,24 @@ pub fn find_duplicates(ctx: &HandlerContext, params: Value) -> Value {
 pub fn find_semantic_duplicates(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::find_duplicates_by_embedding;
 
-    let threshold = params
-        .get("threshold")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.92) as f32;
-    let workspace = params.get("workspace").and_then(|v| v.as_str());
-    let limit = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(50) as usize;
+    let limit = match validate_non_negative_int(&params, "limit") {
+        Ok(val) => val.unwrap_or(50) as usize,
+        Err(err) => return err,
+    };
+    let threshold = match validate_threshold(&params, 0.92) {
+        Ok(t) => t as f32,
+        Err(err) => return err,
+    };
+    let workspace =
+        match extract_optional_workspace("memory_find_semantic_duplicates", &params, ctx) {
+            Ok(ws) => ws,
+            Err(err) => return err,
+        };
 
     ctx.storage
         .with_connection(|conn| {
-            let duplicates = find_duplicates_by_embedding(conn, threshold, workspace, limit)?;
+            let duplicates =
+                find_duplicates_by_embedding(conn, threshold, workspace.as_deref(), limit)?;
             Ok(json!({
                 "count": duplicates.len(),
                 "threshold": threshold,
@@ -491,13 +678,14 @@ pub fn search_cache_feedback(ctx: &HandlerContext, params: Value) -> Value {
         None => return ToolError::missing_argument("positive").into_value(),
     };
 
-    let workspace = params
-        .get("workspace")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    let workspace = match extract_optional_workspace("search_cache_feedback", &params, ctx) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
 
     let filters = CacheFilterParams {
         workspace,
+        rerank_strategy: Some("Heuristic".to_string()),
         ..Default::default()
     };
 
@@ -517,9 +705,12 @@ pub fn search_cache_stats(ctx: &HandlerContext, _params: Value) -> Value {
 }
 
 pub fn search_cache_clear(ctx: &HandlerContext, params: Value) -> Value {
-    let workspace = params.get("workspace").and_then(|v| v.as_str());
+    let workspace = match extract_optional_workspace("search_cache_clear", &params, ctx) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
 
-    if let Some(ws) = workspace {
+    if let Some(ws) = workspace.as_deref() {
         ctx.search_cache.invalidate_for_workspace(Some(ws));
         json!({"cleared": true, "scope": "workspace", "workspace": ws})
     } else {
@@ -548,32 +739,35 @@ pub fn memory_explain_search(_ctx: &HandlerContext, params: Value) -> Value {
 
     let explainer = SearchExplainer::new(rrf_k, reranking_active);
 
-    let batch: Vec<_> = results
-        .iter()
-        .filter_map(|r| {
-            let memory_id = r.get("memory_id")?.as_i64()?;
-            let bm25 = r.get("bm25").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            let vector = r.get("vector").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            let fuzzy = r.get("fuzzy").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            let recency = r.get("recency").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            let importance = r.get("importance").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            let rerank = r
-                .get("rerank_score")
-                .and_then(|v| v.as_f64())
-                .map(|v| v as f32);
-            let final_score = r.get("final_score").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            Some((
-                memory_id,
-                bm25,
-                vector,
-                fuzzy,
-                recency,
-                importance,
-                rerank,
-                final_score,
-            ))
-        })
-        .collect();
+    let mut batch = Vec::with_capacity(results.len());
+    for r in results {
+        let Some(memory_id) = r.get("memory_id").and_then(|v| v.as_i64()) else {
+            return ToolError::invalid_params(
+                "Each result entry must contain an integer 'memory_id'",
+            )
+            .into_value();
+        };
+        let bm25 = r.get("bm25").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let vector = r.get("vector").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let fuzzy = r.get("fuzzy").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let recency = r.get("recency").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let importance = r.get("importance").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let rerank = r
+            .get("rerank_score")
+            .and_then(|v| v.as_f64())
+            .map(|v| v as f32);
+        let final_score = r.get("final_score").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        batch.push((
+            memory_id,
+            bm25,
+            vector,
+            fuzzy,
+            recency,
+            importance,
+            rerank,
+            final_score,
+        ));
+    }
 
     let explanations = explainer.explain_batch(batch);
     json!({
@@ -585,17 +779,19 @@ pub fn memory_explain_search(_ctx: &HandlerContext, params: Value) -> Value {
 // ── Relevance Feedback (RML-1243) ───────────────────────────────────────────
 
 pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
+    use crate::error::EngramError;
     use crate::search::feedback::{record_feedback, FeedbackSignal};
     use crate::storage::feedback::FeedbackProcessor;
+    use rusqlite::OptionalExtension;
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q,
         None => return ToolError::missing_argument("query").into_value(),
     };
 
-    let memory_id = match params.get("memory_id").and_then(|v| v.as_i64()) {
-        Some(id) => id,
-        None => return ToolError::missing_argument("memory_id").into_value(),
+    let memory_id = match crate::mcp::handlers::memory_crud::extract_id(&params, "memory_id") {
+        Ok(id) => id,
+        Err(err) => return err,
     };
 
     // Accept both legacy aliases (helpful/not_helpful) and canonical names
@@ -622,13 +818,56 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
         .get("original_score")
         .and_then(|v| v.as_f64())
         .map(|v| v as f32);
-    let workspace = params
-        .get("workspace")
-        .and_then(|v| v.as_str())
-        .unwrap_or("default");
+
+    let explicit_workspace: Option<String> = match params.get("workspace") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(raw)) => {
+            let normalized = match crate::types::normalize_workspace(raw) {
+                Ok(ws) => ws,
+                Err(e) => return ToolError::invalid_params(e.to_string()).into_value(),
+            };
+            if let Some(p) = ctx.principal.as_ref() {
+                if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+                    "memory_feedback",
+                    p,
+                    Some(&normalized),
+                ) {
+                    return denial;
+                }
+            }
+            Some(normalized)
+        }
+        Some(_) => return ToolError::invalid_params("workspace must be a string").into_value(),
+    };
 
     ctx.storage
-        .with_connection(|conn| {
+        .with_transaction(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(
+                conn,
+                ctx.principal.as_ref(),
+                memory_id,
+            )?;
+
+            let persisted_workspace: Option<String> = conn
+                .query_row(
+                    "SELECT workspace FROM memories WHERE id = ?1 AND valid_to IS NULL",
+                    [memory_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+
+            let effective_workspace = match (&persisted_workspace, &explicit_workspace) {
+                (Some(persisted), Some(explicit)) => {
+                    if persisted != explicit {
+                        return Err(EngramError::NotFound(memory_id));
+                    }
+                    persisted.clone()
+                }
+                (Some(persisted), None) => persisted.clone(),
+                (None, Some(explicit)) => explicit.clone(),
+                (None, None) => "default".to_string(),
+            };
+
             // 1. Record the feedback in the search feedback table
             let fb = record_feedback(
                 conn,
@@ -637,7 +876,7 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
                 feedback_signal,
                 rank_position,
                 original_score,
-                workspace,
+                &effective_workspace,
             )?;
 
             // 2. Process feedback through the feedback loop. Attach the
@@ -646,15 +885,16 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
             let consolidator =
                 std::sync::Arc::new(crate::mcp::handlers::auto_consolidate::QueueingConsolidator);
             let processor = FeedbackProcessor::new().with_consolidator(consolidator);
-            let (new_score, scheduled) = processor.process_feedback(memory_id, signal_str, conn)?;
+            let (new_score, scheduled) =
+                processor.process_feedback_with_query(memory_id, signal_str, Some(query), conn)?;
 
             // 3. Spacing-effect stability reinforcement on positive signal
-            if feedback_signal == FeedbackSignal::Useful {
-                let _ = crate::intelligence::stability::record_reinforcement(
+            if feedback_signal == FeedbackSignal::Useful && persisted_workspace.is_some() {
+                crate::intelligence::stability::record_reinforcement(
                     conn,
                     memory_id,
                     chrono::Utc::now(),
-                );
+                )?;
             }
 
             // 4. Return enriched response
@@ -672,11 +912,14 @@ pub fn memory_feedback(ctx: &HandlerContext, params: Value) -> Value {
 pub fn memory_feedback_stats(ctx: &HandlerContext, params: Value) -> Value {
     use crate::search::feedback::feedback_stats;
 
-    let workspace = params.get("workspace").and_then(|v| v.as_str());
+    let workspace = match extract_optional_workspace("memory_feedback_stats", &params, ctx) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
 
     ctx.storage
         .with_connection(|conn| {
-            let stats = feedback_stats(conn, workspace)?;
+            let stats = feedback_stats(conn, workspace.as_deref())?;
             Ok(json!(stats))
         })
         .unwrap_or_else(|e| ToolError::from(e).into_value())
@@ -685,13 +928,18 @@ pub fn memory_feedback_stats(ctx: &HandlerContext, params: Value) -> Value {
 pub fn memory_explain_utility(ctx: &HandlerContext, params: Value) -> Value {
     use crate::search::utility::UtilityTracker;
 
-    let memory_id = match params.get("memory_id").and_then(|v| v.as_i64()) {
-        Some(id) => id,
-        None => return ToolError::missing_argument("memory_id").into_value(),
+    let memory_id = match crate::mcp::handlers::memory_crud::extract_id(&params, "memory_id") {
+        Ok(id) => id,
+        Err(err) => return err,
     };
 
     ctx.storage
         .with_connection(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(
+                conn,
+                ctx.principal.as_ref(),
+                memory_id,
+            )?;
             let tracker = UtilityTracker::new();
             let explanation = tracker.explain_utility(conn, memory_id)?;
             Ok(json!(explanation))
@@ -708,31 +956,48 @@ pub fn memory_explain_utility(ctx: &HandlerContext, params: Value) -> Value {
 ///   - `limit` (u64, optional, default 10)
 ///   - `workspace` (String, optional)
 ///
-/// The `title` field is the first 80 chars of `content`, truncated at the first
-/// newline, with "..." appended if truncated.
+/// The `title` field is the first line of `content` truncated to at most 80 UTF-8
+/// bytes on a character boundary, with `"..."` appended if truncated or if
+/// additional lines follow.
 pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
+    if let Err(err) = validate_non_negative_int(&params, "limit") {
+        return err;
+    }
+    if let Err(err) = validate_non_negative_int(&params, "offset") {
+        return err;
+    }
+
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q,
         None => return ToolError::missing_argument("query").into_value(),
     };
 
-    let mut options: SearchOptions = serde_json::from_value(params.clone()).unwrap_or_default();
+    let mut options: SearchOptions = match serde_json::from_value(params.clone()) {
+        Ok(opts) => opts,
+        Err(e) => return ToolError::invalid_params(e.to_string()).into_value(),
+    };
 
     // Global search opt-in: when `global` is true, ignore workspace filters.
-    let global = params
+    let global_param = params
         .get("global")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    if global {
+    if global_param {
         options.global = true;
         options.workspace = None;
         options.workspaces = None;
     }
 
+    if let Err(err) =
+        enforce_search_options_workspace("memory_search_compact", &params, &mut options, ctx)
+    {
+        return err;
+    }
+    let global = options.global;
+
     // Apply default limit of 10 when not supplied
     if options.limit.is_none() {
-        let limit_from_param = params.get("limit").and_then(|v| v.as_i64());
-        options.limit = Some(limit_from_param.unwrap_or(10));
+        options.limit = Some(10);
     }
 
     let query_embedding = ctx.embedder.embed(query).ok();
@@ -760,14 +1025,16 @@ pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
                 .iter()
                 .map(|r| {
                     let memory = &r.memory;
-                    // Build title: first 80 chars of content, truncated at first newline,
-                    // with "..." appended if the content was longer than the title shown.
+                    // Build title: first line of content, capped at 80 UTF-8 bytes on a
+                    // char boundary, with "..." appended if the first line was truncated
+                    // or if additional lines follow (ignoring a single trailing newline).
                     let first_line = memory.content.lines().next().unwrap_or("");
-                    let has_more_lines = memory.content.contains('\n');
+                    let has_more_lines = memory.content.lines().nth(1).is_some();
                     let title_str = if first_line.len() > 80 {
-                        format!("{}...", crate::text_util::truncate_bytes(first_line, 80))
+                        let truncated = crate::text_util::truncate_bytes(first_line, 80);
+                        format!("{truncated}...")
                     } else if has_more_lines {
-                        format!("{}...", first_line)
+                        format!("{first_line}...")
                     } else {
                         first_line.to_string()
                     };
@@ -800,48 +1067,77 @@ pub fn memory_search_compact(ctx: &HandlerContext, params: Value) -> Value {
 /// - `limit` (integer, optional, default 20, max 100)
 /// - `include_types` (array of strings, optional) — filter by memory type
 pub fn recent_activity(ctx: &HandlerContext, params: Value) -> Value {
-    let workspace = params.get("workspace").and_then(|v| v.as_str());
-    let timeframe = params
-        .get("timeframe")
-        .and_then(|v| v.as_str())
-        .unwrap_or("24h");
-    let limit = params
-        .get("limit")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(20)
-        .min(100) as i64;
-    let include_types: Option<Vec<String>> = params
-        .get("include_types")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        });
-
-    let time_clause = match timeframe {
-        "1h" => "AND created_at > datetime('now', '-1 hours')",
-        "24h" => "AND created_at > datetime('now', '-24 hours')",
-        "7d" => "AND created_at > datetime('now', '-7 days')",
-        "30d" => "AND created_at > datetime('now', '-30 days')",
-        _ => "AND created_at > datetime('now', '-24 hours')",
+    let workspace_owned = match extract_optional_workspace("recent_activity", &params, ctx) {
+        Ok(ws) => ws,
+        Err(err) => return err,
     };
 
-    let workspace_owned = workspace.map(String::from);
+    let timeframe = match params.get("timeframe") {
+        None | Some(Value::Null) => "24h",
+        Some(Value::String(s)) if matches!(s.as_str(), "1h" | "24h" | "7d" | "30d") => s.as_str(),
+        Some(_) => {
+            return ToolError::invalid_params("timeframe must be one of '1h', '24h', '7d', '30d'")
+                .into_value();
+        }
+    };
+
+    let limit = match params.get("limit") {
+        None | Some(Value::Null) => 20_i64,
+        Some(v) => match v.as_i64() {
+            Some(val) if val >= 1 => val.min(100),
+            _ => {
+                return ToolError::invalid_params("limit must be a positive integer").into_value();
+            }
+        },
+    };
+
+    let include_types: Option<Vec<String>> = match params.get("include_types") {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(arr)) => {
+            let mut types = Vec::with_capacity(arr.len());
+            for item in arr {
+                let Some(s) = item.as_str() else {
+                    return ToolError::invalid_params("include_types must be an array of strings")
+                        .into_value();
+                };
+                types.push(s.to_string());
+            }
+            Some(types)
+        }
+        Some(_) => {
+            return ToolError::invalid_params("include_types must be an array of strings")
+                .into_value();
+        }
+    };
+
+    let now = chrono::Utc::now();
+    let duration = match timeframe {
+        "1h" => chrono::Duration::hours(1),
+        "24h" => chrono::Duration::hours(24),
+        "7d" => chrono::Duration::days(7),
+        "30d" => chrono::Duration::days(30),
+        _ => chrono::Duration::hours(24),
+    };
+    let cutoff_rfc3339 = (now - duration).to_rfc3339();
+    let now_rfc3339 = now.to_rfc3339();
     let timeframe_owned = timeframe.to_string();
 
     ctx.storage
         .with_connection(|conn| {
-            let mut sql = format!(
+            let mut sql = String::from(
                 "SELECT m.id, m.content, m.memory_type, m.importance, m.workspace, \
                  m.created_at, m.updated_at, \
                  (SELECT GROUP_CONCAT(t.name, ',') FROM memory_tags mt \
                   JOIN tags t ON mt.tag_id = t.id WHERE mt.memory_id = m.id) AS tags \
-                 FROM memories m WHERE m.valid_to IS NULL {} ",
-                time_clause
+                 FROM memories m \
+                 WHERE m.valid_to IS NULL \
+                   AND COALESCE(m.updated_at, m.created_at) > ?1 \
+                   AND (m.expires_at IS NULL OR m.expires_at > ?2) \
+                   AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'archived') ",
             );
 
-            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> =
+                vec![Box::new(cutoff_rfc3339), Box::new(now_rfc3339)];
 
             if let Some(ref ws) = workspace_owned {
                 sql.push_str(&format!("AND m.workspace = ?{} ", param_values.len() + 1));
@@ -862,7 +1158,11 @@ pub fn recent_activity(ctx: &HandlerContext, params: Value) -> Value {
                     for t in types {
                         param_values.push(Box::new(t.clone()));
                     }
+                } else {
+                    sql.push_str("AND m.memory_type != 'transcript_chunk' ");
                 }
+            } else {
+                sql.push_str("AND m.memory_type != 'transcript_chunk' ");
             }
 
             sql.push_str(&format!(
@@ -889,16 +1189,16 @@ pub fn recent_activity(ctx: &HandlerContext, params: Value) -> Value {
                         "id": row.get::<_, i64>(0)?,
                         "preview": preview,
                         "memory_type": row.get::<_, String>(2)?,
-                        "importance": row.get::<_, f64>(3)?,
-                        "workspace": row.get::<_, String>(4)?,
+                        "importance": row.get::<_, Option<f64>>(3)?.unwrap_or(0.5),
+                        "workspace": row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "default".to_string()),
                         "created_at": row.get::<_, String>(5)?,
-                        "updated_at": row.get::<_, String>(6)?,
+                        "updated_at": row.get::<_, Option<String>>(6)?,
                         "tags": row.get::<_, Option<String>>(7)?
                     }))
                 },
             )?;
 
-            let activities: Vec<Value> = rows.filter_map(|r| r.ok()).collect();
+            let activities: Vec<Value> = rows.collect::<rusqlite::Result<Vec<Value>>>()?;
             let count = activities.len();
 
             Ok(json!({
@@ -920,12 +1220,27 @@ pub fn recent_activity(ctx: &HandlerContext, params: Value) -> Value {
 /// Returns `{memories: [...], found: N, requested: N}`.
 pub fn memory_expand(ctx: &HandlerContext, params: Value) -> Value {
     use crate::error::EngramError;
-    use crate::storage::queries::get_memory;
+    use crate::storage::queries::get_memory_readonly;
 
-    let ids: Vec<i64> = match params.get("ids").and_then(|v| v.as_array()) {
-        Some(arr) => arr.iter().filter_map(|v| v.as_i64()).collect(),
-        None => return ToolError::missing_argument("ids").into_value(),
+    let ids_arr = match params.get("ids") {
+        None | Some(Value::Null) => return ToolError::missing_argument("ids").into_value(),
+        Some(Value::Array(arr)) => arr,
+        Some(_) => {
+            return ToolError::invalid_params("ids must be an array of positive integers")
+                .into_value();
+        }
     };
+
+    let mut ids = Vec::with_capacity(ids_arr.len());
+    for item in ids_arr {
+        match item.as_i64() {
+            Some(id) if id > 0 => ids.push(id),
+            _ => {
+                return ToolError::invalid_params("ids must be an array of positive integers")
+                    .into_value();
+            }
+        }
+    }
 
     let requested = ids.len();
 
@@ -933,7 +1248,17 @@ pub fn memory_expand(ctx: &HandlerContext, params: Value) -> Value {
         .with_connection(|conn| {
             let mut memories: Vec<Value> = Vec::with_capacity(ids.len());
             for id in &ids {
-                match get_memory(conn, *id) {
+                if let Err(e) = crate::mcp::workspace_guard::ensure_memory_access(
+                    conn,
+                    ctx.principal.as_ref(),
+                    *id,
+                ) {
+                    match e {
+                        EngramError::NotFound(_) => continue,
+                        other => return Err(other),
+                    }
+                }
+                match get_memory_readonly(conn, *id) {
                     Ok(memory) => memories.push(json!(memory)),
                     Err(EngramError::NotFound(_)) => {
                         // Skip silently

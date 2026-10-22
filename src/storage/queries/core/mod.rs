@@ -55,7 +55,7 @@ pub use identity::search_by_identity;
 pub use list::list_memories;
 pub use memory_create::create_memory;
 pub use memory_delete::delete_memory;
-pub use memory_read::{get_memory, load_tags};
+pub use memory_read::{get_memory, get_memory_readonly, load_tags};
 pub use memory_update::update_memory;
 pub(crate) use metadata::metadata_value_to_param;
 pub use procedure::{get_episodic_timeline, get_procedural_memories, record_procedure_outcome};
