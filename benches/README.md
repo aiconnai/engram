@@ -1,6 +1,6 @@
 # Benchmarks
 
-Performance benchmarks for Engram's hot paths. All benchmarks use [Criterion.rs](https://bheisler.github.io/criterion.rs/book/) with in-memory SQLite to isolate CPU cost from disk I/O.
+Performance benchmarks for Engram's hot paths. Default [Criterion.rs](https://bheisler.github.io/criterion.rs/book/) benchmarks use in-memory SQLite to isolate CPU cost from disk I/O; explicit disk benchmarks (`storage_modes/disk_*`, `mcp_dispatch_memory_search_uncached/disk_wal`, and `search_index_v2_report`) use file-backed SQLite.
 
 Historical benchmark snapshots live in [`results/`](results/). Ad hoc or
 machine-generated benchmark output should go under `benches/results/generated/`
@@ -73,7 +73,7 @@ local engineering evidence, not hosted SLOs.
 | `memory_create/no_embedding` | < 200 us | 208 us | ~at target |
 | `memory_get/by_id` | < 100 us | 55 us | well under |
 | `hybrid_search` (any variant) | < 10 ms | 40-444 us | well under |
-| `search_scale/10K memories` | < 10 ms | 2.2 ms | well under |
+| `search_scale/hybrid_memories/10000` (`search_scale/10K memories` in v0.19.0) | < 10 ms | 2.2 ms | well under |
 | `entity_extractor_new/default` | < 50 ms | 3.6 us | 740x under |
 | `entity_extraction/extract_mixed` | < 50 ms | 13.5 us | well under |
 
@@ -115,15 +115,19 @@ Captured on Apple Silicon. Median values from 100-sample Criterion runs.
 | `fuzzy_search/1_char_typo` | 21 us |
 | `fuzzy_search/2_char_typo` | 21 us |
 | `fuzzy_search/transposition` | 21 us |
-| `search_scale/100 memories` | 211 us |
-| `search_scale/1K memories` | 516 us |
-| `search_scale/10K memories` | 2.2 ms |
+| `search_scale/hybrid_memories/100` (`search_scale/100 memories` in v0.19.0) | 211 us |
+| `search_scale/hybrid_memories/1000` (`search_scale/1K memories` in v0.19.0) | 516 us |
+| `search_scale/hybrid_memories/10000` (`search_scale/10K memories` in v0.19.0) | 2.2 ms |
 
 ## RFC 0003 Search Index v2 Package
 
 `search.rs` includes an opt-in benchmark package for the RFC 0003 backend
-decision. Default `cargo bench --bench search` remains sized for normal local
-development. Larger corpora are enabled by environment variable:
+decision (`search_scale/hybrid_memories/*`, `search_scale/semantic_only_memories/*`,
+and `search_index_v2_report`). Default `cargo bench --bench search` remains sized for
+normal local development (`ENGRAM_SEARCH_BENCH_EMBEDDING_DIMS` defaults to `64` in
+`search_scale` and `search_index_v2_report`; set `ENGRAM_SEARCH_BENCH_EMBEDDING_DIMS=384`
+to match the 384-d `hybrid_search` baseline). Larger corpora are enabled by environment
+variable:
 
 | Command | Corpus sizes |
 |---------|--------------|

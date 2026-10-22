@@ -16,10 +16,11 @@
 //!   with quality, latency, rebuild time, delete lag, and disk growth.
 //!
 //! ## Performance targets
-//! | Operation                     | Target   |
-//! |-------------------------------|----------|
-//! | `hybrid_search` (any variant) | < 10 ms  |
-//! | `search_scale/10K memories`   | < 10 ms  |
+//! | Operation                                  | Target   |
+//! |--------------------------------------------|----------|
+//! | `hybrid_search` (any variant)              | < 10 ms  |
+//! | `search_scale/hybrid_memories/10000`       | < 10 ms  |
+//! | `search_scale/semantic_only_memories/10000`| < 10 ms  |
 
 use std::env;
 use std::fs;
@@ -197,11 +198,11 @@ fn setup_file_backed_corpus(count: usize, options: BenchCorpusOptions) -> FileBa
         sync_debounce_ms: 5000,
     };
     let storage = Storage::open(config).unwrap();
+    let base_bytes = sqlite_file_bytes(&db_path);
     if options.vec0 {
         validate_sqlite_vec_binding(&storage, options.embedding_dimensions);
         create_bench_vec0_index(&storage, options.embedding_dimensions);
     }
-    let base_bytes = sqlite_file_bytes(&db_path);
 
     load_bench_corpus(
         &storage,
@@ -221,8 +222,16 @@ fn setup_file_backed_corpus(count: usize, options: BenchCorpusOptions) -> FileBa
 }
 
 fn load_bench_corpus(storage: &Storage, count: usize, options: BenchCorpusOptions) {
-    let embedder = TfIdfEmbedder::new(options.embedding_dimensions);
-    let chunk_size = env_usize("ENGRAM_SEARCH_BENCH_LOAD_CHUNK", 5000);
+    if options.filter_noise && count >= BENCH_TOPICS.len() * 2 {
+        for topic in 0..BENCH_TOPICS.len() {
+            assert!(
+                expected_topic_count(count, topic, true) > 0,
+                "report corpus size {count} must keep topic {topic} visible in {REPORT_WORKSPACE}"
+            );
+        }
+    }
+    let embedder = TfIdfEmbedder::new(options.embedding_dimensions.max(1));
+    let chunk_size = env_usize("ENGRAM_SEARCH_BENCH_LOAD_CHUNK", 5000).max(1);
     let mut start = 0;
 
     while start < count {
@@ -293,11 +302,11 @@ fn bench_workspace(i: usize, filter_noise: bool) -> &'static str {
 }
 
 fn bench_is_transcript_noise(i: usize) -> bool {
-    i.is_multiple_of(20)
+    (i % 20) == (i / 20) % BENCH_TOPICS.len()
 }
 
 fn bench_is_archived_noise(i: usize) -> bool {
-    i % 20 == 3
+    (i % 20) == ((i / 20) + 3) % BENCH_TOPICS.len()
 }
 
 fn bench_row_visible_in_report_search(i: usize, filter_noise: bool) -> bool {
@@ -467,6 +476,7 @@ fn report_sizes() -> Vec<usize> {
         let sizes: Vec<usize> = raw
             .split(',')
             .filter_map(|part| part.trim().parse::<usize>().ok())
+            .filter(|size| *size > 0)
             .collect();
         if !sizes.is_empty() {
             return sizes;
@@ -485,7 +495,7 @@ fn report_sizes() -> Vec<usize> {
 }
 
 fn scale_embedding_dimensions() -> usize {
-    env_usize("ENGRAM_SEARCH_BENCH_EMBEDDING_DIMS", 64)
+    env_usize("ENGRAM_SEARCH_BENCH_EMBEDDING_DIMS", 64).max(1)
 }
 
 fn env_usize(name: &str, default: usize) -> usize {
@@ -654,7 +664,7 @@ fn ndcg_at_10(relevance: &[bool], relevant_total: usize) -> f64 {
 }
 
 fn measure_latency(storage: &Storage, dimensions: usize) -> (LatencyMetrics, CompletenessMetrics) {
-    let iterations = env_usize("ENGRAM_SEARCH_BENCH_REPORT_ITERS", 10);
+    let iterations = env_usize("ENGRAM_SEARCH_BENCH_REPORT_ITERS", 10).max(1);
     let vec0_overfetch = env_usize("ENGRAM_SEARCH_BENCH_VEC0_OVERFETCH", 10).max(1);
     let requested = 10usize;
     let embedder = TfIdfEmbedder::new(dimensions);
@@ -770,7 +780,7 @@ fn vec0_ideal_search(
     query_blob: &[u8],
     limit: usize,
 ) -> rusqlite::Result<Vec<(MemoryId, f64)>> {
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare_cached(
         "SELECT rowid, distance FROM bench_vec
          WHERE embedding MATCH ?1 AND k = ?2
          ORDER BY distance",
@@ -788,9 +798,10 @@ fn vec0_postfilter_search(
     overfetch_multiplier: usize,
 ) -> rusqlite::Result<Vec<(MemoryId, f64)>> {
     let fetch_limit = limit.saturating_mul(overfetch_multiplier.max(1));
-    let mut stmt = conn.prepare(
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut stmt = conn.prepare_cached(
         "SELECT v.memory_id, v.distance, m.memory_type, m.lifecycle_state, m.valid_to,
-                (m.expires_at IS NULL OR m.expires_at > datetime('now')) AS expires_visible,
+                (m.expires_at IS NULL OR m.expires_at > ?3) AS expires_visible,
                 m.workspace
          FROM (
              SELECT rowid AS memory_id, distance FROM bench_vec
@@ -800,7 +811,7 @@ fn vec0_postfilter_search(
          JOIN memories AS m ON m.id = v.memory_id
          ORDER BY v.distance",
     )?;
-    let rows = stmt.query_map(params![query_blob, fetch_limit as i64], |row| {
+    let rows = stmt.query_map(params![query_blob, fetch_limit as i64, now], |row| {
         let memory_id: MemoryId = row.get(0)?;
         let distance: f64 = row.get(1)?;
         let memory_type: String = row.get(2)?;
@@ -860,6 +871,9 @@ where
 }
 
 fn percentile_us(samples: &[Duration], percentile: f64) -> u128 {
+    if samples.is_empty() {
+        return 0;
+    }
     let mut sorted = samples.to_vec();
     sorted.sort();
     let index = ((sorted.len().saturating_sub(1)) as f64 * percentile).round() as usize;
@@ -877,16 +891,47 @@ fn percentile_usize(samples: &[usize], percentile: f64) -> usize {
 }
 
 fn measure_delete_visibility_lag(storage: &Storage, offset: usize) -> (u128, usize) {
-    let offset_val = offset as i64;
     let (target_id, query) = storage
         .with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id FROM memories WHERE valid_to IS NULL ORDER BY id LIMIT 1 OFFSET ?1",
+            let visible_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM memories
+                 WHERE valid_to IS NULL
+                   AND workspace = ?1
+                   AND memory_type != 'transcript_chunk'
+                   AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')",
+                params![REPORT_WORKSPACE],
+                |row| row.get(0),
             )?;
-            let target_id: i64 = stmt.query_row([offset_val], |row| row.get(0))?;
+            assert!(
+                visible_count > 0,
+                "measure_delete_visibility_lag requires at least one visible memory in workspace {REPORT_WORKSPACE}"
+            );
+            let effective_offset = (offset as i64).min(visible_count - 1);
+            let mut stmt = conn.prepare(
+                "SELECT id FROM memories
+                 WHERE valid_to IS NULL
+                   AND workspace = ?1
+                   AND memory_type != 'transcript_chunk'
+                   AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')
+                 ORDER BY id
+                 LIMIT 1 OFFSET ?2",
+            )?;
+            let target_id: i64 =
+                stmt.query_row(params![REPORT_WORKSPACE, effective_offset], |row| row.get(0))?;
             Ok((target_id, format!("benchunique{}", target_id - 1)))
         })
         .unwrap();
+
+    let pre_delete_visible = storage
+        .with_connection(|conn| {
+            bm25_search(conn, &query, 10, false)
+                .map(|results| results.iter().any(|result| result.memory.id == target_id))
+        })
+        .unwrap();
+    assert!(
+        pre_delete_visible,
+        "target memory {target_id} ({query}) must be visible in bm25_search before delete_memory"
+    );
 
     storage
         .with_transaction(|conn| delete_memory(conn, target_id))
@@ -923,7 +968,7 @@ fn file_len(path: &Path) -> u64 {
 
 fn format_search_index_v2_report(rows: &[ReportRow]) -> String {
     let embedding_dimensions = scale_embedding_dimensions();
-    let latency_iterations = env_usize("ENGRAM_SEARCH_BENCH_REPORT_ITERS", 10);
+    let latency_iterations = env_usize("ENGRAM_SEARCH_BENCH_REPORT_ITERS", 10).max(1);
     let vec0_overfetch = env_usize("ENGRAM_SEARCH_BENCH_VEC0_OVERFETCH", 10).max(1);
     let mut report = String::from(
         "# Search Index v2 Benchmark Report\n\n\
@@ -1009,7 +1054,7 @@ fn format_search_index_v2_report(rows: &[ReportRow]) -> String {
          - Quality metrics use deterministic TF-IDF embeddings; they validate ranking plumbing and synthetic-topic relevance, but they should not be read as production semantic retrieval quality for OpenAI, ONNX, Cohere, or similar embedding providers.\n\
          - `delete lag` is search-visibility lag for soft deletes; physical derived-index cleanup remains a separate rebuild/maintenance concern.\n\
          - FTS5 delete propagation is deterministic by construction because it is maintained transactionally by SQLite triggers; ANN/HNSW-style indexes must prove this axis separately.\n\
-         - `disk loaded` includes the SQLite database, WAL, and SHM files. Base migrated database size is excluded from the table but was measured as ",
+         - `disk loaded` includes the SQLite database, WAL, SHM, and disposable `bench_vec` (`vec0`) shadow tables. Base migrated database size (prior to `bench_vec` creation) is excluded from the table but was measured as ",
     );
     if let Some(first) = rows.first() {
         report.push_str(&bytes(first.disk_base_bytes));
