@@ -1,0 +1,17 @@
+{
+  "schema_version": "decision-triage-repo-v1",
+  "repository": "aiconnai/engram",
+  "tasks": [
+    "issue-triage",
+    "validation-triage"
+  ],
+  "state_fields": [
+    "observations",
+    "proposed_next_step",
+    "constraints",
+    "evidence_gaps"
+  ],
+  "max_calls": 2,
+  "max_usd": "0.01",
+  "threshold": "0.90"
+}
