@@ -68,6 +68,20 @@ O root e o SHA exato da config estão fixados no allowlist central via `register
 Editar `decision-triage.json` exige novo registro; grants anteriores ficam
 inválidos. **Registrar não autoriza gastos.**
 
+## Rotas de inferência
+
+O grant congela a rota no `authorize` (padrão `systemone`):
+
+| Rota | Endpoint | Chamadas | Credencial | Custo registrado |
+|---|---|---|---|---|
+| `systemone` | OpenRouter `api/v1/systemone` (d1 → Jev condicional) | até 2 | `OPENROUTER_API_KEY` | recibo do provider |
+| `muse` | Meta Model API `api.meta.ai/v1/chat/completions` (`muse-spark-1.3`, Standard mode) | 1 | `MUSE_API_KEY` | calculado por tabela pinada (`cost_basis: computed_standard_price_table`) |
+
+Ambas as chaves são lidas como atribuição literal do mesmo arquivo de credencial
+aprovado, somente durante `execute`. Na rota `muse`, o custo é estimativa por
+tabela — não recibo do provider. Contributor mode (que autoriza a Meta a treinar
+com o conteúdo enviado) **não** é usado.
+
 ## Adicionar outro repo
 
 Na raiz do outro projeto, substitua `OWNER/REPO` pela identidade correta:
@@ -95,7 +109,7 @@ Se `decision-triage.json` já existir, inspecione-o em vez de tentar recriá-lo.
 
 ## Validação registrada
 
-- 77 testes compartilhados e 118 testes legados da skill passaram, além dos
+- 88 testes compartilhados e 118 testes legados da skill passaram, além dos
   checks de documentação e do preview real.
 - A gravação da suíte específica de inputs foi recusada pela ferramenta e não foi
   repetida nem contornada; essa limitação está registrada na skill.
