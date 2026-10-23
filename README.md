@@ -279,6 +279,11 @@ Structured multi-perspective review via `memory_council` tool before committing 
 
 ## Configuration
 
+SQLite WAL is the canonical storage engine. The in-tree Turso/libSQL backend, `turso`
+Cargo feature, and `TursoBackend` / `TursoConfig` Rust exports were removed in
+v0.24.0. See the [migration guide](docs/migrations/turso-sunset.md) for compatibility
+impact and the SQLite + optional S3/R2 backup sync path.
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ENGRAM_DB_PATH` | SQLite database path | `~/.local/share/engram/memories.db` |
@@ -302,6 +307,7 @@ Structured multi-perspective review via `memory_council` tool before committing 
 
 - [Quickstart Guide](docs/QUICKSTART.md) · [Getting Started](docs/GETTING_STARTED.md) · [User Guide](docs/USER_GUIDE.md)
 - [Using Engram in Another Repository](docs/USING_ENGRAM_IN_A_REPO.md)
+- [Migrating from Turso/libSQL](docs/migrations/turso-sunset.md)
 - [Engram vs Alternatives (Honest Comparison)](docs/COMPARISON.md)
 - [MCP Memory Server Guide](docs/integrations/mcp-memory-server.md)
 - [Claude Code Integration Guide](docs/integrations/claude-code-mcp-memory.md)

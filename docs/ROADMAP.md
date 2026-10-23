@@ -19,7 +19,7 @@ dated artifacts.
 | 3 | Langfuse Integration | Done | v0.3.0 | Trace sync, pattern extraction, async runtime (feature-gated) |
 | 4 | Search Caching | Done | v0.3.0 | Embedding-based LRU cache, adaptive similarity threshold, feedback loop |
 | 5 | Memory Lifecycle | Done | v0.3.0 | Active/Stale/Archived states, configurable thresholds, dry-run support |
-| 6 | Turso/libSQL | Deprecated | v0.3.0 | Distributed SQLite via Turso (deprecated; sunset scheduled for v0.24.0 in favor of SQLite WAL + S3/R2 snapshot sync) |
+| 6 | Turso/libSQL | Removed | v0.3.0 → v0.24.0 | Experimental backend sunset completed in v0.24.0; use SQLite WAL + optional S3/R2 backup sync |
 | 7 | Meilisearch | Done | v0.5.0 | Full `StorageBackend` + background indexer, 4 MCP tools (feature-gated) |
 | 8 | Salience Scoring | Done | v0.4.0 | Multi-signal salience (recency, frequency, importance, feedback), session context |
 | 9 | Context Quality | Done | v0.4.0 | 5-component quality scoring, near-duplicate detection, conflict resolution, source trust |
@@ -44,7 +44,10 @@ MCP tool details are tracked in [`MCP_TOOLS.md`](MCP_TOOLS.md).
 
 ### Phase 0: Storage Abstraction (v0.1.0)
 
-Foundation layer. Defined the `StorageBackend` trait (18 methods) so future backends (Turso, Meilisearch) can be swapped in without touching business logic.
+Foundation layer. Defined the `StorageBackend` trait (18 methods at introduction)
+to separate storage from business logic. SQLite WAL remains the canonical store;
+Meilisearch is an optional search mirror. The experimental Turso backend was
+removed in v0.24.0 (see Phase 6).
 
 - SQLite + WAL mode for crash recovery
 - Connection pooling with read/write separation
@@ -97,13 +100,17 @@ Automatic memory aging: Active -> Stale (30d) -> Archived (90d).
 - Archived memories excluded from search/list by default
 - Configurable thresholds per workspace
 
-### Phase 6: Turso/libSQL (v0.3.0 — Deprecated)
+### Phase 6: Turso/libSQL (v0.3.0 — Removed in v0.24.0)
 
-Distributed SQLite for edge deployments. *Status: Deprecated in v0.22.x; sunset scheduled for v0.24.0 in favor of SQLite WAL + S3/R2 Snapshot Attestation (see `docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md`).*
+The experimental distributed SQLite backend was deprecated in v0.22.x and
+removed in v0.24.0 under the
+[accepted sunset ADR](adr/2026-08-16-turso-backend-deprecation-and-sunset.md).
 
-- Full `StorageBackend` implementation via libSQL (experimental)
-- Embedded replicas with sync to Turso cloud
-- Feature-gated behind `--features turso` (scheduled for removal in v0.24.0)
+- Removed the in-tree backend, `libsql` dependency, and `turso` Cargo feature.
+- Removed the `TursoBackend` / `TursoConfig` Rust exports; callers must migrate.
+- SQLite WAL remains the canonical store, with optional S3/R2 backup sync through
+  `cloud`. See the [migration guide](migrations/turso-sunset.md) for schema and
+  compatibility constraints; there is no automatic Turso database conversion.
 
 ### Phase 7: Meilisearch (v0.5.0)
 

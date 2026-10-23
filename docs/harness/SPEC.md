@@ -3,13 +3,13 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Engram comprehensive improvement program — waves 0-4` |
-| Active task | `engram-comprehensive-improvement — waves 0-4 execution` |
-| Started | `2026-10-05` |
+| Active sprint | `Turso/libSQL sunset v0.24.0` |
+| Active task | `turso-sunset` |
+| Started | `2026-10-23` |
 | Owner | `Ronaldo + agents (Claude Code + Claude Code Sonnet reviewer)` |
 | Active spec | `docs/harness/SPEC.md` |
-| Active plan | `docs/harness/progress/2026-10-05-improvement-lane-p.md` |
-| Tracker | Owner-authorized program (chat, 2026-10-05); local commits only, no push/PR/merge |
+| Active plan | `docs/harness/progress/2026-10-23-turso-sunset.md` |
+| Tracker | Owner-authorized sunset (chat, 2026-10-23); local commits only, no push/PR/merge |
 
 ## Escopo da sprint ativa
 
@@ -19,7 +19,16 @@
 > - Standards gerais: [`../../STANDARDS.md`](../../STANDARDS.md)
 > - Erros & lições: [`../../ERRORS_AND_LESSONS.md`](../../ERRORS_AND_LESSONS.md)
 
-## Tarefa ativa: Engram comprehensive improvement — waves 0-4 execution
+## Tarefa ativa: Turso/libSQL sunset v0.24.0
+
+- **Mandato**: executar o sunset recomendado, com máximo paralelismo útil (owner, chat, 2026-10-23).
+- **Decisão existente**: [ADR-STORAGE-20260816-1](../adr/2026-08-16-turso-backend-deprecation-and-sunset.md), aceito; remoção prevista para v0.24.0.
+- **Plano e evidência**: [turso-sunset](./progress/2026-10-23-turso-sunset.md).
+- **Em escopo**: reconciliar consumidores; remover feature, backend, reexports, testes específicos e dependência; preservar cobertura SQLite; alinhar CI, inventário, exceções comprovadamente exclusivas e migração documentada.
+- **Fora de escopo**: alterar schema SQLite, migrar dados reais, implementar conversor, alterar Dream, publicar/taguear release, push/PR/merge, chamadas de triagem pagas e limpeza de worktrees antigas.
+- **Gates**: doctor, sensores completos, inventário de contratos, dependências/advisories, diff check e revisão independente. Receipt humano continua necessário para o post-gate autoritativo; o writer não o emite.
+
+## Tarefa anterior: Engram comprehensive improvement — waves 0-4 execution
 
 - **Plano completo**: [`plans/2026-10-02-engram-comprehensive-improvement-plan.md`](./plans/2026-10-02-engram-comprehensive-improvement-plan.md)
 - **Progress log (Lane P — harness/governança/CI docs)**: [`progress/2026-10-05-improvement-lane-p.md`](./progress/2026-10-05-improvement-lane-p.md)

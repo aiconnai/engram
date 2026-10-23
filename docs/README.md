@@ -11,6 +11,7 @@ Engram is a memory layer for AI agents and teams that need to organize proprieta
 - `CONTROL_PLANE_SCHEMA.sql`: Postgres schema for the cloud control plane.
 - `QUICKSTART.md`: Command-first local quick reference.
 - `SCHEMA.md`: Local Engram SQLite schema and migrations.
+- `migrations/turso-sunset.md`: v0.24.0 Turso/libSQL removal, Rust/build compatibility impact, and migration to SQLite WAL with optional S3/R2 backup sync.
 - `integrations/`: MCP and ecosystem integration guides for Claude Code, Cursor, OpenAI agent workflows, and generic MCP clients.
 - `awesome-list-submissions.md`: External awesome-list targets, opened PRs, and blocked/manual submissions.
 - `../examples/`: Runnable MCP and ecosystem memory examples for Claude, Cursor, OpenAI Agents SDK, FastMCP, LangGraph, and CrewAI.

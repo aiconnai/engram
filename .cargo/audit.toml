@@ -3,14 +3,5 @@
 # scripts/check-security-exceptions.py. Keep this list narrow and do not add
 # feature-gated PDF warnings here.
 ignore = [
-    "RUSTSEC-2026-0049",
-    "RUSTSEC-2026-0098",
-    "RUSTSEC-2026-0099",
-    "RUSTSEC-2026-0104",
-    "RUSTSEC-2026-0346",
-    "RUSTSEC-2026-0349",
-    "RUSTSEC-2025-0141",
     "RUSTSEC-2024-0436",
-    "RUSTSEC-2025-0134",
-    "RUSTSEC-2026-0258",
 ]

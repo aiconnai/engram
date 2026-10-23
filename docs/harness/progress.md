@@ -3,13 +3,13 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Engram comprehensive improvement program — waves 0-4` |
-| Active task | `engram-comprehensive-improvement — waves 0-4 execution` |
-| Active plan | `docs/harness/progress/2026-10-05-improvement-lane-p.md` |
-| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md (autoridade check-live-state). Programa 2026-10-14 (Waves 0–6): post-gate PASS em docs/harness/reviews/2026-10-14-engram-comprehensive-improvement-post.md e docs/harness/reviews/2026-10-05-comprehensive-improvement/README.md` |
-| Last sensors | `2026-10-05 — FINALFIX (HEAD bdf4620): full status=pass (mode=full; timestamp 2026-10-05T19:07:34Z, 328s) after make ci exit 0; receipts not committed. Earlier: INT full status=pass (2026-10-05T18:11:26Z). Committed receipt .sensors-last (not refreshed, to avoid telemetry churn): status=pass mode=quick timestamp 2026-09-03T13:11:41Z` |
-| Last commit | `0f12ac18` |
-| Last live-state check | `2026-10-14 — Release v0.24.0 / SDKs v0.7.0, O2 untrack --apply, post-gate PASS (HEAD 0f12ac18): status=pass (rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md)` |
+| Active sprint | `Turso/libSQL sunset v0.24.0` |
+| Active task | `turso-sunset` |
+| Active plan | `docs/harness/progress/2026-10-23-turso-sunset.md` |
+| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md (autoridade exigida por check-live-state). Sunset 2026-10-23: opinião Sonnet PASS em docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md; post-gate PENDING por receipt humano ausente.` |
+| Last sensors | `2026-10-23 — turso-sunset: status=pass mode=full timestamp=2026-10-23T20:10:00Z duration_sec=310; sem exclusões. Primeira execução falhou em links de retomada, corrigidos e revalidados.` |
+| Last commit | `b29cd16c` |
+| Last live-state check | `2026-10-23 — PASS: rtk proxy bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Não substitui post-gate com receipt.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -18,27 +18,20 @@
 
 ## Retomada rápida (escopo, limites, última evidência)
 
-- **Escopo**: programa de melhoria abrangente, ondas 0-4, autorizado pelo owner em
-  2026-10-05. Esta lane (P) cuida de harness, governança e CI docs. Fonte de verdade:
-  [`SPEC.md`](./SPEC.md), [plano](./plans/2026-10-02-engram-comprehensive-improvement-plan.md)
-  e o [log da lane P (active plan)](./progress/2026-10-05-improvement-lane-p.md).
-- **Limites**: só **commits locais** na branch da lane; sem push, PR, merge, publicação,
-  produção/nuvem, issues remotas nem alteração de branch protection. Runners da Onda 4 apenas
-  com *fake writer*, offline, sem credenciais reais. Negativo e não concedido:
-  [`WHAT_WE_DONT_DO.md`](./WHAT_WE_DONT_DO.md) e o [ADR aceito](../decisions/2026-07-21-agent-harness-hardening-v1.md).
-  Merge humano continua obrigatório.
-- **Última evidência**: [entrada FINALFIX do log](./progress/2026-10-05-improvement-lane-p.md#finalfix--correções-da-revisão-final-do-branch-2026-10-05)
-  (correções da revisão final, gates completos), [entrada INT](./progress/2026-10-05-improvement-lane-p.md#int--integração-das-lanes-q1b-e-todos-de-integração-2026-10-05)
-  (lanes P e R integradas, NOT RUN) e
-  [entrada H6](./progress/2026-10-05-improvement-lane-p.md#h6--contexto-curto-retomável-e-retenção-explícita--2026-10-05); baseline e discrepâncias em
-  [`audits/2026-10-02-improvement-baseline.md`](./audits/2026-10-02-improvement-baseline.md).
-  Lane offline obrigatória: `bash docs/harness/bin/run-offline-lane.sh` (`OFFLINE_LANE: PASS`).
+- **Escopo**: sunset Turso/libSQL previsto no ADR aceito para v0.24.0, autorizado pelo
+  owner em 2026-10-23 com máximo paralelismo útil. [SPEC](./SPEC.md) e [plano](./progress/2026-10-23-turso-sunset.md).
+- **Limites**: commits locais em `codex/turso-sunset`; sem push/PR/merge/publicação,
+  dados reais, chamadas pagas, alteração de schema/Dream ou limpeza de worktrees antigas.
+  [Escopo canônico](./SPEC.md); [negativo do harness](./WHAT_WE_DONT_DO.md).
+- **Última evidência**: sensores completos PASS (310 s), sem exclusões; Sonnet sem achados.
+  [Validação e limites](./progress/2026-10-23-turso-sunset.md#validação-e-evidência).
+  Deny/inventário global mantêm falhas preexistentes; post-gate aguarda receipt humano.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
   `python3 docs/harness/bin/measure-context.py --section docs/harness/progress-history.md#<âncora>`.
 
-## Programa ativo — comprehensive improvement, ondas 0-4
+## Programa anterior — comprehensive improvement, ondas 0-4
 
 - **Status**: completed (ondas 0-6 encerradas em 2026-10-14). Plano:
   [`plans/2026-10-02-engram-comprehensive-improvement-plan.md`](./plans/2026-10-02-engram-comprehensive-improvement-plan.md).
