@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Proposed (partially implemented). MVP tools `context_record`, `context_record_artifact` and `context_build_bundle` are on main (`src/mcp/tools/catalog/context.rs:460,503,589`; 6f1af3fa, #57) with redaction policy in `src/context/policy.rs`; the Launch Blockers list below is not verified as closed.
 
 ## Context
 

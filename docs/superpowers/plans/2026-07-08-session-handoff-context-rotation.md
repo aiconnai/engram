@@ -1,5 +1,7 @@
 # Session Handoff Context Rotation Implementation Plan
 
+> **Status: Implemented** — evidence: shared builder in `src/intelligence/session_handoff/` (a directory module, not the single file named in the plan), CLI `engram session handoff` (`src/bin/cli/session.rs:81-86`), MCP `session_land` (`src/mcp/handlers/handoff.rs:34`) and `harness_handoff` (`src/mcp/handlers/harness/handoff.rs:138`); landed in 5eed715c (#131), follow-up 28b40bf3. Checkboxes below are not maintained.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the approved manual-first Session Handoff workflow: one MCP action and one CLI command produce the same copy-ready continuation packet for starting a fresh AI session.

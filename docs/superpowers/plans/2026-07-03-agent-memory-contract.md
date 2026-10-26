@@ -1,5 +1,7 @@
 # Agent Memory Contract Implementation Plan
 
+> **Status: Implemented** — evidence: `memory_agent_contract` (`src/mcp/tools/catalog/search.rs:97`, e62c8a42 #114), generated reference `docs/MCP_TOOLS.md:830`, guidance `docs/AI_GUIDE.md:1738`; writeback slice `memory_agent_writeback` (`src/mcp/tools/catalog/misc.rs:177`, 881976a9 #115). Checkboxes below are not maintained. Deviation: the registry lists `memory_agent_contract` as tier `essential` (group `core`, `docs/MCP_TOOLS.md:42`), not the `standard` tier named in Task 1.
+
 > **For agentic workers:** execute task-by-task. This plan is the canonical C1 plan; `.omo` drafts are research notes only.
 
 **Goal:** Establish a safe, MCP-visible agent memory contract before adding new automation. The contract makes recall/writeback rules explicit, reuses existing Engram primitives, and prevents generated memories from becoming trusted instructions by default.

@@ -3,8 +3,10 @@ adr: ADR-CLEANUP-20260707-1
 track: oversized files (adapted single-track pass; not one of the seven mbras-cleanup-pass tracks — Rust monolith, not the Go/TS/Elixir monorepo the skill targets)
 service: engram (single crate, not a multi-service boundary)
 author: Ronaldo (via Claude assessment)
-status: Proposed
+status: Implemented
 ---
+
+> Status evidence: the recommended order 1 → 2 → 4 → 3 → 5 and the row 6 follow-up landed in #119 (markdown_export/), #121 (http_transport), #124 (CLI split), #125 (storage queries core), #126 (queries tests), and #127–#129 (intelligence inspect and splits). Rows 7–8 were marked "not proposed" by this ADR.
 
 ## Scope note
 
