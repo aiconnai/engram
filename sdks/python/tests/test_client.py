@@ -283,7 +283,35 @@ class TestSearch:
 
         args = mock_client._client.post.call_args.kwargs["json"]["params"]["arguments"]
         assert args["query"] == "test query"
-        assert args["limit"] == 10
+        # Mirrors the memory_search catalog default (20), not the old SDK-local 10.
+        assert args["limit"] == 20
+        assert "offset" not in args
+        assert "include_archived" not in args
+
+    @pytest.mark.asyncio
+    async def test_search_pagination_and_archived(self, mock_client, mock_response):
+        mock_client._client.post.return_value = mock_response
+
+        await mock_client.search(
+            "test query", limit=5, offset=10, include_archived=True
+        )
+
+        args = mock_client._client.post.call_args.kwargs["json"]["params"]["arguments"]
+        assert args["limit"] == 5
+        assert args["offset"] == 10
+        assert args["include_archived"] is True
+
+    @pytest.mark.asyncio
+    async def test_search_keeps_falsy_offset_and_archived_flag(
+        self, mock_client, mock_response
+    ):
+        mock_client._client.post.return_value = mock_response
+
+        await mock_client.search("test query", offset=0, include_archived=False)
+
+        args = mock_client._client.post.call_args.kwargs["json"]["params"]["arguments"]
+        assert args["offset"] == 0
+        assert args["include_archived"] is False
 
     @pytest.mark.asyncio
     async def test_search_with_filter_(self, mock_client, mock_response):

@@ -200,6 +200,18 @@ async def test_search_limit_reaches_the_wire(stub: StubServer) -> None:
     assert call["arguments"]["limit"] == 3
 
 
+async def test_search_defaults_and_pagination_reach_the_wire(stub: StubServer) -> None:
+    stub.responder = lambda _r: Reply(body=rpc_result(tool_result([])))
+    async with make_client(stub) as client:
+        await client.search("query")
+        await client.search("query", offset=40, include_archived=True)
+
+    default, paged = (r.body["params"]["arguments"] for r in stub.requests)
+    # Same default as the memory_search catalog entry; optional keys stay off the wire.
+    assert default == {"query": "query", "limit": 20}
+    assert paged == {"query": "query", "limit": 20, "offset": 40, "include_archived": True}
+
+
 # ---------------------------------------------------------------------------
 # Envelopes and errors, decoded from real-shaped server responses
 # ---------------------------------------------------------------------------
@@ -370,11 +382,17 @@ async def test_close_is_idempotent_and_use_after_close_is_typed(stub: StubServer
     assert stub.requests == [], "a closed client must not touch the network"
 
 
+async def _raise_inside_client_context(client: EngramClient) -> None:
+    async with client:
+        raise RuntimeError("boom")
+
+
 async def test_context_manager_closes_even_when_the_body_raises(stub: StubServer) -> None:
     client = make_client(stub)
+    # The raise lives in a helper so static analysis does not treat the statements
+    # after the ``with pytest.raises`` block as unreachable.
     with pytest.raises(RuntimeError, match="boom"):
-        async with client:
-            raise RuntimeError("boom")
+        await _raise_inside_client_context(client)
     with pytest.raises(EngramError, match="closed"):
         await client.get(1)
 

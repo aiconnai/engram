@@ -145,7 +145,7 @@ fn authorize_request(principal: &TransportPrincipal, request: &McpRequest) -> Re
         return Err(Status::permission_denied("permission denied"));
     }
 
-    let requested_workspaces = requested_workspaces(&request.params);
+    let requested_workspaces = requested_workspaces(tool_name, &request.params);
     let first_workspace = requested_workspaces.first().copied();
     if permission_denial_for_principal(tool_name, principal, first_workspace).is_some()
         || requested_workspaces
@@ -581,6 +581,83 @@ mod tests {
         let result = authenticate(&metadata, &key);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
+    }
+
+    // --- authorize_request: batch item workspaces ---
+
+    fn namespaced_writer(namespace: &str) -> TransportPrincipal {
+        use crate::auth::{PermissionSet, TokenClaims, UserId};
+        TransportPrincipal::from_token_claims(TokenClaims {
+            user_id: UserId::from_string("grpc-batch"),
+            key_id: "key-grpc-batch".to_string(),
+            permissions: PermissionSet::standard_user(),
+            namespace: Some(namespace.to_string()),
+            issued_at: chrono::Utc::now(),
+            expires_at: None,
+        })
+        .unwrap()
+    }
+
+    fn call_tool(tool: &str, arguments: serde_json::Value) -> McpRequest {
+        McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!("1")),
+            method: methods::CALL_TOOL.to_string(),
+            params: serde_json::json!({"name": tool, "arguments": arguments}),
+        }
+    }
+
+    #[test]
+    fn authorize_request_denies_foreign_batch_item_workspace() {
+        let principal = namespaced_writer("alpha");
+        for (tool, arguments) in [
+            (
+                "memory_create_batch",
+                serde_json::json!({"workspace": "alpha", "memories": [
+                    {"content": "own", "workspace": "alpha"},
+                    {"content": "foreign", "workspace": "beta"}
+                ]}),
+            ),
+            (
+                "memory_create_batch",
+                serde_json::json!({"memories": [{"content": "foreign", "workspace": "beta"}]}),
+            ),
+            (
+                "memory_ingest_fact_batch",
+                serde_json::json!({"workspace": "alpha", "facts": [
+                    {"fact": "foreign", "workspace": "beta"}
+                ]}),
+            ),
+            (
+                "memory_ingest_fact_batch",
+                serde_json::json!({"facts": [
+                    {"fact": "own", "workspace": "alpha"},
+                    {"fact": "foreign", "workspace": "beta"}
+                ]}),
+            ),
+        ] {
+            let status = authorize_request(&principal, &call_tool(tool, arguments.clone()))
+                .expect_err(&format!("{tool} {arguments} must be denied"));
+            assert_eq!(status.code(), tonic::Code::PermissionDenied);
+        }
+    }
+
+    #[test]
+    fn authorize_request_allows_own_batch_item_workspaces() {
+        let principal = namespaced_writer("alpha");
+        for (tool, arguments) in [
+            (
+                "memory_create_batch",
+                serde_json::json!({"memories": [{"content": "own", "workspace": "alpha"}]}),
+            ),
+            (
+                "memory_ingest_fact_batch",
+                serde_json::json!({"workspace": "alpha", "facts": [{"fact": "own"}]}),
+            ),
+        ] {
+            authorize_request(&principal, &call_tool(tool, arguments.clone()))
+                .unwrap_or_else(|status| panic!("{tool} {arguments} denied: {status}"));
+        }
     }
 
     // --- parse_event_type ---

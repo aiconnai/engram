@@ -43,8 +43,9 @@ export class SearchResource extends BaseResource {
   async search(query: string, options?: SearchOptions): Promise<unknown> {
     const params: Record<string, unknown> = {
       query,
-      limit: options?.limit ?? 10,
+      limit: options?.limit ?? 20,
     };
+    if (options?.offset !== undefined) params.offset = options.offset;
     if (options?.workspace) params.workspace = options.workspace;
     if (options?.workspaces) params.workspaces = options.workspaces;
     if (options?.tags) params.tags = options.tags;
