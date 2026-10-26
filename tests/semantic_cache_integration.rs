@@ -357,3 +357,95 @@ fn search_cache_clear_keeps_its_own_wire_shape() {
     let all = search::search_cache_clear(&ctx, json!({}));
     assert_eq!(all, json!({"cleared": true, "scope": "all"}));
 }
+
+// ── search cache isolation across principals and workspaces ─────────────────
+//
+// The cache key carries every option that shapes a result (workspace(s),
+// global, filters, limit, offset, ...) but not the caller. That is safe only
+// because authorization runs BEFORE the lookup and forces a restricted
+// principal's workspace into the key. These tests pin that ordering.
+
+fn reader(namespace: &str) -> TransportPrincipal {
+    TransportPrincipal::from_token_claims(TokenClaims {
+        user_id: UserId::from_string(format!("reader-{namespace}")),
+        key_id: format!("key-reader-{namespace}"),
+        permissions: PermissionSet::read_only(),
+        namespace: Some(namespace.to_string()),
+        issued_at: Utc::now(),
+        expires_at: None,
+    })
+    .expect("valid token claims")
+}
+
+fn create_in(ctx: &handlers::HandlerContext, content: &str, workspace: &str) {
+    let created =
+        memory_crud::memory_create(ctx, json!({"content": content, "workspace": workspace}));
+    assert!(created["id"].is_i64(), "seed failed: {created}");
+}
+
+#[test]
+fn search_cache_is_not_a_side_channel_between_principals() {
+    let mut ctx = test_ctx();
+    create_in(&ctx, "zebracorn alpha roadmap note", "tenant-a");
+    create_in(&ctx, "zebracorn beta payroll secret", "tenant-b");
+
+    // An unrestricted caller warms entries for every scope, including the
+    // two a restricted caller might collide with.
+    ctx.principal = Some(admin_principal(None));
+    for params in [
+        json!({"query": "zebracorn"}),
+        json!({"query": "zebracorn", "global": true}),
+        json!({"query": "zebracorn", "workspace": "tenant-b"}),
+        json!({"query": "zebracorn", "workspaces": ["tenant-b"]}),
+    ] {
+        let warmed = search::memory_search(&ctx, params.clone());
+        assert!(warmed.is_array(), "warm-up {params} failed: {warmed}");
+    }
+    assert!(ctx.search_cache.stats().entries >= 3);
+
+    // A tenant-a principal is refused every scope that has a cached entry
+    // holding tenant-b rows, and its own scope never contains them.
+    ctx.principal = Some(reader("tenant-a"));
+    for params in [
+        json!({"query": "zebracorn", "workspace": "tenant-b"}),
+        json!({"query": "zebracorn", "workspaces": ["tenant-b"]}),
+        json!({"query": "zebracorn", "global": true}),
+        json!({"query": "zebracorn"}),
+        json!({"query": "zebracorn", "workspace": "tenant-a", "filter": {"workspace": "tenant-b"}}),
+    ] {
+        let denied = search::memory_search(&ctx, params.clone());
+        assert_eq!(
+            denied["error"]["code"], "permission_denied",
+            "{params} must be refused despite a warm cache: {denied}"
+        );
+        assert!(
+            !denied.to_string().contains("payroll"),
+            "{params}: {denied}"
+        );
+    }
+    for params in [
+        json!({"query": "zebracorn", "workspace": "tenant-a"}),
+        json!({"query": "zebracorn", "workspaces": ["tenant-a"]}),
+    ] {
+        for attempt in 0..2 {
+            // The second attempt is served from the cache.
+            let own = search::memory_search(&ctx, params.clone());
+            assert!(own.is_array(), "{params} attempt {attempt}: {own}");
+            assert!(!own.to_string().contains("payroll"), "{params}: {own}");
+            assert!(own.to_string().contains("roadmap"), "{params}: {own}");
+        }
+    }
+
+    assert!(
+        ctx.search_cache.stats().exact_hits >= 2,
+        "the repeated own-scope searches must be served from the cache"
+    );
+
+    // And the other way round: tenant-b never sees tenant-a's cached rows.
+    ctx.principal = Some(reader("tenant-b"));
+    let denied =
+        search::memory_search(&ctx, json!({"query": "zebracorn", "workspace": "tenant-a"}));
+    assert_eq!(denied["error"]["code"], "permission_denied", "{denied}");
+    let own = search::memory_search(&ctx, json!({"query": "zebracorn", "workspace": "tenant-b"}));
+    assert!(!own.to_string().contains("roadmap"), "{own}");
+}
