@@ -158,8 +158,12 @@ fn permission_denial_for_call(
     Some(permission_denied(tool_name, current, required))
 }
 
+/// Denial of `tool_name` under `current`, or `None` when the mode allows it.
+///
+/// Fails closed: a tool the catalog does not know requires `admin`, exactly as
+/// in [`required_mode_for_call`], so an unknown name is never waved through.
 pub fn permission_denial_for_mode(tool_name: &str, current: PermissionMode) -> Option<Value> {
-    let required = required_mode(tool_name)?;
+    let required = required_mode_for_call(tool_name, &Value::Null);
     if current.allows(required) {
         return None;
     }
@@ -778,6 +782,34 @@ mod tests {
         assert_eq!(denial["error"]["tool"], "memory_delete");
         assert_eq!(denial["error"]["current_mode"], "read_only");
         assert_eq!(denial["error"]["required_mode"], "admin");
+    }
+
+    #[test]
+    fn unknown_tool_fails_closed_below_admin_mode() {
+        for mode in [
+            PermissionMode::ReadOnly,
+            PermissionMode::ScopedWrite,
+            PermissionMode::Maintenance,
+        ] {
+            let denial = permission_denial_for_mode("no_such_tool", mode)
+                .unwrap_or_else(|| panic!("unknown tool allowed in {mode:?} mode"));
+            assert_eq!(denial["error"]["code"], "permission_denied");
+            assert_eq!(denial["error"]["required_mode"], "admin");
+        }
+        assert!(permission_denial_for_mode("no_such_tool", PermissionMode::Admin).is_none());
+    }
+
+    #[test]
+    fn dispatch_aliases_are_classified_like_their_canonical_tool() {
+        for (alias, canonical) in DISPATCH_ALIASES {
+            for mode in [PermissionMode::ReadOnly, PermissionMode::ScopedWrite] {
+                assert_eq!(
+                    permission_denial_for_mode(alias, mode).is_some(),
+                    permission_denial_for_mode(canonical, mode).is_some(),
+                    "{alias} must be classified like {canonical} in {mode:?} mode"
+                );
+            }
+        }
     }
 
     #[test]
