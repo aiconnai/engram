@@ -295,7 +295,7 @@ O review-gate é prompted explicitamente para caçar estes (sensores verdes mas 
 
 1. **Tests passam só com `local-embeddings` mas CI Linux usa features remotas** — ONNX ou embedding provider ausente em CI, mas `cargo test --features local-embeddings` passa localmente.
 2. **MCP protocol tests usam fixtures antigas** — `tests/mcp_protocol_tests.rs` ou golden files não cobrem nova tool ou mudança de schema de request/response.
-3. **Schema version atualizada mas testes de migração hardcoded falham** — `storage/migrations.rs` bump + alguns testes em `tests/` ou `src/storage/` ainda têm versão antiga.
+3. **Schema version atualizada mas testes de migração hardcoded falham** — bump em `src/storage/migrations/` (`SCHEMA_VERSION` em `mod.rs`) + alguns testes em `tests/` ou `src/storage/` ainda têm versão antiga.
 4. **Clippy limpo + `unwrap()` em path quente de MCP handler** — allowlist de clippy esconde o problema; handler de tool crítica pode panic em input adverso.
 5. **Snapshot tests verdes mas attestation/Merkle mudou** — `src/snapshot/` ou `tests/snapshot_attestation.rs` não reflete mudança em crypto ou serialization.
 6. **Hooks (session_end etc.) não testados em integração** — comportamento de consolidação/auto-tag muda, mas só unit tests isolados passam.
@@ -810,7 +810,7 @@ Em dúvida: rode o review-gate.
 
 ## Integração com Paridade CI
 
-O modo `full` do sensor principal `sensors.sh` mantém paridade funcional com o contrato do projeto por meio de etapas equivalentes a `CI_FEATURES`/`just ci`:
+O modo `full` do sensor principal `sensors.sh` mantém paridade funcional com o contrato do projeto por meio de etapas equivalentes a `CI_FEATURES`/`scripts/ci.sh` (`make ci`):
 
 - `fmt`
 - `clippy -D warnings`
