@@ -644,7 +644,10 @@ impl McpHandler for EngramHandler {
                     }
                 };
 
-                match self.subscriptions.subscribe(&uri) {
+                match self
+                    .subscriptions
+                    .subscribe_as(&self.storage, &uri, principal.as_ref())
+                {
                     Ok(()) => McpResponse::success(request.id, json!({})),
                     Err(msg) => McpResponse::error(request.id, -32602, msg),
                 }
@@ -661,7 +664,10 @@ impl McpHandler for EngramHandler {
                     }
                 };
 
-                match self.subscriptions.unsubscribe(&uri) {
+                match self
+                    .subscriptions
+                    .unsubscribe_as(&self.storage, &uri, principal.as_ref())
+                {
                     Ok(()) => McpResponse::success(request.id, json!({})),
                     Err(msg) => McpResponse::error(request.id, -32602, msg),
                 }
