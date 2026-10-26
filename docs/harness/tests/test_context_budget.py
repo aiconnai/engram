@@ -334,7 +334,7 @@ class BootstrapAndReadOrder(unittest.TestCase):
         self.assertEqual(boot, [x for x in CANONICAL_ORDER if x != "active-plan"])
 
     def test_mcp_counter_treats_brace_wrapped_cfg_arms_as_feature_gated(self):
-        """Hermetic: a copy of bootstrap.sh counts gated tools whether the arm is `=> cfg!(..)` or `=> { cfg!(..) }`."""
+        """Hermetic: a copy of bootstrap.sh counts gated tools from catalog::required_features, incl. wrapped `|` arms."""
         with tempfile.TemporaryDirectory(prefix="bootstrap-mcp-") as tmp:
             root = Path(tmp)
             (root / "docs/harness/bin").mkdir(parents=True)
@@ -345,16 +345,25 @@ class BootstrapAndReadOrder(unittest.TestCase):
             names = ("a_one", "a_two", "b_one", "b_two", "b_three", "c_one", "open_one", "open_two")
             (tools / "catalog" / "all.rs").write_text(
                 "".join(f'ToolDef {{\n    name: "{n}",\n}},\n' for n in names), encoding="utf-8")
+            # Feature gating has a single source: catalog::required_features.
+            (tools / "catalog" / "mod.rs").write_text(
+                "pub(crate) fn required_features(name: &str) -> &'static [&'static str] {\n"
+                "    match name {\n"
+                '        "a_one" | "a_two" => &["x"],\n'
+                '        "b_one"\n'
+                '        | "b_two"\n'
+                '        | "b_three" => &["y"],\n'
+                '        "c_one" => {\n'
+'            &["x", "y"]\n'
+'        }\n'
+                "        _ => &[],\n"
+                "    }\n"
+                "}\n", encoding="utf-8")
             (tools / "mod.rs").write_text(
                 "pub(crate) fn tool_feature_available(name: &str) -> bool {\n"
-                "    match name {\n"
-                '        "a_one" | "a_two" => cfg!(feature = "x"),\n'
-                '        "b_one" | "b_two" | "b_three" => {\n'
-                '            cfg!(feature = "y")\n'
-                "        }\n"
-                '        "c_one" => cfg!(all(feature = "x", feature = "y")),\n'
-                "        _ => true,\n"
-                "    }\n"
+                "    catalog::required_features(name)\n"
+                "        .iter()\n"
+                "        .all(|feature| gate_feature_compiled(feature))\n"
                 "}\n", encoding="utf-8")
             proc = run(["bash", str(root / "docs/harness/bin/bootstrap.sh")], cwd=root)
         self.assertEqual(proc.returncode, 0, proc.stderr)
