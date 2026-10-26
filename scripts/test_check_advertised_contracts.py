@@ -115,6 +115,14 @@ class CheckedInInventory(unittest.TestCase):
         # keys the checker does not generate are preserved for check-pdf-worker-packaging.py
         self.assertEqual(data["cli"]["pdf_worker_distribution"], "sibling-binary")
 
+    def test_committed_inventory_matches_the_tree(self) -> None:
+        failures = checker.compare_inventory(
+            checker.load_inventory(INVENTORY_PATH), checker.current_inventory()
+        )
+
+        self.assertEqual(failures, [], "run: python3 scripts/check-advertised-contracts.py "
+                         "--inventory docs/contracts/advertised-surfaces.toml --write")
+
 
 if __name__ == "__main__":
     unittest.main()
