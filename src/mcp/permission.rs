@@ -478,7 +478,9 @@ pub fn check_tool_authorization(
             return Some(workspace_unscoped_tool_denied(tool_name, p));
         }
 
-        if !allows_all_workspaces(p) && has_disallowed_workspace_claim_or_filter(params, p) {
+        if !allows_all_workspaces(p)
+            && has_disallowed_workspace_claim_or_filter(tool_name, params, p)
+        {
             record_permission_denied(PermissionDeniedReason::WorkspaceNotAllowed);
             return Some(permission_denied(
                 tool_name,
@@ -487,7 +489,7 @@ pub fn check_tool_authorization(
             ));
         }
 
-        let workspaces = requested_workspaces(params);
+        let workspaces = requested_workspaces(tool_name, params);
         if workspaces.is_empty() {
             if matches!(p, crate::auth::TransportPrincipal::AnonymousLoopback(_)) {
                 record_permission_denied(PermissionDeniedReason::WorkspaceClaimMissing);
@@ -519,54 +521,96 @@ pub fn check_tool_authorization(
     None
 }
 
-fn unwrap_tool_arguments(params: &Value) -> &Value {
-    if let Some(object) = params.as_object() {
-        if object.contains_key("name")
-            && !object.contains_key("workspace")
-            && !object.contains_key("workspaces")
-        {
-            if let Some(args) = object.get("arguments") {
-                return args;
-            }
-        }
-    }
-    params
-}
-
-pub(crate) fn requested_workspaces(params: &Value) -> Vec<&str> {
-    let args = unwrap_tool_arguments(params);
-    let Some(object) = args.as_object() else {
+/// Argument objects a call's workspace claims may live in.
+///
+/// Transports pre-check the whole `tools/call` params object
+/// (`{"name", "arguments"}`) while the dispatcher checks the bare arguments, so
+/// both shapes reach this module. The two cannot be told apart reliably (a
+/// caller may put `name`/`arguments` keys inside the arguments themselves), so
+/// claims are read from the object itself AND from `arguments` when present.
+/// Reading both only ever adds claims to check; it can never hide one.
+fn argument_views(params: &Value) -> Vec<&serde_json::Map<String, Value>> {
+    let Some(object) = params.as_object() else {
         return Vec::new();
     };
-    let mut workspaces = Vec::new();
-    if let Some(Value::String(ws)) = object.get("workspace") {
-        workspaces.push(ws.as_str());
+    let mut views = vec![object];
+    if object.get("name").is_some_and(Value::is_string) {
+        if let Some(inner) = object.get("arguments").and_then(Value::as_object) {
+            views.push(inner);
+        }
     }
-    if let Some(Value::Array(items)) = object.get("workspaces") {
-        if !items.is_empty() && items.iter().all(Value::is_string) {
-            for item in items {
-                if let Value::String(ws) = item {
-                    workspaces.push(ws.as_str());
+    views
+}
+
+/// Every workspace `params` claims for `tool_name`: the top-level `workspace`
+/// and `workspaces`, `filters.workspace`, and the `workspace` of each item of
+/// the tool's batch arrays (see [`workspace_item_arrays`]).
+pub(crate) fn requested_workspaces<'a>(tool_name: &str, params: &'a Value) -> Vec<&'a str> {
+    let mut workspaces = Vec::new();
+    for object in argument_views(params) {
+        if let Some(Value::String(ws)) = object.get("workspace") {
+            workspaces.push(ws.as_str());
+        }
+        if let Some(Value::Array(items)) = object.get("workspaces") {
+            if !items.is_empty() && items.iter().all(Value::is_string) {
+                for item in items {
+                    if let Value::String(ws) = item {
+                        workspaces.push(ws.as_str());
+                    }
                 }
             }
         }
-    }
-    if let Some(filters) = object.get("filters").and_then(Value::as_object) {
-        if let Some(Value::String(ws)) = filters.get("workspace") {
-            workspaces.push(ws.as_str());
+        if let Some(filters) = object.get("filters").and_then(Value::as_object) {
+            if let Some(Value::String(ws)) = filters.get("workspace") {
+                workspaces.push(ws.as_str());
+            }
+        }
+        for item in batch_items(tool_name, object) {
+            if let Some(Value::String(ws)) = item.get("workspace") {
+                workspaces.push(ws.as_str());
+            }
         }
     }
     workspaces
 }
 
+/// Items of the tool's batch arrays (arrays whose items carry a `workspace`).
+fn batch_items<'a>(
+    tool_name: &str,
+    object: &'a serde_json::Map<String, Value>,
+) -> impl Iterator<Item = &'a Value> {
+    crate::mcp::workspace_guard::workspace_item_arrays(tool_name)
+        .iter()
+        .filter_map(|key| object.get(key.as_str()).and_then(Value::as_array))
+        .flatten()
+}
+
+/// Structured denial for a claim the principal may not make (malformed or
+/// outside its workspaces) that a handler detected itself.
+pub(crate) fn workspace_claim_denied(tool_name: &str, principal: &TransportPrincipal) -> Value {
+    record_permission_denied(PermissionDeniedReason::WorkspaceNotAllowed);
+    permission_denied(
+        tool_name,
+        principal_permission_mode(&principal.auth_context().permissions),
+        required_mode_for_call(tool_name, &Value::Null),
+    )
+}
+
 fn has_disallowed_workspace_claim_or_filter(
+    tool_name: &str,
     params: &Value,
     principal: &TransportPrincipal,
 ) -> bool {
-    let args = unwrap_tool_arguments(params);
-    let Some(object) = args.as_object() else {
-        return false;
-    };
+    argument_views(params)
+        .into_iter()
+        .any(|object| object_has_disallowed_workspace_claim(tool_name, object, principal))
+}
+
+fn object_has_disallowed_workspace_claim(
+    tool_name: &str,
+    object: &serde_json::Map<String, Value>,
+    principal: &TransportPrincipal,
+) -> bool {
     if let Some(ws) = object.get("workspace") {
         if !ws.is_null() && !ws.is_string() {
             return true;
@@ -591,7 +635,10 @@ fn has_disallowed_workspace_claim_or_filter(
             return true;
         }
     }
-    false
+    batch_items(tool_name, object).any(|item| {
+        item.get("workspace")
+            .is_some_and(|ws| !ws.is_null() && !ws.is_string())
+    })
 }
 
 fn filter_has_disallowed_workspace(value: &Value, principal: &TransportPrincipal) -> bool {
