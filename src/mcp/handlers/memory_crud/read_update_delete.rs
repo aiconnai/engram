@@ -93,6 +93,16 @@ pub fn memory_get_public(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
+/// Drop deleted / content-changed memories from the in-memory vector index so
+/// search never serves a stale or deleted vector. The embedding drain re-inserts
+/// the fresh vector once a changed memory is re-embedded.
+fn drop_from_vector_index(ctx: &HandlerContext, ids: &[i64]) {
+    let mut index = ctx.hnsw_index.write();
+    for id in ids {
+        index.remove(id);
+    }
+}
+
 pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
     let id = match extract_id(&params, "id") {
         Ok(id) => id,
@@ -148,6 +158,9 @@ pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
     match result {
         Ok(memory) => {
             ctx.search_cache.invalidate_for_memory(memory.id);
+            if changes.iter().any(|c| c == "content") {
+                drop_from_vector_index(ctx, &[memory.id]);
+            }
             if let Some(ref manager) = ctx.realtime {
                 manager.broadcast(RealtimeEvent::memory_updated(
                     memory.id,
@@ -206,6 +219,7 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
 
         match result {
             Ok((deleted_ids, workspace)) => {
+                drop_from_vector_index(ctx, &deleted_ids);
                 for &deleted_id in &deleted_ids {
                     ctx.search_cache.invalidate_for_memory(deleted_id);
                     if let (Some(manager), Some(workspace)) = (&ctx.realtime, workspace.as_deref())
@@ -246,6 +260,7 @@ pub fn memory_delete(ctx: &HandlerContext, params: Value) -> Value {
 
         match result {
             Ok((deleted_id, workspace)) => {
+                drop_from_vector_index(ctx, &[deleted_id]);
                 ctx.search_cache.invalidate_for_memory(deleted_id);
                 if let (Some(manager), Some(workspace)) = (&ctx.realtime, workspace.as_deref()) {
                     manager.broadcast(RealtimeEvent::memory_deleted(deleted_id, workspace));
@@ -401,6 +416,7 @@ pub fn memory_delete_batch(ctx: &HandlerContext, params: Value) -> Value {
                 format!("Successfully deleted {} memories", res.total_deleted),
             );
 
+            drop_from_vector_index(ctx, &res.deleted);
             // Invalidate search cache and broadcast realtime events for deleted items
             for (id, workspace) in workspaces {
                 if res.deleted.contains(&id) {
