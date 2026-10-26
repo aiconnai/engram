@@ -122,19 +122,30 @@ pub fn inspect_model_routing(config: &EmbeddingConfig) -> ModelRoutingReport {
     });
 
     // 5. Neural Reranker
-    let rerank_available = cfg!(feature = "neural-rerank");
+    //
+    // The feature may be compiled in while the cross-encoder scorer is still a
+    // placeholder; only report "available" once real scoring exists.
+    let rerank_compiled = cfg!(feature = "neural-rerank");
+    #[cfg(feature = "neural-rerank")]
+    let rerank_scoring_ready = crate::search::neural_rerank::NEURAL_SCORING_IMPLEMENTED;
+    #[cfg(not(feature = "neural-rerank"))]
+    let rerank_scoring_ready = false;
     providers.push(ProviderStatus {
         capability: ProviderCapability::Reranking,
         name: "neural_rerank".to_string(),
         model_id: "ms-marco-MiniLM-L-6-v2".to_string(),
         dimensions: None,
         is_local: true,
-        is_available: rerank_available,
-        is_degraded: false,
-        status_message: if rerank_available {
+        is_available: rerank_scoring_ready,
+        is_degraded: rerank_compiled && !rerank_scoring_ready,
+        status_message: if rerank_scoring_ready {
             "Cross-encoder neural reranking operational"
+        } else if rerank_compiled {
+            "neural-rerank feature is compiled in but ONNX cross-encoder scoring is \
+             not implemented yet; search uses the rule-based reranker"
         } else {
-            "Build with --features neural-rerank to enable neural reranker"
+            "Build with --features neural-rerank to enable neural reranker \
+             (cross-encoder scoring is not implemented yet)"
         }
         .to_string(),
     });
@@ -169,5 +180,38 @@ mod tests {
             .providers
             .iter()
             .any(|p| p.name == "tfidf" && p.is_available));
+    }
+
+    /// The cross-encoder scorer is a placeholder (see
+    /// `search::neural_rerank::NEURAL_SCORING_IMPLEMENTED`): compiling the
+    /// feature in must never be reported as an operational reranker.
+    #[test]
+    fn test_neural_rerank_status_is_truthful_about_placeholder_scorer() {
+        let report = inspect_model_routing(&EmbeddingConfig::default());
+        let rerank = report
+            .providers
+            .iter()
+            .find(|p| p.name == "neural_rerank")
+            .expect("neural_rerank provider is always reported");
+
+        assert!(
+            !rerank.is_available,
+            "placeholder cross-encoder must not be reported as available"
+        );
+        assert!(
+            !rerank.status_message.contains("operational"),
+            "status must not claim the placeholder is operational: {}",
+            rerank.status_message
+        );
+        if cfg!(feature = "neural-rerank") {
+            assert!(rerank.is_degraded, "compiled-in placeholder is degraded");
+            assert!(
+                rerank.status_message.contains("not implemented"),
+                "status must say scoring is not implemented: {}",
+                rerank.status_message
+            );
+        } else {
+            assert!(!rerank.is_degraded);
+        }
     }
 }

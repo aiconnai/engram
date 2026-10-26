@@ -30,72 +30,41 @@ pub mod registry;
 
 pub use registry::TOOL_DEFINITIONS;
 
-/// Returns `false` for tool names whose feature flag is not compiled in.
+/// Compile-time probe for every Cargo feature that gates an MCP tool.
 ///
-/// Called by both `get_tool_definitions` and `get_tool_definitions_tiered` so
-/// that `tools/list` never advertises a tool that `tools/call` would reject with
-/// "Unknown tool".
+/// `catalog::required_features` names the features each tool needs; this table
+/// says which of them are compiled into the current build. Add a row here when
+/// a new feature starts gating tools (a unit test fails otherwise).
+const GATE_FEATURES: &[(&str, bool)] = &[
+    ("langfuse", cfg!(feature = "langfuse")),
+    ("meilisearch", cfg!(feature = "meilisearch")),
+    ("emergent-graph", cfg!(feature = "emergent-graph")),
+    ("multimodal", cfg!(feature = "multimodal")),
+    ("cloud", cfg!(feature = "cloud")),
+    ("duckdb-graph", cfg!(feature = "duckdb-graph")),
+    ("dream-phase", cfg!(feature = "dream-phase")),
+    ("attestation", cfg!(feature = "attestation")),
+    ("snapshot", cfg!(feature = "snapshot")),
+];
+
+/// Whether a gate feature is compiled in. Unknown features fail closed.
+fn gate_feature_compiled(feature: &str) -> bool {
+    GATE_FEATURES
+        .iter()
+        .any(|(name, compiled)| *name == feature && *compiled)
+}
+
+/// Returns `false` for tool names whose feature flags are not all compiled in.
+///
+/// Derived from `catalog::required_features`, the single source of truth for
+/// feature gating (also used by `discover_tools` and parsed by
+/// `scripts/generate_mcp_reference.py`). Called by both `get_tool_definitions`
+/// and `get_tool_definitions_tiered` so that `tools/list` never advertises a
+/// tool that `tools/call` would reject with "Unknown tool".
 pub(crate) fn tool_feature_available(name: &str) -> bool {
-    match name {
-        // langfuse feature
-        "langfuse_connect"
-        | "langfuse_sync"
-        | "langfuse_sync_status"
-        | "langfuse_extract_patterns"
-        | "memory_from_trace" => cfg!(feature = "langfuse"),
-
-        // meilisearch feature
-        "meilisearch_search"
-        | "meilisearch_reindex"
-        | "meilisearch_status"
-        | "meilisearch_config" => cfg!(feature = "meilisearch"),
-
-        // emergent-graph feature
-        "memory_auto_link"
-        | "memory_list_auto_links"
-        | "memory_auto_link_stats"
-        | "memory_cluster"
-        | "memory_get_cluster"
-        | "memory_list_clusters" => cfg!(feature = "emergent-graph"),
-
-        // multimodal feature (memory_sync_media also needs cloud)
-        "memory_sync_media" => cfg!(all(feature = "multimodal", feature = "cloud")),
-        "memory_describe_image"
-        | "memory_transcribe_audio"
-        | "memory_capture_screenshot"
-        | "memory_process_video"
-        | "memory_list_media"
-        | "memory_search_by_image"
-        | "memory_ingest_media" => cfg!(feature = "multimodal"),
-
-        // duckdb-graph feature
-        "memory_graph_path" | "memory_temporal_snapshot" | "memory_scope_snapshot" => {
-            cfg!(feature = "duckdb-graph")
-        }
-
-        // dream-phase feature
-        "dream_run_now"
-        | "dream_create"
-        | "dream_get"
-        | "dream_list"
-        | "dream_cancel"
-        | "dream_archive"
-        | "dream_candidates_list"
-        | "dream_candidate_get"
-        | "dream_candidate_review"
-        | "dream_candidate_apply"
-        | "memory_agent_writeback"
-        | "dream_eval_run" => cfg!(feature = "dream-phase"),
-
-        "attestation_log"
-        | "attestation_verify"
-        | "attestation_chain_verify"
-        | "attestation_list" => cfg!(feature = "attestation"),
-
-        "snapshot_create" | "snapshot_load" | "snapshot_inspect" => cfg!(feature = "snapshot"),
-
-        _ => true,
-    }
+    catalog::required_features(name)
+        .iter()
+        .all(|feature| gate_feature_compiled(feature))
 }
 
 /// Get all tool definitions as ToolDefinition structs.
@@ -364,19 +333,9 @@ mod tests {
     fn test_dispatch_registry_parity() {
         use std::collections::BTreeSet;
 
-        let mod_src = include_str!("../handlers/mod.rs");
-
         // Dispatch arm names: inside `pub fn dispatch`, up to the catch-all.
-        let d_start = mod_src
-            .find("pub fn dispatch")
-            .expect("dispatch fn present");
-        let d_end = mod_src[d_start..]
-            .find("tool_not_found")
-            .or_else(|| mod_src[d_start..].find(r#"_ => json!({"error": format!("Unknown tool"#))
-            .map(|i| d_start + i)
-            .expect("dispatch catch-all present");
         let mut dispatch: BTreeSet<&str> = BTreeSet::new();
-        for line in mod_src[d_start..d_end].lines() {
+        for line in dispatch_source().lines() {
             let t = line.trim();
             if t.starts_with('"') && t.contains("=>") {
                 if let Some(name) = t[1..].split('"').next() {
@@ -425,6 +384,151 @@ mod tests {
             "Tools ADVERTISED but NOT callable — add a dispatch arm or remove from registry: {:?}",
             r_only
         );
+    }
+
+    /// Source text of the `dispatch` match, from `pub fn dispatch` up to the
+    /// `tool_not_found` catch-all. Shared by the text-level parity guards.
+    fn dispatch_source() -> &'static str {
+        let mod_src = include_str!("../handlers/mod.rs");
+        let start = mod_src
+            .find("pub fn dispatch")
+            .expect("dispatch fn present");
+        let end = mod_src[start..]
+            .find("tool_not_found")
+            .map(|i| start + i)
+            .expect("dispatch catch-all present");
+        &mod_src[start..end]
+    }
+
+    /// Independent test oracle: is this gate feature compiled into the test
+    /// build? Deliberately NOT shared with production code so a wrong
+    /// `cfg!` mapping there is caught here.
+    fn gate_feature_compiled_in_test_build(feature: &str) -> bool {
+        match feature {
+            "langfuse" => cfg!(feature = "langfuse"),
+            "meilisearch" => cfg!(feature = "meilisearch"),
+            "emergent-graph" => cfg!(feature = "emergent-graph"),
+            "multimodal" => cfg!(feature = "multimodal"),
+            "cloud" => cfg!(feature = "cloud"),
+            "duckdb-graph" => cfg!(feature = "duckdb-graph"),
+            "dream-phase" => cfg!(feature = "dream-phase"),
+            "attestation" => cfg!(feature = "attestation"),
+            "snapshot" => cfg!(feature = "snapshot"),
+            other => panic!("test oracle does not know gate feature `{other}`"),
+        }
+    }
+
+    /// `tool_feature_available` (what `tools/list` advertises) must be exactly
+    /// "all `required_features` are compiled in". This is the contract that
+    /// keeps `discover_tools`, `tools/list` and the generated reference in
+    /// agreement; it regressed once when the two lists drifted (the dream
+    /// status/insights tools were gated in dispatch but advertised as always
+    /// available).
+    #[test]
+    fn test_feature_availability_follows_required_features() {
+        for def in TOOL_DEFINITIONS.iter() {
+            let expected = catalog::required_features(def.name)
+                .iter()
+                .all(|feature| gate_feature_compiled_in_test_build(feature));
+            assert_eq!(
+                tool_feature_available(def.name),
+                expected,
+                "tool_feature_available({}) disagrees with required_features {:?}",
+                def.name,
+                catalog::required_features(def.name)
+            );
+        }
+    }
+
+    /// Every `#[cfg(feature = ...)]`-gated dispatch arm must be listed in
+    /// `required_features` with the same feature set, and no ungated arm may
+    /// appear there. Otherwise a default build advertises (or documents) a
+    /// tool that `tools/call` answers with `tool_not_found`.
+    #[test]
+    fn test_cfg_gated_dispatch_arms_match_required_features() {
+        use std::collections::BTreeSet;
+
+        let mut gated: Vec<(&str, BTreeSet<&str>)> = Vec::new();
+        let mut ungated: Vec<&str> = Vec::new();
+        let mut pending: Option<BTreeSet<&str>> = None;
+
+        for line in dispatch_source().lines() {
+            let t = line.trim();
+            if t.starts_with("#[cfg(") && !t.contains("not(") {
+                pending = Some(
+                    t.split("feature = \"")
+                        .skip(1)
+                        .filter_map(|rest| rest.split('"').next())
+                        .collect(),
+                );
+            } else if t.starts_with('"') && t.contains("=>") {
+                let name = t[1..].split('"').next().expect("quoted arm name");
+                match pending.take() {
+                    Some(features) => gated.push((name, features)),
+                    None => ungated.push(name),
+                }
+            } else if !t.is_empty() && !t.starts_with("//") {
+                pending = None;
+            }
+        }
+
+        assert!(
+            gated.len() >= 40,
+            "parsed too few gated arms: {}",
+            gated.len()
+        );
+        for (name, features) in &gated {
+            let declared: BTreeSet<&str> =
+                catalog::required_features(name).iter().copied().collect();
+            assert_eq!(
+                &declared, features,
+                "dispatch cfg gate for `{name}` disagrees with catalog::required_features"
+            );
+        }
+        for name in ungated {
+            assert!(
+                catalog::required_features(name).is_empty(),
+                "`{name}` is dispatched unconditionally but catalog::required_features gates it"
+            );
+        }
+    }
+
+    /// `required_features` may only name cataloged tools and probed gate
+    /// features; a typo there would silently leave a tool ungated.
+    #[test]
+    fn test_required_features_names_are_cataloged_and_probed() {
+        let src = include_str!("catalog/mod.rs");
+        let start = src
+            .find("pub(crate) fn required_features")
+            .expect("required_features present");
+        let end = src[start..]
+            .find("pub(crate) fn required_feature(")
+            .map(|i| start + i)
+            .expect("required_feature present");
+        let registry: std::collections::BTreeSet<&str> =
+            TOOL_DEFINITIONS.iter().map(|d| d.name).collect();
+
+        let mut names = 0;
+        for quoted in src[start..end].split('"').skip(1).step_by(2) {
+            if registry.contains(quoted) {
+                names += 1;
+            } else {
+                // Not a tool: must be a probed gate feature, and the production
+                // probe must agree with the independent oracle.
+                let probe = GATE_FEATURES
+                    .iter()
+                    .find(|(name, _)| *name == quoted)
+                    .unwrap_or_else(|| {
+                        panic!("`{quoted}` in required_features is neither a cataloged tool nor in GATE_FEATURES")
+                    });
+                assert_eq!(
+                    probe.1,
+                    gate_feature_compiled_in_test_build(quoted),
+                    "GATE_FEATURES probe for `{quoted}` disagrees with the cfg oracle"
+                );
+            }
+        }
+        assert!(names >= 40, "parsed too few gated tool names: {names}");
     }
 
     #[test]
