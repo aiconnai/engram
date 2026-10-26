@@ -370,11 +370,17 @@ async def test_close_is_idempotent_and_use_after_close_is_typed(stub: StubServer
     assert stub.requests == [], "a closed client must not touch the network"
 
 
+async def _raise_inside_client_context(client: EngramClient) -> None:
+    async with client:
+        raise RuntimeError("boom")
+
+
 async def test_context_manager_closes_even_when_the_body_raises(stub: StubServer) -> None:
     client = make_client(stub)
+    # The raise lives in a helper so static analysis does not treat the statements
+    # after the ``with pytest.raises`` block as unreachable.
     with pytest.raises(RuntimeError, match="boom"):
-        async with client:
-            raise RuntimeError("boom")
+        await _raise_inside_client_context(client)
     with pytest.raises(EngramError, match="closed"):
         await client.get(1)
 
