@@ -92,6 +92,12 @@ def assess(report: Any, *, candidate_sha: str, supervisor: str) -> Verdict:
     return Verdict(ACCEPTED, [])
 
 
+PHASE_NOTE = (
+    "- Phase: report-only, not a required check, until the floors are accepted by"
+    " independent human review and anchored on the protected base."
+)
+
+
 def render_summary(verdict: Verdict, candidate_sha: str, report_path: Path) -> str:
     title = {ACCEPTED: "ACCEPTED", NOT_ACCEPTED: "NOT ACCEPTED", REJECTED: "REJECTED"}[verdict.decision]
     lines = [
@@ -99,8 +105,7 @@ def render_summary(verdict: Verdict, candidate_sha: str, report_path: Path) -> s
         "",
         f"- Candidate: `{candidate_sha}`",
         f"- Report: `{report_path.name}` (uploaded as a workflow artifact)",
-        "- Phase: report-only, not a required check, until the floors are accepted by"
-        " independent human review and anchored on the protected base.",
+        PHASE_NOTE,
     ]
     lines += [f"- {reason}" for reason in verdict.reasons]
     return "\n".join(lines) + "\n"
