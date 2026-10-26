@@ -302,7 +302,7 @@ notify = { version = "8.2", optional = true }
 tempfile = { version = "3.9", optional = true }
 
 # DuckDB for distributed graph analysis (Phase M)
-duckdb = { version = "1.4", features = ["bundled", "chrono"], optional = true }
+duckdb = { version = "1.10506.1", features = ["bundled", "chrono"], optional = true }
 
 [build-dependencies]
 # Proto compilation for gRPC transport (only active when grpc feature is enabled)
