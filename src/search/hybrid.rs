@@ -173,6 +173,11 @@ fn keyword_only_search(
     Ok(results)
 }
 
+/// Upper bound on HNSW candidates fetched when post-filters discard results.
+const HNSW_MAX_CANDIDATES: usize = 4096;
+/// Growth factor applied to the candidate fetch on each widening round.
+const HNSW_WIDEN_FACTOR: usize = 4;
+
 /// Semantic-only search using HNSW vector index or falling back to SQLite linear scan
 fn semantic_only_search_with_hnsw(
     conn: &Connection,
@@ -186,16 +191,32 @@ fn semantic_only_search_with_hnsw(
     if config.hnsw_enabled {
         if let Some(hnsw) = hnsw_index {
             if !hnsw.is_empty() && query_embedding.len() == hnsw.config().dim {
-                let candidate_k = (limit * 3).max(16) as usize;
-                let candidates =
-                    hnsw.search(query_embedding, candidate_k, Some(config.hnsw_ef_search));
-                if !candidates.is_empty() {
+                let live = hnsw.len();
+                let mut candidate_k = (limit * 3).max(16) as usize;
+                // Post-filtering (workspace, tags, expiry, min_score...) can
+                // discard most candidates: widen the fetch (bounded) until
+                // `limit` eligible results exist or the index is exhausted.
+                loop {
+                    let candidates =
+                        hnsw.search(query_embedding, candidate_k, Some(config.hnsw_ef_search));
+                    if candidates.is_empty() {
+                        break;
+                    }
+                    let exhausted = candidates.len() < candidate_k
+                        || candidate_k >= live
+                        || candidate_k >= HNSW_MAX_CANDIDATES;
                     let hydrated = semantic_hydrate_hnsw_candidates(
                         conn, candidates, limit, min_score, options, config,
                     )?;
-                    if !hydrated.is_empty() {
-                        return Ok(hydrated);
+                    if hydrated.len() as i64 >= limit || exhausted {
+                        if !hydrated.is_empty() {
+                            return Ok(hydrated);
+                        }
+                        break;
                     }
+                    candidate_k = candidate_k
+                        .saturating_mul(HNSW_WIDEN_FACTOR)
+                        .min(HNSW_MAX_CANDIDATES);
                 }
             }
         }
@@ -729,6 +750,69 @@ fn rrf_hybrid_search_with_hnsw(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hnsw_search_widens_the_fetch_so_limit_is_honored_after_filtering() {
+        use super::*;
+        use crate::search::hnsw::{HnswConfig, HnswIndex};
+        use crate::storage::queries::create_memory;
+        use crate::storage::Storage;
+        use crate::types::CreateMemoryInput;
+
+        let storage = Storage::open_in_memory().expect("storage");
+        let mut index = HnswIndex::new(HnswConfig::new(3, crate::search::VectorMetric::Cosine));
+        let make = |conn: &Connection, workspace: &str, name: &str| -> i64 {
+            let input: CreateMemoryInput = serde_json::from_value(serde_json::json!({
+                "content": name, "memory_type": "note", "workspace": workspace
+            }))
+            .expect("input");
+            create_memory(conn, &input).expect("create").id
+        };
+
+        let (mine, ids) = storage
+            .with_connection(|conn| {
+                // 20 closer neighbours in another workspace crowd the initial fetch.
+                let mut others = Vec::new();
+                for i in 0..20 {
+                    let id = make(conn, "other", &format!("other {i}"));
+                    index.insert(id, &[1.0, 0.01 * (i as f32 + 1.0), 0.0]);
+                    others.push(id);
+                }
+                let near = make(conn, "mine", "mine near");
+                index.insert(near, &[1.0, 0.005, 0.0]);
+                let far = make(conn, "mine", "mine far");
+                index.insert(far, &[1.0, 0.5, 0.0]);
+                Ok((vec![near, far], others))
+            })
+            .expect("seed");
+
+        let options = SearchOptions {
+            workspace: Some("mine".to_string()),
+            ..Default::default()
+        };
+        let config = SearchConfig {
+            hnsw_enabled: true,
+            ..Default::default()
+        };
+        let results = storage
+            .with_connection(|conn| {
+                semantic_only_search_with_hnsw(
+                    conn,
+                    &[1.0, 0.0, 0.0],
+                    2,
+                    0.0,
+                    &options,
+                    &config,
+                    Some(&index),
+                )
+            })
+            .expect("search");
+
+        let found: Vec<i64> = results.iter().map(|r| r.memory.id).collect();
+        assert_eq!(found.len(), 2, "limit must be honored: {found:?}");
+        assert!(mine.iter().all(|id| found.contains(id)));
+        assert!(ids.iter().all(|id| !found.contains(id)));
+    }
+
     #[test]
     fn test_rrf_formula() {
         // RRF score = sum of 1/(k + rank) for each system
