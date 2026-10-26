@@ -282,3 +282,92 @@ fn batch_create_completes_jobs_and_survives_provider_outage() {
     );
     assert_eq!(embeddings_health(&ctx).status, DerivedIndexStatus::Healthy);
 }
+
+// --- Vector index stays in sync with delete / update -------------------------
+
+use super::{memory_delete, memory_delete_batch, memory_update};
+
+fn index_hits(ctx: &HandlerContext, id: i64) -> bool {
+    let embedding = ctx
+        .storage
+        .with_connection(|conn| crate::embedding::get_embedding(conn, id))
+        .expect("read embedding")
+        .expect("embedding row");
+    ctx.hnsw_index
+        .read()
+        .search(&embedding, 10, None)
+        .iter()
+        .any(|c| c.id == id)
+}
+
+#[test]
+fn memory_delete_removes_the_memory_from_the_vector_index() {
+    let ctx = make_ctx(Arc::new(SwitchableEmbedder::new()));
+    let id = create(&ctx, "delete me from the vector index", json!({}))["id"]
+        .as_i64()
+        .unwrap();
+    assert!(ctx.hnsw_index.read().contains(&id));
+    assert!(index_hits(&ctx, id));
+
+    memory_delete(&ctx, json!({"id": id}));
+    assert!(!ctx.hnsw_index.read().contains(&id));
+    assert!(ctx
+        .hnsw_index
+        .read()
+        .search(&[0.0; DIMS], 10, None)
+        .is_empty());
+}
+
+#[test]
+fn memory_delete_batch_removes_every_deleted_memory_from_the_vector_index() {
+    let ctx = make_ctx(Arc::new(SwitchableEmbedder::new()));
+    let a = create(&ctx, "batch delete alpha", json!({}))["id"]
+        .as_i64()
+        .unwrap();
+    let b = create(&ctx, "batch delete beta", json!({}))["id"]
+        .as_i64()
+        .unwrap();
+    let keep = create(&ctx, "batch delete keeper", json!({}))["id"]
+        .as_i64()
+        .unwrap();
+
+    memory_delete_batch(&ctx, json!({"ids": [a, b]}));
+    let index = ctx.hnsw_index.read();
+    assert!(!index.contains(&a) && !index.contains(&b));
+    assert!(index.contains(&keep));
+}
+
+#[test]
+fn memory_delete_cascade_removes_the_chain_from_the_vector_index() {
+    let ctx = make_ctx(Arc::new(SwitchableEmbedder::new()));
+    let id = create(&ctx, "cascade root", json!({}))["id"]
+        .as_i64()
+        .unwrap();
+    memory_delete(&ctx, json!({"id": id, "cascade_chain": true}));
+    assert!(!ctx.hnsw_index.read().contains(&id));
+}
+
+#[test]
+fn content_update_drops_the_stale_vector_until_the_new_embedding_is_drained() {
+    let ctx = make_ctx(Arc::new(SwitchableEmbedder::new()));
+    let id = create(&ctx, "original content before the edit", json!({}))["id"]
+        .as_i64()
+        .unwrap();
+    assert!(ctx.hnsw_index.read().contains(&id));
+
+    memory_update(
+        &ctx,
+        json!({"id": id, "content": "completely different words now"}),
+    );
+    assert!(
+        !ctx.hnsw_index.read().contains(&id),
+        "the stale vector must not be served after a content change"
+    );
+
+    // Metadata-only updates keep the (still valid) vector.
+    let other = create(&ctx, "metadata only edit target", json!({}))["id"]
+        .as_i64()
+        .unwrap();
+    memory_update(&ctx, json!({"id": other, "importance": 0.9}));
+    assert!(ctx.hnsw_index.read().contains(&other));
+}

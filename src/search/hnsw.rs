@@ -138,6 +138,10 @@ pub struct HnswIndex<Id = i64> {
     entry_point: Option<usize>,
     max_level: usize,
     rng_state: u64,
+    /// Soft-deleted IDs. Their nodes stay in the graph so traversal keeps
+    /// working, but they are never returned by `search` and are dropped when
+    /// the index is persisted (see `save_to_writer`).
+    tombstones: HashSet<Id>,
 }
 
 impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
@@ -150,22 +154,49 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
             entry_point: None,
             max_level: 0,
             rng_state: 0x853c49e6748fea9b,
+            tombstones: HashSet::new(),
         }
     }
 
-    /// Number of items stored in the index.
+    /// Number of live (non-removed) items stored in the index.
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.nodes.len() - self.tombstones.len()
     }
 
-    /// Returns `true` if the index contains no items.
+    /// Returns `true` if the index contains no live items.
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.len() == 0
     }
 
-    /// Check if the index contains a given ID.
+    /// Check if the index contains a live (non-removed) item with the given ID.
     pub fn contains(&self, id: &Id) -> bool {
-        self.id_to_idx.contains_key(id)
+        self.id_to_idx.contains_key(id) && !self.tombstones.contains(id)
+    }
+
+    /// Remove an item from search results (tombstone).
+    ///
+    /// The node stays in the graph so neighbor links remain navigable, but it
+    /// is never returned by [`search`](Self::search) and is not persisted.
+    /// Re-inserting the same ID revives it with the new vector.
+    /// Returns `true` if a live item was removed.
+    pub fn remove(&mut self, id: &Id) -> bool {
+        if self.id_to_idx.contains_key(id) && !self.tombstones.contains(id) {
+            self.tombstones.insert(id.clone());
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Rebuild the index without tombstoned nodes (used before persisting).
+    fn compacted(&self) -> Self {
+        let mut fresh = Self::new(self.config.clone());
+        for node in &self.nodes {
+            if !self.tombstones.contains(&node.id) {
+                fresh.insert(node.id.clone(), &node.vector);
+            }
+        }
+        fresh
     }
 
     /// Get index configuration.
@@ -203,6 +234,8 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
         }
 
         if let Some(&existing_idx) = self.id_to_idx.get(&id) {
+            // A re-inserted ID is live again (revives a tombstone).
+            self.tombstones.remove(&id);
             // Update vector and re-link its multi-layer neighborhood
             self.nodes[existing_idx].vector = vector.to_vec();
             let node_level = self.nodes[existing_idx].neighbors.len().saturating_sub(1);
@@ -435,7 +468,10 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
             None => return Vec::new(),
         };
 
-        let ef_val = ef.unwrap_or(self.config.ef_search).max(k);
+        // Tombstoned nodes still occupy graph slots: widen the beam so `k` live
+        // results can still be returned (bounded by the node count).
+        let k_fetch = (k + self.tombstones.len()).min(self.nodes.len());
+        let ef_val = ef.unwrap_or(self.config.ef_search).max(k_fetch);
         let mut curr_obj = entry;
         let mut curr_dist = self.dist_to_vec(query, curr_obj);
 
@@ -462,8 +498,14 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
 
         // 3. Take top-k and construct results with metric similarity scores
         let mut results = Vec::with_capacity(k.min(candidates.len()));
-        for cn in candidates.into_iter().take(k) {
+        for cn in candidates.into_iter() {
+            if results.len() >= k {
+                break;
+            }
             let node = &self.nodes[cn.idx];
+            if self.tombstones.contains(&node.id) {
+                continue;
+            }
             let similarity = self.config.metric.similarity(query, &node.vector);
 
             results.push(HnswCandidate {
@@ -507,6 +549,11 @@ impl Adler32 {
 impl HnswIndex<i64> {
     /// Serialize this HNSW index into a compact binary format and write it to `writer`.
     pub fn save_to_writer<W: std::io::Write>(&self, writer: &mut W) -> crate::error::Result<()> {
+        // Tombstones are not part of the on-disk format: persist a compacted
+        // copy so removed vectors never reappear after a restart.
+        if !self.tombstones.is_empty() {
+            return self.compacted().save_to_writer(writer);
+        }
         let mut adler = Adler32::new();
 
         // 1. Magic Header
@@ -780,6 +827,7 @@ impl HnswIndex<i64> {
             entry_point,
             max_level,
             rng_state,
+            tombstones: HashSet::new(),
         })
     }
 
@@ -948,5 +996,57 @@ mod tests {
         assert!(res.is_err());
         let err_msg = res.unwrap_err().to_string();
         assert!(err_msg.contains("exceeds maximum"));
+    }
+    fn sample_index() -> HnswIndex<i64> {
+        let config = HnswConfig::new(3, VectorMetric::Cosine).with_ef(32, 32);
+        let mut index = HnswIndex::new(config);
+        index.insert(1, &[1.0, 0.0, 0.0]);
+        index.insert(2, &[0.9, 0.1, 0.0]);
+        index.insert(3, &[0.0, 1.0, 0.0]);
+        index.insert(4, &[0.0, 0.0, 1.0]);
+        index
+    }
+
+    #[test]
+    fn test_remove_excludes_id_from_search() {
+        let mut index = sample_index();
+        assert!(index.remove(&1));
+        assert!(!index.contains(&1));
+        assert_eq!(index.len(), 3);
+        assert!(!index.remove(&1), "second remove is a no-op");
+        assert!(!index.remove(&999), "unknown id is a no-op");
+
+        let res = index.search(&[1.0, 0.0, 0.0], 4, None);
+        assert_eq!(res.len(), 3, "k live results are still returned");
+        assert!(res.iter().all(|c| c.id != 1));
+        assert_eq!(res[0].id, 2);
+    }
+
+    #[test]
+    fn test_reinsert_replaces_vector_and_revives_tombstone() {
+        let mut index = sample_index();
+        index.insert(3, &[1.0, 0.0, 0.0]);
+        let res = index.search(&[0.0, 1.0, 0.0], 1, None);
+        assert_ne!(res[0].id, 3, "old vector for id 3 must be gone");
+
+        index.remove(&4);
+        index.insert(4, &[0.0, 1.0, 0.0]);
+        assert!(index.contains(&4));
+        assert_eq!(index.len(), 4);
+        let res = index.search(&[0.0, 1.0, 0.0], 1, None);
+        assert_eq!(res[0].id, 4);
+    }
+
+    #[test]
+    fn test_save_load_drops_tombstoned_ids() {
+        let mut index = sample_index();
+        index.remove(&2);
+        let bytes = index.save_to_bytes().expect("save");
+        let loaded = HnswIndex::load_from_bytes(&bytes).expect("load");
+        assert!(!loaded.contains(&2));
+        assert_eq!(loaded.len(), 3);
+        let res = loaded.search(&[0.9, 0.1, 0.0], 4, None);
+        assert!(res.iter().all(|c| c.id != 2));
+        assert_eq!(res[0].id, 1);
     }
 }

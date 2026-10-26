@@ -28,7 +28,11 @@ fn create_test_context() -> HandlerContext {
         storage,
         embedder: embedder.clone(),
         fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
-        search_config: SearchConfig::default(),
+        // HNSW is opt-in by default (RFC 0003); these tests exercise that path.
+        search_config: SearchConfig {
+            hnsw_enabled: true,
+            ..SearchConfig::default()
+        },
         realtime: None,
         embedding_cache: Arc::new(EmbeddingCache::default()),
         search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
@@ -406,7 +410,10 @@ fn test_hnsw_graceful_fallback_when_disabled_or_empty() {
                 "Fallback testing",
                 Some(&emb),
                 &options,
-                &SearchConfig::default(),
+                &SearchConfig {
+                    hnsw_enabled: true,
+                    ..SearchConfig::default()
+                },
             )
         })
         .unwrap();
