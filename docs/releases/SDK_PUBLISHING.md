@@ -14,13 +14,13 @@ credentials or registry-write job in its execution graph.
 Use the exact candidate SHA when dispatching:
 
 ```bash
-RUN_ID="$(bash scripts/dispatch-and-wait-workflow.sh \
-  --workflow sdk-release.yml \
-  --ref "$(git branch --show-current)" \
-  --field channel=all \
-  --field dry_run=true \
-  --field sha="$(git rev-parse HEAD)")"
-bash scripts/verify-sdk-artifacts.sh --run-id "$RUN_ID" --live
+SHA="$(git rev-parse HEAD)"; REF="$(git branch --show-current)"   # the pushed branch whose head is $SHA
+gh workflow run sdk-release.yml --ref "$REF" \
+  -f channel=all -f dry_run=true -f publish=false -f sha="$SHA"
+sleep 10   # allow the run to register, then pick the newest dispatch on that ref
+RUN_ID="$(gh run list --workflow sdk-release.yml --branch "$REF" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
+gh run watch "$RUN_ID" --exit-status
+bash scripts/verify-sdk-artifacts.sh --run-id "$RUN_ID" --expected-sha "$SHA" --live
 ```
 
 The verifier checks package names, independently versioned package metadata,
