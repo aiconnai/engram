@@ -116,10 +116,64 @@ LAST_REVIEW="$(field_value "$PROGRESS_PATH" "Last review")"
 LAST_SENSORS="$(field_value "$PROGRESS_PATH" "Last sensors")"
 LAST_CHECK="$(field_value "$PROGRESS_PATH" "Last live-state check")"
 ACTIVE_PLAN="$(field_value "$PROGRESS_PATH" "Active plan")"
+ACTIVE_TASK="$(field_value "$PROGRESS_PATH" "Active task")"
 REVIEW_PATH=""
 SNAPSHOT_COMMIT=""
+# Legacy approved-baseline mechanism (2026-07 live-state task); unrelated to review authority.
 CANVAS_PATH="docs/harness/canvas/2026-07-09-engram-10-of-10-live-state.md"
-CURRENT_REVIEW_PATH="$(find docs/harness/reviews -type f -name '*engram-10-of-10-live-state*post.md' ! -name '*.raw' | sort | tail -1)"
+
+# Review authority is derived from progress.md, never hardcoded to one task:
+#   - the "Last review" field names the artifact (first docs/harness/reviews/*.md path);
+#   - its task slug comes from its own file name (<date>-<slug>[-vN]-post.md);
+#   - it must be the newest version of that slug (date, then vN);
+#   - when the "Active task" already has post-review artifacts, it must be the newest of those.
+review_slug_from_path() {
+  local base="${1##*/}"
+  local re='^[0-9]{4}-[0-9]{2}-[0-9]{2}-(.+)-post$'
+  local ver_re='^(.+)-v[0-9]+$'
+  base="${base%.md}"
+  if [[ "$base" =~ $re ]]; then
+    base="${BASH_REMATCH[1]}"
+    if [[ "$base" =~ $ver_re ]]; then
+      base="${BASH_REMATCH[1]}"
+    fi
+    printf '%s' "$base"
+  fi
+}
+
+review_sort_key() {
+  local base="${1##*/}"
+  local ver_re='-v([0-9]+)-post\.md$'
+  local version=1
+  if [[ "$base" =~ $ver_re ]]; then
+    version="${BASH_REMATCH[1]}"
+  fi
+  printf '%s %06d' "${base:0:10}" "$((10#$version))"
+}
+
+# Newest <date>-<slug>[-vN]-post.md for an exact slug ('' when none). Raw prompts are ignored.
+latest_post_review_for() {
+  local slug="$1"
+  local candidate
+  case "$slug" in
+    ''|*[!A-Za-z0-9._-]*) return 0 ;;
+  esac
+  { find docs/harness/reviews -maxdepth 1 -type f \
+      \( -name "????-??-??-${slug}-post.md" -o -name "????-??-??-${slug}-v[0-9]*-post.md" \) \
+      ! -name '*.raw' 2>/dev/null || true; } \
+    | while IFS= read -r candidate; do
+        printf '%s\t%s\n' "$(review_sort_key "$candidate")" "$candidate"
+      done \
+    | LC_ALL=C sort | tail -n 1 | cut -f2-
+}
+
+active_task_id() {
+  local value="$1"
+  value="${value%% — *}"
+  value="${value%% - *}"
+  value="${value%% *}"
+  printf '%s' "$value"
+}
 
 commit_touches_file() {
   local commit="$1"
@@ -198,13 +252,20 @@ if [ -n "$LAST_REVIEW" ]; then
     if ! grep -Eq '^REVIEW_VERDICT:[[:space:]]*PASS[[:space:]]' "$REVIEW_PATH"; then
       add_failure "Last review artifact lacks REVIEW_VERDICT: PASS: $REVIEW_PATH"
     fi
-    if ! grep -Fq "engram-10-of-10-live-state" <<<"$REVIEW_PATH"; then
-      add_failure "Last review artifact is stale for this task: $REVIEW_PATH"
+    REVIEW_SLUG="$(review_slug_from_path "$REVIEW_PATH")"
+    if [ -z "$REVIEW_SLUG" ]; then
+      add_failure "Last review artifact is not a docs/harness/reviews/<date>-<task>[-vN]-post.md file: $REVIEW_PATH"
+    else
+      CURRENT_REVIEW_PATH="$(latest_post_review_for "$REVIEW_SLUG")"
+      if [ -z "$CURRENT_REVIEW_PATH" ]; then
+        add_failure "no authoritative current review artifact found for $REVIEW_SLUG"
+      elif [ "$REVIEW_PATH" != "$CURRENT_REVIEW_PATH" ]; then
+        add_failure "Last review is not authoritative current review: found $REVIEW_PATH, expected $CURRENT_REVIEW_PATH"
+      fi
     fi
-    if [ -z "$CURRENT_REVIEW_PATH" ]; then
-      add_failure "no authoritative current review artifact found for engram-10-of-10-live-state"
-    elif [ "$REVIEW_PATH" != "$CURRENT_REVIEW_PATH" ]; then
-      add_failure "Last review is not authoritative current review: found $REVIEW_PATH, expected $CURRENT_REVIEW_PATH"
+    ACTIVE_REVIEW_PATH="$(latest_post_review_for "$(active_task_id "$ACTIVE_TASK")")"
+    if [ -n "$ACTIVE_REVIEW_PATH" ] && [ "$REVIEW_PATH" != "$ACTIVE_REVIEW_PATH" ]; then
+      add_failure "Last review artifact is stale for the active task: found $REVIEW_PATH, expected $ACTIVE_REVIEW_PATH"
     fi
   fi
 fi

@@ -6,7 +6,7 @@
 | Active sprint | `Turso/libSQL sunset v0.24.0` |
 | Active task | `turso-sunset` |
 | Active plan | `docs/harness/progress/2026-10-23-turso-sunset.md` |
-| Last review | `2026-07-10 — pass: docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md (autoridade exigida por check-live-state). Sunset 2026-10-23: opinião Sonnet PASS em docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md; post-gate PENDING por receipt humano ausente.` |
+| Last review | `2026-10-23 — parecer Sonnet PASS (opinião independente; NÃO é post-gate com receipt humano): docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sunset: post-gate PENDING por receipt humano ausente. Autoridade derivada por check-live-state a partir deste campo (mais recente da própria tarefa).` |
 | Last sensors | `2026-10-23 — turso-sunset: status=pass mode=full timestamp=2026-10-23T20:10:00Z duration_sec=310; sem exclusões. Primeira execução falhou em links de retomada, corrigidos e revalidados.` |
 | Last commit | `b29cd16c` |
 | Last live-state check | `2026-10-23 — PASS: rtk proxy bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Não substitui post-gate com receipt.` |
