@@ -74,10 +74,30 @@ Os scripts de `docs/harness/bin/*` alterados (itens 2 e 3) são process-critical
 autoritativos** até haver review independente ou sign-off do owner (WHAT_WE_DONT_DO; GATES "Harness
 Script Guard"). Nenhum reviewer, receipt ou PASS foi produzido por esta frente.
 
-## Verificações locais da frente WT5
+## Verificação final da frente WT5
 
-Preenchidas ao final da frente (ver "Verificação final" abaixo).
+Executado em `chore/harness-live-state` (2026-10-26), sem rede e sem `sensors.sh`:
 
-## Verificação final
+| Verificação | Resultado |
+|---|---|
+| `bash docs/harness/bin/doctor.sh` | exit 0, `OK harness doctor`, 1 WARN esperado (`no review artifact found for active task`: a sprint ainda não tem review) |
+| `bash docs/harness/bin/run-offline-lane.sh` | `OFFLINE_LANE: PASS components=12 checks=534`, todos os pisos exatos (`live_state` 44, `context_budget` 50) |
+| `check-live-state.sh --progress docs/harness/progress.md` (estrito) | PASS com `Last commit` = HEAD antes do commit de refresh; repetido depois dele com `Last commit` = pai |
+| `test-check-live-state.sh` | 44 asserções PASS com bash 3.2.57 e 5.3.15; a suíte nova **falha** contra o checker antigo |
+| `test_context_budget.py` / `test_offline_lane.py` | 50 e 19 testes OK; o teste novo do contador **falha** contra o bootstrap antigo (`5 active / 8 total`) |
+| `shellcheck -x` nos scripts alterados, `check-doc-links.py` nos docs alterados, `git diff --check` | PASS |
+| `bootstrap.sh` | 42 linhas, `MCP tools (source): 256 active / 301 total` (conferido à mão: 301 − 45 tools sob `cfg!(feature)`) |
+| `check-security-exceptions.py` com a config do CI | PASS (2 governed records) |
 
-Pendente.
+Não executado: `sensors.sh` completo (reescreve receipts rastreados; é do integrador), `cargo test`, smokes
+com Docker real, qualquer escrita remota. O hook de pre-commit (`cargo fmt` + `clippy --all-features`) rodou em
+cada commit; esta frente não altera código Rust.
+
+## Achados fora do escopo (não corrigidos)
+
+- `harness-risk-register.sh add` calcula mal o próximo id a partir de `RISK-0008` (aritmética octal com
+  `0008`; de `0010` repetiria `RISK-0009`): `RISK-0009` foi criado com `--id` explícito. Lição em
+  `ERRORS_AND_LESSONS.md`.
+- `harness-risk-register.sh validate` falha até no arquivo de base com Ruby/Psych 4 (`updated_at` vira `Time`).
+  A conferência foi feita com `YAML.safe_load(..., permitted_classes: [Time, Date])`: 9 entradas, scores consistentes.
+- As duas correções são mudanças em `docs/harness/bin/*` (process-critical) e precisam de review independente.
