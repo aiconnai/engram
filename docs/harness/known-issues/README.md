@@ -23,3 +23,11 @@ Example structure:
 ```
 
 Never use this mechanism to hide real problems in the codebase.
+
+## Outra categoria: achados de review adiados
+
+Este diretório também pode guardar a **triagem de achados de review adiados** (não são exclusões de
+sensor e nunca servem como `--known-issue`). Eles ficam em arquivos com o mesmo nome
+`YYYY-MM-DD-<slug>.md`, declaram "Tipo: achados de review adiados" no topo e carregam status
+explícito (aberto, em andamento, parcial, corrigido com SHA). Primeiro caso:
+[`2026-10-26-deferred-review-minors.md`](./2026-10-26-deferred-review-minors.md).
