@@ -42,16 +42,12 @@ Persistent memory for AI agents and teams working on proprietary context. Engram
 
 ```
 engram/
-├── benches/
-├── data/
-├── docs/
-├── sdks/
-├── specs/
-├── src/
-├── tests/
-├── README.md
-├── CONTRIBUTING.md
-├── CHANGELOG.md
+├── src/ (engram-core), crates/ (engram-types), engram-wasm/, proto/
+├── sdks/ (python/, typescript/), examples/, skills/, fuzz/, benches/
+├── tests/ (Rust integration), scripts/ (ci.sh, MCP reference, quality/security checkers)
+├── docs/ (docs/harness/ = agent harness), governance/
+├── Makefile, justfile, Cargo.toml, deny.toml, rust-toolchain.toml
+├── README.md, CONTRIBUTING.md, CHANGELOG.md
 ```
 
 ---
@@ -89,34 +85,31 @@ This operational harness (inspired by proven backend patterns) ensures resumable
 ```bash
 bash docs/harness/bin/bootstrap.sh
 bash docs/harness/bin/doctor.sh
-bash docs/harness/bin/sensors.sh   # full deterministic gates (wraps just ci)
+bash docs/harness/bin/sensors.sh   # full gates: same steps as scripts/ci.sh + doctor (does not call just)
 ```
 
 ```bash
-pip install -r requirements.txt  # or: pip install -e .
-```
-
-```bash
-npm install
+pip install -e sdks/python        # no root requirements.txt
+(cd sdks/typescript && npm install)  # no root package.json
 ```
 
 ```bash
 cargo build
 cargo test
 cargo run
-just ci
+make ci                           # scripts/ci.sh; `just ci` is an alias only if `just` is installed
 ```
 
 ---
 
 ## Testing
 
-Test directories: specs, tests
+Test directories: `tests/` (Rust), `sdks/python/tests/`, `sdks/typescript/src/` (vitest).
 
 ```bash
-pytest
-npm test
 cargo test
+(cd sdks/python && pytest tests/)
+(cd sdks/typescript && npm test)
 ```
 
 ---
@@ -200,20 +193,26 @@ Spinning without progress is the most expensive failure mode. Detecting it early
 
 ## Key Decisions
 
-<!-- [placeholder] -->
 | Decision | Rationale | Status |
 |----------|-----------|--------|
-| <!-- e.g. Use PostgreSQL --> | <!-- why this choice --> | <!-- Active / Revisit / Superseded --> |
-
-<!-- Track decisions that constrain future work. Remove rows when no longer relevant. -->
+| Agent harness hardening v1: writer evidence bound to the commit, static/read-only default, runners only with a fake writer | No self-approval; no autonomous execution without ADR, sandbox and target contract (`docs/decisions/2026-07-21-agent-harness-hardening-v1.md`) | Accepted 2026-10-05 |
+| Turso/libSQL sunset (ADR-STORAGE-20260816-1): SQLite is the only backend | Drop an unmaintained second backend (`docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md`) | Accepted; done in `08cb17a4`; post-gate pending human receipt |
+| WAL replay budget 64 GiB, configurable | Bounds sparse-file and decompression abuse (root `INVARIANTS.md` #25, `ReplayLimits`) | Active (owner, 2026-10-05) |
+| `defer_embedding=true` queues a background job | Code keeps the catalog promise (`CHANGELOG.md` C7; `docs/harness/progress/2026-10-05-improvement-lane-r.md`) | Active (owner, 2026-10-05) |
+| `default = ["openai"]`, restricted loopback principal, char-based chunking | Lean default build; by-ID tools stay admin-only (`docs/decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md`) | Accepted 2026-10-14 |
 
 ---
 
 ## Active Risks
 
-<!-- [placeholder] -->
-<!-- What is currently fragile, under migration, or operationally risky -->
-<!-- Remove items as they are resolved -->
+State at baseline `08cb17a4`, 2026-10-26. Detail: `docs/harness/risk-register.yaml`, `docs/harness/known-issues/`.
+
+- **Authz regression from `e04d3307`** (RISK-0003): a restricted principal can write to a foreign workspace via `memory_create_batch` / `memory_ingest_fact_batch`. Fix is in branch `fix/workspace-batch-auth`, **not merged**; open until the fixing SHA is recorded here.
+- **Unredacted logs** (RISK-0002): ~250 log sites outside the O1 paths (sync/cloud, hooks, multimodal, watcher); use `observability::redact` in new logs.
+- **No required review on `main`** (D8, RISK-0006): `enforce_admins=false`, no PR review rule; human merge is process, not a technical control.
+- **C4 SQLite descriptor-bound open** (RISK-0007): the ADR is still *Proposed*; Invariant #27 mitigates by path only.
+- **Advisories** (RISK-0008): exceptions went 11 → 2, both expire 2026-12-31; the 2026-10-26 survey reports 7 new RUSTSEC keeping `Security Audit`/`Cargo Deny` red since 2026-10-17.
+- **Evidence provenance** (RISK-0009): the 2026-10-14 verdict and the sunset review are PASS without a human receipt; `.sensors-log` has no row from 2026-09-03 to 2026-10-23.
 
 ---
 
@@ -285,6 +284,7 @@ git worktree list                 # see all active worktrees
 Content in this file was assembled from:
 
 - `README.md`
+- hand corrections of 2026-10-26 (structure, commands, Key Decisions, Active Risks)
 
 Sections containing `migrated` in a comment came from existing files — verify accuracy.
 Sections containing `inferred` were detected from project structure — may need correction.
@@ -294,5 +294,5 @@ Sections containing `placeholder` need manual input.
 
 ## Document Information
 
-**Last Updated:** 2026-03-09
+**Last Updated:** 2026-10-26
 **Generated by:** claude-primer v1.8.1

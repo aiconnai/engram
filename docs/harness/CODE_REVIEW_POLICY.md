@@ -135,7 +135,7 @@ consumidores:
 
 O review-gate injeta checagens específicas para engram:
 
-- Se `storage/migrations.rs` ou `SCHEMA_VERSION` mudou → exigir evidência de testes de migração e integração rodando limpos.
+- Se `src/storage/migrations/` ou `SCHEMA_VERSION` mudou → exigir evidência de testes de migração e integração rodando limpos.
 - Se MCP handlers/tools mudaram → checar protocolo tests, reference gerada, e impacto em SDKs Python/TS.
 - Se hooks (`src/hooks/`) ou intelligence modules mudaram → checar side effects, consolidação, e testes de integração.
 - Se embeddings, ONNX, ou cache → checar bounds, feature flags vs CI parity, e benchmarks quando relevantes.

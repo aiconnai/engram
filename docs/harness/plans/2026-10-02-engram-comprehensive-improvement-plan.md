@@ -12,7 +12,16 @@
 
 **Spec:** `docs/harness/SPEC.md`, `docs/harness/INVARIANTS.md`, `docs/harness/WHAT_WE_DONT_DO.md`, `docs/harness/GATES.md`, `docs/decisions/2026-07-21-agent-harness-hardening-v1.md`, root `INVARIANTS.md`, `STANDARDS.md` e `docs/quality/retrieval-performance-policy.md`. O blueprint do operador e a auditoria fornecida são inputs, não política aceita.
 
-**Status:** PROPOSTA PARA REVISÃO (ver nota de autorização acima, que a supersede para esta execução). Não autoriza alteração de branch protection, publicação, merge ou produção.
+**Status:** ENCERRADO em 2026-10-14 (ondas 0-6; fechamento registrado em 2026-10-26). A marca anterior "PROPOSTA PARA REVISÃO" foi superada pela autorização do owner de 2026-10-05 (nota acima) e a execução terminou. Não autoriza alteração de branch protection, publicação, merge ou produção.
+
+> **Nota de encerramento (2026-10-26).** Este documento é o plano **histórico** e não foi mantido durante a execução:
+> as 103 caixas `- [ ]` abaixo ficaram desmarcadas e **não** devem ser lidas como trabalho pendente nem como prova de conclusão.
+> O registro de execução é o [ledger e as revisões por task](../reviews/2026-10-05-comprehensive-improvement/README.md), os logs
+> [lane P](../progress/2026-10-05-improvement-lane-p.md) e [lane R](../progress/2026-10-05-improvement-lane-r.md) e, para as
+> **ondas 5 e 6 (ausentes deste plano**, acrescentadas depois do merge do PR #234), o
+> [sumário](../reviews/2026-10-05-comprehensive-improvement/wave5-6-summary.md). Veredito de 2026-10-14 e suas limitações de
+> proveniência: [nota](../reviews/2026-10-14-engram-comprehensive-improvement-post-provenance.md). O trabalho seguinte está em
+> [`2026-10-26-remediation-plan.md`](./2026-10-26-remediation-plan.md).
 
 **Baseline inspecionada:** `1952f3b461fe7a8f8a6b5c106ac8c4f5929bae91`, em 2026-10-02. Todos os caminhos deste documento são relativos à raiz do repositório. Novos arquivos são explicitamente identificados. `count_lines.py` é sujeira preexistente e está fora do plano.
 
