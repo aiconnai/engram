@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-03  
 **Issue:** ENG-1240 — ROADMAP: event sourcing for enrichment audit trail  
-**Status:** Approved for implementation
+**Status:** Implemented (6bba0e8f, #51; see `src/storage/enrichment_events.rs`)
 
 ---
 
