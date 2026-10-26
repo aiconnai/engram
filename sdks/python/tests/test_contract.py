@@ -200,6 +200,18 @@ async def test_search_limit_reaches_the_wire(stub: StubServer) -> None:
     assert call["arguments"]["limit"] == 3
 
 
+async def test_search_defaults_and_pagination_reach_the_wire(stub: StubServer) -> None:
+    stub.responder = lambda _r: Reply(body=rpc_result(tool_result([])))
+    async with make_client(stub) as client:
+        await client.search("query")
+        await client.search("query", offset=40, include_archived=True)
+
+    default, paged = (r.body["params"]["arguments"] for r in stub.requests)
+    # Same default as the memory_search catalog entry; optional keys stay off the wire.
+    assert default == {"query": "query", "limit": 20}
+    assert paged == {"query": "query", "limit": 20, "offset": 40, "include_archived": True}
+
+
 # ---------------------------------------------------------------------------
 # Envelopes and errors, decoded from real-shaped server responses
 # ---------------------------------------------------------------------------
