@@ -195,9 +195,6 @@ rusqlite = { version = "0.31", features = ["bundled", "vtab", "functions", "trac
 # statvfs free-space checks before VACUUM (#22) + flock singleton lock (#24)
 libc = "0.2"
 
-# Vector search (sqlite-vec)
-sqlite-vec = "0.1"
-
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -313,6 +310,9 @@ criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.9"
 proptest = "1.4"
 tonic = { version = "0.12", features = ["transport"] }
+# sqlite-vec is only used by the RFC 0003 search benchmark (benches/search.rs),
+# never by the library or binaries.
+sqlite-vec = "0.1"
 
 [[bench]]
 name = "memory_ops"
