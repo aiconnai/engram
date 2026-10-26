@@ -46,8 +46,8 @@ plano e declaração de dono, **não** evidência de que as outras frentes termi
 
 1. Transição de sprint (SPEC/progress/plano) e autoridade atual em "Retomada rápida".
 2. Campos vivos refrescados e entradas de log para `d922a60e`, `e04d3307`, `c9de7136`, `b29cd16c`.
-3. Scripts: autoridade de review derivada de `progress.md`; contador MCP do bootstrap; `CLAUDE.md`; piso
-   do tripwire `live_state` (canvas [`2026-10-26-harness-script-fixes`](../canvas/2026-10-26-harness-script-fixes.md)).
+3. Scripts: autoridade de review derivada de `progress.md`; contador MCP do bootstrap; `CLAUDE.md`; pisos
+   do tripwire e teste do contador MCP (canvas [`2026-10-26-harness-script-fixes`](../canvas/2026-10-26-harness-script-fixes.md)).
 4. Nota de proveniência do veredito `2026-10-14` e desvio de Review Canvas do programa de outubro.
 5. `CLAUDE.md` (decisões e riscos), `just ci` e caminhos obsoletos; fechamento do plano antigo e de D1/D7/D9.
 6. Triagem dos minors adiados em [`known-issues`](../known-issues/2026-10-26-deferred-review-minors.md) e no `risk-register.yaml`.

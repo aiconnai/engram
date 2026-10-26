@@ -65,7 +65,7 @@ case "$MAX_NOT_RUN" in
 esac
 
 # Tripwire floors (current counts: unittest 76, self-test 18, fixtures 39, live-state 44,
-# review-gate 39 tests, lane contract 19, sandbox adapter 54, context budget 49, runner 75,
+# review-gate 39 tests, lane contract 19, sandbox adapter 54, context budget 50, runner 75,
 # merge gate 47, retention 21, standing checks 52; every floor is the exact count so a silently
 # shadowed or dropped test trips the lane; docs/harness/tests/test_offline_lane.py mirrors them).
 FLOOR_VALIDATOR_UNIT=76
@@ -75,7 +75,7 @@ FLOOR_LIVE_STATE=44
 FLOOR_REVIEW_GATE=39
 FLOOR_LANE_CONTRACT=19
 FLOOR_SANDBOX_UNIT=54
-FLOOR_CONTEXT_BUDGET=49
+FLOOR_CONTEXT_BUDGET=50
 FLOOR_RUNNER_UNIT=75
 FLOOR_MERGE_GATE=47
 FLOOR_RETENTION=21

@@ -37,8 +37,9 @@
 - **Exceção explícita para scripts do harness** (`docs/harness/bin/*` é process-critical): somente as
   correções do canvas [`2026-10-26-harness-script-fixes`](./canvas/2026-10-26-harness-script-fixes.md) em
   `check-live-state.sh` (autoridade de review derivada de `progress.md`), `test-check-live-state.sh`,
-  `bootstrap.sh` (contador MCP, `CLAUDE.md`), `quarterly-audit.sh` (`CLAUDE.md`) e o piso do tripwire
-  `live_state` (40 para 44) em `run-offline-lane.sh`/`test_offline_lane.py`. Essas mudanças **não são
+  `bootstrap.sh` (contador MCP, `CLAUDE.md`), `quarterly-audit.sh` (`CLAUDE.md`) e os pisos do tripwire
+  (`live_state` 40 para 44, `context_budget` 49 para 50) em `run-offline-lane.sh`/`test_offline_lane.py`, mais um
+  teste do contador MCP em `test_context_budget.py`. Essas mudanças **não são
   autoritativas** até haver review independente ou sign-off do owner (WHAT_WE_DONT_DO).
 - **Fora de escopo**: push, PR, merge, tag, release, publicação, remoção de branches/worktrees, settings do
   GitHub, produção, dados reais, chamadas pagas, código de produto e CI/dependências (outras frentes),

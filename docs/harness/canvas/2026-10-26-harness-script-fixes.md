@@ -2,13 +2,13 @@
 
 Date: 2026-10-26
 Owner: Ronaldo / agente WT5 (sprint `Remediação pós-levantamento 2026-10-26`)
-Scope: Corrigir três defeitos de `docs/harness/bin/*` achados no levantamento de 2026-10-26: autoridade de review hardcoded em `check-live-state.sh`, contador de tools MCP do `bootstrap.sh` e grafia `Claude.md`; subir o piso exato do tripwire `live_state` (40 para 44) na lane offline.
+Scope: Corrigir três defeitos de `docs/harness/bin/*` achados no levantamento de 2026-10-26: autoridade de review hardcoded em `check-live-state.sh`, contador de tools MCP do `bootstrap.sh` e grafia `Claude.md`; subir os pisos exatos do tripwire na lane offline (`live_state` 40 para 44; `context_budget` 49 para 50, por um teste novo do contador MCP).
 
 ## Trigger
 
 | Trigger | Evidência |
 |---|---|
-| Mudança em scripts do harness (`bin/*` é process-critical, GATES "Harness Script Guard") | `check-live-state.sh`, `test-check-live-state.sh`, `bootstrap.sh`, `quarterly-audit.sh`, `run-offline-lane.sh` (piso) e `tests/test_offline_lane.py` (espelho do piso) |
+| Mudança em scripts do harness (`bin/*` é process-critical, GATES "Harness Script Guard") | `check-live-state.sh`, `test-check-live-state.sh`, `bootstrap.sh`, `quarterly-audit.sh`, `run-offline-lane.sh` (pisos), `tests/test_offline_lane.py` (espelho dos pisos) e `tests/test_context_budget.py` (teste do contador MCP) |
 | Mudança em bootstrap e checagem de live state | autoridade de review e contador de tools impressos a toda sessão |
 | `WHAT_WE_DONT_DO.md`: `bin/*` não vira autoritativo sem post-review independente ou sign-off humano | **Pendente**: este canvas é evidência, não aprovação. Nenhum receipt foi emitido. |
 
@@ -24,7 +24,7 @@ Sem ADR: nenhum invariant, gate ou política muda de significado (INVARIANTS exi
 | (a4) Remover a checagem de autoridade | Rejeitada | Enfraquece o gate (WHAT_WE_DONT_DO) |
 | (b1) Aceitar `=> {` opcional antes de `cfg!(` na regex do contador | **Aceita** | Mudança mínima; resultado conferido contra a contagem manual (301 − 45 gated = 256) |
 | (b2) Contar com `cargo`/`cfg` real | Rejeitada | Bootstrap é read-only, < 500 ms, sem compilar |
-| (d) Subir `FLOOR_LIVE_STATE` de 40 para 44 e o espelho `GOOD_COUNTS["live"]` | **Aceita** | Pisos são contagens exatas (comentário em `run-offline-lane.sh`); subir é normal e deixar 40 permitiria apagar 4 asserções em silêncio |
+| (d) Subir `FLOOR_LIVE_STATE` de 40 para 44 e `FLOOR_CONTEXT_BUDGET` de 49 para 50, com o espelho em `GOOD_COUNTS` | **Aceita** | Pisos são contagens exatas (comentário em `run-offline-lane.sh`); subir é normal e deixar 40 permitiria apagar 4 asserções em silêncio |
 | (c) Trocar `Claude.md` por `CLAUDE.md` no bootstrap e no `quarterly-audit.sh` | Aceita | O arquivo é `CLAUDE.md`; em filesystem case-sensitive (Linux/CI) o `rg` do audit ignorava o arquivo |
 
 ## Hot Path Complexity
@@ -43,7 +43,7 @@ Sem ADR: nenhum invariant, gate ou política muda de significado (INVARIANTS exi
 | Tarefa ativa sem review (início de sprint) | caso `omega-task`: aceita a última review PASS de tarefa anterior; o bootstrap mostra `(no review artifact for active task: ...)` |
 | `Active task` com sufixo (`id — texto`) | caso `beta-task — extra wording`: usa a primeira palavra, igual ao `bootstrap.sh` |
 | Review com marcador `FAIL`, artefato `-pre.md` ou `.raw` | casos `gamma-task` (FAIL), `delta-task-pre` (rejeitado), `.raw` ignorado |
-| Braces em arms `cfg!` (`=> {` / `}`) | contador devolve `256 active / 301 total` (3 tools `duckdb-graph` deixam de ser contadas como ativas) |
+| Braces em arms `cfg!` (`=> {` / `}`) | contador devolve `256 active / 301 total` (3 tools `duckdb-graph` deixam de ser contadas como ativas); teste hermético `test_mcp_counter_treats_brace_wrapped_cfg_arms_as_feature_gated` falha contra o bootstrap antigo (`5 active / 8 total`) |
 | bash 3.2 do macOS | suíte e checker rodados com `/bin/bash` 3.2.57 e com bash 5.3 |
 
 ## Breakage Risk
