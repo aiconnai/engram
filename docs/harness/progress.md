@@ -3,13 +3,13 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Turso/libSQL sunset v0.24.0` |
-| Active task | `turso-sunset` |
-| Active plan | `docs/harness/progress/2026-10-23-turso-sunset.md` |
-| Last review | `2026-10-23 — parecer Sonnet PASS (opinião independente; NÃO é post-gate com receipt humano): docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sunset: post-gate PENDING por receipt humano ausente. Autoridade derivada por check-live-state a partir deste campo (mais recente da própria tarefa).` |
-| Last sensors | `2026-10-23 — turso-sunset: status=pass mode=full timestamp=2026-10-23T20:10:00Z duration_sec=310; sem exclusões. Primeira execução falhou em links de retomada, corrigidos e revalidados.` |
+| Active sprint | `Remediação pós-levantamento 2026-10-26` |
+| Active task | `remediation-2026-10-26` |
+| Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
+| Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
+| Last sensors | `2026-10-23 status=pass mode=full timestamp=2026-10-23T20:10:00Z duration_sec=310, sem exclusões (receipts commitados em 08cb17a4; rodado no candidato do sunset, run anterior falhou em offline_lane). Sem receipt commitado de 2026-09-03 a 2026-10-23; não reexecutado depois. Detalhe em progress/2026-10-26-remediation.md.` |
 | Last commit | `b29cd16c` |
-| Last live-state check | `2026-10-23 — PASS: rtk proxy bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Não substitui post-gate com receipt.` |
+| Last live-state check | `PENDENTE até o commit final da frente WT5: rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -18,35 +18,50 @@
 
 ## Retomada rápida (escopo, limites, última evidência)
 
-- **Escopo**: sunset Turso/libSQL previsto no ADR aceito para v0.24.0, autorizado pelo
-  owner em 2026-10-23 com máximo paralelismo útil. [SPEC](./SPEC.md) e [plano](./progress/2026-10-23-turso-sunset.md).
-- **Limites**: commits locais em `codex/turso-sunset`; sem push/PR/merge/publicação,
-  dados reais, chamadas pagas, alteração de schema/Dream ou limpeza de worktrees antigas.
-  [Escopo canônico](./SPEC.md); [negativo do harness](./WHAT_WE_DONT_DO.md).
-- **Última evidência**: sensores completos PASS (310 s), sem exclusões; Sonnet sem achados.
-  [Validação e limites](./progress/2026-10-23-turso-sunset.md#validação-e-evidência).
-  Deny/inventário global mantêm falhas preexistentes; post-gate aguarda receipt humano.
+- **Escopo**: sprint `Remediação pós-levantamento 2026-10-26`: corrigir o que o levantamento read-only de
+  2026-10-26 achou (estado vivo defasado, regressão de autorização de `e04d3307`, advisories, release
+  pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
+  log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
+- **Autorização atual** (owner, chat, 2026-10-26: "resolva tudo o mais paralelo possível"): 6 branches
+  **locais** paralelas a partir de `08cb17a4`; o integrador mescla numa branch de integração, roda o CI
+  completo e só então finaliza os SHAs neste arquivo.
+- **Limites**: push, PR, merge, tag, release, publicação e remoção de branches/worktrees **não** estão
+  autorizados (aguardam decisão explícita do owner); sem dados reais, chamadas pagas, produção ou settings
+  do GitHub. [Negativo do harness](./WHAT_WE_DONT_DO.md); [escopo canônico](./SPEC.md).
+- **Última evidência**: [sensores](./progress/2026-10-26-remediation.md#evidência-de-sensores): full PASS de
+  2026-10-23 (310 s), o único recibo commitado desde 2026-09-03; nenhum gate completo roda nesta sprint
+  antes do integrador. Post-gate do sunset `PENDING` (sem receipt humano).
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
   `python3 docs/harness/bin/measure-context.py --section docs/harness/progress-history.md#<âncora>`.
 
-## Programa anterior — comprehensive improvement, ondas 0-4
+## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
+
+WT1 `fix/workspace-batch-auth`, WT2 `fix/supply-chain-2026-10`, WT3 `fix/release-pipeline`, WT4
+`fix/mcp-surface-honesty`, WT6 `docs/product-status`: abertas, não verificadas por esta branch. WT5
+`chore/harness-live-state`: esta branch. INT: integração e SHAs finais, pendente. Escopo, aceite e
+checklist pós-merge no [plano](./plans/2026-10-26-remediation-plan.md#frentes).
+
+## Programa anterior — comprehensive improvement, ondas 0-6 (concluído em 2026-10-14)
 
 - **Status**: completed (ondas 0-6 encerradas em 2026-10-14). Plano:
   [`plans/2026-10-02-engram-comprehensive-improvement-plan.md`](./plans/2026-10-02-engram-comprehensive-improvement-plan.md).
   Log da lane R (Rust/produto):
   [`progress/2026-10-05-improvement-lane-r.md`](./progress/2026-10-05-improvement-lane-r.md)
   (integrado ao tree desta branch pelo merge das lanes, task INT).
-- **Autorização do owner (2026-10-05, chat)**: ondas 0-4; ADR hardening v1 **aceito**
-  (sem Review Canvas registrado — desvio anotado na auditoria E0); WAL 64 GiB configurável;
-  `defer_embedding=true` enfileira em background; commits locais apenas.
+- **Decisões do owner (2026-10-05, chat; históricas)**: ADR hardening v1 **aceito**; WAL 64 GiB
+  configurável; `defer_embedding=true` enfileira em background. A autorização de execução daquele
+  programa (commits locais, ondas 0-4) expirou com ele e **não** vale nesta sprint. Review Canvas do
+  programa: **ausente**, desvio registrado na [auditoria §9](./audits/2026-10-02-improvement-baseline.md).
 - **Baseline de execução (decisão do owner)**: `1952f3b`, 14 commits locais à frente de
   `origin/main` `949c963` (0 atrás); permanecem locais e sem revisão independente no repositório.
   O commit do plano `630dd26` é documental e fica sobre essa baseline.
 
-Registro (revisões SDD independentes e post-gate PASS [`2026-10-14-engram-comprehensive-improvement-post.md`](./reviews/2026-10-14-engram-comprehensive-improvement-post.md)), ledger,
-briefs, reports e revisão final: [`reviews/2026-10-05-comprehensive-improvement/`](./reviews/2026-10-05-comprehensive-improvement/README.md).
+Registro (revisões SDD independentes), ledger, briefs, reports e revisão final:
+[`reviews/2026-10-05-comprehensive-improvement/`](./reviews/2026-10-05-comprehensive-improvement/README.md).
+O veredito [`2026-10-14`](./reviews/2026-10-14-engram-comprehensive-improvement-post.md) é PASS **sem** reviewer,
+intervalo nem receipt: ver a [nota de proveniência](./reviews/2026-10-14-engram-comprehensive-improvement-post-provenance.md).
 
 | Task | Lane | Revisão → rodadas de correção | Commits |
 |---|---|---|---|
@@ -82,19 +97,19 @@ briefs, reports e revisão final: [`reviews/2026-10-05-comprehensive-improvement
 | Revisão final do branch | — | opus Ready with fixes (0 Critical) | `1952f3b..4868d49` |
 | FINALFIX correções da revisão final | — | sem re-revisão ao commitar | [entrada FINALFIX](./progress/2026-10-05-improvement-lane-p.md#finalfix--correções-da-revisão-final-do-branch-2026-10-05) |
 
-- **Discrepâncias de E0** (detalhe na auditoria): resolvidas D1 (renovada até 2026-12-31, owner Ronaldo), D2 (`rustls` 0.23.46 + exceções governadas `turso`), D3 (Q1a), D4 (Q5/H6), D5 (H2/H3), D6, D7 (`default = ["openai"]` confirmado em ADR), D9 (RFCs 0009–0011 aceitas e implementadas), D10 (`context-budget.md`), D11, D12. Em aberto apenas governança externa: D8 (branch protection GitHub sem review humano obrigatório no plano atual).
+- **Discrepâncias de E0** (detalhe na auditoria): D1, D7 e D9 com nota de fechamento de 2026-10-26 (D9 mantém o desvio de canvas/receipt), D2 (`rustls` 0.23.46), D3 (Q1a), D4 (Q5/H6), D5 (H2/H3), D6, D10 (`context-budget.md`), D11, D12 resolvidas. Em aberto: D8 (branch protection GitHub sem review humano obrigatório).
 - **#152 (confirmada pelo owner Ronaldo em 2026-10-14)**: limites de chunk na ingestão de documentos são em **caracteres**, distintos de tokens; decisão selada em [`../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md`](../decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md) e [`context-budget.md`](./context-budget.md#6-decisão-152--chunks-por-caracteres-não-por-tokens).
 
 ## Próximos passos (owner)
 
-- `supply-chain-pins.toml` zerado (`unpinned_images = []`, pinados em #241); owner de `goals/registry.json` definido como `Ronaldo`; `candidate-floors.json` aceito e selado (`accepted-independent-review`).
-- Follow-ups Waves 5 e 6 (#235-#240, G-2 `known_drift: []` 161->0, G-4/G-5 TS SDK, G-6/G-7 MCP normalizer, SQLite read-path `total_changes`, `EntityExtractor` 4.75× speedup, `readers_readonly_N` 226× speedup) integrados; `v0.24.0` Core + `v0.7.0` SDKs preparados em `CHANGELOG.md` e `channel-matrix.toml`; `O2` `untrack --apply` executado para os 73 `.raw`.
-- Resumo pós-merge e decisões do owner documentados no [registro de revisão](./reviews/2026-10-05-comprehensive-improvement/README.md#owner-decisions--post-merge-waves-56-resolution-2026-10-14) e no [sumário Waves 5–6](./reviews/2026-10-05-comprehensive-improvement/wave5-6-summary.md).
+- Decisões pendentes: tabela no [plano](./plans/2026-10-26-remediation-plan.md#decisões-pendentes-do-owner). Nada foi publicado, tagueado nem removido.
+- `v0.24.0` Core + `v0.7.0` SDKs seguem **preparados** (`CHANGELOG.md`, `channel-matrix.toml`) sem tag nem release; `O2` untrack executado para os 73 `.raw` (histórico Git ainda os contém).
+- Resumo pós-merge e decisões de 2026-10-14: [registro de revisão](./reviews/2026-10-05-comprehensive-improvement/README.md#owner-decisions--post-merge-waves-56-resolution-2026-10-14), [sumário Waves 5–6](./reviews/2026-10-05-comprehensive-improvement/wave5-6-summary.md).
 
 ## Enforcement do live state
 
 - `doctor.sh` roda `check-live-state.sh --structural` neste arquivo (task H6): campos
-  obrigatórios, Active plan existente, review PASS autoritativo, linhas de reconciliação abaixo e
+  obrigatórios, Active plan existente, review PASS autoritativo (derivado do campo `Last review`: precisa ser a versão mais nova da própria tarefa e, se a tarefa ativa já tem review, a dela; canvas `2026-10-26-harness-script-fixes`, scripts pendentes de review independente), linhas de reconciliação abaixo e
   Last commit **bem formado**. Ancestralidade de HEAD é verificada quando possível; clone raso
   ou SHA reescrito (squash/rebase) viram **warning** do doctor, nunca falha nem pass silencioso.
   Não exige HEAD exato nem timestamp de sensores (churn por commit). A checagem estrita
@@ -116,6 +131,8 @@ briefs, reports e revisão final: [`reviews/2026-10-05-comprehensive-improvement
 | `Cargo Deny` | branch-required | `.github/workflows/ci.yml` | Live branch-protection API lists this context as required; do not treat older advisory prose as current truth. |
 | `Harness Contract` | not in `required_status_checks.contexts` | `.github/workflows/harness-contract.yml` | Workflow exists, but the live API receipt does not list it as a required context; do not infer required status from workflow text. |
 | `Harness Doctor Advisory` | advisory workflow job | `.github/workflows/harness-contract.yml` | Non-blocking `doctor.sh`; stays advisory and must not be inferred as required. |
+
+Observado pelo levantamento de 2026-10-26: `Security Audit` e `Cargo Deny` vermelhos desde 2026-10-17 (novos RUSTSEC; frente WT2). A tabela descreve a configuração, não o resultado.
 
 ## Histórico (nada foi apagado)
 

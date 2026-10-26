@@ -2,13 +2,13 @@
 
 Date: 2026-10-26
 Owner: Ronaldo / agente WT5 (sprint `Remediação pós-levantamento 2026-10-26`)
-Scope: Corrigir três defeitos de `docs/harness/bin/*` achados no levantamento de 2026-10-26: autoridade de review hardcoded em `check-live-state.sh`, contador de tools MCP do `bootstrap.sh` e grafia `Claude.md`.
+Scope: Corrigir três defeitos de `docs/harness/bin/*` achados no levantamento de 2026-10-26: autoridade de review hardcoded em `check-live-state.sh`, contador de tools MCP do `bootstrap.sh` e grafia `Claude.md`; subir o piso exato do tripwire `live_state` (40 para 44) na lane offline.
 
 ## Trigger
 
 | Trigger | Evidência |
 |---|---|
-| Mudança em scripts do harness (`bin/*` é process-critical, GATES "Harness Script Guard") | `check-live-state.sh`, `test-check-live-state.sh`, `bootstrap.sh`, `quarterly-audit.sh` |
+| Mudança em scripts do harness (`bin/*` é process-critical, GATES "Harness Script Guard") | `check-live-state.sh`, `test-check-live-state.sh`, `bootstrap.sh`, `quarterly-audit.sh`, `run-offline-lane.sh` (piso) e `tests/test_offline_lane.py` (espelho do piso) |
 | Mudança em bootstrap e checagem de live state | autoridade de review e contador de tools impressos a toda sessão |
 | `WHAT_WE_DONT_DO.md`: `bin/*` não vira autoritativo sem post-review independente ou sign-off humano | **Pendente**: este canvas é evidência, não aprovação. Nenhum receipt foi emitido. |
 
@@ -24,6 +24,7 @@ Sem ADR: nenhum invariant, gate ou política muda de significado (INVARIANTS exi
 | (a4) Remover a checagem de autoridade | Rejeitada | Enfraquece o gate (WHAT_WE_DONT_DO) |
 | (b1) Aceitar `=> {` opcional antes de `cfg!(` na regex do contador | **Aceita** | Mudança mínima; resultado conferido contra a contagem manual (301 − 45 gated = 256) |
 | (b2) Contar com `cargo`/`cfg` real | Rejeitada | Bootstrap é read-only, < 500 ms, sem compilar |
+| (d) Subir `FLOOR_LIVE_STATE` de 40 para 44 e o espelho `GOOD_COUNTS["live"]` | **Aceita** | Pisos são contagens exatas (comentário em `run-offline-lane.sh`); subir é normal e deixar 40 permitiria apagar 4 asserções em silêncio |
 | (c) Trocar `Claude.md` por `CLAUDE.md` no bootstrap e no `quarterly-audit.sh` | Aceita | O arquivo é `CLAUDE.md`; em filesystem case-sensitive (Linux/CI) o `rg` do audit ignorava o arquivo |
 
 ## Hot Path Complexity
@@ -52,6 +53,7 @@ Sem ADR: nenhum invariant, gate ou política muda de significado (INVARIANTS exi
 | Regra nova mais frouxa que a antiga | gate enfraquecido | cobre os mesmos modos de falha (revisão de outra tarefa, versão superada, sem PASS) e acrescenta (revisão de tarefa ativa, artefato não-`post`); `Last review` continua exigindo `REVIEW_VERDICT: PASS` | mutação: a suíte nova **falha** contra o checker antigo |
 | Review `PASS` sem receipt humano aceita como "Last review" | falso verde de autoridade | o checker valida apenas existência, marcador e versão; **não** autentica o reviewer. Campo e plano rotulam parecer vs. post-gate com receipt | Texto de `progress.md` e nota de proveniência de `2026-10-14` |
 | Integrador mescla branches com reviews novas | `Last review` stale após merge | só a regra "tarefa ativa tem review própria" e "versão superada" falham; checklist de refresh no plano `2026-10-26` | `check-live-state.sh --progress` após o merge |
+| Piso do tripwire desatualizado | asserções apagadas sem alarme | piso exato 44 e espelho em `test_offline_lane.py` | `test_offline_lane.py` (19 testes) e `test-check-live-state.sh` (44 asserções) |
 | Contador conta mal se um feature gated entrar em `default` | número divergente | limitação documentada: `default = ["openai"]` hoje; WT4 (`fix/mcp-surface-honesty`) é dono da superfície de tools | comparação manual 301 − 45 = 256 |
 
 ## Decision

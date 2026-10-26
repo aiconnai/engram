@@ -3,13 +3,13 @@
 | Field | Value |
 |-------|-------|
 | Project | `engram` |
-| Active sprint | `Turso/libSQL sunset v0.24.0` |
-| Active task | `turso-sunset` |
-| Started | `2026-10-23` |
+| Active sprint | `Remediação pós-levantamento 2026-10-26` |
+| Active task | `remediation-2026-10-26` |
+| Started | `2026-10-26` |
 | Owner | `Ronaldo + agents (Claude Code + Claude Code Sonnet reviewer)` |
 | Active spec | `docs/harness/SPEC.md` |
-| Active plan | `docs/harness/progress/2026-10-23-turso-sunset.md` |
-| Tracker | Owner-authorized sunset (chat, 2026-10-23); local commits only, no push/PR/merge |
+| Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
+| Tracker | Owner (chat, 2026-10-26): "resolva tudo o mais paralelo possível" → 6 branches locais paralelas a partir de `08cb17a4`; push, PR, merge, tag, release, publicação e remoção de branches/worktrees **não** autorizados (aguardam decisão explícita do owner) |
 
 ## Escopo da sprint ativa
 
@@ -19,44 +19,50 @@
 > - Standards gerais: [`../../STANDARDS.md`](../../STANDARDS.md)
 > - Erros & lições: [`../../ERRORS_AND_LESSONS.md`](../../ERRORS_AND_LESSONS.md)
 
-## Tarefa ativa: Turso/libSQL sunset v0.24.0
+## Tarefa ativa: Remediação pós-levantamento 2026-10-26
 
-- **Mandato**: executar o sunset recomendado, com máximo paralelismo útil (owner, chat, 2026-10-23).
-- **Decisão existente**: [ADR-STORAGE-20260816-1](../adr/2026-08-16-turso-backend-deprecation-and-sunset.md), aceito; remoção prevista para v0.24.0.
+- **Mandato**: o levantamento read-only de 2026-10-26 achou o estado vivo defasado e regressões; o owner
+  pediu "resolva tudo o mais paralelo possível" (chat, 2026-10-26).
+- **Plano**: [`plans/2026-10-26-remediation-plan.md`](./plans/2026-10-26-remediation-plan.md). **Log ativo e evidência**
+  (alvo do campo `Active plan`): [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
+- **Base**: `08cb17a4` (= `main` local `b29cd16c` + `refactor(storage): complete turso-sunset`).
+- **Execução**: 6 branches **locais** paralelas (WT1 `fix/workspace-batch-auth`, WT2 `fix/supply-chain-2026-10`,
+  WT3 `fix/release-pipeline`, WT4 `fix/mcp-surface-honesty`, WT5 `chore/harness-live-state`,
+  WT6 `docs/product-status`). O integrador mescla numa branch de integração, roda o CI completo e só então
+  finaliza os SHAs em `progress.md`.
+- **Em escopo (WT5, estado vivo e governança)**: transição de sprint; campos vivos e log retroativo de
+  `d922a60e`, `e04d3307`, `c9de7136`, `b29cd16c`; proveniência do veredito de 2026-10-14; `CLAUDE.md`,
+  `AGENTS.md`, `CONTRIBUTING.md` e docs do harness (caminhos e comandos obsoletos); fechamento do plano
+  antigo e de D1/D7/D9; triagem dos minors adiados (`known-issues/`, `risk-register.yaml`).
+- **Exceção explícita para scripts do harness** (`docs/harness/bin/*` é process-critical): somente as
+  correções do canvas [`2026-10-26-harness-script-fixes`](./canvas/2026-10-26-harness-script-fixes.md) em
+  `check-live-state.sh` (autoridade de review derivada de `progress.md`), `test-check-live-state.sh`,
+  `bootstrap.sh` (contador MCP, `CLAUDE.md`), `quarterly-audit.sh` (`CLAUDE.md`) e o piso do tripwire
+  `live_state` (40 para 44) em `run-offline-lane.sh`/`test_offline_lane.py`. Essas mudanças **não são
+  autoritativas** até haver review independente ou sign-off do owner (WHAT_WE_DONT_DO).
+- **Fora de escopo**: push, PR, merge, tag, release, publicação, remoção de branches/worktrees, settings do
+  GitHub, produção, dados reais, chamadas pagas, código de produto e CI/dependências (outras frentes),
+  weakening de gate, receipt ou PASS fabricado.
+- **Gates**: `bootstrap.sh`, `doctor.sh`, `check-live-state.sh` estrito, lane offline e `git diff --check`.
+  O gate completo (`sensors.sh`) e o post-gate com receipt humano ficam com o integrador/owner.
+
+## Tarefa anterior: Turso/libSQL sunset v0.24.0
+
+- **Status**: implementação concluída e commitada em `08cb17a4` (2026-10-23); sensores completos PASS
+  registrados em `.sensors-last` (310 s). **Post-gate `PENDING`**: não há receipt humano; o parecer Sonnet
+  `v2` é opinião, não aprovação. Release, tag e publicação **não** foram feitos.
+- **Decisão existente**: [ADR-STORAGE-20260816-1](../adr/2026-08-16-turso-backend-deprecation-and-sunset.md), aceito.
 - **Plano e evidência**: [turso-sunset](./progress/2026-10-23-turso-sunset.md).
-- **Em escopo**: reconciliar consumidores; remover feature, backend, reexports, testes específicos e dependência; preservar cobertura SQLite; alinhar CI, inventário, exceções comprovadamente exclusivas e migração documentada.
-- **Fora de escopo**: alterar schema SQLite, migrar dados reais, implementar conversor, alterar Dream, publicar/taguear release, push/PR/merge, chamadas de triagem pagas e limpeza de worktrees antigas.
-- **Gates**: doctor, sensores completos, inventário de contratos, dependências/advisories, diff check e revisão independente. Receipt humano continua necessário para o post-gate autoritativo; o writer não o emite.
 
-## Tarefa anterior: Engram comprehensive improvement — waves 0-4 execution
+## Tarefa anterior: Engram comprehensive improvement — ondas 0-6 (concluída em 2026-10-14)
 
-- **Plano completo**: [`plans/2026-10-02-engram-comprehensive-improvement-plan.md`](./plans/2026-10-02-engram-comprehensive-improvement-plan.md)
+- **Plano histórico**: [`plans/2026-10-02-engram-comprehensive-improvement-plan.md`](./plans/2026-10-02-engram-comprehensive-improvement-plan.md) (encerrado; sem as ondas 5-6).
 - **Progress log (Lane P — harness/governança/CI docs)**: [`progress/2026-10-05-improvement-lane-p.md`](./progress/2026-10-05-improvement-lane-p.md)
-- **Progress log (Lane R — Rust/produto)**: [`progress/2026-10-05-improvement-lane-r.md`](./progress/2026-10-05-improvement-lane-r.md) (pertence à lane R; criado na worktree dessa lane)
-- **Baseline de execução**: `1952f3b461fe7a8f8a6b5c106ac8c4f5929bae91` (14 commits locais à frente de `origin/main` `949c9634be28badea43ba2a2b5bcdf5d4c0dd358`; permanecem locais, sem push). Inventário: [`audits/2026-10-02-improvement-baseline.md`](./audits/2026-10-02-improvement-baseline.md)
-- **Autorização do owner (2026-10-05, chat)**: ondas 0-4 autorizadas; ADR `agent-harness-hardening-v1` **aceito** (ver ADR); runners da Onda 4 somente com *fake writer*, offline; budget WAL 64 GiB configurável; `defer_embedding=true` enfileira em background; entrega por commits locais na branch da worktree.
-- **Status**: completed (2026-10-14) — as 25 tarefas do plano e as tarefas G1, P1 e Q2F concluídas com revisão SDD independente (todas "review clean"); lanes integradas (INT); revisão final do branch (Opus): *Ready with fixes*, 0 Critical, corrigida na onda FINALFIX. Ondas 5 e 6 pós-merge (`661b140`..`b1fd869`): `quinn-proto` advisories e deadlock GNU Bash 5.3 em `doctor.sh` sanados, migração `LazyLock`, `G1 CloudStorage::upload` Invariante #27, `v49` `media_assets` delimitado por workspace (`#235`), leituras limitadas de mídia 50 MiB (`#236`), wiring `SessionStart`/`PostToolUse`/`SyncWorker` (`#237`), retry `-shm` macOS (`#238`), `aws-sdk-s3` + `rustls 0.23.46` (`#239`), alinhamento `161 -> 0` nos SDKs Python/TS (`G-2`, `G-4`, `G-5`), normalizador de erros MCP (`G-6`, `G-7`, `G-10`), otimização SQLite `total_changes` + `EntityExtractor` 4.75× (`P1`/`G1`), promoção das RFCs 0009–0011, execução de `O2` (`retention-manifest.py untrack --apply` dos 73 `.raw`), preparação da release `v0.24.0` Core / `v0.7.0` SDKs, e veredicto post-gate formal em [`reviews/2026-10-14-engram-comprehensive-improvement-post.md`](./reviews/2026-10-14-engram-comprehensive-improvement-post.md). Registro completo: [`reviews/2026-10-05-comprehensive-improvement/README.md`](./reviews/2026-10-05-comprehensive-improvement/README.md).
-
-### Em escopo
-
-- Reconciliar estado/autorização/baseline (E0) e as tarefas H*, Q*, C*, O* do plano, cada uma com seu brief, TDD/evidência e review independente.
-- Docs/harness da Lane P: `docs/harness/`, `docs/decisions/`, `docs/harness/audits/`; Lane R mantém seu próprio log.
-- Manter `SPEC.md` ↔ `progress.md` sincronizados (`doctor.sh`).
-
-### Fora de escopo
-
-- Push, PR, merge, publicação de pacotes, produção, nuvem, issues remotas, alteração de branch protection.
-- Execução autônoma real (writer de agente real), fallback para host, credenciais reais, provedores externos pagos.
-- Promover schemas/validator já existentes (commit `2313d8a`) a TCB sem a tarefa de onda correspondente e aprovação do owner.
-- Remoção de código/dependências baseada só em auditoria estática; enfraquecer cobertura, assertions ou o gate completo.
-
-### Gates esperados
-
-- `bash docs/harness/bin/bootstrap.sh`
-- `bash docs/harness/bin/doctor.sh`
-- `bash docs/harness/bin/sensors.sh` (completo, sem argumentos) para completion claims; `sensors.sh quick` apenas como lane rápida
-- `git diff --check`
-- Review independente por task (dois FAILs consecutivos escalam ao humano)
+- **Progress log (Lane R — Rust/produto)**: [`progress/2026-10-05-improvement-lane-r.md`](./progress/2026-10-05-improvement-lane-r.md)
+- **Baseline de execução**: `1952f3b461fe7a8f8a6b5c106ac8c4f5929bae91`. Inventário: [`audits/2026-10-02-improvement-baseline.md`](./audits/2026-10-02-improvement-baseline.md)
+- **Decisões do owner (2026-10-05, chat, históricas)**: ADR `agent-harness-hardening-v1` **aceito**; runners da Onda 4 só com *fake writer*, offline; budget WAL 64 GiB configurável; `defer_embedding=true` enfileira em background. A autorização de execução daquele programa (commits locais, ondas 0-4) **expirou com o programa** e não vale para outras sprints.
+- **Status**: completed (2026-10-14) — as 25 tarefas do plano e as tarefas G1, P1 e Q2F concluídas com revisão SDD independente; lanes integradas (INT); revisão final do branch (Opus): *Ready with fixes*, 0 Critical, corrigida na onda FINALFIX. Ondas 5 e 6 pós-merge (`661b140`..`b1fd869`): `quinn-proto` e deadlock Bash 5.3 em `doctor.sh`, `LazyLock`, `CloudStorage::upload` Invariante #27, `v49` `media_assets` (`#235`), leituras de mídia limitadas (`#236`), wiring `SessionStart`/`PostToolUse`/`SyncWorker` (`#237`), retry `-shm` macOS (`#238`), `aws-sdk-s3` + `rustls 0.23.46` (`#239`), SDKs `161 -> 0` (`G-2`, `G-4`, `G-5`), normalizador de erros MCP (`G-6`, `G-7`, `G-10`), `P1`/`G1`, RFCs 0009–0011, `O2` (73 `.raw`), preparação `v0.24.0` Core / `v0.7.0` SDKs. Registro: [`reviews/2026-10-05-comprehensive-improvement/README.md`](./reviews/2026-10-05-comprehensive-improvement/README.md).
+- **Proveniência**: o veredito [`2026-10-14`](./reviews/2026-10-14-engram-comprehensive-improvement-post.md) não registra reviewer, intervalo nem receipt; ver a [nota de proveniência](./reviews/2026-10-14-engram-comprehensive-improvement-post-provenance.md). Review Canvas do programa: **ausente** (desvio registrado em [`audits/2026-10-02-improvement-baseline.md` §9](./audits/2026-10-02-improvement-baseline.md)).
 
 ## Tarefa anterior: Agent harness hardening v1 — Wave 0 governance
 
@@ -92,9 +98,8 @@
 
 - **Branch**: `chore/harness-live-state`
 - **Progress log**: [`progress/2026-06-27-harness-live-state-closeout.md`](./progress/2026-06-27-harness-live-state-closeout.md)
-- **Status**: active — close stale live metadata now that the bootstrap sprint
-  work is on `main`, `HEAD`/`origin/main` are at `1aa14e5`, and PR #108 commit
-  `e156810` is already contained in that history.
+- **Status**: completed (2026-07-10) — fechamento do estado vivo; review PASS em
+  [`reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md`](./reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md).
 
 ### Em escopo
 
@@ -134,7 +139,7 @@
 - Criar estrutura `docs/harness/` completa (README, SPEC, INVARIANTS, GATES, CODE_REVIEW_POLICY, progress.md, bin/ scripts, reviews/, known-issues/, progress/).
 - Implementar `bootstrap.sh` — orientação rápida, read-only, <50 linhas, imprime estado + ordem de leitura.
 - Implementar `doctor.sh` — validação de consistência do harness (drift SPEC/progress, executáveis, referências à policy, bootstrap size, etc.).
-- Implementar `sensors.sh` — wrapper determinístico sobre `just ci` (fmt + clippy -D + testes paridade Linux + docs + MCP ref) + harness doctor + checks específicos de engram.
+- Implementar `sensors.sh` — wrapper determinístico com as etapas de `scripts/ci.sh` (alvo de `make ci`; fmt + clippy -D + testes paridade Linux + docs + MCP ref) + harness doctor + checks específicos de engram.
 - Implementar `review-gate.sh` — generalizado para múltiplos reviewers (claude-sonnet, codex, local). Suporte a pre/post, range, continuity em FAILs, versionamento de artefatos, exclusão de paths do harness, timeout, prompt rico com fake-success patterns de Rust/MCP.
 - Implementar `check-commit-msg.sh` — validador de Conventional Commits com scopes engram/harness.
 - Criar `CODE_REVIEW_POLICY.md` adaptada para Rust, engram (MCP tools, hooks, embeddings, storage invariants, cross-SDK), e o cenário dual-CLI atual.
@@ -155,7 +160,7 @@
 - `bash docs/harness/bin/sensors.sh`
 - `bash docs/harness/bin/review-gate.sh pre harness-bootstrap`
 - `bash docs/harness/bin/review-gate.sh post harness-bootstrap`
-- `just ci` (paridade mantida)
+- `make ci` (`scripts/ci.sh`; paridade mantida; `just ci` é alias opcional quando `just` está instalado)
 
 ### Fora de escopo (v0)
 
