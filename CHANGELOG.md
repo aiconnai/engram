@@ -23,6 +23,7 @@ package registries, and dated external sources.
 ### Fixed
 
 - `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
+- Deleted (single, cascade, batch) and content-edited memories are removed from the in-memory HNSW index, saving the index no longer persists removed vectors, and HNSW semantic search widens its bounded candidate fetch so `limit` holds after filtering.
 - `dream_consolidation_status` and `dream_insights` were documented as always available but require `dream-phase`; tool feature gating now has a single source (`catalog::required_features`).
 - `CrossEncoderReranker` returns an explicit "not implemented" error instead of fabricating scores, and model routing no longer reports the placeholder as operational.
 - SDK release workflow no longer hardcodes `v0.22.0` / `0.5.0`: it derives the core tag and SDK versions from the manifests and re-checks them after environment approval; `sdks/typescript/package-lock.json` synced to 0.7.0.
@@ -31,6 +32,7 @@ package registries, and dated external sources.
 ### Changed
 
 - Search (from `e04d3307`): catalog default `limit` is 20, `offset` and `include_archived` are accepted, `SearchOptions.offset` is public, and `memory_search_by_identity` / `memory_session_search` are read-only. Python and TypeScript SDKs default `search` to limit 20 and accept `offset` (Python also `include_archived`).
+- **HNSW is opt-in** — `hnsw_enabled` defaults to `false` until the benchmark required by RFC 0003 exists.
 - Snapshot loader reads archive entry names from the central directory and rejects undecodable names.
 - DuckDB bundled engine 1.4.4 → 1.5.6; `sqlite-vec` is a dev-dependency (benchmarks only).
 - CI pins cargo-audit 0.22.0 and cargo-outdated 0.19.0 (`--locked`); the TypeScript live lane uses Node 24; the docs job runs the public-claims, advertised-contracts and release-version checks.
