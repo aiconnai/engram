@@ -732,6 +732,14 @@ jobs:
           shared-key: required-linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: ./scripts/generate-mcp-reference.sh --check
+      - run: python3 scripts/test_generate_mcp_reference.py
+      - run: python3 scripts/test_check_public_claims.py
+      - run: python3 scripts/check-public-claims.py
+      - run: python3 scripts/test_check_advertised_contracts.py
+      - run: python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml
+      - run: python3 scripts/test_bump_version.py
+      - run: python3 scripts/test_sdk_release_workflow.py
+      - run: python3 scripts/bump-version.py --check
       - run: python3 scripts/test_check_pdf_worker_packaging.py
       - run: python3 scripts/check-pdf-worker-packaging.py
       - run: |
