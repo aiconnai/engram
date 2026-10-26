@@ -417,3 +417,40 @@ fn search_include_archived_is_opt_in_and_stays_inside_the_workspace() {
     assert!(!ids(&cached_default).contains(&seeded.own_archived_note));
     assert!(ids(&cached_archived).contains(&seeded.own_archived_note));
 }
+
+#[test]
+fn search_suggest_does_not_reveal_other_workspaces_vocabulary() {
+    let (mut ctx, _) = seeded_ctx();
+    let reader = principal(Some(OWN_WS));
+
+    // "payrol" is a typo of a word that exists only in the foreign workspace.
+    let suggestion = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_search_suggest",
+        json!({"query": "payrol", "workspace": OWN_WS}),
+    );
+    assert!(
+        !suggestion.to_string().contains("payroll"),
+        "the foreign workspace's vocabulary leaked through suggestions: {suggestion}"
+    );
+
+    // A typo of an own word is still corrected.
+    let own = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_search_suggest",
+        json!({"query": "roadmapp", "workspace": OWN_WS}),
+    );
+    assert!(own.to_string().contains("roadmap"), "{own}");
+
+    // Unrestricted callers keep the process-wide vocabulary.
+    let admin_reader = principal(None);
+    let global = dispatch_as(
+        &mut ctx,
+        &admin_reader,
+        "memory_search_suggest",
+        json!({"query": "payrol"}),
+    );
+    assert!(global.to_string().contains("payroll"), "{global}");
+}
