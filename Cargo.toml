@@ -217,7 +217,9 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart"], de
 async-trait = { version = "0.1", optional = true }
 
 # Cloud storage (S3/R2/GCS) - optional, feature-gated
-aws-sdk-s3 = { version = "1.144", default-features = false, features = ["default-https-client", "rt-tokio", "sigv4a"], optional = true }
+# SigV4a (S3 multi-region access points only) is intentionally not enabled:
+# aws-sigv4 still pins crypto-bigint 0.5 for it (RUSTSEC-2026-0387).
+aws-sdk-s3 = { version = "1.144", default-features = false, features = ["default-https-client", "rt-tokio"], optional = true }
 aws-config = { version = "1.12", optional = true }
 
 # Encryption (for cloud sync)
