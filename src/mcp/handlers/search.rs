@@ -704,18 +704,29 @@ pub fn search_cache_stats(ctx: &HandlerContext, _params: Value) -> Value {
     json!(stats)
 }
 
-pub fn search_cache_clear(ctx: &HandlerContext, params: Value) -> Value {
-    let workspace = match extract_optional_workspace("search_cache_clear", &params, ctx) {
-        Ok(ws) => ws,
-        Err(err) => return err,
+/// Authorize `params` for `tool_name` and evict the matching search cache
+/// entries: the requested workspace's, or everything when none applies.
+///
+/// Returns the workspace that was cleared (`None` = all) and the number of
+/// entries evicted, or the structured denial/validation error.
+pub(crate) fn evict_search_cache(
+    tool_name: &str,
+    params: &Value,
+    ctx: &HandlerContext,
+) -> std::result::Result<(Option<String>, usize), Value> {
+    let workspace = extract_optional_workspace(tool_name, params, ctx)?;
+    let evicted = match workspace.as_deref() {
+        Some(ws) => ctx.search_cache.invalidate_for_workspace(Some(ws)),
+        None => ctx.search_cache.clear(),
     };
+    Ok((workspace, evicted))
+}
 
-    if let Some(ws) = workspace.as_deref() {
-        ctx.search_cache.invalidate_for_workspace(Some(ws));
-        json!({"cleared": true, "scope": "workspace", "workspace": ws})
-    } else {
-        ctx.search_cache.clear();
-        json!({"cleared": true, "scope": "all"})
+pub fn search_cache_clear(ctx: &HandlerContext, params: Value) -> Value {
+    match evict_search_cache("search_cache_clear", &params, ctx) {
+        Ok((Some(ws), _)) => json!({"cleared": true, "scope": "workspace", "workspace": ws}),
+        Ok((None, _)) => json!({"cleared": true, "scope": "all"}),
+        Err(err) => err,
     }
 }
 
