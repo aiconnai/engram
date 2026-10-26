@@ -2,10 +2,12 @@
 adr: ADR-CLEANUP-20260708-1
 track: oversized files follow-up inspect
 service: engram intelligence module
-status: Proposed
+status: Implemented
 ---
 
 # Intelligence oversized-file inspect: `context_quality.rs` and `memory_update.rs`
+
+> Status evidence: inspect landed in #127 (2db45c21); the two proposed implementation PRs landed as #128 (`src/intelligence/memory_update/`, 69f1a790) and #129 (`src/intelligence/context_quality/`, b66ae09b).
 
 ## Scope
 
