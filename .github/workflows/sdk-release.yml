@@ -44,6 +44,8 @@ jobs:
       publish: ${{ steps.guard.outputs.publish }}
       release_sha: ${{ steps.guard.outputs.release_sha }}
       release_tag: ${{ steps.guard.outputs.release_tag }}
+      python_version: ${{ steps.guard.outputs.python_version }}
+      npm_version: ${{ steps.guard.outputs.npm_version }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -71,41 +73,64 @@ jobs:
           else
             [[ "${INPUT_PUBLISH}" == "true" ]] || { echo "::error::non-dry-run must explicitly request publish"; exit 1; }
             [[ "${INPUT_CHANNEL}" != "all" ]] || { echo "::error::publish dispatch must select exactly one registry"; exit 1; }
-            [[ "${INPUT_TAG}" == "v0.22.0" ]] || { echo "::error::publish requires the approved v0.22.0 tag"; exit 1; }
+            [[ "${INPUT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::publish requires an exact stable vX.Y.Z core release tag"; exit 1; }
             [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == "${INPUT_TAG}" ]] || { echo "::error::publish requires the exact tag ref"; exit 1; }
             [[ "$(git cat-file -t "${INPUT_TAG}")" == "tag" ]] || { echo "::error::publish requires an annotated tag object"; exit 1; }
             git verify-tag "${INPUT_TAG}" >/dev/null || { echo "::error::publish requires a cryptographically signed tag"; exit 1; }
             [[ "$(git rev-list -n 1 "${INPUT_TAG}^{commit}")" == "${INPUT_SHA}" ]] || { echo "::error::tag, github.sha, and supplied SHA do not agree"; exit 1; }
-            gh release view "${INPUT_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName --jq 'select(.isDraft == false and .isPrerelease == false and .tagName == "v0.22.0")' | grep -q . || {
+            gh release view "${INPUT_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName | jq -e --arg tag "${INPUT_TAG}" '.isDraft == false and .isPrerelease == false and .tagName == $tag' >/dev/null || {
               echo "::error::approved immutable GitHub Release is missing"; exit 1;
             }
           fi
+
+          # Derive the expected core tag and SDK versions from the manifests at this exact SHA.
+          # The tag (publish only) must equal v<Cargo.toml version> and be declared by the reviewed
+          # channel matrix; lockfiles, SDK manifests, and the tested core range must all agree.
+          plan_args=(--release-plan)
+          if [[ -n "${INPUT_TAG}" ]]; then plan_args+=(--release-tag "${INPUT_TAG}"); fi
+          plan="$(python3 scripts/bump-version.py "${plan_args[@]}")" || { echo "::error::release tag, Cargo.toml, lockfiles, and SDK manifests do not agree"; exit 1; }
+          python_version="$(sed -n 's/^python_version=//p' <<<"${plan}")"
+          npm_version="$(sed -n 's/^npm_version=//p' <<<"${plan}")"
+          sdk_version_pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+          [[ "${python_version}" =~ ${sdk_version_pattern} ]] || { echo "::error::derived Python SDK version is invalid"; exit 1; }
+          [[ "${npm_version}" =~ ${sdk_version_pattern} ]] || { echo "::error::derived npm SDK version is invalid"; exit 1; }
           {
             echo "channel=${INPUT_CHANNEL}"
             echo "dry_run=${INPUT_DRY_RUN}"
             echo "publish=${INPUT_PUBLISH}"
             echo "release_sha=${INPUT_SHA}"
             echo "release_tag=${INPUT_TAG}"
+            echo "python_version=${python_version}"
+            echo "npm_version=${npm_version}"
           } >>"${GITHUB_OUTPUT}"
 
       - name: Verify package names and target-version availability read-only
         env:
           CHANNEL: ${{ steps.guard.outputs.channel }}
           DRY_RUN: ${{ steps.guard.outputs.dry_run }}
+          PYTHON_VERSION: ${{ steps.guard.outputs.python_version }}
+          NPM_VERSION: ${{ steps.guard.outputs.npm_version }}
         run: |
           set -euo pipefail
           if [[ "${CHANNEL}" == "all" || "${CHANNEL}" == "python" ]]; then
             python3 -c 'import json,urllib.request; payload=json.load(urllib.request.urlopen("https://pypi.org/pypi/engram-client/json",timeout=20)); assert payload.get("info",{}).get("name","").lower().replace("_","-")=="engram-client", "PyPI package-name verification failed"'
-            if [[ "${DRY_RUN}" == "false" ]] && curl --fail --silent --output /dev/null "https://pypi.org/pypi/engram-client/0.5.0/json"; then
-              echo "::error::PyPI version 0.5.0 already exists"
-              exit 1
+            if [[ "${DRY_RUN}" == "false" ]]; then
+              pypi_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 "https://pypi.org/pypi/engram-client/${PYTHON_VERSION}/json" || true)"
+              case "${pypi_status}" in
+                404) ;;
+                200) echo "::error::PyPI version ${PYTHON_VERSION} already exists"; exit 1 ;;
+                *) echo "::error::could not verify PyPI version ${PYTHON_VERSION} is unpublished (HTTP ${pypi_status:-none})"; exit 1 ;;
+              esac
             fi
           fi
           if [[ "${CHANNEL}" == "all" || "${CHANNEL}" == "npm" ]]; then
             test "$(npm view engram-client name)" = "engram-client"
-            if [[ "${DRY_RUN}" == "false" ]] && npm view engram-client@0.5.0 version >/dev/null 2>&1; then
-              echo "::error::npm version 0.5.0 already exists"
-              exit 1
+            if [[ "${DRY_RUN}" == "false" ]]; then
+              published="$(npm view "engram-client@${NPM_VERSION}" version 2>/dev/null || true)"
+              if [[ -n "${published}" ]]; then
+                echo "::error::npm version ${NPM_VERSION} already exists"
+                exit 1
+              fi
             fi
           fi
 
@@ -178,6 +203,7 @@ jobs:
       - name: Assert dry-run terminal state
         run: |
           test "${{ needs.preflight.outputs.publish }}" = false
+          echo "Derived SDK versions: python=${{ needs.preflight.outputs.python_version }} npm=${{ needs.preflight.outputs.npm_version }}"
           echo "Dry-run complete: no registry request was attempted."
 
   publish-python:
@@ -199,6 +225,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
           RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          EXPECTED_VERSION: ${{ needs.preflight.outputs.python_version }}
         run: |
           set -euo pipefail
           test "${GITHUB_SHA}" = "${RELEASE_SHA}"
@@ -208,7 +235,9 @@ jobs:
           test "$(git cat-file -t "${RELEASE_TAG}")" = tag
           git verify-tag "${RELEASE_TAG}" >/dev/null
           test "$(git rev-list -n 1 "${RELEASE_TAG}^{commit}")" = "${RELEASE_SHA}"
-          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName --jq 'select(.isDraft == false and .isPrerelease == false and .tagName == "v0.22.0")' | grep -q .
+          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName | jq -e --arg tag "${RELEASE_TAG}" '.isDraft == false and .isPrerelease == false and .tagName == $tag' >/dev/null
+          plan="$(python3 scripts/bump-version.py --release-plan --release-tag "${RELEASE_TAG}")"
+          test "$(sed -n 's/^python_version=//p' <<<"${plan}")" = "${EXPECTED_VERSION}"
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: sdk-python
@@ -225,8 +254,8 @@ jobs:
           packages-dir: dist/packages/
       - name: Verify the published PyPI release is installable
         env:
-          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
-        run: scripts/verify-pypi-release.sh --package engram-client --version "${RELEASE_TAG#v}"
+          PYTHON_VERSION: ${{ needs.preflight.outputs.python_version }}
+        run: scripts/verify-pypi-release.sh --package engram-client --version "${PYTHON_VERSION}"
 
   publish-npm:
     name: Publish TypeScript SDK
@@ -247,6 +276,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
           RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          EXPECTED_VERSION: ${{ needs.preflight.outputs.npm_version }}
         run: |
           set -euo pipefail
           test "${GITHUB_SHA}" = "${RELEASE_SHA}"
@@ -256,7 +286,9 @@ jobs:
           test "$(git cat-file -t "${RELEASE_TAG}")" = tag
           git verify-tag "${RELEASE_TAG}" >/dev/null
           test "$(git rev-list -n 1 "${RELEASE_TAG}^{commit}")" = "${RELEASE_SHA}"
-          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName --jq 'select(.isDraft == false and .isPrerelease == false and .tagName == "v0.22.0")' | grep -q .
+          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName | jq -e --arg tag "${RELEASE_TAG}" '.isDraft == false and .isPrerelease == false and .tagName == $tag' >/dev/null
+          plan="$(python3 scripts/bump-version.py --release-plan --release-tag "${RELEASE_TAG}")"
+          test "$(sed -n 's/^npm_version=//p' <<<"${plan}")" = "${EXPECTED_VERSION}"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
@@ -275,5 +307,5 @@ jobs:
           npm publish "${tarball}" --access public --provenance
       - name: Verify the published npm release is installable
         env:
-          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
-        run: scripts/verify-npm-release.sh --package engram-client --version "${RELEASE_TAG#v}"
+          NPM_VERSION: ${{ needs.preflight.outputs.npm_version }}
+        run: scripts/verify-npm-release.sh --package engram-client --version "${NPM_VERSION}"
