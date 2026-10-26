@@ -209,6 +209,7 @@ class TestBumpVersion(unittest.TestCase):
             matrix = (root / "matrix.toml").read_text(encoding="utf-8")
             self.assertIn('core_version = "0.23.0"', matrix)
             self.assertIn('core_tag = "v0.23.0"', matrix)
+            self.assertIn('observed_utc = "2020-01-01T00:00:00Z"', matrix)  # a bump observes no registry
 
     def test_bump_python_simulation(self):
         with fixture_repo(python="0.5.0", dunder="0.5.0") as root, contextlib.redirect_stdout(io.StringIO()):

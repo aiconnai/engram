@@ -435,13 +435,8 @@ def bump_core_version(new_version: str) -> None:
         matrix_updated,
         count=1,
     )
-    now_utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    matrix_updated = re.sub(
-        r'observed_utc\s*=\s*"[^"]*"',
-        f'observed_utc = "{now_utc}"',
-        matrix_updated,
-        count=1,
-    )
+    # observed_utc is deliberately untouched: it records when registries were last observed, and a
+    # version bump observes nothing. Re-observe, then run --refresh-matrix (see docs/releases/README.md).
     # Update local core channel
     matrix_updated = re.sub(
         r'(id\s*=\s*"core"[\s\S]*?local_version\s*=\s*)"[^"]*"',
