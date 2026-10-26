@@ -735,8 +735,6 @@ jobs:
       - run: python3 scripts/test_generate_mcp_reference.py
       - run: python3 scripts/test_check_public_claims.py
       - run: python3 scripts/check-public-claims.py
-      - run: python3 scripts/test_check_advertised_contracts.py
-      - run: python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml
       - run: python3 scripts/test_bump_version.py
       - run: python3 scripts/test_sdk_release_workflow.py
       - run: python3 scripts/bump-version.py --check
@@ -751,6 +749,17 @@ jobs:
   # =============================================================================
   # Release builds
   # =============================================================================
+
+  advertised-contracts:
+    # Not a required context: the merge-gate CI policy (harness-hardening-v1) pins which files
+    # required jobs may depend on, and the advertised-surfaces baseline is not on that list yet.
+    # Promote this into the Documentation job only together with a versioned policy update.
+    name: Advertised Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - run: python3 scripts/test_check_advertised_contracts.py
+      - run: python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml
 
   release:
     name: Release Build (${{ matrix.target }})

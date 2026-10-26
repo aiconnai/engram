@@ -138,7 +138,7 @@ gating_src = catalog_mod.read_text() if catalog_mod.exists() else ""
 all_names = re.findall(r"\bname:\s*\"([^\"]+)\"", registry)
 feature_gated = set()
 # Single source of feature gating: catalog::required_features, whose arms read
-# "a" | "b" => &["feature", ...]; rustfmt may wrap the `|` alternatives or the body in `{ }`.
+# "a" | "b" => &["feature", ...]; rustfmt may wrap the | alternatives or the arm body in braces.
 match_body = re.search(
     r"fn required_features\(name: &str\)[^{]*\{\s*match name \{(.*?)\n\s*_\s*=>\s*&\[\]",
     gating_src,
