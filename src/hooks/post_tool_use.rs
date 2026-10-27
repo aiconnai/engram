@@ -40,7 +40,11 @@ impl PostToolUseHandler {
     pub fn handle(&self, _hook: super::LifecycleHook, context: &HookContext) -> Result<HookResult> {
         eprintln!(
             "[Hook] PostToolUse: tool={:?}",
-            context.metadata.get("tool_name")
+            context
+                .metadata
+                .get("tool_name")
+                .and_then(Value::as_str)
+                .map(crate::mcp::log_labels::known_tool)
         );
 
         self.reinforce_policy_from_metadata(context);
@@ -78,7 +82,7 @@ impl PostToolUseHandler {
                 {
                     tracing::warn!(
                         target = "engram::hooks::post_tool_use",
-                        tool_name,
+                        tool_name = crate::mcp::log_labels::known_tool(tool_name),
                         requested = memory_ids.len(),
                         reinforced,
                         examined,
@@ -104,8 +108,8 @@ impl PostToolUseHandler {
                     tracing::warn!(
                         target = "engram::hooks::post_tool_use",
                         memory_id = *memory_id,
-                        tool_name,
-                        error = %e,
+                        tool_name = crate::mcp::log_labels::known_tool(tool_name),
+                        error = %crate::observability::redact::redacted(&e),
                         "failed to record post-tool-use policy reinforcement; continuing"
                     );
                 }
@@ -116,8 +120,8 @@ impl PostToolUseHandler {
         if let Err(e) = result {
             tracing::warn!(
                 target = "engram::hooks::post_tool_use",
-                tool_name,
-                error = %e,
+                tool_name = crate::mcp::log_labels::known_tool(tool_name),
+                error = %crate::observability::redact::redacted(&e),
                 "failed to access storage for post-tool-use policy reinforcement; continuing"
             );
         }
@@ -145,7 +149,7 @@ fn memory_belongs_to_workspace(
             tracing::warn!(
                 target = "engram::hooks::post_tool_use",
                 memory_id,
-                error = %e,
+                error = %crate::observability::redact::opaque(&e),
                 "workspace lookup failed; skipping reinforcement"
             );
             false

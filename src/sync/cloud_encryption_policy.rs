@@ -84,8 +84,8 @@ impl CloudStorage {
     pub(super) fn decrypt_encrypted_object(&self, object: &CloudObject) -> Result<Vec<u8>> {
         let result = if object.metadata.is_empty() {
             tracing::warn!(
-                bucket = %self.bucket,
-                key = %self.key,
+                bucket = %crate::observability::redact::opaque(&self.bucket),
+                key = %crate::observability::redact::opaque(&self.key),
                 "Encrypted cloud object uses embedded key identity without object metadata"
             );
             self.decrypt_data(&object.body)
@@ -98,9 +98,9 @@ impl CloudStorage {
         };
         if let Err(error) = &result {
             tracing::warn!(
-                bucket = %self.bucket,
-                key = %self.key,
-                error = %error,
+                bucket = %crate::observability::redact::opaque(&self.bucket),
+                key = %crate::observability::redact::opaque(&self.key),
+                error = %crate::observability::redact::redacted(error),
                 "Rejected encrypted cloud object"
             );
         }
@@ -150,9 +150,9 @@ impl CloudStorage {
 
     pub(super) fn reject_encryption_audit<T>(&self, message: &str) -> Result<T> {
         tracing::warn!(
-            bucket = %self.bucket,
-            key = %self.key,
-            reason = message,
+            bucket = %crate::observability::redact::opaque(&self.bucket),
+            key = %crate::observability::redact::opaque(&self.key),
+            reason = %crate::observability::redact::opaque(message),
             "Rejected encrypted cloud object"
         );
         Err(EngramError::Encryption(message.to_string()))
