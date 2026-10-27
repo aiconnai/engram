@@ -101,6 +101,12 @@ fn drop_from_vector_index(ctx: &HandlerContext, ids: &[i64]) {
     for id in ids {
         index.remove(id);
     }
+    // Bound the dead nodes a long-running server keeps (search widens its beam
+    // by the tombstone count): rebuild once they pass the compaction threshold.
+    index.compact_if_needed(
+        crate::search::hnsw_sync::HNSW_COMPACT_MIN_TOMBSTONES,
+        crate::search::hnsw_sync::HNSW_COMPACT_MAX_TOMBSTONE_RATIO,
+    );
 }
 
 pub fn memory_update(ctx: &HandlerContext, params: Value) -> Value {
