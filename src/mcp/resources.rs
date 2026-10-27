@@ -137,6 +137,38 @@ pub fn read_resource_as(
     Err(format!("Permission denied for resource URI: {uri}"))
 }
 
+/// Authorize a resource URI for a transport principal without reading it.
+///
+/// Applies the same policy as [`read_resource_as`]: unrestricted principals and
+/// `None` pass; a workspace-restricted principal passes only for an allowed
+/// workspace resource or a memory whose persisted workspace is allowed.
+fn authorize_resource_uri(
+    storage: &Storage,
+    uri: &str,
+    principal: Option<&TransportPrincipal>,
+) -> Result<(), String> {
+    let Some(principal) = principal.filter(|p| is_workspace_restricted(p)) else {
+        return Ok(());
+    };
+    let (path, _) = split_uri(uri);
+
+    if let Some(rest) = path.strip_prefix("engram://memory/") {
+        let id: i64 = rest
+            .parse()
+            .map_err(|_| format!("Invalid memory ID: {}", rest))?;
+        return storage
+            .with_connection(|conn| ensure_memory_access(conn, Some(principal), id))
+            .map_err(|e| e.to_string());
+    }
+    if let Some(rest) = path.strip_prefix("engram://workspace/") {
+        let name = rest.strip_suffix("/memories").unwrap_or(rest);
+        if principal.allows_workspace(Some(name)) {
+            return Ok(());
+        }
+    }
+    Err(format!("Permission denied for resource URI: {uri}"))
+}
+
 /// Validate whether a given URI is a supported engram resource URI.
 pub fn validate_resource_uri(uri: &str) -> bool {
     let (path, _) = split_uri(uri);
@@ -180,6 +212,40 @@ impl ResourceSubscriptionManager {
         let mut subs = self.subscriptions.write();
         subs.insert(uri.to_string());
         Ok(())
+    }
+
+    /// Subscribe on behalf of a transport principal.
+    ///
+    /// Unrestricted principals and `None` (stdio owner) subscribe like
+    /// [`subscribe`](Self::subscribe). A workspace-restricted principal may
+    /// subscribe only to what [`read_resource_as`] lets it read; anything else
+    /// is refused before it is registered, so a subscription can never report
+    /// activity in a workspace the principal cannot see. A foreign memory
+    /// fails exactly like a missing one.
+    pub fn subscribe_as(
+        &self,
+        storage: &Storage,
+        uri: &str,
+        principal: Option<&TransportPrincipal>,
+    ) -> Result<(), String> {
+        let uri = uri.trim();
+        if !validate_resource_uri(uri) {
+            return Err(format!("Invalid resource URI: {}", uri));
+        }
+        authorize_resource_uri(storage, uri, principal)?;
+        self.subscribe(uri)
+    }
+
+    /// Unsubscribe on behalf of a transport principal: a restricted principal
+    /// cannot remove a subscription to a resource it could not subscribe to.
+    pub fn unsubscribe_as(
+        &self,
+        storage: &Storage,
+        uri: &str,
+        principal: Option<&TransportPrincipal>,
+    ) -> Result<(), String> {
+        authorize_resource_uri(storage, uri.trim(), principal)?;
+        self.unsubscribe(uri)
     }
 
     /// Unsubscribe from a resource URI.

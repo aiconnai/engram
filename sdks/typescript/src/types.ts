@@ -40,7 +40,10 @@ export interface ListOptions {
 }
 
 export interface SearchOptions {
+  /** Maximum results. Defaults to 20, the `memory_search` catalog default. */
   limit?: number;
+  /** Number of results to skip (pagination). */
+  offset?: number;
   workspace?: string;
   workspaces?: string[];
   tags?: string[];

@@ -130,8 +130,19 @@ pub fn memory_ingest_fact_batch(ctx: &HandlerContext, params: Value) -> Value {
     let default_workspace = params
         .get("workspace")
         .and_then(|v| v.as_str())
-        .unwrap_or("default")
+        .unwrap_or(crate::mcp::workspace_guard::DEFAULT_WORKSPACE)
         .to_string();
+
+    // Each fact is written to its own workspace, else the batch default; every
+    // one must be inside the principal's workspaces before anything is written.
+    if let Some(denial) = crate::mcp::workspace_guard::denial_for_batch_item_workspaces(
+        ctx.principal.as_ref(),
+        "memory_ingest_fact_batch",
+        &facts,
+        &default_workspace,
+    ) {
+        return denial;
+    }
 
     let default_scope = match params
         .get("scope")
