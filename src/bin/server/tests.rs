@@ -359,4 +359,74 @@ crate::engram_server_only! {
         );
         assert!(unrestricted.error.is_none(), "stdio/local owner stays unrestricted");
     }
+
+    fn storage_with_one_embedded_memory(
+        embedder: &Arc<dyn engram::embedding::Embedder>,
+    ) -> (Storage, i64) {
+        let storage = Storage::open_in_memory().unwrap();
+        let id = storage
+            .with_connection(|conn| {
+                let input = CreateMemoryInput {
+                    content: "warm me up".to_string(),
+                    memory_type: MemoryType::Note,
+                    tags: vec![],
+                    metadata: Default::default(),
+                    importance: None,
+                    scope: Default::default(),
+                    workspace: None,
+                    tier: Default::default(),
+                    defer_embedding: true,
+                    ttl_seconds: None,
+                    dedup_mode: Default::default(),
+                    dedup_threshold: None,
+                    event_time: None,
+                    event_duration_seconds: None,
+                    trigger_pattern: None,
+                    summary_of_id: None,
+                    media_url: None,
+                };
+                let id = engram::storage::queries::create_memory(conn, &input)?.id;
+                engram::embedding::enqueue_embedding_job(conn, id)?;
+                let embedding = embedder.embed(&input.content)?;
+                engram::embedding::persist_computed_embedding(
+                    conn, id, &input.content, &embedding, "test",
+                )?;
+                Ok(id)
+            })
+            .unwrap();
+        (storage, id)
+    }
+
+    #[test]
+    fn hnsw_switch_defaults_off_and_follows_the_flag() {
+        use clap::Parser;
+        let off = Args::try_parse_from(["engram-server"]).unwrap();
+        assert!(!off.hnsw_enabled);
+        assert!(!search_config_for(off.hnsw_enabled).hnsw_enabled);
+
+        let on = Args::try_parse_from(["engram-server", "--hnsw-enabled"]).unwrap();
+        assert!(on.hnsw_enabled);
+        assert!(search_config_for(on.hnsw_enabled).hnsw_enabled);
+    }
+
+    #[test]
+    fn handler_warms_the_index_only_when_hnsw_is_enabled() {
+        let embedder = create_embedder(&EmbeddingConfig::default()).unwrap();
+        for enabled in [false, true] {
+            let (storage, id) = storage_with_one_embedded_memory(&embedder);
+            let (progress_tx, _rx) = std::sync::mpsc::channel();
+            let handler = EngramHandler::new(
+                storage,
+                embedder.clone(),
+                progress_tx,
+                search_config_for(enabled),
+            );
+            assert_eq!(handler.search_config.hnsw_enabled, enabled);
+            assert_eq!(
+                handler.hnsw_index.read().contains(&id),
+                enabled,
+                "warmup must run iff hnsw_enabled (enabled={enabled})"
+            );
+        }
+    }
 }

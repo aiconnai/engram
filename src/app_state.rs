@@ -53,9 +53,12 @@ impl AppState {
             )),
         ));
 
-        let _ = storage.with_connection(|conn| {
-            crate::search::warmup_hnsw_from_db(conn, &mut hnsw_index.write())
-        });
+        // HNSW is opt-in: skip the warmup (full DB replay) when it is disabled.
+        if search_config.hnsw_enabled {
+            let _ = storage.with_connection(|conn| {
+                crate::search::warmup_hnsw_from_db(conn, &mut hnsw_index.write())
+            });
+        }
 
         Self {
             storage,

@@ -193,6 +193,7 @@ fn semantic_only_search_with_hnsw(
             if !hnsw.is_empty() && query_embedding.len() == hnsw.config().dim {
                 let live = hnsw.len();
                 let mut candidate_k = (limit * 3).max(16) as usize;
+                let mut previous_eligible: Option<usize> = None;
                 // Post-filtering (workspace, tags, expiry, min_score...) can
                 // discard most candidates: widen the fetch (bounded) until
                 // `limit` eligible results exist or the index is exhausted.
@@ -208,7 +209,14 @@ fn semantic_only_search_with_hnsw(
                     let hydrated = semantic_hydrate_hnsw_candidates(
                         conn, candidates, limit, min_score, options, config,
                     )?;
-                    if hydrated.len() as i64 >= limit || exhausted {
+                    // Two consecutive rounds with zero eligible results mean the
+                    // filters reject (almost) everything: stop instead of paying
+                    // the remaining IN(...) hydration rounds under the storage
+                    // lock. Nothing is lost: an empty result falls back to the
+                    // exact SQLite scan below.
+                    let stagnated = hydrated.is_empty() && previous_eligible == Some(0);
+                    previous_eligible = Some(hydrated.len());
+                    if hydrated.len() as i64 >= limit || exhausted || stagnated {
                         if !hydrated.is_empty() {
                             return Ok(hydrated);
                         }
