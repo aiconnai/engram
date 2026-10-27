@@ -423,9 +423,9 @@ mkdir -p "$AUTH_REPO"
 build_authority_repo "$AUTH_REPO"
 
 set +e
-OUT="$(run_authority "omega-task" "2026-10-23-alpha-task-v10-post.md")"; STATUS=$?
+OUT="$(run_authority "alpha-task" "2026-10-23-alpha-task-v10-post.md")"; STATUS=$?
 set -e
-[ "$STATUS" -eq 0 ] || { printf 'FAIL: newest vN of a slug unrelated to the active task passes\n%s\n' "$OUT" >&2; exit 1; }
+[ "$STATUS" -eq 0 ] || { printf 'FAIL: newest vN of the active task passes\n%s\n' "$OUT" >&2; exit 1; }
 assert_contains "$OUT" "PASS live state structure is consistent" "alpha v10 is accepted: slug derived from the Last review name, v10 sorts after v2"
 
 set +e
@@ -462,6 +462,23 @@ OUT="$(run_authority "omega-task" "2026-10-26-delta-task-pre.md")"; STATUS=$?
 set -e
 [ "$STATUS" -ne 0 ] || { printf 'FAIL: advisory pre artifact unexpectedly passed\n%s\n' "$OUT" >&2; exit 1; }
 assert_contains "$OUT" "is not a docs/harness/reviews/<date>-<task>[-vN]-post.md file" "only post-review artifacts can be authoritative"
+
+# While the Active task has no post review, an arbitrary older PASS of another task is not enough: the
+# Last review must be the newest PASS post review in the repository (beta, 2026-10-24, here).
+set +e
+OUT="$(run_authority "omega-task" "2026-10-23-alpha-task-v10-post.md")"; STATUS=$?
+set -e
+[ "$STATUS" -ne 0 ] || { printf 'FAIL: older review of another task passed while the active task has none\n%s\n' "$OUT" >&2; exit 1; }
+assert_contains "$OUT" "Last review is not the newest PASS review while the active task has none: found $AUTH_DIR/2026-10-23-alpha-task-v10-post.md, expected $AUTH_DIR/2026-10-24-beta-task-post.md" "an older PASS of another task cannot stand in for the active task"
+
+# Versions match the exact slug: <slug>-v1-impostor is another task, not a newer version of <slug>.
+printf 'REVIEW_VERDICT: PASS fixture\n' >"$AUTH_REPO/$AUTH_DIR/2026-10-29-alpha-task-v1-impostor-post.md"
+set +e
+OUT="$(run_authority "alpha-task" "2026-10-23-alpha-task-v10-post.md")"; STATUS=$?
+set -e
+rm -f "$AUTH_REPO/$AUTH_DIR/2026-10-29-alpha-task-v1-impostor-post.md"
+[ "$STATUS" -eq 0 ] || { printf 'FAIL: a different slug sharing the prefix was treated as a newer version\n%s\n' "$OUT" >&2; exit 1; }
+assert_contains "$OUT" "PASS live state structure is consistent" "a slug sharing the prefix is not a newer version of the active task"
 
 # A shallow clone (typical CI checkout) cannot prove ancestry: say so explicitly instead of passing silently.
 SHALLOW_REPO="$TMP_DIR/shallow-repo"
