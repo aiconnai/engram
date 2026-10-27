@@ -1,7 +1,7 @@
 # Generated baseline for advertised Engram contracts. Do not hand-trim surfaces.
 # Regenerate after an intentional surface change: python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml --write
 schema_version = "advertised-surfaces-v1"
-base_sha = "fd51f84f3315a2b981210fa3785016b44c8bf74b"
+base_sha = "ccea5d1c165c5eca9df82e0fd5d0d6b83de6c97a"
 captured_date = "2026-10-26"
 
 [sources]

@@ -314,4 +314,49 @@ crate::engram_server_only! {
             "memory in ws-beta must NOT be reinforced when PostToolUse is scoped to ws-alpha"
         );
     }
+
+    #[test]
+    fn test_resource_subscription_enforces_principal_workspace() {
+        use engram::auth::{PermissionSet, TokenClaims, TransportPrincipal, UserId};
+
+        let handler = test_handler();
+        let principal = TransportPrincipal::from_token_claims(TokenClaims {
+            user_id: UserId::from_string("user-alpha"),
+            key_id: "key-alpha".to_string(),
+            permissions: PermissionSet::admin(),
+            namespace: Some("ws-alpha".to_string()),
+            issued_at: chrono::Utc::now(),
+            expires_at: None,
+        })
+        .unwrap();
+        let request = |method: &str, uri: &str| McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(1)),
+            method: method.to_string(),
+            params: json!({ "uri": uri }),
+        };
+
+        for method in [methods::SUBSCRIBE_RESOURCE, methods::UNSUBSCRIBE_RESOURCE] {
+            let foreign = handler.handle_request_as(
+                request(method, "engram://workspace/ws-beta/memories"),
+                Some(principal.clone()),
+            );
+            assert!(
+                foreign.error.is_some(),
+                "{method} on a foreign workspace must be denied for a restricted principal"
+            );
+
+            let own = handler.handle_request_as(
+                request(method, "engram://workspace/ws-alpha/memories"),
+                Some(principal.clone()),
+            );
+            assert!(own.error.is_none(), "{method} on the principal's workspace must succeed");
+        }
+
+        let unrestricted = handler.handle_request_as(
+            request(methods::SUBSCRIBE_RESOURCE, "engram://workspace/ws-beta/memories"),
+            None,
+        );
+        assert!(unrestricted.error.is_none(), "stdio/local owner stays unrestricted");
+    }
 }

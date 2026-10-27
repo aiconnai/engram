@@ -133,17 +133,19 @@ if catalog_dir.exists():
     registry = "\n".join(p.read_text() for p in catalog_dir.glob("*.rs"))
 else:
     registry = Path("src/mcp/tools/registry.rs").read_text()
-tools_mod = Path("src/mcp/tools/mod.rs").read_text()
+catalog_mod = catalog_dir / "mod.rs"
+gating_src = catalog_mod.read_text() if catalog_mod.exists() else ""
 all_names = re.findall(r"\bname:\s*\"([^\"]+)\"", registry)
 feature_gated = set()
+# Single source of feature gating: catalog::required_features, whose arms read
+# "a" | "b" => &["feature", ...]; rustfmt may wrap the | alternatives or the arm body in braces.
 match_body = re.search(
-    r"fn tool_feature_available\(name: &str\) -> bool \{.*?match name \{(.*?)\n\s*_\s*=>\s*true,",
-    tools_mod,
+    r"fn required_features\(name: &str\)[^{]*\{\s*match name \{(.*?)\n\s*_\s*=>\s*&\[\]",
+    gating_src,
     re.S,
 )
 if match_body:
-    # Gated arms read "a" | "b" => cfg!(...), or, once rustfmt wraps them, => { cfg!(...) }.
-    for arm in re.finditer(r"((?:\s*\"[^\"]+\"\s*\|?)+)\s*=>\s*(?:\{\s*)?cfg!\(", match_body.group(1)):
+    for arm in re.finditer(r"((?:\s*\|?\s*\"[^\"]+\")+)\s*=>\s*(?:\{\s*)?&\[\s*\"", match_body.group(1)):
         feature_gated.update(re.findall(r"\"([^\"]+)\"", arm.group(1)))
 active_count = len([name for name in all_names if name not in feature_gated])
 print(f"{active_count} active / {len(all_names)} total")

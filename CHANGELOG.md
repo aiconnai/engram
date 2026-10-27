@@ -12,6 +12,42 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+### Security
+
+- **Batch tools enforce per-item workspaces** — `memory_create_batch` and `memory_ingest_fact_batch` authorize every item's `workspace` (central check, gRPC pre-check and handlers), closing a cross-workspace write introduced by the search/auth hardening commit `e04d3307`. Batch item arrays are derived from the catalog schema and fail closed on unreadable nested `workspace` claims.
+- **Resource subscriptions are principal-aware** — `resources/subscribe` and `resources/unsubscribe` apply the same workspace policy as `resources/read`.
+- **`memory_search_suggest` is workspace-scoped** — restricted principals get spelling corrections built only from their own workspace vocabulary.
+- **`permission_denial_for_mode` fails closed** for unknown tools.
+- **Dependency advisories** — zip 9.0.5 and duckdb 1.10506.1 (RUSTSEC-2026-0367/0368/0369), tokio 1.53.3 (RUSTSEC-2026-0386), rustls-webpki 0.103.16, webpki-roots 1.0.11 and ctutils 0.4.6 (RUSTSEC-2026-0382/0381/0385); crypto-bigint 0.5 removed from the graph (RUSTSEC-2026-0387) by not enabling `aws-sdk-s3/sigv4a`.
+
+### Fixed
+
+- `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
+- Deleted (single, cascade, batch) and content-edited memories are removed from the in-memory HNSW index, saving the index no longer persists removed vectors, and HNSW semantic search widens its bounded candidate fetch so `limit` holds after filtering.
+- `dream_consolidation_status` and `dream_insights` were documented as always available but require `dream-phase`; tool feature gating now has a single source (`catalog::required_features`).
+- `CrossEncoderReranker` returns an explicit "not implemented" error instead of fabricating scores, and model routing no longer reports the placeholder as operational.
+- SDK release workflow no longer hardcodes `v0.22.0` / `0.5.0`: it derives the core tag and SDK versions from the manifests and re-checks them after environment approval; `sdks/typescript/package-lock.json` synced to 0.7.0.
+- Quality-candidate scripts no longer use empty `except` blocks; the Rust risk inventory parser returns one tuple shape.
+
+### Changed
+
+- Search (from `e04d3307`): catalog default `limit` is 20, `offset` and `include_archived` are accepted, `SearchOptions.offset` is public, and `memory_search_by_identity` / `memory_session_search` are read-only. Python and TypeScript SDKs default `search` to limit 20 and accept `offset` (Python also `include_archived`).
+- **HNSW is opt-in** — `hnsw_enabled` defaults to `false` until the benchmark required by RFC 0003 exists.
+- Snapshot loader reads archive entry names from the central directory and rejects undecodable names.
+- DuckDB bundled engine 1.4.4 → 1.5.6; `sqlite-vec` is a dev-dependency (benchmarks only).
+- CI pins cargo-audit 0.22.0 and cargo-outdated 0.19.0 (`--locked`); the TypeScript live lane uses Node 24; the docs job runs the public-claims, advertised-contracts and release-version checks.
+- `bump-version.py` verifies lockfiles and `__version__` and adds a read-only `--release-plan` mode.
+
+### Removed
+
+- S3 multi-region access point (SigV4a) signing.
+
+### Docs
+
+- Public claims corrected: measured latency (FTS5 p50 3.2 ms, hybrid p50 250 ms at 100K×384d) instead of "sub-millisecond"; nonexistent model "native adapters" and unsourced competitor tool counts removed; gRPC and ONNX marked optional; tool counts are 301 catalog / 254 default build.
+- RFC, ADR, plan and spec statuses record their implementation evidence; ROADMAP tool names corrected and cross-host federation marked not implemented.
+- Shared decision-triage guide trimmed for publication.
+
 ## [0.24.0] - 2026-10-14
 
 ### Added
