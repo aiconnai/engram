@@ -8,8 +8,8 @@
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
 | Last sensors | `2026-10-23 status=pass mode=full timestamp=2026-10-23T20:10:00Z duration_sec=310, sem exclusões (receipts commitados em 08cb17a4; rodado no candidato do sunset, run anterior falhou em offline_lane). Sem receipt commitado de 2026-09-03 a 2026-10-23; não reexecutado depois. Detalhe em progress/2026-10-26-remediation.md.` |
-| Last commit | `7c2fc79c` |
-| Last live-state check | `2026-10-26 — integrador em remediation/integration: Last commit = 7c2fc79c (pai do commit de refresh), rtk bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Branch local, não publicada; não substitui post-gate.` |
+| Last commit | `976fbe8b` |
+| Last live-state check | `2026-10-27 — Claude, após o merge do #260 no main: Last commit = 976fbe8b, primeiro pai do merge do #262 (último da pilha); vale estrito no main depois desse merge. bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Não substitui post-gate.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -22,12 +22,13 @@
   2026-10-26 achou (estado vivo defasado, regressão de autorização de `e04d3307`, advisories, release
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
-- **Autorização atual** (owner, chat, 2026-10-26: "resolva tudo o mais paralelo possível"): 6 branches
-  **locais** paralelas a partir de `08cb17a4`; o integrador mescla numa branch de integração, roda o CI
-  completo e só então finaliza os SHAs neste arquivo.
-- **Limites**: push, PR, merge, tag, release, publicação e remoção de branches/worktrees **não** estão
-  autorizados (aguardam decisão explícita do owner); sem dados reais, chamadas pagas, produção ou settings
-  do GitHub. [Negativo do harness](./WHAT_WE_DONT_DO.md); [escopo canônico](./SPEC.md).
+- **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
+- **Autorização atual** (owner, chat, 2026-10-27): push e um PR por frente (#244–#262), opção A; merges
+  feitos pelo Claude por exceção explícita à regra de merge humano, só para esta pilha. Ordem, SHAs e CI:
+  [log da sprint](./progress/2026-10-26-remediation.md#publicação-2026-10-27).
+- **Limites**: push, PR e merge fora desta pilha, tag, release, publicação em registries, remoção de
+  branches/worktrees e settings do GitHub **não** estão autorizados (aguardam decisão explícita do owner);
+  sem dados reais, chamadas pagas ou produção. [Negativo do harness](./WHAT_WE_DONT_DO.md); [escopo canônico](./SPEC.md).
 - **Última evidência**: [sensores](./progress/2026-10-26-remediation.md#evidência-de-sensores): full PASS de
   2026-10-23 (310 s), o único recibo commitado desde 2026-09-03; nenhum gate completo roda nesta sprint
   antes do integrador. Post-gate do sunset `PENDING` (sem receipt humano).
@@ -102,7 +103,7 @@ intervalo nem receipt: ver a [nota de proveniência](./reviews/2026-10-14-engram
 
 ## Próximos passos (owner)
 
-- Decisões pendentes: tabela no [plano](./plans/2026-10-26-remediation-plan.md#decisões-pendentes-do-owner). Nada foi publicado, tagueado nem removido.
+- Decisões pendentes: tabela no [plano](./plans/2026-10-26-remediation-plan.md#decisões-pendentes-do-owner). Pilha #244–#262 mesclada no `main` em 2026-10-27; nada foi tagueado, publicado em registries nem removido.
 - `v0.24.0` Core + `v0.7.0` SDKs seguem **preparados** (`CHANGELOG.md`, `channel-matrix.toml`) sem tag nem release; `O2` untrack executado para os 73 `.raw` (histórico Git ainda os contém).
 - Resumo pós-merge e decisões de 2026-10-14: [registro de revisão](./reviews/2026-10-05-comprehensive-improvement/README.md#owner-decisions--post-merge-waves-56-resolution-2026-10-14), [sumário Waves 5–6](./reviews/2026-10-05-comprehensive-improvement/wave5-6-summary.md).
 

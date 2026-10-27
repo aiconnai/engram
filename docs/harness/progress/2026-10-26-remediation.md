@@ -8,8 +8,8 @@ frente WT5 (`chore/harness-live-state`) verificou. O estado das frentes WT1-WT4 
 
 - Owner, chat, 2026-10-26: "resolva tudo o mais paralelo possível" → 6 branches locais paralelas a
   partir de `08cb17a4`; o integrador mescla, roda o CI completo e finaliza SHAs em `progress.md`.
-- Push, PR, merge, tag, release, publicação e remoção de branches/worktrees **não** estão
-  autorizados (aguardam decisão explícita do owner). [Negativo do harness](../WHAT_WE_DONT_DO.md).
+- Push, PR, merge, tag, release, publicação e remoção de branches/worktrees **não** estavam
+  autorizados em 2026-10-26. Push, PRs e merges foram autorizados em 2026-10-27 (seção Publicação). [Negativo do harness](../WHAT_WE_DONT_DO.md).
 
 ## Registro retroativo de commits sem entrada de progresso
 
@@ -130,3 +130,56 @@ merge, tag, release, publicação e remoção de branches/worktrees seguem sem a
 - **Padrões aplicados por decisão do owner (revisáveis)**: HNSW opt-in; federação marcada como não implementada;
   guia de decision-triage enxugado; remoção de SigV4a; DuckDB 1.5.6; reranker placeholder retorna erro;
   contagens de concorrentes sem fonte removidas.
+- **Regressão pega pelo CI final** (`make ci` em `08ca8288`, 1 falha): o pré-check HTTP de `06666ae8` passou a aplicar o
+  `_permission_mode` por chamada e devolvia HTTP 403 em vez de 200 + recusa no resultado (contrato
+  `tests/canonical_journey`). Corrigido com teste primeiro: o pré-check de transporte deixa a auto-restrição para o
+  dispatcher, que continua recusando. Links quebrados de `docs/GETTING_STARTED.md` (pré-existentes) corrigidos.
+
+## Publicação (2026-10-27)
+
+Owner, chat, 2026-10-27: autorizou o push e "um PR por frente"; escolheu a opção A (um merge por PR) e
+autorizou o Claude a executar os merges, como exceção explícita à regra de merge humano só para esta
+pilha: merge commit, só com os checks obrigatórios verdes no head exato, parar na primeira falha, sem
+bypass de admin. GO de 5 h, até 09:35Z; tag, release, registries, deleções e settings ficaram de fora.
+
+- **Pilha**: 19 PRs contra `main`, na ordem de merge. Simulação local antes do push (merge-tree com
+  merge commits) limpa em todos os passos e árvore final idêntica à de `remediation/integration`.
+  gitleaks no intervalo publicado: sem achados.
+- **Cherry-picks para cada PR passar sozinho**: `cdcb093c` (= `4134d28b`, link intra-doc que quebrava o
+  `Documentation`) no #247; `7a4357f3` (= `14a65a54`, recusa por `_permission_mode` volta ao resultado)
+  no #255. Os commits originais mesclam como no-op no #262.
+- **Ordem**: #246 primeiro (contém #244 e #245 e conserta Security Audit e Cargo Deny); depois cada PR foi
+  atualizado com `main`, passou no CI e recebeu merge commit.
+- **Atualização dos branches**: até o #253 pelo "Update branch" do GitHub. No #254 o GitHub acusou conflito
+  falso (6 bases de merge, histórico cruzado); `git merge-tree` (ort) resolvia limpo e dava a árvore prevista
+  na simulação. Do #254 em diante, cada branch foi atualizado localmente com merge-ort (primeiro pai = branch,
+  segundo = `main`, a mesma forma do "Update branch") e enviado como fast-forward.
+
+| PR | Branch | Merge no `main` |
+|---|---|---|
+| #244 | `fix/search-hardening-and-decision-triage` | marcado como mesclado junto com #246, 04:55Z |
+| #245 | `codex/turso-sunset` | marcado como mesclado junto com #246, 04:55Z |
+| #246 | `fix/supply-chain-2026-10` | merge commit `f383c837`, 04:55Z |
+| #247 | `fix/workspace-batch-auth` | merge commit `f304bf51`, 05:17Z |
+| #248 | `fix/mcp-surface-honesty` | merge commit `347324e8`, 05:34Z |
+| #249 | `fix/release-pipeline` | merge commit `9203d8a1`, 05:53Z |
+| #250 | `docs/product-status` | merge commit `489271ce`, 06:09Z |
+| #251 | `chore/harness-live-state` | merge commit `8bfb79e4`, 06:24Z |
+| #252 | `docs/claims-and-triage-trim` | merge commit `958bf5f5`, 06:42Z |
+| #253 | `fix/hnsw-default-propagation` | merge commit `a197fcf8`, 07:00Z |
+| #254 | `remediation/integrator-round-1` | merge commit `3e6687b7`, 07:18Z |
+| #255 | `fix/security-followups` | merge commit `8b1eb9ab`, 07:33Z |
+| #256 | `fix/log-redaction-sweep` | merge commit `2dca9f00`, 07:49Z |
+| #257 | `docs/followups-and-harness-tools` | merge commit `d68f37ce`, 08:08Z |
+| #258 | `fix/live-state-review-authority` | merge commit `88980be0`, 08:26Z |
+| #259 | `fix/hnsw-followups` | merge commit `468e76a2`, 08:42Z |
+| #260 | `remediation/integrator-round-2` | merge commit `976fbe8b`, 09:01Z |
+| #261 | `docs/fix-getting-started-links` | contido no #262 (head `8ee32e87`); sem merge próprio para caber no prazo |
+| #262 | `remediation/integration` | este commit entra por aqui (último da pilha) |
+
+- **CI**: Security Audit e Cargo Deny voltaram a verde no `main` no push CI de `f304bf51` (após #247).
+  Checks não obrigatórios que falharam durante a cadeia:
+  - Python SDK installed-wheel live contract no #262 (1ª rodada, 04:32Z): conflito do `rustup` ao instalar `clippy` no runner; o re-run passou.
+  - `Advertised Contracts` no #257, #258 e #259: o baseline das 9 variáveis documentadas pelo #257 só é regenerado em `127e3e89` (#260), como na integração. Exceção explícita, registrada em comentário no #257; voltou a passar no #260.
+  - Runs de CI no `main` (push e agendados, incluindo um Nightly atrasado) foram cancelados durante a cadeia para liberar runners: cada árvore intermediária já tinha sido testada no PR. O CI do merge do #262 roda completo.
+- **Live state**: `Last commit` = `976fbe8b` (merge do #260), primeiro pai do merge do #262.
