@@ -89,6 +89,27 @@ const WRITE_FLAG_PARAMS: &[(&str, &str)] = &[
     ("sync_state", "update_version"),
 ];
 
+/// Write-flag parameters of `tool_name` (aliases resolved as in enforcement).
+fn write_flag_params(tool_name: &str) -> Vec<&'static str> {
+    let canonical = canonical_tool_name(tool_name);
+    WRITE_FLAG_PARAMS
+        .iter()
+        .filter(|(tool, _)| *tool == canonical)
+        .map(|(_, flag)| *flag)
+        .collect()
+}
+
+/// Bare arguments that set every given write flag, to ask enforcement for the
+/// mode such a call requires.
+fn flag_probe(flags: &[&str]) -> Value {
+    Value::Object(
+        flags
+            .iter()
+            .map(|flag| ((*flag).to_string(), Value::Bool(true)))
+            .collect(),
+    )
+}
+
 /// Resolve a dispatcher alias to the catalog tool it executes.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
     DISPATCH_ALIASES
@@ -122,7 +143,7 @@ pub fn required_mode(tool_name: &str) -> Option<PermissionMode> {
 
 /// Mode required for one concrete call. Unknown tools require `admin` (fail
 /// closed); write flags raise a read-only tool to `scoped_write`. Flags are
-/// read from the arguments or, for transport pre-checks, `params.arguments`.
+/// read from the bare arguments.
 pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode {
     let base = required_mode(tool_name).unwrap_or(PermissionMode::Admin);
     let canonical = canonical_tool_name(tool_name);
@@ -130,13 +151,9 @@ pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode
         .iter()
         .filter(|(tool, _)| *tool == canonical)
         .any(|(_, flag)| {
-            [
-                params.get(*flag),
-                params.get("arguments").and_then(|a| a.get(*flag)),
-            ]
-            .into_iter()
-            .flatten()
-            .any(|value| !matches!(value, Value::Null | Value::Bool(false)))
+            params
+                .get(*flag)
+                .is_some_and(|value| !matches!(value, Value::Null | Value::Bool(false)))
         });
     if writes && base < PermissionMode::ScopedWrite {
         PermissionMode::ScopedWrite
@@ -200,7 +217,10 @@ pub fn active_permission_mode() -> Option<PermissionMode> {
 
 /// Inspect permission modes and tool requirements report (RFC 0010).
 pub fn permission_mode_status_report(target_tool: Option<&str>) -> Value {
-    let active = active_permission_mode();
+    status_report_for(active_permission_mode(), target_tool)
+}
+
+fn status_report_for(active: Option<PermissionMode>, target_tool: Option<&str>) -> Value {
     let active_str = active.map(|m| m.as_str()).unwrap_or("unconstrained");
 
     if let Some(tool) = target_tool {
@@ -210,13 +230,25 @@ pub fn permission_mode_status_report(target_tool: Option<&str>) -> Value {
             (None, _) => true,
             _ => false,
         };
-        json!({
+        let mut report = json!({
             "active_mode": active_str,
             "configured_via": if active.is_some() { "env" } else { "default_unconstrained" },
             "tool": tool,
             "required_mode": req.map(|r| r.as_str()),
             "allowed": allowed
-        })
+        });
+        // `required_mode`/`allowed` describe a call without write flags. A call
+        // that sets one is enforced at `scoped_write` or above, so report that
+        // too (additive fields; the existing ones keep their meaning).
+        let flags = write_flag_params(tool);
+        if !flags.is_empty() {
+            let escalated = required_mode_for_call(tool, &flag_probe(&flags));
+            report["write_flag_params"] = json!(flags);
+            report["required_mode_with_write_flags"] = json!(escalated.as_str());
+            report["allowed_with_write_flags"] =
+                json!(active.is_none_or(|act| act.allows(escalated)));
+        }
+        report
     } else {
         let all_tools = TOOL_DEFINITIONS.len();
         let allowed_count = if let Some(act) = active {
@@ -420,6 +452,32 @@ pub fn check_scope_authorization(
     None
 }
 
+/// Transport pre-check (HTTP): the same verdict as [`check_tool_authorization`]
+/// except the caller's per-call `_permission_mode` / `permission_mode`
+/// self-restriction (RFC 0010). The dispatcher applies that override, so its
+/// denial travels in the tool result (HTTP 200) on every transport instead of
+/// becoming a transport-level error. Skipping it here can only remove a denial
+/// the dispatcher still issues; it never authorizes anything extra.
+pub fn check_transport_authorization(
+    conn: Option<&rusqlite::Connection>,
+    tool_name: &str,
+    arguments: &Value,
+    principal: Option<&TransportPrincipal>,
+) -> Option<Value> {
+    let has_override = arguments.as_object().is_some_and(|args| {
+        args.contains_key("_permission_mode") || args.contains_key("permission_mode")
+    });
+    if !has_override {
+        return check_tool_authorization(conn, tool_name, arguments, principal);
+    }
+    let mut without_override = arguments.clone();
+    if let Some(args) = without_override.as_object_mut() {
+        args.remove("_permission_mode");
+        args.remove("permission_mode");
+    }
+    check_tool_authorization(conn, tool_name, &without_override, principal)
+}
+
 /// Central authorization guard checking:
 /// 1. Environment permission modes (ENGRAM_PERMISSION_MODE)
 /// 2. Transport principal modes and workspace boundaries
@@ -525,25 +583,25 @@ pub fn check_tool_authorization(
     None
 }
 
-/// Argument objects a call's workspace claims may live in.
+/// Split a `tools/call` params envelope (`{"name", "arguments"}`) into the tool
+/// name and its bare arguments. Missing arguments yield `Value::Null`.
 ///
-/// Transports pre-check the whole `tools/call` params object
-/// (`{"name", "arguments"}`) while the dispatcher checks the bare arguments, so
-/// both shapes reach this module. The two cannot be told apart reliably (a
-/// caller may put `name`/`arguments` keys inside the arguments themselves), so
-/// claims are read from the object itself AND from `arguments` when present.
-/// Reading both only ever adds claims to check; it can never hide one.
+/// Transports call this exactly once, at the boundary, and hand everything
+/// downstream (this module, the dispatcher, handlers) the bare arguments plus
+/// the tool name. Nothing below the transport unwraps again, so a `name` or
+/// `arguments` key inside real arguments is plain data, never an envelope.
+pub fn tool_call_parts(envelope: &Value) -> Option<(&str, &Value)> {
+    static NO_ARGUMENTS: Value = Value::Null;
+    let name = envelope.get("name")?.as_str()?;
+    Some((name, envelope.get("arguments").unwrap_or(&NO_ARGUMENTS)))
+}
+
+/// The bare arguments object a call's workspace claims live in.
+///
+/// `params` is always the bare tool arguments (see [`tool_call_parts`]); it is
+/// never an envelope, so no key of it is interpreted as one.
 fn argument_views(params: &Value) -> Vec<&serde_json::Map<String, Value>> {
-    let Some(object) = params.as_object() else {
-        return Vec::new();
-    };
-    let mut views = vec![object];
-    if object.get("name").is_some_and(Value::is_string) {
-        if let Some(inner) = object.get("arguments").and_then(Value::as_object) {
-            views.push(inner);
-        }
-    }
-    views
+    params.as_object().into_iter().collect()
 }
 
 /// Every workspace `params` claims for `tool_name`: the top-level `workspace`
@@ -880,6 +938,94 @@ mod tests {
 
         assert!(allowed.is_none());
         assert!(denied.is_some());
+    }
+
+    fn alpha_writer() -> TransportPrincipal {
+        principal(Some("alpha"), PermissionSet::standard_user())
+    }
+
+    #[test]
+    fn bare_arguments_with_name_and_arguments_keys_are_not_unwrapped() {
+        // `name`/`arguments` inside real arguments are plain data: they are not
+        // an envelope, so the nested object is neither read as claims nor able
+        // to change which workspace the call targets.
+        let p = alpha_writer();
+        let args = json!({"workspace": "alpha", "name": "x", "arguments": {"workspace": "beta"}});
+        assert_eq!(requested_workspaces("memory_list", &args), vec!["alpha"]);
+        assert!(check_tool_authorization(None, "memory_list", &args, Some(&p)).is_none());
+
+        // The top-level claim is the only one that counts: a foreign top-level
+        // workspace is denied no matter what `arguments` holds.
+        let foreign =
+            json!({"workspace": "beta", "name": "x", "arguments": {"workspace": "alpha"}});
+        assert_eq!(requested_workspaces("memory_list", &foreign), vec!["beta"]);
+        assert!(check_tool_authorization(None, "memory_list", &foreign, Some(&p)).is_some());
+    }
+
+    #[test]
+    fn write_flag_is_read_from_bare_arguments_only() {
+        let nested = json!({"name": "x", "arguments": {"auto_apply": true}});
+        assert_eq!(
+            required_mode_for_call("memory_predict_links", &nested),
+            required_mode("memory_predict_links").unwrap()
+        );
+        assert_eq!(
+            required_mode_for_call("memory_predict_links", &json!({"auto_apply": true})),
+            PermissionMode::ScopedWrite
+        );
+    }
+
+    #[test]
+    fn tool_call_parts_unwraps_the_envelope_exactly_once() {
+        let envelope =
+            json!({"name": "memory_list", "arguments": {"name": "inner", "arguments": {"a": 1}}});
+        let (name, arguments) = tool_call_parts(&envelope).unwrap();
+        assert_eq!(name, "memory_list");
+        assert_eq!(arguments, &json!({"name": "inner", "arguments": {"a": 1}}));
+
+        let no_arguments = json!({"name": "memory_list"});
+        assert_eq!(tool_call_parts(&no_arguments).unwrap().1, &Value::Null);
+        assert!(tool_call_parts(&json!({"arguments": {}})).is_none());
+        assert!(tool_call_parts(&json!({"name": 7})).is_none());
+    }
+
+    #[test]
+    fn status_report_reflects_write_flag_escalation() {
+        // Under read_only the default call of a flagged tool is allowed, but the
+        // call that sets the write flag is not: the report must say so.
+        let report =
+            status_report_for(Some(PermissionMode::ReadOnly), Some("memory_predict_links"));
+        assert_eq!(report["required_mode"], "read_only");
+        assert_eq!(report["allowed"], true);
+        assert_eq!(report["write_flag_params"], json!(["auto_apply"]));
+        assert_eq!(report["required_mode_with_write_flags"], "scoped_write");
+        assert_eq!(report["allowed_with_write_flags"], false);
+
+        // Aliases resolve like enforcement does.
+        let alias = status_report_for(Some(PermissionMode::ReadOnly), Some("graph_predict_links"));
+        assert_eq!(alias["required_mode_with_write_flags"], "scoped_write");
+        assert_eq!(alias["allowed_with_write_flags"], false);
+
+        // Once the mode permits writes, both agree.
+        let writer = status_report_for(
+            Some(PermissionMode::ScopedWrite),
+            Some("memory_predict_links"),
+        );
+        assert_eq!(writer["allowed"], true);
+        assert_eq!(writer["allowed_with_write_flags"], true);
+
+        // Unconstrained process: nothing is denied.
+        let open = status_report_for(None, Some("memory_predict_links"));
+        assert_eq!(open["allowed_with_write_flags"], true);
+    }
+
+    #[test]
+    fn status_report_without_write_flags_is_unchanged() {
+        let report = status_report_for(Some(PermissionMode::ReadOnly), Some("memory_get"));
+        assert_eq!(report["required_mode"], "read_only");
+        assert_eq!(report["allowed"], true);
+        assert!(report.get("write_flag_params").is_none());
+        assert!(report.get("allowed_with_write_flags").is_none());
     }
 
     #[test]

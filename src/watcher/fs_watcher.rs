@@ -149,14 +149,14 @@ where
 
         for path in &config.paths {
             if !path.exists() {
-                warn!(path = ?path, "Watched path does not exist; skipping");
+                warn!(path = %crate::observability::redact::path_label(path), "Watched path does not exist; skipping");
                 continue;
             }
             watcher
                 .watch(path, RecursiveMode::Recursive)
                 .map_err(|e| EngramError::Config(format!("Cannot watch path {:?}: {e}", path)))?;
 
-            debug!(path = ?path, "Watching path");
+            debug!(path = %crate::observability::redact::path_label(path), "Watching path");
         }
 
         let (stop_tx, stop_rx) = mpsc::sync_channel::<()>(1);
@@ -196,7 +196,7 @@ where
                     self.handle_raw_event(event, debounce, &mut pending);
                 }
                 Ok(Err(e)) => {
-                    error!(error = %e, "Notify watcher error");
+                    error!(error = %crate::observability::redact::opaque(&e), "Notify watcher error");
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     // Fall through to flush pending events.
@@ -277,7 +277,11 @@ where
                     kind: p.kind,
                     timestamp: chrono::Utc::now().to_rfc3339(),
                 };
-                debug!(path = ?event.path, kind = ?event.kind, "Firing debounced file event");
+                debug!(
+                    path = %crate::observability::redact::path_label(&event.path),
+                    kind = ?event.kind,
+                    "Firing debounced file event"
+                );
                 (self.callback)(event);
             }
         }
@@ -556,5 +560,23 @@ mod tests {
         handle
             .join()
             .expect("disabled watcher thread should not panic");
+    }
+
+    #[test]
+    fn missing_watch_path_log_omits_the_path() {
+        // Given: a configured watch path that does not exist.
+        use crate::observability::test_capture::{assert_logs_exclude, captured, install};
+        install();
+        const MARKER: &str = "watch-path-sentinel-wt12-c3d1";
+        let mut config = config_with(vec![], vec![]);
+        config.paths = vec![PathBuf::from(format!("/nonexistent/{MARKER}"))];
+
+        // When: the watcher is created.
+        let created = FsWatcher::new(config, |_| {});
+
+        // Then: the skip is logged without the path.
+        assert!(created.is_ok());
+        assert!(captured().contains("Watched path does not exist; skipping"));
+        assert_logs_exclude(&[MARKER]);
     }
 }

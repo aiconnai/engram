@@ -126,7 +126,8 @@ CANVAS_PATH="docs/harness/canvas/2026-07-09-engram-10-of-10-live-state.md"
 #   - the "Last review" field names the artifact (first docs/harness/reviews/*.md path);
 #   - its task slug comes from its own file name (<date>-<slug>[-vN]-post.md);
 #   - it must be the newest version of that slug (date, then vN);
-#   - when the "Active task" already has post-review artifacts, it must be the newest of those.
+#   - when the "Active task" already has post-review artifacts, it must be the newest of those;
+#   - otherwise it must be the newest PASS post review of any task (no older stand-in).
 review_slug_from_path() {
   local base="${1##*/}"
   local re='^[0-9]{4}-[0-9]{2}-[0-9]{2}-(.+)-post$'
@@ -162,6 +163,21 @@ latest_post_review_for() {
       \( -name "????-??-??-${slug}-post.md" -o -name "????-??-??-${slug}-v[0-9]*-post.md" \) \
       ! -name '*.raw' 2>/dev/null || true; } \
     | while IFS= read -r candidate; do
+        # The glob also matches <slug>-vN-<other>; keep only exact versions of this slug.
+        [ "$(review_slug_from_path "$candidate")" = "$slug" ] || continue
+        printf '%s\t%s\n' "$(review_sort_key "$candidate")" "$candidate"
+      done \
+    | LC_ALL=C sort | tail -n 1 | cut -f2-
+}
+
+# Newest PASS <date>-<slug>[-vN]-post.md of any task ('' when none). Raw prompts are ignored.
+latest_pass_post_review_any() {
+  local candidate
+  { find docs/harness/reviews -maxdepth 1 -type f -name '????-??-??-*-post.md' ! -name '*.raw' \
+      2>/dev/null || true; } \
+    | while IFS= read -r candidate; do
+        [ -n "$(review_slug_from_path "$candidate")" ] || continue
+        grep -Eq '^REVIEW_VERDICT:[[:space:]]*PASS[[:space:]]' "$candidate" || continue
         printf '%s\t%s\n' "$(review_sort_key "$candidate")" "$candidate"
       done \
     | LC_ALL=C sort | tail -n 1 | cut -f2-
@@ -266,6 +282,11 @@ if [ -n "$LAST_REVIEW" ]; then
     ACTIVE_REVIEW_PATH="$(latest_post_review_for "$(active_task_id "$ACTIVE_TASK")")"
     if [ -n "$ACTIVE_REVIEW_PATH" ] && [ "$REVIEW_PATH" != "$ACTIVE_REVIEW_PATH" ]; then
       add_failure "Last review artifact is stale for the active task: found $REVIEW_PATH, expected $ACTIVE_REVIEW_PATH"
+    elif [ -z "$ACTIVE_REVIEW_PATH" ]; then
+      NEWEST_PASS_REVIEW_PATH="$(latest_pass_post_review_any)"
+      if [ -n "$NEWEST_PASS_REVIEW_PATH" ] && [ "$REVIEW_PATH" != "$NEWEST_PASS_REVIEW_PATH" ]; then
+        add_failure "Last review is not the newest PASS review while the active task has none: found $REVIEW_PATH, expected $NEWEST_PASS_REVIEW_PATH"
+      fi
     fi
   fi
 fi

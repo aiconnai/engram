@@ -195,7 +195,11 @@ impl SyncWorker {
                 true
             }
             Err(e) => {
-                tracing::error!("Sync {:?} failed: {}", direction, e);
+                tracing::error!(
+                    "Sync {:?} failed: {}",
+                    direction,
+                    crate::observability::redact::redacted(&e)
+                );
                 false
             }
         }
@@ -450,7 +454,7 @@ fn warn_sync_state_write_failed(
     tracing::warn!(
         phase = phase,
         direction = ?direction,
-        error = %error,
+        error = %crate::observability::redact::redacted(error),
         "sync_state bookkeeping write failed"
     );
 }
@@ -529,5 +533,21 @@ mod tests {
         for result in results {
             assert!(matches!(result, Err(EngramError::Database(_))));
         }
+    }
+
+    #[test]
+    fn bookkeeping_failure_log_omits_error_text() {
+        // Given: a sync error whose text embeds a secret (remote error body).
+        use crate::observability::test_capture::{assert_logs_exclude, captured, install};
+        install();
+        const SECRET: &str = "sync-error-sentinel-wt12-91c4";
+        let err = EngramError::Sync(format!("remote said token={SECRET}"));
+
+        // When: the worker logs the failed bookkeeping write.
+        warn_sync_state_write_failed("restart", SyncDirection::Push, &err);
+
+        // Then: the event is emitted with the error class, never the text.
+        assert!(captured().contains("sync_state bookkeeping write failed"));
+        assert_logs_exclude(&[SECRET]);
     }
 }

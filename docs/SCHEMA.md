@@ -29,7 +29,7 @@ Engram uses SQLite with WAL (Write-Ahead Logging) mode for its storage layer. Th
 
 - Core memory storage with metadata and versioning
 - Full-text search via FTS5 (BM25 scoring)
-- Vector embeddings stored as BLOBs in the `embeddings` table (cosine similarity computed in Rust)
+- Vector embeddings stored as BLOBs in the `embeddings` table (cosine similarity computed in Rust; an optional in-memory HNSW index is opt-in and off by default)
 - Knowledge graph via cross-references
 - Entity extraction and linking
 - Identity unification (canonical IDs + aliases)

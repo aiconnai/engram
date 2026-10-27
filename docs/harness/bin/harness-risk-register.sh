@@ -58,7 +58,8 @@ next_risk_id() {
   if [ -f "$file" ]; then
     while IFS= read -r line; do
       if [[ "$line" =~ ^[[:space:]]*-[[:space:]]id:[[:space:]]RISK-([0-9]{4})$ ]]; then
-        current_id="${BASH_REMATCH[1]}"
+        # Force base 10: zero-padded ids such as 0008 are octal in $(( )) and fail.
+        current_id="$((10#${BASH_REMATCH[1]}))"
         if [ "$current_id" -gt "$max_id" ]; then
           max_id="$current_id"
         fi
@@ -86,8 +87,10 @@ validate_yaml() {
     return 0
   fi
 
-  ruby -e 'require "yaml";
-doc = YAML.load_file(ARGV[0]);
+  # Psych 4+ (Ruby 3.1+) makes YAML.load_file safe-by-default and rejects the
+  # unquoted dates/timestamps this register uses; permit exactly Date and Time.
+  ruby -e 'require "yaml"; require "date";
+doc = YAML.safe_load_file(ARGV[0], permitted_classes: [Date, Time], aliases: false);
 raise "invalid root type" unless doc.is_a?(Hash)
 raise "schema_version missing" unless doc["schema_version"] == "harness-risk-register-v1"
 raise "entries missing" unless doc.key?("entries")
