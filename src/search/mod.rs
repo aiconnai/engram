@@ -16,6 +16,7 @@ pub mod explain;
 pub mod feedback;
 mod fuzzy;
 pub mod hnsw;
+pub mod hnsw_sync;
 mod hybrid;
 mod metadata;
 pub mod mmr;
