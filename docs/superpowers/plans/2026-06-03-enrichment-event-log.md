@@ -1,5 +1,7 @@
 # Enrichment Event Log Implementation Plan
 
+> **Status: Implemented** — evidence: `src/storage/enrichment_events.rs`, `enrichment_events` table test (`src/storage/migrations/tests.rs:252`), read tools `memory_enrichment_timeline` / `memory_enrichment_audit` (`src/mcp/tools/catalog/admin.rs:533,565`); landed in 6bba0e8f (#51). Checkboxes below are not maintained.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an append-only `enrichment_events` table and wire 11 enrichment handlers to emit structured events, then expose two read-only MCP tools (`memory_enrichment_timeline`, `memory_enrichment_audit`) for querying them.

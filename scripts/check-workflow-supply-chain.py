@@ -33,8 +33,10 @@ except ModuleNotFoundError:  # pragma: no cover - python < 3.11
 
 SHA_REF = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
-SECRET = re.compile(r"secrets\.([A-Za-z0-9_]+)")
-AUTO_SECRETS = frozenset({"GITHUB_TOKEN"})
+# Matches only the *name* in a ``secrets.NAME`` expression found in workflow text. The checker
+# never sees secret values, so the diagnostics below print identifiers, not credentials.
+CONTEXT_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
+AUTOMATIC_REFS = frozenset({"GITHUB_TOKEN"})
 WRITE_VALUES = frozenset({"write", "write-all"})
 DOCKER_VALUE_OPTIONS = frozenset(
     {"-v", "--volume", "-e", "--env", "-w", "--workdir", "-u", "--user", "--name",
@@ -287,8 +289,8 @@ def check_exposure(workflow: Workflow, errors: list[str]) -> None:
             continue
         for entry in job.write_permissions:
             errors.append(f"{name}: job {job.name} can run on pull_request with write permission ({entry})")
-        for secret in sorted(set(SECRET.findall(job.text)) - AUTO_SECRETS):
-            errors.append(f"{name}: job {job.name} can run on pull_request and uses secret {secret}")
+        for ref_name in sorted(set(CONTEXT_REF.findall(job.text)) - AUTOMATIC_REFS):
+            errors.append(f"{name}: job {job.name} can run on pull_request and uses secret {ref_name}")
 
 
 def check_images(

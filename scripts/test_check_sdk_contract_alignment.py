@@ -9,9 +9,8 @@ import io
 import json
 import sys
 import tempfile
-import unittest
 from pathlib import Path
-from unittest import mock
+from unittest import TestCase, main, mock
 
 SCRIPT = Path(__file__).resolve().with_name("check-sdk-contract-alignment.py")
 spec = importlib.util.spec_from_file_location("check_sdk_contract_alignment", SCRIPT)
@@ -32,7 +31,7 @@ def call(tool: str, *keys: str, sdk: str = "python", site: str = "test") -> "che
     return checker.Call(sdk, tool, frozenset(keys), site)
 
 
-class ComputeDriftTests(unittest.TestCase):
+class ComputeDriftTests(TestCase):
     def test_aligned_calls_have_no_drift(self) -> None:
         calls = [call("memory_get", "id"), call("memory_create", "content", "tags")]
         self.assertEqual(checker.compute_drift(REGISTRY, calls), set())
@@ -95,7 +94,7 @@ class ComputeDriftTests(unittest.TestCase):
         )
 
 
-class RatchetTests(unittest.TestCase):
+class RatchetTests(TestCase):
     def test_new_drift_and_stale_baseline_both_fail(self) -> None:
         new, stale = checker.compare({"a", "b"}, {"b", "c"})
         self.assertEqual((new, stale), (["a"], ["c"]))
@@ -137,7 +136,7 @@ class RatchetTests(unittest.TestCase):
         )
 
 
-class UpdateBaselineTests(unittest.TestCase):
+class UpdateBaselineTests(TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
@@ -213,7 +212,7 @@ class UpdateBaselineTests(unittest.TestCase):
             checker.main(["--allow-new-drift"])
 
 
-class TypeScriptExtractionTests(unittest.TestCase):
+class TypeScriptExtractionTests(TestCase):
     def extract(self, source: str):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -276,7 +275,7 @@ class R {
         self.assertEqual(calls[0].keys, frozenset({"a", "b"}))
 
 
-class RealRepositoryTests(unittest.TestCase):
+class RealRepositoryTests(TestCase):
     def test_registry_loads_and_python_sweep_runs(self) -> None:
         registry = checker.load_registry()
         self.assertIn("memory_create", registry)
@@ -297,4 +296,4 @@ class RealRepositoryTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    main()

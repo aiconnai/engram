@@ -7,12 +7,16 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
 use parking_lot::Mutex;
-use serde_json::json;
+use serde_json::{json, Value};
 
+use engram::auth::{PermissionSet, TokenClaims, TransportPrincipal, UserId};
 use engram::embedding::{create_embedder, EmbeddingCache};
-use engram::mcp::handlers::{self, memory_crud, search};
-use engram::search::{AdaptiveCacheConfig, FuzzyEngine, SearchConfig, SearchResultCache};
+use engram::mcp::handlers::{self, memory_crud, retrieval, search};
+use engram::search::{
+    AdaptiveCacheConfig, CacheFilterParams, FuzzyEngine, SearchConfig, SearchResultCache,
+};
 use engram::storage::Storage;
 use engram::types::EmbeddingConfig;
 
@@ -219,4 +223,229 @@ fn test_search_cache_management_mcp_tools() {
 
     let stats_after = search::search_cache_stats(&ctx, json!({}));
     assert_eq!(stats_after["entries"].as_u64(), Some(0));
+}
+
+// ── memory_cache_clear: one response contract for every scope ───────────────
+
+fn admin_principal(namespace: Option<&str>) -> TransportPrincipal {
+    TransportPrincipal::from_token_claims(TokenClaims {
+        user_id: UserId::from_string("agent-cache"),
+        key_id: "key-agent-cache".to_string(),
+        permissions: PermissionSet::admin(),
+        namespace: namespace.map(str::to_string),
+        issued_at: Utc::now(),
+        expires_at: None,
+    })
+    .expect("valid token claims")
+}
+
+fn put_cache_entry(ctx: &handlers::HandlerContext, query: &str, workspace: Option<&str>) {
+    ctx.search_cache.put(
+        query,
+        None,
+        CacheFilterParams {
+            workspace: workspace.map(str::to_string),
+            ..Default::default()
+        },
+        Vec::new(),
+    );
+}
+
+/// Two `tenant-a` entries, one `tenant-b` entry and one workspace-less entry.
+fn ctx_with_cached_entries() -> handlers::HandlerContext {
+    let ctx = test_ctx();
+    put_cache_entry(&ctx, "alpha one", Some("tenant-a"));
+    put_cache_entry(&ctx, "alpha two", Some("tenant-a"));
+    put_cache_entry(&ctx, "beta one", Some("tenant-b"));
+    put_cache_entry(&ctx, "nowhere one", None);
+    assert_eq!(ctx.search_cache.stats().entries, 4);
+    ctx
+}
+
+fn cleared(entries: u64) -> Value {
+    json!({"success": true, "entries_cleared": entries})
+}
+
+#[test]
+fn memory_cache_clear_unscoped_keeps_its_wire_shape() {
+    let ctx = ctx_with_cached_entries();
+
+    let response = retrieval::memory_cache_clear(&ctx, json!({}));
+
+    assert_eq!(response, cleared(4));
+    assert_eq!(ctx.search_cache.stats().entries, 0);
+}
+
+#[test]
+fn memory_cache_clear_scoped_returns_the_unscoped_shape() {
+    let ctx = ctx_with_cached_entries();
+
+    let response = retrieval::memory_cache_clear(&ctx, json!({"workspace": "tenant-a"}));
+
+    // tenant-a's two entries plus the workspace-less one (it may hold tenant-a rows).
+    assert_eq!(
+        response,
+        cleared(3),
+        "same keys as the unscoped call: {response}"
+    );
+    assert_eq!(ctx.search_cache.stats().entries, 1, "tenant-b must survive");
+}
+
+#[test]
+fn memory_cache_clear_scoped_dispatch_for_restricted_principal() {
+    let mut ctx = ctx_with_cached_entries();
+    ctx.principal = Some(admin_principal(Some("tenant-a")));
+
+    let response = handlers::dispatch(&ctx, "memory_cache_clear", json!({"workspace": "tenant-a"}));
+    assert_eq!(response, cleared(3), "restricted principal: {response}");
+    assert_eq!(ctx.search_cache.stats().entries, 1, "tenant-b must survive");
+
+    // A foreign workspace is denied and evicts nothing.
+    let denied = handlers::dispatch(&ctx, "memory_cache_clear", json!({"workspace": "tenant-b"}));
+    assert_eq!(denied["error"]["code"], "permission_denied", "{denied}");
+    assert_eq!(ctx.search_cache.stats().entries, 1);
+}
+
+#[test]
+fn memory_cache_clear_without_workspace_is_denied_for_a_restricted_principal() {
+    let mut ctx = ctx_with_cached_entries();
+    ctx.principal = Some(admin_principal(Some("tenant-a")));
+
+    // Direct handler call: a restricted principal must name its workspace;
+    // an unscoped clear would evict other tenants' entries.
+    let response = retrieval::memory_cache_clear(&ctx, json!({}));
+
+    assert_eq!(response["error"]["code"], "permission_denied", "{response}");
+    assert_eq!(
+        response["error"]["tool"], "memory_cache_clear",
+        "{response}"
+    );
+    assert_eq!(
+        ctx.search_cache.stats().entries,
+        4,
+        "nothing may be evicted"
+    );
+}
+
+#[test]
+fn memory_cache_clear_unrestricted_principal_uses_the_same_shapes() {
+    let mut ctx = ctx_with_cached_entries();
+    ctx.principal = Some(admin_principal(None));
+
+    let scoped = handlers::dispatch(&ctx, "memory_cache_clear", json!({"workspace": "tenant-b"}));
+    assert_eq!(
+        scoped,
+        cleared(2),
+        "scoped, unrestricted principal: {scoped}"
+    );
+    assert_eq!(ctx.search_cache.stats().entries, 2);
+
+    let all = handlers::dispatch(&ctx, "memory_cache_clear", json!({}));
+    assert_eq!(all, cleared(2), "unscoped, unrestricted principal: {all}");
+    assert_eq!(ctx.search_cache.stats().entries, 0);
+}
+
+#[test]
+fn search_cache_clear_keeps_its_own_wire_shape() {
+    let ctx = ctx_with_cached_entries();
+
+    let scoped = search::search_cache_clear(&ctx, json!({"workspace": "tenant-a"}));
+    assert_eq!(
+        scoped,
+        json!({"cleared": true, "scope": "workspace", "workspace": "tenant-a"})
+    );
+    let all = search::search_cache_clear(&ctx, json!({}));
+    assert_eq!(all, json!({"cleared": true, "scope": "all"}));
+}
+
+// ── search cache isolation across principals and workspaces ─────────────────
+//
+// The cache key carries every option that shapes a result (workspace(s),
+// global, filters, limit, offset, ...) but not the caller. That is safe only
+// because authorization runs BEFORE the lookup and forces a restricted
+// principal's workspace into the key. These tests pin that ordering.
+
+fn reader(namespace: &str) -> TransportPrincipal {
+    TransportPrincipal::from_token_claims(TokenClaims {
+        user_id: UserId::from_string(format!("reader-{namespace}")),
+        key_id: format!("key-reader-{namespace}"),
+        permissions: PermissionSet::read_only(),
+        namespace: Some(namespace.to_string()),
+        issued_at: Utc::now(),
+        expires_at: None,
+    })
+    .expect("valid token claims")
+}
+
+fn create_in(ctx: &handlers::HandlerContext, content: &str, workspace: &str) {
+    let created =
+        memory_crud::memory_create(ctx, json!({"content": content, "workspace": workspace}));
+    assert!(created["id"].is_i64(), "seed failed: {created}");
+}
+
+#[test]
+fn search_cache_is_not_a_side_channel_between_principals() {
+    let mut ctx = test_ctx();
+    create_in(&ctx, "zebracorn alpha roadmap note", "tenant-a");
+    create_in(&ctx, "zebracorn beta payroll secret", "tenant-b");
+
+    // An unrestricted caller warms entries for every scope, including the
+    // two a restricted caller might collide with.
+    ctx.principal = Some(admin_principal(None));
+    for params in [
+        json!({"query": "zebracorn"}),
+        json!({"query": "zebracorn", "global": true}),
+        json!({"query": "zebracorn", "workspace": "tenant-b"}),
+        json!({"query": "zebracorn", "workspaces": ["tenant-b"]}),
+    ] {
+        let warmed = search::memory_search(&ctx, params.clone());
+        assert!(warmed.is_array(), "warm-up {params} failed: {warmed}");
+    }
+    assert!(ctx.search_cache.stats().entries >= 3);
+
+    // A tenant-a principal is refused every scope that has a cached entry
+    // holding tenant-b rows, and its own scope never contains them.
+    ctx.principal = Some(reader("tenant-a"));
+    for params in [
+        json!({"query": "zebracorn", "workspace": "tenant-b"}),
+        json!({"query": "zebracorn", "workspaces": ["tenant-b"]}),
+        json!({"query": "zebracorn", "global": true}),
+        json!({"query": "zebracorn"}),
+        json!({"query": "zebracorn", "workspace": "tenant-a", "filter": {"workspace": "tenant-b"}}),
+    ] {
+        let denied = search::memory_search(&ctx, params.clone());
+        assert_eq!(
+            denied["error"]["code"], "permission_denied",
+            "{params} must be refused despite a warm cache: {denied}"
+        );
+        assert!(
+            !denied.to_string().contains("payroll"),
+            "{params}: {denied}"
+        );
+    }
+    for params in [
+        json!({"query": "zebracorn", "workspace": "tenant-a"}),
+        json!({"query": "zebracorn", "workspaces": ["tenant-a"]}),
+    ] {
+        for attempt in 0..2 {
+            // The second attempt is served from the cache.
+            let own = search::memory_search(&ctx, params.clone());
+            assert!(own.is_array(), "{params} attempt {attempt}: {own}");
+            assert!(!own.to_string().contains("payroll"), "{params}: {own}");
+            assert!(own.to_string().contains("roadmap"), "{params}: {own}");
+        }
+    }
+
+    assert!(
+        ctx.search_cache.stats().exact_hits >= 2,
+        "the repeated own-scope searches must be served from the cache"
+    );
+
+    // And the other way round: tenant-b never sees tenant-a's cached rows.
+    ctx.principal = Some(reader("tenant-b"));
+    let denied =
+        search::memory_search(&ctx, json!({"query": "zebracorn", "workspace": "tenant-a"}));
+    assert_eq!(denied["error"]["code"], "permission_denied", "{denied}");
+    let own = search::memory_search(&ctx, json!({"query": "zebracorn", "workspace": "tenant-b"}));
+    assert!(!own.to_string().contains("roadmap"), "{own}");
 }

@@ -312,7 +312,7 @@ async with EngramClient(base_url="...", api_key="...", tenant="...") as client:
 
 **list kwargs:** `limit`, `offset`, `workspace`, `memory_type`, `tags`, `filter_`, `sort_by`, `sort_order`
 
-**search kwargs:** `limit`, `workspace`, `filter_`
+**search kwargs:** `limit` (default 20), `offset`, `workspace`, `filter_`, `include_archived`
 
 `filter_` is sent to the MCP API as `filter` and supports AND/OR and comparison-operator syntax:
 

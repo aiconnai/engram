@@ -16,9 +16,8 @@ on:
         required: true
         type: string
       version:
-        description: "Artifact version label (for example v0.22.0)"
+        description: "Exact stable release tag label (for example v0.24.0); defaults to the dispatched tag ref, so branch dry-runs must set it"
         required: false
-        default: "v0.22.0"
         type: string
       overwrite_assets:
         description: "Allow replacing assets on an existing GitHub Release"

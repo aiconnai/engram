@@ -687,6 +687,17 @@ pub fn memory_create_batch(ctx: &HandlerContext, params: Value) -> Value {
         return ToolError::invalid_params("memories array cannot be empty").into_value();
     }
 
+    // Items without a workspace land in the default workspace; every item must
+    // be inside the principal's workspaces before anything is written.
+    if let Some(denial) = crate::mcp::workspace_guard::denial_for_batch_item_workspaces(
+        ctx.principal.as_ref(),
+        "memory_create_batch",
+        memories,
+        crate::mcp::workspace_guard::DEFAULT_WORKSPACE,
+    ) {
+        return denial;
+    }
+
     let total = memories.len() as u64;
     ctx.reporter().step(
         0,
