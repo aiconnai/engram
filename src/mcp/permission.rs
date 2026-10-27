@@ -122,7 +122,7 @@ pub fn required_mode(tool_name: &str) -> Option<PermissionMode> {
 
 /// Mode required for one concrete call. Unknown tools require `admin` (fail
 /// closed); write flags raise a read-only tool to `scoped_write`. Flags are
-/// read from the arguments or, for transport pre-checks, `params.arguments`.
+/// read from the bare arguments.
 pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode {
     let base = required_mode(tool_name).unwrap_or(PermissionMode::Admin);
     let canonical = canonical_tool_name(tool_name);
@@ -130,13 +130,9 @@ pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode
         .iter()
         .filter(|(tool, _)| *tool == canonical)
         .any(|(_, flag)| {
-            [
-                params.get(*flag),
-                params.get("arguments").and_then(|a| a.get(*flag)),
-            ]
-            .into_iter()
-            .flatten()
-            .any(|value| !matches!(value, Value::Null | Value::Bool(false)))
+            params
+                .get(*flag)
+                .is_some_and(|value| !matches!(value, Value::Null | Value::Bool(false)))
         });
     if writes && base < PermissionMode::ScopedWrite {
         PermissionMode::ScopedWrite
@@ -525,25 +521,25 @@ pub fn check_tool_authorization(
     None
 }
 
-/// Argument objects a call's workspace claims may live in.
+/// Split a `tools/call` params envelope (`{"name", "arguments"}`) into the tool
+/// name and its bare arguments. Missing arguments yield `Value::Null`.
 ///
-/// Transports pre-check the whole `tools/call` params object
-/// (`{"name", "arguments"}`) while the dispatcher checks the bare arguments, so
-/// both shapes reach this module. The two cannot be told apart reliably (a
-/// caller may put `name`/`arguments` keys inside the arguments themselves), so
-/// claims are read from the object itself AND from `arguments` when present.
-/// Reading both only ever adds claims to check; it can never hide one.
+/// Transports call this exactly once, at the boundary, and hand everything
+/// downstream (this module, the dispatcher, handlers) the bare arguments plus
+/// the tool name. Nothing below the transport unwraps again, so a `name` or
+/// `arguments` key inside real arguments is plain data, never an envelope.
+pub fn tool_call_parts(envelope: &Value) -> Option<(&str, &Value)> {
+    static NO_ARGUMENTS: Value = Value::Null;
+    let name = envelope.get("name")?.as_str()?;
+    Some((name, envelope.get("arguments").unwrap_or(&NO_ARGUMENTS)))
+}
+
+/// The bare arguments object a call's workspace claims live in.
+///
+/// `params` is always the bare tool arguments (see [`tool_call_parts`]); it is
+/// never an envelope, so no key of it is interpreted as one.
 fn argument_views(params: &Value) -> Vec<&serde_json::Map<String, Value>> {
-    let Some(object) = params.as_object() else {
-        return Vec::new();
-    };
-    let mut views = vec![object];
-    if object.get("name").is_some_and(Value::is_string) {
-        if let Some(inner) = object.get("arguments").and_then(Value::as_object) {
-            views.push(inner);
-        }
-    }
-    views
+    params.as_object().into_iter().collect()
 }
 
 /// Every workspace `params` claims for `tool_name`: the top-level `workspace`
@@ -880,6 +876,55 @@ mod tests {
 
         assert!(allowed.is_none());
         assert!(denied.is_some());
+    }
+
+    fn alpha_writer() -> TransportPrincipal {
+        principal(Some("alpha"), PermissionSet::standard_user())
+    }
+
+    #[test]
+    fn bare_arguments_with_name_and_arguments_keys_are_not_unwrapped() {
+        // `name`/`arguments` inside real arguments are plain data: they are not
+        // an envelope, so the nested object is neither read as claims nor able
+        // to change which workspace the call targets.
+        let p = alpha_writer();
+        let args = json!({"workspace": "alpha", "name": "x", "arguments": {"workspace": "beta"}});
+        assert_eq!(requested_workspaces("memory_list", &args), vec!["alpha"]);
+        assert!(check_tool_authorization(None, "memory_list", &args, Some(&p)).is_none());
+
+        // The top-level claim is the only one that counts: a foreign top-level
+        // workspace is denied no matter what `arguments` holds.
+        let foreign =
+            json!({"workspace": "beta", "name": "x", "arguments": {"workspace": "alpha"}});
+        assert_eq!(requested_workspaces("memory_list", &foreign), vec!["beta"]);
+        assert!(check_tool_authorization(None, "memory_list", &foreign, Some(&p)).is_some());
+    }
+
+    #[test]
+    fn write_flag_is_read_from_bare_arguments_only() {
+        let nested = json!({"name": "x", "arguments": {"auto_apply": true}});
+        assert_eq!(
+            required_mode_for_call("memory_predict_links", &nested),
+            required_mode("memory_predict_links").unwrap()
+        );
+        assert_eq!(
+            required_mode_for_call("memory_predict_links", &json!({"auto_apply": true})),
+            PermissionMode::ScopedWrite
+        );
+    }
+
+    #[test]
+    fn tool_call_parts_unwraps_the_envelope_exactly_once() {
+        let envelope =
+            json!({"name": "memory_list", "arguments": {"name": "inner", "arguments": {"a": 1}}});
+        let (name, arguments) = tool_call_parts(&envelope).unwrap();
+        assert_eq!(name, "memory_list");
+        assert_eq!(arguments, &json!({"name": "inner", "arguments": {"a": 1}}));
+
+        let no_arguments = json!({"name": "memory_list"});
+        assert_eq!(tool_call_parts(&no_arguments).unwrap().1, &Value::Null);
+        assert!(tool_call_parts(&json!({"arguments": {}})).is_none());
+        assert!(tool_call_parts(&json!({"name": 7})).is_none());
     }
 
     #[test]
