@@ -188,6 +188,36 @@ impl<Id: Clone + std::hash::Hash + Eq> HnswIndex<Id> {
         }
     }
 
+    /// IDs of the live (non-removed) items, in insertion order.
+    pub fn live_ids(&self) -> Vec<Id> {
+        self.nodes
+            .iter()
+            .filter(|node| !self.tombstones.contains(&node.id))
+            .map(|node| node.id.clone())
+            .collect()
+    }
+
+    /// Number of soft-deleted (tombstoned) nodes still held in the graph.
+    pub fn tombstone_count(&self) -> usize {
+        self.tombstones.len()
+    }
+
+    /// Rebuild the graph without tombstoned nodes when they exceed both
+    /// `min_tombstones` and `max_ratio` of all nodes (live + dead).
+    ///
+    /// Bounds the memory a long-running server wastes on deleted vectors
+    /// without paying the rebuild cost on every delete. Returns `true` if the
+    /// index was rebuilt.
+    pub fn compact_if_needed(&mut self, min_tombstones: usize, max_ratio: f32) -> bool {
+        let dead = self.tombstones.len();
+        if dead == 0 || dead < min_tombstones || (dead as f32) < max_ratio * self.nodes.len() as f32
+        {
+            return false;
+        }
+        *self = self.compacted();
+        true
+    }
+
     /// Rebuild the index without tombstoned nodes (used before persisting).
     fn compacted(&self) -> Self {
         let mut fresh = Self::new(self.config.clone());

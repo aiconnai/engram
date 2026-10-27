@@ -55,11 +55,18 @@ impl Embedder for SwitchableEmbedder {
 }
 
 fn make_ctx(embedder: Arc<SwitchableEmbedder>) -> HandlerContext {
+    make_ctx_with(embedder, true)
+}
+
+fn make_ctx_with(embedder: Arc<SwitchableEmbedder>, hnsw_enabled: bool) -> HandlerContext {
     HandlerContext {
         storage: Storage::open_in_memory().expect("in-memory storage"),
         embedder: embedder.clone(),
         fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
-        search_config: SearchConfig::default(),
+        search_config: SearchConfig {
+            hnsw_enabled,
+            ..SearchConfig::default()
+        },
         realtime: None,
         embedding_cache: Arc::new(EmbeddingCache::default()),
         search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
@@ -370,4 +377,26 @@ fn content_update_drops_the_stale_vector_until_the_new_embedding_is_drained() {
         .unwrap();
     memory_update(&ctx, json!({"id": other, "importance": 0.9}));
     assert!(ctx.hnsw_index.read().contains(&other));
+}
+
+#[test]
+fn memory_create_does_not_populate_the_vector_index_when_hnsw_is_disabled() {
+    let ctx = make_ctx_with(Arc::new(SwitchableEmbedder::new()), false);
+    let id = create(&ctx, "hnsw is opt-in, do not index me", json!({}))["id"]
+        .as_i64()
+        .unwrap();
+    // The embedding is still persisted for the exact SQLite scan ...
+    let has_embedding: bool = ctx
+        .storage
+        .with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT has_embedding FROM memories WHERE id = ?",
+                params![id],
+                |r| r.get(0),
+            )?)
+        })
+        .unwrap();
+    assert!(has_embedding);
+    // ... but the in-memory HNSW index is left untouched.
+    assert!(ctx.hnsw_index.read().is_empty());
 }

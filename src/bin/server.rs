@@ -63,6 +63,12 @@ struct Args {
     #[arg(long, env = "ENGRAM_CLOUD_ENCRYPT")]
     encrypt: bool,
 
+    /// Enable the in-memory HNSW approximate-nearest-neighbour index for
+    /// semantic search. Opt-in (RFC 0003): when off, semantic search uses the
+    /// exact SQLite scan and no index is built, warmed up or maintained.
+    #[arg(long, env = "ENGRAM_HNSW_ENABLED")]
+    hnsw_enabled: bool,
+
     /// Embedding model (tfidf, local, openai)
     #[arg(long, env = "ENGRAM_EMBEDDING_MODEL", default_value = "tfidf")]
     embedding_model: String,
@@ -263,6 +269,7 @@ impl EngramHandler {
         storage: Storage,
         embedder: Arc<dyn engram::embedding::Embedder>,
         progress_tx: std::sync::mpsc::Sender<engram::mcp::ProgressNotification>,
+        search_config: SearchConfig,
     ) -> Self {
         let hnsw_index = Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
             engram::search::HnswConfig::new(
@@ -271,15 +278,18 @@ impl EngramHandler {
             ),
         )));
 
-        let _ = storage.with_connection(|conn| {
-            engram::search::warmup_hnsw_from_db(conn, &mut hnsw_index.write())
-        });
+        // HNSW is opt-in: skip the warmup (full DB replay) when it is disabled.
+        if search_config.hnsw_enabled {
+            let _ = storage.with_connection(|conn| {
+                engram::search::warmup_hnsw_from_db(conn, &mut hnsw_index.write())
+            });
+        }
 
         Self {
             storage,
             embedder,
             fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
-            search_config: SearchConfig::default(),
+            search_config,
             realtime: None,
             embedding_cache: Arc::new(engram::embedding::EmbeddingCache::default()),
             search_cache: Arc::new(engram::search::SearchResultCache::new(
@@ -701,6 +711,17 @@ impl McpHandler for EngramHandler {
     }
 }
 
+/// Drain cycles between two HNSW-vs-SQLite reconciliations.
+const HNSW_SYNC_EVERY_N_CYCLES: u32 = 10;
+
+/// Search configuration for the server: defaults plus the explicit HNSW opt-in.
+fn search_config_for(hnsw_enabled: bool) -> SearchConfig {
+    SearchConfig {
+        hnsw_enabled,
+        ..SearchConfig::default()
+    }
+}
+
 fn main() -> Result<()> {
     // Initialize logging to stderr (stdout is for MCP protocol)
     tracing_subscriber::registry()
@@ -831,7 +852,12 @@ fn main() -> Result<()> {
     // `McpHandler`.
     let (progress_tx, progress_rx) = std::sync::mpsc::channel();
     #[allow(unused_mut)]
-    let mut handler_state = EngramHandler::new(storage.clone(), embedder.clone(), progress_tx);
+    let mut handler_state = EngramHandler::new(
+        storage.clone(),
+        embedder.clone(),
+        progress_tx,
+        search_config_for(args.hnsw_enabled),
+    );
     #[cfg(feature = "hooks")]
     handler_state.enable_hooks();
     let handler = Arc::new(handler_state);
@@ -840,6 +866,8 @@ fn main() -> Result<()> {
     // Start background cleanup thread if enabled
     if args.cleanup_interval_seconds > 0 {
         let cleanup_storage = storage.clone();
+        let cleanup_hnsw = handler.hnsw_index.clone();
+        let cleanup_hnsw_enabled = handler.search_config.hnsw_enabled;
         let interval = std::time::Duration::from_secs(args.cleanup_interval_seconds);
 
         std::thread::spawn(move || {
@@ -857,6 +885,12 @@ fn main() -> Result<()> {
                     Ok(deleted) => {
                         if deleted > 0 {
                             tracing::info!("Cleaned up {} expired memories", deleted);
+                            if cleanup_hnsw_enabled {
+                                engram::search::hnsw_sync::sync_hnsw_logged(
+                                    &cleanup_storage,
+                                    &cleanup_hnsw,
+                                );
+                            }
                         }
                     }
                     Err(e) => {
@@ -881,6 +915,8 @@ fn main() -> Result<()> {
         let drain_storage = storage.clone();
         let drain_embedder = embedder.clone();
         let drain_hnsw = handler.hnsw_index.clone();
+        let sync_hnsw = handler.hnsw_index.clone();
+        let hnsw_enabled = handler.search_config.hnsw_enabled;
         let interval = std::time::Duration::from_secs(args.embedding_drain_interval_seconds);
         let batch_size = args.embedding_drain_batch_size;
 
@@ -894,9 +930,12 @@ fn main() -> Result<()> {
             // Drained embeddings are mirrored into the in-memory vector index
             // only after their transaction committed.
             let index_persisted = move |memory_id: i64, embedding: &[f32]| {
-                drain_hnsw.write().insert(memory_id, embedding)
+                if hnsw_enabled {
+                    drain_hnsw.write().insert(memory_id, embedding)
+                }
             };
 
+            let mut cycles_since_hnsw_sync: u32 = 0;
             loop {
                 // run_embedding_drain_cycle owns its lock discipline — it
                 // releases the connection lock around the embed_batch call
@@ -910,6 +949,19 @@ fn main() -> Result<()> {
                     &hygiene,
                     &index_persisted,
                 );
+                // Memories also leave the searchable set through paths that
+                // never touch the index (expiry, supersede, merge, GC, content
+                // rewrites): reconcile against SQLite and bound tombstones.
+                // Search re-validates every candidate against SQLite, so this
+                // only reclaims memory and beam width: run it every few cycles
+                // rather than scanning the whole index twice a minute.
+                if hnsw_enabled {
+                    if cycles_since_hnsw_sync == 0 {
+                        engram::search::hnsw_sync::sync_hnsw_logged(&drain_storage, &sync_hnsw);
+                    }
+                    cycles_since_hnsw_sync =
+                        (cycles_since_hnsw_sync + 1) % HNSW_SYNC_EVERY_N_CYCLES;
+                }
                 std::thread::sleep(interval);
             }
         });

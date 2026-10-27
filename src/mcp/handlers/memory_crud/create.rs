@@ -11,6 +11,15 @@ use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::*;
 use crate::types::*;
 
+/// Mirror a persisted embedding into the in-memory vector index. HNSW is
+/// opt-in (`SearchConfig::hnsw_enabled`): when disabled, semantic search uses
+/// the exact SQLite scan and the index must not be built, so this is a no-op.
+fn index_embedding(ctx: &HandlerContext, memory_id: i64, embedding: &[f32]) {
+    if ctx.search_config.hnsw_enabled {
+        ctx.hnsw_index.write().insert(memory_id, embedding);
+    }
+}
+
 /// Compute and persist the embedding of a just-committed memory (the
 /// `defer_embedding = false` path).
 ///
@@ -46,7 +55,7 @@ fn embed_after_commit(ctx: &HandlerContext, memory: &Memory) {
     match ctx.storage.with_transaction(|conn| {
         persist_computed_embedding(conn, memory.id, &memory.content, &embedding, model)
     }) {
-        Ok(true) => ctx.hnsw_index.write().insert(memory.id, &embedding),
+        Ok(true) => index_embedding(ctx, memory.id, &embedding),
         Ok(false) => tracing::warn!(
             memory_id = memory.id,
             "Immediate embedding not persisted (memory changed or job already settled); \
@@ -102,7 +111,7 @@ fn mirror_existing_embedding(ctx: &HandlerContext, memory: &Memory) {
         .storage
         .with_connection(|conn| crate::embedding::get_embedding(conn, memory.id))
     {
-        Ok(Some(emb)) => ctx.hnsw_index.write().insert(memory.id, &emb),
+        Ok(Some(emb)) => index_embedding(ctx, memory.id, &emb),
         Ok(None) => {}
         Err(e) => tracing::warn!(
             memory_id = memory.id,

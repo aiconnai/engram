@@ -16,6 +16,7 @@ pub mod explain;
 pub mod feedback;
 mod fuzzy;
 pub mod hnsw;
+pub mod hnsw_sync;
 mod hybrid;
 mod metadata;
 pub mod mmr;
@@ -153,6 +154,17 @@ pub fn warmup_hnsw_from_db(
     conn: &rusqlite::Connection,
     hnsw: &mut HnswIndex<i64>,
 ) -> crate::error::Result<usize> {
+    replay_hnsw_from_db(conn, hnsw)?;
+    // A restored checkpoint can predate deletes, expiries, supersedes and
+    // content rewrites: drop everything the database no longer considers live.
+    hnsw_sync::reconcile_hnsw_with_db(conn, hnsw)?;
+    Ok(hnsw.len())
+}
+
+fn replay_hnsw_from_db(
+    conn: &rusqlite::Connection,
+    hnsw: &mut HnswIndex<i64>,
+) -> crate::error::Result<usize> {
     let dim = hnsw.config().dim;
     let model = "default";
 
@@ -168,7 +180,8 @@ pub fn warmup_hnsw_from_db(
                     "SELECT e.memory_id, e.embedding, e.dimensions
                      FROM embeddings e
                      INNER JOIN memories m ON e.memory_id = m.id
-                     WHERE m.valid_to IS NULL AND (e.created_at > ?1 OR m.updated_at > ?1)",
+                     WHERE m.valid_to IS NULL AND m.has_embedding = 1
+                       AND (e.created_at > ?1 OR m.updated_at > ?1)",
                 )?;
 
                 let mut count = 0;
@@ -214,7 +227,7 @@ pub fn warmup_hnsw_from_db(
         "SELECT e.memory_id, e.embedding, e.dimensions
          FROM embeddings e
          INNER JOIN memories m ON e.memory_id = m.id
-         WHERE m.valid_to IS NULL",
+         WHERE m.valid_to IS NULL AND m.has_embedding = 1",
     )?;
 
     let mut count = 0;

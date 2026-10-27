@@ -49,7 +49,11 @@ impl TestHandler {
             storage: storage.clone(),
             embedder: embedder.clone(),
             fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
-            search_config: SearchConfig::default(),
+            // HNSW is opt-in; these tests assert index coherence, so enable it.
+            search_config: SearchConfig {
+                hnsw_enabled: true,
+                ..SearchConfig::default()
+            },
             realtime: None,
             embedding_cache: Arc::new(EmbeddingCache::default()),
             search_cache: Arc::new(SearchResultCache::new(AdaptiveCacheConfig::default())),
