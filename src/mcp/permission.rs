@@ -452,6 +452,32 @@ pub fn check_scope_authorization(
     None
 }
 
+/// Transport pre-check (HTTP): the same verdict as [`check_tool_authorization`]
+/// except the caller's per-call `_permission_mode` / `permission_mode`
+/// self-restriction (RFC 0010). The dispatcher applies that override, so its
+/// denial travels in the tool result (HTTP 200) on every transport instead of
+/// becoming a transport-level error. Skipping it here can only remove a denial
+/// the dispatcher still issues; it never authorizes anything extra.
+pub fn check_transport_authorization(
+    conn: Option<&rusqlite::Connection>,
+    tool_name: &str,
+    arguments: &Value,
+    principal: Option<&TransportPrincipal>,
+) -> Option<Value> {
+    let has_override = arguments.as_object().is_some_and(|args| {
+        args.contains_key("_permission_mode") || args.contains_key("permission_mode")
+    });
+    if !has_override {
+        return check_tool_authorization(conn, tool_name, arguments, principal);
+    }
+    let mut without_override = arguments.clone();
+    if let Some(args) = without_override.as_object_mut() {
+        args.remove("_permission_mode");
+        args.remove("permission_mode");
+    }
+    check_tool_authorization(conn, tool_name, &without_override, principal)
+}
+
 /// Central authorization guard checking:
 /// 1. Environment permission modes (ENGRAM_PERMISSION_MODE)
 /// 2. Transport principal modes and workspace boundaries

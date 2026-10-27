@@ -292,7 +292,12 @@ fn permission_denial_for_http_request(
     // the bare arguments the dispatcher will receive (never the envelope).
     let (tool_name, arguments) = crate::mcp::permission::tool_call_parts(&request.params)?;
 
-    crate::mcp::permission::check_tool_authorization(None, tool_name, arguments, Some(principal))
+    crate::mcp::permission::check_transport_authorization(
+        None,
+        tool_name,
+        arguments,
+        Some(principal),
+    )
 }
 
 #[cfg(test)]
@@ -354,6 +359,34 @@ mod tests {
                 http_verdict.is_some(),
                 dispatch_verdict.is_some(),
                 "HTTP pre-check and dispatch disagree for {params}"
+            );
+        }
+    }
+
+    #[test]
+    fn per_call_permission_mode_is_left_to_dispatch_so_denials_stay_in_the_result() {
+        // `_permission_mode` is the caller restricting itself (RFC 0010). The
+        // dispatcher applies it and returns the denial inside the tool result
+        // (HTTP 200) on every transport; the transport pre-check must not turn
+        // it into an HTTP 403 (wire contract: tests/canonical_journey).
+        let principal = alpha_writer();
+        for key in ["_permission_mode", "permission_mode"] {
+            let params = json!({"name": "memory_update", "arguments": {
+                "id": 1, "content": "x", "workspace": "alpha", key: "read_only"}});
+            assert!(
+                permission_denial_for_http_request(&call(params.clone()), &principal).is_none(),
+                "HTTP pre-check must defer {key} to dispatch"
+            );
+            let (name, arguments) = crate::mcp::permission::tool_call_parts(&params).unwrap();
+            assert!(
+                crate::mcp::permission::check_tool_authorization(
+                    None,
+                    name,
+                    arguments,
+                    Some(&principal)
+                )
+                .is_some(),
+                "dispatch still denies the {key} self-restriction"
             );
         }
     }
