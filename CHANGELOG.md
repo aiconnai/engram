@@ -18,7 +18,7 @@ package registries, and dated external sources.
 - **Resource subscriptions are principal-aware** — `resources/subscribe` and `resources/unsubscribe` apply the same workspace policy as `resources/read`.
 - **`memory_search_suggest` is workspace-scoped** — restricted principals get spelling corrections built only from their own workspace vocabulary.
 - **`permission_denial_for_mode` fails closed** for unknown tools.
-- **One `tools/call` unwrap point** — HTTP and gRPC unwrap the envelope once and authorize the same bare arguments the dispatcher sees; `name`/`arguments` keys inside real tool arguments are no longer treated as an envelope.
+- **One `tools/call` unwrap point** — HTTP and gRPC unwrap the envelope once and authorize the same bare arguments the dispatcher sees; `name`/`arguments` keys inside real tool arguments are no longer treated as an envelope. A caller's per-call `_permission_mode` self-restriction is still applied by the dispatcher, so its denial stays in the tool result (HTTP 200).
 - **Log redaction (RISK-0002)** — sync/cloud, hooks, multimodal and the watcher (including its daemon) no longer log bucket/object keys, workspace and tool names, filesystem paths, `engram_url`, dry-run memory content, subprocess stderr or raw error text; errors are logged by class (`ENGRAM_LOG_ERROR_DETAIL=1` restores detail for debugging).
 - **Dependency advisories** — zip 9.0.5 and duckdb 1.10506.1 (RUSTSEC-2026-0367/0368/0369), tokio 1.53.3 (RUSTSEC-2026-0386), rustls-webpki 0.103.16, webpki-roots 1.0.11 and ctutils 0.4.6 (RUSTSEC-2026-0382/0381/0385); crypto-bigint 0.5 removed from the graph (RUSTSEC-2026-0387) by not enabling `aws-sdk-s3/sigv4a`.
 

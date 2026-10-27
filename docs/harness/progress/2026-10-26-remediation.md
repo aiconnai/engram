@@ -130,3 +130,7 @@ merge, tag, release, publicação e remoção de branches/worktrees seguem sem a
 - **Padrões aplicados por decisão do owner (revisáveis)**: HNSW opt-in; federação marcada como não implementada;
   guia de decision-triage enxugado; remoção de SigV4a; DuckDB 1.5.6; reranker placeholder retorna erro;
   contagens de concorrentes sem fonte removidas.
+- **Regressão pega pelo CI final** (`make ci` em `08ca8288`, 1 falha): o pré-check HTTP de `06666ae8` passou a aplicar o
+  `_permission_mode` por chamada e devolvia HTTP 403 em vez de 200 + recusa no resultado (contrato
+  `tests/canonical_journey`). Corrigido com teste primeiro: o pré-check de transporte deixa a auto-restrição para o
+  dispatcher, que continua recusando. Links quebrados de `docs/GETTING_STARTED.md` (pré-existentes) corrigidos.
