@@ -124,7 +124,8 @@ sintéticos), então **nada** passou a rodar o checker contra o `progress.md` re
 
 1. `check-live-state.sh --structural` roda no `doctor.sh` sobre o `progress.md` real e é
    fail-closed para drift real: campo obrigatório ausente, active plan inexistente, review
-   autoritativo ausente/sem PASS, linha de reconciliação required/advisory removida e
+   autoritativo ausente/sem PASS (a autoridade é derivada do campo `Last review`: precisa ser a versão mais
+   nova da própria tarefa e, se a tarefa ativa já tem review `post`, a mais nova dela; 2026-10-26), linha de reconciliação required/advisory removida e
    **Last commit malformado** (não é um id de 7-40 dígitos hexadecimais).
 2. **Não** falha por churn nem por reescrita de SHA: Last commit atrás de HEAD é aceito e o
    timestamp de `.sensors-last` não é comparado. Um id bem formado que HEAD **não alcança**

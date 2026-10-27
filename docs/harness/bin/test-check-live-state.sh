@@ -217,41 +217,11 @@ assert_contains "$STALE_OUTPUT" "stale Last commit: found 1aa14e5" "stale fixtur
 assert_contains "$STALE_OUTPUT" "remediation: update Last commit in $STALE_FIXTURE" "stale fixture gives remediation"
 assert_not_contains "$STALE_OUTPUT" "PASS live state matches current repository facts" "failure does not print misleading PASS"
 
-STALE_REVIEW_FIXTURE="$TMP_DIR/stale-review-progress.md"
-python3 - "$PROGRESS" "$STALE_REVIEW_FIXTURE" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-source = Path(sys.argv[1]).read_text()
-stale = re.sub(
-    r"(\| Last review \| `)[^`]+(` \|)",
-    r"\g<1>2026-06-27 — pass: docs/harness/reviews/2026-06-27-harness-live-state-closeout-v2-post.md\2",
-    source,
-)
-Path(sys.argv[2]).write_text(stale)
-PY
-
-STALE_REVIEW_OUTPUT="$(run_expect_failure "stale review fixture fails" bash "$CHECKER" --progress "$STALE_REVIEW_FIXTURE")"
-assert_contains "$STALE_REVIEW_OUTPUT" "Last review artifact is stale for this task" "stale review is rejected"
-assert_not_contains "$STALE_REVIEW_OUTPUT" "PASS live state matches current repository facts" "stale review failure does not print misleading PASS"
-
-SUPERSEDED_REVIEW_FIXTURE="$TMP_DIR/superseded-review-progress.md"
-python3 - "$PROGRESS" "$SUPERSEDED_REVIEW_FIXTURE" <<'PY'
-import sys
-from pathlib import Path
-
-source = Path(sys.argv[1]).read_text()
-superseded = source.replace(
-    "docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md",
-    "docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v2-post.md",
-)
-Path(sys.argv[2]).write_text(superseded)
-PY
-
-SUPERSEDED_REVIEW_OUTPUT="$(run_expect_failure "superseded same-task review fixture fails" bash "$CHECKER" --progress "$SUPERSEDED_REVIEW_FIXTURE")"
-assert_contains "$SUPERSEDED_REVIEW_OUTPUT" "Last review is not authoritative current review" "superseded same-task review is rejected"
-assert_not_contains "$SUPERSEDED_REVIEW_OUTPUT" "PASS live state matches current repository facts" "superseded review failure does not print misleading PASS"
+# Review authority is derived from the Last review field (no task is hardcoded in the checker); the
+# stale/superseded/active-task cases run hermetically in the "Review authority" section below.
+CHECKER_SOURCE="$(cat "$CHECKER")"
+assert_not_contains "$CHECKER_SOURCE" "-name '*engram-10-of-10-live-state*post.md'" "checker does not hardcode the 2026-07 task as review authority"
+assert_not_contains "$CHECKER_SOURCE" "no authoritative current review artifact found for engram-10-of-10-live-state" "checker has no task-specific authority message"
 
 MALFORMED_FIXTURE="$TMP_DIR/malformed-progress.md"
 printf '# malformed\n\nNo live-state table here.\n' > "$MALFORMED_FIXTURE"
@@ -394,6 +364,104 @@ write_structural_progress "$STRUCT_PROGRESS" "$STRUCT_C1" "$SENSORS_OK"
 grep -v 'Last review' "$STRUCT_PROGRESS" >"$STRUCT_PROGRESS.tmp" && mv "$STRUCT_PROGRESS.tmp" "$STRUCT_PROGRESS"
 OUT="$(run_expect_failure "missing required field fails structurally" bash -c "cd '$STRUCT_REPO' && bash docs/harness/bin/check-live-state.sh --progress '$STRUCT_PROGRESS' --structural")"
 assert_contains "$OUT" "missing required field: Last review" "missing field is reported"
+
+# --- Review authority derived from progress.md ---------------------------------------------------
+# The authoritative review is not tied to one historical task: the checker takes the artifact named by
+# "Last review", derives the task slug from the file name (<date>-<slug>[-vN]-post.md), requires it to be
+# the newest version of that slug, and, when the Active task already has post-review artifacts, the newest
+# of those. Hermetic repo: alpha has v1/v2/v10 (v10 must sort after v2), beta has one review, gamma
+# carries a FAIL marker, delta only has an advisory pre artifact.
+AUTH_REPO="$TMP_DIR/authority-repo"
+AUTH_DIR="docs/harness/reviews"
+build_authority_repo() {
+  local repo="$1"
+  local g=(git -C "$repo" -c user.name=fixture -c user.email=fixture@example.test -c commit.gpgsign=false -c core.hooksPath=/dev/null)
+  mkdir -p "$repo/docs/harness/bin" "$repo/$AUTH_DIR" "$repo/docs/harness/progress" "$repo/.github/workflows"
+  git -C "$repo" init -q -b main
+  cp "$REPO_ROOT/docs/harness/bin/check-live-state.sh" "$REPO_ROOT/docs/harness/bin/lib.sh" "$repo/docs/harness/bin/"
+  printf 'plan\n' >"$repo/docs/harness/progress/plan.md"
+  local f
+  for f in 2026-10-23-alpha-task-v1-post.md 2026-10-23-alpha-task-v2-post.md 2026-10-23-alpha-task-v10-post.md \
+    2026-10-24-beta-task-post.md; do
+    printf 'REVIEW_VERDICT: PASS fixture\n' >"$repo/$AUTH_DIR/$f"
+  done
+  printf 'REVIEW_VERDICT: FAIL fixture\n' >"$repo/$AUTH_DIR/2026-10-25-gamma-task-post.md"
+  printf 'advisory only\n' >"$repo/$AUTH_DIR/2026-10-26-delta-task-pre.md"
+  printf 'REVIEW_VERDICT: PASS raw prompt\n' >"$repo/$AUTH_DIR/2026-10-27-beta-task-post.md.raw"
+  printf 'status=pass\nmode=quick\ntimestamp=2026-01-01T00:00:00Z\n' >"$repo/docs/harness/.sensors-last"
+  printf 'name: Format\nname: Clippy\nname: Test (ubuntu-latest)\nname: Documentation\nname: Security Audit\nname: Cargo Deny\n' \
+    >"$repo/.github/workflows/ci.yml"
+  printf 'name: Harness Contract\nname: Harness Doctor Advisory\n' >"$repo/.github/workflows/harness-contract.yml"
+  "${g[@]}" add -A
+  "${g[@]}" commit -q -m "authority fixture"
+}
+write_authority_progress() {
+  # $1 = output path, $2 = Active task value, $3 = Last review file name
+  cat >"$1" <<EOF
+| Active task | \`$2\` |
+| Last review | \`2026-10-26 - pass: $AUTH_DIR/$3\` |
+| Last sensors | \`status=pass mode=quick 2026-01-01T00:00:00Z\` |
+| Last commit | \`$(git -C "$AUTH_REPO" rev-parse HEAD)\` |
+| Last live-state check | \`check-live-state.sh --progress docs/harness/progress.md\` |
+| Active plan | \`docs/harness/progress/plan.md\` |
+| \`Format\` | branch-required | \`.github/workflows/ci.yml\` |
+| \`Clippy\` | branch-required | \`.github/workflows/ci.yml\` |
+| \`Test (ubuntu-latest)\` | branch-required | \`.github/workflows/ci.yml\` |
+| \`Documentation\` | branch-required | \`.github/workflows/ci.yml\` |
+| \`Security Audit\` | branch-required | \`.github/workflows/ci.yml\` |
+| \`Cargo Deny\` | branch-required | \`.github/workflows/ci.yml\` |
+| \`Harness Contract\` | not in \`required_status_checks.contexts\` | \`.github/workflows/harness-contract.yml\` |
+| \`Harness Doctor Advisory\` | advisory workflow job | \`.github/workflows/harness-contract.yml\` |
+EOF
+}
+run_authority() {
+  # $1 = Active task value, $2 = Last review file name; prints checker output, keeps the exit status
+  write_authority_progress "$TMP_DIR/authority-progress.md" "$1" "$2"
+  (cd "$AUTH_REPO" && bash docs/harness/bin/check-live-state.sh --progress "$TMP_DIR/authority-progress.md" --structural 2>&1)
+}
+mkdir -p "$AUTH_REPO"
+build_authority_repo "$AUTH_REPO"
+
+set +e
+OUT="$(run_authority "omega-task" "2026-10-23-alpha-task-v10-post.md")"; STATUS=$?
+set -e
+[ "$STATUS" -eq 0 ] || { printf 'FAIL: newest vN of a slug unrelated to the active task passes\n%s\n' "$OUT" >&2; exit 1; }
+assert_contains "$OUT" "PASS live state structure is consistent" "alpha v10 is accepted: slug derived from the Last review name, v10 sorts after v2"
+
+set +e
+OUT="$(run_authority "omega-task" "2026-10-23-alpha-task-v2-post.md")"; STATUS=$?
+set -e
+[ "$STATUS" -ne 0 ] || { printf 'FAIL: superseded same-task review unexpectedly passed\n%s\n' "$OUT" >&2; exit 1; }
+assert_contains "$OUT" "Last review is not authoritative current review: found $AUTH_DIR/2026-10-23-alpha-task-v2-post.md, expected $AUTH_DIR/2026-10-23-alpha-task-v10-post.md" "superseded version is rejected and the newest is named"
+assert_not_contains "$OUT" "PASS live state" "superseded review prints no PASS"
+
+set +e
+OUT="$(run_authority "omega-task" "2026-10-24-beta-task-post.md")"; STATUS=$?
+set -e
+[ "$STATUS" -eq 0 ] || { printf 'FAIL: single unversioned review of another task passes while the active task has none\n%s\n' "$OUT" >&2; exit 1; }
+
+set +e
+OUT="$(run_authority "beta-task" "2026-10-23-alpha-task-v10-post.md")"; STATUS=$?
+set -e
+[ "$STATUS" -ne 0 ] || { printf 'FAIL: review of another task unexpectedly passed for an active task that has its own review\n%s\n' "$OUT" >&2; exit 1; }
+assert_contains "$OUT" "Last review artifact is stale for the active task: found $AUTH_DIR/2026-10-23-alpha-task-v10-post.md, expected $AUTH_DIR/2026-10-24-beta-task-post.md" "active task with its own review must name it"
+
+set +e
+OUT="$(run_authority "beta-task — extra wording after the id" "2026-10-24-beta-task-post.md")"; STATUS=$?
+set -e
+[ "$STATUS" -eq 0 ] || { printf 'FAIL: active task id is its first word\n%s\n' "$OUT" >&2; exit 1; }
+
+set +e
+OUT="$(run_authority "omega-task" "2026-10-25-gamma-task-post.md")"; STATUS=$?
+set -e
+[ "$STATUS" -ne 0 ] || { printf 'FAIL: FAIL-marker review unexpectedly passed\n%s\n' "$OUT" >&2; exit 1; }
+assert_contains "$OUT" "Last review artifact lacks REVIEW_VERDICT: PASS" "a FAIL review cannot be the Last review"
+
+set +e
+OUT="$(run_authority "omega-task" "2026-10-26-delta-task-pre.md")"; STATUS=$?
+set -e
+[ "$STATUS" -ne 0 ] || { printf 'FAIL: advisory pre artifact unexpectedly passed\n%s\n' "$OUT" >&2; exit 1; }
+assert_contains "$OUT" "is not a docs/harness/reviews/<date>-<task>[-vN]-post.md file" "only post-review artifacts can be authoritative"
 
 # A shallow clone (typical CI checkout) cannot prove ancestry: say so explicitly instead of passing silently.
 SHALLOW_REPO="$TMP_DIR/shallow-repo"

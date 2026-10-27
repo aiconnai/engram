@@ -73,17 +73,20 @@ bash docs/harness/bin/sensors.sh quick    # durante o desenvolvimento
 bash docs/harness/bin/sensors.sh          # full, antes de abrir o PR
 ```
 
-No GitHub, o merge em `main` exige estes **required status checks**:
+No GitHub, o merge em `main` exige estes **required status checks** (leitura somente de 2026-10-05,
+ver `GATES.md` e `progress.md`):
 
 - `Format`
 - `Clippy`
 - `Test (ubuntu-latest)`
 - `Documentation`
-- `Harness Contract` — gate leve que roda `bootstrap.sh` mais a política de
-  título de PR. Hoje a política só bloqueia o marcador literal `[codex]`; **não**
-  é um validador amplo de qualidade de título (ex.: não exige Conventional
-  Commits). O `doctor.sh` **não** faz parte deste gate required — ele permanece
-  local/advisory.
+- `Security Audit`
+- `Cargo Deny`
+
+`Harness Contract` (gate leve que roda `bootstrap.sh` mais a política de título de PR, que só bloqueia o
+marcador literal `[codex]` e **não** valida Conventional Commits) e `Security Gate` **não** são required
+live. O `doctor.sh` roda no job separado `Harness Doctor Advisory` (non-blocking) e localmente. A proteção
+também não exige review de PR: "merge humano obrigatório" é regra de processo, não controle técnico.
 
 `Test (ubuntu-latest)` depende do job PR-visible `Security Gate`, que agrega
 Cargo Audit, Cargo Deny, a política de exceções, CodeQL, Semgrep, Gitleaks e
@@ -114,7 +117,8 @@ check confiável.
 | `progress.md`                  | Resumo vivo curto (≤150 linhas): campos de estado, retomada (escopo/limites/última evidência), tabela de tasks |
 | `progress-history.md`          | Histórico anterior a H6, byte a byte, com índice de seções e âncoras estáveis (nunca apagar) |
 | `context-budget.md`            | Orçamento de contexto, medição (bytes/tokens), retenção e decisão #152 (chars ≠ tokens) |
-| `progress/*.md`                | Logs permanentes por sprint/tarefa (detalhados) |
+| `progress/*.md`                | Logs permanentes por sprint/tarefa (detalhados); o campo `Active plan` aponta para um deles |
+| `plans/*.md`                   | Planos de sprint (o log ativo em `progress/` linka o plano; planos encerrados ficam como histórico) |
 | `known-issues/*.md`            | Incidentes externos que justificam exclusão auditável de sensor |
 | `reviews/*.md`                 | Artefatos permanentes de pre/post review (versionados por iteração) |
 | `decisions/harness-decision-log.yaml` | Registro estruturado de decisões do harness (DEC-XXXX) |
@@ -137,6 +141,23 @@ check confiável.
 | `bin/check-commit-msg.sh`      | Validador de Conventional Commit com scope |
 | `bin/pr-title-policy.sh`       | Política canônica de títulos de PR, incluindo bloqueio do marcador `[codex]` |
 | `bin/check-pr-title.sh`        | Wrapper compatível para validar títulos de PR via política canônica |
+| `bin/lib.sh`                   | Helpers shell compartilhados (`field_value` lê a tabela de campos de `progress.md`/`SPEC.md`) |
+| `bin/check-live-state.sh`      | Checa o live state de `progress.md`: estrito (fecha tasks) e `--structural` (doctor). A autoridade de review é derivada do campo `Last review` |
+| `bin/test-check-live-state.sh` | Suíte hermética do checker de live state (componente `live_state` da lane offline) |
+| `bin/test-fixtures.sh`         | Suíte das fixtures e schemas v1/v2 do validator de evidência (componente da lane offline) |
+| `bin/test-review-gate.sh`      | Suíte do `review-gate.sh` fail-closed com repositórios e receipts sintéticos (lane offline) |
+| `bin/harness_git.py`           | Acesso `git` neutralizado (env reconstruído, sem config global, hooks nulos) compartilhado por `check-scope.py`, `run-task.py` e `record-evidence.py` |
+| `bin/check-scope.py`           | Checker de escopo do runner confiável: compara base e candidato e recusa paths fora do permitido ou protegidos |
+| `bin/sandbox_registry.py`      | Registry de checks aprovados e política de argv do adaptador de sandbox (sem spawn de processo) |
+| `bin/sandbox-adapter.py`       | Adaptador de sandbox (H3): roda checks por ID num container Docker endurecido; sem fallback para o host |
+| `bin/run-task.py`              | Runner confiável (H4), **somente com fake writer**, que grava evidência externa pós-commit |
+| `bin/record-evidence.py`       | Gravação e verificação de evidência externa do runner; `verify()` é a única forma de aceitá-la |
+| `bin/run-standing-checks.py`   | Standing checks só de alerta (O4), com dono e lock exclusivo por goal |
+| `bin/merge-gate.py`            | Avaliador read-only de elegibilidade de merge (H5); nunca aprova, mescla nem publica |
+| `bin/merge_gate_ci.py`         | Regras de proveniência de CI do avaliador de merge (importado por `merge-gate.py`) |
+| `bin/retention-manifest.py`    | Inventário, manifest, backup e restauração de classes de artefatos (O2; política em `OPERATIONS_GIT_RETENTION.md`) |
+| `bin/run-sandbox-smoke.sh`     | Smoke com Docker real do sandbox usando o fake writer; **fora** da lane offline e do CI required |
+| `bin/run-runner-smoke.sh`      | Smoke com Docker real do runner com o fake writer; **fora** da lane offline e do CI required |
 
 ## Leitura Obrigatória (em ordem)
 
@@ -386,7 +407,7 @@ Uma tarefa só está pronta quando:
 
 ## Situações que Exigem Cuidado Extra
 
-- **Schema / Migrations** (`storage/migrations.rs`): Atualizar `SCHEMA_VERSION`. Testes têm versão hardcoded em alguns lugares — atualizar também. Nunca quebrar monotonicidade de IDs.
+- **Schema / Migrations** (`src/storage/migrations/`; `SCHEMA_VERSION` em `mod.rs`, testes em `tests.rs`): Atualizar `SCHEMA_VERSION`. Testes têm versão hardcoded em alguns lugares — atualizar também. Nunca quebrar monotonicidade de IDs.
 - **MCP Tools**: Mudança na superfície de 155+ tools exige atualização de `scripts/generate-mcp-reference.sh` output, docs/MCP_TOOLS.md, e testes de protocolo. Coordenação com SDKs Python/TS.
 - **Hooks / Intelligence / Consolidation**: Comportamento não-determinístico ou com side effects em produção exige dry-run + evidência.
 - **Embeddings / ONNX / Cache**: Mudanças aqui afetam benchmarks, tamanho de binário, e qualidade de retrieval. Exigem baseline comparison quando relevante.

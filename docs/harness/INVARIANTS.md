@@ -88,7 +88,7 @@ Cada invariant tem um **gate** indicando como é enforçado.
 18. **Paridade CI local é sagrada.** `just ci` (ou `make ci`) deve reproduzir o que o GitHub Actions exige (fmt, clippy -D warnings, testes com CI_FEATURES, docs + MCP reference). Não "funciona na minha máquina" com features locais apenas.
     _Gate: `sensors.sh` invoca o ci target + review-gate checa por hacks de CI._
 
-19. **Schema version + testes de migração.** Alterar `storage/migrations.rs` exige atualizar `SCHEMA_VERSION` **e** todos os testes que têm versão hardcoded. Nunca silenciar mismatches.
+19. **Schema version + testes de migração.** Alterar `src/storage/migrations/` (`SCHEMA_VERSION` em `mod.rs`) exige atualizar `SCHEMA_VERSION` **e** todos os testes que têm versão hardcoded. Nunca silenciar mismatches.
     _Gate: cargo test + review-gate (prompt procura version drift)._
 
 20. **MCP surface changes são breaking por default.** Adicionar/remover/renomear tools expostas exige atualização de `scripts/generate-mcp-reference.sh`, docs/MCP_TOOLS.md, testes de protocolo, e SDKs (quando breaking). Coordenação visível.

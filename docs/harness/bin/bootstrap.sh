@@ -10,7 +10,7 @@
 #   - Security contract remains static/read-only first; see docs/harness/security/anthropic-reference-harness.md
 #   - Safe for any agent CLI: Claude Code, Claude Code Sonnet reviewer, Codex, Cursor, Aider, etc.
 #
-# Called manually at session start per AGENTS.md / Claude.md.
+# Called manually at session start per AGENTS.md / CLAUDE.md.
 # Later can be wired to session_start hook or MCP tool.
 
 set -euo pipefail
@@ -142,7 +142,8 @@ match_body = re.search(
     re.S,
 )
 if match_body:
-    for arm in re.finditer(r"((?:\s*\"[^\"]+\"\s*\|?)+)\s*=>\s*cfg!\(", match_body.group(1)):
+    # Gated arms read "a" | "b" => cfg!(...), or, once rustfmt wraps them, => { cfg!(...) }.
+    for arm in re.finditer(r"((?:\s*\"[^\"]+\"\s*\|?)+)\s*=>\s*(?:\{\s*)?cfg!\(", match_body.group(1)):
         feature_gated.update(re.findall(r"\"([^\"]+)\"", arm.group(1)))
 active_count = len([name for name in all_names if name not in feature_gated])
 print(f"{active_count} active / {len(all_names)} total")
@@ -171,7 +172,7 @@ echo "  docs/harness/CODE_REVIEW_POLICY.md   (local policy for external reviewer
 echo "  docs/harness/security/anthropic-reference-harness.md (security boundary)"
 echo "  docs/harness/README.md               (workflow + harness loop)"
 echo "  docs/harness/progress.md             (live state)"
-echo "  AGENTS.md + Claude.md                (onboarding)"
+echo "  AGENTS.md + CLAUDE.md                (onboarding)"
 echo "  INVARIANTS.md (root)                 (data invariants)"
 echo "  STANDARDS.md + ERRORS_AND_LESSONS.md (governance)"
 echo
