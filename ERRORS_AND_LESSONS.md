@@ -111,6 +111,18 @@ Tech Debt, Security, Performance, Fragile Areas
 **Right:** Canonicalize the parent directory and join the file name (as `database_open_path` already does for the database itself).
 **Date:** 2026-10-05
 
+### [Tech Debt] A live-state checker that hardcodes one task freezes the "Last review" field
+**Context:** `check-live-state.sh` accepted only reviews of `engram-10-of-10-live-state` as the authoritative review.
+**Wrong:** Keeping that July task as the only valid `Last review`, so three later sprints left the field pointing at 2026-07-10 while bootstrap printed newer verdicts next to it.
+**Right:** Derive the authority from `progress.md` itself: the task slug comes from the named artifact, it must be the newest version of that slug, and the active task's own review wins when it exists. Test the rules on hermetic repos, not on the real review names.
+**Date:** 2026-10-26
+
+### [Fragile Areas] `harness-risk-register.sh` breaks past RISK-0007 and `validate` needs old Psych
+**Context:** Adding RISK-0008 and RISK-0009 with `harness-risk-register.sh add`.
+**Wrong:** Trusting the tool: `next_risk_id` feeds a zero-padded string (`0008`) into shell arithmetic, which reads it as invalid octal (and would compute a wrong id from `0010`); `validate` loads `updated_at` with a Ruby that rejects `Time` (Psych 4), so it fails even on the committed baseline.
+**Right:** Pass `--id RISK-NNNN` explicitly until the script uses `10#` arithmetic, and check the file with `YAML.safe_load(..., permitted_classes: [Time, Date])`. Fixing the script is a `docs/harness/bin/*` change and needs independent review.
+**Date:** 2026-10-26
+
 ---
 
 ## Rationalization Table

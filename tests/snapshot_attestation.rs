@@ -506,3 +506,68 @@ fn scenario_11_decompression_guard_rejects_bomb() {
 
     cleanup_snapshot(&path);
 }
+
+// ── Scenario 12: Archive entry names are validated before any entry is read ───
+
+#[test]
+fn scenario_12_load_rejects_path_traversal_entry_names() {
+    use std::io::Write;
+
+    for evil_name in [
+        "../escape.txt",
+        "nested/../../escape.txt",
+        "/abs/escape.txt",
+    ] {
+        let path = tmp_egm("s12_traversal");
+        let file = std::fs::File::create(&path).expect("create zip");
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("manifest.json", options)
+            .expect("start manifest");
+        zip.write_all(b"{}").expect("write manifest");
+        zip.start_file(evil_name, options)
+            .expect("start evil entry");
+        zip.write_all(b"payload").expect("write evil entry");
+        zip.finish().expect("finish zip");
+
+        let storage = open_storage();
+        let result = SnapshotLoader::load(&storage, &path, LoadStrategy::DryRun, None, None, None);
+        let err = result.expect_err("traversal entry names must be rejected");
+        assert!(
+            err.to_string().contains("zip entry name"),
+            "expected entry-name rejection for {evil_name:?}, got: {err}"
+        );
+
+        cleanup_snapshot(&path);
+    }
+}
+
+// ── Scenario 13: Symlink entries are data, never followed on load ─────────────
+
+#[cfg(unix)]
+#[test]
+fn scenario_13_symlink_entry_is_never_followed() {
+    let path = tmp_egm("s13_symlink");
+    let file = std::fs::File::create(&path).expect("create zip");
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default();
+    // A manifest that is a symlink to a sensitive host path. The loader only reads
+    // archive bytes, so the link target is parsed as (invalid) manifest JSON.
+    zip.add_symlink("manifest.json", "/etc/passwd", options)
+        .expect("add symlink entry");
+    zip.finish().expect("finish zip");
+
+    let err = SnapshotLoader::inspect(&path).expect_err("symlink manifest must not parse");
+    let message = err.to_string();
+    assert!(
+        message.contains("Failed to parse snapshot manifest"),
+        "expected manifest parse failure, got: {message}"
+    );
+    assert!(
+        !message.contains("root:"),
+        "host file contents must never surface through a symlink entry: {message}"
+    );
+
+    cleanup_snapshot(&path);
+}

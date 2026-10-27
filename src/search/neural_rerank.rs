@@ -6,6 +6,15 @@
 //! reranker in `rerank.rs` with learned scoring.
 //!
 //! Feature-gated behind `neural-rerank` to keep the default binary lean.
+//!
+//! # Status: scoring is not implemented
+//!
+//! The ONNX forward pass (tokenisation, tensor stacking, `session.run`) is not
+//! wired yet; see [`NEURAL_SCORING_IMPLEMENTED`]. Until it is,
+//! [`CrossEncoderReranker`] returns an error from `rerank` instead of
+//! producing scores, so placeholder output can never reorder results or
+//! replace real retrieval scores. Search keeps using the rule-based reranker
+//! in `rerank.rs`.
 
 #![cfg(feature = "neural-rerank")]
 
@@ -13,6 +22,18 @@ use std::path::PathBuf;
 
 use crate::error::{EngramError, Result};
 use crate::types::Memory;
+
+/// Whether [`CrossEncoderReranker`] actually runs the cross-encoder model.
+///
+/// `false` until the ONNX inference path exists. Model-routing status
+/// (`routing::model`) reads this so a compiled-in but non-functional reranker
+/// is never reported as operational. Flip it only together with a real
+/// `score_batch` implementation and tests that exercise it.
+pub const NEURAL_SCORING_IMPLEMENTED: bool = false;
+
+/// Error text returned while [`NEURAL_SCORING_IMPLEMENTED`] is `false`.
+const SCORING_NOT_IMPLEMENTED: &str = "cross-encoder scoring is not implemented: \
+     the ONNX forward pass is not wired, so no relevance scores are produced";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -99,11 +120,15 @@ impl Default for CrossEncoderConfig {
 // Cross-encoder reranker (ONNX runtime)
 // ---------------------------------------------------------------------------
 
-/// ONNX-based cross-encoder reranker.
+/// ONNX-based cross-encoder reranker (scoring not implemented yet).
 ///
-/// Uses an ms-marco-MiniLM-L-6-v2 compatible model to score each
-/// `(query, document)` pair.  The raw logits are min-max normalised to
-/// `[0, 1]` across the batch, then filtered by `config.threshold`.
+/// Designed to use an ms-marco-MiniLM-L-6-v2 compatible model to score each
+/// `(query, document)` pair, min-max normalise the raw logits to `[0, 1]`
+/// across the batch, then filter by `config.threshold`.
+///
+/// **The model is loaded but never run:** [`NEURAL_SCORING_IMPLEMENTED`] is
+/// `false`, and [`Reranker::rerank`] returns an error for any non-empty
+/// candidate list rather than fabricating scores.
 pub struct CrossEncoderReranker {
     config: CrossEncoderConfig,
     /// ONNX inference session.  `None` when running under `cfg(test)` or
@@ -155,26 +180,30 @@ impl CrossEncoderReranker {
     /// Score a single batch of inputs via the ONNX session.
     ///
     /// Returns a vector of raw logit scores (one per input).
+    ///
+    /// Always fails while [`NEURAL_SCORING_IMPLEMENTED`] is `false`: returning
+    /// constant placeholder scores would be normalised to `1.0` by
+    /// [`Self::normalize`] and presented as real relevance.
     fn score_batch(&self, inputs: &[String]) -> Result<Vec<f32>> {
-        let session = self
+        if !NEURAL_SCORING_IMPLEMENTED {
+            return Err(EngramError::Search(SCORING_NOT_IMPLEMENTED.to_string()));
+        }
+
+        let _session = self
             .session
             .as_ref()
             .ok_or_else(|| EngramError::Config("ONNX session not initialised".to_string()))?;
 
-        // Simple whitespace tokenisation — a production implementation
-        // would use a proper BERT tokeniser (e.g., via `tokenizers` crate).
-        // This is intentionally minimal; the `ort` integration wires up the
-        // forward pass contract.
-        let _session_ref = session; // silence unused-variable lint until ort types are available
-
-        // Placeholder: return zero scores for each input.
-        // Real implementation would:
-        //   1. Tokenise each `input` string with BertTokenizer
+        // Real implementation will:
+        //   1. Tokenise each `input` string with a BERT tokeniser
         //   2. Pad/truncate to `config.max_length`
         //   3. Stack into a 2-D tensor (batch × seq_len)
         //   4. Run `session.run([input_ids, attention_mask])` → logits
         //   5. Extract the relevance logit from the model output
-        Ok(vec![0.0_f32; inputs.len()])
+        Err(EngramError::Search(format!(
+            "{SCORING_NOT_IMPLEMENTED} ({} inputs)",
+            inputs.len()
+        )))
     }
 
     /// Min-max normalise a slice of scores to `[0, 1]`.
@@ -204,6 +233,11 @@ impl Reranker for CrossEncoderReranker {
     /// 3. **Filter** — discard candidates below `config.threshold`
     ///
     /// Returns candidates sorted by descending `rerank_score`.
+    ///
+    /// # Errors
+    ///
+    /// Until [`NEURAL_SCORING_IMPLEMENTED`] is `true`, any non-empty
+    /// `candidates` list yields an error (stage 1 cannot produce scores).
     fn rerank(
         &self,
         query: &str,
@@ -601,6 +635,41 @@ mod tests {
         assert_eq!(result.len(), 2);
         // Candidate 2 mentions "rust" so it should rank first
         assert_eq!(result[0].memory.id, 2);
+    }
+
+    /// The ONNX forward pass is not wired yet. The reranker must refuse to
+    /// score instead of fabricating constant scores that `normalize` would turn
+    /// into `1.0` ("everything is perfectly relevant") and that
+    /// `effective_score` would then use in place of the original retrieval score.
+    #[test]
+    fn test_cross_encoder_refuses_to_fabricate_scores() {
+        let reranker = CrossEncoderReranker {
+            config: CrossEncoderConfig::default(),
+            session: None,
+        };
+        let candidates = vec![
+            make_candidate(1, "alpha", 0.9),
+            make_candidate(2, "beta", 0.4),
+        ];
+
+        let err = match reranker.rerank("alpha", candidates) {
+            Ok(_) => panic!("placeholder scorer must not return reranked candidates"),
+            Err(err) => err,
+        };
+
+        assert!(
+            err.to_string().contains("not implemented"),
+            "error must explain the scorer is not implemented, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_cross_encoder_rerank_of_nothing_is_still_ok() {
+        let reranker = CrossEncoderReranker {
+            config: CrossEncoderConfig::default(),
+            session: None,
+        };
+        assert!(reranker.rerank("anything", Vec::new()).unwrap().is_empty());
     }
 
     #[test]

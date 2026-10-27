@@ -3,10 +3,12 @@ adr: ADR-CLEANUP-20260708-2
 track: oversized files follow-up inspect
 service: engram (single Rust crate)
 author: Codex
-status: Proposed
+status: Proposed (partially implemented)
 ---
 
 # Remaining oversized Rust files inspect
+
+> Status evidence: ranked rows 1–5 landed in #132 (misc/), #133 (embedding/queue/), #180 (context/), #181 (memory_crud/), #182 (harness/); rows 6–9 have split modules on main (`storage/sqlite_backend/`, `storage/meilisearch_backend/`, `graph/conflicts/`, graph split #187/#190); row 11 is superseded by the turso sunset; rows 10 and 12 have split modules (`context/record/`, #184 types facade) but their gating design/inspect steps are not verified.
 
 ## Scope note
 

@@ -406,10 +406,7 @@ def run(
         print(json.dumps({"status": "fail", "errors": [str(exc)]}, sort_keys=True), file=sys.stderr)
         return 1
     # A stale passing report must never survive a failed run.
-    try:
-        output.unlink()
-    except FileNotFoundError:
-        pass
+    output.unlink(missing_ok=True)
     report: Dict[str, Any] = {
         "schema_version": REPORT_SCHEMA,
         "status": "fail",

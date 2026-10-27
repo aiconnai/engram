@@ -333,6 +333,33 @@ class BootstrapAndReadOrder(unittest.TestCase):
         # bootstrap lists the static files; the active plan is resolved from progress.md instead.
         self.assertEqual(boot, [x for x in CANONICAL_ORDER if x != "active-plan"])
 
+    def test_mcp_counter_treats_brace_wrapped_cfg_arms_as_feature_gated(self):
+        """Hermetic: a copy of bootstrap.sh counts gated tools whether the arm is `=> cfg!(..)` or `=> { cfg!(..) }`."""
+        with tempfile.TemporaryDirectory(prefix="bootstrap-mcp-") as tmp:
+            root = Path(tmp)
+            (root / "docs/harness/bin").mkdir(parents=True)
+            shutil.copy(BOOTSTRAP, root / "docs/harness/bin/bootstrap.sh")
+            tools = root / "src/mcp/tools"
+            (tools / "catalog").mkdir(parents=True)
+            (tools / "registry.rs").write_text("// registry\n", encoding="utf-8")
+            names = ("a_one", "a_two", "b_one", "b_two", "b_three", "c_one", "open_one", "open_two")
+            (tools / "catalog" / "all.rs").write_text(
+                "".join(f'ToolDef {{\n    name: "{n}",\n}},\n' for n in names), encoding="utf-8")
+            (tools / "mod.rs").write_text(
+                "pub(crate) fn tool_feature_available(name: &str) -> bool {\n"
+                "    match name {\n"
+                '        "a_one" | "a_two" => cfg!(feature = "x"),\n'
+                '        "b_one" | "b_two" | "b_three" => {\n'
+                '            cfg!(feature = "y")\n'
+                "        }\n"
+                '        "c_one" => cfg!(all(feature = "x", feature = "y")),\n'
+                "        _ => true,\n"
+                "    }\n"
+                "}\n", encoding="utf-8")
+            proc = run(["bash", str(root / "docs/harness/bin/bootstrap.sh")], cwd=root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("MCP tools (source): 2 active / 8 total", proc.stdout)
+
     def test_harness_invariant_order_is_a_consistent_prefix(self):
         text = (REPO_ROOT / "docs" / "harness" / "INVARIANTS.md").read_text(encoding="utf-8")
         line = next(ln for ln in text.splitlines() if "Ordem de leitura obrigatória" in ln)

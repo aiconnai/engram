@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Date | 2026-07-08 |
-| Status | Approved design; implementation not started |
+| Status | Implemented (5eed715c, #131; follow-up 28b40bf3) |
 | Product area | MCP session continuity, Operational Context, CLI UX |
 | Primary user | Advanced users who understand when to rotate AI sessions |
 | Future user | Non-technical users who need automatic context-rotation guidance |

@@ -126,8 +126,16 @@ fi
 cargo check -p engram-wasm --all-targets
 cargo check -p engram-wasm --target wasm32-unknown-unknown
 
-echo "==> [7/7] Documentation + generated MCP reference"
+echo "==> [7/7] Documentation, generated MCP reference + public surface contracts"
 ./scripts/generate-mcp-reference.sh --check
+# Public Claims Gate: tool counts / banned claims in public docs, and the advertised
+# surface baseline (regenerate with `check-advertised-contracts.py ... --write`).
+python3 "$SCRIPT_DIR/test_generate_mcp_reference.py"
+python3 "$SCRIPT_DIR/test_check_public_claims.py"
+python3 "$SCRIPT_DIR/check-public-claims.py"
+python3 "$SCRIPT_DIR/test_check_advertised_contracts.py"
+python3 "$SCRIPT_DIR/check-advertised-contracts.py" \
+  --inventory "$SCRIPT_DIR/../docs/contracts/advertised-surfaces.toml"
 python3 "$SCRIPT_DIR/test_check_pdf_worker_packaging.py"
 python3 "$SCRIPT_DIR/check-pdf-worker-packaging.py"
 RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features "$CI_REQUIRED_FEATURES" --no-deps --document-private-items

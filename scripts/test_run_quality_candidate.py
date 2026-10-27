@@ -13,7 +13,6 @@ Run: python3 -m unittest scripts/test_run_quality_candidate.py
 from __future__ import annotations
 
 import contextlib
-import copy
 import io
 import json
 import os

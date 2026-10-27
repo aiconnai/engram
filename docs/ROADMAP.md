@@ -32,7 +32,7 @@ dated artifacts.
 | I | Retrieval Excellence | Done | v0.11.0 | Multi-provider embeddings, MMR diversity, semantic cache, neural reranking, explainability, feedback |
 | J | Context Engineering | Done | v0.11.0 | Fact extraction, prompt construction, self-editing memory blocks |
 | K | Temporal Graph & Platform Maturity | Done | v0.11.0 | Temporal knowledge graph, hierarchical scoping, benchmark suite |
-| L | Multi-Agent Sharing & Platform | Done | v0.12.0 | Multi-agent memory sharing with scope-based access grants, advanced SSE with resumable streams, engram-wasm crate, cross-host federation |
+| L | Multi-Agent Sharing & Platform | Partial | v0.12.0 | Multi-agent memory sharing with scope-based access grants, advanced SSE with resumable streams, engram-wasm crate; cross-host federation not implemented in this tree |
 
 The original 20-phase roadmap was completed by the v0.12.0 line. Current
 release status is tracked in [`../CHANGELOG.md`](../CHANGELOG.md), and generated
@@ -193,7 +193,7 @@ Advanced knowledge graph capabilities. Feature flag: `advanced-graph` (depends o
 - **Temporal Coactivation / Hebbian Learning**: "Neurons that fire together wire together" edge strengthening
 - **Semantic Triplet Matching**: SPARQL-like SPO pattern matching with transitive inference
 - Schema v29: `coactivation_edges`, `graph_conflicts`, `knowledge_triplets` tables
-- 5 MCP tools: `memory_detect_conflicts`, `memory_resolve_conflict`, `memory_coactivation_report`, `memory_query_triplets`, `memory_add_knowledge`
+- 4 MCP tools: `memory_detect_conflicts`, `memory_resolve_conflict`, `memory_coactivation_report`, `memory_query_triplets`. `memory_add_knowledge` is not implemented (no registry entry or library symbol).
 
 ### Phase H: Autonomous Memory Agent (v0.11.0)
 
@@ -204,7 +204,7 @@ Full autonomous agent loop. Feature flag: `autonomous-agent` (depends on compres
 - **Memory Agent Loop**: Observe→decide→act tick-based agent
 - Schema v30: `garden_log`, `query_log` tables
 - New binary: `engram-agent`
-- 10 MCP tools: `memory_agent_start/stop/status/metrics/configure`, `memory_garden/garden_preview/garden_undo`, `memory_suggest_acquisition`, `memory_proactive_scan`
+- 7 MCP tools: `memory_agent_start/stop/status/metrics`, `memory_garden/garden_preview`, `memory_suggest_acquisitions` (roadmap name `memory_suggest_acquisition`). Not exposed via MCP: `memory_garden_undo` (library-only: `Gardener::garden_undo`, `src/intelligence/gardening.rs:363`) and `memory_proactive_scan` (library-only: `src/intelligence/proactive.rs`). Not implemented: `memory_agent_configure`.
 
 ### Phase I: Retrieval Excellence (v0.11.0)
 
@@ -227,7 +227,7 @@ LLM context optimization pipeline. Feature flag: `context-engineering`.
 - **Memory-Aware Prompt Construction**: 3 strategies (Greedy/Balanced/Recency) with token counting
 - **Self-Editing Memory Blocks**: 3-tier blocks (system/persona/human) with edit log
 - Schema v22-23: `facts`, `memory_blocks`, `block_edit_log` tables
-- 10 MCP tools: `memory_extract_facts`, `memory_list_facts`, `memory_fact_graph`, `memory_build_context`, `memory_prompt_template`, `memory_token_estimate`, `memory_block_get/edit/list/create`
+- 8 MCP tools: `memory_extract_facts`, `memory_list_facts`, `memory_fact_graph`, `memory_build_context`, `memory_block_get/edit/list/create`. Not implemented: `memory_prompt_template`. Library-only, not exposed via MCP: `memory_token_estimate` (`context::metrics::token_estimate_metadata`, `src/context/metrics.rs:55`).
 
 ### Phase K: Temporal Graph & Platform Maturity (v0.11.0)
 
@@ -238,7 +238,7 @@ Temporal knowledge graphs and hierarchical scoping. Feature flag: `temporal-grap
 - **Standardized Benchmark Suite**: LOCOMO, LongMemEval, MemBench frameworks
 - Schema v24-25: `temporal_edges` table, `scope_path` column
 - New binary: `engram-bench`
-- 10 MCP tools: `memory_temporal_create/invalidate/snapshot/contradictions/evolve`, `memory_scope_set/get/list/inherit/isolate`
+- MCP tools: `temporal_add_edge` (roadmap name `memory_temporal_create`), `memory_temporal_snapshot`, `temporal_contradictions` (roadmap `memory_temporal_contradictions`), `scope_set`, `scope_get`, `scope_list` (roadmap `memory_scope_*`). Library-only, not exposed via MCP: edge invalidation (`graph::temporal::invalidate_edge`, `src/graph/temporal/edges.rs:63`). Not implemented: `memory_temporal_evolve`, `memory_scope_inherit`, `memory_scope_isolate` (ancestor inheritance exists as search behaviour in `src/storage/scoping.rs`).
 
 ### Phase L: Multi-Agent Sharing & Platform (v0.12.0)
 
@@ -247,9 +247,9 @@ Multi-agent memory sharing with access control, resumable SSE streams, browser-s
 - **Scope-Based Access Grants**: Fine-grained per-agent access control over scope paths with `read`/`write`/`admin` permissions, persisted in the `scope_grants` table
 - **Advanced SSE with Resumable Streams**: `Last-Event-Id` reconnect header support, in-memory ring buffer replay (last 1000 events), preventing event loss on transient disconnects
 - **engram-wasm Crate**: Browser-compilable crate exposing BM25, TF-IDF, graph traversal, RRF fusion, and entity extraction to JavaScript/TypeScript via wasm-bindgen
-- **Cross-Host Federation**: HTTP federation client, federated search across peer nodes, peer registry with health tracking, memory sharing between hosts
+- **Cross-Host Federation**: HTTP federation client, federated search across peer nodes, peer registry with health tracking, memory sharing between hosts. **Not implemented in this tree**: no `federation` module or tools exist in `src/`.
 - Schema v31: `scope_grants` table
-- 10 new MCP tools: `memory_grant_access`, `memory_revoke_access`, `memory_list_grants`, `memory_check_access`, `federation_add_peer`, `federation_remove_peer`, `federation_list_peers`, `federation_search`, `federation_share`, `federation_sync_status`
+- 4 new MCP tools exist: `memory_grant_access`, `memory_revoke_access`, `memory_list_grants`, `memory_check_access`. The six `federation_*` tools (`federation_add_peer`, `federation_remove_peer`, `federation_list_peers`, `federation_search`, `federation_share`, `federation_sync_status`) are not implemented.
 
 ---
 

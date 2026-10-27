@@ -2,10 +2,15 @@
 adr: ADR-STORAGE-20260714-1
 track: storage-architecture
 service: engram-core
-status: Accepted
+status: Superseded
 owner: Engram Architecture Team
 created: 2026-07-14
+superseded-by: ADR-STORAGE-20260816-1
 ---
+
+> **Superseded by ADR-STORAGE-20260816-1** (Turso / libSQL Backend Deprecation and
+> Sunset Strategy). The backend described here was removed in v0.24.0; this record is
+> kept for history only and its roadmap is no longer active.
 
 # Turso / libSQL Backend Architectural Status and Production Roadmap
 

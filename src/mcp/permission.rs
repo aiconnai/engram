@@ -548,7 +548,8 @@ fn argument_views(params: &Value) -> Vec<&serde_json::Map<String, Value>> {
 
 /// Every workspace `params` claims for `tool_name`: the top-level `workspace`
 /// and `workspaces`, `filters.workspace`, and the `workspace` of each item of
-/// the tool's batch arrays (see [`workspace_item_arrays`]).
+/// the tool's batch arrays (see
+/// [`workspace_item_arrays`](crate::mcp::workspace_guard::workspace_item_arrays)).
 pub(crate) fn requested_workspaces<'a>(tool_name: &str, params: &'a Value) -> Vec<&'a str> {
     let mut workspaces = Vec::new();
     for object in argument_views(params) {

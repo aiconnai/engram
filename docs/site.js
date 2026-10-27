@@ -116,8 +116,8 @@ const terminalScenarios = {
     { type: 'line', prompt: '$', cmd: 'engram-server --transport stdio' },
     { type: 'banner', text: '  Engram v0.24.0 (local-first persistent memory server)' },
     { type: 'dim', text: '  Database: ~/.local/share/engram/memories.db [SQLite 3.45 + WAL]' },
-    { type: 'dim', text: '  Search: Hybrid BM25 (FTS5) + Cosine Vectors (MiniLM ONNX + HNSW) + Fuzzy' },
-    { type: 'dim', text: '  MCP Protocol: JSON-RPC 2.0 active over stdio [243 tools registered]' },
+    { type: 'dim', text: '  Search: Hybrid BM25 (FTS5) + Cosine Vectors (MiniLM ONNX) + Fuzzy' },
+    { type: 'dim', text: '  MCP Protocol: JSON-RPC 2.0 active over stdio [254 tools registered]' },
     { type: 'break' },
     { type: 'success', tag: '[MCP INITIALIZED]', text: ' Handshake from host: Claude Code v1.0.18' },
     { type: 'dim', text: '  Capabilities: tools, resources, prompts, logging, completions' },
@@ -623,7 +623,7 @@ function executePlaygroundAction(mode) {
         created_at: new Date().toISOString(),
         indexing: {
           bm25_fts5: 'indexed',
-          vector_embedding: '384-dim (MiniLM ONNX + HNSW)',
+          vector_embedding: '384-dim (MiniLM ONNX)',
           entities_extracted: extractedEnts
         }
       }

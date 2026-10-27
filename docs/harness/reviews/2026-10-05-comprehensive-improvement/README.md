@@ -134,3 +134,12 @@ were resolved, implemented, verified, and closed in post-merge Waves 5 and 6:
 
 See [`wave5-6-summary.md`](./wave5-6-summary.md)
 for the full post-merge verification record.
+
+## Nota de proveniência (2026-10-26)
+
+O veredito `REVIEW_VERDICT: PASS` de 2026-10-14
+([`../2026-10-14-engram-comprehensive-improvement-post.md`](../2026-10-14-engram-comprehensive-improvement-post.md))
+**contradiz** as linhas 21-24 e 91-95 acima (nenhum `review-gate.sh post` com receipt; nenhum marcador
+de propósito) e não registra reviewer, intervalo nem receipt. O que está e o que não está evidenciado
+fica em [`../2026-10-14-engram-comprehensive-improvement-post-provenance.md`](../2026-10-14-engram-comprehensive-improvement-post-provenance.md).
+Este README permanece como foi escrito em 2026-10-05; a nota não altera o veredito nem cria receipt.

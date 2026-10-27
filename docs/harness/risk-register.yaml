@@ -1,5 +1,5 @@
 schema_version: harness-risk-register-v1
-updated_at: 2026-10-05T15:11:37Z
+updated_at: 2026-10-26T20:48:18Z
 entries:
 
   - id: RISK-0001
@@ -29,3 +29,100 @@ entries:
     monitoring:
       - "novo log com %err ou path.display()"
       - "ENGRAM_LOG_ERROR_DETAIL ativo em ambiente compartilhado"
+
+  - id: RISK-0003
+    date: 2026-10-26
+    status: open
+    description: "Regressao de autorizacao em e04d3307: um principal restrito pode escrever em workspace alheio via memory_create_batch e memory_ingest_fact_batch (achado pelo levantamento de 2026-10-26). Correcao em fix/workspace-batch-auth, ainda nao mesclada."
+    probability: 4
+    impact: 5
+    score: 20
+    owner: "Ronaldo (correcao: WT1)"
+    mitigation: "Mesclar a correcao de WT1 com teste de regressao por tool de lote e registrar o SHA de merge. Ate la o risco permanece ativo em CLAUDE.md."
+    contingency: "Decisao do owner sobre desabilitar as tools de lote para principais restritos ate o merge da correcao"
+    monitoring:
+      - "merge de fix/workspace-batch-auth"
+      - "novas tools de lote com workspace por item"
+
+  - id: RISK-0004
+    date: 2026-10-26
+    status: open
+    description: "Minors de autorizacao adiados do programa de outubro: cache de resultados sem principal na chave (ledger 235), resources/subscribe sem principal (97), tool desconhecida fail-open em permission_denial_for_mode e escalada por flag de escrita ignorada em permission_mode_status_report (107). Triagem em known-issues/2026-10-26-deferred-review-minors.md."
+    probability: 3
+    impact: 4
+    score: 12
+    owner: "Ronaldo (correcao: WT1)"
+    mitigation: "WT1 corrige cache, resources/subscribe e tool desconhecida; a escalada por flag de escrita e o teste e2e gRPC ainda nao tem dono. Status so muda com SHA de merge e teste."
+    contingency: ""
+    monitoring:
+      - "merge de fix/workspace-batch-auth"
+      - "novo item de autorizacao no ledger"
+
+  - id: RISK-0005
+    date: 2026-10-26
+    status: monitoring
+    description: "merge_gate_ci.base_references() falha aberto (conjunto vazio) se o git falhar, e outros minors do H5 (required_jobs depende de indentacao, conjunto protegido amplo). O avaliador so aponta elegibilidade e o merge segue humano."
+    probability: 2
+    impact: 2
+    score: 4
+    owner: "@team"
+    mitigation: "Corrigir em task de harness com review independente (docs/harness/bin/* e process-critical); manter o merge humano obrigatorio"
+    contingency: ""
+    monitoring:
+      - "merge-gate emitindo eligible sem avaliar o conjunto protegido dinamico"
+
+  - id: RISK-0006
+    date: 2026-10-26
+    status: open
+    description: "D8: a protecao de main nao exige review de PR e enforce_admins=false; merge humano e regra de processo, nao controle tecnico. Security Gate e Harness Contract tambem nao sao contexts required."
+    probability: 3
+    impact: 4
+    score: 12
+    owner: "Ronaldo"
+    mitigation: "Decisao do owner sobre branch protection, Dependabot e secret scanning (plano de remediacao, decisao 8). Nenhuma automacao altera settings remotos."
+    contingency: ""
+    monitoring:
+      - "merge em main sem review humano"
+      - "mudanca de required_status_checks"
+
+  - id: RISK-0007
+    date: 2026-10-26
+    status: deferred
+    description: "ADR C4 (docs/decisions/2026-10-05-c4-descriptor-bound-sqlite-open.md) continua Proposed: a abertura de SQLite nao e atomica com a verificacao de caminho (janela TOCTOU). G1 e a Invariante 27 mitigam por caminho, nao por descritor."
+    probability: 2
+    impact: 4
+    score: 8
+    owner: "Ronaldo"
+    mitigation: "Decisao do owner sobre adotar, alterar ou rejeitar o ADR (plano de remediacao, decisao 10). Ate la manter a Invariante 27 e os testes de regressao POSIX."
+    contingency: ""
+    monitoring:
+      - "relato de perda de WAL ou de lock"
+      - "mudanca em refuse_active_sqlite_artifact"
+
+  - id: RISK-0008
+    date: 2026-10-26
+    status: open
+    description: "Exceptions de advisory: 2 registros (11 antes do sunset Turso) vencem em 2026-12-31. Segundo o levantamento de 2026-10-26, 7 novos RUSTSEC deixam Security Audit e Cargo Deny (required) vermelhos desde 2026-10-17."
+    probability: 4
+    impact: 3
+    score: 12
+    owner: "Ronaldo (correcao: WT2)"
+    mitigation: "WT2 atualiza dependencias; nao renovar excecao de advisory corrigivel (GATES). Renovacao so com racional datado e owner."
+    contingency: ""
+    monitoring:
+      - "vencimento de 2026-12-31"
+      - "novo advisory no lock"
+
+  - id: RISK-0009
+    date: 2026-10-26
+    status: monitoring
+    description: "Proveniencia de evidencia fraca: o veredito 2026-10-14 e o parecer do sunset sao PASS sem receipt humano; .sensors-log nao tem linhas entre 2026-09-03 e 2026-10-23; PASS em prosa pode ser lido como autorizacao."
+    probability: 3
+    impact: 3
+    score: 9
+    owner: "Ronaldo"
+    mitigation: "Nota de proveniencia em reviews/2026-10-14-engram-comprehensive-improvement-post-provenance.md, Last review rotulado como parecer e receipt humano pendente (decisao 11 do plano). Gate completo roda no integrador."
+    contingency: ""
+    monitoring:
+      - "citar PASS sem receipt como aprovacao"
+      - "gate completo sem receipt commitado"

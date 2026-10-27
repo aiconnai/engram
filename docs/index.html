@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Engram — Persistent Memory Engine for Claude 5, Gemini 3.7, DeepSeek-V4, Grok 4.6, GPT-5.6 Sol & Antigravity</title>
-  <meta name="description" content="Give your AI a memory. Local-first storage and retrieval for AI workflows, 3-way hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and 243+ MCP tools. Compatible with Claude Code, Cursor, Antigravity, OpenAI Agents, Gemini 3.7, and DeepSeek-V4.">
-  <meta name="keywords" content="Engram, MCP memory server, Model Context Protocol, persistent memory for AI agents, Claude Code memory, Cursor rules memory, Google Antigravity, Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, GPT-5.6 Sol, LangGraph memory, CrewAI memory, hybrid search, SQLite WAL, knowledge graph, identity resolution">
+  <title>Engram — Persistent Memory Engine for AI Agents over MCP (Claude Code, Cursor, Antigravity, OpenAI Agents)</title>
+  <meta name="description" content="Give your AI a memory. Local-first storage and retrieval for AI workflows, 3-way hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and 301 MCP tools. Works with Claude Code, Cursor, Antigravity, OpenAI Agents, and any MCP-capable host.">
+  <meta name="keywords" content="Engram, MCP memory server, Model Context Protocol, persistent memory for AI agents, Claude Code memory, Cursor rules memory, Google Antigravity, LangGraph memory, CrewAI memory, hybrid search, SQLite WAL, knowledge graph, identity resolution">
   
   <!-- Open Graph -->
   <meta property="og:title" content="Engram — Memory is Identity for AI Agents">
-  <meta property="og:description" content="Local-first persistent memory for AI agents. Sub-millisecond hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and MCP-native integration.">
+  <meta property="og:description" content="Local-first persistent memory for AI agents. Millisecond-scale keyword search plus hybrid search (BM25+Vectors+Fuzzy), knowledge graphs, identity resolution, and MCP-native integration.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://aiconnai.github.io/engram/">
 
@@ -28,7 +28,7 @@
       "priceCurrency": "USD"
     },
     "softwareVersion": "0.24.0",
-    "description": "Local-first memory engine for AI agents and teams. SQLite + WAL storage, 3-way hybrid search, knowledge graph traversal, and 243+ MCP tools.",
+    "description": "Local-first memory engine for AI agents and teams. SQLite + WAL storage, 3-way hybrid search, knowledge graph traversal, and 301 MCP tools.",
     "url": "https://aiconnai.github.io/engram/",
     "downloadUrl": "https://crates.io/crates/engram-core",
     "author": {
@@ -66,7 +66,7 @@
           <li><a href="#anatomy">Anatomy</a></li>
           <li><a href="#mechanics">Mechanics</a></li>
           <li><a href="#playground">Explorer</a></li>
-          <li><a href="mcp-tools.html">MCP Tools (243)</a></li>
+          <li><a href="mcp-tools.html">MCP Tools (301)</a></li>
           <li><a href="architecture.html">Architecture</a></li>
           <li><a href="#sdk">SDKs</a></li>
           <li><a href="#install">Install</a></li>
@@ -93,7 +93,7 @@
       <h1>Memory is <span class="gradient-text">Identity.</span></h1>
       <p class="hero-subtitle">
         Every architecture decision, every convention, every critical fact… held somewhere safe.<br>
-        <strong>Sub-millisecond hybrid retrieval (BM25 + Vectors + Fuzzy), dynamic knowledge graphs, and 243+ MCP tools.</strong> 100% local-first, zero-cloud lock-in, engineered for Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, Claude 5 Sonnet/Opus, GPT-5.6 Sol, Google Antigravity, and Cursor.
+        <strong>Hybrid retrieval (BM25 + Vectors + Fuzzy), dynamic knowledge graphs, and 301 MCP tools.</strong> 100% local-first, zero-cloud lock-in, model-agnostic over MCP, with examples for Claude Code, Google Antigravity, Cursor, and the OpenAI Agents SDK.
       </p>
       <div class="hero-cta">
         <a href="#install" class="btn btn-primary">
@@ -132,7 +132,7 @@
           <div class="t-banner">  Engram v0.24.0 (local-first persistent memory server)</div>
           <div class="t-dim">  Database: ~/.local/share/engram/memories.db [SQLite 3.45 + WAL]</div>
           <div class="t-dim">  Search: Hybrid BM25 (FTS5) + Cosine Vectors (MiniLM ONNX) + Fuzzy Levenshtein</div>
-          <div class="t-dim">  MCP Protocol: JSON-RPC 2.0 active over stdio [243 tools registered]</div>
+          <div class="t-dim">  MCP Protocol: JSON-RPC 2.0 active over stdio [254 tools registered]</div>
           <br>
           <div><span class="t-success">[MCP INITIALIZED]</span> Handshake from host: <span class="t-cyan">Claude Code v1.0.18</span></div>
           <div class="t-dim">  Capabilities: tools, resources, prompts, logging, completions</div>
@@ -271,7 +271,7 @@
       <div class="section-mark"><span class="roman">iii</span> <span>indexing & retrieval</span></div>
       <h2 class="section-title">Dense Symbolic Indexing. <em>Verbatim Fidelity.</em></h2>
       <p class="section-subtitle">
-        The content stays verbatim — always. The index above it is compressed into 3-way hybrid embeddings and entity graphs that an agent can query in &lt;2ms.
+        The content stays verbatim — always. The index above it is compressed into 3-way hybrid embeddings and entity graphs that an agent can query locally (keyword p50 3.2 ms, hybrid p50 250 ms at 100K memories).
       </p>
 
       <div class="dialect-grid">
@@ -342,7 +342,7 @@
           <div>
             <div class="mech-number">— 02</div>
             <h3>Zero API Keys</h3>
-            <p>3-way search (BM25 FTS5 + local MiniLM ONNX vectors + fuzzy distance) runs 100% on CPU. No OpenAI key or cloud embedding endpoint required.</p>
+            <p>3-way search (BM25 FTS5 + vectors + fuzzy distance) runs 100% on CPU. No OpenAI key or cloud embedding endpoint required: embeddings default to built-in TF-IDF, or local MiniLM ONNX with the optional <code>local-embeddings</code> feature.</p>
           </div>
           <div class="mech-metric">cloud keys required · <b>none</b></div>
         </div>
@@ -412,18 +412,18 @@
 
         <div class="model-card">
           <div class="model-header">
-            <span class="model-name">Gemini 3.7 Flash</span>
-            <span class="model-badge">High Concurrency</span>
+            <span class="model-name">LlamaIndex</span>
+            <span class="model-badge">Python / TS</span>
           </div>
-          <p class="model-desc">Ultra-fast sub-millisecond memory lookups matching high-throughput reasoning loops.</p>
+          <p class="model-desc">Document store, vector store, and chat store adapters backed by hybrid retrieval.</p>
         </div>
 
         <div class="model-card">
           <div class="model-header">
-            <span class="model-name">DeepSeek-V4-Pro</span>
-            <span class="model-badge">Code & Logic</span>
+            <span class="model-name">FastMCP & Any MCP Host</span>
+            <span class="model-badge">Model-agnostic</span>
           </div>
-          <p class="model-desc">Accurate code snippet indexing and entity-linked dependency knowledge graphs.</p>
+          <p class="model-desc">Any MCP-capable host or model connects over stdio or HTTP JSON-RPC. No model-specific adapters are shipped.</p>
         </div>
 
         <div class="model-card">
@@ -572,7 +572,7 @@
             </tr>
             <tr>
               <td><strong>Transports Supported</strong></td>
-              <td class="highlight-col"><span class="check-icon">✓ stdio, HTTP, WS, gRPC</span></td>
+              <td class="highlight-col"><span class="check-icon">✓ stdio, HTTP, WS (gRPC optional)</span></td>
               <td>REST API</td>
               <td>REST / GraphQL</td>
               <td>REST API</td>
@@ -580,7 +580,7 @@
             </tr>
             <tr>
               <td><strong>Active MCP Tools</strong></td>
-              <td class="highlight-col"><strong style="color:var(--color-cyan)">243 tools</strong></td>
+              <td class="highlight-col"><strong style="color:var(--color-cyan)">301 tools</strong> (254 default build)</td>
               <td>~6 tools</td>
               <td>~8 tools</td>
               <td>~10 tools</td>
@@ -665,14 +665,14 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     <div class="container">
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-number">&lt;2ms</div>
-          <div class="stat-label">Retrieval Latency</div>
-          <div class="stat-desc">SQLite FTS5 + WAL local execution</div>
+          <div class="stat-number">3.2ms</div>
+          <div class="stat-label">Keyword Search p50</div>
+          <div class="stat-desc">FTS5 at 100K memories; hybrid p50 250 ms. <a href="https://github.com/aiconnai/engram/blob/main/docs/harness/decisions/phase2-2-search-vector-bottleneck-sqlite-vec-2026-06-07.md">Measurements</a></div>
         </div>
         <div class="stat-card">
-          <div class="stat-number">243+</div>
+          <div class="stat-number">301</div>
           <div class="stat-label">Active MCP Tools</div>
-          <div class="stat-desc">Memory, search, graph, and council</div>
+          <div class="stat-desc">Memory, search, graph, and council; 254 in the default build</div>
         </div>
         <div class="stat-card">
           <div class="stat-number">0 B</div>
@@ -709,7 +709,7 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
             View on GitHub
           </a>
           <a href="mcp-tools.html" class="btn btn-secondary">
-            Browse MCP Catalog (243 Tools)
+            Browse MCP Catalog (301 Tools)
           </a>
         </div>
       </div>
