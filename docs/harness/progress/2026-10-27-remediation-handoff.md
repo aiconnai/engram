@@ -4,6 +4,9 @@ Handoff para a próxima IA (Claude, Codex, Gemini ou outra) assumir esta frente 
 Escrito pelo integrador da sessão (Claude Code, perfil `claude-consultores`, Opus 5.5). Fatos com SHA
 foram verificados no repositório; o que não foi verificado está marcado como tal.
 
+> **Atualização 2026-10-27:** a pilha foi publicada e mesclada no `main` (#244–#262, opção A). As seções
+> 1, 3 e 7 descrevem o estado anterior. Registro: [Publicação](./2026-10-26-remediation.md#publicação-2026-10-27).
+
 ## 1. Estado em 30 segundos
 
 - **Branch de trabalho:** `remediation/integration` (worktree `.worktrees/rem-int`). Contém tudo: os 4
