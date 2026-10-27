@@ -83,6 +83,34 @@ pub fn sync_hnsw_with_db(conn: &Connection, hnsw: &mut HnswIndex<i64>) -> Result
     Ok(HnswSyncReport { removed, compacted })
 }
 
+/// Background-task entry point: sync the shared index under the storage lock
+/// (lock order storage -> index) and log the outcome. Errors are logged, never
+/// propagated, so a failing sync cannot stop the calling maintenance loop.
+pub fn sync_hnsw_logged(
+    storage: &crate::storage::Storage,
+    hnsw: &parking_lot::RwLock<HnswIndex<i64>>,
+) -> Option<HnswSyncReport> {
+    match storage.with_connection(|conn| sync_hnsw_with_db(conn, &mut hnsw.write())) {
+        Ok(report) => {
+            if report.removed > 0 || report.compacted {
+                tracing::info!(
+                    removed = report.removed,
+                    compacted = report.compacted,
+                    "HNSW index reconciled with the database"
+                );
+            }
+            Some(report)
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %crate::observability::redact::redacted(&e),
+                "HNSW index reconciliation failed"
+            );
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +274,21 @@ mod tests {
         assert_eq!(hnsw.tombstone_count(), 0);
         assert_eq!(hnsw.len(), 70);
         assert!(hnsw.contains(&99) && !hnsw.contains(&0));
+    }
+
+    #[test]
+    fn logged_sync_reconciles_the_shared_index_and_reports() {
+        let storage = Storage::open_in_memory().unwrap();
+        let shared = parking_lot::RwLock::new(new_index());
+        let gone = storage
+            .with_connection(|conn| {
+                let id = embedded_memory(conn, &mut shared.write(), "to be removed", None);
+                conn.execute("DELETE FROM memories WHERE id = ?", [id])?;
+                Ok(id)
+            })
+            .unwrap();
+        let report = sync_hnsw_logged(&storage, &shared).expect("sync succeeds");
+        assert_eq!(report.removed, 1);
+        assert!(!shared.read().contains(&gone));
     }
 }

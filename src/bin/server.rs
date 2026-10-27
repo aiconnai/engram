@@ -845,6 +845,8 @@ fn main() -> Result<()> {
     // Start background cleanup thread if enabled
     if args.cleanup_interval_seconds > 0 {
         let cleanup_storage = storage.clone();
+        let cleanup_hnsw = handler.hnsw_index.clone();
+        let cleanup_hnsw_enabled = handler.search_config.hnsw_enabled;
         let interval = std::time::Duration::from_secs(args.cleanup_interval_seconds);
 
         std::thread::spawn(move || {
@@ -862,6 +864,12 @@ fn main() -> Result<()> {
                     Ok(deleted) => {
                         if deleted > 0 {
                             tracing::info!("Cleaned up {} expired memories", deleted);
+                            if cleanup_hnsw_enabled {
+                                engram::search::hnsw_sync::sync_hnsw_logged(
+                                    &cleanup_storage,
+                                    &cleanup_hnsw,
+                                );
+                            }
                         }
                     }
                     Err(e) => {
@@ -886,6 +894,7 @@ fn main() -> Result<()> {
         let drain_storage = storage.clone();
         let drain_embedder = embedder.clone();
         let drain_hnsw = handler.hnsw_index.clone();
+        let sync_hnsw = handler.hnsw_index.clone();
         let hnsw_enabled = handler.search_config.hnsw_enabled;
         let interval = std::time::Duration::from_secs(args.embedding_drain_interval_seconds);
         let batch_size = args.embedding_drain_batch_size;
@@ -918,6 +927,12 @@ fn main() -> Result<()> {
                     &hygiene,
                     &index_persisted,
                 );
+                // Memories also leave the searchable set through paths that
+                // never touch the index (expiry, supersede, merge, GC, content
+                // rewrites): reconcile against SQLite and bound tombstones.
+                if hnsw_enabled {
+                    engram::search::hnsw_sync::sync_hnsw_logged(&drain_storage, &sync_hnsw);
+                }
                 std::thread::sleep(interval);
             }
         });
