@@ -271,15 +271,20 @@ impl EngramHandler {
             ),
         )));
 
-        let _ = storage.with_connection(|conn| {
-            engram::search::warmup_hnsw_from_db(conn, &mut hnsw_index.write())
-        });
+        let search_config = SearchConfig::default();
+
+        // HNSW is opt-in: skip the warmup (full DB replay) when it is disabled.
+        if search_config.hnsw_enabled {
+            let _ = storage.with_connection(|conn| {
+                engram::search::warmup_hnsw_from_db(conn, &mut hnsw_index.write())
+            });
+        }
 
         Self {
             storage,
             embedder,
             fuzzy_engine: Arc::new(Mutex::new(FuzzyEngine::new())),
-            search_config: SearchConfig::default(),
+            search_config,
             realtime: None,
             embedding_cache: Arc::new(engram::embedding::EmbeddingCache::default()),
             search_cache: Arc::new(engram::search::SearchResultCache::new(
@@ -881,6 +886,7 @@ fn main() -> Result<()> {
         let drain_storage = storage.clone();
         let drain_embedder = embedder.clone();
         let drain_hnsw = handler.hnsw_index.clone();
+        let hnsw_enabled = handler.search_config.hnsw_enabled;
         let interval = std::time::Duration::from_secs(args.embedding_drain_interval_seconds);
         let batch_size = args.embedding_drain_batch_size;
 
@@ -894,7 +900,9 @@ fn main() -> Result<()> {
             // Drained embeddings are mirrored into the in-memory vector index
             // only after their transaction committed.
             let index_persisted = move |memory_id: i64, embedding: &[f32]| {
-                drain_hnsw.write().insert(memory_id, embedding)
+                if hnsw_enabled {
+                    drain_hnsw.write().insert(memory_id, embedding)
+                }
             };
 
             loop {
