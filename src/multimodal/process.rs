@@ -154,7 +154,12 @@ fn drain<R: Read + Send + 'static>(
         });
     if let Err(error) = spawned {
         // The sender was dropped with the closure, so `collect_output` reports it.
-        tracing::warn!(target = "engram::multimodal::process", %error, stream = name, "output reader spawn failed");
+        tracing::warn!(
+            target = "engram::multimodal::process",
+            error_class = %crate::observability::redact::io_class(&error),
+            stream = name,
+            "output reader spawn failed"
+        );
     }
     rx
 }
@@ -237,11 +242,19 @@ impl ChildGuard {
         if let Err(error) = self.child.kill() {
             // InvalidInput means it already exited; anything else is logged.
             if error.kind() != std::io::ErrorKind::InvalidInput {
-                tracing::warn!(target = "engram::multimodal::process", %error, "child kill failed");
+                tracing::warn!(
+                    target = "engram::multimodal::process",
+                    error_class = %crate::observability::redact::io_class(&error),
+                    "child kill failed"
+                );
             }
         }
         if let Err(error) = self.child.wait() {
-            tracing::warn!(target = "engram::multimodal::process", %error, "child wait failed");
+            tracing::warn!(
+                target = "engram::multimodal::process",
+                error_class = %crate::observability::redact::io_class(&error),
+                "child wait failed"
+            );
         }
         self.reaped = true;
     }
