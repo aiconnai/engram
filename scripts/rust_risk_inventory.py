@@ -251,6 +251,12 @@ class Gate:
 
 
 def _parse_cfg(toks: Sequence[Tok]):
+    """Parse a cfg predicate into ``(head, payload, value)`` triples.
+
+    Every node has the same 3-tuple shape: compound ``all(...)``/``any(...)``/
+    ``not(...)`` nodes are ``(name, args, None)``, ``key = "value"`` nodes are
+    ``("kv", key, value)`` and bare identifiers are ``("atom", name, None)``.
+    """
     pos = 0
 
     def expr():
@@ -268,13 +274,13 @@ def _parse_cfg(toks: Sequence[Tok]):
                 if toks[pos].text == ",":
                     pos += 1
             pos += 1
-            return (name, args)
+            return (name, args, None)
         if pos < len(toks) and toks[pos].text == "=":
             pos += 1
             val = toks[pos].text.strip('"')
             pos += 1
             return ("kv", name, val)
-        return ("atom", name)
+        return ("atom", name, None)
 
     node = expr()
     if pos != len(toks):

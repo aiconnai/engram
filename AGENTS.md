@@ -54,7 +54,7 @@ cargo build --release
 - **Build Velocity**: Nunca rode `cargo clean` sem confirmação prévia explícita. O cache incremental preserva a velocidade da suíte de testes.
 - **Testes**: Use `#[cfg(test)] mod tests` com `#[test]` functions
 - **Clippy**: Sempre execute `cargo clippy` antes de submeter PRs
-- **Migrations**: Ao alterar o schema, atualize `SCHEMA_VERSION` em `storage/migrations.rs` e os testes correspondentes
+- **Migrations**: Ao alterar o schema, atualize `SCHEMA_VERSION` em `src/storage/migrations/mod.rs` e os testes correspondentes (`src/storage/migrations/tests.rs`)
 
 ### Python SDK (`sdks/python/`)
 - **Async**: Use `async with EngramClient(...) as client` para gerenciar ciclo de vida
@@ -68,7 +68,7 @@ cargo build --release
 - **Documentação**: Use TSDoc (`/** */`) para todos os métodos públicos
 
 ## Armadilhas Conhecidas (Gotchas)
-1. **Schema Version Mismatch**: Testes em `storage/migrations.rs` têm versão hardcoded. Ao atualizar schema, atualize também os testes.
+1. **Schema Version Mismatch**: Testes em `src/storage/migrations/tests.rs` têm versão hardcoded. Ao atualizar schema, atualize também os testes.
 2. **Python Built-ins**: O parâmetro `filter` em `EngramClient.list()` foi renomeado para `filter_` para evitar sombra do built-in.
 3. **TypeScript Syntax**: Verifique cuidadosamente o fechamento de tipos em métodos que retornam objetos complexos (ex: `Promise<{...}>`).
 4. **Unicode Slicing**: Textos multilíngues sofrem variação de tamanho em bytes ao converter maiúsculas/minúsculas (ex: `ß` vs `ẞ`). Fatiar strings originais com índices de string normalizada causa panic no Rust.
@@ -140,7 +140,7 @@ o boundary de segurança do harness e a validação com evidência.
 # Harness bootstrap + gates (obrigatório)
 bash docs/harness/bin/bootstrap.sh
 bash docs/harness/bin/doctor.sh
-bash docs/harness/bin/sensors.sh          # runs just ci + doctor (pode demorar)
+bash docs/harness/bin/sensors.sh          # etapas de scripts/ci.sh (make ci) + doctor (pode demorar)
 bash docs/harness/bin/review-gate.sh pre harness-bootstrap
 
 # Verificar código Rust
@@ -149,8 +149,7 @@ cargo clippy && cargo fmt --check
 # Rodar os gates obrigatórios de CI localmente (equivalente ao que deve estar
 # verde no PR): formato, lint, testes core (Linux) e documentação.
 make ci
-# ou
-just ci
+# ou, se o `just` estiver instalado: just ci (alias do mesmo scripts/ci.sh)
 # Para ignorar falhas de validações opcionais localmente (ex.: dependências ausentes):
 # CI_ALLOW_OPTIONAL_TEST_FAILURES=1 make ci
 # Opcional: instale o hook local de pre-commit

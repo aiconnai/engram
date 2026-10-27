@@ -14,13 +14,29 @@ the reviewed changelog.
 
 ## Next Version Decision
 
-Use the next patch version after the latest released tag for release automation,
+Use the next patch version after the latest released tag (`latest_released_tag`
+in [`channel-matrix.toml`](channel-matrix.toml)) for release automation,
 documentation hygiene, claim hygiene, token/secret rotation, and other changes
-that do not alter public runtime behavior. After `v0.22.0`, that next patch
-version is `0.22.1`.
+that do not alter public runtime behavior.
 
-Use `0.22.0` when the next release includes product-facing changes to MCP
-tools, SDK APIs, CLI behavior, storage behavior, or agent workflows.
+Use the next minor version when the release includes product-facing changes to
+MCP tools, SDK APIs, CLI behavior, storage behavior, or agent workflows. The
+version in `Cargo.toml` must already equal the tag you intend to push; the
+release and SDK workflows fail closed when they differ.
+
+## Before Tagging
+
+Run these from the exact commit that will be tagged:
+
+1. `python3 scripts/bump-version.py --check` (versions, lockfiles, changelog).
+2. `python3 scripts/bump-version.py --release-plan --release-tag vX.Y.Z`
+   (the mapping the SDK workflow re-derives; see
+   [`SDK_PUBLISHING.md`](SDK_PUBLISHING.md#version-mapping)).
+3. Re-observe every registry and GitHub release and correct any stale
+   `observed_*` value in [`channel-matrix.toml`](channel-matrix.toml)
+   (`python3 scripts/check-release-channels.py --matrix docs/releases/channel-matrix.toml --read-only`),
+   then `python3 scripts/bump-version.py --refresh-matrix`. The matrix records
+   observations only; never edit them without observing the registry.
 
 ## Public Claims Gate
 

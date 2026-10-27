@@ -97,10 +97,7 @@ def run(
     except CandidateError as exc:
         print(json.dumps({"status": "fail", "errors": [str(exc)]}), file=sys.stderr)
         return 1
-    try:
-        output.unlink()
-    except FileNotFoundError:
-        pass
+    output.unlink(missing_ok=True)
     try:
         supervisor = environ.get(SUPERVISOR_ENV, DEFAULT_SUPERVISOR)
         if args.require_supervisor and supervisor.strip().lower() in LOCAL_SUPERVISORS:

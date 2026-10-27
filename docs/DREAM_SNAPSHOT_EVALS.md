@@ -1,5 +1,7 @@
 # Dream Snapshot Evaluation Fixtures
 
+> **Status: Implemented** — evidence: `src/dream/eval.rs`, `tests/dream_eval_tests.rs` (runner and MCP dispatch tests), and the `dream_eval_run` tool (`docs/MCP_TOOLS.md:288`), landed in e0ac9f28 (#61). The acceptance checklist below is not re-verified here; its boxes are left as written.
+
 This runbook defines the deterministic evaluation scaffold for
 `ENGRA-100` and RFC 0007. It is intentionally contract-first: the fixtures
 describe the behavior the storage, generator, freshness, MCP, and harness lanes

@@ -369,8 +369,11 @@ impl SearchResultCache {
         self.entries.retain(|_, v| !v.is_expired(ttl));
     }
 
-    /// Invalidate cache entries for a specific workspace
-    pub fn invalidate_for_workspace(&self, workspace: Option<&str>) {
+    /// Invalidate cache entries for a specific workspace.
+    ///
+    /// Returns how many entries were evicted.
+    pub fn invalidate_for_workspace(&self, workspace: Option<&str>) -> usize {
+        let mut evicted = 0usize;
         self.entries.retain(|_, v| {
             let should_invalidate = match workspace {
                 Some(ws) => {
@@ -388,9 +391,11 @@ impl SearchResultCache {
             };
             if should_invalidate {
                 self.stats.invalidations.fetch_add(1, Ordering::Relaxed);
+                evicted += 1;
             }
             !should_invalidate
         });
+        evicted
     }
 
     /// Invalidate cache entries that might contain a specific memory
@@ -410,13 +415,14 @@ impl SearchResultCache {
         });
     }
 
-    /// Clear all cache entries
-    pub fn clear(&self) {
+    /// Clear all cache entries. Returns how many entries were evicted.
+    pub fn clear(&self) -> usize {
         let count = self.entries.len();
         self.entries.clear();
         self.stats
             .invalidations
             .fetch_add(count as u64, Ordering::Relaxed);
+        count
     }
 
     /// Record feedback for a query (adjusts adaptive threshold)

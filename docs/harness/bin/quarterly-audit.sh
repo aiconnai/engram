@@ -87,7 +87,7 @@ EOF
 
 append_cmd "Current branch and commit" "git branch --show-current && git log -1 --oneline"
 append_cmd "Working tree status" "git status --short"
-append_cmd "Harness policy references" "rg -n 'WHAT_WE_DONT_DO|CODE_REVIEW_POLICY|review-gate|doctor.sh|sensors.sh|baseline.sh|quarterly-audit' docs/harness README.md AGENTS.md Claude.md 2>/dev/null | head -160"
+append_cmd "Harness policy references" "rg -n 'WHAT_WE_DONT_DO|CODE_REVIEW_POLICY|review-gate|doctor.sh|sensors.sh|baseline.sh|quarterly-audit' docs/harness README.md AGENTS.md CLAUDE.md 2>/dev/null | head -160"
 append_cmd "Schema and migration references" "rg -n 'SCHEMA_VERSION|migration|migrations' src/storage tests docs 2>/dev/null | head -160"
 append_cmd "MCP reference count and manual count risks" "rg -n 'MCP_TOOLS|[0-9]+\\+? tools|tools exposed|Available MCP Tools' README.md docs src sdks 2>/dev/null | head -160"
 append_cmd "Temporary, legacy, and cleanup markers" "rg -n -i 'temporary|legacy|compat|deprecated|TODO: remove|remove after|sunset|hack|workaround' src tests docs sdks scripts 2>/dev/null | head -180"

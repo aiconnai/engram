@@ -2,11 +2,16 @@
 adr: ADR-STORAGE-20260816-1
 track: storage-architecture
 service: engram-core
-status: Accepted
+status: Implemented
 owner: Engram Architecture Team
 created: 2026-08-16
 supersedes: ADR-STORAGE-20260714-1
 ---
+
+> **Implemented in 08cb17a4 (v0.24.0).** The `turso` Cargo feature, `src/storage/turso_backend/`,
+> `tests/turso_backend_tests.rs` and the `libsql` dependency were removed, together with the
+> advisory exceptions that only the libSQL stack required. Migration path:
+> `docs/migrations/turso-sunset.md`.
 
 # Turso / libSQL Backend Deprecation and Sunset Strategy
 

@@ -69,8 +69,7 @@ cargo test
 4. Run the test/lint gate for PRs:
    ```bash
    make ci
-   # or
-   just ci
+   # or, when `just` is installed: just ci (alias of the same scripts/ci.sh)
    # Equivalent to (and intentionally includes):
    # cargo fmt --all -- --check
    # cargo clippy --all-targets --all-features -- -D warnings
