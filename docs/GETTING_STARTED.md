@@ -350,6 +350,7 @@ This enables cross-machine synchronization with encrypted storage.
 |----------|-------------|---------|------------------------|
 | `ENGRAM_CLEANUP_INTERVAL` | Seconds between expired-memory cleanup passes. `0` disables the cleanup thread. | `3600` (`src/bin/server.rs:108`) | none |
 | `ENGRAM_GRPC_BIND_ADDRESS` | IP address the gRPC transport binds to (used with `--transport grpc`). | `127.0.0.1` (`src/bin/server.rs:186`) | `grpc` feature |
+| `ENGRAM_HNSW_ENABLED` | Enables the in-memory HNSW vector index (`--hnsw-enabled`). Off by default until the RFC 0003 benchmark exists; when off, no index is built at startup or maintained on writes. | `false` (`src/bin/server.rs:69`) | none |
 | `ENGRAM_WS_BIND_ADDRESS` | IP address the WebSocket real-time server binds to. Only used when `ENGRAM_WS_PORT` is greater than `0`. | `127.0.0.1` (`src/bin/server.rs:145`) | none (WebSocket server starts only when `ENGRAM_WS_PORT > 0`, `src/bin/server.rs:1052`) |
 | `ENGRAM_WS_MAX_CONNECTIONS` | Maximum simultaneous upgraded WebSocket connections. Must be a positive integer no greater than `10000`. | `128` (`src/realtime/config.rs:12`) | none |
 | `ENGRAM_WS_MAX_MESSAGE_BYTES` | Maximum bytes accepted in one inbound WebSocket message or frame. Must be a positive integer no greater than `16777216` (16 MiB). | `65536` (64 KiB) (`src/realtime/config.rs:13`) | none |

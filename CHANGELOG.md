@@ -27,6 +27,7 @@ package registries, and dated external sources.
 - `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
 - `permission_mode_status` reports write-flag escalation (`write_flag_params`, `required_mode_with_write_flags`, `allowed_with_write_flags`).
 - Harness: `check-live-state.sh` requires the newest PASS review while the active task has none and matches review versions by exact slug; `harness-risk-register.sh` allocates ids past RISK-0008 and validates under Psych 4.
+- The HNSW index is reconciled with SQLite (expiry, supersede, merge, GC, content rewrites) on drain/cleanup cycles and compacts tombstones live; warmup no longer replays stale vectors or checkpointed deleted ids.
 - Deleted (single, cascade, batch) and content-edited memories are removed from the in-memory HNSW index, saving the index no longer persists removed vectors, and HNSW semantic search widens its bounded candidate fetch so `limit` holds after filtering.
 - `dream_consolidation_status` and `dream_insights` were documented as always available but require `dream-phase`; tool feature gating now has a single source (`catalog::required_features`).
 - `CrossEncoderReranker` returns an explicit "not implemented" error instead of fabricating scores, and model routing no longer reports the placeholder as operational.
@@ -36,7 +37,7 @@ package registries, and dated external sources.
 ### Changed
 
 - Search (from `e04d3307`): catalog default `limit` is 20, `offset` and `include_archived` are accepted, `SearchOptions.offset` is public, and `memory_search_by_identity` / `memory_session_search` are read-only. Python and TypeScript SDKs default `search` to limit 20 and accept `offset` (Python also `include_archived`).
-- **HNSW is opt-in** — `hnsw_enabled` defaults to `false` until the benchmark required by RFC 0003 exists.
+- **HNSW is opt-in** — `hnsw_enabled` defaults to `false` until the benchmark required by RFC 0003 exists; enable it with `ENGRAM_HNSW_ENABLED` / `--hnsw-enabled`. When off, no index is built at startup or maintained on writes. HNSW widening stops after two empty hydration rounds.
 - Snapshot loader reads archive entry names from the central directory and rejects undecodable names.
 - DuckDB bundled engine 1.4.4 → 1.5.6; `sqlite-vec` is a dev-dependency (benchmarks only).
 - CI pins cargo-audit 0.22.0 and cargo-outdated 0.19.0 (`--locked`); the TypeScript live lane uses Node 24; the docs job runs the public-claims, advertised-contracts and release-version checks.
