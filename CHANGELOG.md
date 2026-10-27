@@ -12,6 +12,10 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-27
+
+Release candidate prepared for review; tag and package publication are pending.
+
 ### Security
 
 - **Batch tools enforce per-item workspaces** — `memory_create_batch` and `memory_ingest_fact_batch` authorize every item's `workspace` (central check, gRPC pre-check and handlers), closing a cross-workspace write introduced by the search/auth hardening commit `e04d3307`. Batch item arrays are derived from the catalog schema and fail closed on unreadable nested `workspace` claims.
@@ -22,40 +26,6 @@ package registries, and dated external sources.
 - **Log redaction (RISK-0002)** — sync/cloud, hooks, multimodal and the watcher (including its daemon) no longer log bucket/object keys, workspace and tool names, filesystem paths, `engram_url`, dry-run memory content, subprocess stderr or raw error text; errors are logged by class (`ENGRAM_LOG_ERROR_DETAIL=1` restores detail for debugging).
 - **Dependency advisories** — zip 9.0.5 and duckdb 1.10506.1 (RUSTSEC-2026-0367/0368/0369), tokio 1.53.3 (RUSTSEC-2026-0386), rustls-webpki 0.103.16, webpki-roots 1.0.11 and ctutils 0.4.6 (RUSTSEC-2026-0382/0381/0385); crypto-bigint 0.5 removed from the graph (RUSTSEC-2026-0387) by not enabling `aws-sdk-s3/sigv4a`.
 
-### Fixed
-
-- `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
-- `permission_mode_status` reports write-flag escalation (`write_flag_params`, `required_mode_with_write_flags`, `allowed_with_write_flags`).
-- Harness: `check-live-state.sh` requires the newest PASS review while the active task has none and matches review versions by exact slug; `harness-risk-register.sh` allocates ids past RISK-0008 and validates under Psych 4.
-- The HNSW index is reconciled with SQLite (expiry, supersede, merge, GC, content rewrites) on drain/cleanup cycles and compacts tombstones live; warmup no longer replays stale vectors or checkpointed deleted ids.
-- Deleted (single, cascade, batch) and content-edited memories are removed from the in-memory HNSW index, saving the index no longer persists removed vectors, and HNSW semantic search widens its bounded candidate fetch so `limit` holds after filtering.
-- `dream_consolidation_status` and `dream_insights` were documented as always available but require `dream-phase`; tool feature gating now has a single source (`catalog::required_features`).
-- `CrossEncoderReranker` returns an explicit "not implemented" error instead of fabricating scores, and model routing no longer reports the placeholder as operational.
-- SDK release workflow no longer hardcodes `v0.22.0` / `0.5.0`: it derives the core tag and SDK versions from the manifests and re-checks them after environment approval; `sdks/typescript/package-lock.json` synced to 0.7.0.
-- Quality-candidate scripts no longer use empty `except` blocks; the Rust risk inventory parser returns one tuple shape.
-
-### Changed
-
-- Search (from `e04d3307`): catalog default `limit` is 20, `offset` and `include_archived` are accepted, `SearchOptions.offset` is public, and `memory_search_by_identity` / `memory_session_search` are read-only. Python and TypeScript SDKs default `search` to limit 20 and accept `offset` (Python also `include_archived`).
-- **HNSW is opt-in** — `hnsw_enabled` defaults to `false` until the benchmark required by RFC 0003 exists; enable it with `ENGRAM_HNSW_ENABLED` / `--hnsw-enabled`. When off, no index is built at startup or maintained on writes. HNSW widening stops after two empty hydration rounds.
-- Snapshot loader reads archive entry names from the central directory and rejects undecodable names.
-- DuckDB bundled engine 1.4.4 → 1.5.6; `sqlite-vec` is a dev-dependency (benchmarks only).
-- CI pins cargo-audit 0.22.0 and cargo-outdated 0.19.0 (`--locked`); the TypeScript live lane uses Node 24; the docs job runs the public-claims, advertised-contracts and release-version checks.
-- `bump-version.py` verifies lockfiles and `__version__` and adds a read-only `--release-plan` mode.
-
-### Removed
-
-- S3 multi-region access point (SigV4a) signing.
-
-### Docs
-
-- Public claims corrected: measured latency (FTS5 p50 3.2 ms, hybrid p50 250 ms at 100K×384d) instead of "sub-millisecond"; nonexistent model "native adapters" and unsourced competitor tool counts removed; gRPC and ONNX marked optional; tool counts are 301 catalog / 254 default build.
-- RFC, ADR, plan and spec statuses record their implementation evidence; ROADMAP tool names corrected and cross-host federation marked not implemented.
-- Shared decision-triage guide trimmed for publication.
-- Optional server variables documented (`ENGRAM_CLEANUP_INTERVAL`, `ENGRAM_GRPC_BIND_ADDRESS`, `ENGRAM_WS_*`, `MEILISEARCH_*`); vector-search docs corrected (HNSW opt-in, sqlite-vec benchmarks only); Rust risk inventory regenerated without the removed Turso backend.
-
-## [0.24.0] - 2026-10-14
-
 ### Added
 
 - **RFC 0009, 0010, and 0011 Implemented** — Promoted and wired MCP Contract Validation (`docs/rfcs/0009-mcp-contract-validation.md`), Permission Modes (`docs/rfcs/0010-permission-modes.md`), and Deterministic Model Routing (`docs/rfcs/0011-model-routing.md`, `governance/models.toml`, `scripts/select-model.py`).
@@ -65,6 +35,14 @@ package registries, and dated external sources.
 
 ### Changed
 
+- Search (from `e04d3307`): catalog default `limit` is 20, `offset` and `include_archived` are accepted, `SearchOptions.offset` is public, and `memory_search_by_identity` / `memory_session_search` are read-only. Python and TypeScript SDKs default `search` to limit 20 and accept `offset` (Python also `include_archived`).
+- **HNSW is opt-in** — `hnsw_enabled` defaults to `false` until the benchmark required by RFC 0003 exists; enable it with `ENGRAM_HNSW_ENABLED` / `--hnsw-enabled`. When off, no index is built at startup or maintained on writes. HNSW widening stops after two empty hydration rounds.
+- Snapshot loader reads archive entry names from the central directory and rejects undecodable names.
+- DuckDB bundled engine 1.4.4 → 1.5.6; `sqlite-vec` is a dev-dependency (benchmarks only).
+- CI pins cargo-audit 0.22.0 and cargo-outdated 0.19.0 (`--locked`); the TypeScript live lane uses Node 24; the docs job runs the public-claims, advertised-contracts and release-version checks.
+- `bump-version.py` verifies lockfiles and `__version__` and adds a read-only `--release-plan` mode.
+- Miri smoke uses 256 deterministic Unicode oracle cases; native tests retain all 20,000 cases and the explicit adversarial matrix runs in both modes.
+- **Breaking cache-clear response:** `memory_cache_clear` now returns `{success, entries_cleared}` for global, explicit-workspace and principal-bound calls. Consumers reading `cleared`, `scope` or `workspace` must migrate; `search_cache_clear` keeps its existing response. See the [migration guide](docs/migrations/v0.24.0-cache-clear.md).
 - **Workspace-scoped `media_assets` schema migration `v49` (`#235`)** — Rebuilt `media_assets` with composite `PRIMARY KEY (workspace, file_hash)` and `idx_media_assets_workspace_memory` so identical media bytes ingested in different workspaces remain strictly isolated.
 - **Bounded multimodal media reads (`#236`)** — Enforced `MAX_MEDIA_FILE_BYTES = 50 MiB` (`open_bounded_media_file` + `Read::take`) before hashing or reading media files in `src/storage/media_ops.rs` and `src/mcp/handlers/multimodal.rs`.
 - **Cloud sync supply chain & atomic snapshot upload (`#239`, `#240`, `G1`)** — Upgraded `aws-sdk-s3` (`1.129.0`), `aws-config` (`1.8.15`), and `rustls` (`0.23.46`), removing `RUSTSEC-2026-0253`, `RUSTSEC-2026-0346`, and `RUSTSEC-2026-0349` from the default/cloud dependency graph; isolated `CloudStorage::upload` snapshots into unique sibling tempfiles (`Invariante #27`).
@@ -87,6 +65,17 @@ package registries, and dated external sources.
 
 ### Fixed
 
+- `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
+- `permission_mode_status` reports write-flag escalation (`write_flag_params`, `required_mode_with_write_flags`, `allowed_with_write_flags`).
+- Harness: `check-live-state.sh` requires the newest PASS review while the active task has none and matches review versions by exact slug; `harness-risk-register.sh` allocates ids past RISK-0008 and validates under Psych 4.
+- The HNSW index is reconciled with SQLite (expiry, supersede, merge, GC, content rewrites) on drain/cleanup cycles and compacts tombstones live; warmup no longer replays stale vectors or checkpointed deleted ids.
+- Deleted (single, cascade, batch) and content-edited memories are removed from the in-memory HNSW index, saving the index no longer persists removed vectors, and HNSW semantic search widens its bounded candidate fetch so `limit` holds after filtering.
+- `dream_consolidation_status` and `dream_insights` were documented as always available but require `dream-phase`; tool feature gating now has a single source (`catalog::required_features`).
+- `CrossEncoderReranker` returns an explicit "not implemented" error instead of fabricating scores, and model routing no longer reports the placeholder as operational.
+- SDK release workflow no longer hardcodes `v0.22.0` / `0.5.0`: it derives the core tag and SDK versions from the manifests and re-checks them after environment approval; `sdks/typescript/package-lock.json` synced to 0.7.0.
+- SDK artifact metadata maps the npm registry channel to TypeScript compatibility and excludes its own output on retries, so generation works for both channels and is repeatable.
+- Quality-candidate scripts no longer use empty `except` blocks; the Rust risk inventory parser returns one tuple shape.
+- Hierarchical scope trees now attach children to their direct parents, preserving sibling branches and orphan roots; previously every stored scope could be returned as a separate root.
 - **PDF worker coverage profile under `RLIMIT_FSIZE = 0`** — Integration tests now spawn `engram-pdf-worker` with `LLVM_PROFILE_FILE=/dev/null` so coverage-instrumented builds do not fail with `SIGXFSZ` on exit.
 - **macOS `SQLITE_READONLY` (`1544`) `-shm` race retry (`#238`)** — `Storage::with_connection` and `Storage::with_read_connection` now retry transient `SQLITE_READONLY` (`1544`) errors when concurrent readers open `-shm` in WAL mode on macOS.
 - **SQLite artifact permission hardening dropped POSIX locks (G1)** — Restricting permissions on the database, WAL and SHM files used open/close on the live files, which drops the process's POSIX locks and could lose WAL frames. Permissions are now set by path (`fchmodat` without following symlinks), and caller-controlled paths that resolve to the active database are refused.
@@ -94,7 +83,15 @@ package registries, and dated external sources.
 
 ### Removed
 
+- S3 multi-region access point (SigV4a) signing.
 - **Turso/libSQL backend (breaking Rust/build change)** — Completed the v0.24.0 sunset from [ADR-STORAGE-20260816-1](docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md). Removed the `turso` Cargo feature, optional `libsql` dependency, `storage::turso_backend` module, and `TursoBackend` / `TursoConfig` exports. Builds requesting `--features turso` and Rust imports of those types must change. SQLite WAL remains the canonical store, with optional S3/R2 backup sync through the existing `cloud` feature. The legacy backend had a separate schema runner; existing Turso databases are not automatically converted or guaranteed to open as Engram SQLite databases. See the [migration guide](docs/migrations/turso-sunset.md).
+
+### Docs
+
+- Public claims corrected: measured latency (FTS5 p50 3.2 ms, hybrid p50 250 ms at 100K×384d) instead of "sub-millisecond"; nonexistent model "native adapters" and unsourced competitor tool counts removed; gRPC and ONNX marked optional; tool counts are 301 catalog / 254 default build.
+- RFC, ADR, plan and spec statuses record their implementation evidence; ROADMAP tool names corrected and cross-host federation marked not implemented.
+- Shared decision-triage guide trimmed for publication.
+- Optional server variables documented (`ENGRAM_CLEANUP_INTERVAL`, `ENGRAM_GRPC_BIND_ADDRESS`, `ENGRAM_WS_*`, `MEILISEARCH_*`); vector-search docs corrected (HNSW opt-in, sqlite-vec benchmarks only); Rust risk inventory regenerated without the removed Turso backend.
 
 ---
 

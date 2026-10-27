@@ -332,7 +332,12 @@ mod tests {
             state ^= state >> 27;
             (state.wrapping_mul(0x2545_F491_4F6C_DD1D) >> 33) as usize % bound
         };
-        for _ in 0..20_000 {
+        // Miri interprets both the matcher and its allocating reference oracle;
+        // 20,000 cases exceed the nightly smoke's 1,800 s wall cap. Keep that
+        // native regression budget and run the same seeded prefix under Miri,
+        // alongside the full explicit adversarial Unicode matrix above.
+        let cases = if cfg!(miri) { 256 } else { 20_000 };
+        for _ in 0..cases {
             let text: String = (0..next(12))
                 .map(|_| ALPHABET[next(ALPHABET.len())])
                 .collect();

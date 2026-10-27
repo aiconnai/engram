@@ -1,0 +1,33 @@
+# cargo-mutants configuration for the weekly/manual mutation lane
+# (.github/workflows/nightly.yml, job `mutants`).
+#
+# Owner: Ronaldo (engram maintainer). Task Q3 review round 1.
+#
+# Why scoped: the whole library is ~151k lines. Mutating all of it cannot finish
+# inside a CI job, and cargo-mutants exits non-zero on any missed mutant, so a
+# whole-lib run would be permanently red. The lane stays FAIL-CLOSED (a missed or
+# timed-out mutant fails the job; there is no continue-on-error) but is limited
+# to small, pure or well-unit-tested modules where a surviving mutant means a
+# real test gap:
+#   - src/text_util.rs                      UTF-8 boundary helpers (task C3)
+#   - src/storage/scoping.rs                scope path parsing/ancestry (workspace scope)
+#   - src/intelligence/entity_extraction.rs entity extraction
+#   - src/auth/transport_principal.rs       workspace/permission binding of principals
+#
+# Estimated size: roughly 130 mutants, ~1.5 min each, 2 jobs => about 1.5-2 h
+# (UNMEASURED: cargo-mutants was not run locally). The job timeout is 240 min.
+#
+# How to widen: add a path glob below (one module at a time), watch the job
+# duration in the uploaded `mutation-report` artifact (mutants.out/), and only
+# keep the module if the lane still finishes well inside `timeout-minutes`.
+# To narrow or disable: remove globs or disable the job in nightly.yml with an
+# explicit owner note; never mask the result. Update
+# scripts/test_optional_lane_contracts.py if the contract changes.
+examine_globs = [
+    "src/text_util.rs",
+    "src/storage/scoping.rs",
+    "src/intelligence/entity_extraction.rs",
+    "src/auth/transport_principal.rs",
+]
+
+examine_re = ["^src/auth/transport_principal\\.rs:31:29:\\ replace\\ \\|\\|\\ with\\ \\&\\&\\ in\\ TransportPrincipal::from_process_bearer$", "^src/auth/transport_principal\\.rs:92:9:\\ replace\\ <impl\\ std::fmt::Display\\ for\\ TransportPrincipalError>::fmt\\ \\->\\ std::fmt::Result\\ with\\ Ok\\(Default::default\\(\\)\\)$", "^src/intelligence/entity_extraction\\.rs:204:30:\\ replace\\ \\&\\&\\ with\\ \\|\\|\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:216:28:\\ replace\\ \\+=\\ with\\ \\*=\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:218:35:\\ replace\\ >=\\ with\\ <\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:225:50:\\ replace\\ <\\ with\\ ==\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:225:50:\\ replace\\ <\\ with\\ <=\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:240:36:\\ replace\\ \\+=\\ with\\ \\-=\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:244:35:\\ replace\\ >=\\ with\\ <\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:251:51:\\ replace\\ <\\ with\\ <=\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:268:35:\\ replace\\ >=\\ with\\ <\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:283:36:\\ replace\\ \\+=\\ with\\ \\*=\\ in\\ extract_entities$", "^src/intelligence/entity_extraction\\.rs:341:5:\\ replace\\ is_common_domain\\ \\->\\ bool\\ with\\ false$", "^src/intelligence/entity_extraction\\.rs:361:5:\\ replace\\ is_common_phrase\\ \\->\\ bool\\ with\\ false$", "^src/intelligence/entity_extraction\\.rs:397:5:\\ replace\\ auto_link_memory\\ \\->\\ Result<usize>\\ with\\ Ok\\(0\\)$", "^src/intelligence/entity_extraction\\.rs:397:5:\\ replace\\ auto_link_memory\\ \\->\\ Result<usize>\\ with\\ Ok\\(1\\)$", "^src/intelligence/entity_extraction\\.rs:441:26:\\ replace\\ \\+=\\ with\\ \\*=\\ in\\ auto_link_memory$", "^src/storage/scoping\\.rs:335:29:\\ replace\\ ==\\ with\\ !=\\ in\\ build_tree$", "^src/storage/scoping\\.rs:346:70:\\ replace\\ ==\\ with\\ !=\\ in\\ build_tree$", "^src/text_util\\.rs:19:18:\\ replace\\ \\-=\\ with\\ /=\\ in\\ floor_char_boundary$", "^src/text_util\\.rs:26:14:\\ replace\\ >=\\ with\\ <\\ in\\ ceil_char_boundary$", "^src/text_util\\.rs:31:18:\\ replace\\ \\+=\\ with\\ \\*=\\ in\\ ceil_char_boundary$", "^src/text_util\\.rs:138:32:\\ replace\\ \\+\\ with\\ \\*\\ in\\ LowercaseIndex<'a>::find_window$"]

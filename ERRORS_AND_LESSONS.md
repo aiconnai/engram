@@ -125,6 +125,12 @@ Tech Debt, Security, Performance, Fragile Areas
 
 ---
 
+### [API] SDK registry channels differ from compatibility identifiers
+**Context:** `verify-sdk-artifacts.sh --write-metadata npm` preparing SDK 0.7.0.
+**Wrong:** Looking up `sdk=npm` in a matrix whose SDK identifier is `typescript`, or hashing an existing metadata output when repeating generation.
+**Right:** Map the registry channel to its SDK identifier explicitly and exclude only the metadata output from the artifact hash list. Exercise both channels twice and assert compatibility, source SHA and the exact archive hashes.
+**Date:** 2026-10-27
+
 ## Rationalization Table
 
 Common excuses that lead to mistakes. If you catch yourself thinking these, stop.

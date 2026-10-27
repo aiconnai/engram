@@ -75,11 +75,13 @@ import hashlib,json,pathlib,sys,tomllib
 root=pathlib.Path(sys.argv[1]); out=pathlib.Path(sys.argv[2]); sha=sys.argv[3]; sdk=sys.argv[4]
 matrix=tomllib.loads((root/"docs/releases/channel-matrix.toml").read_text())
 channel_id="pypi" if sdk=="python" else "npm"
+compat_sdk="python" if sdk=="python" else "typescript"
 channel=next(item for item in matrix["channels"] if item["id"]==channel_id)
-compat=next(item for item in matrix["sdk_compatibility"] if item["sdk"]==sdk)
-files=[{"name":path.name,"sha256":hashlib.sha256(path.read_bytes()).hexdigest()} for path in sorted(out.iterdir())]
+compat=next(item for item in matrix["sdk_compatibility"] if item["sdk"]==compat_sdk)
+metadata_name="python-sdk-metadata.json" if sdk=="python" else "npm-sdk-metadata.json"
+files=[{"name":path.name,"sha256":hashlib.sha256(path.read_bytes()).hexdigest()} for path in sorted(out.iterdir()) if path.name!=metadata_name]
 metadata={"repository":"aiconnai/engram","channel":channel_id,"package":channel["package"],"version":channel["local_version"],"sha":sha,"compatible_core_min":compat["compatible_core_min"],"compatible_core_max":compat["compatible_core_max"],"files":files}
-(out/("python-sdk-metadata.json" if sdk=="python" else "npm-sdk-metadata.json")).write_text(json.dumps(metadata,sort_keys=True,indent=2)+"\n")
+(out/metadata_name).write_text(json.dumps(metadata,sort_keys=True,indent=2)+"\n")
 ' "$repo_root" "$artifact_dir" "$expected_sha" "$channel"
   echo "verify-sdk-artifacts metadata: PASS ($channel)"
   exit 0

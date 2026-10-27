@@ -8,7 +8,7 @@
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
 | Last sensors | `2026-10-23 status=pass mode=full timestamp=2026-10-23T20:10:00Z duration_sec=310, sem exclusões (receipts commitados em 08cb17a4; rodado no candidato do sunset, run anterior falhou em offline_lane). Sem receipt commitado de 2026-09-03 a 2026-10-23; não reexecutado depois. Detalhe em progress/2026-10-26-remediation.md.` |
-| Last commit | `976fbe8b` |
+| Last commit | `2e84a594` |
 | Last live-state check | `2026-10-27 — Claude, após o merge do #260 no main: Last commit = 976fbe8b, primeiro pai do merge do #262 (último da pilha); vale estrito no main depois desse merge. bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Não substitui post-gate.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
@@ -23,15 +23,15 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat, 2026-10-27): push e um PR por frente (#244–#262), opção A; merges
-  feitos pelo Claude por exceção explícita à regra de merge humano, só para esta pilha. Ordem, SHAs e CI:
-  [log da sprint](./progress/2026-10-26-remediation.md#publicação-2026-10-27).
+- **Autorização atual** (owner, chat, 2026-10-27): diagnóstico do Nightly, fixes locais e preparação
+  de release/verify-tag/aviso. [Plano do follow-up](./plans/2026-10-27-nightly-release-readiness.md).
+  A autorização histórica de merges da pilha #244–#262 encerrou às 09:35Z.
 - **Limites**: push, PR e merge fora desta pilha, tag, release, publicação em registries, remoção de
   branches/worktrees e settings do GitHub **não** estão autorizados (aguardam decisão explícita do owner);
   sem dados reais, chamadas pagas ou produção. [Negativo do harness](./WHAT_WE_DONT_DO.md); [escopo canônico](./SPEC.md).
-- **Última evidência**: [sensores](./progress/2026-10-26-remediation.md#evidência-de-sensores): full PASS de
-  2026-10-23 (310 s), o único recibo commitado desde 2026-09-03; nenhum gate completo roda nesta sprint
-  antes do integrador. Post-gate do sunset `PENDING` (sem receipt humano).
+- **Última evidência**: [Nightly e follow-up](./progress/2026-10-26-remediation.md#follow-up-nightly-e-release-2026-10-27): run
+  `40479914277` falhou por cap Miri e mutações; inventário Miri local passou após amostragem específica.
+  make ci PASS (2351 testes); 18 mutantes detectados, quatro timeouts. Receipts humanos pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
@@ -39,10 +39,9 @@
 
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 
-WT1 `fix/workspace-batch-auth`, WT2 `fix/supply-chain-2026-10`, WT3 `fix/release-pipeline`, WT4
-`fix/mcp-surface-honesty`, WT6 `docs/product-status`: abertas, não verificadas por esta branch. WT5
-`chore/harness-live-state`: esta branch. INT: integração e SHAs finais, pendente. Escopo, aceite e
-checklist pós-merge no [plano](./plans/2026-10-26-remediation-plan.md#frentes).
+Pilha #244–#262 mesclada no main `2e84a594` em 2026-10-27. Follow-up Nightly/release local preparado;
+evidência e pendências no [relatório](./audits/2026-10-27-nightly-release-readiness.md).
+O [log ativo](./progress/2026-10-26-remediation.md) preserva a integração e os limites de autorização.
 
 ## Programa anterior — comprehensive improvement, ondas 0-6 (concluído em 2026-10-14)
 

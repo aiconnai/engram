@@ -47,6 +47,18 @@
 - **Gates**: `bootstrap.sh`, `doctor.sh`, `check-live-state.sh` estrito, lane offline e `git diff --check`.
   O gate completo (`sensors.sh`) e o post-gate com receipt humano ficam com o integrador/owner.
 
+## Follow-up autorizado — 2026-10-27
+
+A pilha #244–#262 está mesclada no main `2e84a594`. O GO antigo encerrou às 09:35Z.
+Novo GO do owner (chat): diagnosticar Nightly, corrigir defeitos confirmados e lacunas
+relevantes de testes, resolver a proposta de verify-tag e preparar release/aviso de migração;
+entregar evidências e recomendação antes de publicar ou executar mudanças operacionais.
+O [plano do follow-up](plans/2026-10-27-nightly-release-readiness.md) detalha paths e aceite.
+Permite alterações e verificações locais; não autoriza push/PR/merge, tags de release,
+publicação, envio de avisos, deleções ou settings. Os limites históricos acima referem-se
+à frente WT5 original; este follow-up inclui os testes, o fix de scoping e os defeitos confirmados do gerador
+de metadados de SDK ali delimitados.
+
 ## Tarefa anterior: Turso/libSQL sunset v0.24.0
 
 - **Status**: implementação concluída e commitada em `08cb17a4` (2026-10-23); sensores completos PASS

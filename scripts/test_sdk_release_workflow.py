@@ -7,12 +7,15 @@ every safety gate still present, and the publish jobs re-derive the version mapp
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
 import unittest
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -178,6 +181,45 @@ class TestPreflightGuardBehaviour(unittest.TestCase):
         code, _, log = self.run_guard(INPUT_TAG="v0.24.0")
         self.assertNotEqual(code, 0)
         self.assertIn("dry-run does not accept a release tag", log)
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash is required")
+class TestArtifactMetadata(unittest.TestCase):
+    def test_registry_channels_map_to_sdk_compatibility_and_can_be_repeated(self):
+        matrix = tomllib.loads((REPO_ROOT / "docs/releases/channel-matrix.toml").read_text())
+        for channel, sdk, registry, filenames in (
+            ("python", "python", "pypi", ("fixture.whl", "fixture.tar.gz")),
+            ("npm", "typescript", "npm", ("fixture.tgz",)),
+        ):
+            with self.subTest(channel=channel), tempfile.TemporaryDirectory() as tmp:
+                artifacts = Path(tmp)
+                for name in filenames:
+                    (artifacts / name).write_bytes(b"synthetic archive bytes for metadata hashing")
+                command = [
+                    "bash", str(REPO_ROOT / "scripts/verify-sdk-artifacts.sh"),
+                    "--write-metadata", channel, "--artifact-dir", tmp,
+                    "--expected-sha", "1" * 40,
+                ]
+                metadata_path = artifacts / f"{channel}-sdk-metadata.json"
+                previous = None
+                for _ in range(2):
+                    result = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    metadata = json.loads(metadata_path.read_text())
+                    policy = next(row for row in matrix["channels"] if row["id"] == registry)
+                    compatibility = next(row for row in matrix["sdk_compatibility"] if row["sdk"] == sdk)
+                    self.assertEqual(metadata["channel"], registry)
+                    self.assertEqual(metadata["version"], policy["local_version"])
+                    self.assertEqual(metadata["sha"], "1" * 40)
+                    for key in ("compatible_core_min", "compatible_core_max"):
+                        self.assertEqual(metadata[key], compatibility[key])
+                    self.assertEqual(metadata["files"], [
+                        {"name": name, "sha256": hashlib.sha256((artifacts / name).read_bytes()).hexdigest()}
+                        for name in sorted(filenames)
+                    ])
+                    if previous is not None:
+                        self.assertEqual(metadata, previous, "metadata must not hash itself on retry")
+                    previous = metadata
 
 
 if __name__ == "__main__":

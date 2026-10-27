@@ -183,3 +183,42 @@ bypass de admin. GO de 5 h, até 09:35Z; tag, release, registries, deleções e 
   - `Advertised Contracts` no #257, #258 e #259: o baseline das 9 variáveis documentadas pelo #257 só é regenerado em `127e3e89` (#260), como na integração. Exceção explícita, registrada em comentário no #257; voltou a passar no #260.
   - Runs de CI no `main` (push e agendados, incluindo um Nightly atrasado) foram cancelados durante a cadeia para liberar runners: cada árvore intermediária já tinha sido testada no PR. O CI do merge do #262 roda completo.
 - **Live state**: `Last commit` = `976fbe8b` (merge do #260), primeiro pai do merge do #262.
+
+## Follow-up Nightly e release (2026-10-27)
+
+Novo GO do owner, chat: diagnosticar Nightly, corrigir defeitos confirmados e lacunas relevantes
+de testes, resolver a proposta de verify-tag e preparar release e aviso de migração. Entregar
+evidências e recomendação antes de publicar ou executar mudanças operacionais. Não renova
+o GO histórico de push/PR/merge; sem tags de release, publicações, avisos enviados, deleções,
+settings ou recibos humanos fabricados.
+
+- Base: `2e84a59422b3659aaaf25c69dbe01b01ab321332`, checkout limpo; bootstrap e doctor executados.
+- [Plano](../plans/2026-10-27-nightly-release-readiness.md),
+  [canvas](../canvas/2026-10-27-nightly-release-readiness.md),
+  [evidência](../audits/2026-10-27-nightly-release-readiness.md),
+  [readiness](../../releases/v0.24.0-readiness.md).
+- Bug confirmado: árvore de escopos achatada por ordenar reverso e depois consumir com pop;
+  dois testes novos falharam antes do fix. Corrigida ordem; preservar órfãos e irmãos.
+- Lacunas: Bearer vazio, diagnósticos, flags/caps/contadores de extração, filtros e persistência
+  de auto-link. Miri mantém 20.000 casos nativos e interpreta prefixo de 256 do mesmo seed.
+- `CHANGELOG.md`: remediação incorporada à seção 0.24.0 para entrar nas notas extraídas pelo
+  workflow. Data é de preparação do candidato; publicação ainda pendente.
+- Pre-gate manual gerou só prompt advisory (sem inferência paga). Review independente e
+  receipt humano do candidato final pendentes; não há post-gate PASS desta sessão.
+
+- Fechamento técnico local: make ci PASS (2351 testes, 2 skips preexistentes, offline 12/536);
+  Miri PASS (5 filtros, 16 testes, texto 80 s); reexecução focada 18 caught / 0 missed /
+  4 timeouts (um ramo redundante removido). O Nightly ainda exige disposição dos timeouts.
+- Matriz reobservada integralmente em 2026-10-27T18:14:43Z (todas as verificações PASS).
+  SDKs empacotados localmente; proposta de confiança de assinatura e aviso preparados.
+  Recomendação: segurar publicação; integrar/revisar o candidato, resolver timeouts e
+  provisionamento de assinatura, obter receipts humanos e dry-runs no SHA final.
+
+- Preparação de artefatos encontrou defeitos adicionais confirmados: `--write-metadata npm`
+  procurava SDK `npm` onde a matriz declara `typescript`; retries incluíam o próprio metadata
+  no hash. Teste primeiro reproduziu ambos, helper corrigido, 12 testes + shellcheck PASS.
+  CI repetido para incluir o fix; geração dos metadados reais passa nos dois canais.
+- Instalação limpa dos SDKs PASS após corrigir o helper; artefatos vinculados ao SHA
+  de origem dos SDKs `2e84a594` (árvore SDK inalterada). Republicação exige artefatos
+  refeitos no SHA integrado final. Crates conjuntos empacotam; verificação de staging
+  encontra erro interno do Cargo 1.96; fontes extraídos compilam com patch local de types.
