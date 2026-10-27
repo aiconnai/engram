@@ -1,7 +1,7 @@
 # ONNX Local Embeddings — Design Spec
 
 **Date:** 2026-05-11
-**Status:** Approved (pending implementation)
+**Status:** Implemented (4208d9a9, #215): `OnnxEmbedder` in `src/embedding/onnx.rs`, `model` CLI subcommand (`src/bin/cli/args.rs:200`, `src/bin/cli/model.rs`), feature `onnx-embed` (`Cargo.toml:136`). Acceptance-checklist boxes below were not re-verified; the model-download and benchmark items need a manual run.
 **Tracks:** [GitHub #17](https://github.com/aiconnai/engram/issues/17)
 **Feature flag:** `onnx-embed` (already exists; currently inert)
 

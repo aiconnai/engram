@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+accepted (implemented). Evidence: `src/mcp/handlers/digest.rs` (76d1089b, #63), tool at `src/mcp/tools/catalog/search.rs:72`, `tests/digest_integration_tests.rs`, reference `docs/MCP_TOOLS.md:804`.
 
 ## Tracker
 

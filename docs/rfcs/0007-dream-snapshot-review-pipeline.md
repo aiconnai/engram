@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Proposed (partially implemented). Rollout phases 1-4 and 6 are on main: schema tables and generator in `src/dream/candidates.rs` (with `freshness_state`), `dream_candidate_*` tools in `src/mcp/tools/catalog/misc.rs:118-162`, and `src/dream/eval.rs` with `tests/dream_eval_tests.rs` (e0ac9f28, #61). Phase 5 (harness dogfooding and context-bundle integration) has no `dream` reference in `src/context`, `src/mcp/handlers/context`, `src/mcp/handlers/harness` or `src/bin/cli`.
 
 ## Context
 

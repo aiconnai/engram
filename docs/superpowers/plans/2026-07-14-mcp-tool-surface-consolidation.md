@@ -1,6 +1,6 @@
 # MCP Tool Surface Consolidation Program (Phase 3a Specification)
 
-**Status:** Proposed / Active  
+**Status:** Complete (Phases 3a-3c). Evidence: facades `memory_lifecycle_update`, `graph_query`, `graph_mutate` in `src/mcp/tools/catalog/policy.rs` and `graph.rs`, landed in 787c8312 (#210); SDK facade calls in `sdks/typescript/src/resources/graph.ts:62,79`, `sdks/python/engram_client/resources/graph.py:261` and `memories.py:423`.  
 **Author:** Engram Architecture Team  
 **Date:** 2026-07-14  
 **Target Scope:** `src/mcp/tools/` · `docs/MCP_TOOLS.md` · MCP Client Integration

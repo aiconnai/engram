@@ -196,6 +196,20 @@ class Cli(unittest.TestCase):
         self.assertTrue(text.startswith("previous step\n"))
         self.assertIn("ACCEPTED", text)
 
+    def test_summary_renders_each_item_as_its_own_bullet(self):
+        # Guards against adjacent list items being silently merged into one line
+        # (a missing comma) when the summary bullets are edited.
+        verdict = consume.Verdict(consume.NOT_ACCEPTED, ["first reason", "second reason"])
+        lines = consume.render_summary(verdict, SHA, Path("report.json")).splitlines()
+        self.assertEqual(lines[2], f"- Candidate: `{SHA}`")
+        self.assertEqual(lines[3], "- Report: `report.json` (uploaded as a workflow artifact)")
+        self.assertEqual(
+            lines[4],
+            "- Phase: report-only, not a required check, until the floors are accepted by"
+            " independent human review and anchored on the protected base.",
+        )
+        self.assertEqual(lines[5:], ["- first reason", "- second reason"])
+
     def test_wrapper_script_runs_without_writing_bytecode(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "report.json"
