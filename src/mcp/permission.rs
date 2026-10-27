@@ -89,6 +89,27 @@ const WRITE_FLAG_PARAMS: &[(&str, &str)] = &[
     ("sync_state", "update_version"),
 ];
 
+/// Write-flag parameters of `tool_name` (aliases resolved as in enforcement).
+fn write_flag_params(tool_name: &str) -> Vec<&'static str> {
+    let canonical = canonical_tool_name(tool_name);
+    WRITE_FLAG_PARAMS
+        .iter()
+        .filter(|(tool, _)| *tool == canonical)
+        .map(|(_, flag)| *flag)
+        .collect()
+}
+
+/// Bare arguments that set every given write flag, to ask enforcement for the
+/// mode such a call requires.
+fn flag_probe(flags: &[&str]) -> Value {
+    Value::Object(
+        flags
+            .iter()
+            .map(|flag| ((*flag).to_string(), Value::Bool(true)))
+            .collect(),
+    )
+}
+
 /// Resolve a dispatcher alias to the catalog tool it executes.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
     DISPATCH_ALIASES
@@ -196,7 +217,10 @@ pub fn active_permission_mode() -> Option<PermissionMode> {
 
 /// Inspect permission modes and tool requirements report (RFC 0010).
 pub fn permission_mode_status_report(target_tool: Option<&str>) -> Value {
-    let active = active_permission_mode();
+    status_report_for(active_permission_mode(), target_tool)
+}
+
+fn status_report_for(active: Option<PermissionMode>, target_tool: Option<&str>) -> Value {
     let active_str = active.map(|m| m.as_str()).unwrap_or("unconstrained");
 
     if let Some(tool) = target_tool {
@@ -206,13 +230,25 @@ pub fn permission_mode_status_report(target_tool: Option<&str>) -> Value {
             (None, _) => true,
             _ => false,
         };
-        json!({
+        let mut report = json!({
             "active_mode": active_str,
             "configured_via": if active.is_some() { "env" } else { "default_unconstrained" },
             "tool": tool,
             "required_mode": req.map(|r| r.as_str()),
             "allowed": allowed
-        })
+        });
+        // `required_mode`/`allowed` describe a call without write flags. A call
+        // that sets one is enforced at `scoped_write` or above, so report that
+        // too (additive fields; the existing ones keep their meaning).
+        let flags = write_flag_params(tool);
+        if !flags.is_empty() {
+            let escalated = required_mode_for_call(tool, &flag_probe(&flags));
+            report["write_flag_params"] = json!(flags);
+            report["required_mode_with_write_flags"] = json!(escalated.as_str());
+            report["allowed_with_write_flags"] =
+                json!(active.is_none_or(|act| act.allows(escalated)));
+        }
+        report
     } else {
         let all_tools = TOOL_DEFINITIONS.len();
         let allowed_count = if let Some(act) = active {
@@ -925,6 +961,45 @@ mod tests {
         assert_eq!(tool_call_parts(&no_arguments).unwrap().1, &Value::Null);
         assert!(tool_call_parts(&json!({"arguments": {}})).is_none());
         assert!(tool_call_parts(&json!({"name": 7})).is_none());
+    }
+
+    #[test]
+    fn status_report_reflects_write_flag_escalation() {
+        // Under read_only the default call of a flagged tool is allowed, but the
+        // call that sets the write flag is not: the report must say so.
+        let report =
+            status_report_for(Some(PermissionMode::ReadOnly), Some("memory_predict_links"));
+        assert_eq!(report["required_mode"], "read_only");
+        assert_eq!(report["allowed"], true);
+        assert_eq!(report["write_flag_params"], json!(["auto_apply"]));
+        assert_eq!(report["required_mode_with_write_flags"], "scoped_write");
+        assert_eq!(report["allowed_with_write_flags"], false);
+
+        // Aliases resolve like enforcement does.
+        let alias = status_report_for(Some(PermissionMode::ReadOnly), Some("graph_predict_links"));
+        assert_eq!(alias["required_mode_with_write_flags"], "scoped_write");
+        assert_eq!(alias["allowed_with_write_flags"], false);
+
+        // Once the mode permits writes, both agree.
+        let writer = status_report_for(
+            Some(PermissionMode::ScopedWrite),
+            Some("memory_predict_links"),
+        );
+        assert_eq!(writer["allowed"], true);
+        assert_eq!(writer["allowed_with_write_flags"], true);
+
+        // Unconstrained process: nothing is denied.
+        let open = status_report_for(None, Some("memory_predict_links"));
+        assert_eq!(open["allowed_with_write_flags"], true);
+    }
+
+    #[test]
+    fn status_report_without_write_flags_is_unchanged() {
+        let report = status_report_for(Some(PermissionMode::ReadOnly), Some("memory_get"));
+        assert_eq!(report["required_mode"], "read_only");
+        assert_eq!(report["allowed"], true);
+        assert!(report.get("write_flag_params").is_none());
+        assert!(report.get("allowed_with_write_flags").is_none());
     }
 
     #[test]
