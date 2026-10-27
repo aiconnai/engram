@@ -104,7 +104,11 @@ pub struct SearchConfig {
     pub project_context_path: Option<String>,
     /// Deduplication strategy for hybrid search
     pub dedupe_strategy: DedupeStrategy,
-    /// Whether in-memory HNSW approximate nearest neighbor search is enabled
+    /// Whether in-memory HNSW approximate nearest neighbor search is enabled.
+    ///
+    /// Opt-in: defaults to `false` until the benchmark required by RFC 0003
+    /// ("avoid adding ANN/HNSW as default until measured") exists. Semantic
+    /// search falls back to the exact SQLite scan when disabled.
     pub hnsw_enabled: bool,
     /// Number of candidates to evaluate during HNSW search phase (ef_search)
     pub hnsw_ef_search: usize,
@@ -128,7 +132,8 @@ impl Default for SearchConfig {
             project_context_boost: 0.2,
             project_context_path: None,
             dedupe_strategy: DedupeStrategy::default(),
-            hnsw_enabled: true,
+            // Opt-in until the RFC 0003 benchmark exists.
+            hnsw_enabled: false,
             hnsw_ef_search: 64,
             hnsw_ef_construction: 128,
             hnsw_m: 16,
@@ -274,6 +279,20 @@ pub fn checkpoint_hnsw_to_db(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_hnsw_is_opt_in_by_default() {
+        let config = SearchConfig::default();
+        assert!(
+            !config.hnsw_enabled,
+            "HNSW must stay off by default until the RFC 0003 benchmark exists"
+        );
+        let opted_in = SearchConfig {
+            hnsw_enabled: true,
+            ..SearchConfig::default()
+        };
+        assert!(opted_in.hnsw_enabled, "HNSW stays available via config");
+    }
 
     #[test]
     fn test_strategy_selection() {
