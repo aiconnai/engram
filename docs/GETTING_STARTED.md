@@ -341,6 +341,28 @@ This enables cross-machine synchronization with encrypted storage.
 | `ENGRAM_ONNX_MODEL_DIR` | Path to directory containing `model.onnx` and `tokenizer.json`. Required when `ENGRAM_EMBEDDING_MODEL=local`. | — |
 | `OPENAI_API_KEY` | Required for OpenAI embeddings | - |
 
+### Optional server variables
+
+`engram-server` reads these variables through clap `env` attributes in
+`src/bin/server.rs`; the defaults below are taken from that code.
+
+| Variable | Description | Default | Feature / prerequisite |
+|----------|-------------|---------|------------------------|
+| `ENGRAM_CLEANUP_INTERVAL` | Seconds between expired-memory cleanup passes. `0` disables the cleanup thread. | `3600` (`src/bin/server.rs:108`) | none |
+| `ENGRAM_GRPC_BIND_ADDRESS` | IP address the gRPC transport binds to (used with `--transport grpc`). | `127.0.0.1` (`src/bin/server.rs:186`) | `grpc` feature |
+| `ENGRAM_WS_BIND_ADDRESS` | IP address the WebSocket real-time server binds to. Only used when `ENGRAM_WS_PORT` is greater than `0`. | `127.0.0.1` (`src/bin/server.rs:145`) | none (WebSocket server starts only when `ENGRAM_WS_PORT > 0`, `src/bin/server.rs:1052`) |
+| `ENGRAM_WS_MAX_CONNECTIONS` | Maximum simultaneous upgraded WebSocket connections. Must be a positive integer no greater than `10000`. | `128` (`src/realtime/config.rs:12`) | none |
+| `ENGRAM_WS_MAX_MESSAGE_BYTES` | Maximum bytes accepted in one inbound WebSocket message or frame. Must be a positive integer no greater than `16777216` (16 MiB). | `65536` (64 KiB) (`src/realtime/config.rs:13`) | none |
+| `ENGRAM_WS_READ_IDLE_TIMEOUT_SECONDS` | Maximum seconds an upgraded client may stay silent between inbound frames. Must be a positive integer no greater than `3600`. | `60` (`src/realtime/config.rs:14`) | none |
+| `MEILISEARCH_API_KEY` | Optional API key sent to the Meilisearch instance set by `MEILISEARCH_URL`. | unset (`src/bin/server.rs:202`) | `meilisearch` feature |
+| `MEILISEARCH_INDEXER` | Enables the background indexer that mirrors SQLite memories into Meilisearch. Requires `MEILISEARCH_URL`; the indexer is only started inside the `MEILISEARCH_URL` branch. | `false` (`src/bin/server.rs:207`) | `meilisearch` feature |
+| `MEILISEARCH_SYNC_INTERVAL` | Seconds between indexer sync passes. Only used when `MEILISEARCH_INDEXER` is enabled. | `60` (`src/bin/server.rs:212`) | `meilisearch` feature |
+
+The WebSocket limits are fail-closed: a value that is not a positive integer,
+is `0`, or exceeds its maximum makes the WebSocket server fail to start with an
+`InvalidInput` error (`src/realtime/config.rs`, `src/realtime/server.rs`)
+instead of silently falling back to the default.
+
 ---
 
 ---

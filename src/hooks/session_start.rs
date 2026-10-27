@@ -30,7 +30,7 @@ impl SessionStartHandler {
         tracing::info!(
             target = "engram::hooks::session_start",
             session_id = ?context.session_id,
-            workspace = ?context.workspace,
+            workspace = %crate::observability::redact::opaque(context.workspace.as_deref().unwrap_or("-")),
             "SessionStart"
         );
 
@@ -52,7 +52,7 @@ impl SessionStartHandler {
             Err(e) => {
                 tracing::warn!(
                     target = "engram::hooks::session_start",
-                    error = %e,
+                    error = %crate::observability::redact::redacted(&e),
                     "failed to drain pending_injections; continuing"
                 );
                 return Ok(HookResult::Continue);
@@ -80,7 +80,7 @@ pub(super) fn remaining_value(count: Result<i64>) -> Value {
         Err(e) => {
             tracing::warn!(
                 target = "engram::hooks::session_start",
-                error = %e,
+                error = %crate::observability::redact::redacted(&e),
                 "could not count remaining pending_injections; reporting remaining as null"
             );
             Value::Null

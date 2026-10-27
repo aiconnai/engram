@@ -129,7 +129,11 @@ impl HookManager {
                     Ok(Ok(result)) => results.push(result),
                     Ok(Err(e)) => {
                         // Log error but continue with other handlers
-                        eprintln!("Hook handler error for {:?}: {}", hook, e);
+                        eprintln!(
+                            "Hook handler error for {:?}: {}",
+                            hook,
+                            crate::observability::redact::redacted(&e)
+                        );
                     }
                     Err(_) => {
                         eprintln!("Hook handler panicked for {:?}; continuing", hook);
@@ -157,6 +161,8 @@ impl Default for HookManager {
 #[cfg(test)]
 mod failure_tests;
 pub mod post_tool_use;
+#[cfg(test)]
+mod redaction_tests;
 pub mod session_end;
 pub mod session_start;
 pub mod stop;

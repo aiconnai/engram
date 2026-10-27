@@ -52,6 +52,7 @@ removed in v0.24.0 (see Phase 6).
 - SQLite + WAL mode for crash recovery
 - Connection pooling with read/write separation
 - Hybrid search: BM25 (FTS5) + vector (cosine over embedding BLOBs) + fuzzy (Levenshtein) + RRF fusion
+- Optional in-memory HNSW index for the vector leg; opt-in and off by default (`SearchConfig.hnsw_enabled = false` in `src/search/mod.rs`). `sqlite-vec` is not used on the production search path
 - Knowledge graph with entity extraction, traversal, shortest-path
 - Cloud sync (S3/R2) with AES-256 encryption
 - MCP stdio, HTTP JSON-RPC, optional WebSocket events, and CLI interfaces

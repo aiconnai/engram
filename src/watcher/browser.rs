@@ -160,8 +160,8 @@ fn open_readonly(
         Err(e) => {
             debug!(
                 "Direct open of {} failed ({}), trying copy approach",
-                path.display(),
-                e
+                crate::observability::redact::path_label(path),
+                crate::observability::redact::opaque(&e)
             );
         }
     }
@@ -395,12 +395,16 @@ impl BrowserWatcher {
                 Err(BrowserWatcherError::DatabaseNotFound(path)) => {
                     debug!(
                         browser = %browser,
-                        path = %path.display(),
+                        path = %crate::observability::redact::path_label(&path),
                         "Browser history database not found — skipping"
                     );
                 }
                 Err(e) => {
-                    warn!(browser = %browser, error = %e, "Failed to poll browser history");
+                    warn!(
+                        browser = %browser,
+                        error = %crate::observability::redact::opaque(&e),
+                        "Failed to poll browser history"
+                    );
                 }
             }
         }

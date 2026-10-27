@@ -32,6 +32,8 @@ backend-smoke:
 
 docs:
     ./scripts/generate-mcp-reference.sh --check
+    python3 scripts/check-public-claims.py
+    python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml
     RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features "${CI_REQUIRED_FEATURES:-{{ci_required_features}}}" --no-deps --document-private-items
 
 version-check:

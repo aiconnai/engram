@@ -141,55 +141,74 @@ raw strings; flatten nested block comments; ignore `cfg` gates; treat
 jumping in the statement-start walk; never end a statement at a block) each
 made 1 to 8 of the 30 tests fail; the unmutated tool passes 30/30.
 
-## 3. Counts (commit `46fc3e2`, 2026-10-05)
+## 3. Counts (regenerated 2026-10-26 from tree `4134d28b`)
 
-Command: `python3 scripts/rust_risk_inventory.py`. Stats: 572 files reached by
-a root, 0 orphans, 0 unresolved `mod`, 0 lexer errors, 0 bracket errors, 0
-unparsed `cfg`, 1 file shared by two roots (`tests/support/mod.rs`, both
-integration tests), 0 files reached from conflicting target kinds.
+Command: `python3 scripts/rust_risk_inventory.py` (summary); JSON: `--format json`.
+This block replaces the 2026-10-05 counts for commit `46fc3e2`, which still included the
+deleted Turso backend (`src/storage/turso_backend/`, `turso` feature, removed in `08cb17a4`).
+The regenerated run has no occurrence whose path or text mentions `turso`. Narrative
+numbers in sections 1 and 4-7 still refer to the 2026-10-05 run and are not re-triaged here.
+
+
+### Stats
+
+- files: 626
+- tokens: 1098202
+- roots: 87
+- files_reached: 625
+- orphan_files: 1
+- unresolved_mods: 0
+- lex_errors: 0
+- bracket_errors_files: 0
+- unparsed_cfg_attrs: 0
+- nonitem_cfg_units_approximated: 316
+- nonitem_test_gated_units_approximated: 6
+- files_multi_root: 1
+- files_conflicting_root_kind: 0
+- custom_unwrap_expect_defs: 0
+- unsafe_code_lints: 0
+
+### Counts by kind x scope
 
 | kind | prod-lib | prod-bin | test-unit | test-integration | bench | example | build-script | total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| unwrap | 32 | 0 | 1174 | 323 | 60 | 0 | 1 | 1590 |
-| expect | 37 | 8 | 1015 | 838 | 8 | 0 | 1 | 1907 |
-| unwrap_err | 0 | 0 | 58 | 2 | 0 | 0 | 0 | 60 |
-| expect_err | 0 | 0 | 28 | 30 | 0 | 0 | 0 | 58 |
-| panic_macro | 4 | 2 | 36 | 19 | 1 | 0 | 0 | 62 |
-| assert_macro | 0 | 0 | 4290 | 1659 | 10 | 0 | 0 | 5959 |
-| unsafe | 2 | 0 | 0 | 0 | 1 | 0 | 0 | 3 |
-| print | 6 | 236 | 0 | 8 | 2 | 38 | 2 | 292 |
+| unwrap | 37 | 3 | 1585 | 450 | 61 | 0 | 1 | 2137 |
+| expect | 59 | 11 | 1159 | 1060 | 30 | 0 | 1 | 2320 |
+| unwrap_err | 0 | 0 | 79 | 2 | 0 | 0 | 0 | 81 |
+| expect_err | 0 | 0 | 41 | 39 | 0 | 0 | 0 | 80 |
+| panic_macro | 5 | 2 | 56 | 31 | 1 | 0 | 0 | 95 |
+| assert_macro | 5 | 38 | 5041 | 2214 | 13 | 0 | 0 | 7311 |
+| unsafe | 45 | 2 | 2 | 23 | 1 | 0 | 0 | 73 |
+| print | 12 | 247 | 2 | 12 | 3 | 38 | 2 | 316 |
 | io_handle | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 4 |
-| process_exit | 0 | 12 | 0 | 0 | 0 | 1 | 0 | 13 |
-| let_underscore | 86 | 7 | 45 | 37 | 2 | 0 | 0 | 177 |
-| ok_discard | 16 | 0 | 1 | 3 | 0 | 0 | 0 | 20 |
-| ok_bound | 27 | 3 | 1 | 1 | 0 | 0 | 0 | 32 |
-| filter_map_ok | 92 | 2 | 5 | 1 | 0 | 0 | 0 | 100 |
-| err_default_closure | 106 | 6 | 0 | 1 | 0 | 0 | 0 | 113 |
+| process_exit | 0 | 13 | 0 | 0 | 0 | 1 | 0 | 14 |
+| let_underscore | 87 | 13 | 49 | 44 | 2 | 0 | 0 | 195 |
+| ok_discard | 5 | 0 | 1 | 3 | 0 | 0 | 0 | 9 |
+| ok_bound | 27 | 3 | 2 | 1 | 0 | 0 | 0 | 33 |
+| filter_map_ok | 89 | 2 | 5 | 2 | 0 | 0 | 0 | 98 |
+| err_default_closure | 97 | 6 | 0 | 2 | 0 | 0 | 0 | 105 |
 
-`prod-lib` includes the `engram-wasm` crate (4 `expect`, 8 `err_default_closure`).
-`unwrap_unchecked`, `todo!`, `unimplemented!`, `dbg!`: 0 occurrences.
+### Production counts by crate/target
 
-Production counts by target:
+| target | unwrap | expect | panic_macro | assert_macro | unsafe | print | io_handle | process_exit | let_underscore | ok_discard | ok_bound | filter_map_ok | err_default_closure |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| c4spike:bin:peer | 3 | 5 | 0 | 1 | 2 | 10 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| c4spike:lib | 5 | 22 | 1 | 5 | 37 | 5 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
+| engram-core:bin:engram-agent | 0 | 0 | 0 | 0 | 0 | 39 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
+| engram-core:bin:engram-bench | 0 | 0 | 0 | 0 | 0 | 14 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| engram-core:bin:engram-cli | 0 | 0 | 2 | 0 | 0 | 183 | 2 | 10 | 3 | 0 | 2 | 2 | 2 |
+| engram-core:bin:engram-pdf-worker | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| engram-core:bin:engram-server | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 3 | 0 | 1 | 0 | 1 |
+| engram-core:bin:engram-watcher | 0 | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 1 |
+| engram-core:lib | 32 | 33 | 4 | 0 | 8 | 7 | 2 | 0 | 86 | 5 | 27 | 89 | 89 |
+| engram-fuzz:bin:entity_extraction | 0 | 0 | 0 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| engram-fuzz:bin:text_util_boundaries | 0 | 0 | 0 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| engram-fuzz:bin:workspace_normalization | 0 | 0 | 0 | 17 | 0 | 0 | 0 | 0 | 4 | 0 | 0 | 0 | 1 |
+| engram-wasm:lib | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 8 |
 
-| target | unwrap | expect | panic | unsafe | print | io_handle | exit | let _ | .ok(); discard | .ok() bound | filter_map_ok | unwrap_or_else(\|_\|) |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| engram-core lib | 32 | 33 | 4 | 2 | 6 | 2 | 0 | 86 | 16 | 27 | 92 | 98 |
-| engram-wasm lib | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 8 |
-| bin engram-cli | 0 | 2 | 2 | 0 | 182 | 2 | 10 | 2 | 0 | 2 | 2 | 3 |
-| bin engram-agent | 0 | 0 | 0 | 0 | 39 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
-| bin engram-bench | 0 | 0 | 0 | 0 | 14 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
-| bin engram-server | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 1 | 0 | 1 |
-| bin engram-watcher | 0 | 2 | 0 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 1 |
-| bin engram-pdf-worker | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+### Orphan files (not reachable from any target root; scope unknown)
 
-Textual baselines for comparison (`git grep -hoF`): `.unwrap()` 1 601,
-`.expect(` 1 908, `unsafe` 28 (`-w`: 5, of which 3 real), `println!` 302 (this substring also matches `eprintln!` 33), `let _ =` 177.
-
-The counts were identical before and after the two C2 fix commits that landed
-while this inventory was being produced (`a9c3bd8`, `7a7809f`, `46fc3e2`
-changed `src/sync`, `src/storage`, docs). Re-run the commands above after
-later C2 commits; `src/sync/*` and `src/storage/{connection,migrations}` are
-under C2 review and are only listed here, not changed.
+- docs/decisions/assets/2026-10-05-c4-spike/stub/shim_stub.rs
 
 ## 4. Production `unwrap` / `expect` / panic-macro triage
 
