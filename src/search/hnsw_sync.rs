@@ -291,4 +291,55 @@ mod tests {
         assert_eq!(report.removed, 1);
         assert!(!shared.read().contains(&gone));
     }
+
+    #[test]
+    fn warmup_skips_memories_whose_content_was_replaced() {
+        let storage = Storage::open_in_memory().unwrap();
+        let mut scratch = new_index();
+        let (keep, replaced) = storage
+            .with_connection(|conn| {
+                let keep = embedded_memory(conn, &mut scratch, "unchanged", None);
+                let replaced = embedded_memory(conn, &mut scratch, "will be rewritten", None);
+                // update_memory leaves the old embeddings row but clears the flag.
+                conn.execute(
+                    "UPDATE memories SET has_embedding = 0 WHERE id = ?",
+                    [replaced],
+                )?;
+                Ok((keep, replaced))
+            })
+            .unwrap();
+        let mut warmed = new_index();
+        storage
+            .with_connection(|conn| crate::search::warmup_hnsw_from_db(conn, &mut warmed))
+            .unwrap();
+        assert!(warmed.contains(&keep));
+        assert!(
+            !warmed.contains(&replaced),
+            "stale vector must not be replayed"
+        );
+    }
+
+    #[test]
+    fn warmup_drops_checkpointed_vectors_deleted_after_the_checkpoint() {
+        let storage = Storage::open_in_memory().unwrap();
+        let mut live = new_index();
+        let (keep, deleted) = storage
+            .with_connection(|conn| {
+                let keep = embedded_memory(conn, &mut live, "survives", None);
+                let deleted = embedded_memory(conn, &mut live, "deleted later", None);
+                crate::search::checkpoint_hnsw_to_db(conn, &live, "default")?;
+                conn.execute("DELETE FROM memories WHERE id = ?", [deleted])?;
+                Ok((keep, deleted))
+            })
+            .unwrap();
+        let mut restarted = new_index();
+        storage
+            .with_connection(|conn| crate::search::warmup_hnsw_from_db(conn, &mut restarted))
+            .unwrap();
+        assert!(restarted.contains(&keep));
+        assert!(
+            !restarted.contains(&deleted),
+            "checkpoint must be reconciled"
+        );
+    }
 }
