@@ -1,20 +1,14 @@
-# Decision triage — CLI compartilhada e skill global
+# Decision triage — CLI compartilhada
 
-> Ferramenta compartilhada de triagem estruturada (d1/Jev), instalada globalmente
-> em `~/.agents/skills/decision-triage` e acessível a partir de qualquer repo.
-> Este repositório está configurado em `decision-triage.json` (sem credenciais)
-> e registrado no allowlist central. Preview é o padrão; chamadas pagas exigem
-> autorização explícita por tarefa, dados e orçamento.
+> Ferramenta compartilhada de triagem estruturada, instalada separadamente deste
+> repositório e acessível a partir de qualquer projeto. Este repositório tem um
+> `decision-triage.json` sem credenciais e registrado no registro central da
+> ferramenta. Preview é o padrão; chamadas pagas exigem autorização explícita por
+> tarefa, dados e orçamento.
 
-O mecanismo foi extraído para uma ferramenta compartilhada com configuração
-explícita por repositório, preview sem custo e chamadas pagas limitadas por
-autorização. A instalação fica em `~/.agents/skills/decision-triage`; cada
-projeto tem um `decision-triage.json` sem credenciais, e o orçamento e o
-histórico ficam centralizados na instalação global (não neste repo).
-
-A execução histórica da issue #652 foi preservada como evidência, sem alteração
-dos arquivos congelados. A CLI está generalizada para triagem de issues e
-validações, sem depender da issue #652.
+A CLI é generalizada para triagem de issues e validações. Orçamento e histórico de
+uso ficam centralizados na instalação da ferramenta, não neste repositório. Cada
+projeto mantém apenas a sua configuração.
 
 ## Usar pelo Zed
 
@@ -38,20 +32,22 @@ para a tarefa, dados e orçamento.
 ## Testar neste repo — sem custo
 
 Existe um exemplo sintético em `tmp/shared-triage-example/input.json` (diretório
-ignorado pelo Git). Se ele não existir, recrie-o a partir de
-`~/.agents/skills/decision-triage/templates/input.json` com
-`"repository": "aiconnai/engram"`.
+ignorado pelo Git). Se ele não existir, crie-o a partir do template fornecido com a
+instalação da CLI, definindo `"repository": "aiconnai/engram"`.
+
+Em todos os comandos abaixo, `<decision-triage>` é o diretório onde a ferramenta
+compartilhada está instalada.
 
 ```sh
-rtk proxy python3 -B ~/.agents/skills/decision-triage/scripts/triage.py preview \
+python3 -B <decision-triage>/scripts/triage.py preview \
   --repo . \
   --input tmp/shared-triage-example/input.json
 ```
 
-Para consultar a contabilidade compartilhada:
+Para consultar o status da instalação compartilhada:
 
 ```sh
-rtk proxy python3 -B ~/.agents/skills/decision-triage/scripts/triage.py status
+python3 -B <decision-triage>/scripts/triage.py status
 ```
 
 ## Configuração deste repo
@@ -61,62 +57,42 @@ rtk proxy python3 -B ~/.agents/skills/decision-triage/scripts/triage.py status
 - identidade `aiconnai/engram`;
 - tarefas `issue-triage` e `validation-triage`;
 - campos `observations`, `proposed_next_step`, `constraints`, `evidence_gaps`;
-- até **duas chamadas e US$ 0,01** por operação; corte fixo **0,90**;
-- d1 principal; Jev somente por incerteza válida abaixo de 0,90.
+- até **duas chamadas por operação**;
+- o modelo principal é o padrão; o modelo secundário só é acionado com incerteza
+  válida abaixo do corte fixo de **0,90**.
 
-O root e o SHA exato da config estão fixados no allowlist central via `register`.
-Editar `decision-triage.json` exige novo registro; grants anteriores ficam
-inválidos. **Registrar não autoriza gastos.**
+A raiz do repositório e o SHA exato da configuração ficam registrados no registro
+central por meio de `register`. Editar `decision-triage.json` exige novo registro,
+e autorizações anteriores ficam inválidas. **Registrar não autoriza gastos.**
 
 ## Rotas de inferência
 
-O grant congela a rota no `authorize` (padrão `systemone`):
+A rota é congelada no momento da autorização (`authorize`). O padrão é `systemone`.
 
 | Rota | Endpoint | Chamadas | Credencial | Custo registrado |
 |---|---|---|---|---|
-| `systemone` | OpenRouter `api/v1/systemone` (d1 → Jev condicional) | até 2 | `OPENROUTER_API_KEY` | recibo do provider |
+| `systemone` | OpenRouter `api/v1/systemone` (modelo principal, com escalonamento condicional para o modelo secundário) | até 2 | `OPENROUTER_API_KEY` | recibo do provider |
 | `muse` | Meta Model API `api.meta.ai/v1/chat/completions` (`muse-spark-1.3`, Standard mode) | 1 | `MUSE_API_KEY` | calculado por tabela pinada (`cost_basis: computed_standard_price_table`) |
 
-Ambas as chaves são lidas como atribuição literal do mesmo arquivo de credencial
-aprovado, somente durante `execute`. Na rota `muse`, o custo é estimativa por
-tabela — não recibo do provider. Contributor mode (que autoriza a Meta a treinar
-com o conteúdo enviado) **não** é usado.
+Cada rota usa somente a variável de ambiente indicada na tabela, e somente durante
+`execute`. Na rota `muse`, o custo é estimativa por tabela, não recibo do provider.
+Contributor mode (que autoriza a Meta a treinar com o conteúdo enviado) **não** é
+usado.
 
 ## Adicionar outro repo
 
 Na raiz do outro projeto, substitua `OWNER/REPO` pela identidade correta:
 
 ```sh
-rtk proxy python3 -B ~/.agents/skills/decision-triage/scripts/triage.py init \
+python3 -B <decision-triage>/scripts/triage.py init \
   --repo . --repository OWNER/REPO --write
 
-rtk proxy python3 -B ~/.agents/skills/decision-triage/scripts/triage.py register --repo .
+python3 -B <decision-triage>/scripts/triage.py register --repo .
 ```
 
 Se `decision-triage.json` já existir, inspecione-o em vez de tentar recriá-lo.
 
-## Estado compartilhado preservado
+## Comportamento padrão
 
-- Histórico centralizado: **194 tentativas**, subtotal conhecido
-  **US$ 0,46017200482**, sem zerar custos por repo.
-- Pendência Drex e reserva de **US$ 0,00167088** intactas
-  (tentativa `86f7a96a-6958-405e-9f2b-3ae1422bfbb1`). A exceção antiga da
-  issue 652 **não** se aplica a novas tarefas.
-- Teto acumulado: US$ 5 / 217 tentativas.
-- Nenhuma inferência paga foi feita na instalação nem nesta configuração; nenhum
-  hook ou alteração automática de produção.
-- `paid_dispatch_allowed: false` até uma autorização explícita e escopada.
-
-## Validação registrada
-
-- 88 testes compartilhados e 118 testes legados da skill passaram, além dos
-  checks de documentação e do preview real.
-- A gravação da suíte específica de inputs foi recusada pela ferramenta e não foi
-  repetida nem contornada; essa limitação está registrada na skill.
-- Neste repo: `preview` executado com `network_calls: 0`, `registered: true` e
-  `paid_dispatch_allowed: false` (evidência gerada em 2026-10-23).
-
-Referências da instalação global (fora deste repo):
-
-- Skill: `~/.agents/skills/decision-triage/SKILL.md`
-- Guia completo: `~/.agents/skills/decision-triage/references/usage.md`
+Por padrão, `preview` não faz chamadas de rede (`network_calls: 0`), e
+`paid_dispatch_allowed` fica `false` até uma autorização explícita e escopada.

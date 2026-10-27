@@ -113,7 +113,7 @@ Engram solves this by providing a unified, local-first intelligence layer:
 | **Memory Tiering & Salience** | **Permanent + 24h Daily** | Manual | Single tier | Manual | None |
 | **Contradiction Detection** | **Yes (Temporal)** | Overwrite only | Edge invalidation | None | None |
 | **Transports Supported** | **stdio, HTTP, WS** (+ gRPC, optional feature) | REST API | REST / GraphQL | REST API | stdio only |
-| **Active MCP Tools** | **301 tools** (254 in the default build) | ~6 tools | ~8 tools | ~10 tools | ~4 tools |
+| **Active MCP Tools** | **301 tools** (254 in the default build) | — | — | — | — |
 | **Zero Cloud Lock-in** | **Yes** | No | No | Partial | Yes |
 
 Tool counts: 301 is the size of the generated catalog ([docs/MCP_TOOLS.md](docs/MCP_TOOLS.md)); 254 of them are callable in a default `cargo build`, and the rest need opt-in Cargo features. The default `tools/list` advertises only the 17 essential tools unless `ENGRAM_TOOL_TIER` is raised.
