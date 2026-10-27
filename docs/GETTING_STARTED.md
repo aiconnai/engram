@@ -131,7 +131,7 @@ Use the same `mcpServers.engram` JSON block in your client's MCP config location
 
 ### Verify Connection
 
-Once configured, your AI tool will have access to the MCP tools listed in [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md). Ask it to run `memory_stats` to verify the connection is working and to confirm it can read the shared memory layer.
+Once configured, your AI tool will have access to the MCP tools listed in [`docs/MCP_TOOLS.md`](MCP_TOOLS.md). Ask it to run `memory_stats` to verify the connection is working and to confirm it can read the shared memory layer.
 
 ---
 
@@ -447,4 +447,4 @@ await client.createDaily('Debugging session: fixed auth ordering issue');
 - Read the full [README](../README.md) for feature details
 - See [AGENTS.md](../AGENTS.md) for the complete MCP tool reference
 - Check [SCHEMA.md](SCHEMA.md) for database schema details
-- Explore the [architecture overview](../README.md#architecture) to understand how components fit together
+- Explore the [architecture overview](ARCHITECTURE.md) to understand how components fit together
