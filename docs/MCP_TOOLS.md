@@ -103,8 +103,8 @@ Total tools: **301**
 | `temporal_diff` | advanced | temporal | always | readOnlyHint | `t1`, `t2` |
 | `temporal_snapshot` | advanced | temporal | always | readOnlyHint | `timestamp` |
 | `temporal_timeline` | advanced | temporal | always | readOnlyHint | `from_id`, `to_id` |
-| `graph_query` | essential | misc | always | readOnlyHint | none |
-| `graph_mutate` | standard | misc | always | mutating (no MCP hints) | none |
+| `graph_query` | essential | memory.graph | always | readOnlyHint | none |
+| `graph_mutate` | standard | memory.graph | always | mutating (no MCP hints) | none |
 | `memory_link` | standard | memory.graph | always | mutating (no MCP hints) | `from_id`, `to_id` |
 | `memory_unlink` | standard | memory.graph | always | mutating (no MCP hints) | `from_id`, `to_id` |
 | `memory_related` | standard | memory.search | always | readOnlyHint | `id` |
@@ -260,21 +260,21 @@ Total tools: **301**
 | `memory_capture_screenshot` | advanced | feature.multimodal | multimodal | readOnlyHint | none |
 | `memory_describe_image` | advanced | feature.multimodal | multimodal | readOnlyHint | `image_path` |
 | `memory_list_media` | standard | feature.multimodal | multimodal | readOnlyHint | none |
-| `memory_ingest_media` | standard | memory.core | always | mutating (no MCP hints) | `media_path` |
+| `memory_ingest_media` | standard | feature.multimodal | multimodal | mutating (no MCP hints) | `media_path` |
 | `memory_process_video` | advanced | feature.multimodal | multimodal | mutating (no MCP hints) | `video_path` |
 | `memory_transcribe_audio` | advanced | feature.multimodal | multimodal | readOnlyHint | `audio_path` |
-| `replication_status` | advanced | misc | always | readOnlyHint | none |
-| `replication_sync_now` | advanced | misc | always | mutating (no MCP hints) | none |
-| `replication_recover` | advanced | misc | always | mutating (no MCP hints) | `target_db_path` |
-| `palace_navigate` | standard | misc | always | readOnlyHint | none |
-| `room_search` | standard | misc | always | readOnlyHint | `query`, `wing` |
-| `drawer_open` | standard | misc | always | readOnlyHint | `id` |
-| `palace_visualize` | standard | misc | always | readOnlyHint | none |
+| `replication_status` | advanced | sync | always | readOnlyHint | none |
+| `replication_sync_now` | advanced | sync | always | mutating (no MCP hints) | none |
+| `replication_recover` | advanced | sync | always | mutating (no MCP hints) | `target_db_path` |
+| `palace_navigate` | standard | spatial | always | readOnlyHint | none |
+| `room_search` | standard | spatial | always | readOnlyHint | `query`, `wing` |
+| `drawer_open` | standard | spatial | always | readOnlyHint | `id` |
+| `palace_visualize` | standard | spatial | always | readOnlyHint | none |
 | `memory_compress_aaak` | standard | memory.admin | always | readOnlyHint | none |
 | `memory_decompress_aaak` | standard | memory.admin | always | readOnlyHint | `text` |
 | `dream_run_now` | advanced | feature.dream | dream-phase | idempotentHint | none |
-| `dream_consolidation_status` | advanced | misc | always | readOnlyHint | none |
-| `dream_insights` | advanced | misc | always | readOnlyHint | none |
+| `dream_consolidation_status` | advanced | feature.dream | dream-phase | readOnlyHint | none |
+| `dream_insights` | advanced | feature.dream | dream-phase | readOnlyHint | none |
 | `dream_create` | advanced | feature.dream | dream-phase | mutating (no MCP hints) | none |
 | `dream_get` | advanced | feature.dream | dream-phase | readOnlyHint | `id` |
 | `dream_list` | advanced | feature.dream | dream-phase | readOnlyHint | none |
@@ -1934,7 +1934,7 @@ Return the full edge history between two memory IDs, ordered chronologically.
 Unified facade for querying the knowledge graph: retrieve related memories/neighborhood, find path between memories, traverse multi-hop graph relations, list linked entities, search entities, or export graph visualization.
 
 - Tier: `essential`
-- Group: `misc`
+- Group: `memory.graph`
 - Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
@@ -1959,7 +1959,7 @@ Unified facade for querying the knowledge graph: retrieve related memories/neigh
 Unified facade for mutating the knowledge graph: create cross-references, remove cross-references, or extract and link named entities.
 
 - Tier: `standard`
-- Group: `misc`
+- Group: `memory.graph`
 - Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
@@ -4382,8 +4382,8 @@ List media assets stored in the media_assets table, optionally filtered by type 
 Ingest a local media asset (image, audio, or video) and create a durable memory with associated metadata in media_assets. Retrying with the same file bytes in the same workspace is idempotent: it returns the existing live memory with deduplicated=true and ignores the retry's content, tags and importance (a deleted memory is not revived). media_assets keys assets per (workspace, file_hash), so ingesting the same file bytes in another workspace creates an independent memory and asset row without disturbing deduplication in the first workspace.
 
 - Tier: `standard`
-- Group: `memory.core`
-- Required feature: `always`
+- Group: `feature.multimodal`
+- Required feature: `multimodal`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `media_path`
 
@@ -4429,7 +4429,7 @@ Transcribe an audio file to text using the configured audio transcription provid
 Get SQLite WAL continuous replication status, lag metrics, and frame sequence numbers for R2/S3 cloud backup and PITR.
 
 - Tier: `advanced`
-- Group: `misc`
+- Group: `sync`
 - Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
@@ -4443,7 +4443,7 @@ Get SQLite WAL continuous replication status, lag metrics, and frame sequence nu
 Force an immediate WAL delta extraction and replication flush, generating a compressed and checksummed delta package.
 
 - Tier: `advanced`
-- Group: `misc`
+- Group: `sync`
 - Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: none
@@ -4459,7 +4459,7 @@ Force an immediate WAL delta extraction and replication flush, generating a comp
 Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into a target database. When the source is the active storage database (the default), only its latest committed state is recovered, via a SQLite snapshot (frames_replayed 0, last_frame_applied null); target_frame, target_time and source_wal_path are refused for the active database and require a closed copy. The target must not be the active database or one of its side files.
 
 - Tier: `advanced`
-- Group: `misc`
+- Group: `sync`
 - Required feature: `always`
 - Annotations: mutating (no MCP hints)
 - Required inputs: `target_db_path`
@@ -4479,7 +4479,7 @@ Perform Point-In-Time Recovery (PITR) by replaying SQLite WAL delta frames into 
 Navigate the Memory Palace: inspect active wings (top-level domains), rooms (sub-topics), and memory counts for spatial orientation.
 
 - Tier: `standard`
-- Group: `misc`
+- Group: `spatial`
 - Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
@@ -4494,7 +4494,7 @@ Navigate the Memory Palace: inspect active wings (top-level domains), rooms (sub
 Search memories scoped within a specific spatial room and wing using hybrid retrieval.
 
 - Tier: `standard`
-- Group: `misc`
+- Group: `spatial`
 - Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `query`, `wing`
@@ -4512,7 +4512,7 @@ Search memories scoped within a specific spatial room and wing using hybrid retr
 Open a specific memory drawer by ID to read its full verbatim content and metadata.
 
 - Tier: `standard`
-- Group: `misc`
+- Group: `spatial`
 - Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: `id`
@@ -4526,7 +4526,7 @@ Open a specific memory drawer by ID to read its full verbatim content and metada
 Generate or export a topological visualization of the memory palace in interactive HTML, ASCII floorplan, vector SVG, Mermaid mindmap, or Cytoscape JSON.
 
 - Tier: `standard`
-- Group: `misc`
+- Group: `spatial`
 - Required feature: `always`
 - Annotations: readOnlyHint
 - Required inputs: none
@@ -4589,8 +4589,8 @@ Manually trigger the Dream Phase (background consolidation) across all workspace
 Retrieve memory consolidation status, counts of distilled procedural rules, archived duplicates, and tokens saved.
 
 - Tier: `advanced`
-- Group: `misc`
-- Required feature: `always`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: readOnlyHint
 - Required inputs: none
 
@@ -4603,8 +4603,8 @@ Retrieve memory consolidation status, counts of distilled procedural rules, arch
 Retrieve actionable distilled insights, procedural rules, and thematic summaries generated during consolidation passes.
 
 - Tier: `advanced`
-- Group: `misc`
-- Required feature: `always`
+- Group: `feature.dream`
+- Required feature: `dream-phase`
 - Annotations: readOnlyHint
 - Required inputs: none
 

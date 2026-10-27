@@ -4,12 +4,17 @@
 # ///
 # ─── How to run ───
 # rtk python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml
+# Regenerate the baseline after an intentional surface change (review the diff!):
+# rtk python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml --write
 from __future__ import annotations
 
 import argparse
 import ast
+import datetime
 import hashlib
+import json
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -35,6 +40,11 @@ CHANNELS = {
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check Engram advertised contract inventory.")
     parser.add_argument("--inventory", type=Path, required=True)
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="rewrite the inventory from the current tree instead of checking it",
+    )
     for name in "missing-surface tier-drift cli-drift doc-drift image-get-query-drift image-delete-query-drift".split():
         parser.add_argument(f"--self-test-{name}", action="store_true")
     args = parser.parse_args()
@@ -47,6 +57,13 @@ def main() -> int:
     for flag, mutator in ((args.self_test_missing_surface, missing_surface), (args.self_test_tier_drift, tier_drift), (args.self_test_cli_drift, cli_drift), (args.self_test_doc_drift, doc_drift), (args.self_test_image_get_query_drift, lambda item: image_query_drift(item, "GET")), (args.self_test_image_delete_query_drift, lambda item: image_query_drift(item, "DELETE"))):
         if flag:
             current = mutator(current)
+    if args.write:
+        text = render_inventory(
+            args.inventory.read_text(encoding="utf-8"), current, git_head(), datetime.date.today().isoformat()
+        )
+        args.inventory.write_text(text, encoding="utf-8")
+        print(f"advertised-contracts: wrote {args.inventory}")
+        return 0
     failures = compare_inventory(inventory, current)
     if failures:
         print("advertised-contracts: FAIL")
@@ -63,6 +80,83 @@ def main() -> int:
         f"{inventory['rust_public_api']['line_count']} Rust API baseline lines"
     )
     return 0
+
+
+def git_head() -> str:
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError(f"cannot read git HEAD for base_sha: {exc}") from exc
+
+
+def toml_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        return "[" + ", ".join(toml_value(item) for item in value) + "]"
+    raise ValueError(f"unsupported inventory value: {value!r}")
+
+
+def render_inventory(text: str, current, base_sha: str, captured_date: str) -> str:
+    """Rewrite tracked `key = value` lines of an existing inventory in place.
+
+    Comments, key order and keys the checker does not generate (for example the
+    `pdf_worker_*` contract read by check-pdf-worker-packaging.py) are kept.
+    Generated keys missing from the file are appended to their section.
+    """
+    out: list[str] = []
+    section: str | None = None
+    seen: set[str] = set()
+    sections_seen: set[str] = set()
+
+    def flush_missing() -> None:
+        missing = [
+            f"{key} = {toml_value(value)}"
+            for key, value in current.get(section, {}).items()
+            if key not in seen
+        ]
+        if not missing:
+            return
+        trailing = 0
+        while out and out[-1] == "":
+            out.pop()
+            trailing += 1
+        out.extend(missing)
+        out.extend([""] * trailing)
+
+    for line in text.splitlines():
+        header = re.match(r"^\[([A-Za-z0-9_.-]+)\]\s*$", line)
+        if header:
+            flush_missing()
+            section = header.group(1)
+            sections_seen.add(section)
+            seen = set()
+            out.append(line)
+            continue
+        key_match = re.match(r"^([A-Za-z0-9_-]+)\s*=", line)
+        if key_match:
+            key = key_match.group(1)
+            seen.add(key)
+            if section is None and key == "base_sha":
+                line = f"base_sha = {toml_value(base_sha)}"
+            elif section is None and key == "captured_date":
+                line = f"captured_date = {toml_value(captured_date)}"
+            elif section is not None and key in current.get(section, {}):
+                line = f"{key} = {toml_value(current[section][key])}"
+        out.append(line)
+    flush_missing()
+
+    for name, values in current.items():
+        if name not in sections_seen:
+            out.extend(["", f"[{name}]"])
+            out.extend(f"{key} = {toml_value(value)}" for key, value in values.items())
+    return "\n".join(out) + "\n"
 
 
 def load_inventory(path: Path):
@@ -176,11 +270,37 @@ def python_exports() -> list[str]:
 
 
 def python_methods() -> list[str]:
-    tree = ast.parse((ROOT / "sdks/python/engram_client/client.py").read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == "EngramClient":
-            return [child.name for child in node.body if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and not child.name.startswith("_")]
-    raise ValueError("Python EngramClient class is missing")
+    """Public methods of EngramClient, including those inherited from resource mixins."""
+    package = ROOT / "sdks/python/engram_client"
+    classes: dict[str, ast.ClassDef] = {}
+    for path in [package / "client.py", *sorted((package / "resources").glob("*.py"))]:
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if isinstance(node, ast.ClassDef):
+                classes.setdefault(node.name, node)
+    if "EngramClient" not in classes:
+        raise ValueError("Python EngramClient class is missing")
+
+    methods: list[str] = []
+    visited: set[str] = set()
+
+    def visit(name: str) -> None:
+        node = classes.get(name)
+        if node is None or name in visited:
+            return
+        visited.add(name)
+        for child in node.body:
+            if (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and not child.name.startswith("_")
+                and child.name not in methods
+            ):
+                methods.append(child.name)
+        for base in node.bases:
+            if isinstance(base, ast.Name):
+                visit(base.id)
+
+    visit("EngramClient")
+    return methods
 
 
 def ts_exports(kind: str) -> list[str]:

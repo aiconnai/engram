@@ -55,10 +55,11 @@ retention cannot be proven for a deduplication.
 Nine expired exceptions were re-verified on 2026-10-05 against `Cargo.lock` with
 `cargo audit --no-fetch` (RustSec advisory-db `ef6173c`, 2026-10-03) and renewed to
 2026-12-31 (owner Ronaldo) because no semver-compatible dependency update fixes them.
-They concentrate in the optional `libsql` stack (turso feature: `rustls-webpki`
-0.102.8 x4, `h2` 0.3.27, `bincode`, `rustls-pemfile`) plus `paste` (tokenizers) and
+They concentrated in the optional `libsql` stack (turso feature: `rustls-webpki`
+0.102.8 x4, `h2` 0.3.27, `bincode`, `rustls-pemfile`; **retired on 2026-10-23 with the
+turso sunset, see the 2026-10-26 update below**) plus `paste` (tokenizers) and
 `ttf-parser` (pdf feature: lopdf 0.45 drops it, but pdf-extract 0.12 pins lopdf ^0.42,
-so removing it needs a product change).
+so removing it needs a product change). The last two are the only records still governed.
 
 Not renewed, handed to Q6 (owner of `Cargo.lock`), no exception added:
 
@@ -76,10 +77,32 @@ rust_decimal 1.43.0 without rkyv, event-listener 5.4.2). On the integrated tree 
 with a freshly fetched database (still `ef6173c`) exits 0 with no vulnerability and two allowed
 warnings, and `cargo deny check advisories bans licenses sources` passes. The records for
 0098/0099/0104/0258 now name the libsql-only path (turso feature); RUSTSEC-2026-0253 (`lru`
-0.16.4 via `aws-sdk-s3`, cloud feature, unsound warning) has a governed allowed-warning record
-whose follow-up is to pin `BehaviorVersion` and bump `aws-sdk-s3`/`aws-config` with a bucket
-canary. `governance/exceptions.toml` EXC-0001 (dual reqwest) was removed: the lock resolves only
-reqwest 0.12.28.
+0.16.4 via `aws-sdk-s3`, cloud feature, unsound warning) had a governed allowed-warning record
+(retired, see the 2026-10-26 update). `governance/exceptions.toml` EXC-0001 (dual reqwest) was
+removed: the lock resolves only reqwest 0.12.28.
+
+**Update 2026-10-26 (supply-chain remediation, branch `fix/supply-chain-2026-10`):** scheduled CI
+had been red since 2026-10-17 because the advisory database (1378 advisories, commit `a78282a`,
+fetched 2026-10-26) gained findings against the lock. All were fixed in the dependency graph, with
+no new exception:
+
+| Advisory | Crate (was) | Resolution |
+|---|---|---|
+| RUSTSEC-2026-0367/0368/0369 | `zip` 2.4.2 (direct, `snapshot` feature) | `zip` 9.0.5; entry names now come from the central directory and an undecodable name fails closed. The loader never extracts to disk, so the extraction advisories were not reachable, but the bump stays. |
+| RUSTSEC-2026-0367/0368/0369 | `zip` 6.0.0 (build dependency of `libduckdb-sys` 1.4.4) | `duckdb` 1.10506.1 (DuckDB 1.5.6) depends on `zip` 9; the graph is in-memory only. |
+| RUSTSEC-2026-0386 (unsound) | `tokio` 1.49.0 | `tokio` 1.53.3 (also in `fuzz/Cargo.lock`). `cargo deny` fails on unsound advisories, `cargo audit` only warns. |
+| RUSTSEC-2026-0382 | `rustls-webpki` 0.103.15 | 0.103.16 |
+| RUSTSEC-2026-0381 | `webpki-roots` 1.0.5 | 1.0.11 |
+| RUSTSEC-2026-0385 | `ctutils` 0.4.3 | 0.4.6 |
+| RUSTSEC-2026-0387 | `crypto-bigint` 0.5.5 (via `aws-sigv4`) | `aws-sigv4` 1.6.3 still pins `crypto-bigint` 0.5 for SigV4a, so no bump helps. The `sigv4a` feature of `aws-sdk-s3` (S3 multi-region access points only; engram addresses plain `s3://bucket/key` URIs) was dropped, which removes `crypto-bigint`, `p256` and `ecdsa` from the graph. |
+| RUSTSEC-2026-0221 (fuzz lock) | `event-listener` 5.4.1 | refreshed in `fuzz/Cargo.lock` |
+
+`cargo audit` now exits 0 with one allowed warning (`ttf-parser`, governed) and
+`cargo deny check advisories bans licenses sources` passes. `lru` is 0.18.5, above the patched
+floor of RUSTSEC-2026-0253 (`>=0.18.2`), so that advisory is no longer reported; the earlier
+allowed-warning claim for it had no governed record and is dropped. `sqlite-vec` moved to
+`[dev-dependencies]` (only `benches/search.rs` uses it). Tool pins: `cargo-audit` 0.22.0 and
+`cargo-outdated` 0.19.0, both installed with `--locked`.
 
 ## Ledger entries that need online action
 

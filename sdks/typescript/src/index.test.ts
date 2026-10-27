@@ -329,6 +329,37 @@ describe("EngramClient", () => {
       expect(requestArguments(2).query).toBe("query 3");
     });
 
+    it("should default to the catalog limit and omit optional keys", async () => {
+      mockFetch.mockResolvedValue(okResponse());
+
+      await client.search("query");
+      expect(requestArguments(0)).toEqual({ query: "query", limit: 20 });
+    });
+
+    it("should forward offset and includeArchived, including falsy values", async () => {
+      mockFetch.mockResolvedValue(okResponse());
+
+      await client.search.search("query", {
+        limit: 5,
+        offset: 10,
+        includeArchived: true,
+      });
+      expect(requestArguments(0)).toEqual({
+        query: "query",
+        limit: 5,
+        offset: 10,
+        include_archived: true,
+      });
+
+      await client.memorySearch("query", { offset: 0, includeArchived: false });
+      expect(requestArguments(1)).toEqual({
+        query: "query",
+        limit: 20,
+        offset: 0,
+        include_archived: false,
+      });
+    });
+
     it("should support council, explain, feedback, feedbackStats", async () => {
       mockFetch.mockResolvedValue(okResponse());
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 import sys
@@ -37,71 +38,15 @@ SCHEMA_RE = re.compile(
 TIER_RE = re.compile(r"tier:\s*ToolTier::(?P<value>Essential|Standard|Advanced)")
 INCLUDE_RE = re.compile(r"=\s*include!\(\s*\"(?P<path>[^\"]+)\"\s*\)")
 
-LANGFUSE_TOOLS: Final = frozenset(
-    (
-        "langfuse_connect",
-        "langfuse_sync",
-        "langfuse_sync_status",
-        "langfuse_extract_patterns",
-        "memory_from_trace",
-    )
+# Feature gating is NOT duplicated here: `required_features()` reads the Rust
+# `required_features` match in src/mcp/tools/catalog/mod.rs, the single source
+# of truth shared with `tool_feature_available` (tools/list) and discover_tools.
+CATALOG_MOD: Final = ROOT / "src/mcp/tools/catalog/mod.rs"
+REQUIRED_FEATURES_FN: Final = "fn required_features(name: &str)"
+FEATURE_ARM_RE: Final = re.compile(
+    r'(?P<names>"[^"]+"(?:\s*\|\s*"[^"]+")*)\s*=>\s*(?:\{\s*)?&\[(?P<features>[^\]]*)\]'
 )
-MEILISEARCH_TOOLS: Final = frozenset(
-    (
-        "meilisearch_search",
-        "meilisearch_reindex",
-        "meilisearch_status",
-        "meilisearch_config",
-    )
-)
-EMERGENT_GRAPH_TOOLS: Final = frozenset(
-    (
-        "memory_auto_link",
-        "memory_list_auto_links",
-        "memory_auto_link_stats",
-        "memory_cluster",
-        "memory_get_cluster",
-        "memory_list_clusters",
-    )
-)
-MULTIMODAL_TOOLS: Final = frozenset(
-    (
-        "memory_describe_image",
-        "memory_transcribe_audio",
-        "memory_capture_screenshot",
-        "memory_process_video",
-        "memory_list_media",
-        "memory_search_by_image",
-    )
-)
-DUCKDB_GRAPH_TOOLS: Final = frozenset(
-    ("memory_graph_path", "memory_temporal_snapshot", "memory_scope_snapshot")
-)
-DREAM_PHASE_TOOLS: Final = frozenset(
-    (
-        "dream_run_now",
-        "dream_create",
-        "dream_get",
-        "dream_list",
-        "dream_cancel",
-        "dream_archive",
-        "dream_candidates_list",
-        "dream_candidate_get",
-        "dream_candidate_review",
-        "dream_candidate_apply",
-        "memory_agent_writeback",
-        "dream_eval_run",
-    )
-)
-ATTESTATION_TOOLS: Final = frozenset(
-    (
-        "attestation_log",
-        "attestation_verify",
-        "attestation_chain_verify",
-        "attestation_list",
-    )
-)
-SNAPSHOT_TOOLS: Final = frozenset(("snapshot_create", "snapshot_load", "snapshot_inspect"))
+QUOTED_RE: Final = re.compile(r'"([^"]+)"')
 CORE_TOOLS: Final = frozenset(("discover_tools", "recent_activity", "memory_agent_contract"))
 FEATURE_GROUPS: Final = {
     "langfuse": "feature.langfuse",
@@ -122,7 +67,12 @@ PREFIX_GROUPS: Final = {
     "scope": "scope",
     "temporal": "temporal",
     "sync": "sync",
+    "replication": "sync",
     "agent": "agent",
+    "palace": "spatial",
+    "room": "spatial",
+    "drawer": "spatial",
+    "graph": "memory.graph",
     "harness": "harness",
     "lifecycle": "lifecycle",
     "retention": "lifecycle",
@@ -153,6 +103,14 @@ def main() -> int:
     args = parser.parse_args()
 
     tools = parse_tools(args.source)
+    unknown = unknown_gated_names(tools)
+    if unknown:
+        print(
+            "required_features in src/mcp/tools/catalog/mod.rs names tools missing "
+            f"from the catalog: {', '.join(unknown)}",
+            file=sys.stderr,
+        )
+        return 1
     markdown = render_reference(tools, args.source)
 
     if args.stdout:
@@ -383,26 +341,40 @@ def required_feature_summary(tool: Tool) -> str:
     return ",".join(tool.required_features)
 
 
+def parse_required_features(catalog_mod: Path) -> dict[str, tuple[str, ...]]:
+    """Parse the Rust `required_features` match into {tool name: features}."""
+    text = catalog_mod.read_text()
+    fn_start = text.find(REQUIRED_FEATURES_FN)
+    if fn_start == -1:
+        raise ValueError(f"missing `{REQUIRED_FEATURES_FN}` in {catalog_mod}")
+    match_start = text.index("match name {", fn_start)
+    brace = text.index("{", match_start)
+    body = text[brace + 1 : matching_brace(text, brace)]
+
+    parsed: dict[str, tuple[str, ...]] = {}
+    for arm in FEATURE_ARM_RE.finditer(body):
+        features = tuple(QUOTED_RE.findall(arm.group("features")))
+        for name in QUOTED_RE.findall(arm.group("names")):
+            if name in parsed:
+                raise ValueError(f"{name!r} appears twice in required_features")
+            parsed[name] = features
+    if not parsed:
+        raise ValueError(f"no feature-gated tools found in {catalog_mod}")
+    return parsed
+
+
+@functools.lru_cache(maxsize=None)
+def catalog_required_features() -> dict[str, tuple[str, ...]]:
+    return parse_required_features(CATALOG_MOD)
+
+
 def required_features(name: str) -> tuple[str, ...]:
-    if name in LANGFUSE_TOOLS:
-        return ("langfuse",)
-    if name in MEILISEARCH_TOOLS:
-        return ("meilisearch",)
-    if name in EMERGENT_GRAPH_TOOLS:
-        return ("emergent-graph",)
-    if name == "memory_sync_media":
-        return ("multimodal", "cloud")
-    if name in MULTIMODAL_TOOLS:
-        return ("multimodal",)
-    if name in DUCKDB_GRAPH_TOOLS:
-        return ("duckdb-graph",)
-    if name in DREAM_PHASE_TOOLS:
-        return ("dream-phase",)
-    if name in ATTESTATION_TOOLS:
-        return ("attestation",)
-    if name in SNAPSHOT_TOOLS:
-        return ("snapshot",)
-    return ()
+    return catalog_required_features().get(name, ())
+
+
+def unknown_gated_names(tools: list[Tool]) -> list[str]:
+    """Names gated in Rust `required_features` that are not cataloged tools."""
+    return sorted(set(catalog_required_features()) - {tool.name for tool in tools})
 
 
 def tool_group(name: str) -> str:
