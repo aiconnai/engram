@@ -77,20 +77,35 @@ class SearchMixin(ResourceMixin):
         self,
         query: str,
         *,
-        limit: int = 10,
+        limit: int = 20,
+        offset: int | None = None,
         workspace: str | None = None,
         filter_: dict[str, Any] | None = None,
+        include_archived: bool | None = None,
     ) -> dict[str, Any]:
         """Hybrid search (BM25 + vector + fuzzy).
 
         Accepts the same ``filter_`` syntax as :meth:`list` for advanced
         metadata filtering on search results.
+
+        Args:
+            query: Search query.
+            limit: Maximum results. Defaults to 20, the ``memory_search`` default.
+            offset: Number of results to skip (pagination). Omitted when ``None``.
+            workspace: Optional workspace filter.
+            filter_: Advanced metadata filter.
+            include_archived: Include archived memories. Omitted when ``None``, so the
+                server default (excluded) applies.
         """
         params: dict[str, Any] = {"query": query, "limit": limit}
+        if offset is not None:
+            params["offset"] = offset
         if workspace is not None:
             params["workspace"] = workspace
         if filter_ is not None:
             params["filter"] = filter_
+        if include_archived is not None:
+            params["include_archived"] = include_archived
         return await self._mcp_call("memory_search", params)
 
     async def memory_council(
