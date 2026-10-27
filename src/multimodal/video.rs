@@ -143,8 +143,8 @@ impl Drop for FramesDirInner {
             if error.kind() != std::io::ErrorKind::NotFound {
                 tracing::warn!(
                     target = "engram::multimodal::video",
-                    path = %self.path.display(),
-                    %error,
+                    path = %crate::observability::redact::path_label(&self.path),
+                    error_class = %crate::observability::redact::io_class(&error),
                     "failed to remove keyframe directory"
                 );
             }
@@ -902,5 +902,34 @@ mod tests {
             err.to_string().contains("not found or not executable"),
             "unexpected error: {err}"
         );
+    }
+}
+
+#[cfg(all(test, unix))]
+mod redaction_tests {
+    use super::*;
+    use crate::observability::test_capture::{assert_logs_exclude, captured, install};
+
+    #[test]
+    fn failed_cleanup_log_omits_directory_path() {
+        // Given: a frames directory under a recognisable path whose cleanup
+        // fails with something other than NotFound (a file took its place).
+        install();
+        const MARKER: &str = "path-sentinel-wt12-77be";
+        let base = tempfile::Builder::new()
+            .prefix(MARKER)
+            .tempdir()
+            .expect("test tempdir is created");
+        let frames = FramesDir::create_in(Some(base.path())).expect("frames dir is created");
+        let dir = frames.path().to_path_buf();
+        std::fs::remove_dir(&dir).expect("empty frames dir is removed");
+        std::fs::write(&dir, b"not a directory").expect("blocking file is written");
+
+        // When: the guard drops and cleanup fails.
+        drop(frames);
+
+        // Then: the failure is logged without the path.
+        assert!(captured().contains("failed to remove keyframe directory"));
+        assert_logs_exclude(&[MARKER]);
     }
 }

@@ -136,7 +136,7 @@ impl ScreenshotCapture {
             None => {
                 // Fallback: capture entire screen
                 tracing::warn!(
-                    app = app_name,
+                    app = %crate::observability::redact::opaque(app_name),
                     "Window ID not found; falling back to full-screen capture"
                 );
                 run_screencapture(&["-x", output_path.to_str().unwrap_or("")], &output_path)?;

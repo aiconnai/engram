@@ -10,8 +10,9 @@ pub struct StopHandler;
 impl StopHandler {
     pub fn handle(&self, _hook: super::LifecycleHook, context: &HookContext) -> Result<HookResult> {
         eprintln!(
-            "[Hook] Stop: session_id={:?}, workspace={:?}",
-            context.session_id, context.workspace
+            "[Hook] Stop: session_id={:?}, workspace={}",
+            context.session_id,
+            crate::observability::redact::opaque(context.workspace.as_deref().unwrap_or("-"))
         );
 
         // TODO: Implement stop logic

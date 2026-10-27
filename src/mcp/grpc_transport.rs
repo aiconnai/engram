@@ -132,8 +132,10 @@ fn authorize_request(principal: &TransportPrincipal, request: &McpRequest) -> Re
         return Ok(());
     }
 
-    let tool_name = request.params.get("name").and_then(|v| v.as_str());
-    let Some(tool_name) = tool_name else {
+    // Unwrap the `tools/call` envelope once: from here on only the bare
+    // arguments (what the dispatcher receives) are inspected for claims.
+    let parts = crate::mcp::permission::tool_call_parts(&request.params);
+    let Some((tool_name, arguments)) = parts else {
         return if is_anonymous {
             Err(Status::permission_denied("permission denied"))
         } else {
@@ -145,13 +147,13 @@ fn authorize_request(principal: &TransportPrincipal, request: &McpRequest) -> Re
         return Err(Status::permission_denied("permission denied"));
     }
 
-    let requested_workspaces = requested_workspaces(tool_name, &request.params);
+    let requested_workspaces = requested_workspaces(tool_name, arguments);
     let first_workspace = requested_workspaces.first().copied();
     if permission_denial_for_principal(tool_name, principal, first_workspace).is_some()
         || requested_workspaces
             .iter()
             .any(|workspace| !principal.allows_workspace(Some(workspace)))
-        || (requests_all_workspaces(&request.params) && !allows_all_workspaces(principal))
+        || (requests_all_workspaces(arguments) && !allows_all_workspaces(principal))
     {
         return Err(Status::permission_denied("permission denied"));
     }
@@ -657,6 +659,42 @@ mod tests {
         ] {
             authorize_request(&principal, &call_tool(tool, arguments.clone()))
                 .unwrap_or_else(|status| panic!("{tool} {arguments} denied: {status}"));
+        }
+    }
+
+    #[test]
+    fn authorize_request_matches_dispatch_on_bare_arguments() {
+        let principal = namespaced_writer("alpha");
+        let envelopes = [
+            serde_json::json!({"name": "memory_list", "arguments": {"workspace": "alpha"}, "workspace": "beta"}),
+            serde_json::json!({"name": "memory_list", "arguments": {"workspace": "beta"}, "workspace": "alpha"}),
+            serde_json::json!({"name": "memory_list", "arguments": {
+                "workspace": "alpha", "name": "x", "arguments": {"workspace": "beta"}}}),
+            serde_json::json!({"name": "memory_list", "arguments": {
+                "workspace": "beta", "name": "x", "arguments": {"workspace": "alpha"}}}),
+            serde_json::json!({"name": "memory_list", "arguments": {"workspace": "alpha"}}),
+            serde_json::json!({"name": "memory_list", "arguments": {"workspace": "beta"}}),
+        ];
+        for params in envelopes {
+            let (name, arguments) = crate::mcp::permission::tool_call_parts(&params).unwrap();
+            let dispatch_denied = crate::mcp::permission::check_tool_authorization(
+                None,
+                name,
+                arguments,
+                Some(&principal),
+            )
+            .is_some();
+            let request = McpRequest {
+                jsonrpc: "2.0".to_string(),
+                id: Some(serde_json::json!("1")),
+                method: methods::CALL_TOOL.to_string(),
+                params: params.clone(),
+            };
+            assert_eq!(
+                authorize_request(&principal, &request).is_err(),
+                dispatch_denied,
+                "gRPC pre-check and dispatch disagree for {params}"
+            );
         }
     }
 

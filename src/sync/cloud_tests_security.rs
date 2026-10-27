@@ -254,3 +254,35 @@ async fn stale_upload_condition_cannot_replace_concurrently_changed_object() {
         b"concurrent"
     );
 }
+
+#[tokio::test]
+async fn cloud_logs_do_not_expose_bucket_or_object_key() {
+    // Given: a bucket and object key that carry identifiable names.
+    use crate::observability::test_capture::{assert_logs_exclude, captured, install};
+    install();
+    const BUCKET: &str = "bucket-sentinel-wt12-3f9a";
+    const KEY: &str = "key-sentinel-wt12-3f9a/private.db";
+    let store = InMemoryCloudStore::default();
+    let writer = CloudStorage::test_fixture(BUCKET, KEY, provider_from_byte(21), store.clone());
+    let temp_dir = tempfile::tempdir().expect("test tempdir is created");
+    let source = temp_dir.path().join("source.db");
+    let destination = temp_dir.path().join("destination.db");
+    tokio::fs::write(&source, b"database bytes")
+        .await
+        .expect("test source is written");
+
+    // When: an upload (info log) and a wrong-key download (warn log) run.
+    writer.upload(&source).await.expect("upload succeeds");
+    let wrong_reader =
+        CloudStorage::test_fixture(BUCKET, KEY, provider_from_byte(22), store.clone());
+    wrong_reader
+        .download(&destination)
+        .await
+        .expect_err("wrong key id must fail");
+
+    // Then: both events were logged, without bucket or key names.
+    let logs = captured();
+    assert!(logs.contains("bytes to s3://"));
+    assert!(logs.contains("Rejected encrypted cloud object"));
+    assert_logs_exclude(&[BUCKET, KEY]);
+}

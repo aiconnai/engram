@@ -296,7 +296,7 @@ pub fn poll_foreground_app() -> Option<String> {
             }
         } else {
             tracing::debug!(
-                stderr = %String::from_utf8_lossy(&output.stderr),
+                stderr = %crate::observability::redact::opaque(&String::from_utf8_lossy(&output.stderr)),
                 "osascript returned non-zero exit code"
             );
             None

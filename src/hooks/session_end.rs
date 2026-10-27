@@ -90,7 +90,7 @@ impl SessionEndHandler {
         tracing::info!(
             target = "engram::hooks::session_end",
             session_id = ?context.session_id,
-            workspace = ?context.workspace,
+            workspace = %crate::observability::redact::opaque(context.workspace.as_deref().unwrap_or("-")),
             "SessionEnd"
         );
 
@@ -172,7 +172,7 @@ impl SessionEndHandler {
             Err(e) => {
                 tracing::warn!(
                     target = "engram::hooks::session_end",
-                    error = %e,
+                    error = %crate::observability::redact::redacted(&e),
                     "failed to enqueue session-end payload; continuing"
                 );
                 false
@@ -237,7 +237,7 @@ fn emit_session_end_policy_summary(
     if let Err(e) = result {
         tracing::warn!(
             target = "engram::hooks::session_end",
-            error = %e,
+            error = %crate::observability::redact::redacted(&e),
             "failed to emit session-end policy summary; continuing"
         );
     }

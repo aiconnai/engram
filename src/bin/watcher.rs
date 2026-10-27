@@ -33,6 +33,7 @@ use chrono::Utc;
 use clap::Parser;
 use tracing::{debug, error, info, warn};
 
+use engram::observability::redact::{opaque, path_label};
 use engram::watcher::{
     app_focus::AppFocusWatcher,
     browser::BrowserWatcher,
@@ -98,10 +99,10 @@ impl<'a> MemorySender<'a> {
     async fn send(&self, content: String, memory_type: &str, tags: Vec<String>) {
         if self.dry_run {
             info!(
-                workspace = self.workspace,
+                workspace = %opaque(self.workspace),
                 r#type = memory_type,
                 "[dry-run] Would create memory: {}",
-                content
+                opaque(&content)
             );
             return;
         }
@@ -130,7 +131,10 @@ impl<'a> MemorySender<'a> {
 
         match req.send().await {
             Ok(resp) if resp.status().is_success() => {
-                debug!(workspace = self.workspace, "Memory created successfully");
+                debug!(
+                    workspace = %opaque(self.workspace),
+                    "Memory created successfully"
+                );
             }
             Ok(resp) => {
                 warn!(
@@ -139,7 +143,7 @@ impl<'a> MemorySender<'a> {
                 );
             }
             Err(e) => {
-                warn!(error = %e, "Failed to send memory to Engram");
+                warn!(error = %opaque(&e), "Failed to send memory to Engram");
             }
         }
     }
@@ -187,7 +191,7 @@ fn start_fs_watcher(
             Some(stop_tx)
         }
         Err(e) => {
-            error!(error = %e, "Failed to create file system watcher");
+            error!(error = %opaque(&e), "Failed to create file system watcher");
             None
         }
     }
@@ -312,11 +316,11 @@ async fn main() {
     let config = match args.config {
         Some(ref path) => match WatcherConfig::load(path) {
             Ok(cfg) => {
-                info!(path = ?path, "Loaded watcher config");
+                info!(path = %path_label(path), "Loaded watcher config");
                 cfg
             }
             Err(e) => {
-                error!(error = %e, "Failed to load config; using defaults");
+                error!(error = %opaque(&e), "Failed to load config; using defaults");
                 WatcherConfig::default()
             }
         },
@@ -328,8 +332,8 @@ async fn main() {
     };
 
     info!(
-        engram_url = %config.engram_url,
-        workspace = %config.workspace,
+        engram_url = %opaque(&config.engram_url),
+        workspace = %opaque(&config.workspace),
         dry_run = args.dry_run,
         "Engram watcher daemon starting"
     );

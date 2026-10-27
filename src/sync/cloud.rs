@@ -126,8 +126,8 @@ impl CloudStorage {
         tracing::info!(
             "Uploaded {} bytes to s3://{}/{}",
             size,
-            self.bucket,
-            self.key
+            crate::observability::redact::opaque(&self.bucket),
+            crate::observability::redact::opaque(&self.key)
         );
         Ok(size)
     }
@@ -192,8 +192,8 @@ impl CloudStorage {
         tracing::info!(
             "Downloaded {} bytes from s3://{}/{}",
             size,
-            self.bucket,
-            self.key
+            crate::observability::redact::opaque(&self.bucket),
+            crate::observability::redact::opaque(&self.key)
         );
         Ok(size)
     }
