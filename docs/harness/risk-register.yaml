@@ -24,7 +24,7 @@ entries:
     impact: 3
     score: 9
     owner: "@team"
-    mitigation: "Usar observability::redact (redacted/path_label/opaque) em todo novo log; varrer os sites restantes por lane; teste de captura em cada modulo dono"
+    mitigation: "Usar observability::redact (redacted/path_label/opaque) em todo novo log. 2026-10-26: 41 sites redigidos em sync/cloud, hooks, multimodal e watcher (fix/log-redaction-sweep, integrado em remediation/integration) com teste de captura por modulo; session_id segue em claro (correlacao); o restante do repositorio ainda precisa de varredura por lane."
     contingency: "Operar com RUST_LOG em nivel info e nao reter logs compartilhados ate a varredura completa"
     monitoring:
       - "novo log com %err ou path.display()"
@@ -32,13 +32,13 @@ entries:
 
   - id: RISK-0003
     date: 2026-10-26
-    status: open
+    status: monitoring
     description: "Regressao de autorizacao em e04d3307: um principal restrito pode escrever em workspace alheio via memory_create_batch e memory_ingest_fact_batch (achado pelo levantamento de 2026-10-26). Correcao em fix/workspace-batch-auth, ainda nao mesclada."
     probability: 4
     impact: 5
     score: 20
     owner: "Ronaldo (correcao: WT1)"
-    mitigation: "Mesclar a correcao de WT1 com teste de regressao por tool de lote e registrar o SHA de merge. Ate la o risco permanece ativo em CLAUDE.md."
+    mitigation: "Corrigido em remediation/integration (c50b552e + f53b75a0, teste de regressao por tool de lote; e2e gRPC em 83e3816c); ainda nao publicado em origin/main. Fechar quando o merge humano registrar o SHA no main."
     contingency: "Decisao do owner sobre desabilitar as tools de lote para principais restritos ate o merge da correcao"
     monitoring:
       - "merge de fix/workspace-batch-auth"
@@ -101,13 +101,13 @@ entries:
 
   - id: RISK-0008
     date: 2026-10-26
-    status: open
+    status: monitoring
     description: "Exceptions de advisory: 2 registros (11 antes do sunset Turso) vencem em 2026-12-31. Segundo o levantamento de 2026-10-26, 7 novos RUSTSEC deixam Security Audit e Cargo Deny (required) vermelhos desde 2026-10-17."
     probability: 4
     impact: 3
     score: 12
     owner: "Ronaldo (correcao: WT2)"
-    mitigation: "WT2 atualiza dependencias; nao renovar excecao de advisory corrigivel (GATES). Renovacao so com racional datado e owner."
+    mitigation: "Resolvido em remediation/integration (fix/supply-chain-2026-10): cargo audit 0 vulnerabilidades (1 aviso governado ttf-parser), cargo deny advisories/bans/licenses/sources ok, sem excecao nova. CI agendado do main segue vermelho ate o merge humano. Nao renovar excecao de advisory corrigivel (GATES)."
     contingency: ""
     monitoring:
       - "vencimento de 2026-12-31"

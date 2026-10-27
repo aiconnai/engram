@@ -205,13 +205,13 @@ Spinning without progress is the most expensive failure mode. Detecting it early
 
 ## Active Risks
 
-State at baseline `08cb17a4`, 2026-10-26. Detail: `docs/harness/risk-register.yaml`, `docs/harness/known-issues/`.
+State on `remediation/integration`, 2026-10-26 (not yet on `main`). Detail: `docs/harness/risk-register.yaml`, `docs/harness/known-issues/`.
 
-- **Authz regression from `e04d3307`** (RISK-0003): a restricted principal can write to a foreign workspace via `memory_create_batch` / `memory_ingest_fact_batch`. Fix is in branch `fix/workspace-batch-auth`, **not merged**; open until the fixing SHA is recorded here.
-- **Unredacted logs** (RISK-0002): ~250 log sites outside the O1 paths (sync/cloud, hooks, multimodal, watcher); use `observability::redact` in new logs.
+- **Authz regression from `e04d3307`** (RISK-0003): a restricted principal could write to a foreign workspace via `memory_create_batch` / `memory_ingest_fact_batch`. Fixed on `remediation/integration` (`c50b552e`, `f53b75a0`, gRPC e2e `83e3816c`); stays listed until a human merge puts it on `main`.
+- **Unredacted logs** (RISK-0002): sync/cloud, hooks, multimodal and watcher were swept (41 sites, capture tests); the rest of the repository still needs a sweep; use `observability::redact` in new logs.
 - **No required review on `main`** (D8, RISK-0006): `enforce_admins=false`, no PR review rule; human merge is process, not a technical control.
 - **C4 SQLite descriptor-bound open** (RISK-0007): the ADR is still *Proposed*; Invariant #27 mitigates by path only.
-- **Advisories** (RISK-0008): exceptions went 11 → 2, both expire 2026-12-31; the 2026-10-26 survey reports 7 new RUSTSEC keeping `Security Audit`/`Cargo Deny` red since 2026-10-17.
+- **Advisories** (RISK-0008): resolved on `remediation/integration` (`cargo audit` 0 vulnerabilities, `cargo deny` ok, no new exception; 2 governed exceptions expire 2026-12-31). Scheduled CI on `main` stays red until the merge.
 - **Evidence provenance** (RISK-0009): the 2026-10-14 verdict and the sunset review are PASS without a human receipt; `.sensors-log` has no row from 2026-09-03 to 2026-10-23.
 
 ---
