@@ -18,11 +18,15 @@ package registries, and dated external sources.
 - **Resource subscriptions are principal-aware** — `resources/subscribe` and `resources/unsubscribe` apply the same workspace policy as `resources/read`.
 - **`memory_search_suggest` is workspace-scoped** — restricted principals get spelling corrections built only from their own workspace vocabulary.
 - **`permission_denial_for_mode` fails closed** for unknown tools.
+- **One `tools/call` unwrap point** — HTTP and gRPC unwrap the envelope once and authorize the same bare arguments the dispatcher sees; `name`/`arguments` keys inside real tool arguments are no longer treated as an envelope.
+- **Log redaction (RISK-0002)** — sync/cloud, hooks, multimodal and the watcher (including its daemon) no longer log bucket/object keys, workspace and tool names, filesystem paths, `engram_url`, dry-run memory content, subprocess stderr or raw error text; errors are logged by class (`ENGRAM_LOG_ERROR_DETAIL=1` restores detail for debugging).
 - **Dependency advisories** — zip 9.0.5 and duckdb 1.10506.1 (RUSTSEC-2026-0367/0368/0369), tokio 1.53.3 (RUSTSEC-2026-0386), rustls-webpki 0.103.16, webpki-roots 1.0.11 and ctutils 0.4.6 (RUSTSEC-2026-0382/0381/0385); crypto-bigint 0.5 removed from the graph (RUSTSEC-2026-0387) by not enabling `aws-sdk-s3/sigv4a`.
 
 ### Fixed
 
 - `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
+- `permission_mode_status` reports write-flag escalation (`write_flag_params`, `required_mode_with_write_flags`, `allowed_with_write_flags`).
+- Harness: `check-live-state.sh` requires the newest PASS review while the active task has none and matches review versions by exact slug; `harness-risk-register.sh` allocates ids past RISK-0008 and validates under Psych 4.
 - Deleted (single, cascade, batch) and content-edited memories are removed from the in-memory HNSW index, saving the index no longer persists removed vectors, and HNSW semantic search widens its bounded candidate fetch so `limit` holds after filtering.
 - `dream_consolidation_status` and `dream_insights` were documented as always available but require `dream-phase`; tool feature gating now has a single source (`catalog::required_features`).
 - `CrossEncoderReranker` returns an explicit "not implemented" error instead of fabricating scores, and model routing no longer reports the placeholder as operational.
@@ -47,6 +51,7 @@ package registries, and dated external sources.
 - Public claims corrected: measured latency (FTS5 p50 3.2 ms, hybrid p50 250 ms at 100K×384d) instead of "sub-millisecond"; nonexistent model "native adapters" and unsourced competitor tool counts removed; gRPC and ONNX marked optional; tool counts are 301 catalog / 254 default build.
 - RFC, ADR, plan and spec statuses record their implementation evidence; ROADMAP tool names corrected and cross-host federation marked not implemented.
 - Shared decision-triage guide trimmed for publication.
+- Optional server variables documented (`ENGRAM_CLEANUP_INTERVAL`, `ENGRAM_GRPC_BIND_ADDRESS`, `ENGRAM_WS_*`, `MEILISEARCH_*`); vector-search docs corrected (HNSW opt-in, sqlite-vec benchmarks only); Rust risk inventory regenerated without the removed Turso backend.
 
 ## [0.24.0] - 2026-10-14
 
