@@ -100,6 +100,11 @@ fn test_hnsw_warmup_from_sqlite() {
                  VALUES (?1, ?2, 'tfidf', ?3, datetime('now'))",
                 rusqlite::params![id, bytes, v.len()],
             )?;
+            // Production persistence sets the flag with the row; warmup relies on it.
+            conn.execute(
+                "UPDATE memories SET has_embedding = 1 WHERE id = ?1",
+                rusqlite::params![id],
+            )?;
         }
         Ok(())
     }).expect("insert embeddings");
