@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 LANE = REPO_ROOT / "docs" / "harness" / "bin" / "run-offline-lane.sh"
 
 # Mirrors the exact floors of run-offline-lane.sh (the real suites' current counts).
-GOOD_COUNTS = {"unit": 76, "selftest": 18, "fixtures": 39, "live": 44, "gate": 39, "lane": 19,
+GOOD_COUNTS = {"unit": 76, "selftest": 18, "fixtures": 39, "live": 46, "gate": 39, "lane": 19,
                "sandbox": 54, "context": 50, "runner": 75, "merge": 47, "retention": 21,
                "standing": 52}
 
