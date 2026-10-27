@@ -1,3 +1,10 @@
+# Observation freshness: every observed_* value and the matrix observed_utc timestamp below record
+# what was visible in the registries at the time of the last manual check. They are NOT refreshed
+# by version bumps. Immediately before tagging, re-observe every registry and the GitHub releases
+# (python3 scripts/check-release-channels.py --matrix docs/releases/channel-matrix.toml --read-only),
+# correct any observed_* value that changed, then run python3 scripts/bump-version.py --refresh-matrix
+# and commit the result. Never edit observed_* values without having observed the registry.
+
 [matrix]
 schema_version = 2
 observed_utc = "2026-10-14T20:18:54Z"
@@ -30,8 +37,8 @@ target = "v0.24.0"
 expected_present = false
 observed_latest = "v0.21.2"
 owner = "release owner"
-dry_run_command = "git ls-remote --tags https://github.com/aiconnai/engram.git refs/tags/v0.22.0"
-publish_command = "git tag -a v0.22.0 -m 'v0.22.0' && git push origin v0.22.0"
+dry_run_command = "git ls-remote --tags https://github.com/aiconnai/engram.git refs/tags/v0.24.0"
+publish_command = "git tag -s v0.24.0 -m 'v0.24.0' && git push origin v0.24.0"
 rollback = "Do not delete public tags casually; coordinate a forward fix or documented tag correction."
 human_gate = true
 
@@ -42,7 +49,7 @@ target = "v0.24.0"
 expected_present = false
 observed_latest = "v0.21.2"
 owner = "release owner"
-dry_run_command = "gh release view v0.22.0 --repo aiconnai/engram --json tagName,isDraft,isPrerelease,publishedAt"
+dry_run_command = "gh release view v0.24.0 --repo aiconnai/engram --json tagName,isDraft,isPrerelease,publishedAt"
 publish_command = "GitHub Actions release workflow from reviewed tag; do not use generated notes."
 pdf_support = "Linux release archives contain engram-server, engram-cli, and sibling engram-pdf-worker; macOS PDF ingestion fails closed."
 rollback = "Published releases may be edited, but assets/checksums and downstream Homebrew formula may already be consumed."
