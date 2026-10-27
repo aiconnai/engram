@@ -117,6 +117,92 @@ pub const TOOL_DEFINITIONS: &[ToolDef] = &[
         )
         self.assertIn("- Required feature: `multimodal,cloud`", markdown)
 
+    def test_required_features_follow_the_rust_catalog(self) -> None:
+        # Gating lives in src/mcp/tools/catalog/mod.rs::required_features; the
+        # generator must read it instead of keeping its own lists.
+        self.assertEqual(generator.required_features("dream_insights"), ("dream-phase",))
+        self.assertEqual(
+            generator.required_features("dream_consolidation_status"), ("dream-phase",)
+        )
+        self.assertEqual(generator.required_features("memory_ingest_media"), ("multimodal",))
+        self.assertEqual(
+            generator.required_features("memory_sync_media"), ("multimodal", "cloud")
+        )
+        self.assertEqual(generator.required_features("memory_create"), ())
+
+    def test_parse_required_features_handles_pipe_and_brace_arms(self) -> None:
+        source = """
+pub(crate) fn required_features(name: &str) -> &'static [&'static str] {
+    match name {
+        "a_one"
+        | "a_two" => &["alpha"],
+        "b_one" => &["beta", "gamma"],
+        "c_one" | "c_two" => {
+            &["delta"]
+        }
+        _ => &[],
+    }
+}
+
+pub(crate) fn required_feature(name: &str) -> Option<&'static str> {
+    required_features(name).first().copied()
+}
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mod.rs"
+            path.write_text(source)
+
+            parsed = generator.parse_required_features(path)
+
+        self.assertEqual(
+            parsed,
+            {
+                "a_one": ("alpha",),
+                "a_two": ("alpha",),
+                "b_one": ("beta", "gamma"),
+                "c_one": ("delta",),
+                "c_two": ("delta",),
+            },
+        )
+
+    def test_parse_required_features_rejects_duplicate_tool_names(self) -> None:
+        source = """
+pub(crate) fn required_features(name: &str) -> &'static [&'static str] {
+    match name {
+        "dup" => &["alpha"],
+        "dup" => &["beta"],
+        _ => &[],
+    }
+}
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mod.rs"
+            path.write_text(source)
+
+            with self.assertRaises(ValueError):
+                generator.parse_required_features(path)
+
+    def test_every_gated_name_in_rust_is_a_cataloged_tool(self) -> None:
+        tools = generator.parse_tools(generator.DEFAULT_SOURCE)
+        names = {tool.name for tool in tools}
+
+        self.assertEqual(generator.unknown_gated_names(tools), [])
+        self.assertEqual(
+            generator.unknown_gated_names(
+                [tool for tool in tools if tool.name != "dream_insights"]
+            ),
+            ["dream_insights"],
+        )
+        self.assertIn("dream_insights", names)
+
+    def test_groups_match_rust_tool_group_for_prefix_families(self) -> None:
+        self.assertEqual(generator.tool_group("palace_navigate"), "spatial")
+        self.assertEqual(generator.tool_group("room_search"), "spatial")
+        self.assertEqual(generator.tool_group("drawer_open"), "spatial")
+        self.assertEqual(generator.tool_group("graph_query"), "memory.graph")
+        self.assertEqual(generator.tool_group("replication_status"), "sync")
+        self.assertEqual(generator.tool_group("dream_insights"), "feature.dream")
+
 
 if __name__ == "__main__":
     unittest.main()

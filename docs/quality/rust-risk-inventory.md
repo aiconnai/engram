@@ -316,7 +316,7 @@ decision for the fix patches, not part of this inventory.
 | Q2-B19 | `src/integrations/langfuse.rs:108` (`LangfuseConfig::from_env`) | `.expect("... failed security validation")`: a bad `LANGFUSE_BASE_URL` aborts startup with a panic (documented), instead of a typed error. | Confirmed (static). |
 | Q2-B20 | `src/embedding/mod.rs:96`, `src/portability/markdown.rs:128`, `src/bin/server.rs:297,685,888,939`, `src/bin/watcher.rs:186,341` | Runtime/HTTP-client construction `expect`s. Also `Runtime::new()` created inside a library constructor can panic when the owning value is dropped inside an async context. Prefer a typed startup error. | HYPOTHESIS. |
 | Q2-B22 | `src/storage/queries/core/row.rs:22,52,55,86,89`, `queries/sync.rs:161,408,537` | Decode fallbacks `unwrap_or_else(\|_\| ...)` turn bad data into valid values: unknown tier becomes `"permanent"`, unparsable timestamps become `Utc::now()` (a corrupt `created_at` makes a memory look fresh; sync ordering uses these). 106 production `err_default_closure` sites; most are benign defaults and need triage per site. | HYPOTHESIS. |
-| Q2-B23 | `src/storage/turso_backend/impls_crud.rs:97,104,323,331`, `core.rs:352-388` (feature `turso`, non-default) | Tag insert/link and index creation use `.await.ok()`; tag-link failures are silent. | HYPOTHESIS. |
+| Q2-B23 | `src/storage/turso_backend/impls_crud.rs:97,104,323,331`, `core.rs:352-388` (feature `turso`, non-default; paths no longer exist) | Tag insert/link and index creation use `.await.ok()`; tag-link failures are silent. | HYPOTHESIS. **REMOVED** in `08cb17a4` (v0.24.0): the `turso` feature and `src/storage/turso_backend/` were deleted (ADR-STORAGE-20260816-1), so the finding no longer applies. |
 | Q2-B24 | `src/hooks/mod.rs:113,124` | Hook errors go only to stderr and `trigger_and_forget` discards the result. Intentional fire-and-forget; documenting it is enough. | Confirmed (static). |
 | Q2-B25 | 9 sites using `query_row(..).ok()` as "not found": `storage/queries/core/dedup.rs:42` (`find_by_content_hash`), `entity_queries.rs:60`, `identity_links.rs:297,418`, `clustering.rs:223`, `queries/sync.rs:233`, `queries/core/memory_delete.rs:14`, `intelligence/session_indexing.rs:437`, `mcp/handlers/context/facts.rs:30`; and 7 `ctx.embedder.embed(..).ok()` in `mcp/handlers/{search.rs:127,702, context/assembly.rs:89,291,436}`, `bin/cli/{core.rs:87, interactive.rs:121}` | `query_row(..).ok()` turns any error (lock, I/O, schema) into "row absent": `dedup.rs:42` would then insert a duplicate, `session_indexing.rs:437` would treat an existing session as new. The idiom is `.optional()?`. A failing embedder silently degrades search to lexical-only with no signal in the response (may be intended graceful degradation; needs a documented contract). | HYPOTHESIS |
 
@@ -346,7 +346,8 @@ decision for the fix patches, not part of this inventory.
 - `.ok();` as a discarded statement: 16 production sites. 5 wrap an
   `emit_best_effort(..)` closure that always returns `Ok`
   (`mcp/handlers/{autonomous.rs:238,274, lifecycle.rs:576, summarize.rs:120,
-  misc/auto_tag.rs:199}`), 11 are Turso `.await.ok()` (Q2-B23). `.ok()` bound to
+  misc/auto_tag.rs:199}`), 11 were Turso `.await.ok()` (Q2-B23; removed with the
+  backend in `08cb17a4`, so 5 remain). `.ok()` bound to
   a variable (`ok_bound`, 30 production sites) converts every error to `None`;
   the consequential ones are listed in Q2-B25.
 - `Err(_) => {}` / `Err(_) => ()`: 0 occurrences.
@@ -451,5 +452,5 @@ b.storage().with_connection(|c| { c.execute("UPDATE memories SET importance='not
   syntactic part, but `#[cfg(target_os = ...)]` branches that are inactive on
   macOS are classified by their predicates, not by compilation.
 - `snapshot_*` handler path for Q2-B06, `compact()` failure injection (Q2-B13),
-  filesystems without `flock` (Q2-B15), and the Turso backend (Q2-B23) were
-  not run.
+  filesystems without `flock` (Q2-B15), and the Turso backend (Q2-B23, since
+  removed in `08cb17a4`) were not run.

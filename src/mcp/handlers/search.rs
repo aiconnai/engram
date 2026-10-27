@@ -544,14 +544,63 @@ pub fn memory_search(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| ToolError::from(e).into_value())
 }
 
+/// Most recent memories read to build a restricted principal's suggestion vocabulary.
+const SUGGEST_VOCABULARY_MAX_ROWS: i64 = 5_000;
+
+/// Fuzzy engine whose vocabulary comes only from `workspace`'s live memories.
+fn workspace_fuzzy_engine(
+    ctx: &HandlerContext,
+    workspace: &str,
+) -> crate::error::Result<crate::search::FuzzyEngine> {
+    ctx.storage.with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT content FROM memories
+             WHERE workspace = ?1 AND valid_to IS NULL
+               AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')
+             ORDER BY updated_at DESC LIMIT ?2",
+        )?;
+        let mut engine = crate::search::FuzzyEngine::new();
+        let rows = stmt.query_map(
+            rusqlite::params![workspace, SUGGEST_VOCABULARY_MAX_ROWS],
+            |row| row.get::<_, String>(0),
+        )?;
+        for content in rows {
+            engine.add_to_vocabulary(&content?);
+        }
+        Ok(engine)
+    })
+}
+
 pub fn search_suggest(ctx: &HandlerContext, params: Value) -> Value {
     if let Err(err) = validate_non_negative_int(&params, "limit") {
         return err;
     }
-    if let Err(err) = extract_optional_workspace("memory_search_suggest", &params, ctx) {
-        return err;
-    }
+    let workspace = match extract_optional_workspace("memory_search_suggest", &params, ctx) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
     let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
+
+    // The shared vocabulary is built from every workspace, so corrections from
+    // it would reveal words that only exist in workspaces a restricted
+    // principal cannot read. Such a principal gets its own workspace's words.
+    if let Some(principal) = ctx
+        .principal
+        .as_ref()
+        .filter(|p| !crate::mcp::permission::allows_all_workspaces(p))
+    {
+        let Some(workspace) = workspace.as_deref() else {
+            return crate::mcp::permission::workspace_claim_denied(
+                "memory_search_suggest",
+                principal,
+            );
+        };
+        return match workspace_fuzzy_engine(ctx, workspace) {
+            Ok(engine) => json!(engine.correct_query(query)),
+            Err(e) => ToolError::from(e).into_value(),
+        };
+    }
+
     let fuzzy = ctx.fuzzy_engine.lock();
     let result = fuzzy.correct_query(query);
     json!(result)
@@ -704,18 +753,29 @@ pub fn search_cache_stats(ctx: &HandlerContext, _params: Value) -> Value {
     json!(stats)
 }
 
-pub fn search_cache_clear(ctx: &HandlerContext, params: Value) -> Value {
-    let workspace = match extract_optional_workspace("search_cache_clear", &params, ctx) {
-        Ok(ws) => ws,
-        Err(err) => return err,
+/// Authorize `params` for `tool_name` and evict the matching search cache
+/// entries: the requested workspace's, or everything when none applies.
+///
+/// Returns the workspace that was cleared (`None` = all) and the number of
+/// entries evicted, or the structured denial/validation error.
+pub(crate) fn evict_search_cache(
+    tool_name: &str,
+    params: &Value,
+    ctx: &HandlerContext,
+) -> std::result::Result<(Option<String>, usize), Value> {
+    let workspace = extract_optional_workspace(tool_name, params, ctx)?;
+    let evicted = match workspace.as_deref() {
+        Some(ws) => ctx.search_cache.invalidate_for_workspace(Some(ws)),
+        None => ctx.search_cache.clear(),
     };
+    Ok((workspace, evicted))
+}
 
-    if let Some(ws) = workspace.as_deref() {
-        ctx.search_cache.invalidate_for_workspace(Some(ws));
-        json!({"cleared": true, "scope": "workspace", "workspace": ws})
-    } else {
-        ctx.search_cache.clear();
-        json!({"cleared": true, "scope": "all"})
+pub fn search_cache_clear(ctx: &HandlerContext, params: Value) -> Value {
+    match evict_search_cache("search_cache_clear", &params, ctx) {
+        Ok((Some(ws), _)) => json!({"cleared": true, "scope": "workspace", "workspace": ws}),
+        Ok((None, _)) => json!({"cleared": true, "scope": "all"}),
+        Err(err) => err,
     }
 }
 

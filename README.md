@@ -10,7 +10,7 @@
 [![docs.rs](https://img.shields.io/docsrs/engram-core)](https://docs.rs/engram-core)
 [![Python SDK](https://img.shields.io/badge/Python%20SDK-PyPI-blue?logo=python)](sdks/python)
 [![TypeScript SDK](https://img.shields.io/badge/TypeScript%20SDK-npm-purple?logo=typescript)](sdks/typescript)
-[![MCP Server](https://img.shields.io/badge/MCP%20Server-243%20Tools-emerald)](docs/MCP_TOOLS.md)
+[![MCP Server](https://img.shields.io/badge/MCP%20Server-301%20Tools-emerald)](docs/MCP_TOOLS.md)
 
 - [Website & Interactive Playground](https://aiconnai.github.io/engram/)
 - [MCP Tools Catalog](https://aiconnai.github.io/engram/mcp-tools.html)
@@ -23,9 +23,11 @@
 
 ---
 
-Engram is an offline, high-performance Rust memory engine for teams shipping autonomous AI agents across the modern AI stack. Native adapters and first-class Model Context Protocol (MCP) support cover **Claude Code, Cursor & Cursor Rules, Google Antigravity, OpenAI Agents SDK, Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, GPT-5.6 Sol, LangGraph, CrewAI, LlamaIndex, and FastMCP**.
+Engram is an offline, high-performance Rust memory engine for teams shipping autonomous AI agents across the modern AI stack. First-class Model Context Protocol (MCP) support, runnable examples, and SDK integrations cover **Claude Code, Cursor & Cursor Rules, Google Antigravity, OpenAI Agents SDK, LangGraph, CrewAI, LlamaIndex, and FastMCP**. Any other MCP-capable host or model can connect over MCP stdio or HTTP JSON-RPC; this repository ships no model-specific adapters.
 
-It organizes decisions, transcripts, architecture notes, and repos into SQLite with sub-millisecond retrieval, **3-way hybrid search** (BM25 + Vectors + Fuzzy), **dynamic knowledge graphs with identity resolution**, **multi-tier temporal salience decay**, and **contradiction detection**.
+It organizes decisions, transcripts, architecture notes, and repos into SQLite with millisecond-scale keyword retrieval, **3-way hybrid search** (BM25 + Vectors + Fuzzy), **dynamic knowledge graphs with identity resolution**, **multi-tier temporal salience decay**, and **contradiction detection**.
+
+Measured latency (100K memories x 384-dim embeddings, 100 iterations): FTS5 keyword search p50 3.2 ms, p95 3.8 ms; hybrid search (BM25 + cosine + RRF) p50 250 ms, p95 261 ms. The vector leg is brute-force cosine, so hybrid latency grows linearly with corpus size. Commands, raw numbers, and caveats: [search measurements](docs/harness/decisions/phase2-2-search-vector-bottleneck-sqlite-vec-2026-06-07.md).
 
 Engram operates 100% offline, keeping your proprietary context on your machine with zero telemetry, and exposes unified access via MCP stdio, HTTP JSON-RPC 2.0 (`POST /mcp`), WebSocket event streaming, CLI, and Python/TypeScript SDKs.
 
@@ -35,13 +37,13 @@ Engram operates 100% offline, keeping your proprietary context on your machine w
 
 | Area | What Engram does |
 |------|------------------|
-| **Storage Layer** | Local-first SQLite + WAL with connection pooling, sub-millisecond ACID writes, and optional AES-256-GCM encrypted S3/R2 cloud backup sync. |
-| **Hybrid Search** | 3-way retrieval fusing BM25 (FTS5), dense cosine vector embeddings (MiniLM ONNX / OpenAI), and fuzzy Levenshtein via Reciprocal Rank Fusion (RRF). |
+| **Storage Layer** | Local-first SQLite + WAL with connection pooling, ACID writes, and optional AES-256-GCM encrypted S3/R2 cloud backup sync. |
+| **Hybrid Search** | 3-way retrieval fusing BM25 (FTS5), dense cosine vector embeddings (built-in TF-IDF by default; OpenAI with an API key; local MiniLM ONNX via the optional `local-embeddings` feature), and fuzzy Levenshtein via Reciprocal Rank Fusion (RRF). |
 | **Knowledge Graph** | Automatic entity extraction, bidirectional relationship edges, canonical identity resolution, and multi-hop shortest path graph traversal. |
 | **Salience & Lifecycle** | Multi-tier retention distinguishing permanent decisions from 24h daily scratchpads; dynamic exponential decay scoring. |
 | **Context Quality** | 5-component quality scoring (clarity, completeness, freshness, consistency, trust) + automated contradiction and conflict detection. |
 | **Project Discovery** | Auto-ingests and indexes `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `copilot-instructions.md`, and `.aider.conf.yml`. |
-| **Universal Transports** | MCP over stdio, HTTP JSON-RPC 2.0 (`/mcp`), WebSocket real-time subscription streaming, and gRPC. |
+| **Universal Transports** | MCP over stdio, HTTP JSON-RPC 2.0 (`/mcp`), WebSocket real-time subscription streaming, and gRPC (optional `grpc` Cargo feature, not in the default build). |
 | **Developer Surface** | Native Rust crate (`engram-core`), async Python SDK (`engram-client`), TypeScript SDK (`@aiconnai/engram-client`), and CLI (`engram-cli`). |
 
 ---
@@ -56,7 +58,7 @@ Engram provides durable, structured memory anywhere an AI agent reasons, plans, 
 | **Cursor & Cursor Rules** | Ingests `.cursorrules`, provides instant semantic search over architecture patterns and coding conventions. |
 | **Google Antigravity** | Persistent multi-agent memory and shared workspace context for complex agentic refactors and long-running swarms. |
 | **OpenAI Agents SDK & ChatGPT** | Callable tools for durable thread state, entity lookup, and fact verification over HTTP JSON-RPC. |
-| **Gemini 3.7 Flash & DeepSeek-V4** | Sub-millisecond memory lookups matching high-throughput reasoning loops and accurate code snippet indexing. |
+| **Other MCP-capable models (Gemini, DeepSeek, Grok, GPT, ...)** | Model-agnostic: connect through any MCP host over stdio or HTTP JSON-RPC. No model-specific adapters or examples are shipped for these models. |
 | **LangGraph & LangChain** | Python SDK adapters for stateful graph nodes that search, store, and compact memory across multi-agent workflows. |
 | **CrewAI Swarms** | Python SDK adapters for short-term, long-term, and entity memory across specialized agent crews. |
 | **LlamaIndex** | Python SDK document store, vector store, and chat store adapters backed by hybrid retrieval. |
@@ -81,7 +83,7 @@ Engram solves this by providing a unified, local-first intelligence layer:
 │                          AI Agent Hosts                         │
 │   Claude Code │ Cursor │ Antigravity │ OpenAI Agents │ CrewAI   │
 └────────────────────────────────┬────────────────────────────────┘
-                                 │ MCP stdio / HTTP / WS / gRPC
+                                 │ MCP stdio / HTTP / WS (gRPC: optional feature)
 ┌────────────────────────────────▼────────────────────────────────┐
 │                         Engram Server                           │
 ├─────────────────────────────────────────────────────────────────┤
@@ -110,9 +112,11 @@ Engram solves this by providing a unified, local-first intelligence layer:
 | **Knowledge Graph & Identity** | **Yes (Built-in)** | Basic | Yes (Graphiti) | Yes | None |
 | **Memory Tiering & Salience** | **Permanent + 24h Daily** | Manual | Single tier | Manual | None |
 | **Contradiction Detection** | **Yes (Temporal)** | Overwrite only | Edge invalidation | None | None |
-| **Transports Supported** | **stdio, HTTP, WS, gRPC** | REST API | REST / GraphQL | REST API | stdio only |
-| **Active MCP Tools** | **243 tools** | ~6 tools | ~8 tools | ~10 tools | ~4 tools |
+| **Transports Supported** | **stdio, HTTP, WS** (+ gRPC, optional feature) | REST API | REST / GraphQL | REST API | stdio only |
+| **Active MCP Tools** | **301 tools** (254 in the default build) | ~6 tools | ~8 tools | ~10 tools | ~4 tools |
 | **Zero Cloud Lock-in** | **Yes** | No | No | Partial | Yes |
+
+Tool counts: 301 is the size of the generated catalog ([docs/MCP_TOOLS.md](docs/MCP_TOOLS.md)); 254 of them are callable in a default `cargo build`, and the rest need opt-in Cargo features. The default `tools/list` advertises only the 17 essential tools unless `ENGRAM_TOOL_TIER` is raised.
 
 For a comprehensive breakdown, see [docs/COMPARISON.md](docs/COMPARISON.md).
 
