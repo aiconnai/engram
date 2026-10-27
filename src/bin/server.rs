@@ -711,6 +711,9 @@ impl McpHandler for EngramHandler {
     }
 }
 
+/// Drain cycles between two HNSW-vs-SQLite reconciliations.
+const HNSW_SYNC_EVERY_N_CYCLES: u32 = 10;
+
 /// Search configuration for the server: defaults plus the explicit HNSW opt-in.
 fn search_config_for(hnsw_enabled: bool) -> SearchConfig {
     SearchConfig {
@@ -932,6 +935,7 @@ fn main() -> Result<()> {
                 }
             };
 
+            let mut cycles_since_hnsw_sync: u32 = 0;
             loop {
                 // run_embedding_drain_cycle owns its lock discipline — it
                 // releases the connection lock around the embed_batch call
@@ -948,8 +952,15 @@ fn main() -> Result<()> {
                 // Memories also leave the searchable set through paths that
                 // never touch the index (expiry, supersede, merge, GC, content
                 // rewrites): reconcile against SQLite and bound tombstones.
+                // Search re-validates every candidate against SQLite, so this
+                // only reclaims memory and beam width: run it every few cycles
+                // rather than scanning the whole index twice a minute.
                 if hnsw_enabled {
-                    engram::search::hnsw_sync::sync_hnsw_logged(&drain_storage, &sync_hnsw);
+                    if cycles_since_hnsw_sync == 0 {
+                        engram::search::hnsw_sync::sync_hnsw_logged(&drain_storage, &sync_hnsw);
+                    }
+                    cycles_since_hnsw_sync =
+                        (cycles_since_hnsw_sync + 1) % HNSW_SYNC_EVERY_N_CYCLES;
                 }
                 std::thread::sleep(interval);
             }
