@@ -273,8 +273,8 @@ impl WatcherConfig {
                 Ok(cfg) => cfg,
                 Err(e) => {
                     tracing::warn!(
-                        path = ?default_path,
-                        error = %e,
+                        path = %crate::observability::redact::path_label(&default_path),
+                        error = %crate::observability::redact::opaque(&e),
                         "Failed to parse watcher config, using defaults"
                     );
                     Self::default()
