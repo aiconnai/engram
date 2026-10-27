@@ -63,6 +63,12 @@ struct Args {
     #[arg(long, env = "ENGRAM_CLOUD_ENCRYPT")]
     encrypt: bool,
 
+    /// Enable the in-memory HNSW approximate-nearest-neighbour index for
+    /// semantic search. Opt-in (RFC 0003): when off, semantic search uses the
+    /// exact SQLite scan and no index is built, warmed up or maintained.
+    #[arg(long, env = "ENGRAM_HNSW_ENABLED")]
+    hnsw_enabled: bool,
+
     /// Embedding model (tfidf, local, openai)
     #[arg(long, env = "ENGRAM_EMBEDDING_MODEL", default_value = "tfidf")]
     embedding_model: String,
@@ -263,6 +269,7 @@ impl EngramHandler {
         storage: Storage,
         embedder: Arc<dyn engram::embedding::Embedder>,
         progress_tx: std::sync::mpsc::Sender<engram::mcp::ProgressNotification>,
+        search_config: SearchConfig,
     ) -> Self {
         let hnsw_index = Arc::new(parking_lot::RwLock::new(engram::search::HnswIndex::new(
             engram::search::HnswConfig::new(
@@ -270,8 +277,6 @@ impl EngramHandler {
                 engram::search::VectorMetric::Cosine,
             ),
         )));
-
-        let search_config = SearchConfig::default();
 
         // HNSW is opt-in: skip the warmup (full DB replay) when it is disabled.
         if search_config.hnsw_enabled {
@@ -706,6 +711,14 @@ impl McpHandler for EngramHandler {
     }
 }
 
+/// Search configuration for the server: defaults plus the explicit HNSW opt-in.
+fn search_config_for(hnsw_enabled: bool) -> SearchConfig {
+    SearchConfig {
+        hnsw_enabled,
+        ..SearchConfig::default()
+    }
+}
+
 fn main() -> Result<()> {
     // Initialize logging to stderr (stdout is for MCP protocol)
     tracing_subscriber::registry()
@@ -836,7 +849,12 @@ fn main() -> Result<()> {
     // `McpHandler`.
     let (progress_tx, progress_rx) = std::sync::mpsc::channel();
     #[allow(unused_mut)]
-    let mut handler_state = EngramHandler::new(storage.clone(), embedder.clone(), progress_tx);
+    let mut handler_state = EngramHandler::new(
+        storage.clone(),
+        embedder.clone(),
+        progress_tx,
+        search_config_for(args.hnsw_enabled),
+    );
     #[cfg(feature = "hooks")]
     handler_state.enable_hooks();
     let handler = Arc::new(handler_state);
