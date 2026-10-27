@@ -44,6 +44,7 @@ pub use lifecycle::{
     cleanup_expired, memory_boost, memory_checkpoint, memory_promote_to_permanent, set_expiration,
 };
 pub use procedural::{memory_get_procedures, memory_get_timeline, record_procedure_outcome};
+pub(crate) use read_update_delete::extract_id;
 pub use read_update_delete::{
     memory_delete, memory_delete_batch, memory_get, memory_get_public, memory_list, memory_update,
 };

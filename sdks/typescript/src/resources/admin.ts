@@ -119,8 +119,10 @@ export class AdminResource extends BaseResource {
   /**
    * Clear cache entries.
    */
-  async cacheClear(_options?: CacheClearOptions): Promise<unknown> {
-    return this.caller.mcpCall("memory_cache_clear", {});
+  async cacheClear(options?: CacheClearOptions): Promise<unknown> {
+    const params: Record<string, unknown> = {};
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    return this.caller.mcpCall("memory_cache_clear", params);
   }
 
   /**

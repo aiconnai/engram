@@ -464,7 +464,9 @@ pub const TOOLS: &[ToolDef] = &[
             description: "Evict all entries from the semantic search cache. Mutates in-memory cache state.",
             schema: r#"{
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "workspace": {"type": "string", "description": "Only clear cache for this workspace (optional)"}
+                },
                 "required": []
             }"#,
             annotations: ToolAnnotations::mutating(),

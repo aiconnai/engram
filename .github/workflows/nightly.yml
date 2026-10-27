@@ -207,8 +207,8 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
 
-      - name: Install cargo-outdated
-        run: cargo install cargo-outdated
+      - name: Install cargo-outdated (pinned)
+        run: cargo install cargo-outdated --version 0.19.0 --locked
 
       - name: Check outdated
         run: cargo outdated --root-deps-only

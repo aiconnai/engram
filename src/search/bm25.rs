@@ -127,6 +127,42 @@ pub fn bm25_search_complete_with_scope_path(
     tier: Option<&crate::types::MemoryTier>,
     scope_path: Option<&str>,
 ) -> Result<Vec<Bm25Result>> {
+    bm25_search_complete_with_options(
+        conn,
+        query,
+        limit,
+        explain,
+        scope,
+        filter,
+        include_transcripts,
+        include_archived,
+        workspace,
+        workspaces,
+        tier,
+        scope_path,
+        None,
+        None,
+    )
+}
+
+/// Perform BM25 search with all options including tags and memory_type filters.
+#[allow(clippy::too_many_arguments)]
+pub fn bm25_search_complete_with_options(
+    conn: &Connection,
+    query: &str,
+    limit: i64,
+    explain: bool,
+    scope: Option<&MemoryScope>,
+    filter: Option<&serde_json::Value>,
+    include_transcripts: bool,
+    include_archived: bool,
+    workspace: Option<&str>,
+    workspaces: Option<&[String]>,
+    tier: Option<&crate::types::MemoryTier>,
+    scope_path: Option<&str>,
+    tags: Option<&[String]>,
+    memory_type: Option<&crate::types::MemoryType>,
+) -> Result<Vec<Bm25Result>> {
     // Escape special FTS5 characters
     let escaped_query = escape_fts5_query(query);
     let now = Utc::now().to_rfc3339();
@@ -165,7 +201,7 @@ pub fn bm25_search_complete_with_scope_path(
         sql.push_str(" AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'archived')");
     }
 
-    // Add advanced filter (RML-932)
+    // Add advanced filter (RML-932) or fallback tags / memory_type filters
     if let Some(filter_json) = filter {
         let filter_expr = parse_filter(filter_json)?;
         let mut builder = SqlBuilder::new();
@@ -174,6 +210,28 @@ pub fn bm25_search_complete_with_scope_path(
         sql.push_str(&filter_sql);
         for param in builder.take_params() {
             params.push(param);
+        }
+    } else {
+        if let Some(tag_list) = tags {
+            if !tag_list.is_empty() {
+                sql.push_str(
+                    " AND m.id IN (
+                        SELECT mt.memory_id FROM memory_tags mt
+                        JOIN tags t ON mt.tag_id = t.id
+                        WHERE t.name IN (",
+                );
+                let placeholders: Vec<&str> = tag_list.iter().map(|_| "?").collect();
+                sql.push_str(&placeholders.join(", "));
+                sql.push_str("))");
+                for tag in tag_list {
+                    params.push(Box::new(tag.clone()));
+                }
+            }
+        }
+
+        if let Some(mt) = memory_type {
+            sql.push_str(" AND m.memory_type = ?");
+            params.push(Box::new(mt.as_str().to_string()));
         }
     }
 

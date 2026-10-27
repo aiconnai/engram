@@ -31,6 +31,8 @@ pub fn search_by_identity(
          WHERE m.workspace = ? AND (m.content LIKE ? OR t.name LIKE ?)
            AND m.valid_to IS NULL
            AND (m.expires_at IS NULL OR m.expires_at > ?)
+           AND m.memory_type != 'transcript_chunk'
+           AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'archived')
          ORDER BY m.importance DESC, m.created_at DESC
          LIMIT ?"
     } else {
@@ -46,13 +48,15 @@ pub fn search_by_identity(
          WHERE (m.content LIKE ? OR t.name LIKE ?)
            AND m.valid_to IS NULL
            AND (m.expires_at IS NULL OR m.expires_at > ?)
+           AND m.memory_type != 'transcript_chunk'
+           AND (m.lifecycle_state IS NULL OR m.lifecycle_state != 'archived')
          ORDER BY m.importance DESC, m.created_at DESC
          LIMIT ?"
     };
 
     let mut stmt = conn.prepare(query)?;
 
-    let memories = if let Some(ws) = workspace {
+    let mut memories = if let Some(ws) = workspace {
         stmt.query_map(
             params![ws, &pattern, &pattern, &now, limit as i64],
             memory_from_row,
@@ -65,6 +69,10 @@ pub fn search_by_identity(
         )?
         .collect::<std::result::Result<Vec<_>, _>>()?
     };
+
+    for m in &mut memories {
+        m.tags = load_tags(conn, m.id)?;
+    }
 
     Ok(memories)
 }

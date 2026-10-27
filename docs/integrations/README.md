@@ -7,3 +7,4 @@ These guides show how to connect Engram to MCP clients and agent workflows.
 - [`cursor-mcp-memory.md`](cursor-mcp-memory.md): Cursor MCP memory setup.
 - [`openai-agents-memory.md`](openai-agents-memory.md): OpenAI agent workflow memory pattern, with native-support limits.
 - [`engram_shared_memory_architecture.md`](engram_shared_memory_architecture.md): Proposed shared-memory architecture for Hermes Local and Hermes VPS.
+- [`decision-triage.md`](decision-triage.md): Shared decision-triage CLI (`~/.agents/skills/decision-triage`); preview-first, paid calls only with explicit authorization. Repo config: `decision-triage.json`.

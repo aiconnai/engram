@@ -9,7 +9,6 @@
 //! implementations:
 //!
 //! - `SqliteBackend` - Current default, uses rusqlite with WAL mode
-//! - `TursoBackend` - Planned for Phase 6, distributed SQLite
 //! - `MeilisearchBackend` - Planned for Phase 7, full-text search focused
 //!
 //! ## Extension Traits
@@ -52,9 +51,6 @@ pub mod temporal;
 pub mod meilisearch_backend;
 #[cfg(feature = "meilisearch")]
 pub mod meilisearch_indexer;
-
-#[cfg(feature = "turso")]
-pub mod turso_backend;
 
 pub use crate::context::{
     ArtifactAccessPolicy, ArtifactRedactionStatus, ArtifactRetentionPolicy,
@@ -186,6 +182,3 @@ pub use sqlite_backend::{health_check_storage, SqliteBackend};
 pub use temporal::{
     MemorySnapshot, StateDiff, TemporalMemory, TemporalQueryEngine, TemporalQueryOptions,
 };
-#[cfg(feature = "turso")]
-#[allow(deprecated)]
-pub use turso_backend::{TursoBackend, TursoConfig};

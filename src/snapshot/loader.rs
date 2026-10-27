@@ -70,8 +70,9 @@ impl SnapshotLoader {
         let files: Vec<String> = (0..archive.len())
             .map(|i| {
                 archive
-                    .by_index(i)
-                    .map(|f| f.name().to_string())
+                    .name_for_index(i)
+                    .and_then(|name| name.ok())
+                    .map(std::borrow::Cow::into_owned)
                     .unwrap_or_default()
             })
             .collect();
@@ -108,10 +109,19 @@ impl SnapshotLoader {
         let mut archive = zip::ZipArchive::new(file)
             .map_err(|e| EngramError::Io(std::io::Error::other(e.to_string())))?;
 
-        // Sanitize all entry names in the archive
+        // Sanitize all entry names in the archive. Names are read from the central
+        // directory without opening the entry, and an undecodable name fails closed.
         for i in 0..archive.len() {
-            if let Ok(entry) = archive.by_index(i) {
-                sanitize_zip_entry(entry.name())?;
+            match archive.name_for_index(i) {
+                Some(Ok(name)) => {
+                    sanitize_zip_entry(&name)?;
+                }
+                Some(Err(e)) => {
+                    return Err(EngramError::InvalidInput(format!(
+                        "zip entry {i} has an undecodable name: {e}"
+                    )));
+                }
+                None => {}
             }
         }
 

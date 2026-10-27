@@ -101,6 +101,7 @@ Se o skill `huly` estiver disponível no seu ambiente (`.claude/skills/huly/SKIL
 - **Engenharia e Governança**: `docs/standards/rust-repository-engineering-standard-v5.md`, `governance/exceptions.toml`, `governance/models.toml`
 - **Tese do produto**: `README.md`, `docs/README.md`, `docs/AI_GUIDE.md`, `docs/USING_ENGRAM_IN_A_REPO.md`
 - **AI Operating Guide / lazycodex-ai**: `docs/AI_OPERATING_GUIDE.md`
+- **Decision triage (CLI compartilhada)**: `docs/integrations/decision-triage.md`, config `decision-triage.json`
 
 ## Harness de Desenvolvimento (Obrigatório no Início de Toda Sessão)
 

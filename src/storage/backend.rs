@@ -126,7 +126,7 @@ pub enum DerivedIndexStatus {
 /// Core storage backend trait for Engram (ENG-14)
 ///
 /// This trait defines the interface for all storage operations, allowing
-/// for multiple backend implementations (SQLite, Turso, Meilisearch).
+/// for multiple backend implementations (SQLite, Meilisearch).
 pub trait StorageBackend: Send + Sync {
     // --- Memory CRUD ---
 

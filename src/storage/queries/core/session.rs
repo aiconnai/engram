@@ -18,6 +18,7 @@ pub fn search_sessions(
         "m.memory_type = 'transcript_chunk'",
         "m.valid_to IS NULL",
         "(m.expires_at IS NULL OR m.expires_at > ?)",
+        "(m.lifecycle_state IS NULL OR m.lifecycle_state != 'archived')",
     ];
     let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(now)];
 
@@ -63,9 +64,13 @@ pub fn search_sessions(
 
     let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
     let mut stmt = conn.prepare(&query)?;
-    let memories = stmt
+    let mut memories = stmt
         .query_map(params_refs.as_slice(), memory_from_row)?
         .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    for m in &mut memories {
+        m.tags = load_tags(conn, m.id)?;
+    }
 
     Ok(memories)
 }

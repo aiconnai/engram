@@ -275,7 +275,12 @@ fn principal_denial_for_call(
 ) -> Option<Value> {
     let required = required_mode_for_call(tool_name, params);
     let current = principal_permission_mode(&principal.auth_context().permissions);
-    let workspace_allowed = principal.allows_workspace(requested_workspace);
+    let workspace_allowed = match requested_workspace {
+        Some(raw) => crate::types::normalize_workspace(raw)
+            .map(|normalized| principal.allows_workspace(Some(&normalized)))
+            .unwrap_or(false),
+        None => principal.allows_workspace(None),
+    };
     if !workspace_allowed || !principal_allows_mode(principal, required) {
         record_permission_denied(if workspace_allowed {
             PermissionDeniedReason::ModeInsufficient
@@ -473,6 +478,15 @@ pub fn check_tool_authorization(
             return Some(workspace_unscoped_tool_denied(tool_name, p));
         }
 
+        if !allows_all_workspaces(p) && has_disallowed_workspace_claim_or_filter(params, p) {
+            record_permission_denied(PermissionDeniedReason::WorkspaceNotAllowed);
+            return Some(permission_denied(
+                tool_name,
+                principal_permission_mode(&p.auth_context().permissions),
+                required_mode_for_call(tool_name, params),
+            ));
+        }
+
         let workspaces = requested_workspaces(params);
         if workspaces.is_empty() {
             if matches!(p, crate::auth::TransportPrincipal::AnonymousLoopback(_)) {
@@ -505,46 +519,121 @@ pub fn check_tool_authorization(
     None
 }
 
+fn unwrap_tool_arguments(params: &Value) -> &Value {
+    if let Some(object) = params.as_object() {
+        if object.contains_key("name")
+            && !object.contains_key("workspace")
+            && !object.contains_key("workspaces")
+        {
+            if let Some(args) = object.get("arguments") {
+                return args;
+            }
+        }
+    }
+    params
+}
+
 pub(crate) fn requested_workspaces(params: &Value) -> Vec<&str> {
+    let args = unwrap_tool_arguments(params);
+    let Some(object) = args.as_object() else {
+        return Vec::new();
+    };
     let mut workspaces = Vec::new();
-    collect_requested_workspaces(params, &mut workspaces);
+    if let Some(Value::String(ws)) = object.get("workspace") {
+        workspaces.push(ws.as_str());
+    }
+    if let Some(Value::Array(items)) = object.get("workspaces") {
+        if !items.is_empty() && items.iter().all(Value::is_string) {
+            for item in items {
+                if let Value::String(ws) = item {
+                    workspaces.push(ws.as_str());
+                }
+            }
+        }
+    }
+    if let Some(filters) = object.get("filters").and_then(Value::as_object) {
+        if let Some(Value::String(ws)) = filters.get("workspace") {
+            workspaces.push(ws.as_str());
+        }
+    }
     workspaces
 }
 
-fn collect_requested_workspaces<'a>(value: &'a Value, workspaces: &mut Vec<&'a str>) {
+fn has_disallowed_workspace_claim_or_filter(
+    params: &Value,
+    principal: &TransportPrincipal,
+) -> bool {
+    let args = unwrap_tool_arguments(params);
+    let Some(object) = args.as_object() else {
+        return false;
+    };
+    if let Some(ws) = object.get("workspace") {
+        if !ws.is_null() && !ws.is_string() {
+            return true;
+        }
+    }
+    if let Some(wss) = object.get("workspaces") {
+        match wss {
+            Value::Null => {}
+            Value::Array(items) if !items.is_empty() && items.iter().all(Value::is_string) => {}
+            _ => return true,
+        }
+    }
+    if let Some(filters) = object.get("filters").and_then(Value::as_object) {
+        if let Some(ws) = filters.get("workspace") {
+            if !ws.is_null() && !ws.is_string() {
+                return true;
+            }
+        }
+    }
+    if let Some(filter) = object.get("filter") {
+        if filter_has_disallowed_workspace(filter, principal) {
+            return true;
+        }
+    }
+    false
+}
+
+fn filter_has_disallowed_workspace(value: &Value, principal: &TransportPrincipal) -> bool {
     match value {
         Value::Object(object) => {
             for (key, child) in object {
                 if matches!(key.as_str(), "workspace" | "workspaces") {
-                    collect_workspace_values(child, workspaces);
-                } else {
-                    collect_requested_workspaces(child, workspaces);
+                    if !workspace_filter_condition_allowed(child, principal) {
+                        return true;
+                    }
+                } else if filter_has_disallowed_workspace(child, principal) {
+                    return true;
                 }
             }
+            false
         }
-        Value::Array(items) => {
-            for item in items {
-                collect_requested_workspaces(item, workspaces);
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+        Value::Array(items) => items
+            .iter()
+            .any(|item| filter_has_disallowed_workspace(item, principal)),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => false,
     }
 }
 
-fn collect_workspace_values<'a>(value: &'a Value, workspaces: &mut Vec<&'a str>) {
+fn workspace_filter_condition_allowed(value: &Value, principal: &TransportPrincipal) -> bool {
+    let check_str = |raw: &str| -> bool {
+        crate::types::normalize_workspace(raw)
+            .map(|norm| principal.allows_workspace(Some(&norm)))
+            .unwrap_or(false)
+    };
     match value {
-        Value::String(workspace) => workspaces.push(workspace),
-        Value::Array(items) => {
-            for item in items {
-                collect_workspace_values(item, workspaces);
-            }
+        Value::String(ws) => check_str(ws),
+        Value::Object(ops) => {
+            !ops.is_empty()
+                && ops.iter().all(|(op, operand)| match op.as_str() {
+                    "eq" => operand.as_str().is_some_and(check_str),
+                    "in" => operand.as_array().is_some_and(|arr| {
+                        !arr.is_empty() && arr.iter().all(|v| v.as_str().is_some_and(check_str))
+                    }),
+                    _ => false,
+                })
         }
-        Value::Object(object) => {
-            for child in object.values() {
-                collect_workspace_values(child, workspaces);
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+        _ => false,
     }
 }
 

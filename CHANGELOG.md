@@ -50,6 +50,10 @@ package registries, and dated external sources.
 - **SQLite artifact permission hardening dropped POSIX locks (G1)** — Restricting permissions on the database, WAL and SHM files used open/close on the live files, which drops the process's POSIX locks and could lose WAL frames. Permissions are now set by path (`fchmodat` without following symlinks), and caller-controlled paths that resolve to the active database are refused.
 - **Unicode and hex panics (C3)** — Search compaction, context grouping, gardening, compression budget checks and attestation hex parsing no longer panic on multibyte text or short hex input.
 
+### Removed
+
+- **Turso/libSQL backend (breaking Rust/build change)** — Completed the v0.24.0 sunset from [ADR-STORAGE-20260816-1](docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md). Removed the `turso` Cargo feature, optional `libsql` dependency, `storage::turso_backend` module, and `TursoBackend` / `TursoConfig` exports. Builds requesting `--features turso` and Rust imports of those types must change. SQLite WAL remains the canonical store, with optional S3/R2 backup sync through the existing `cloud` feature. The legacy backend had a separate schema runner; existing Turso databases are not automatically converted or guaranteed to open as Engram SQLite databases. See the [migration guide](docs/migrations/turso-sunset.md).
+
 ---
 
 ## [0.23.0] - 2026-08-19

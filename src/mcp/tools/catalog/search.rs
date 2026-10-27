@@ -12,7 +12,8 @@ pub const TOOLS: &[ToolDef] = &[
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query"},
-                    "limit": {"type": "integer", "default": 10},
+                    "limit": {"type": "integer", "default": 20},
+                    "offset": {"type": "integer", "default": 0, "description": "Number of results to skip"},
                     "min_score": {"type": "number", "default": 0.1},
                     "tags": {"type": "array", "items": {"type": "string"}},
                     "memory_type": {"type": "string", "description": "Filter by memory type (preferred field; alias: type)"},
@@ -21,6 +22,7 @@ pub const TOOLS: &[ToolDef] = &[
                     "workspaces": {"type": "array", "items": {"type": "string"}, "description": "Filter by multiple workspaces"},
                     "tier": {"type": "string", "enum": ["permanent", "daily"], "description": "Filter by memory tier"},
                     "include_transcripts": {"type": "boolean", "default": false, "description": "Include transcript chunk memories (excluded by default)"},
+                    "include_archived": {"type": "boolean", "default": false, "description": "Include archived memories in search results (default: false)"},
                     "strategy": {"type": "string", "enum": ["auto", "keyword", "keyword_only", "semantic", "semantic_only", "hybrid"], "description": "Force specific strategy (auto selects based on query; keyword/semantic are aliases for keyword_only/semantic_only)"},
                     "explain": {"type": "boolean", "default": false, "description": "Include match explanations"},
                     "rerank": {"type": "boolean", "default": true, "description": "Apply reranking to improve result quality"},
@@ -131,7 +133,9 @@ pub const TOOLS: &[ToolDef] = &[
             schema: r#"{
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string"}
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "default": 5},
+                    "workspace": {"type": "string", "description": "Filter by workspace (optional)"}
                 },
                 "required": ["query"]
             }"#,
@@ -144,7 +148,8 @@ pub const TOOLS: &[ToolDef] = &[
             schema: r#"{
                 "type": "object",
                 "properties": {
-                    "threshold": {"type": "number", "default": 0.9}
+                    "threshold": {"type": "number", "default": 0.9},
+                    "workspace": {"type": "string", "description": "Filter by workspace (optional)"}
                 }
             }"#,
             annotations: ToolAnnotations::read_only(),
@@ -269,7 +274,7 @@ pub const TOOLS: &[ToolDef] = &[
                 },
                 "required": ["identity"]
             }"#,
-            annotations: ToolAnnotations::mutating(),
+            annotations: ToolAnnotations::read_only(),
             tier: ToolTier::Standard,
         },
     ToolDef {
@@ -285,7 +290,7 @@ pub const TOOLS: &[ToolDef] = &[
                 },
                 "required": ["query"]
             }"#,
-            annotations: ToolAnnotations::mutating(),
+            annotations: ToolAnnotations::read_only(),
             tier: ToolTier::Standard,
         },
     ToolDef {

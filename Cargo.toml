@@ -105,9 +105,6 @@ pdf = ["dep:cap", "dep:lopdf", "dep:pdf-extract", "dep:rlimit"]
 # Langfuse observability integration (Phase 3 - ENG-35)
 langfuse = ["http-client"]
 
-# Turso/libSQL support (Phase 6 - ENG-54)
-turso = ["dep:libsql"]
-
 # Meilisearch integration (Phase 7 - ENG-58)
 meilisearch = ["dep:meilisearch-sdk"]
 
@@ -175,7 +172,7 @@ agent-portability = ["snapshot", "attestation"]
 grpc = ["dep:tonic", "dep:prost", "dep:tonic-build"]
 
 # All features
-full = ["cloud", "openai", "pdf", "langfuse", "turso", "meilisearch", "watcher", "multimodal", "clip-embeddings", "emergent-graph", "hooks", "dream-phase", "ollama", "cohere", "voyage", "local-embeddings", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "snapshot", "attestation", "agent-portability", "grpc"]
+full = ["cloud", "openai", "pdf", "langfuse", "meilisearch", "watcher", "multimodal", "clip-embeddings", "emergent-graph", "hooks", "dream-phase", "ollama", "cohere", "voyage", "local-embeddings", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "snapshot", "attestation", "agent-portability", "grpc"]
 
 [dependencies]
 # Core domain types (Phase 1 Workspace Modularization)
@@ -198,9 +195,6 @@ rusqlite = { version = "0.31", features = ["bundled", "vtab", "functions", "trac
 # statvfs free-space checks before VACUUM (#22) + flock singleton lock (#24)
 libc = "0.2"
 
-# Vector search (sqlite-vec)
-sqlite-vec = "0.1"
-
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -220,7 +214,9 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart"], de
 async-trait = { version = "0.1", optional = true }
 
 # Cloud storage (S3/R2/GCS) - optional, feature-gated
-aws-sdk-s3 = { version = "1.144", default-features = false, features = ["default-https-client", "rt-tokio", "sigv4a"], optional = true }
+# SigV4a (S3 multi-region access points only) is intentionally not enabled:
+# aws-sigv4 still pins crypto-bigint 0.5 for it (RUSTSEC-2026-0387).
+aws-sdk-s3 = { version = "1.144", default-features = false, features = ["default-https-client", "rt-tokio"], optional = true }
 aws-config = { version = "1.12", optional = true }
 
 # Encryption (for cloud sync)
@@ -230,12 +226,8 @@ rand = "0.8"
 base64 = "0.21"
 
 # Agent portability (Phase L)
-zip = { version = "2.0", optional = true, default-features = false, features = ["deflate"] }
+zip = { version = "9.0.5", optional = true, default-features = false, features = ["deflate"] }
 ed25519-dalek = { version = "2.1", optional = true, features = ["rand_core"] }
-
-# Turso/libSQL (Phase 6 - ENG-54)
-# Enable core + replication + remote for full functionality
-libsql = { version = "0.9", optional = true, features = ["core", "replication", "remote"] }
 
 # Logging & tracing
 tracing = "0.1"
@@ -307,7 +299,7 @@ notify = { version = "8.2", optional = true }
 tempfile = { version = "3.9", optional = true }
 
 # DuckDB for distributed graph analysis (Phase M)
-duckdb = { version = "1.4", features = ["bundled", "chrono"], optional = true }
+duckdb = { version = "1.10506.1", features = ["bundled", "chrono"], optional = true }
 
 [build-dependencies]
 # Proto compilation for gRPC transport (only active when grpc feature is enabled)
@@ -318,6 +310,9 @@ criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.9"
 proptest = "1.4"
 tonic = { version = "0.12", features = ["transport"] }
+# sqlite-vec is only used by the RFC 0003 search benchmark (benches/search.rs),
+# never by the library or binaries.
+sqlite-vec = "0.1"
 
 [[bench]]
 name = "memory_ops"

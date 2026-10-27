@@ -980,3 +980,272 @@ fn test_catalog_metadata_tools_allowed_for_restricted_principals() {
         );
     }
 }
+
+#[test]
+fn test_search_handlers_workspace_isolation_and_contracts() {
+    use engram::mcp::handlers::search as search_handlers;
+
+    let mut ctx = test_ctx();
+    let own_id = seed_memory(&ctx, OWN_CONTENT, OWN_WS);
+    let own_second_id = seed_memory(&ctx, "zebracorn second own note\nline two", OWN_WS);
+    let foreign_id = seed_memory(&ctx, FOREIGN_SECRET, FOREIGN_WS);
+
+    let reader = create_principal("agent-reader", Some(OWN_WS), PermissionSet::read_only());
+    let writer = create_principal("agent-writer", Some(OWN_WS), PermissionSet::standard_user());
+
+    // 1. Direct handler call to memory_search & memory_search_compact enforces principal
+    //    workspace authorization even when bypassing dispatch().
+    ctx.principal = Some(reader.clone());
+    let direct_unscoped = search_handlers::memory_search(&ctx, json!({"query": "zebracorn"}));
+    assert_eq!(
+        direct_unscoped["error"]["code"], "permission_denied",
+        "direct unscoped memory_search must be denied for restricted principal: {direct_unscoped}"
+    );
+    let direct_foreign = search_handlers::memory_search(
+        &ctx,
+        json!({"query": "zebracorn", "workspace": FOREIGN_WS}),
+    );
+    assert_eq!(
+        direct_foreign["error"]["code"], "permission_denied",
+        "direct foreign memory_search must be denied: {direct_foreign}"
+    );
+    let direct_search =
+        search_handlers::memory_search(&ctx, json!({"query": "zebracorn", "workspace": OWN_WS}));
+    assert!(
+        !ToolError::is_error_response(&direct_search),
+        "direct memory_search in own workspace failed: {direct_search}"
+    );
+    assert!(
+        !direct_search.to_string().contains("payroll"),
+        "direct memory_search leaked foreign workspace: {direct_search}"
+    );
+
+    let direct_compact_unscoped =
+        search_handlers::memory_search_compact(&ctx, json!({"query": "zebracorn"}));
+    assert_eq!(
+        direct_compact_unscoped["error"]["code"], "permission_denied",
+        "direct unscoped memory_search_compact must be denied: {direct_compact_unscoped}"
+    );
+    let direct_compact = search_handlers::memory_search_compact(
+        &ctx,
+        json!({"query": "zebracorn", "workspace": OWN_WS}),
+    );
+    assert!(
+        !ToolError::is_error_response(&direct_compact),
+        "direct memory_search_compact failed: {direct_compact}"
+    );
+    assert!(
+        !direct_compact.to_string().contains("payroll"),
+        "direct memory_search_compact leaked foreign workspace: {direct_compact}"
+    );
+    ctx.principal = None;
+
+    // 2. Case-insensitive workspace normalization in dispatch ("TENANT-A" -> "tenant-a")
+    let upper_search = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_search",
+        json!({"query": "zebracorn", "workspace": "TENANT-A"}),
+    );
+    assert!(
+        !ToolError::is_error_response(&upper_search),
+        "uppercase workspace should normalize to principal's workspace: {upper_search}"
+    );
+
+    // 3. Non-string workspace and filter bypasses are rejected
+    for bad_params in [
+        json!({"query": "zebracorn", "workspace": 123}),
+        json!({"query": "zebracorn", "workspaces": [OWN_WS, 999]}),
+        json!({"query": "zebracorn", "workspace": OWN_WS, "filter": {"workspace": FOREIGN_WS}}),
+        json!({"query": "zebracorn", "workspace": OWN_WS, "filter": {"not": {"workspace": OWN_WS}}}),
+    ] {
+        let res = dispatch_as(&mut ctx, &reader, "memory_search", bad_params.clone());
+        assert!(
+            ToolError::is_error_response(&res),
+            "expected error for malformed/disallowed workspace params {bad_params}: {res}"
+        );
+    }
+
+    // 4. memory_expand enforces per-ID workspace access, validates ids, and is read-only
+    let foreign_expand = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_expand",
+        json!({"ids": [own_id, foreign_id], "workspace": OWN_WS}),
+    );
+    assert_not_found_without_leak(&foreign_expand, "memory_expand foreign_id");
+
+    let own_state_before = row_state(&ctx, own_id);
+    let own_expand = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_expand",
+        json!({"ids": [own_id], "workspace": OWN_WS}),
+    );
+    assert!(
+        !ToolError::is_error_response(&own_expand),
+        "memory_expand own_id failed: {own_expand}"
+    );
+    assert_eq!(own_expand["found"], 1);
+    assert_eq!(
+        own_state_before,
+        row_state(&ctx, own_id),
+        "memory_expand is read-only and must not mutate access_count or reinforcements"
+    );
+
+    let bad_expand = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_expand",
+        json!({"ids": [-1], "workspace": OWN_WS}),
+    );
+    assert_eq!(bad_expand["error"]["code"], "invalid_params");
+
+    // 5. memory_explain_utility enforces per-ID workspace access and positive integer ID
+    let foreign_utility = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_explain_utility",
+        json!({"memory_id": foreign_id, "workspace": OWN_WS}),
+    );
+    assert_not_found_without_leak(&foreign_utility, "memory_explain_utility foreign_id");
+
+    let bad_utility = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_explain_utility",
+        json!({"memory_id": 0, "workspace": OWN_WS}),
+    );
+    assert_eq!(bad_utility["error"]["code"], "invalid_params");
+
+    // 6. memory_feedback_stats on empty feedback table succeeds with 0 counts (no NULL error)
+    let empty_stats = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_feedback_stats",
+        json!({"workspace": OWN_WS}),
+    );
+    assert!(
+        !ToolError::is_error_response(&empty_stats),
+        "memory_feedback_stats on empty table failed: {empty_stats}"
+    );
+    assert_eq!(empty_stats["useful_count"], 0);
+    assert_eq!(empty_stats["irrelevant_count"], 0);
+
+    // 7. memory_feedback blocks cross-workspace IDs and records persisted workspace + query
+    let foreign_before = row_state(&ctx, foreign_id);
+    let denied_fb = dispatch_as(
+        &mut ctx,
+        &writer,
+        "memory_feedback",
+        json!({
+            "query": "zebracorn",
+            "memory_id": foreign_id,
+            "signal": "helpful",
+            "workspace": OWN_WS
+        }),
+    );
+    assert_not_found_without_leak(&denied_fb, "memory_feedback foreign_id");
+    assert_eq!(foreign_before, row_state(&ctx, foreign_id));
+
+    let own_fb = dispatch_as(
+        &mut ctx,
+        &writer,
+        "memory_feedback",
+        json!({
+            "query": "zebracorn roadmap",
+            "memory_id": own_id,
+            "signal": "outdated",
+            "workspace": OWN_WS
+        }),
+    );
+    assert!(
+        !ToolError::is_error_response(&own_fb),
+        "memory_feedback own_id failed: {own_fb}"
+    );
+    assert_eq!(own_fb["workspace"], OWN_WS);
+
+    // Verify utility_feedback stored the actual query and feedback_stats counts 'outdated' as negative
+    ctx.storage
+        .with_connection(|conn| {
+            let stored_query: Option<String> = conn.query_row(
+                "SELECT query FROM utility_feedback WHERE memory_id = ?1 ORDER BY id DESC LIMIT 1",
+                [own_id],
+                |r| r.get(0),
+            )?;
+            assert_eq!(stored_query.as_deref(), Some("zebracorn roadmap"));
+            Ok(())
+        })
+        .expect("check utility_feedback query");
+
+    let stats_after = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_feedback_stats",
+        json!({"workspace": OWN_WS}),
+    );
+    assert_eq!(stats_after["irrelevant_count"], 1);
+
+    // 8. recent_activity RFC3339 cutoff, workspace isolation, and RFC3339 updated_at
+    let activity = dispatch_as(
+        &mut ctx,
+        &reader,
+        "recent_activity",
+        json!({"timeframe": "1h", "limit": 10, "workspace": OWN_WS}),
+    );
+    assert!(
+        !ToolError::is_error_response(&activity),
+        "recent_activity failed: {activity}"
+    );
+    assert!(!activity.to_string().contains("payroll"));
+    assert_eq!(activity["count"], 2);
+    assert!(
+        activity["activities"][0]["updated_at"].is_string(),
+        "recent_activity should return RFC3339 updated_at string: {activity}"
+    );
+
+    let bad_activity = dispatch_as(
+        &mut ctx,
+        &reader,
+        "recent_activity",
+        json!({"timeframe": "99y", "workspace": OWN_WS}),
+    );
+    assert_eq!(bad_activity["error"]["code"], "invalid_params");
+
+    // 9. memory_search explain=true with rerank=false returns object with results array,
+    //    and offset pagination returns distinct slices.
+    let explain_no_rerank = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_search",
+        json!({
+            "query": "zebracorn",
+            "workspace": OWN_WS,
+            "explain": true,
+            "rerank": false
+        }),
+    );
+    assert!(
+        explain_no_rerank["results"].is_array(),
+        "explain=true with rerank=false must return object with 'results' array: {explain_no_rerank}"
+    );
+    assert_eq!(explain_no_rerank["reranked"], false);
+
+    let page0 = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_search",
+        json!({"query": "zebracorn", "workspace": OWN_WS, "limit": 1, "offset": 0}),
+    );
+    let page1 = dispatch_as(
+        &mut ctx,
+        &reader,
+        "memory_search",
+        json!({"query": "zebracorn", "workspace": OWN_WS, "limit": 1, "offset": 1}),
+    );
+    assert_eq!(page0.as_array().unwrap().len(), 1);
+    assert_eq!(page1.as_array().unwrap().len(), 1);
+    assert_ne!(page0[0]["memory"]["id"], page1[0]["memory"]["id"]);
+
+    let _ = own_second_id;
+}

@@ -265,8 +265,8 @@ pub fn feedback_stats(conn: &Connection, workspace: Option<&str>) -> Result<Feed
     let totals_sql = format!(
         "SELECT
             COUNT(*),
-            SUM(CASE WHEN signal = 'useful' THEN 1 ELSE 0 END),
-            SUM(CASE WHEN signal = 'irrelevant' THEN 1 ELSE 0 END)
+            COALESCE(SUM(CASE WHEN signal = 'useful' THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN signal IN ('irrelevant', 'outdated', 'conflict') THEN 1 ELSE 0 END), 0)
          FROM search_feedback {ws_clause}"
     );
     let (total_feedback, useful_count, irrelevant_count) = exec_scalar(&totals_sql)?;
@@ -292,7 +292,7 @@ pub fn feedback_stats(conn: &Connection, workspace: Option<&str>) -> Result<Feed
     let top_irrelevant_sql = format!(
         "SELECT memory_id, COUNT(*) AS cnt
          FROM search_feedback
-         {ws_clause} AND signal = 'irrelevant'
+         {ws_clause} AND signal IN ('irrelevant', 'outdated', 'conflict')
          GROUP BY memory_id
          ORDER BY cnt DESC
          LIMIT 10"
@@ -310,7 +310,7 @@ pub fn feedback_stats(conn: &Connection, workspace: Option<&str>) -> Result<Feed
     let avg_irrelevant_sql = format!(
         "SELECT AVG(rank_position)
          FROM search_feedback
-         {ws_clause} AND signal = 'irrelevant' AND rank_position IS NOT NULL"
+         {ws_clause} AND signal IN ('irrelevant', 'outdated', 'conflict') AND rank_position IS NOT NULL"
     );
     let avg_irrelevant_rank = exec_avg(&avg_irrelevant_sql)?;
 

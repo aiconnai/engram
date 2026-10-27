@@ -37,7 +37,8 @@ pdf_worker_unsupported_platform_behavior = "fail-closed"
 pdf_worker_docker_support = "not-advertised"
 
 [cargo]
-features = ["default", "http-client", "cloud", "openai", "multimodal", "clip-embeddings", "pdf", "langfuse", "turso", "meilisearch", "watcher", "emergent-graph", "hooks", "dream-phase", "ollama", "cohere", "voyage", "local-embeddings", "onnx-embed", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "snapshot", "attestation", "agent-portability", "grpc", "full"]
+# ADR-STORAGE-20260816-1 retires the turso feature in v0.24.0.
+features = ["default", "http-client", "cloud", "openai", "multimodal", "clip-embeddings", "pdf", "langfuse", "meilisearch", "watcher", "emergent-graph", "hooks", "dream-phase", "ollama", "cohere", "voyage", "local-embeddings", "onnx-embed", "neural-rerank", "retrieval-excellence", "context-engineering", "temporal-graph", "duckdb-graph", "compression", "agentic-evolution", "advanced-graph", "autonomous-agent", "snapshot", "attestation", "agent-portability", "grpc", "full"]
 
 [sdk_python]
 exports = ["EngramClient", "EngramError"]

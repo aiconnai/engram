@@ -528,9 +528,14 @@ mod tests {
     #[test]
     fn test_with_transaction_reports_unsupported_wrapper_when_called() {
         let backend = SqliteBackend::in_memory().unwrap();
+        let mut called = false;
 
-        let result = backend.with_transaction(|_| Ok(()));
+        let result = backend.with_transaction(|_| {
+            called = true;
+            Ok(())
+        });
 
+        assert!(!called);
         assert!(
             matches!(result, Err(EngramError::Storage(message)) if message.contains("transaction-scoped StorageBackend"))
         );

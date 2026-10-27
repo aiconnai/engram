@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use chrono::Utc;
 use rusqlite::Connection;
 
-use super::bm25::bm25_search_complete_with_scope_path;
+use super::bm25::bm25_search_complete_with_options;
 use super::{select_search_strategy, SearchConfig};
 use crate::embedding::{cosine_similarity, get_embedding};
 use crate::error::Result;
@@ -42,33 +42,56 @@ pub fn hybrid_search_with_hnsw(
     let strategy = options
         .strategy
         .unwrap_or_else(|| select_search_strategy(query));
-    let limit = options.limit.unwrap_or(20);
+    let limit = options.limit.unwrap_or(20).max(0);
+    let offset = options.offset.unwrap_or(0).max(0);
+    let fetch_limit = limit.saturating_add(offset);
     let min_score = options.min_score.unwrap_or(config.min_score);
 
-    match strategy {
+    let mut results = match strategy {
         SearchStrategy::KeywordOnly => {
-            keyword_only_search(conn, query, limit, min_score, options, config)
+            keyword_only_search(conn, query, fetch_limit, min_score, options, config)?
         }
         SearchStrategy::SemanticOnly => {
             if let Some(embedding) = query_embedding {
                 semantic_only_search_with_hnsw(
-                    conn, embedding, limit, min_score, options, config, hnsw_index,
-                )
+                    conn,
+                    embedding,
+                    fetch_limit,
+                    min_score,
+                    options,
+                    config,
+                    hnsw_index,
+                )?
             } else {
                 // Fallback to keyword if no embedding
-                keyword_only_search(conn, query, limit, min_score, options, config)
+                keyword_only_search(conn, query, fetch_limit, min_score, options, config)?
             }
         }
         SearchStrategy::Hybrid => {
             if let Some(embedding) = query_embedding {
                 rrf_hybrid_search_with_hnsw(
-                    conn, query, embedding, limit, min_score, options, config, hnsw_index,
-                )
+                    conn,
+                    query,
+                    embedding,
+                    fetch_limit,
+                    min_score,
+                    options,
+                    config,
+                    hnsw_index,
+                )?
             } else {
-                keyword_only_search(conn, query, limit, min_score, options, config)
+                keyword_only_search(conn, query, fetch_limit, min_score, options, config)?
             }
         }
+    };
+
+    if offset > 0 {
+        let skip = (offset as usize).min(results.len());
+        results.drain(..skip);
     }
+    results.truncate(limit as usize);
+
+    Ok(results)
 }
 
 /// Perform hybrid search with automatic strategy selection (legacy signature)
@@ -103,7 +126,7 @@ fn keyword_only_search(
         options.workspaces.as_deref()
     };
 
-    let bm25_results = bm25_search_complete_with_scope_path(
+    let bm25_results = bm25_search_complete_with_options(
         conn,
         query,
         limit * 2,
@@ -116,6 +139,8 @@ fn keyword_only_search(
         workspaces_filter,
         options.tier.as_ref(),
         options.scope_path.as_deref(),
+        options.tags.as_deref(),
+        options.memory_type.as_ref(),
     )?;
 
     let mut results: Vec<SearchResult> = bm25_results
@@ -533,7 +558,7 @@ fn rrf_hybrid_search_with_hnsw(
     };
 
     // Get keyword results (with all filters applied)
-    let keyword_results = bm25_search_complete_with_scope_path(
+    let keyword_results = bm25_search_complete_with_options(
         conn,
         query,
         limit * 2,
@@ -546,12 +571,16 @@ fn rrf_hybrid_search_with_hnsw(
         workspaces_filter,
         options.tier.as_ref(),
         options.scope_path.as_deref(),
+        options.tags.as_deref(),
+        options.memory_type.as_ref(),
     )?;
 
     // Get semantic results (without boost - we'll apply it to the final RRF score)
     let semantic_options = SearchOptions {
         limit: Some(limit * 2),
         min_score: Some(0.0), // We'll filter after fusion
+        tags: options.tags.clone(),
+        memory_type: options.memory_type,
         scope: options.scope.clone(),
         filter: options.filter.clone(),
         include_transcripts: options.include_transcripts,

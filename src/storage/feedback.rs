@@ -77,8 +77,19 @@ impl FeedbackProcessor {
         signal: &str,
         conn: &Connection,
     ) -> Result<(f64, bool)> {
-        // Record with signal-tagged query so explain_utility can show which
-        // negative signal drove a decay (helpful/not_helpful/outdated/conflict).
+        self.process_feedback_with_query(memory_id, signal, None, conn)
+    }
+
+    /// Process a feedback signal for a memory, recording the caller's search query when provided.
+    pub fn process_feedback_with_query(
+        &self,
+        memory_id: i64,
+        signal: &str,
+        query: Option<&str>,
+        conn: &Connection,
+    ) -> Result<(f64, bool)> {
+        // Record with the caller's query when non-empty, or a signal-tagged fallback
+        // so explain_utility can show which query or signal drove a score change.
         let (was_useful, signal_tag) = match signal {
             "helpful" => (true, "feedback:helpful"),
             "not_helpful" => (false, "feedback:not_helpful"),
@@ -86,8 +97,12 @@ impl FeedbackProcessor {
             "conflict" => (false, "feedback:conflict"),
             other => (false, other),
         };
+        let query_to_record = query
+            .map(str::trim)
+            .filter(|q| !q.is_empty())
+            .unwrap_or(signal_tag);
         self.tracker
-            .record_retrieval(conn, memory_id, was_useful, signal_tag)?;
+            .record_retrieval(conn, memory_id, was_useful, query_to_record)?;
 
         let new_score = self.tracker.get_utility(conn, memory_id)?.score;
 

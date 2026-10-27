@@ -54,6 +54,9 @@ pub struct CacheFilterParams {
     /// Advanced filter expression, serialized.
     #[serde(default)]
     pub filter: Option<String>,
+    /// Pagination offset.
+    #[serde(default)]
+    pub offset: Option<i64>,
 }
 
 /// A cached search result entry
@@ -369,11 +372,24 @@ impl SearchResultCache {
     /// Invalidate cache entries for a specific workspace
     pub fn invalidate_for_workspace(&self, workspace: Option<&str>) {
         self.entries.retain(|_, v| {
-            let should_keep = v.filter_params.workspace.as_deref() != workspace;
-            if !should_keep {
+            let should_invalidate = match workspace {
+                Some(ws) => {
+                    v.filter_params.workspace.as_deref() == Some(ws)
+                        || v.filter_params.global
+                        || (v.filter_params.workspace.is_none()
+                            && v.filter_params.workspaces.is_none())
+                        || v.filter_params
+                            .workspaces
+                            .as_ref()
+                            .is_some_and(|list| list.iter().any(|w| w == ws))
+                        || v.results.iter().any(|r| r.memory.workspace == ws)
+                }
+                None => v.filter_params.workspace.is_none(),
+            };
+            if should_invalidate {
                 self.stats.invalidations.fetch_add(1, Ordering::Relaxed);
             }
-            should_keep
+            !should_invalidate
         });
     }
 
@@ -410,6 +426,14 @@ impl SearchResultCache {
 
         if let Some(entry) = self.entries.get(&cache_key) {
             entry.record_feedback(positive);
+        } else {
+            for entry in self.entries.iter() {
+                if entry.value().query_hash == query_hash
+                    && entry.value().filter_params.workspace == filters.workspace
+                {
+                    entry.value().record_feedback(positive);
+                }
+            }
         }
 
         // Adjust threshold based on feedback

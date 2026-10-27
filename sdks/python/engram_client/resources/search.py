@@ -135,7 +135,10 @@ class SearchMixin(ResourceMixin):
 
     async def cache_clear(self, *, workspace: str | None = None) -> dict[str, Any]:
         """Clear the embedding and search cache."""
-        return await self._mcp_call("memory_cache_clear", {})
+        params: dict[str, Any] = {}
+        if workspace is not None:
+            params["workspace"] = workspace
+        return await self._mcp_call("memory_cache_clear", params)
 
     async def embedding_providers(self) -> dict[str, Any]:
         """List available embedding providers and their status."""

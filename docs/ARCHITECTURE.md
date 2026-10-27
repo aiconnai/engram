@@ -122,14 +122,22 @@ Metrics:
 
 ## Storage Backends (OSS)
 
-The open-source core supports multiple pluggable storage backends:
+SQLite WAL is the canonical operational store. Optional features add search
+indexing, cloud backup sync, and media storage:
 
 | Backend | Feature flag | Use case |
 |---------|-------------|----------|
-| **SQLite** (default) | *(always on)* | Primary embedded store; BM25 FTS via SQLite FTS5; S3/R2 Snapshot Attestation for cloud sync |
-| **Turso / libSQL** | `turso` | *Deprecated* (sunset in v0.24.0; see `docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md`) |
-| **Meilisearch** | `meilisearch` | Full-text search complement/replacement for SQLite FTS (Phase 7 / ENG-58) |
+| **SQLite** (default) | *(always on)* | Primary embedded store; WAL and BM25 FTS via SQLite FTS5 |
+| **S3/R2 backup sync** | `cloud` | Background SQLite snapshot upload/sync; local SQLite remains the source of truth |
+| **Meilisearch** | `meilisearch` | Optional search mirror; SQLite remains the operational source of truth (Phase 7 / ENG-58) |
 | **Image Storage** | `cloud` | R2 or local storage for multimodal memory assets (`media_url` on memories, v34) |
+
+The Turso/libSQL backend, `turso` Cargo feature, and `TursoBackend` /
+`TursoConfig` Rust exports were removed in v0.24.0 under the
+[accepted sunset ADR](adr/2026-08-16-turso-backend-deprecation-and-sunset.md).
+Existing users must follow the [migration guide](migrations/turso-sunset.md);
+Turso replicas are not a drop-in SQLite migration path. Signed portable snapshots
+use the separate `snapshot` / `attestation` features (or `agent-portability`).
 
 ---
 

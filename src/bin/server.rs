@@ -1141,13 +1141,14 @@ fn main() -> Result<()> {
         }
     };
 
-    // Save final HNSW checkpoint on shutdown if vectors exist
-    let hnsw = handler.hnsw_index.read();
-    if !hnsw.is_empty() {
-        let _ = storage
-            .with_connection(|conn| engram::search::checkpoint_hnsw_to_db(conn, &hnsw, "default"));
-    }
-    drop(hnsw);
+    // Save final HNSW checkpoint on shutdown if vectors exist (lock order: storage -> hnsw_index)
+    let _ = storage.with_connection(|conn| {
+        let hnsw = handler.hnsw_index.read();
+        if !hnsw.is_empty() {
+            engram::search::checkpoint_hnsw_to_db(conn, &hnsw, "default")?;
+        }
+        Ok(())
+    });
 
     res
 }

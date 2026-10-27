@@ -95,6 +95,7 @@ pub enum SortOrder {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SearchOptions {
     pub limit: Option<i64>,
+    pub offset: Option<i64>,
     pub min_score: Option<f32>,
     pub tags: Option<Vec<String>>,
     #[serde(alias = "type")]
