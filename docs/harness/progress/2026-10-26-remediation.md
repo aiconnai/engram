@@ -101,3 +101,32 @@ cada commit; esta frente não altera código Rust.
 - `harness-risk-register.sh validate` falha até no arquivo de base com Ruby/Psych 4 (`updated_at` vira `Time`).
   A conferência foi feita com `YAML.safe_load(..., permitted_classes: [Time, Date])`: 9 entradas, scores consistentes.
 - As duas correções são mudanças em `docs/harness/bin/*` (process-critical) e precisam de review independente.
+
+## Integração (integrador, 2026-10-26)
+
+Branch `remediation/integration` (worktree `.worktrees/rem-int`), base `08cb17a4`. Somente local: push, PR,
+merge, tag, release, publicação e remoção de branches/worktrees seguem sem autorização do owner.
+
+- **Onda 1** (merges sem conflito textual): `fix/supply-chain-2026-10` (WT2), `fix/workspace-batch-auth` (WT1),
+  `fix/mcp-surface-honesty` (WT4), `fix/release-pipeline` (WT3), `docs/product-status` (WT6),
+  `chore/harness-live-state` (WT5), `docs/claims-and-triage-trim` (WT8), `fix/hnsw-default-propagation` (WT7).
+- **Correções pós-merge do integrador** (teste primeiro): fiação de `subscribe_as`/`unsubscribe_as` no servidor
+  (`f53b75a0`); contador MCP do bootstrap a partir de `catalog::required_features` (`d76bceee`, 254/301);
+  checks novos no job Documentation (`c8e1884d`); link intra-doc qualificado (`4134d28b`).
+- **Gate que segurou** (`93fc8566`): o drift guard do merge-gate recusou `docs/contracts/advertised-surfaces.toml`
+  num job obrigatório (política de CI fixada em `harness-hardening-v1`). A política não foi alterada; o check foi
+  para o job não obrigatório `Advertised Contracts`. Proteger o baseline exige versionar a política (decisão do owner).
+- **Revisão independente** (Sonnet, só leitura, não é receipt): WT1 revisado pelo integrador; R3 revisou WT2/WT4/WT7
+  e `bin/*` sem achado crítico/alto. Achado médio (autoridade de review sem post da tarefa ativa) corrigido em
+  `383b70a8`; achados baixos de HNSW encaminhados a WT9. R2: nada a portar de
+  `claude/engram-improvement-plan-edb43d`; `wave4-todo24` (75a1e16e) descartável.
+- **Onda 2**: `fix/security-followups` (WT10), `fix/log-redaction-sweep` (WT12),
+  `docs/followups-and-harness-tools` (WT11), `fix/live-state-review-authority` (integrador),
+  `fix/hnsw-followups` (WT9: `ENGRAM_HNSW_ENABLED`, reconcile com SQLite, compactação viva); docs/CHANGELOG em `7c2fc79c`.
+- **Evidência**: `make ci` em `4134d28b` exit 0 (offline lane 12/534, 2319/2319 testes, docs/WASM ok);
+  `cargo audit` 0 vulnerabilidades (aviso governado `ttf-parser`) e `cargo deny` ok em `c8e1884d` (lockfile igual
+  depois); `make ci` em `932e9c8d` falhou só no `cargo doc` (link intra-doc), corrigido em `4134d28b`.
+  `sensors.sh` não foi executado (receipt versionado; `Last sensors` segue 2026-10-23).
+- **Padrões aplicados por decisão do owner (revisáveis)**: HNSW opt-in; federação marcada como não implementada;
+  guia de decision-triage enxugado; remoção de SigV4a; DuckDB 1.5.6; reranker placeholder retorna erro;
+  contagens de concorrentes sem fonte removidas.
