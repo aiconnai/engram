@@ -433,9 +433,14 @@ fn fact_batch_unrestricted_callers_unchanged() {
 
 #[test]
 fn http_style_envelope_is_checked_against_item_workspaces() {
-    // The HTTP transport pre-checks the whole `tools/call` params object
-    // (`{"name", "arguments"}`) before dispatching `arguments`.
+    // The HTTP transport unwraps the `tools/call` params object
+    // (`{"name", "arguments"}`) once and pre-checks the bare `arguments`
+    // exactly as the dispatcher will see them.
     let who = restricted_writer();
+    let pre_check = |envelope: &serde_json::Value| {
+        let (name, arguments) = engram::mcp::permission::tool_call_parts(envelope).unwrap();
+        check_tool_authorization(None, name, arguments, Some(&who))
+    };
 
     let hostile = json!({
         "name": "memory_create_batch",
@@ -443,7 +448,7 @@ fn http_style_envelope_is_checked_against_item_workspaces() {
             {"content": "foreign item", "workspace": FOREIGN_WS}
         ]}
     });
-    let denial = check_tool_authorization(None, "memory_create_batch", &hostile, Some(&who));
+    let denial = pre_check(&hostile);
     assert!(
         denial.as_ref().is_some_and(ToolError::is_error_response),
         "envelope with foreign item must be denied: {denial:?}"
@@ -454,7 +459,38 @@ fn http_style_envelope_is_checked_against_item_workspaces() {
         "arguments": {"memories": [{"content": "own item", "workspace": OWN_WS}]}
     });
     assert!(
-        check_tool_authorization(None, "memory_create_batch", &legit, Some(&who)).is_none(),
+        pre_check(&legit).is_none(),
         "envelope with only own items must pass"
+    );
+}
+
+#[test]
+fn dispatch_does_not_unwrap_name_and_arguments_keys_inside_arguments() {
+    // `name`/`arguments` inside real arguments are data. The dispatcher must not
+    // treat them as an envelope: neither letting them hide the real claim nor
+    // letting them smuggle a different workspace into the check.
+    let mut ctx = test_ctx();
+    let who = restricted_writer();
+
+    let own_with_decoy = dispatch_as(
+        &mut ctx,
+        &who,
+        "memory_list",
+        json!({"workspace": OWN_WS, "name": "x", "arguments": {"workspace": FOREIGN_WS}}),
+    );
+    assert!(
+        !ToolError::is_error_response(&own_with_decoy),
+        "own workspace with a decoy `arguments` key must pass: {own_with_decoy}"
+    );
+
+    let foreign_with_cover = dispatch_as(
+        &mut ctx,
+        &who,
+        "memory_list",
+        json!({"workspace": FOREIGN_WS, "name": "x", "arguments": {"workspace": OWN_WS}}),
+    );
+    assert!(
+        ToolError::is_error_response(&foreign_with_cover),
+        "foreign top-level workspace must be denied: {foreign_with_cover}"
     );
 }

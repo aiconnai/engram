@@ -288,15 +288,73 @@ fn permission_denial_for_http_request(
         return None;
     }
 
-    let tool_name = request
-        .params
-        .get("name")
-        .and_then(|value| value.as_str())?;
+    // Unwrap the `tools/call` envelope once, here: authorization sees exactly
+    // the bare arguments the dispatcher will receive (never the envelope).
+    let (tool_name, arguments) = crate::mcp::permission::tool_call_parts(&request.params)?;
 
-    crate::mcp::permission::check_tool_authorization(
-        None,
-        tool_name,
-        &request.params,
-        Some(principal),
-    )
+    crate::mcp::permission::check_tool_authorization(None, tool_name, arguments, Some(principal))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::{PermissionSet, TokenClaims, TransportPrincipal, UserId};
+    use serde_json::json;
+
+    fn alpha_writer() -> TransportPrincipal {
+        TransportPrincipal::from_token_claims(TokenClaims {
+            user_id: UserId::from_string("http-envelope"),
+            key_id: "key-http-envelope".to_string(),
+            permissions: PermissionSet::standard_user(),
+            namespace: Some("alpha".to_string()),
+            issued_at: chrono::Utc::now(),
+            expires_at: None,
+        })
+        .unwrap()
+    }
+
+    fn call(params: serde_json::Value) -> McpRequest {
+        McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(1)),
+            method: methods::CALL_TOOL.to_string(),
+            params,
+        }
+    }
+
+    /// The pre-check must reach the same verdict as the dispatcher, which only
+    /// ever sees the bare `arguments` the server extracts from the envelope.
+    #[test]
+    fn http_pre_check_matches_dispatch_on_bare_arguments() {
+        let principal = alpha_writer();
+        let envelopes = [
+            // Envelope-level keys other than name/arguments never reach dispatch.
+            json!({"name": "memory_list", "arguments": {"workspace": "alpha"}, "workspace": "beta"}),
+            json!({"name": "memory_list", "arguments": {"workspace": "beta"}, "workspace": "alpha"}),
+            // `name`/`arguments` inside real arguments are data, not an envelope.
+            json!({"name": "memory_list", "arguments": {
+                "workspace": "alpha", "name": "x", "arguments": {"workspace": "beta"}}}),
+            json!({"name": "memory_list", "arguments": {
+                "workspace": "beta", "name": "x", "arguments": {"workspace": "alpha"}}}),
+            json!({"name": "memory_list", "arguments": {"workspace": "alpha"}}),
+            json!({"name": "memory_list", "arguments": {"workspace": "beta"}}),
+            json!({"name": "memory_list"}),
+        ];
+        for params in envelopes {
+            let (name, arguments) = crate::mcp::permission::tool_call_parts(&params).unwrap();
+            let dispatch_verdict = crate::mcp::permission::check_tool_authorization(
+                None,
+                name,
+                arguments,
+                Some(&principal),
+            );
+            let http_verdict =
+                permission_denial_for_http_request(&call(params.clone()), &principal);
+            assert_eq!(
+                http_verdict.is_some(),
+                dispatch_verdict.is_some(),
+                "HTTP pre-check and dispatch disagree for {params}"
+            );
+        }
+    }
 }
