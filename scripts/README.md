@@ -35,6 +35,54 @@ JSON envelope for automation.
 python3 scripts/validate_mcp_contract.py --json | jq .
 ```
 
+### `check-public-claims.py`
+
+Public Claims Gate. Fails when a public page states a tool count that is not
+derived from the MCP catalog, repeats a banned unverified claim, or lists a
+featured tool that does not exist or has the wrong tier. Runs in `scripts/ci.sh`,
+CI (`.github/workflows/ci.yml`), and the `docs` target of `make` and `just`.
+
+```bash
+python3 scripts/check-public-claims.py
+python3 scripts/test_check_public_claims.py    # unit tests
+```
+
+### `check-advertised-contracts.py`
+
+Checks the surfaces advertised in public docs (env vars, transports, channels)
+against the committed inventory `docs/contracts/advertised-surfaces.toml`. An
+undocumented or unrecorded addition fails. Regenerate the inventory only after an
+intentional surface change, and review the diff.
+
+```bash
+python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml
+python3 scripts/check-advertised-contracts.py --inventory docs/contracts/advertised-surfaces.toml --write
+python3 scripts/test_check_advertised_contracts.py    # unit tests, incl. committed-inventory check
+```
+
+### `test_sdk_release_workflow.py`
+
+Static and behavioural guards for `.github/workflows/sdk-release.yml`: no
+hardcoded release tag or SDK version, every safety gate still present, and the
+publish jobs re-derive the version mapping through `bump-version.py --release-plan`.
+
+```bash
+python3 scripts/test_sdk_release_workflow.py
+```
+
+### `bump-version.py --release-plan`
+
+Read-only CI mode. Derives the expected core tag (`v<Cargo.toml version>`) and
+the SDK versions from their manifests, fails closed on drift, and prints
+`key=value` lines on stdout (`core_version`, `core_tag`, `python_version`,
+`npm_version`). With `--release-tag` the tag must equal the derived core tag.
+Diagnostics go to stderr. The release workflow calls it in
+`.github/workflows/sdk-release.yml`.
+
+```bash
+python3 scripts/bump-version.py --release-plan --release-tag v0.24.0
+```
+
 ### `bench-baseline.sh`
 
 Saves a Criterion benchmark baseline with a given name.

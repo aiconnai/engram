@@ -28,7 +28,7 @@ While the basic CRUD and health-check operations for `TursoBackend` are function
 2. **C-ABI & Linker Collisions**:
    - Under combined compilation (e.g. `--all-features`), static linking of both `libsqlite3-sys` (used by `rusqlite`) and `libsql-sys` (used by `libsql`) can cause symbol collision and global state initialization conflicts in the SQLite C runtime unless strictly partitioned.
 3. **Vector Search Parity**:
-   - Engram's fast vector search pipeline utilizes `sqlite-vec` and embedded SIMD cosine similarity. LibSQL handles vector indexing differently across server and edge modes, creating indexing divergence.
+   - Engram's vector search computes exact cosine similarity over embedding BLOBs in SQLite; `sqlite-vec` is a bench-only dev-dependency and is not on the production search path. LibSQL handles vector indexing differently across server and edge modes, creating indexing divergence.
 4. **Sync Delta Extensions**:
    - Cloud sync primitives such as `sync_delta` and `sync_state` are currently stubbed as unsupported on `TursoBackend`.
 

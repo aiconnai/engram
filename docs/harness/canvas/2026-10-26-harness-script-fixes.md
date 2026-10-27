@@ -59,3 +59,5 @@ Sem ADR: nenhum invariant, gate ou política muda de significado (INVARIANTS exi
 ## Decision
 
 Proceed, com os scripts marcados como **pendentes de post-review independente ou sign-off do owner** (WHAT_WE_DONT_DO; GATES "Harness Script Guard"). Nenhum receipt, reviewer ou PASS foi fabricado. Rollback: reverter os commits `fix(harness)` correspondentes devolve o comportamento anterior; nenhum dado é afetado.
+
+- `docs/harness/bin/harness-risk-register.sh` changed (octal-safe `next_risk_id` via `10#`; `validate` uses `YAML.safe_load_file` with `permitted_classes: [Date, Time]` for Psych 4+); needs independent review before sign-off. Tests: `docs/harness/tests/test_harness_risk_register.py`.
