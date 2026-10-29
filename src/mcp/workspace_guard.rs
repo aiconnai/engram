@@ -64,6 +64,15 @@ pub const ID_SCOPED_TOOLS: &[&str] = &[
     "memory_delete_batch",
     "memory_link",
     "memory_unlink",
+    "memory_set_lifecycle",
+    "memory_lifecycle_update",
+    "memory_score",
+    "memory_promote",
+    "memory_explain",
+    "memory_reconcile_conflict",
+    "memory_promote_to_permanent",
+    "memory_boost",
+    "memory_set_expiration",
 ];
 
 /// Tools whose `workspace` parameter is NOT the memory workspace: in the

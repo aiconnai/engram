@@ -215,6 +215,8 @@ export class AdminResource extends BaseResource {
       params.ttl_seconds = options.ttlSeconds;
     if (options?.state !== undefined) params.state = options.state;
     if (options?.reason !== undefined) params.reason = options.reason;
+    if (options?.workspace !== undefined) params.workspace = options.workspace;
+    if (options?.dryRun !== undefined) params.dry_run = options.dryRun;
     if (options?.persist !== undefined) params.persist = options.persist;
     return this.caller.mcpCall("memory_lifecycle_update", params);
   }
