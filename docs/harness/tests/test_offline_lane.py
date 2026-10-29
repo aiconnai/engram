@@ -21,7 +21,7 @@ LANE = REPO_ROOT / "docs" / "harness" / "bin" / "run-offline-lane.sh"
 
 # Mirrors the exact floors of run-offline-lane.sh (the real suites' current counts).
 GOOD_COUNTS = {"unit": 76, "selftest": 18, "fixtures": 39, "live": 46, "gate": 39, "lane": 19,
-               "sandbox": 54, "context": 50, "runner": 75, "merge": 47, "retention": 21,
+               "sandbox": 54, "context": 50, "runner": 75, "merge": 50, "retention": 21,
                "standing": 52}
 
 
@@ -183,7 +183,7 @@ class OfflineLaneContract(unittest.TestCase):
 
     def test_merge_gate_component_is_mandatory_and_skips_low_counts_or_a_missing_file_fail(self):
         for label, over, needle in (("skip", {"merge_skip": True}, "merge_gate"),
-                                    ("below floor", {"merge": 46}, "below the tripwire floor"),
+                                    ("below floor", {"merge": 49}, "below the tripwire floor"),
                                     ("zero", {"merge": 0}, "merge_gate")):
             with self.subTest(label):
                 self.write_stubs(**over)
