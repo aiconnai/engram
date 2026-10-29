@@ -59,10 +59,7 @@ impl Storage {
         if self.db_path() == ":memory:" {
             return false;
         }
-        matches_any(
-            path.as_ref(),
-            &artifact_paths(Path::new(self.db_path()), &SIDE_SUFFIXES),
-        )
+        is_active_sqlite_artifact_for_db(Path::new(self.db_path()), path.as_ref())
     }
 
     /// Write a consistent copy of the database (including committed WAL
@@ -168,12 +165,21 @@ fn refuse_descriptor_alias(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn is_descriptor_alias_path(path: &Path) -> bool {
+pub(crate) fn is_descriptor_alias_path(path: &Path) -> bool {
     let special = |p: &Path| p.starts_with("/dev") || p.starts_with("/proc");
     special(path)
         || std::path::absolute(path).is_ok_and(|p| special(&p))
         || resolved_name(path).is_some_and(|p| special(&p))
         || std::fs::canonicalize(path).is_ok_and(|p| special(&p))
+}
+
+#[cfg(any(feature = "cloud", test))]
+pub(crate) fn is_same_sqlite_file(active_db: &Path, candidate: &Path) -> bool {
+    matches_any(candidate, &[active_db.to_path_buf()])
+}
+
+pub(crate) fn is_active_sqlite_artifact_for_db(active_db: &Path, candidate: &Path) -> bool {
+    matches_any(candidate, &artifact_paths(active_db, &SIDE_SUFFIXES))
 }
 
 fn artifact_paths(db_path: &Path, suffixes: &[&str]) -> Vec<PathBuf> {
@@ -415,5 +421,15 @@ mod tests {
         let db = dir.path().join("memory.db");
         let storage = open(&db);
         assert!(storage.vacuum_into(&db).is_err());
+    }
+
+    #[test]
+    fn same_sqlite_file_matches_main_db_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("memory.db");
+        let _storage = open(&db);
+        assert!(is_same_sqlite_file(&db, &db));
+        assert!(!is_same_sqlite_file(&db, &dir.path().join("memory.db-wal")));
+        assert!(!is_same_sqlite_file(&db, &dir.path().join("other.db")));
     }
 }

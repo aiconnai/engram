@@ -399,42 +399,13 @@ impl Storage {
     /// checkpointed, and the database is VACUUMed — but VACUUM runs only when
     /// there is enough free disk space for the rewrite.
     pub fn compact(&self, apply: bool) -> Result<CompactReport> {
-        #[cfg(unix)]
-        #[allow(clippy::unnecessary_cast)]
-        fn available_disk_bytes(path: &str) -> Option<i64> {
-            use std::ffi::CString;
-            use std::os::unix::ffi::OsStrExt;
-            // Stat the parent dir so this works even before the file exists.
-            let p = Path::new(path);
-            let target = match p.parent() {
-                Some(parent) if !parent.as_os_str().is_empty() => parent,
-                _ => p,
-            };
-            let cpath = CString::new(target.as_os_str().as_bytes()).ok()?;
-            // SAFETY: `cpath` is a valid NUL-terminated path; `stat` is zeroed
-            // before being filled by statvfs(3).
-            unsafe {
-                let mut stat: libc::statvfs = std::mem::zeroed();
-                if libc::statvfs(cpath.as_ptr(), &mut stat) == 0 {
-                    let avail = (stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64);
-                    Some(avail.min(i64::MAX as u64) as i64)
-                } else {
-                    None
-                }
-            }
-        }
-        #[cfg(not(unix))]
-        fn available_disk_bytes(_path: &str) -> Option<i64> {
-            None
-        }
-
         let conn = self.conn.lock();
 
         let page_size: i64 = conn.query_scalar_0("PRAGMA page_size").unwrap_or(0);
         let page_count: i64 = conn.query_scalar_0("PRAGMA page_count").unwrap_or(0);
         let freelist_count: i64 = conn.query_scalar_0("PRAGMA freelist_count").unwrap_or(0);
-        let db_size_bytes = page_size * page_count;
-        let reclaimable_bytes = page_size * freelist_count;
+        let db_size_bytes = page_size.saturating_mul(page_count);
+        let reclaimable_bytes = page_size.saturating_mul(freelist_count);
 
         let queue_complete_prunable: i64 = conn
             .query_scalar_0("SELECT COUNT(*) FROM embedding_queue WHERE status = 'complete'")
@@ -459,10 +430,13 @@ impl Storage {
         let wal_bytes = sidecar("-wal");
         let shm_bytes = sidecar("-shm");
 
+        let is_in_memory = self.config.db_path == ":memory:";
         let free_space = available_disk_bytes(&self.config.db_path);
         let free_space_bytes = free_space.unwrap_or(-1);
-        // VACUUM rewrites the DB into a temp file, needing ~db_size extra bytes.
-        let vacuum_safe = matches!(free_space, Some(free) if free >= db_size_bytes);
+        // VACUUM rewrites the DB into a temp file plus transient journal/WAL overhead.
+        let required_free_bytes = db_size_bytes.saturating_mul(2);
+        let vacuum_safe =
+            is_in_memory || matches!(free_space, Some(free) if free >= required_free_bytes);
 
         let mut operations = Vec::new();
 
@@ -522,7 +496,7 @@ impl Storage {
                 vacuum.skipped_reason = Some(match free_space {
                     Some(free) => {
                         format!(
-                            "insufficient free space: {free} available, need >= {db_size_bytes}"
+                            "insufficient free space: {free} available, need >= {required_free_bytes}"
                         )
                     }
                     None => "free space could not be determined".to_string(),
@@ -617,6 +591,39 @@ impl Storage {
 }
 
 #[cfg(unix)]
+#[allow(clippy::unnecessary_cast)]
+fn available_disk_bytes(path: &str) -> Option<i64> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    if path == ":memory:" {
+        return None;
+    }
+    // Stat the parent dir so this works even before the file exists.
+    let p = Path::new(path);
+    let target = p
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let cpath = CString::new(target.as_os_str().as_bytes()).ok()?;
+    // SAFETY: `cpath` is a valid NUL-terminated path; `stat` is zeroed
+    // before being filled by statvfs(3).
+    unsafe {
+        let mut stat: libc::statvfs = std::mem::zeroed();
+        if libc::statvfs(cpath.as_ptr(), &mut stat) == 0 {
+            let avail = (stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64);
+            Some(avail.min(i64::MAX as u64) as i64)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn available_disk_bytes(_path: &str) -> Option<i64> {
+    None
+}
+
+#[cfg(unix)]
 fn ensure_filesystem_database_supported() -> Result<()> {
     Ok(())
 }
@@ -632,7 +639,11 @@ fn ensure_filesystem_database_supported() -> Result<()> {
 impl StoragePool {
     /// Create a connection pool with the specified size
     pub fn new(config: StorageConfig, pool_size: usize) -> Result<Self> {
-        let pool_size = pool_size.max(1);
+        let pool_size = if config.db_path == ":memory:" {
+            1
+        } else {
+            pool_size.max(1)
+        };
         let mut pool = Vec::with_capacity(pool_size);
 
         for _ in 0..pool_size {

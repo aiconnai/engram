@@ -15,8 +15,8 @@ use engram::error::Result;
 use engram::mcp::{
     get_prompt, get_tool_definitions_tiered, handlers, http_transport, list_prompts,
     list_resources, methods, read_resource_as, InitializeResult, McpHandler, McpRequest,
-    McpResponse, McpServer, PromptCapabilities, ResourceCapabilities, ServerCapabilities,
-    ToolCallResult, ToolsCapability, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
+    McpResponse, McpServer, ServerCapabilities, ToolCallResult, ToolsCapability,
+    MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_LEGACY,
 };
 use engram::realtime::{RealtimeManager, RealtimeServer};
 use engram::search::{FuzzyEngine, SearchConfig};
@@ -313,12 +313,21 @@ impl EngramHandler {
         }
     }
 
-    // Preserved for the WebSocket feature that wires realtime events to the handler;
-    // not yet called from `main` while WebSocket transport is gated behind ws_port > 0
-    // and uses a separate path.
-    #[allow(dead_code)]
     fn with_realtime(mut self, manager: RealtimeManager) -> Self {
         self.realtime = Some(manager);
+        self
+    }
+
+    #[cfg(feature = "meilisearch")]
+    fn with_meilisearch(
+        mut self,
+        meili: Option<Arc<MeilisearchBackend>>,
+        meili_indexer: Option<Arc<MeilisearchIndexer>>,
+        meili_sync_interval: u64,
+    ) -> Self {
+        self.meili = meili;
+        self.meili_indexer = meili_indexer;
+        self.meili_sync_interval = meili_sync_interval;
         self
     }
 
@@ -433,8 +442,14 @@ impl EngramHandler {
 fn resolve_hook_workspace(
     params: &Value,
     principal: Option<&engram::auth::TransportPrincipal>,
-) -> String {
+) -> Option<String> {
     if let Some(p) = principal {
+        if !p.has_permission(
+            engram::auth::Permission::Write,
+            engram::auth::ResourceType::Memory,
+        ) {
+            return None;
+        }
         if let Some(ns) = p
             .auth_context()
             .namespace
@@ -442,18 +457,22 @@ fn resolve_hook_workspace(
             .map(str::trim)
             .filter(|s| !s.is_empty())
         {
-            return ns.to_string();
+            let norm = engram::types::normalize_workspace(ns).ok()?;
+            return p.allows_workspace(Some(&norm)).then_some(norm);
         }
     }
-    if let Some(ws) = params
-        .get("workspace")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
-        return ws.to_string();
+    let candidate = match params.get("workspace") {
+        None | Some(Value::Null) => "default".to_string(),
+        Some(Value::String(ws)) if ws.trim().is_empty() => "default".to_string(),
+        Some(Value::String(ws)) => engram::types::normalize_workspace(ws).ok()?,
+        Some(_) => return None,
+    };
+    if let Some(p) = principal {
+        if !p.allows_workspace(Some(&candidate)) {
+            return None;
+        }
     }
-    "default".to_string()
+    Some(candidate)
 }
 
 #[cfg(feature = "hooks")]
@@ -501,30 +520,15 @@ impl McpHandler for EngramHandler {
                         ..InitializeResult::default()
                     }
                 } else {
-                    // Current mode: 2025-11-25 with full capabilities
-                    InitializeResult {
-                        protocol_version: MCP_PROTOCOL_VERSION.to_string(),
-                        capabilities: ServerCapabilities {
-                            tools: Some(ToolsCapability {
-                                list_changed: false,
-                            }),
-                            resources: Some(ResourceCapabilities {
-                                subscribe: false,
-                                list_changed: false,
-                            }),
-                            prompts: Some(PromptCapabilities {
-                                list_changed: false,
-                            }),
-                        },
-                        ..InitializeResult::default()
-                    }
+                    // Current mode: 2025-11-25 with full capabilities (including resource subscribe)
+                    InitializeResult::default()
                 };
 
                 #[allow(unused_mut)]
                 let mut resp_json = json!(result);
                 #[cfg(feature = "hooks")]
+                if let Some(workspace) = resolve_hook_workspace(&request.params, principal.as_ref())
                 {
-                    let workspace = resolve_hook_workspace(&request.params, principal.as_ref());
                     let session_id = resolve_hook_session_id(&request.params);
                     let ctx = engram::hooks::HookContext::new(session_id, Some(workspace));
                     for hook_res in
@@ -585,13 +589,15 @@ impl McpHandler for EngramHandler {
                 let result = self.handle_tool_call(name, arguments, progress_reporter, principal);
 
                 #[cfg(feature = "hooks")]
-                {
-                    let mut ctx =
-                        engram::hooks::HookContext::new(hook_session_id, Some(hook_workspace));
-                    ctx.metadata.insert("tool_name".to_string(), json!(name));
-                    ctx.metadata
-                        .insert("tool_output".to_string(), result.clone());
-                    self.trigger_hook(engram::hooks::LifecycleHook::PostToolUse, ctx);
+                if !engram::mcp::ToolError::is_error_response(&result) {
+                    if let Some(hook_workspace) = hook_workspace {
+                        let mut ctx =
+                            engram::hooks::HookContext::new(hook_session_id, Some(hook_workspace));
+                        ctx.metadata.insert("tool_name".to_string(), json!(name));
+                        ctx.metadata
+                            .insert("tool_output".to_string(), result.clone());
+                        self.trigger_hook(engram::hooks::LifecycleHook::PostToolUse, ctx);
+                    }
                 }
 
                 let tool_result = ToolCallResult::from_tool_output(&result);
@@ -775,11 +781,11 @@ fn main() -> Result<()> {
     }
 
     #[cfg(feature = "meilisearch")]
-    let mut _meili_backend_for_handler: Option<Arc<MeilisearchBackend>> = None;
+    let mut meili_backend_for_handler: Option<Arc<MeilisearchBackend>> = None;
     #[cfg(feature = "meilisearch")]
-    let mut _meili_indexer_for_handler: Option<Arc<MeilisearchIndexer>> = None;
+    let mut meili_indexer_for_handler: Option<Arc<MeilisearchIndexer>> = None;
     #[cfg(feature = "meilisearch")]
-    let _meili_sync_interval = args.meilisearch_sync_interval;
+    let meili_sync_interval = args.meilisearch_sync_interval;
 
     #[cfg(feature = "meilisearch")]
     {
@@ -788,7 +794,7 @@ fn main() -> Result<()> {
                 url,
                 args.meilisearch_api_key.as_deref(),
             )?);
-            _meili_backend_for_handler = Some(meili.clone());
+            meili_backend_for_handler = Some(meili.clone());
 
             if args.meilisearch_indexer {
                 let sqlite_backend = SqliteBackend::new(config.clone())?;
@@ -797,7 +803,7 @@ fn main() -> Result<()> {
                     meili.clone(),
                     args.meilisearch_sync_interval,
                 ));
-                _meili_indexer_for_handler = Some(indexer.clone());
+                meili_indexer_for_handler = Some(indexer.clone());
 
                 let indexer_bg = indexer.clone();
                 std::thread::spawn(move || {
@@ -851,13 +857,23 @@ fn main() -> Result<()> {
     // `EngramHandler` directly since that's the type that implements
     // `McpHandler`.
     let (progress_tx, progress_rx) = std::sync::mpsc::channel();
-    #[allow(unused_mut)]
     let mut handler_state = EngramHandler::new(
         storage.clone(),
         embedder.clone(),
         progress_tx,
         search_config_for(args.hnsw_enabled),
     );
+    if let Some(ref manager) = realtime_manager {
+        handler_state = handler_state.with_realtime(manager.clone());
+    }
+    #[cfg(feature = "meilisearch")]
+    {
+        handler_state = handler_state.with_meilisearch(
+            meili_backend_for_handler,
+            meili_indexer_for_handler,
+            meili_sync_interval,
+        );
+    }
     #[cfg(feature = "hooks")]
     handler_state.enable_hooks();
     let handler = Arc::new(handler_state);
@@ -1057,39 +1073,66 @@ fn main() -> Result<()> {
                     }
                 };
                 rt.block_on(async move {
-                    let worker = match engram::sync::SyncWorker::start(
-                        std::path::PathBuf::from(&sync_config.db_path),
-                        cloud_uri,
+                    let db_path = std::path::PathBuf::from(&sync_config.db_path);
+                    let interval =
+                        std::time::Duration::from_millis(sync_config.sync_debounce_ms.max(1000));
+                    let mut worker: Option<engram::sync::SyncWorker> = None;
+                    match engram::sync::SyncWorker::start(
+                        db_path.clone(),
+                        cloud_uri.clone(),
                         sync_config.encrypt_cloud,
                         sync_config.sync_debounce_ms,
                         conn.clone(),
                     )
                     .await
                     {
-                        Ok(w) => w,
+                        Ok(w) => {
+                            tracing::info!(
+                                "Cloud sync worker started (interval: {}ms)",
+                                interval.as_millis()
+                            );
+                            worker = Some(w);
+                        }
                         Err(e) => {
                             tracing::error!(
                                 error = %engram::observability::redact::redacted(&e),
-                                "Failed to start cloud sync worker"
+                                "Failed to start cloud sync worker; will retry"
                             );
-                            return;
                         }
-                    };
-                    let interval =
-                        std::time::Duration::from_millis(sync_config.sync_debounce_ms.max(1000));
-                    tracing::info!(
-                        "Cloud sync worker started (interval: {}ms)",
-                        interval.as_millis()
-                    );
+                    }
                     loop {
                         tokio::time::sleep(interval).await;
-                        if let Err(e) = worker.sync(engram::sync::SyncDirection::Push, false).await
-                        {
-                            tracing::error!(
-                                error = %engram::observability::redact::redacted(&e),
-                                "Cloud sync worker dispatch error"
-                            );
-                            break;
+                        if worker.is_none() {
+                            match engram::sync::SyncWorker::start(
+                                db_path.clone(),
+                                cloud_uri.clone(),
+                                sync_config.encrypt_cloud,
+                                sync_config.sync_debounce_ms,
+                                conn.clone(),
+                            )
+                            .await
+                            {
+                                Ok(w) => {
+                                    tracing::info!("Cloud sync worker recovered");
+                                    worker = Some(w);
+                                }
+                                Err(e) => {
+                                    tracing::error!(
+                                        error = %engram::observability::redact::redacted(&e),
+                                        "Cloud sync worker restart failed; will retry"
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
+                        if let Some(ref w) = worker {
+                            if let Err(e) = w.sync(engram::sync::SyncDirection::Push, false).await {
+                                tracing::error!(
+                                    error = %engram::observability::redact::redacted(&e),
+                                    "Cloud sync worker dispatch error; resetting worker"
+                                );
+                                worker = None;
+                            }
                         }
                     }
                 });
@@ -1112,8 +1155,10 @@ fn main() -> Result<()> {
                         RealtimeServer::new(ws_manager, ws_addr).with_auth_key(ws_auth_key);
                     tracing::info!("WebSocket server starting on {}...", ws_addr);
                     if let Err(e) = ws_server.start().await {
-                        let err_msg = e.to_string();
-                        tracing::error!("WebSocket server error: {}", err_msg);
+                        tracing::error!(
+                            error = %engram::observability::redact::io_class(&e),
+                            "WebSocket server error"
+                        );
                     }
                 });
             });
@@ -1170,8 +1215,10 @@ fn main() -> Result<()> {
                     )
                     .await
                     {
-                        let err_msg = e.to_string();
-                        tracing::error!("HTTP transport error: {}", err_msg);
+                        tracing::error!(
+                            error = %engram::observability::redact::opaque(&e),
+                            "HTTP transport error"
+                        );
                     }
                 });
             });

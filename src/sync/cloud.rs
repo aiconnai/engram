@@ -3,7 +3,7 @@
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::Client as S3Client;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::encryption::{
     decrypt_data_with_provider, decrypt_data_with_provider_for_key_id, encrypt_data_with_provider,
@@ -320,9 +320,37 @@ async fn sync_parent_dir(target: &Path) {
     let _ = target;
 }
 
+/// RAII guard that removes an uncommitted download temp file if the enclosing
+/// future fails, panics, or is cancelled before the atomic `rename` succeeds.
+struct TempDownloadGuard {
+    path: PathBuf,
+    disarmed: bool,
+}
+
+impl TempDownloadGuard {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            disarmed: false,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.disarmed = true;
+    }
+}
+
+impl Drop for TempDownloadGuard {
+    fn drop(&mut self) {
+        if !self.disarmed {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
 /// Write `bytes` to a sibling temp file, fsync it, and rename it over `target`.
-/// The temp file is removed on every failure path. An existing target keeps its
-/// permissions; a new one is owner-only.
+/// The temp file is removed on every failure or cancellation path. An existing
+/// target keeps its permissions; a new one is owner-only.
 async fn replace_file_atomically(target: &Path, bytes: &[u8]) -> Result<()> {
     use tokio::io::AsyncWriteExt;
 
@@ -334,32 +362,25 @@ async fn replace_file_atomically(target: &Path, bytes: &[u8]) -> Result<()> {
         ".{file_name}.download-{}.tmp",
         uuid::Uuid::new_v4().simple()
     ));
+    let mut temp_guard = TempDownloadGuard::new(temp.clone());
 
-    let outcome: Result<()> = async {
-        let mut options = tokio::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        options.mode(0o600);
-        let mut file = options.open(&temp).await?;
-        file.write_all(bytes).await?;
-        file.sync_all().await?;
-        drop(file);
-        if let Ok(existing) = tokio::fs::metadata(target).await {
-            if existing.is_file() {
-                tokio::fs::set_permissions(&temp, existing.permissions()).await?;
-            }
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options.open(&temp).await?;
+    file.write_all(bytes).await?;
+    file.sync_all().await?;
+    drop(file);
+    if let Ok(existing) = tokio::fs::metadata(target).await {
+        if existing.is_file() {
+            tokio::fs::set_permissions(&temp, existing.permissions()).await?;
         }
-        tokio::fs::rename(&temp, target).await?;
-        sync_parent_dir(target).await;
-        Ok(())
     }
-    .await;
-
-    if outcome.is_err() {
-        // Best-effort teardown: the business error is already in `outcome`.
-        let _ = tokio::fs::remove_file(&temp).await;
-    }
-    outcome
+    tokio::fs::rename(&temp, target).await?;
+    temp_guard.disarm();
+    sync_parent_dir(target).await;
+    Ok(())
 }
 
 /// Cloud file metadata
