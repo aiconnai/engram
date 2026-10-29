@@ -1,0 +1,19 @@
+# Trusted SSH release-tag signers for Engram release verification
+# (consumed by scripts/verify-release-tag.sh).
+#
+# Format (OpenSSH allowed_signers; see ssh-keygen(1) "ALLOWED SIGNERS"):
+#   <principal> namespaces="git" <key-type> <base64-public-key> [comment]
+#
+# Example:
+#   release@aiconnai.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... release-signing-key
+#
+# Security model (fail-closed, anti-self-authorization):
+# - scripts/verify-release-tag.sh rejects an empty or comment-only signers file.
+# - In CI (.github/workflows/sdk-release.yml), signers are loaded either from
+#   the protected ENGRAM_RELEASE_ALLOWED_SIGNERS variable (with optional
+#   ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256 digest pin) or from
+#   origin/main:docs/releases/allowed-signers — never from the tag tree under
+#   verification, so a tag cannot authorize its own signing key.
+# - Keep this file comment-only until the release owner merges the chosen
+#   release signing public key onto main or provisions
+#   ENGRAM_RELEASE_ALLOWED_SIGNERS in the protected release environments.
