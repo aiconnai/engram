@@ -1,0 +1,2285 @@
+{
+  "observed_at_utc": "2026-10-27T23:37:18.558120+00:00",
+  "base_local_sha": "21cf80e9148b3f0273494cd3bec73c9c525bca6f",
+  "main_remote_sha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+  "coverage": {
+    "tracked_docs_paths": 471,
+    "github_rest_pages": 3,
+    "issues_excluding_pull_requests": 88,
+    "issue_states": {
+      "closed": 88
+    },
+    "pull_requests_in_history": 174,
+    "worktree_entries": 30,
+    "ledger_deferred_entries": 68
+  },
+  "docs_paths": [
+    "docs/.nojekyll",
+    "docs/AI_GUIDE.md",
+    "docs/AI_OPERATING_GUIDE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/COMPARISON.md",
+    "docs/CONTROL_PLANE_SCHEMA.sql",
+    "docs/DREAM_SNAPSHOT_EVALS.md",
+    "docs/GETTING_STARTED.md",
+    "docs/MCP_AUTH.md",
+    "docs/MCP_TOOLS.md",
+    "docs/OPERATIONS.md",
+    "docs/OPERATIONS_GIT_RETENTION.md",
+    "docs/QUICKSTART.md",
+    "docs/README.md",
+    "docs/REFERENCE.md",
+    "docs/ROADMAP.md",
+    "docs/SCHEMA.md",
+    "docs/USER_GUIDE.md",
+    "docs/USING_ENGRAM_IN_A_REPO.md",
+    "docs/VERSIONING.md",
+    "docs/adr/2026-07-14-turso-backend-status.md",
+    "docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md",
+    "docs/adr/cleanup/2026-07-07-oversized-files-engram.md",
+    "docs/adr/cleanup/2026-07-08-intelligence-context-memory-update-inspect.md",
+    "docs/adr/cleanup/2026-07-08-remaining-oversized-files-inspect.md",
+    "docs/adr/cleanup/2026-07-09-types-api-rfc.md",
+    "docs/api/types-baseline.txt",
+    "docs/architecture.html",
+    "docs/awesome-list-submissions.md",
+    "docs/contracts/advertised-surfaces.toml",
+    "docs/decisions/2026-07-21-agent-harness-hardening-v1.md",
+    "docs/decisions/2026-10-05-c4-descriptor-bound-sqlite-open-spike-notes.md",
+    "docs/decisions/2026-10-05-c4-descriptor-bound-sqlite-open.md",
+    "docs/decisions/2026-10-14-default-features-loopback-and-chunking-signoff.md",
+    "docs/decisions/assets/2026-10-05-c4-spike/Cargo.lock",
+    "docs/decisions/assets/2026-10-05-c4-spike/Cargo.toml",
+    "docs/decisions/assets/2026-10-05-c4-spike/README.md",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/green-macos.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/linux-env.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/linux-red.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/linux.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/macos-soak.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/multiuid-demo.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/probe-macos.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/red-macos-shim.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/soak-linux.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/soak-macos.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/evidence/stock-trace.txt",
+    "docs/decisions/assets/2026-10-05-c4-spike/multiuid-demo.sh",
+    "docs/decisions/assets/2026-10-05-c4-spike/run-linux.sh",
+    "docs/decisions/assets/2026-10-05-c4-spike/soak.sh",
+    "docs/decisions/assets/2026-10-05-c4-spike/src/bin/peer.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/src/lib.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/src/shim.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/src/trust.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/src/util.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/stub/shim_stub.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/tests/alt_vfs.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/tests/create_unlink_race.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/tests/fd_alias.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/tests/lock_hazard.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/tests/shim.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/tests/stock_race.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/tests/stress_control.rs",
+    "docs/decisions/assets/2026-10-05-c4-spike/tests/trust_chain.rs",
+    "docs/harness/.baseline-last",
+    "docs/harness/.quarterly-audit-last",
+    "docs/harness/.sensors-last",
+    "docs/harness/.sensors-log",
+    "docs/harness/CODE_REVIEW_POLICY.md",
+    "docs/harness/GATES.md",
+    "docs/harness/INVARIANTS.md",
+    "docs/harness/JSON_OUTPUTS.md",
+    "docs/harness/README.md",
+    "docs/harness/REFERENCE_INTAKE.md",
+    "docs/harness/SKILLS.md",
+    "docs/harness/SPEC.md",
+    "docs/harness/VERIFICATION_MANIFEST.md",
+    "docs/harness/WHAT_WE_DONT_DO.md",
+    "docs/harness/audits/.gitkeep",
+    "docs/harness/audits/2026-06-05T155933Z-quarterly-audit.md",
+    "docs/harness/audits/2026-10-02-improvement-baseline.md",
+    "docs/harness/audits/2026-10-27-nightly-release-evidence/ci.json",
+    "docs/harness/audits/2026-10-27-nightly-release-evidence/miri.json",
+    "docs/harness/audits/2026-10-27-nightly-release-evidence/mutation-recheck.json",
+    "docs/harness/audits/2026-10-27-nightly-release-evidence/mutation-recheck.toml",
+    "docs/harness/audits/2026-10-27-nightly-release-evidence/sdk-artifacts.json",
+    "docs/harness/audits/2026-10-27-nightly-release-readiness.md",
+    "docs/harness/bin/baseline.sh",
+    "docs/harness/bin/bootstrap.sh",
+    "docs/harness/bin/check-commit-msg.sh",
+    "docs/harness/bin/check-doc-links.py",
+    "docs/harness/bin/check-live-state.sh",
+    "docs/harness/bin/check-pr-title.sh",
+    "docs/harness/bin/check-scope.py",
+    "docs/harness/bin/doc_links.py",
+    "docs/harness/bin/doctor.sh",
+    "docs/harness/bin/harness-decision-log.sh",
+    "docs/harness/bin/harness-risk-register.sh",
+    "docs/harness/bin/harness-stats.sh",
+    "docs/harness/bin/harness_git.py",
+    "docs/harness/bin/lib.sh",
+    "docs/harness/bin/measure-context.py",
+    "docs/harness/bin/merge-gate.py",
+    "docs/harness/bin/merge_gate_ci.py",
+    "docs/harness/bin/pr-title-policy.sh",
+    "docs/harness/bin/quarterly-audit.sh",
+    "docs/harness/bin/record-evidence.py",
+    "docs/harness/bin/retention-manifest.py",
+    "docs/harness/bin/review-gate.sh",
+    "docs/harness/bin/run-offline-lane.sh",
+    "docs/harness/bin/run-runner-smoke.sh",
+    "docs/harness/bin/run-sandbox-smoke.sh",
+    "docs/harness/bin/run-standing-checks.py",
+    "docs/harness/bin/run-task.py",
+    "docs/harness/bin/sandbox-adapter.py",
+    "docs/harness/bin/sandbox_registry.py",
+    "docs/harness/bin/sensors.sh",
+    "docs/harness/bin/test-check-live-state.sh",
+    "docs/harness/bin/test-fixtures.sh",
+    "docs/harness/bin/test-review-gate.sh",
+    "docs/harness/bin/validate-evidence.py",
+    "docs/harness/bin/vc-gate.sh",
+    "docs/harness/canvas/2026-06-05-jj-version-control-gate.md",
+    "docs/harness/canvas/2026-06-05-memory-policy-layer.md",
+    "docs/harness/canvas/2026-06-06-harness-security-alignment.md",
+    "docs/harness/canvas/2026-06-08-dream-snapshot-review-pipeline.md",
+    "docs/harness/canvas/2026-06-08-engra-84-rate-limit-hardening.md",
+    "docs/harness/canvas/2026-06-08-memory-digest.md",
+    "docs/harness/canvas/2026-06-09-engra-111-mock-parity.md",
+    "docs/harness/canvas/2026-06-16-code-quality-maintenance.md",
+    "docs/harness/canvas/2026-06-20-hooks-contracts.md",
+    "docs/harness/canvas/2026-06-20-pr-title-guard.md",
+    "docs/harness/canvas/2026-06-20-storage-extension-semantics.md",
+    "docs/harness/canvas/2026-06-21-b1-pr-title-policy.md",
+    "docs/harness/canvas/2026-06-21-b2-loop-skills-policy.md",
+    "docs/harness/canvas/2026-06-21-final-engram-broad-review-fixes.md",
+    "docs/harness/canvas/2026-06-21-loop-followup-skills.md",
+    "docs/harness/canvas/2026-06-22-ENGRA-150-query-layer-lifecycle-updates.md",
+    "docs/harness/canvas/2026-06-22-memory-export-scope-workspace.md",
+    "docs/harness/canvas/2026-06-22-reviewer-cli-gemini-substitution.md",
+    "docs/harness/canvas/2026-06-22-zed-gemini-reviewer-path.md",
+    "docs/harness/canvas/2026-06-25-harness-12207-wave0.md",
+    "docs/harness/canvas/2026-06-26-harness-12207-tailoring.md",
+    "docs/harness/canvas/2026-06-26-harness-review-perspectives.md",
+    "docs/harness/canvas/2026-06-26-mcp-export-code-api.md",
+    "docs/harness/canvas/2026-06-27-lifecycle-predicate-unification.md",
+    "docs/harness/canvas/2026-06-27-reference-intake-checklist.md",
+    "docs/harness/canvas/2026-07-03-c1-agent-writeback-candidates.md",
+    "docs/harness/canvas/2026-07-08-mcp-misc-split.md",
+    "docs/harness/canvas/2026-07-09-engram-10-of-10-live-state.md",
+    "docs/harness/canvas/2026-07-09-engram-v022-security.md",
+    "docs/harness/canvas/2026-07-12-security-aggregate-gate.md",
+    "docs/harness/canvas/2026-07-13-engram-10-of-10-todo23.md",
+    "docs/harness/canvas/2026-07-21-agent-harness-hardening-v1.md",
+    "docs/harness/canvas/2026-10-23-turso-sunset.md",
+    "docs/harness/canvas/2026-10-26-harness-script-fixes.md",
+    "docs/harness/canvas/2026-10-27-nightly-release-readiness.md",
+    "docs/harness/canvas/README.md",
+    "docs/harness/canvas/TEMPLATE.md",
+    "docs/harness/checks/registry.json",
+    "docs/harness/context-budget.md",
+    "docs/harness/decisions/harness-decision-log.yaml",
+    "docs/harness/decisions/phase1-1-issue-snapshot-2026-05-31.md",
+    "docs/harness/decisions/phase1-2-plan-source-unification-2026-05-31.md",
+    "docs/harness/decisions/phase1-3-open-issues-audit-2026-05-31.md",
+    "docs/harness/decisions/phase1-4-dependency-map-2026-05-31.md",
+    "docs/harness/decisions/phase2-1-issue-28-rest-vs-mcp-only-2026-05-31.md",
+    "docs/harness/decisions/phase2-2-search-index-v2-rfc-2026-05-31.md",
+    "docs/harness/decisions/phase2-2-search-vector-bottleneck-sqlite-vec-2026-06-07.md",
+    "docs/harness/decisions/phase2-3-compression-benchmark-2026-05-31.md",
+    "docs/harness/decisions/phase2-4-markdown-obsidian-portability-2026-05-31.md",
+    "docs/harness/fixtures/check-logs/clippy.txt",
+    "docs/harness/fixtures/check-logs/doctor.txt",
+    "docs/harness/fixtures/check-logs/fmt.txt",
+    "docs/harness/fixtures/check-logs/test_lib.txt",
+    "docs/harness/fixtures/invalid_bool_integer.json",
+    "docs/harness/fixtures/invalid_broad_glob.json",
+    "docs/harness/fixtures/invalid_duplicate_key.json",
+    "docs/harness/fixtures/invalid_impossible_date.json",
+    "docs/harness/fixtures/invalid_missing_required.json",
+    "docs/harness/fixtures/invalid_nan.json",
+    "docs/harness/fixtures/invalid_pass_with_blocking.json",
+    "docs/harness/fixtures/invalid_scope_violation.json",
+    "docs/harness/fixtures/invalid_unknown_check_id.json",
+    "docs/harness/fixtures/invalid_unknown_field.json",
+    "docs/harness/fixtures/invalid_wrong_sha.json",
+    "docs/harness/fixtures/invalid_zero_checks.json",
+    "docs/harness/fixtures/valid_evidence.json",
+    "docs/harness/fixtures/valid_evidence_v2.json",
+    "docs/harness/fixtures/valid_review.json",
+    "docs/harness/fixtures/valid_review_v2.json",
+    "docs/harness/fixtures/valid_task.json",
+    "docs/harness/fixtures/valid_task_v2.json",
+    "docs/harness/goals/README.md",
+    "docs/harness/goals/registry.json",
+    "docs/harness/known-issues/2026-05-31-grpc-transport-port-bind.md",
+    "docs/harness/known-issues/2026-10-26-deferred-review-minors.md",
+    "docs/harness/known-issues/README.md",
+    "docs/harness/plans/2026-05-31-code-all-issues-plan.md",
+    "docs/harness/plans/2026-06-05-cross-harness-improvement-plan.md",
+    "docs/harness/plans/2026-06-05-engram-harness-improvement-execution-plan.md",
+    "docs/harness/plans/2026-06-05-memory-policy-layer-implementation-plan.md",
+    "docs/harness/plans/2026-06-07-dream-snapshot-parallel-worktree-plan.md",
+    "docs/harness/plans/2026-06-07-dream-snapshot-review-pipeline.md",
+    "docs/harness/plans/2026-06-08-memory-digest-implementation-plan.md",
+    "docs/harness/plans/2026-10-02-engram-comprehensive-improvement-plan.md",
+    "docs/harness/plans/2026-10-26-remediation-plan.md",
+    "docs/harness/plans/2026-10-27-nightly-release-readiness.md",
+    "docs/harness/plans/open-issues-audit-2026-05-31.md",
+    "docs/harness/progress-history.md",
+    "docs/harness/progress.md",
+    "docs/harness/progress/2026-05-30-harness-bootstrap.md",
+    "docs/harness/progress/2026-06-27-harness-live-state-closeout.md",
+    "docs/harness/progress/2026-07-03-agent-memory-contract-c1.md",
+    "docs/harness/progress/2026-07-21-agent-harness-hardening-v1.md",
+    "docs/harness/progress/2026-10-05-improvement-lane-p.md",
+    "docs/harness/progress/2026-10-05-improvement-lane-r.md",
+    "docs/harness/progress/2026-10-23-turso-sunset.md",
+    "docs/harness/progress/2026-10-26-remediation.md",
+    "docs/harness/progress/2026-10-27-remediation-handoff.md",
+    "docs/harness/progress/dream-snapshot/ENGRA-100-handoff.md",
+    "docs/harness/retention/review-raw.manifest.json",
+    "docs/harness/reviews/2026-05-31-compression-benchmark-ratio-recall.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-pre.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v2-pre.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v3-pre.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v4-pre.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v5-pre.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v6-pre.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v7-post.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v7-pre.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v8-pre.md",
+    "docs/harness/reviews/2026-05-31-harness-bootstrap-v9-post.md",
+    "docs/harness/reviews/2026-06-03-eng-1241-mcp-http-auth-docs-v2-post.md",
+    "docs/harness/reviews/2026-06-06-memory-policy-layer-post.md",
+    "docs/harness/reviews/2026-06-06-memory-policy-layer-v2-post.md",
+    "docs/harness/reviews/2026-06-08-dream-snapshot-review-pipeline-post.md",
+    "docs/harness/reviews/2026-06-16-code-quality-maintenance-pre.md",
+    "docs/harness/reviews/2026-06-16-code-quality-maintenance-v2-post.md",
+    "docs/harness/reviews/2026-06-21-b1-pr-title-policy-post.md",
+    "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-post.md",
+    "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v2-post.md",
+    "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v3-post.md",
+    "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v4-post.md",
+    "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v5-post.md",
+    "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v6-post.md",
+    "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v7-post.md",
+    "docs/harness/reviews/2026-06-21-b2-loop-skills-policy-v8-post.md",
+    "docs/harness/reviews/2026-06-21-enrichment-audit-subsecond-replay-pre.md",
+    "docs/harness/reviews/2026-06-21-enrichment-audit-subsecond-replay-v2-post.md",
+    "docs/harness/reviews/2026-06-21-final-harness-parity-post.md",
+    "docs/harness/reviews/2026-06-21-final-harness-parity-v2-post.md",
+    "docs/harness/reviews/2026-06-21-final-harness-parity-v3-post.md",
+    "docs/harness/reviews/2026-06-22-ENGRA-150-pre.md",
+    "docs/harness/reviews/2026-06-22-ENGRA-150-v2-post.md",
+    "docs/harness/reviews/2026-06-22-reviewer-cli-gemini-substitution-v3-post.md",
+    "docs/harness/reviews/2026-06-22-zed-gemini-reviewer-path-v2-post.md",
+    "docs/harness/reviews/2026-06-25-harness-12207-wave0-pre.md",
+    "docs/harness/reviews/2026-06-26-discover-tools-detail-post.md",
+    "docs/harness/reviews/2026-06-26-harness-12207-tailoring-post.md",
+    "docs/harness/reviews/2026-06-26-harness-12207-wave0-v2-post.md",
+    "docs/harness/reviews/2026-06-26-harness-12207-wave0-v3-post.md",
+    "docs/harness/reviews/2026-06-26-harness-12207-wave0-v4-post.md",
+    "docs/harness/reviews/2026-06-26-harness-12207-wave0-v5-post.md",
+    "docs/harness/reviews/2026-06-26-harness-review-perspectives-post.md",
+    "docs/harness/reviews/2026-06-26-mcp-registry-hygiene-post-rereview.md",
+    "docs/harness/reviews/2026-06-26-mcp-registry-hygiene-post.md",
+    "docs/harness/reviews/2026-06-26-pending-worktree-fixes-post.md",
+    "docs/harness/reviews/2026-06-26-worktree-closeout-post.md",
+    "docs/harness/reviews/2026-06-26-worktree-closeout-v2-post.md",
+    "docs/harness/reviews/2026-06-26-worktree-closeout-v3-post.md",
+    "docs/harness/reviews/2026-06-26-worktree-closeout-v4-post.md",
+    "docs/harness/reviews/2026-06-26-worktree-closeout-v5-post.md",
+    "docs/harness/reviews/2026-06-27-harness-live-state-closeout-v2-post.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-chair-v2.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-chair-v3.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-chair.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-claude-sonnet-v3.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex-v2.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex-v3.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-codex.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-grok-v2.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-grok-v3.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-post.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-prompt.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-v2-post.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-v3-post.md",
+    "docs/harness/reviews/2026-06-27-lifecycle-predicate-unification-v4-post.md",
+    "docs/harness/reviews/2026-06-27-reference-intake-checklist-post.md",
+    "docs/harness/reviews/2026-06-27-reference-intake-checklist-v2-post.md",
+    "docs/harness/reviews/2026-07-02-c0-mcp-registry-baseline-pre.md",
+    "docs/harness/reviews/2026-07-08-embedding-queue-split-post.md",
+    "docs/harness/reviews/2026-07-08-misc-split-post.md",
+    "docs/harness/reviews/2026-07-09-harness-split-post.md",
+    "docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v2-post.md",
+    "docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v3-post.md",
+    "docs/harness/reviews/2026-07-10-engram-10-of-10-live-state-v4-post.md",
+    "docs/harness/reviews/2026-07-12-engram-10-of-10-wave2-v2-post.md",
+    "docs/harness/reviews/2026-07-12-harness-contract-yaml-repair-post.md",
+    "docs/harness/reviews/2026-07-13-engram-10-of-10-wave4-post.md",
+    "docs/harness/reviews/2026-07-22-agent-harness-hardening-v1-v3-post.md",
+    "docs/harness/reviews/2026-08-16-harness-bootstrap-pre.md",
+    "docs/harness/reviews/2026-08-23-markdown-obsidian-vault-adapter-pre.md",
+    "docs/harness/reviews/2026-08-23-markdown-obsidian-vault-adapter-v3-post.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/README.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/final-review.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/ledger.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C1-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C1-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C2-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C2-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C3-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C3-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C4-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C4-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C5-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C5-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C6-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C6-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C7-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-C7-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-E0-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-E0-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-G1-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-G1-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H1-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H1-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H2-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H2-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H3-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H3-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H4-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H4-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H5-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H5-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H6-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-H6-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-INT-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-INT-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-O1-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-O1-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-O2-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-O2-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-O3-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-O3-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-O4-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-O4-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-P1-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-P1-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q1-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q1-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q2-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q2-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q2F-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q2F-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q3-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q3-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q4-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q4-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q5-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q5-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q6-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q6-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q7-brief.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/task-Q7-report.md",
+    "docs/harness/reviews/2026-10-05-comprehensive-improvement/wave5-6-summary.md",
+    "docs/harness/reviews/2026-10-14-engram-comprehensive-improvement-post-provenance.md",
+    "docs/harness/reviews/2026-10-14-engram-comprehensive-improvement-post.md",
+    "docs/harness/reviews/2026-10-23-turso-sunset-pre.md",
+    "docs/harness/reviews/2026-10-23-turso-sunset-v1-post.md",
+    "docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md",
+    "docs/harness/reviews/2026-10-27-nightly-release-readiness-2026-10-27-pre.md",
+    "docs/harness/risk-register.yaml",
+    "docs/harness/schemas/check-catalog-v1.json",
+    "docs/harness/schemas/evidence-v1.schema.json",
+    "docs/harness/schemas/evidence-v2.schema.json",
+    "docs/harness/schemas/goal-v1.schema.json",
+    "docs/harness/schemas/review-v1.schema.json",
+    "docs/harness/schemas/review-v2.schema.json",
+    "docs/harness/schemas/task-v1.schema.json",
+    "docs/harness/schemas/task-v2.schema.json",
+    "docs/harness/security/anthropic-reference-harness.md",
+    "docs/harness/tests/fake_writer.py",
+    "docs/harness/tests/merge_gate_test_support.py",
+    "docs/harness/tests/runner_test_support.py",
+    "docs/harness/tests/sandbox_test_support.py",
+    "docs/harness/tests/test_context_budget.py",
+    "docs/harness/tests/test_evidence_integrity.py",
+    "docs/harness/tests/test_harness_risk_register.py",
+    "docs/harness/tests/test_merge_gate.py",
+    "docs/harness/tests/test_offline_lane.py",
+    "docs/harness/tests/test_retention.py",
+    "docs/harness/tests/test_runner.py",
+    "docs/harness/tests/test_runner_smoke.py",
+    "docs/harness/tests/test_sandbox_adapter.py",
+    "docs/harness/tests/test_sandbox_smoke.py",
+    "docs/harness/tests/test_scope.py",
+    "docs/harness/tests/test_standing_checks.py",
+    "docs/harness/tests/test_validate_evidence.py",
+    "docs/index.html",
+    "docs/integrations/README.md",
+    "docs/integrations/claude-code-mcp-memory.md",
+    "docs/integrations/cursor-mcp-memory.md",
+    "docs/integrations/decision-triage.md",
+    "docs/integrations/engram_shared_memory_architecture.md",
+    "docs/integrations/mcp-memory-server.md",
+    "docs/integrations/openai-agents-memory.md",
+    "docs/loops/agentshield-scan/STATE.md",
+    "docs/mcp-tools.html",
+    "docs/migrations/turso-sunset.md",
+    "docs/migrations/v0.24.0-cache-clear.md",
+    "docs/quality/baseline.schema.json",
+    "docs/quality/budgets.json",
+    "docs/quality/candidate-floors.json",
+    "docs/quality/evaluations/2026-10-02-probability-review/PROVENANCE.md",
+    "docs/quality/evaluations/holdout-case.schema.json",
+    "docs/quality/evaluations/holdout-cases.example.jsonl",
+    "docs/quality/probabilistic-evaluation-policy.md",
+    "docs/quality/retrieval-performance-policy.md",
+    "docs/quality/rust-risk-inventory.md",
+    "docs/quality/sdk-contract-drift-baseline.json",
+    "docs/quality/test-coverage-map.md",
+    "docs/releases/README.md",
+    "docs/releases/SDK_PUBLISHING.md",
+    "docs/releases/channel-matrix.toml",
+    "docs/releases/v0.24.0-readiness.md",
+    "docs/releases/v0.7.0-sdk-notes.md",
+    "docs/rfcs/0001-harness-memory-product-boundary.md",
+    "docs/rfcs/0002-compression-benchmarks-for-context.md",
+    "docs/rfcs/0003-search-index-v2-benchmark.md",
+    "docs/rfcs/0003-search-index-v2.md",
+    "docs/rfcs/0004-markdown-obsidian-portability.md",
+    "docs/rfcs/0005-operational-context.md",
+    "docs/rfcs/0006-gbrain-ideas-prioritization.md",
+    "docs/rfcs/0007-dream-snapshot-review-pipeline.md",
+    "docs/rfcs/0008-memory-digest.md",
+    "docs/rfcs/0009-mcp-contract-validation.md",
+    "docs/rfcs/0010-permission-modes.md",
+    "docs/rfcs/0011-model-routing.md",
+    "docs/security/THREAT_MODEL.md",
+    "docs/security/advisory-exceptions.toml",
+    "docs/security/finding-exceptions.toml",
+    "docs/security/security-gate-evidence.md",
+    "docs/security/supply-chain-pins.toml",
+    "docs/security/workspace-operation-matrix.md",
+    "docs/site.css",
+    "docs/site.js",
+    "docs/standards/rust-engineering-guardrails.md",
+    "docs/standards/rust-repository-engineering-standard-v5-validation.json",
+    "docs/standards/rust-repository-engineering-standard-v5.md",
+    "docs/strategy/README.md",
+    "docs/strategy/competitive-landscape.md",
+    "docs/strategy/positioning-and-messaging.md",
+    "docs/strategy/product-opportunity-roadmap.md",
+    "docs/superpowers/plans/2026-06-03-enrichment-event-log.md",
+    "docs/superpowers/plans/2026-06-27-lifecycle-predicate-unification.md",
+    "docs/superpowers/plans/2026-07-03-agent-memory-contract.md",
+    "docs/superpowers/plans/2026-07-08-session-handoff-context-rotation.md",
+    "docs/superpowers/plans/2026-07-14-mcp-tool-surface-consolidation.md",
+    "docs/superpowers/specs/2026-05-11-onnx-local-embeddings-design.md",
+    "docs/superpowers/specs/2026-06-03-enrichment-event-log-design.md",
+    "docs/superpowers/specs/2026-06-26-stability-spacing-effect-design.md",
+    "docs/superpowers/specs/2026-06-27-lifecycle-predicate-unification-design.md",
+    "docs/superpowers/specs/2026-07-08-session-handoff-context-rotation-design.md",
+    "docs/wasm/README.md",
+    "docs/wasm/engram_wasm.d.ts",
+    "docs/wasm/engram_wasm.js",
+    "docs/wasm/engram_wasm_bg.wasm",
+    "docs/wasm/engram_wasm_bg.wasm.d.ts",
+    "docs/wasm/package.json"
+  ],
+  "issues": [
+    {
+      "number": 241,
+      "title": "Pin 3 container images by digest before 2026-11-05 (supply-chain ledger expiry blocks all PRs) — due 2026-10-29",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/241",
+      "updated_at": "2026-10-05T21:59:12Z",
+      "comments": 1,
+      "reconciliation_group": "I12"
+    },
+    {
+      "number": 240,
+      "title": "Independent human review of retrieval v2 corpus labels and candidate floors",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/240",
+      "updated_at": "2026-10-14T14:51:11Z",
+      "comments": 2,
+      "reconciliation_group": "I12"
+    },
+    {
+      "number": 239,
+      "title": "Bump aws-sdk-s3 with a pinned BehaviorVersion to clear RUSTSEC-2026-0253",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/239",
+      "updated_at": "2026-10-14T13:17:21Z",
+      "comments": 1,
+      "reconciliation_group": "I12"
+    },
+    {
+      "number": 238,
+      "title": "Investigate possible macOS SQLITE_READONLY shm fallback under concurrent startup",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/238",
+      "updated_at": "2026-10-14T13:46:49Z",
+      "comments": 1,
+      "reconciliation_group": "I12"
+    },
+    {
+      "number": 237,
+      "title": "Wire hardened hooks and SyncWorker into the server (currently library-only)",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/237",
+      "updated_at": "2026-10-14T13:46:46Z",
+      "comments": 1,
+      "reconciliation_group": "I12"
+    },
+    {
+      "number": 236,
+      "title": "Cap input size for media ingest, describe_image and search_by_image",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/236",
+      "updated_at": "2026-10-14T13:17:18Z",
+      "comments": 1,
+      "reconciliation_group": "I12"
+    },
+    {
+      "number": 235,
+      "title": "media_assets: scope file_hash uniqueness per workspace (cross-workspace asset re-pointing)",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/235",
+      "updated_at": "2026-10-14T13:17:15Z",
+      "comments": 1,
+      "reconciliation_group": "I12"
+    },
+    {
+      "number": 183,
+      "title": "Fix duplicate issue-update fields in harness_status response",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/183",
+      "updated_at": "2026-07-10T00:44:22Z",
+      "comments": 1,
+      "reconciliation_group": "I11"
+    },
+    {
+      "number": 179,
+      "title": "ENG-1241 follow-up: add MCP HTTP observability (metrics/tracing)",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/179",
+      "updated_at": "2026-07-08T23:27:11Z",
+      "comments": 1,
+      "reconciliation_group": "I10"
+    },
+    {
+      "number": 178,
+      "title": "ENG-1241 follow-up: add MCP HTTP rate limiting middleware",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/178",
+      "updated_at": "2026-07-08T23:27:10Z",
+      "comments": 2,
+      "reconciliation_group": "I10"
+    },
+    {
+      "number": 177,
+      "title": "security: resolve RUSTSEC-2026-0185 (quinn-proto) and RUSTSEC-2026-0187 (lopdf) before promoting Cargo Deny to required",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/177",
+      "updated_at": "2026-07-08T23:26:32Z",
+      "comments": 1,
+      "reconciliation_group": "I05"
+    },
+    {
+      "number": 176,
+      "title": "Submit project to awesome MCP lists",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/176",
+      "updated_at": "2026-07-08T23:26:28Z",
+      "comments": 1,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 175,
+      "title": "Add LangGraph memory tool example",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/175",
+      "updated_at": "2026-07-08T23:26:22Z",
+      "comments": 1,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 174,
+      "title": "Add runnable FastMCP server memory example",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/174",
+      "updated_at": "2026-07-08T23:26:18Z",
+      "comments": 1,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 173,
+      "title": "Add OpenAI Agents SDK memory example",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/173",
+      "updated_at": "2026-07-08T23:26:12Z",
+      "comments": 1,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 172,
+      "title": "Add a runnable Claude MCP example",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/172",
+      "updated_at": "2026-07-08T23:26:08Z",
+      "comments": 1,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 171,
+      "title": "Dream Snapshot Pipeline: eval suite and docs",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/171",
+      "updated_at": "2026-07-08T23:27:08Z",
+      "comments": 1,
+      "reconciliation_group": "I09"
+    },
+    {
+      "number": 170,
+      "title": "Dream Snapshot Pipeline: harness dogfooding and context bundles",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/170",
+      "updated_at": "2026-07-08T23:27:07Z",
+      "comments": 1,
+      "reconciliation_group": "I09"
+    },
+    {
+      "number": 169,
+      "title": "Dream Snapshot Pipeline: freshness engine",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/169",
+      "updated_at": "2026-07-08T23:27:06Z",
+      "comments": 1,
+      "reconciliation_group": "I09"
+    },
+    {
+      "number": 168,
+      "title": "Dream Snapshot Pipeline: MCP review tools",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/168",
+      "updated_at": "2026-07-08T23:27:05Z",
+      "comments": 1,
+      "reconciliation_group": "I09"
+    },
+    {
+      "number": 167,
+      "title": "Dream Snapshot Pipeline: deterministic candidate generator",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/167",
+      "updated_at": "2026-07-08T23:27:04Z",
+      "comments": 1,
+      "reconciliation_group": "I09"
+    },
+    {
+      "number": 166,
+      "title": "Dream Snapshot Pipeline: storage schema and lifecycle",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/166",
+      "updated_at": "2026-07-08T23:27:03Z",
+      "comments": 1,
+      "reconciliation_group": "I09"
+    },
+    {
+      "number": 165,
+      "title": "Dream Snapshot Pipeline: RFC and review candidate contract",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/165",
+      "updated_at": "2026-07-08T23:27:02Z",
+      "comments": 1,
+      "reconciliation_group": "I09"
+    },
+    {
+      "number": 164,
+      "title": "Drift de docs: vector search documentado como sqlite-vec, implementacao usa cosine manual",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/164",
+      "updated_at": "2026-07-08T23:27:01Z",
+      "comments": 2,
+      "reconciliation_group": "I08"
+    },
+    {
+      "number": 163,
+      "title": "ENGRA-60 Fly.io deploy validation for MCP auth + rate limit",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/163",
+      "updated_at": "2026-07-08T23:27:00Z",
+      "comments": 1,
+      "reconciliation_group": "I07"
+    },
+    {
+      "number": 162,
+      "title": "ENGRA-59 MCP transport observability (metrics/tracing/health)",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/162",
+      "updated_at": "2026-07-08T23:26:59Z",
+      "comments": 1,
+      "reconciliation_group": "I07"
+    },
+    {
+      "number": 161,
+      "title": "ENGRA-58 MCP HTTP rate limit hardening and rollout alignment",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/161",
+      "updated_at": "2026-07-08T23:26:58Z",
+      "comments": 1,
+      "reconciliation_group": "I07"
+    },
+    {
+      "number": 160,
+      "title": "Implement RFC 0004 Markdown/Obsidian export-import contract",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/160",
+      "updated_at": "2026-07-08T23:25:24Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 159,
+      "title": "Add harness_handoff for next-agent continuity",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/159",
+      "updated_at": "2026-07-08T23:25:20Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 158,
+      "title": "Add harness_status to assemble current project state",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/158",
+      "updated_at": "2026-07-08T23:25:14Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 157,
+      "title": "Add harness_record for decisions, handoffs, failures, and verification evidence",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/157",
+      "updated_at": "2026-07-08T23:25:10Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 156,
+      "title": "Add harness verification evidence workflow",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/156",
+      "updated_at": "2026-07-08T23:25:04Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 155,
+      "title": "Define Harness Memory product boundary",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/155",
+      "updated_at": "2026-07-08T23:25:00Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 154,
+      "title": "Design Markdown and Obsidian portability workflow",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/154",
+      "updated_at": "2026-07-08T23:24:54Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 153,
+      "title": "Benchmark prompt compression before adding neural compressor backend",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/153",
+      "updated_at": "2026-07-08T23:24:50Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 152,
+      "title": "Unify token budget and token-aware chunking",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/152",
+      "updated_at": "2026-07-08T23:24:43Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 151,
+      "title": "Create Search Index v2 RFC",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/151",
+      "updated_at": "2026-07-08T23:24:39Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 150,
+      "title": "Decide local REST API vs MCP-only",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/150",
+      "updated_at": "2026-07-08T23:24:33Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 149,
+      "title": "Generate MCP tools reference from code",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/149",
+      "updated_at": "2026-07-08T23:24:29Z",
+      "comments": 1,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 148,
+      "title": "Define derived index health contract for external backends",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/148",
+      "updated_at": "2026-07-08T23:24:23Z",
+      "comments": 1,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 147,
+      "title": "Add embedding queue hygiene policy",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/147",
+      "updated_at": "2026-07-08T23:24:19Z",
+      "comments": 1,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 146,
+      "title": "Add worker/indexer singleton lock per storage path",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/146",
+      "updated_at": "2026-07-08T23:24:13Z",
+      "comments": 1,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 145,
+      "title": "Add derived-index rebuild command",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/145",
+      "updated_at": "2026-07-08T23:24:09Z",
+      "comments": 1,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 144,
+      "title": "Add safe maintenance compact dry-run",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/144",
+      "updated_at": "2026-07-08T23:24:03Z",
+      "comments": 1,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 143,
+      "title": "Add CLI maintenance status matching memory_storage_health",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/143",
+      "updated_at": "2026-07-08T23:23:59Z",
+      "comments": 1,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 142,
+      "title": "feat: add local sentence transformers as opt-in embedding backend",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/142",
+      "updated_at": "2026-07-08T23:23:55Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 141,
+      "title": "Feature: Reduce LLM Token Usage via Self-Improving Memory System",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/141",
+      "updated_at": "2026-07-08T23:23:50Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 140,
+      "title": "Feature: Complete RTK-Inspired LLM Token Reduction System",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/140",
+      "updated_at": "2026-07-08T23:23:47Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 139,
+      "title": "Memory subsystem degraded: embeddings stuck (0/1166), search filters return empty, schema_version=0",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/139",
+      "updated_at": "2026-07-08T23:23:42Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 138,
+      "title": "Panic \"there is no reactor running\" when using ENGRAM_EMBEDDING_MODEL=openai with MCP server",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/138",
+      "updated_at": "2026-07-08T23:23:58Z",
+      "comments": 2,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 137,
+      "title": "Dream Phase: periodic background consolidation of memories",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/137",
+      "updated_at": "2026-07-08T23:23:35Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 136,
+      "title": "memory_smart_retrieve: intent-aware unified retrieval",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/136",
+      "updated_at": "2026-07-08T23:23:29Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 135,
+      "title": "Wire HookManager into MCP server AppState",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/135",
+      "updated_at": "2026-07-08T23:23:25Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 134,
+      "title": "Binaries broken: src/bin/app_state.rs and src/bin/server.rs do not compile",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/134",
+      "updated_at": "2026-07-08T23:23:20Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 122,
+      "title": "session_land always fails with \"no such column: tags\"",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/122",
+      "updated_at": "2026-07-08T23:31:56Z",
+      "comments": 1,
+      "reconciliation_group": "I06"
+    },
+    {
+      "number": 106,
+      "title": "security: resolve RUSTSEC-2026-0185 (quinn-proto) and RUSTSEC-2026-0187 (lopdf) before promoting Cargo Deny to required",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/106",
+      "updated_at": "2026-06-27T15:52:11Z",
+      "comments": 2,
+      "reconciliation_group": "I05"
+    },
+    {
+      "number": 76,
+      "title": "Submit project to awesome MCP lists",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/76",
+      "updated_at": "2026-06-12T18:19:19Z",
+      "comments": 2,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 75,
+      "title": "Add LangGraph memory tool example",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/75",
+      "updated_at": "2026-06-12T18:19:19Z",
+      "comments": 2,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 74,
+      "title": "Add runnable FastMCP server memory example",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/74",
+      "updated_at": "2026-06-12T18:19:18Z",
+      "comments": 2,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 73,
+      "title": "Add OpenAI Agents SDK memory example",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/73",
+      "updated_at": "2026-06-12T18:19:18Z",
+      "comments": 2,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 72,
+      "title": "Add a runnable Claude MCP example",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/72",
+      "updated_at": "2026-06-12T18:19:18Z",
+      "comments": 2,
+      "reconciliation_group": "I04"
+    },
+    {
+      "number": 43,
+      "title": "Implement RFC 0004 Markdown/Obsidian export-import contract",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/43",
+      "updated_at": "2026-05-31T20:47:26Z",
+      "comments": 2,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 37,
+      "title": "Add harness verification evidence workflow",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/37",
+      "updated_at": "2026-05-31T20:27:13Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 36,
+      "title": "Add harness_handoff for next-agent continuity",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/36",
+      "updated_at": "2026-05-31T20:20:33Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 35,
+      "title": "Add harness_status to assemble current project state",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/35",
+      "updated_at": "2026-05-31T20:15:43Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 34,
+      "title": "Add harness_record for decisions, handoffs, failures, and verification evidence",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/34",
+      "updated_at": "2026-05-31T20:11:14Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 33,
+      "title": "Define Harness Memory product boundary",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/33",
+      "updated_at": "2026-05-30T15:48:15Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 32,
+      "title": "Design Markdown and Obsidian portability workflow",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/32",
+      "updated_at": "2026-05-31T19:47:05Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 31,
+      "title": "Benchmark prompt compression before adding neural compressor backend",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/31",
+      "updated_at": "2026-05-31T19:43:15Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 30,
+      "title": "Unify token budget and token-aware chunking",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/30",
+      "updated_at": "2026-05-31T19:38:09Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 29,
+      "title": "Create Search Index v2 RFC",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/29",
+      "updated_at": "2026-05-31T18:28:35Z",
+      "comments": 1,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 28,
+      "title": "Decide local REST API vs MCP-only",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/28",
+      "updated_at": "2026-05-31T18:26:16Z",
+      "comments": 2,
+      "reconciliation_group": "I03"
+    },
+    {
+      "number": 27,
+      "title": "Generate MCP tools reference from code",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/27",
+      "updated_at": "2026-05-31T18:17:55Z",
+      "comments": 5,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 26,
+      "title": "Define derived index health contract for external backends",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/26",
+      "updated_at": "2026-05-31T18:03:51Z",
+      "comments": 2,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 25,
+      "title": "Add embedding queue hygiene policy",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/25",
+      "updated_at": "2026-05-31T18:03:51Z",
+      "comments": 2,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 24,
+      "title": "Add worker/indexer singleton lock per storage path",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/24",
+      "updated_at": "2026-05-30T23:04:45Z",
+      "comments": 0,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 23,
+      "title": "Add derived-index rebuild command",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/23",
+      "updated_at": "2026-05-30T23:04:45Z",
+      "comments": 0,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 22,
+      "title": "Add safe maintenance compact dry-run",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/22",
+      "updated_at": "2026-05-30T23:04:45Z",
+      "comments": 0,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 21,
+      "title": "Add CLI maintenance status matching memory_storage_health",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/21",
+      "updated_at": "2026-05-31T18:23:23Z",
+      "comments": 3,
+      "reconciliation_group": "I02"
+    },
+    {
+      "number": 17,
+      "title": "feat: add local sentence transformers as opt-in embedding backend",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/17",
+      "updated_at": "2026-05-27T01:34:47Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 16,
+      "title": "Feature: Complete RTK-Inspired LLM Token Reduction System",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/16",
+      "updated_at": "2026-05-27T01:34:45Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 15,
+      "title": "Feature: Reduce LLM Token Usage via Self-Improving Memory System",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/15",
+      "updated_at": "2026-05-12T11:08:24Z",
+      "comments": 2,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 14,
+      "title": "Binaries broken: src/bin/app_state.rs and src/bin/server.rs do not compile",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/14",
+      "updated_at": "2026-05-11T00:14:07Z",
+      "comments": 0,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 13,
+      "title": "Dream Phase: periodic background consolidation of memories",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/13",
+      "updated_at": "2026-05-11T00:59:28Z",
+      "comments": 0,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 12,
+      "title": "memory_smart_retrieve: intent-aware unified retrieval",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/12",
+      "updated_at": "2026-05-11T00:49:30Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 11,
+      "title": "Wire HookManager into MCP server AppState",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/11",
+      "updated_at": "2026-05-27T01:34:42Z",
+      "comments": 0,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 10,
+      "title": "Memory subsystem degraded: embeddings stuck (0/1166), search filters return empty, schema_version=0",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/10",
+      "updated_at": "2026-05-11T23:24:23Z",
+      "comments": 1,
+      "reconciliation_group": "I01"
+    },
+    {
+      "number": 9,
+      "title": "Panic \"there is no reactor running\" when using ENGRAM_EMBEDDING_MODEL=openai with MCP server",
+      "state": "closed",
+      "state_reason": "completed",
+      "url": "https://github.com/aiconnai/engram/issues/9",
+      "updated_at": "2026-05-11T18:10:54Z",
+      "comments": 0,
+      "reconciliation_group": "I01"
+    }
+  ],
+  "historical_ledger_deferred_entries": [
+    {
+      "line": 44,
+      "text": "Task E0: minor (deferred): ADR Source row attributes phrase \"Tudo, inclusive Onda 4\" to plan note — it is the owner's chat answer, not in plan note; fix wording",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 45,
+      "text": "Task E0: minor (deferred): no Review Canvas recorded for ADR acceptance/harness policy change; note deviation in audit §6/7",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 46,
+      "text": "Task E0: minor (deferred): lane-P log summarizes only D1-D6; add pointer to D7-D12",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 47,
+      "text": "Task E0: minor (deferred): progress.md Last commit stale (630dd26); Last sensors cell verbose",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 48,
+      "text": "Task E0: minor (deferred): loose evidence SHAs (harness-contract.yml, sensors.sh attribution)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 56,
+      "text": "Task Q1: minor (deferred): justfile ci recipe only string-grepped, not behaviorally tested",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 57,
+      "text": "Task Q1: minor (deferred): ci-parity-check.sh lacks rg presence check (pre-existing)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 66,
+      "text": "Task C2: follow-up (deferred): WAL header checksum endianness naming bug (WalHeader::new emits headers verify rejects)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 67,
+      "text": "Task C2: follow-up (deferred): streamer flush_delta doesn't reset last_replicated_frame when nCkpt==0 (pre-existing; packs now refused fail-closed)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 70,
+      "text": "Task C2: minor (deferred): PITR WAL-present path lacks explicit 0600 mode assertion (shares StagedTarget)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 71,
+      "text": "Task C2: minor (deferred): DecompressionFailed vs ReplayBudgetExceeded label when remaining == 64MiB cap",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 72,
+      "text": "Task C2: minor (deferred): with_transaction IMMEDIATE for read-only closures → cross-process read contention (reviewer: Minor)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 76,
+      "text": "Task H1: minor (deferred): reviewer diff still --unified=0 (no context)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 80,
+      "text": "Task H1: minor (deferred): GATE_SCRIPT relative path resolved after cd → hashes/location-checks wrong file (fails closed); make absolute before cd",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 81,
+      "text": "Task H1: minor (deferred): ACL check skipped when xattr present (ls shows @ not +)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 82,
+      "text": "Task H1: minor (deferred): symlinked gate file not resolved (content pinned by sha; TOCTOU only)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 83,
+      "text": "Task H1: minor (deferred): test_gate_inside_worktree_cannot_pass asserts only rc=3, not reason",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 87,
+      "text": "Task Q2: minor (deferred): scripts/rust_risk_inventory.py 1,175 lines (>800 user max), analyze() ~190 lines — split lexer/cfg-tree/report",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 88,
+      "text": "Task Q2: minor (deferred): mutation evidence not committed; undefined \"Confirmed (static)\" label in §7 legend",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 89,
+      "text": "Task Q2: minor (deferred): tool + inventory in one commit (brief: separate PR)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 96,
+      "text": "Task C1: minor (deferred): TOCTOU on pre-dispatch-only ID tools (summary_of_id, parent_id, feedback, writeback…)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 97,
+      "text": "Task C1: minor (deferred): resources/subscribe not principal-aware (activity oracle)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 98,
+      "text": "Task C1: minor (deferred): no gRPC e2e with real EngramHandler",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 99,
+      "text": "Task C1: minor (deferred): handle_request_as default ignores principal (custom handlers must override)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 104,
+      "text": "Task C1: minor (deferred): no catalog drift test for WORKSPACE_ALIAS_TOOLS (new tool reusing workspace as path-hash would pass)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 105,
+      "text": "Task C1: minor (deferred): unexplained anonymous context_record* reason-assertion exemption in workspace_auth_enforcement_tests",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 106,
+      "text": "Task C1: minor (deferred): dispatch parser in test_every_dispatchable_name_has_a_permission_mode brittle to wrapped or-patterns",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 107,
+      "text": "Task C1: minor (deferred): public permission_denial_for_mode still fail-open for unknown tools; permission_mode_status_report ignores write-flag escalation",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 116,
+      "text": "Task H2: minor (deferred): offline-lane floor constants unpinned (lowerable silently); review-gate \"Not applicable\" count unbounded/unprinted; zero-count stub tests only for unit/self-test",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 117,
+      "text": "Task H2: minor (deferred): sensors.sh full skips offline_lane when CI_STATUS=pass_with_exclusion",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 118,
+      "text": "Task H2: minor (deferred): validate-evidence.py 1325 lines / test 1035 lines (>800) — split follow-up; uniqueItems skipped when len>4096 (fail closed instead)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 119,
+      "text": "Task H2: minor (deferred): check-live-state.sh no longer run against real progress.md anywhere (Last commit/sensors staleness unenforced) → H6 decide",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 126,
+      "text": "Task O3: minor (deferred): Brier figures 11-decimal precision unverified (provenance unavailable)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 132,
+      "text": "Task C3: minor (deferred): advertise ttl_days 0..=36500 in catalog/MCP_TOOLS.md",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 133,
+      "text": "Task C3: minor (deferred): weak contains() assertion in bm25 lengthening-fold test",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 134,
+      "text": "Task C3: minor (deferred): truncate_with_marker contract chars→bytes (fewer chars kept for multibyte)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 135,
+      "text": "Task C3: follow-up (→Q2F): unaudited slices in intelligence/content_utils.rs:143,190,231,239, context/bundle.rs:499; Duration::seconds(ttl_seconds) panic hazards in storage/queries/core",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 145,
+      "text": "Task Q4: minor (deferred): persisted_state no-mutation check covers memories/memory_tags only; positive control stdio-only",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 146,
+      "text": "Task Q4: minor (deferred): characterization tests (TS isError/AbortError, camelCase ignored, legacy string errors) must be flipped when bugs fixed",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 154,
+      "text": "Task Q4: minor (deferred): drift sites per method not per call expression; TS _enclosing_method only 2-space class members",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 155,
+      "text": "Task Q4: minor (deferred): coverage map G-1 rows still \"open; owned by G1\" — reconcile after G1 completes",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 161,
+      "text": "Task Q5: minor (deferred): bench PR comments removed (regression still fails PR); bench-publish swallows publish failure; exceptions files PR-editable (human merge mitigates)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 167,
+      "text": "Task Q5: minor (deferred): CI contract pin misses `- if:` first-key form; commented-out gate commands satisfy assertIn; flow-style permissions single-line only; security-gate contract-test step itself unpinned (consider offline lane/ci.sh)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 174,
+      "text": "Task H3: minor (deferred): ceil budget allows ≤1s overrun; tmpfs parser order-sensitive; INLINE_INTERPRETERS lacks Rscript/deno/bun/pwsh; unix socket forwarding remote undetectable",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 179,
+      "text": "Task Q3: minor (deferred): outdated job continue-on-error remains; cargo-mutants runtime unmeasured (est ~130 mutants); GH-hosted nightly not run",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 182,
+      "text": "Task C7: minor (deferred): multi-process lease edge (slow original claimant fail marks re-claimer job failed); checkpoint window between commit and HNSW insert (pre-existing); drain report lost on partial failure; hygiene config hard-coded Default; no test for context_seed embed_after_commit / server observer wiring",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 187,
+      "text": "Task H3: minor (deferred): prefix inline-flag match over-rejects (e.g. perl -Mstrict)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 195,
+      "text": "Task C7: minor (deferred): dream/eval.rs:532 fixture creates defer=true memories without enqueue (non-test helper)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 197,
+      "text": "Task G1: minor (deferred): /dev,/proc refused even under :memory: storage; /dev/shm legitimate paths refused (fail-closed); CloudStorage upload/download hazard documented-not-fixed (not wired); TOCTOU window between guard and open",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 203,
+      "text": "Task C7: minor (deferred): ec3093c swept in C6's src/hooks/failure_tests.rs (uncompiled at that commit) — C6 notified; queued_at not refreshed on rebuild reset; rebuild count queries unwrap_or(0) (pre-existing)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 207,
+      "text": "Task H6: minor (deferred): lane-P active log ~12k tokens growing (rotate per task later); AGENTS/CLAUDE read-list duplication kept",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 214,
+      "text": "Task C5: minor (deferred): no positive vocabulary assertion after successful create; batch create lacks vocabulary update (pre-existing, follow-up); bench inconclusive (noisy)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 224,
+      "text": "Task C6: minor (deferred): hooks fixes not reachable from live server (HookContext::new(None,None), SessionStart drain not wired); SyncWorker not started by any binary; media_assets.file_hash globally UNIQUE → cross-workspace ping-pong (schema limitation); pub frames_dir semver-visible; vision errors wrapped Internal; screencapture unbounded; ingest/describe/search_by_image read whole files uncapped",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 229,
+      "text": "Task H4: minor (deferred): check_repo git status honours operator's local filter config; H4 tests not written test-first (mutation RED substitute)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 235,
+      "text": "Task Q2F: minor (deferred): result cache invalidate_for_workspace ignores workspaces/global; cache key lacks caller principal (check vs C1 auth — principal-scoped results could be served cross-principal?)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 238,
+      "text": "Task Q7: minor (deferred): hot-path baselines in candidate budgets.json not anchored (candidate can raise baselines) → anchor budgets like floors (Q1b/follow-up); main-branch push anchor = merge-base == SHA → accepted always false (doc: use first parent); --output dir unlink uncaught error",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 244,
+      "text": "Task C6: minor (deferred, fix before merge): catalog/MCP_TOOLS.md \"other workspaces are unaffected\" overclaims (file_hash UNIQUE re-points asset across workspaces)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 245,
+      "text": "Task C6: minor (deferred): unqualified panic-isolation claim in lane-R log line ~343; reset_interrupted_sync last_error unbounded growth in crash loop; worker Pull guard canonicalize-only (download_checked unused in prod); pid_alive zombie flake risk; waitid EINTR retry",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 253,
+      "text": "Task Q2F: minor (deferred, fix before merge): mcp.rs write_atomic temp file briefly default-mode before chmod (0600 config world-readable window) and rename replaces symlinked config (canonicalize first)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 254,
+      "text": "Task Q2F: minor (deferred): legacy {\"error\":string} on memory_create/memory_boost/context_record_artifact out-of-range paths (wire-format follow-up); ignored_date_filter has no consumer; write_unique_backup prefix match",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 258,
+      "text": "Task P1: minor (deferred): LowercaseIndex offset map reserves 16B/byte for non-ASCII (size by char count / u32); one Σ forces exact scan for whole text; index built even when org/concept extraction disabled; alloc test regex cache-pool sensitivity; no long-text adversarial case",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 264,
+      "text": "Task H4: minor (deferred): multi-line cfg attribute continuation lines not parsed (first line only); assertion-weakening on same line count undetected; evidence integrity not a signature (same-user host process can rewrite bundle); offline lane +75s",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 273,
+      "text": "Task O1: minor (deferred): RED evidence only for provider-body/panic tests (others guards written after code); panic test output noise",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 287,
+      "text": "Task O2: minor (deferred): manifest field format validation (sha256/git_blob/size types, unique paths); regex fullmatch; symlink/non-regular restore tests; backup root must be outside repo; restore TOCTOU undocumented; \"no gc\" test greps help text only; early lane floors (unit 60, self-test 15, fixtures 30, live-state 15, review-gate 30, lane-contract 8) not exact despite comment",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 291,
+      "text": "Task C4: minor (deferred): .semgrepignore touched (scoped to spike dir); rust_risk_inventory will list spike .rs files on regeneration; foreign-owned file E check untested; BSD not run",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 295,
+      "text": "Task O1: minor (deferred): storage-mode warning fully redacted loses operator guidance (use static message); gRPC denials without authorization_checks increment; handler_panic/mcp_timeouts denominator includes non-handler rejections; unaudited log sites in sync/hooks/multimodal/watcher (RISK-0002)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 302,
+      "text": "Task O4: minor (deferred): no test/doctor assertion of standing-checks.yml concurrency block; /work mounted rw (python checks would trip gate_mutated_checkout); failures outside runner leave no alert; only goal is a constant canary (Q3 lanes need H3 registry/image change); owner handle placeholder `harness-maintainers` (owner to set)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    },
+    {
+      "line": 308,
+      "text": "Task H5: minor (deferred): base_references() fails open (empty) on git error; required_jobs indentation-dependent; >100-char markdown lines; broad protected set (any scripts/** or .github/** PR → human)",
+      "disposition": "triage-required; historical entry, not confirmed current defect"
+    }
+  ],
+  "github_main_protection": {
+    "url": "https://api.github.com/repos/aiconnai/engram/branches/main/protection",
+    "required_status_checks": {
+      "url": "https://api.github.com/repos/aiconnai/engram/branches/main/protection/required_status_checks",
+      "strict": true,
+      "contexts": [
+        "Format",
+        "Clippy",
+        "Documentation",
+        "Test (ubuntu-latest)",
+        "Security Audit",
+        "Cargo Deny"
+      ],
+      "contexts_url": "https://api.github.com/repos/aiconnai/engram/branches/main/protection/required_status_checks/contexts",
+      "checks": [
+        {
+          "context": "Format",
+          "app_id": 15368
+        },
+        {
+          "context": "Clippy",
+          "app_id": 15368
+        },
+        {
+          "context": "Documentation",
+          "app_id": 15368
+        },
+        {
+          "context": "Test (ubuntu-latest)",
+          "app_id": 15368
+        },
+        {
+          "context": "Security Audit",
+          "app_id": 15368
+        },
+        {
+          "context": "Cargo Deny",
+          "app_id": 15368
+        }
+      ]
+    },
+    "required_signatures": {
+      "url": "https://api.github.com/repos/aiconnai/engram/branches/main/protection/required_signatures",
+      "enabled": false
+    },
+    "enforce_admins": {
+      "url": "https://api.github.com/repos/aiconnai/engram/branches/main/protection/enforce_admins",
+      "enabled": false
+    },
+    "required_linear_history": {
+      "enabled": false
+    },
+    "allow_force_pushes": {
+      "enabled": false
+    },
+    "allow_deletions": {
+      "enabled": false
+    },
+    "block_creations": {
+      "enabled": false
+    },
+    "required_conversation_resolution": {
+      "enabled": false
+    },
+    "lock_branch": {
+      "enabled": false
+    },
+    "allow_fork_syncing": {
+      "enabled": false
+    }
+  },
+  "github_rulesets": [],
+  "github_repository_settings": {
+    "default_branch": "main",
+    "open_issues_count": 0,
+    "allow_auto_merge": false,
+    "delete_branch_on_merge": false,
+    "security_and_analysis": {
+      "secret_scanning": {
+        "status": "disabled"
+      },
+      "secret_scanning_push_protection": {
+        "status": "disabled"
+      },
+      "dependabot_security_updates": {
+        "status": "disabled"
+      },
+      "secret_scanning_non_provider_patterns": {
+        "status": "disabled"
+      },
+      "secret_scanning_validity_checks": {
+        "status": "disabled"
+      }
+    }
+  },
+  "security_alert_observation": {
+    "dependabot": {
+      "status": "unavailable",
+      "exit": 1,
+      "message": "gh: Dependabot alerts are disabled for this repository. (HTTP 403)"
+    },
+    "code_scanning": {
+      "status": "queried",
+      "open_alerts": 0,
+      "pages": 1
+    },
+    "secret_scanning": {
+      "status": "unavailable",
+      "exit": 1,
+      "message": "gh: Secret scanning is disabled on this repository. (HTTP 404)"
+    }
+  },
+  "recent_workflow_runs": [
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T11:27:40Z",
+      "databaseId": 40496307840,
+      "event": "schedule",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:50:48Z",
+      "databaseId": 40483891790,
+      "event": "schedule",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "Standing Checks"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:19:51Z",
+      "databaseId": 40479948259,
+      "event": "workflow_dispatch",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-27T09:19:35Z",
+      "databaseId": 40479914277,
+      "event": "workflow_dispatch",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "Nightly"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:19:04Z",
+      "databaseId": 40479851144,
+      "event": "push",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "Deploy GitHub Pages"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:19:03Z",
+      "databaseId": 40479851014,
+      "event": "push",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "AgentShield"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:19:03Z",
+      "databaseId": 40479850939,
+      "event": "push",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "Semgrep"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:19:03Z",
+      "databaseId": 40479850935,
+      "event": "push",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "CodeQL"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:19:03Z",
+      "databaseId": 40479850900,
+      "event": "push",
+      "headSha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+      "status": "completed",
+      "workflowName": "Gitleaks"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:02:39Z",
+      "databaseId": 40477812549,
+      "event": "pull_request",
+      "headSha": "bf761e8f65894b39caba3cfe5a550e2336791221",
+      "status": "completed",
+      "workflowName": "Agent Evidence"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:02:39Z",
+      "databaseId": 40477812544,
+      "event": "pull_request",
+      "headSha": "bf761e8f65894b39caba3cfe5a550e2336791221",
+      "status": "completed",
+      "workflowName": "AgentShield"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:02:39Z",
+      "databaseId": 40477812498,
+      "event": "pull_request",
+      "headSha": "bf761e8f65894b39caba3cfe5a550e2336791221",
+      "status": "completed",
+      "workflowName": "Gitleaks"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:02:39Z",
+      "databaseId": 40477812497,
+      "event": "pull_request",
+      "headSha": "bf761e8f65894b39caba3cfe5a550e2336791221",
+      "status": "completed",
+      "workflowName": "CodeQL"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:02:39Z",
+      "databaseId": 40477812442,
+      "event": "pull_request",
+      "headSha": "bf761e8f65894b39caba3cfe5a550e2336791221",
+      "status": "completed",
+      "workflowName": "Harness Contract"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:02:39Z",
+      "databaseId": 40477812441,
+      "event": "pull_request",
+      "headSha": "bf761e8f65894b39caba3cfe5a550e2336791221",
+      "status": "completed",
+      "workflowName": "Semgrep"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:02:39Z",
+      "databaseId": 40477812438,
+      "event": "pull_request",
+      "headSha": "bf761e8f65894b39caba3cfe5a550e2336791221",
+      "status": "completed",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-10-27T09:01:05Z",
+      "databaseId": 40477621287,
+      "event": "push",
+      "headSha": "976fbe8bb411e81993bbd4a9d6f3e253a6c4e8f8",
+      "status": "completed",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-10-27T09:01:05Z",
+      "databaseId": 40477621225,
+      "event": "push",
+      "headSha": "976fbe8bb411e81993bbd4a9d6f3e253a6c4e8f8",
+      "status": "completed",
+      "workflowName": "CodeQL"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-10-27T09:01:05Z",
+      "databaseId": 40477621162,
+      "event": "push",
+      "headSha": "976fbe8bb411e81993bbd4a9d6f3e253a6c4e8f8",
+      "status": "completed",
+      "workflowName": "AgentShield"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-10-27T09:01:05Z",
+      "databaseId": 40477621156,
+      "event": "push",
+      "headSha": "976fbe8bb411e81993bbd4a9d6f3e253a6c4e8f8",
+      "status": "completed",
+      "workflowName": "Gitleaks"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-10-27T09:01:05Z",
+      "databaseId": 40477621142,
+      "event": "push",
+      "headSha": "976fbe8bb411e81993bbd4a9d6f3e253a6c4e8f8",
+      "status": "completed",
+      "workflowName": "Candidate Quality Evidence"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-10-27T09:01:05Z",
+      "databaseId": 40477621133,
+      "event": "push",
+      "headSha": "976fbe8bb411e81993bbd4a9d6f3e253a6c4e8f8",
+      "status": "completed",
+      "workflowName": "Semgrep"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T09:01:05Z",
+      "databaseId": 40477621130,
+      "event": "push",
+      "headSha": "976fbe8bb411e81993bbd4a9d6f3e253a6c4e8f8",
+      "status": "completed",
+      "workflowName": "Deploy GitHub Pages"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T08:43:13Z",
+      "databaseId": 40475469794,
+      "event": "pull_request",
+      "headSha": "910a488b32dec4e0e4b1480fa3349ba1fa3a08ba",
+      "status": "completed",
+      "workflowName": "Agent Evidence"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T08:43:13Z",
+      "databaseId": 40475469682,
+      "event": "pull_request",
+      "headSha": "910a488b32dec4e0e4b1480fa3349ba1fa3a08ba",
+      "status": "completed",
+      "workflowName": "CodeQL"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T08:43:13Z",
+      "databaseId": 40475469662,
+      "event": "pull_request",
+      "headSha": "910a488b32dec4e0e4b1480fa3349ba1fa3a08ba",
+      "status": "completed",
+      "workflowName": "Gitleaks"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T08:43:13Z",
+      "databaseId": 40475469556,
+      "event": "pull_request",
+      "headSha": "910a488b32dec4e0e4b1480fa3349ba1fa3a08ba",
+      "status": "completed",
+      "workflowName": "Candidate Quality Evidence"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T08:43:13Z",
+      "databaseId": 40475469546,
+      "event": "pull_request",
+      "headSha": "910a488b32dec4e0e4b1480fa3349ba1fa3a08ba",
+      "status": "completed",
+      "workflowName": "Semgrep"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T08:43:13Z",
+      "databaseId": 40475469525,
+      "event": "pull_request",
+      "headSha": "910a488b32dec4e0e4b1480fa3349ba1fa3a08ba",
+      "status": "completed",
+      "workflowName": "AgentShield"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-27T08:43:13Z",
+      "databaseId": 40475469517,
+      "event": "pull_request",
+      "headSha": "910a488b32dec4e0e4b1480fa3349ba1fa3a08ba",
+      "status": "completed",
+      "workflowName": "CI"
+    }
+  ],
+  "limitations": [
+    "Full manifest is inventory coverage, not semantic review of every file.",
+    "Historical ledger entries require reconciliation, not automatic implementation.",
+    "No Linear/Huly project query; integration comments alone do not establish current backlog.",
+    "No tokens, raw issue bodies, Huly guest links or secret alert content included.",
+    "No inference token/cost metrics exposed."
+  ],
+  "issue_reconciliation_groups": {
+    "I01": {
+      "issue_numbers": [
+        9,
+        138,
+        10,
+        139,
+        11,
+        135,
+        12,
+        136,
+        13,
+        137,
+        14,
+        134,
+        15,
+        141,
+        16,
+        140,
+        17,
+        142
+      ],
+      "disposition": "Entregas/propostas históricas, sem defeito atual confirmado nesta frente. #11 mudou de contrato para não gerar memórias sintéticas. #12 tem função, mas benchmark de aceite não localizado; ONNX #17 tem design implementado, porém smoke/download/benchmark manual não foram verificados. #13 foi superada pelo fluxo Dream posterior; ver I09. Conferir evidência seletiva em H5/Q, não reimplementar automaticamente."
+    },
+    "I02": {
+      "issue_numbers": [
+        21,
+        143,
+        22,
+        144,
+        23,
+        145,
+        24,
+        146,
+        25,
+        147,
+        26,
+        148,
+        27,
+        149
+      ],
+      "disposition": "CLI maintenance, compact/rebuild, singleton lock e fila têm implementação em `src/bin/cli/maintenance`, `src/storage/queries/maintenance.rs`, `src/storage/lock.rs` e `src/embedding/queue`. Health base existe; health mais rico para índices externos/ANN é condicional. Gerador/parity de MCP já existem; contagem literal de README é ponto de manutenção, sem defeito demonstrado."
+    },
+    "I03": {
+      "issue_numbers": [
+        28,
+        150,
+        29,
+        151,
+        30,
+        152,
+        31,
+        153,
+        32,
+        154,
+        33,
+        155,
+        34,
+        157,
+        35,
+        158,
+        36,
+        159,
+        37,
+        156,
+        43,
+        160
+      ],
+      "disposition": "Decisões/RFCs e funcionalidades correspondentes existem. REST vs MCP tem decisão registrada; chunking em caracteres foi confirmado em 14/10. **Ressalva #43/#160:** import/export implementado não significa cumprimento integral; default CLI/Rust diverge do RFC, task C1. Contratos de harness estão nos handlers próprios."
+    },
+    "I04": {
+      "issue_numbers": [
+        72,
+        172,
+        73,
+        173,
+        74,
+        174,
+        75,
+        175,
+        76,
+        176
+      ],
+      "disposition": "Exemplos Claude/OpenAI/FastMCP/LangGraph existem em `examples/`; execução externa não foi certificada. [Registro de listagens](../../awesome-list-submissions.md) relata um PR aberto, uma branch com falha de criação de PR e um destino manual. Estados externos atuais não consultados; completar evidência/envio só se P4 for selecionada e autorizado."
+    },
+    "I05": {
+      "issue_numbers": [
+        106,
+        177
+      ],
+      "disposition": "Advisories antigos tratados no histórico. Main atual tem audit/deny verdes; esta tarefa não refez auditoria de dependências. Monitoramento Q4 continua separado."
+    },
+    "I06": {
+      "issue_numbers": [
+        122
+      ],
+      "disposition": "Falha histórica de schema em session_land; evidência insuficiente nesta revisão seletiva para certificar o aceite individual. Nenhum defeito atual confirmado; H5 fecha a rastreabilidade se ainda relevante."
+    },
+    "I07": {
+      "issue_numbers": [
+        161,
+        162,
+        163
+      ],
+      "disposition": "Rate limiting, observabilidade e runbook de auth têm código/docs; execução externa Fly/staging de #163 não verificada. Ver `docs/MCP_AUTH.md` e `progress-history.md`, sem novo deploy para descobrir o estado."
+    },
+    "I08": {
+      "issue_numbers": [
+        164
+      ],
+      "disposition": "Documentação atual distingue cosine de produção e sqlite-vec fora do hot path; drift original aparentemente resolvido. Não construir backend para satisfazer texto antigo."
+    },
+    "I09": {
+      "issue_numbers": [
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171
+      ],
+      "disposition": "RFC 0007 registra fases 1–4 e 6 implementadas. **#170 tem fase 5 ausente** no status e busca dirigida atuais: task P2 condicionada à prioridade, com opt-in/rotulagem de candidatos e apply explícito. Não presumir que issue fechada concluiu essa integração."
+    },
+    "I10": {
+      "issue_numbers": [
+        178,
+        179
+      ],
+      "disposition": "Seguimentos de rate limit/observabilidade com correspondência em código/docs; nenhum defeito atual confirmado nesta inspeção seletiva."
+    },
+    "I11": {
+      "issue_numbers": [
+        183
+      ],
+      "disposition": "Duplicação de campos de harness_status tem correção/teste correspondente em handlers de harness; sem pendência de código confirmada."
+    },
+    "I12": {
+      "issue_numbers": [
+        235,
+        236,
+        237,
+        238,
+        239,
+        240,
+        241
+      ],
+      "disposition": "Correções com evidência atual: v49 mídia/caps, hooks/worker, retries shm, aws-sdk-s3 1.144 com BehaviorVersion v2026_01_12, aceite de floors e pins de imagem. Limites e exceções detalhados acima. Não confundir com números do ledger."
+    }
+  },
+  "ai_usage": {
+    "source": "native spawn_agent/followup_task receipts; no model telemetry",
+    "delegates_unique": 3,
+    "task_dispatches": 5,
+    "integrator_model": "not exposed",
+    "requested_delegate_configurations": [
+      {
+        "agent": "product_docs",
+        "model": "gpt-6.1-terra",
+        "effort": "xhigh",
+        "task_dispatches": 2
+      },
+      {
+        "agent": "governance_release",
+        "model": "gpt-6.1-terra",
+        "effort": "xhigh",
+        "task_dispatches": 2
+      },
+      {
+        "agent": "issues_inventory",
+        "model": "gpt-6-luna",
+        "effort": "max",
+        "task_dispatches": 1
+      }
+    ],
+    "reported_model_effort": "not exposed",
+    "input_output_tokens": "not observed",
+    "cache_reasoning_tokens": "not observed",
+    "internal_inference_calls": "not observed",
+    "cost": "not observed"
+  }
+}

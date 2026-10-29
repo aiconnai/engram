@@ -222,3 +222,53 @@ settings ou recibos humanos fabricados.
   de origem dos SDKs `2e84a594` (árvore SDK inalterada). Republicação exige artefatos
   refeitos no SHA integrado final. Crates conjuntos empacotam; verificação de staging
   encontra erro interno do Cargo 1.96; fontes extraídos compilam com patch local de types.
+
+## Resolução consolidada local (2026-10-29)
+
+Execução local em `fix/resolve-all-2026-10-29` (sobre `21cf80e9`, `origin/main` `2e84a594`) do
+[plano consolidado](../plans/2026-10-27-repository-execution-plan.md) e dos 5 lotes da auditoria
+`/code-review-rm`, mantendo todos os limites estritamente locais (sem push, PR, merge, tag,
+release, publicação em registries, remoção de branches/worktrees ou inferência paga):
+
+- **R1 (`src/text_util.rs`)**: `floor_char_boundary` / `ceil_char_boundary` delegados à stdlib e
+  `LowercaseIndex::find_window` reescrito com `split_first()`. `cargo-mutants --no-config --file src/text_util.rs`
+  passou com **42/42 mutantes detectados, 0 missed, 0 timeouts**.
+- **R3 (release tag verification fail-closed)**: adicionados [`allowed-signers`](../../releases/allowed-signers),
+  `scripts/verify-release-tag.sh`, materialização de `origin/main:scripts/verify-release-tag.sh` em
+  `.github/workflows/sdk-release.yml` e 14 testes herméticos em `scripts/test_sdk_release_workflow.py`
+  (recusa allowlist vazia/placeholder, substituição do verificador na tag e auto-autorização pelo commit da tag).
+- **R4 / R5 / R7**: empacotamento local conjunto `cargo package -p engram-types -p engram-core --registry crates-io --offline`
+  PASS; artefatos SDK `0.7.0` + contrato `--live` revalidados no SHA final; claims `"100% offline"`
+  qualificados em `README.md` e `docs/index.html`; documentos de levantamento/plano de `2026-10-27`
+  incorporados e reconciliados com [`v0.24.0-readiness.md`](../../releases/v0.24.0-readiness.md) e
+  [`2026-10-27-nightly-release-readiness.md`](../audits/2026-10-27-nightly-release-readiness.md).
+- **C1 (portabilidade Markdown RFC 0004)**: CLI `engram-cli import markdown`, `ImportOptions::default()`,
+  resposta MCP (`"dry_run"`), SDK Python (`vault_import(..., confirm=False)`) e SDK TypeScript (`confirm?: boolean`)
+  alinhados ao modo seguro de review/dry-run por default.
+- **H1 / Q1 / H2**: reconciliados `docs/harness/risk-register.yaml`,
+  [`2026-10-26-deferred-review-minors.md`](../known-issues/2026-10-26-deferred-review-minors.md) e
+  [`retrieval-performance-policy.md`](../../quality/retrieval-performance-policy.md); `merge_gate_ci.py` e
+  `merge-gate.py` endurecidos para falhar fechado (`CiRefusal`) quando `git show` da base falha
+  (`FLOOR_MERGE_GATE=50`), documentados no [canvas](../canvas/2026-10-29-resolve-all.md).
+- **S1 + Unidades 1–5 (runtime, pool SQLite, sync, lifecycle/retenção, consolidação e ingestão)**:
+  - `src/bin/server.rs` (timeouts HTTP sem leak, hook budget/truncation UTF-8, `workspace` scoping),
+    `src/storage/connection.rs` (`available_connections`, recovery de pool, cleanup de sidecars WAL/SHM),
+    `src/storage/active_artifacts.rs` + `src/sync/worker.rs` + `src/sync/cloud.rs` (dedup/cap de
+    `last_error` em crash-loop, guarda contra overwrite de DB ativo e `TempDownloadGuard` RAII) e
+    `src/multimodal/process.rs` (retry em `EINTR`).
+  - Anti-IDOR em 9 tools MCP by-id (`src/mcp/workspace_guard.rs` + handlers de lifecycle/policy +
+    [`workspace-operation-matrix.md`](../../security/workspace-operation-matrix.md)), validação estrita e
+    escopo por workspace em `src/storage/queries/retention.rs`, e alinhamento 4-way MCP/SDKs
+    (`check-sdk-contract-alignment.py` com 0 drift).
+  - `src/intelligence/consolidation_offline.rs` + `src/mcp/handlers/compression.rs` (timestamps
+    RFC3339 ms válidos, `preview_with_strategy` puro em `dry_run`, savepoint por grupo, filtro de
+    `word_sets` vazios/`transcript_chunk`/expiradas) e `src/intelligence/document_ingest.rs`
+    (chunking por índice de `char`, Markdown multi-bloco/tabelas, dedup intra-documento e buffer UTF-8
+    por página em `BoundedPdfText`).
+- **Revisão independente `R2` + Harness Script Guard**: subagente read-only independente revisou todo o
+  intervalo `origin/main` (`2e84a594`) até os commits `6aed4f28..56458055` em 3 rodadas e concluiu com
+  veredito **`PASS`** (0 achados abertos; **`PASS`** em `docs/harness/bin/*`). Parecer de agente não
+  substitui sign-off/receipt humano antes de merge.
+- **Pendências exclusivas do owner**: provisionar chave SSH pública real em `docs/releases/allowed-signers`,
+  autorizar push/PR/merge para `main`, emitir receipts humanos de post-gate e criar tag assinada
+  `v0.24.0` para disparo de publicação nos registries.

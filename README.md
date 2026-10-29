@@ -23,13 +23,13 @@
 
 ---
 
-Engram is an offline, high-performance Rust memory engine for teams shipping autonomous AI agents across the modern AI stack. First-class Model Context Protocol (MCP) support, runnable examples, and SDK integrations cover **Claude Code, Cursor & Cursor Rules, Google Antigravity, OpenAI Agents SDK, LangGraph, CrewAI, LlamaIndex, and FastMCP**. Any other MCP-capable host or model can connect over MCP stdio or HTTP JSON-RPC; this repository ships no model-specific adapters.
+Engram is a local-first, offline-capable, high-performance Rust memory engine for teams shipping autonomous AI agents across the modern AI stack. First-class Model Context Protocol (MCP) support, runnable examples, and SDK integrations cover **Claude Code, Cursor & Cursor Rules, Google Antigravity, OpenAI Agents SDK, LangGraph, CrewAI, LlamaIndex, and FastMCP**. Any other MCP-capable host or model can connect over MCP stdio or HTTP JSON-RPC; this repository ships no model-specific adapters.
 
 It organizes decisions, transcripts, architecture notes, and repos into SQLite with millisecond-scale keyword retrieval, **3-way hybrid search** (BM25 + Vectors + Fuzzy), **dynamic knowledge graphs with identity resolution**, **multi-tier temporal salience decay**, and **contradiction detection**.
 
 Measured latency (100K memories x 384-dim embeddings, 100 iterations): FTS5 keyword search p50 3.2 ms, p95 3.8 ms; hybrid search (BM25 + cosine + RRF) p50 250 ms, p95 261 ms. The vector leg is brute-force cosine, so hybrid latency grows linearly with corpus size. Commands, raw numbers, and caveats: [search measurements](docs/harness/decisions/phase2-2-search-vector-bottleneck-sqlite-vec-2026-06-07.md).
 
-Engram operates 100% offline, keeping your proprietary context on your machine with zero telemetry, and exposes unified access via MCP stdio, HTTP JSON-RPC 2.0 (`POST /mcp`), WebSocket event streaming, CLI, and Python/TypeScript SDKs.
+Engram runs locally and offline by default—keeping your proprietary context on your machine with zero telemetry and never sending data externally unless you opt into remote embedding providers or encrypted S3/R2 backup sync—and exposes unified access via MCP stdio, HTTP JSON-RPC 2.0 (`POST /mcp`), WebSocket event streaming, CLI, and Python/TypeScript SDKs.
 
 ---
 
@@ -107,7 +107,7 @@ Engram solves this by providing a unified, local-first intelligence layer:
 | Feature | Engram | Mem0 | Zep (Graphiti) | Cognee | Generic MCP Memory |
 |---------|:------:|:----:|:--------------:|:------:|:------------------:|
 | **Core Runtime** | **Rust (Single binary)** | Python | Python / Cloud | Python | Node.js / Python |
-| **100% Offline / Local-First** | **Yes (SQLite+WAL)** | Partial | Cloud service | Partial | Yes |
+| **Offline by Default / Local-First** | **Yes (SQLite+WAL; remote embeddings & S3/R2 sync opt-in)** | Partial | Cloud service | Partial | Yes |
 | **3-Way Hybrid Search** | **BM25 + Vector + Fuzzy** | Vector only | Vector + Graph | Graph + Vector | Keyword only |
 | **Knowledge Graph & Identity** | **Yes (Built-in)** | Basic | Yes (Graphiti) | Yes | None |
 | **Memory Tiering & Salience** | **Permanent + 24h Daily** | Manual | Single tier | Manual | None |

@@ -8,8 +8,8 @@
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
 | Last sensors | `2026-10-23 status=pass mode=full timestamp=2026-10-23T20:10:00Z duration_sec=310, sem exclusões (receipts commitados em 08cb17a4; rodado no candidato do sunset, run anterior falhou em offline_lane). Sem receipt commitado de 2026-09-03 a 2026-10-23; não reexecutado depois. Detalhe em progress/2026-10-26-remediation.md.` |
-| Last commit | `2e84a594` |
-| Last live-state check | `2026-10-27 — Claude, após o merge do #260 no main: Last commit = 976fbe8b, primeiro pai do merge do #262 (último da pilha); vale estrito no main depois desse merge. bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Não substitui post-gate.` |
+| Last commit | `56458055` |
+| Last live-state check | `2026-10-29 — Antigravity, em fix/resolve-all-2026-10-29: Last commit = 56458055 (pai do commit de reconciliação documental/live-state). bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Revisão independente R2 PASS (não substitui post-gate humano).` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,15 +23,15 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat, 2026-10-27): diagnóstico do Nightly, fixes locais e preparação
-  de release/verify-tag/aviso. [Plano do follow-up](./plans/2026-10-27-nightly-release-readiness.md).
-  A autorização histórica de merges da pilha #244–#262 encerrou às 09:35Z.
+- **Autorização atual** (owner, chat, 2026-10-29): resolução local completa do backlog técnico
+  ([plano consolidado](./plans/2026-10-27-repository-execution-plan.md), [canvas](./canvas/2026-10-29-resolve-all.md)).
+  A autorização histórica de merges da pilha #244–#262 encerrou em 2026-10-27T09:35Z.
 - **Limites**: push, PR e merge fora desta pilha, tag, release, publicação em registries, remoção de
   branches/worktrees e settings do GitHub **não** estão autorizados (aguardam decisão explícita do owner);
   sem dados reais, chamadas pagas ou produção. [Negativo do harness](./WHAT_WE_DONT_DO.md); [escopo canônico](./SPEC.md).
-- **Última evidência**: [Nightly e follow-up](./progress/2026-10-26-remediation.md#follow-up-nightly-e-release-2026-10-27): run
-  `40479914277` falhou por cap Miri e mutações; inventário Miri local passou após amostragem específica.
-  make ci PASS (2351 testes); 18 mutantes detectados, quatro timeouts. Receipts humanos pendentes.
+- **Última evidência**: [Resolução consolidada local](./progress/2026-10-26-remediation.md#resolução-consolidada-local-2026-10-29):
+  42/42 mutantes em `text_util.rs` (0 timeouts), verify-tag SSH fail-closed, defaults RFC 0004,
+  merge-gate fail-closed, fixes S1 + unidades 1–5 e CI/SDKs locais verdes. Receipts humanos pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:

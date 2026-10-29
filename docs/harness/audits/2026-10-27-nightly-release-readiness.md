@@ -150,3 +150,27 @@ Rust e lane 12/536; os 12 testes do workflow/helper foram executados separadamen
 [Readiness](../../releases/v0.24.0-readiness.md) contém a recomendação e o checklist.
 Sem parecer independente/receipt humano e sem confiança provisionada para verify-tag,
 o pacote não está autorizado para publicação. Esta sessão não publicou nem enviou avisos.
+
+## Atualização de fechamento local (2026-10-29)
+
+Execução local na branch `fix/resolve-all-2026-10-29` (a partir do candidato `21cf80e9` sobre `origin/main` `2e84a594`):
+
+- **R1 (`src/text_util.rs` — eliminação dos 4 timeouts de mutação)**: `floor_char_boundary` e
+  `ceil_char_boundary` delegados aos métodos stdlib de `str` (sem laços `while` mutáveis) e
+  `LowercaseIndex::find_window` reescrito com `remaining.split_first()` + teste determinístico
+  `"a — İ\u{307}\u{307}"` / `"\u{307}\u{307}"`. Campanha completa do módulo
+  (`cargo-mutants mutants --no-config --file src/text_util.rs --profile ci --copy-target true --timeout 60 --jobs 2 -- --lib -- text_util::tests`):
+  **42/42 mutantes detectados (`42 caught, 0 missed, 0 timeouts`, exit 0)**.
+- **R3 (`scripts/verify-release-tag.sh` + `docs/releases/allowed-signers`)**: verificação SSH
+  fail-closed integrada nos 3 jobs de `.github/workflows/sdk-release.yml` com anti-auto-autorização
+  via `origin/main:docs/releases/allowed-signers` (ou `ENGRAM_ALLOWED_SIGNERS_FILE`).
+  `scripts/test_sdk_release_workflow.py` (13 testes) e `scripts/check-workflow-supply-chain.py`: **PASS**.
+  `docs/releases/allowed-signers` permanece vazio (comentários apenas) aguardando chave pública SSH do owner no `main`.
+- **R4 (diagnóstico Cargo 1.96 `no hash listed`)**: causa raiz identificada — executar
+  `cargo package --no-verify` grava entradas sem hash de checksum em `target/package/tmp-registry`,
+  envenenando execuções subsequentes com verificação no mesmo `target-dir`. Em `target-dir` limpo,
+  `cargo package -p engram-types -p engram-core --registry crates-io --offline --target-dir <dir>`
+  passa com verificação completa (**exit 0**).
+- **C1, H1, H2, Q1, S1 e auditoria profunda de 5 unidades**: todos os itens locais implementados,
+  com contratos MCP/SDK 4-way alinhados (`0` drift) e `verify-sdk-artifacts.sh --live` validado no SHA candidato final.
+  Operações externas (push, PR/merge, chave SSH do owner, Nightly remoto, receipts humanos e publicação) continuam pendentes do owner.
