@@ -263,6 +263,7 @@ pub fn memory_import_markdown(ctx: &HandlerContext, params: Value) -> Value {
         "conflict": count_conflict,
         "conflicts": count_conflict,
         "applied": applied,
+        "dry_run": !confirm,
         "files": files_detail
     })
 }

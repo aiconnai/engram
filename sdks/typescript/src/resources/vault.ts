@@ -27,10 +27,14 @@ export class VaultResource extends BaseResource {
 
   /**
    * Import Markdown files into Engram with SHA-256 drift detection.
-   * By default, runs with confirm: true unless dryRun: true is specified.
+   * Defaults to safe review/dry-run mode (`confirm: false`) per RFC 0004;
+   * pass `confirm: true` to apply database writes.
    */
   async import(options: VaultImportOptions): Promise<VaultImportReport> {
-    const confirm = options.confirm ?? (options.dryRun ? false : true);
+    if (options.confirm && options.dryRun) {
+      throw new Error("vaultImport: confirm and dryRun cannot both be true");
+    }
+    const confirm = options.dryRun ? false : (options.confirm ?? false);
     const params: Record<string, unknown> = {
       input_dir: options.inputDir,
       confirm,

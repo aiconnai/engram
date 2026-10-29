@@ -413,3 +413,45 @@ fn test_vault_import_conflict_resolution() {
 
     let _ = fs::remove_dir_all(vault_dir);
 }
+
+#[test]
+fn test_vault_import_default_options_is_safe_dry_run_and_mcp_reports_dry_run() {
+    let storage = Storage::open_in_memory().expect("open memory storage");
+    let vault_dir = temp_vault_dir("safe_default");
+
+    let note_path = vault_dir.join("new-rfc0004-note.md");
+    fs::write(
+        &note_path,
+        "---\nengram_workspace: safe_ws\nengram_type: note\n---\n# Safe Default\n\nShould stage only.\n",
+    )
+    .unwrap();
+
+    let default_opts = ImportOptions {
+        input_dir: vault_dir.clone(),
+        target_workspace: Some("safe_ws".to_string()),
+        ..ImportOptions::default()
+    };
+    assert!(
+        default_opts.dry_run,
+        "ImportOptions::default() must run in RFC 0004 dry-run review mode"
+    );
+
+    let report = import_markdown(&storage, &default_opts).expect("dry-run import by default");
+    assert!(report.dry_run);
+    assert_eq!(report.new, 1);
+    assert_eq!(report.applied, 0);
+
+    let count_after_default: i64 = storage
+        .with_connection(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM memories WHERE workspace = 'safe_ws'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(Into::into)
+        })
+        .unwrap();
+    assert_eq!(count_after_default, 0);
+
+    let _ = fs::remove_dir_all(vault_dir);
+}

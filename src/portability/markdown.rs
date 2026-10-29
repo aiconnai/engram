@@ -77,6 +77,7 @@ pub struct ExportReport {
 #[derive(Debug, Clone)]
 pub struct ImportOptions {
     pub input_dir: PathBuf,
+    /// Review/stage only without writing to SQLite (RFC 0004 default: `true`; set `false` to apply writes).
     pub dry_run: bool,
     pub target_workspace: Option<String>,
     pub force_version: bool,
@@ -86,7 +87,7 @@ impl Default for ImportOptions {
     fn default() -> Self {
         Self {
             input_dir: PathBuf::from("./memories-export"),
-            dry_run: false,
+            dry_run: true,
             target_workspace: None,
             force_version: false,
         }
