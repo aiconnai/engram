@@ -535,8 +535,9 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
             self.assertNotEqual(lightweight.returncode, 0)
             self.assertIn("publish requires an annotated tag object", lightweight.stderr)
 
-            # 8. Default committed docs/releases/allowed-signers template (comment-only) -> FAIL CLOSED
-            empty_signers = REPO_ROOT / "docs" / "releases" / "allowed-signers"
+            # 8a. Comment-only allowed-signers file -> FAIL CLOSED
+            empty_signers = tmp / "comment-only-allowed-signers"
+            empty_signers.write_text("# comment only\n\n", encoding="utf-8")
             unconfigured = self._verify(
                 "--repo",
                 str(repo),
@@ -549,6 +550,46 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
             )
             self.assertNotEqual(unconfigured.returncode, 0)
             self.assertIn("no trusted release signers configured", unconfigured.stderr)
+
+            # 8b. Committed docs/releases/allowed-signers parses cleanly under OpenSSH
+            # and rejects tags signed by unlisted ephemeral keys
+            committed_signers = REPO_ROOT / "docs" / "releases" / "allowed-signers"
+            active_lines = [
+                line.strip()
+                for line in committed_signers.read_text(encoding="utf-8").splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            ]
+            self.assertGreaterEqual(len(active_lines), 1, "expected at least one provisioned release signer")
+            first_principal = active_lines[0].split()[0]
+            matched = subprocess.run(
+                [
+                    "ssh-keygen",
+                    "-Y",
+                    "match-principals",
+                    "-I",
+                    first_principal,
+                    "-f",
+                    str(committed_signers),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(matched.returncode, 0, matched.stdout + matched.stderr)
+            self.assertEqual(matched.stdout.strip(), first_principal)
+
+            unlisted_against_committed = self._verify(
+                "--repo",
+                str(repo),
+                "--tag",
+                "v1.0.0",
+                "--expected-sha",
+                main_sha,
+                "--allowed-signers",
+                str(committed_signers),
+            )
+            self.assertNotEqual(unlisted_against_committed.returncode, 0)
+            self.assertIn("publish requires a cryptographically signed tag", unlisted_against_committed.stderr)
 
 
 if __name__ == "__main__":

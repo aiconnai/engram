@@ -14,6 +14,7 @@
 #   ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256 digest pin) or from
 #   origin/main:docs/releases/allowed-signers — never from the tag tree under
 #   verification, so a tag cannot authorize its own signing key.
-# - Keep this file comment-only until the release owner merges the chosen
-#   release signing public key onto main or provisions
-#   ENGRAM_RELEASE_ALLOWED_SIGNERS in the protected release environments.
+# - Changes to this file only take effect for release verification once merged
+#   onto main (or mirrored in ENGRAM_RELEASE_ALLOWED_SIGNERS).
+
+ron@ldinho.com.br namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEU8OXpzoh+Gi08l2yeHSHFifurV7v9sz90mD/ncTPyt ron@ldinho.com.br
