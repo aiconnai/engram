@@ -162,10 +162,14 @@ Execução local na branch `fix/resolve-all-2026-10-29` (a partir do candidato `
   (`cargo-mutants mutants --no-config --file src/text_util.rs --profile ci --copy-target true --timeout 60 --jobs 2 -- --lib -- text_util::tests`):
   **42/42 mutantes detectados (`42 caught, 0 missed, 0 timeouts`, exit 0)**.
 - **R3 (`scripts/verify-release-tag.sh` + `docs/releases/allowed-signers`)**: verificação SSH
-  fail-closed integrada nos 3 jobs de `.github/workflows/sdk-release.yml` com anti-auto-autorização
-  via `origin/main:docs/releases/allowed-signers` (ou `ENGRAM_ALLOWED_SIGNERS_FILE`).
-  `scripts/test_sdk_release_workflow.py` (13 testes) e `scripts/check-workflow-supply-chain.py`: **PASS**.
-  `docs/releases/allowed-signers` permanece vazio (comentários apenas) aguardando chave pública SSH do owner no `main`.
+  fail-closed integrada nos 3 jobs de `.github/workflows/sdk-release.yml` (materializando
+  `origin/main:scripts/verify-release-tag.sh` em `${RUNNER_TEMP}`) com anti-auto-autorização
+  via `origin/main:docs/releases/allowed-signers` (ou `ENGRAM_RELEASE_ALLOWED_SIGNERS` /
+  `ENGRAM_RELEASE_ALLOWED_SIGNERS_FILE`). Em `2026-10-30` (`82f79bed`), o owner autorizou o
+  provisionamento da chave pública SSH de release (`ron@ldinho.com.br`,
+  `SHA256:iinTT0HVuDeNCuJab1vXYI8fvRc/IPvR2Xx3LYhJLXA`) em `docs/releases/allowed-signers`
+  (ativa em `origin/main` após merge do PR). `scripts/test_sdk_release_workflow.py` (14/14 testes,
+  incluindo validação `ssh-keygen -Y match-principals`) e `scripts/check-workflow-supply-chain.py`: **PASS**.
 - **R4 (diagnóstico Cargo 1.96 `no hash listed`)**: causa raiz identificada — executar
   `cargo package --no-verify` grava entradas sem hash de checksum em `target/package/tmp-registry`,
   envenenando execuções subsequentes com verificação no mesmo `target-dir`. Em `target-dir` limpo,
@@ -173,4 +177,4 @@ Execução local na branch `fix/resolve-all-2026-10-29` (a partir do candidato `
   passa com verificação completa (**exit 0**).
 - **C1, H1, H2, Q1, S1 e auditoria profunda de 5 unidades**: todos os itens locais implementados,
   com contratos MCP/SDK 4-way alinhados (`0` drift) e `verify-sdk-artifacts.sh --live` validado no SHA candidato final.
-  Operações externas (push, PR/merge, chave SSH do owner, Nightly remoto, receipts humanos e publicação) continuam pendentes do owner.
+  Em `2026-10-30`, o owner autorizou `git push` e abertura do PR contra `main`; merge, Nightly remoto, receipts humanos, tag assinada e publicação em registries permanecem retidos até revisão do PR.

@@ -269,6 +269,19 @@ release, publicação em registries, remoção de branches/worktrees ou inferên
   intervalo `origin/main` (`2e84a594`) até os commits `6aed4f28..56458055` em 3 rodadas e concluiu com
   veredito **`PASS`** (0 achados abertos; **`PASS`** em `docs/harness/bin/*`). Parecer de agente não
   substitui sign-off/receipt humano antes de merge.
-- **Pendências exclusivas do owner**: provisionar chave SSH pública real em `docs/releases/allowed-signers`,
-  autorizar push/PR/merge para `main`, emitir receipts humanos de post-gate e criar tag assinada
-  `v0.24.0` para disparo de publicação nos registries.
+- **Pendências exclusivas do owner (em 2026-10-29)**: provisionar chave SSH pública real em
+  `docs/releases/allowed-signers`, autorizar push/PR/merge para `main`, emitir receipts humanos de
+  post-gate e criar tag assinada `v0.24.0` para disparo de publicação nos registries.
+
+## Provisionamento de signer SSH e abertura de PR (2026-10-30)
+
+Novo GO explícito do owner no chat (`2026-10-30`):
+1. Provisionar a chave pública SSH ativa do owner (`ron@ldinho.com.br`,
+   `SHA256:iinTT0HVuDeNCuJab1vXYI8fvRc/IPvR2Xx3LYhJLXA`) em
+   [`docs/releases/allowed-signers`](../../releases/allowed-signers) — commitada em `82f79bed` e
+   validada por `scripts/test_sdk_release_workflow.py` (**14/14 PASS**, cobrindo recusa fail-closed
+   para arquivo só com comentários e `ssh-keygen -Y match-principals` no trust store commitado).
+2. Executar `git push -u origin fix/resolve-all-2026-10-29` e abrir PR contra `main` para validação
+   do CI remoto e revisão humana.
+3. **Limites mantidos**: merge do PR, criação de tag/GitHub Release (`v0.24.0`), publicação em
+   crates.io/PyPI/npm, remoção de branches/worktrees e inferência paga seguem **não** autorizados.
