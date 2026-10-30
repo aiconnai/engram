@@ -2563,9 +2563,11 @@ Unified facade for memory lifecycle mutations: promote a memory or reinforce its
 | `action` | `string` | no | Lifecycle action to perform: promote (reinforce policy), promote_permanent (promote to canonical permanent tier), decay (policy decay), expire (set TTL), score (evaluate policy), explain (audit score), transition (manual state transition), restore (restore to active) Default: `promote`. Allowed: `promote`, `promote_permanent`, `decay`, `expire`, `score`, `explain`, `transition`, `restore`. |
 | `canonical_tier` | `boolean` | no | When action='promote' and canonical_tier=true, promotes to permanent canonical tier Default: `false`. |
 | `ttl_seconds` | `integer` | no | Time-to-live in seconds when action='expire' |
-| `state` | `string` | no | Target lifecycle state when action='transition' Allowed: `active`, `stale`, `archived`, `purged`. |
+| `state` | `string` | no | Target lifecycle state when action='transition' Allowed: `active`, `stale`, `archived`. |
 | `reason` | `string` | no | Audit reason or explanation for the transition or reconciliation |
 | `persist` | `boolean` | no | When action='score', whether to persist the evaluated policy Default: `false`. |
+| `workspace` | `string` | no | Workspace scope (used for workspace-scoped actions such as decay or restricted-principal authorization) |
+| `dry_run` | `boolean` | no | When action='decay' (default true) or action='score', preview without persisting mutations |
 
 ### `memory_promote`
 

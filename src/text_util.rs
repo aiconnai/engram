@@ -11,26 +11,12 @@
 
 /// Largest char boundary of `s` that is `<= index` (clamped to `s.len()`).
 pub fn floor_char_boundary(s: &str, index: usize) -> usize {
-    if index >= s.len() {
-        return s.len();
-    }
-    let mut boundary = index;
-    while !s.is_char_boundary(boundary) {
-        boundary -= 1; // index 0 is always a boundary, so this terminates.
-    }
-    boundary
+    s.floor_char_boundary(index)
 }
 
 /// Smallest char boundary of `s` that is `>= index` (clamped to `s.len()`).
 pub fn ceil_char_boundary(s: &str, index: usize) -> usize {
-    if index >= s.len() {
-        return s.len();
-    }
-    let mut boundary = index;
-    while !s.is_char_boundary(boundary) {
-        boundary += 1; // s.len() is always a boundary, so this terminates.
-    }
-    boundary
+    s.ceil_char_boundary(index)
 }
 
 /// The longest prefix of `s` that is at most `max_bytes` bytes long and ends on
@@ -117,25 +103,30 @@ impl<'a> LowercaseIndex<'a> {
         }
         let char_offsets = self.char_offsets.as_ref()?;
 
-        let mut from = 0;
-        while let Some(relative) = self.lower[from..].find(needle) {
+        let mut remaining = char_offsets.as_slice();
+        while let Some((&(_, from), tail)) = remaining.split_first() {
+            let Some(relative) = self.lower[from..].find(needle) else {
+                break;
+            };
             let lower_start = from + relative;
-            if let Ok(first) = char_offsets.binary_search_by_key(&lower_start, |&(_, low)| low) {
-                // The window must cover exactly `needle_chars` original chars
-                // whose lowercase ends where the needle ends.
-                let aligned_end = char_offsets
-                    .get(first + needle_chars)
-                    .filter(|&&(_, low)| low == lower_start + needle.len());
-                if let Some(&(end, _)) = aligned_end {
-                    let start = char_offsets[first].0;
-                    return Some((start, &self.original[start..end]));
+            match remaining.binary_search_by_key(&lower_start, |&(_, low)| low) {
+                Ok(idx) => {
+                    // The window must cover exactly `needle_chars` original chars
+                    // whose lowercase ends where the needle ends.
+                    let at_match = &remaining[idx..];
+                    if let Some(&(end, _)) = at_match
+                        .get(needle_chars)
+                        .filter(|&&(_, low)| low == lower_start + needle.len())
+                    {
+                        let start = at_match[0].0;
+                        return Some((start, &self.original[start..end]));
+                    }
+                    remaining = &tail[idx..];
+                }
+                Err(next_idx) => {
+                    remaining = &tail[next_idx.saturating_sub(1)..];
                 }
             }
-            let step = self.lower[lower_start..]
-                .chars()
-                .next()
-                .map_or(1, char::len_utf8);
-            from = lower_start + step;
         }
         None
     }
@@ -269,6 +260,7 @@ mod tests {
     fn find_window_matches_reference_on_adversarial_unicode() {
         let texts = [
             "İ OpenAI",
+            "a — İ\u{307}\u{307}",
             "İstanbul ISTANBUL",
             "ẞtraße STRASSE",
             "Cafe\u{301} CAFÉ café",
@@ -292,6 +284,7 @@ mod tests {
             "café",
             "cafe\u{301}",
             "e\u{301}",
+            "\u{307}\u{307}",
             "kafka",
             "σ",
             "ς",
@@ -332,7 +325,12 @@ mod tests {
             state ^= state >> 27;
             (state.wrapping_mul(0x2545_F491_4F6C_DD1D) >> 33) as usize % bound
         };
-        for _ in 0..20_000 {
+        // Miri interprets both the matcher and its allocating reference oracle;
+        // 20,000 cases exceed the nightly smoke's 1,800 s wall cap. Keep that
+        // native regression budget and run the same seeded prefix under Miri,
+        // alongside the full explicit adversarial Unicode matrix above.
+        let cases = if cfg!(miri) { 256 } else { 20_000 };
+        for _ in 0..cases {
             let text: String = (0..next(12))
                 .map(|_| ALPHABET[next(ALPHABET.len())])
                 .collect();

@@ -24,7 +24,7 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Instant;
 
-use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use sha2::{Digest, Sha256};
 
 use crate::error::{EngramError, Result};
@@ -172,36 +172,38 @@ impl PdfExtractionLimits {
     }
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(any(feature = "pdf", test))]
 struct BoundedPdfText {
-    value: String,
+    bytes: Vec<u8>,
     max_bytes: usize,
     exceeded: bool,
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(any(feature = "pdf", test))]
 impl BoundedPdfText {
     fn new(max_bytes: usize) -> Self {
         Self {
-            value: String::new(),
+            bytes: Vec::new(),
             max_bytes,
             exceeded: false,
         }
     }
+
+    fn into_string(self) -> std::result::Result<String, std::string::FromUtf8Error> {
+        String::from_utf8(self.bytes)
+    }
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(any(feature = "pdf", test))]
 impl std::io::Write for BoundedPdfText {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        let next_len = self.value.len().checked_add(bytes.len());
+        let next_len = self.bytes.len().checked_add(bytes.len());
         if next_len.is_none_or(|length| length > self.max_bytes) {
             self.exceeded = true;
             return Err(std::io::Error::other("PDF extracted text limit exceeded"));
         }
 
-        let text = std::str::from_utf8(bytes)
-            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-        self.value.push_str(text);
+        self.bytes.extend_from_slice(bytes);
         Ok(bytes.len())
     }
 
@@ -318,7 +320,7 @@ impl<'a> DocumentIngestor<'a> {
         let chunks = create_chunks(sections, &source_path, &doc_id, &config);
 
         // Ingest chunks
-        let existing_hashes = self.existing_chunk_hashes(&doc_id)?;
+        let mut existing_hashes = self.existing_chunk_hashes(&doc_id)?;
         let mut chunks_created = 0;
         let mut chunks_skipped = 0;
 
@@ -330,6 +332,7 @@ impl<'a> DocumentIngestor<'a> {
 
             // Create memory for chunk
             self.create_chunk_memory(chunk, &config.extra_tags)?;
+            existing_hashes.insert(chunk.chunk_hash.clone());
             chunks_created += 1;
         }
 
@@ -367,7 +370,7 @@ impl<'a> DocumentIngestor<'a> {
                     sort_by: None,
                     sort_order: None,
                     scope: None,
-                    workspace: None,
+                    workspace: Some("default".to_string()),
                     workspaces: None,
                     tier: None,
                     metadata_filter: Some(filter),
@@ -469,7 +472,9 @@ fn compute_hash(content: &[u8]) -> String {
 
 /// Extract sections from Markdown content
 fn extract_markdown_sections(content: &str) -> Vec<DocumentSection> {
-    let parser = Parser::new(content);
+    let options =
+        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let parser = Parser::new_ext(content, options);
     let mut sections = Vec::new();
     let mut heading_stack: Vec<(usize, String)> = Vec::new();
     let mut current_content = String::new();
@@ -477,6 +482,12 @@ fn extract_markdown_sections(content: &str) -> Vec<DocumentSection> {
     let mut in_heading = false;
     let mut current_heading_text = String::new();
     let mut current_heading_level = 0usize;
+
+    let push_block_break = |buf: &mut String| {
+        if !buf.is_empty() && !buf.ends_with('\n') {
+            buf.push('\n');
+        }
+    };
 
     for event in parser {
         match event {
@@ -538,8 +549,29 @@ fn extract_markdown_sections(content: &str) -> Vec<DocumentSection> {
                     current_content.push('`');
                 }
             }
+            Event::TaskListMarker(checked) if !in_heading => {
+                current_content.push_str(if checked { "[x] " } else { "[ ] " });
+            }
             Event::SoftBreak | Event::HardBreak if !in_heading => {
                 current_content.push('\n');
+            }
+            Event::Rule if !in_heading => {
+                push_block_break(&mut current_content);
+            }
+            Event::End(TagEnd::TableCell) if !in_heading => {
+                if !current_content.is_empty() && !current_content.ends_with([' ', '\n']) {
+                    current_content.push(' ');
+                }
+            }
+            Event::End(
+                TagEnd::Paragraph
+                | TagEnd::Item
+                | TagEnd::CodeBlock
+                | TagEnd::BlockQuote
+                | TagEnd::TableRow
+                | TagEnd::TableHead,
+            ) if !in_heading => {
+                push_block_break(&mut current_content);
             }
             _ => {}
         }
@@ -645,11 +677,16 @@ fn extract_pdf_sections_inner(
             EngramError::InvalidInput(format!("PDF extraction failed: {error}"))
         })?;
 
-        extracted_text_bytes = extracted_text_bytes
-            .checked_add(page_text.value.len())
-            .ok_or_else(|| {
-                EngramError::InvalidInput("PDF extracted text byte count overflow".to_string())
-            })?;
+        let decoded = page_text.into_string().map_err(|error| {
+            EngramError::InvalidInput(format!("PDF extraction produced invalid UTF-8: {error}"))
+        })?;
+
+        extracted_text_bytes =
+            extracted_text_bytes
+                .checked_add(decoded.len())
+                .ok_or_else(|| {
+                    EngramError::InvalidInput("PDF extracted text byte count overflow".to_string())
+                })?;
         if extracted_text_bytes > limits.max_text_bytes {
             return Err(EngramError::InvalidInput(format!(
                 "PDF extracted text exceeds limit: {} bytes (max: {} bytes)",
@@ -657,10 +694,10 @@ fn extract_pdf_sections_inner(
             )));
         }
 
-        if !page_text.value.trim().is_empty() {
+        if !decoded.trim().is_empty() {
             sections.push(DocumentSection {
                 section_path: format!("Page {}", page_index + 1),
-                content: page_text.value.trim().to_string(),
+                content: decoded.trim().to_string(),
                 page: Some(page_index + 1),
                 level: None,
             });
@@ -747,51 +784,48 @@ fn create_chunks(
     chunks
 }
 
-/// Chunk text with overlap
+/// Chunk text with overlap using character indices (UTF-8 safe).
 fn chunk_text(text: &str, chunk_size: usize, overlap: usize) -> Vec<String> {
-    if text.is_empty() {
+    if text.is_empty() || chunk_size == 0 {
         return vec![];
     }
 
-    // If text is smaller than chunk size, return as single chunk
-    if text.chars().count() <= chunk_size {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= chunk_size {
         return vec![text.to_string()];
     }
 
+    let effective_overlap = overlap.min(chunk_size.saturating_sub(1));
+    let min_break = (chunk_size / 2).max(effective_overlap);
     let mut chunks = Vec::new();
-    let chars: Vec<char> = text.chars().collect();
-    let mut start = 0;
+    let mut start = 0usize;
 
     while start < chars.len() {
-        let end = (start + chunk_size).min(chars.len());
-        let chunk: String = chars[start..end].iter().collect();
+        let max_end = (start + chunk_size).min(chars.len());
+        let window_len = max_end - start;
 
-        // Try to break at word boundary
-        let chunk = if end < chars.len() {
-            if let Some(last_space) = chunk.rfind(|c: char| c.is_whitespace()) {
-                if last_space > chunk_size / 2 {
-                    // Only break at word boundary if it's in the second half
-                    chunk[..last_space].to_string()
-                } else {
-                    chunk
-                }
-            } else {
-                chunk
+        // Break at the last whitespace character in the second half that preserves overlap.
+        let actual_end = if max_end < chars.len() {
+            let break_offset = (0..window_len)
+                .rev()
+                .find(|&idx| chars[start + idx].is_whitespace())
+                .filter(|&idx| idx > min_break);
+            match break_offset {
+                Some(idx) => start + idx,
+                None => max_end,
             }
         } else {
-            chunk
+            max_end
         };
 
-        let chunk_char_count = chunk.chars().count();
+        let chunk: String = chars[start..actual_end].iter().collect();
         chunks.push(chunk);
 
-        // Move start with overlap
-        if start + chunk_char_count >= chars.len() {
+        if actual_end >= chars.len() {
             break;
         }
 
-        let step = chunk_char_count.saturating_sub(overlap);
-        start += if step == 0 { chunk_char_count } else { step };
+        start = actual_end - effective_overlap;
     }
 
     chunks
@@ -955,6 +989,101 @@ Content for section 2.
 
         let err = ingestor.ingest_file(&file_path, config).unwrap_err();
         assert!(err.to_string().contains("PDF"));
+    }
+
+    #[test]
+    fn test_chunk_text_multibyte_utf8_and_high_overlap_preserves_overlap() {
+        // Multibyte UTF-8 (accented Portuguese + CJK + emoji) must never panic on char boundaries
+        // and must preserve exact character overlap even when overlap >= chunk_size / 2.
+        let text = "ação 漢字 🚀 teste ".repeat(15);
+        let chunks = chunk_text(&text, 30, 20);
+        assert!(chunks.len() >= 4, "expected multiple overlapping chunks");
+        for pair in chunks.windows(2) {
+            let prev_chars: Vec<char> = pair[0].chars().collect();
+            let next_chars: Vec<char> = pair[1].chars().collect();
+            assert!(prev_chars.len() <= 30);
+            assert!(
+                prev_chars.len() > 20,
+                "non-final chunk length {} must exceed overlap 20",
+                prev_chars.len()
+            );
+            let tail = &prev_chars[prev_chars.len() - 20..];
+            let head = &next_chars[..20.min(next_chars.len())];
+            assert_eq!(
+                tail, head,
+                "20-character overlap must be preserved across chunks"
+            );
+        }
+    }
+
+    #[test]
+    fn test_markdown_sections_preserve_block_boundaries_lists_and_tables() {
+        let md = r#"# Guide
+
+First paragraph.
+
+Second paragraph.
+
+- [x] Done item
+- [ ] Open item
+
+| ColA | ColB |
+| ---- | ---- |
+| val1 | val2 |
+"#;
+        let sections = extract_markdown_sections(md);
+        assert_eq!(sections.len(), 1);
+        let body = &sections[0].content;
+        assert!(
+            body.contains("First paragraph.\nSecond paragraph."),
+            "paragraphs must not be glued together: {body}"
+        );
+        assert!(
+            body.contains("[x] Done item\n[ ] Open item"),
+            "task list items must remain on separate lines: {body}"
+        );
+        assert!(
+            body.contains("ColA ColB") && body.contains("val1 val2"),
+            "GFM table cells must be separated by spaces: {body}"
+        );
+    }
+
+    #[test]
+    fn test_ingest_deduplicates_identical_chunks_within_same_document() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("dup.md");
+        fs::write(
+            &file_path,
+            "# Part 1\n\nIdentical body text.\n\n# Part 2\n\nIdentical body text.\n",
+        )
+        .unwrap();
+
+        let storage = Storage::open_in_memory().unwrap();
+        let ingestor = DocumentIngestor::new(&storage);
+        let res = ingestor
+            .ingest_file(&file_path, IngestConfig::default())
+            .unwrap();
+        assert_eq!(res.chunks_total, 2);
+        assert_eq!(res.chunks_created, 1);
+        assert_eq!(res.chunks_skipped, 1);
+    }
+
+    #[test]
+    fn test_bounded_pdf_text_handles_utf8_split_across_writes() {
+        use std::io::Write;
+
+        let mut buf = BoundedPdfText::new(64);
+        let emoji = "🚀é".as_bytes(); // 4-byte + 2-byte UTF-8
+                                      // Write 1 byte at a time so every multibyte codepoint is split across Write::write calls.
+        for b in emoji {
+            assert_eq!(buf.write(std::slice::from_ref(b)).unwrap(), 1);
+        }
+        assert!(!buf.exceeded);
+        assert_eq!(buf.into_string().unwrap(), "🚀é");
+
+        let mut tiny = BoundedPdfText::new(3);
+        assert!(tiny.write(emoji).is_err());
+        assert!(tiny.exceeded);
     }
 
     #[cfg(feature = "pdf")]

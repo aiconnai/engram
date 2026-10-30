@@ -324,7 +324,9 @@ pub fn scope_tree(conn: &Connection) -> Result<Vec<ScopeNode>> {
 /// Recursively nest nodes into a proper tree.
 fn build_tree(mut nodes: Vec<ScopeNode>) -> Result<Vec<ScopeNode>> {
     // Process from deepest to shallowest so we can attach children.
-    nodes.sort_by_key(|b| std::cmp::Reverse(b.scope.level as usize));
+    // `pop()` takes the last node: ascending order makes children available
+    // for attachment before their parent is itself popped.
+    nodes.sort_by_key(|node| node.scope.level as usize);
 
     // We'll accumulate root nodes here.
     let mut roots: Vec<ScopeNode> = Vec::new();
@@ -332,11 +334,7 @@ fn build_tree(mut nodes: Vec<ScopeNode>) -> Result<Vec<ScopeNode>> {
     // For each node (deepest first), find its parent in the remaining set.
     // Simple O(n²) approach — scope trees are small in practice.
     while let Some(node) = nodes.pop() {
-        if node.scope.level == ScopeLevel::Global {
-            roots.push(node);
-            continue;
-        }
-        // Find the parent among remaining nodes or already-placed roots.
+        // Find the direct parent among the remaining, shallower nodes.
         let parent_path = match node.scope.parent() {
             Some(p) => p.path,
             None => {
@@ -581,6 +579,68 @@ mod tests {
 
         let global_node = global_node.unwrap();
         assert_eq!(global_node.memory_count, 2); // id 1 and 2
+        assert_eq!(tree.len(), 1, "descendants must be nested under global");
+        assert_eq!(global_node.children.len(), 1);
+        let org = &global_node.children[0];
+        assert_eq!(org.scope.path, "global/org:acme");
+        assert_eq!(org.memory_count, 1);
+        assert_eq!(org.children.len(), 1);
+        assert_eq!(org.children[0].scope.path, "global/org:acme/user:alice");
+        assert_eq!(org.children[0].memory_count, 1);
+        assert!(org.children[0].children.is_empty());
+    }
+
+    #[test]
+    fn test_scope_tree_keeps_siblings_and_orphans_separate() {
+        let conn = setup_db();
+        for (index, path) in [
+            "global/org:acme/user:alice/session:s1/agent:bot",
+            "global/org:acme/user:alice/session:s1",
+            "global/org:acme/user:alice",
+            "global/org:acme/user:bob",
+            "global/org:acme",
+            "global/org:orphan/user:carol",
+            "global",
+        ]
+        .iter()
+        .enumerate()
+        {
+            insert(&conn, index as i64 + 1, "memory", path);
+        }
+        let tree = scope_tree(&conn).unwrap();
+        assert_eq!(
+            tree.len(),
+            2,
+            "a missing direct parent leaves an orphan root"
+        );
+        let global = tree
+            .iter()
+            .find(|node| node.scope.path == "global")
+            .unwrap();
+        assert_eq!(global.children.len(), 1);
+        let acme = &global.children[0];
+        assert_eq!(acme.scope.path, "global/org:acme");
+        assert_eq!(acme.children.len(), 2);
+        let alice = acme
+            .children
+            .iter()
+            .find(|node| node.scope.path.ends_with("user:alice"))
+            .unwrap();
+        let bob = acme
+            .children
+            .iter()
+            .find(|node| node.scope.path.ends_with("user:bob"))
+            .unwrap();
+        assert!(bob.children.is_empty());
+        assert_eq!(alice.children.len(), 1);
+        assert_eq!(alice.children[0].scope.level, ScopeLevel::Session);
+        assert_eq!(alice.children[0].children.len(), 1);
+        assert_eq!(alice.children[0].children[0].scope.level, ScopeLevel::Agent);
+        let orphan = tree
+            .iter()
+            .find(|node| node.scope.path == "global/org:orphan/user:carol")
+            .unwrap();
+        assert!(orphan.children.is_empty());
     }
 
     // ── 8. Global scope has no parent ─────────────────────────────────────────

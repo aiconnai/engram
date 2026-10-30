@@ -28,6 +28,7 @@ pub fn memory_compress(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             let memory = get_memory(conn, id)?;
             let config = CompressionConfig {
                 target_ratio,
@@ -61,6 +62,7 @@ pub fn memory_decompress(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             let memory = get_memory(conn, id)?;
             Ok(json!({
                 "memory_id": id,
@@ -98,6 +100,7 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
     let result = ctx.storage.with_connection(|conn| {
         let mut inputs: Vec<MemoryInput> = Vec::new();
         for &id in &ids {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             if let Ok(m) = get_memory(conn, id) {
                 inputs.push(MemoryInput {
                     id: m.id,
@@ -135,93 +138,138 @@ pub fn memory_consolidate(ctx: &HandlerContext, params: Value) -> Value {
         ConsolidationConfig, GroupingStrategy, OfflineConsolidator,
     };
 
-    let workspace = params
-        .get("workspace")
-        .and_then(|v| v.as_str())
-        .unwrap_or("default");
-    let strategy_str = params
-        .get("strategy")
-        .and_then(|v| v.as_str())
-        .unwrap_or("content_overlap");
-    let dry_run = params
-        .get("dry_run")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let strategy = match strategy_str {
-        "tag_similarity" => GroupingStrategy::TagSimilarity,
-        "temporal_proximity" => GroupingStrategy::TemporalProximity,
-        _ => GroupingStrategy::ContentOverlap,
+    let explicit_ws = match params.get("workspace") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(ws)) => match crate::types::normalize_workspace(ws) {
+            Ok(norm) => Some(norm),
+            Err(e) => {
+                return ToolError::invalid_params(format!("Invalid workspace: {e}")).into_value()
+            }
+        },
+        Some(_) => return ToolError::invalid_params("workspace must be a string").into_value(),
     };
 
-    let result = ctx.storage.with_connection(|conn| {
-        let config = ConsolidationConfig::default();
-        let consolidator = OfflineConsolidator::new(config);
-        let report = consolidator.consolidate_with_strategy(conn, workspace, strategy)?;
-
-        if !dry_run && report.memories_merged > 0 {
-            let operation_id = uuid::Uuid::new_v4().to_string();
-            emit_best_effort(
-                conn,
-                &EnrichmentEvent {
-                    operation_id: &operation_id,
-                    event_type: "consolidation",
-                    memory_id: None,
-                    version_id: None,
-                    triggered_by: "memory_consolidate",
-                    agent_id: None,
-                    workspace: Some(workspace),
-                    params: json!({"strategy": strategy_str}),
-                    outcome: json!({
-                        "groups_found":       report.groups_found,
-                        "memories_merged":    report.memories_merged,
-                        "memories_archived":  report.memories_archived,
-                        "tokens_saved":       report.tokens_saved,
-                    }),
-                    status: "completed",
-                    dry_run,
-                },
-            );
+    if let Some(ref p) = ctx.principal {
+        if explicit_ws.is_none()
+            && matches!(p, crate::auth::TransportPrincipal::AnonymousLoopback(_))
+        {
+            return crate::mcp::permission::workspace_claim_denied("memory_consolidate", p);
         }
+        if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+            "memory_consolidate",
+            p,
+            explicit_ws.as_deref(),
+        ) {
+            return denial;
+        }
+    }
 
-        Ok(json!({
-            "workspace": workspace,
-            "strategy": strategy_str,
-            "dry_run": dry_run,
-            "groups_found": report.groups_found,
-            "memories_merged": report.memories_merged,
-            "memories_archived": report.memories_archived,
-            "tokens_before": report.tokens_before,
-            "tokens_after": report.tokens_after,
-            "tokens_saved": report.tokens_saved,
-        }))
-    });
+    let workspace = explicit_ws.unwrap_or_else(|| "default".to_string());
 
-    result.unwrap_or_else(|e| {
-        // Emit a failed event outside the failed transaction.
-        let err_str = e.to_string();
-        let _ = ctx.storage.with_connection(|conn| {
-            let op_id = uuid::Uuid::new_v4().to_string();
-            emit_best_effort(
-                conn,
-                &EnrichmentEvent {
-                    operation_id: &op_id,
-                    event_type: "consolidation",
-                    memory_id: None,
-                    version_id: None,
-                    triggered_by: "memory_consolidate",
-                    agent_id: None,
-                    workspace: Some(workspace),
-                    params: json!({"strategy": strategy_str}),
-                    outcome: json!({"error": &err_str}),
-                    status: "failed",
-                    dry_run,
-                },
-            );
-            Ok::<_, crate::error::EngramError>(())
-        });
-        json!({"error": err_str})
-    })
+    let strategy_str = match params.get("strategy") {
+        None | Some(Value::Null) => "content_overlap",
+        Some(Value::String(s)) => s.as_str(),
+        Some(_) => return ToolError::invalid_params("strategy must be a string").into_value(),
+    };
+
+    let strategy = match strategy_str {
+        "content_overlap" => GroupingStrategy::ContentOverlap,
+        "tag_similarity" => GroupingStrategy::TagSimilarity,
+        "temporal_proximity" => GroupingStrategy::TemporalProximity,
+        other => {
+            return ToolError::invalid_params(format!(
+                "Invalid strategy '{other}': expected 'content_overlap', 'tag_similarity', or 'temporal_proximity'"
+            ))
+            .into_value()
+        }
+    };
+
+    let dry_run = match params.get("dry_run") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return ToolError::invalid_params("dry_run must be a boolean").into_value(),
+    };
+
+    let config = ConsolidationConfig::default();
+    let consolidator = OfflineConsolidator::new(config);
+
+    let report_res = if dry_run {
+        ctx.storage
+            .with_connection(|conn| consolidator.preview_with_strategy(conn, &workspace, strategy))
+    } else {
+        ctx.storage.with_transaction(|conn| {
+            consolidator.consolidate_with_strategy(conn, &workspace, strategy)
+        })
+    };
+
+    match report_res {
+        Ok(report) => {
+            if !dry_run && report.memories_merged > 0 {
+                let operation_id = uuid::Uuid::new_v4().to_string();
+                let _ = ctx.storage.with_connection(|conn| {
+                    emit_best_effort(
+                        conn,
+                        &EnrichmentEvent {
+                            operation_id: &operation_id,
+                            event_type: "consolidation",
+                            memory_id: None,
+                            version_id: None,
+                            triggered_by: "memory_consolidate",
+                            agent_id: None,
+                            workspace: Some(&workspace),
+                            params: json!({"strategy": strategy_str}),
+                            outcome: json!({
+                                "groups_found":       report.groups_found,
+                                "memories_merged":    report.memories_merged,
+                                "memories_archived":  report.memories_archived,
+                                "tokens_saved":       report.tokens_saved,
+                            }),
+                            status: "completed",
+                            dry_run,
+                        },
+                    );
+                    Ok::<_, crate::error::EngramError>(())
+                });
+            }
+
+            json!({
+                "workspace": workspace,
+                "strategy": strategy_str,
+                "dry_run": dry_run,
+                "groups_found": report.groups_found,
+                "memories_merged": report.memories_merged,
+                "memories_archived": report.memories_archived,
+                "tokens_before": report.tokens_before,
+                "tokens_after": report.tokens_after,
+                "tokens_saved": report.tokens_saved,
+            })
+        }
+        Err(e) => {
+            // Emit a failed event outside the failed transaction.
+            let err_str = e.to_string();
+            let _ = ctx.storage.with_connection(|conn| {
+                let op_id = uuid::Uuid::new_v4().to_string();
+                emit_best_effort(
+                    conn,
+                    &EnrichmentEvent {
+                        operation_id: &op_id,
+                        event_type: "consolidation",
+                        memory_id: None,
+                        version_id: None,
+                        triggered_by: "memory_consolidate",
+                        agent_id: None,
+                        workspace: Some(&workspace),
+                        params: json!({"strategy": strategy_str}),
+                        outcome: json!({"error": &err_str}),
+                        status: "failed",
+                        dry_run,
+                    },
+                );
+                Ok::<_, crate::error::EngramError>(())
+            });
+            json!({"error": err_str})
+        }
+    }
 }
 
 // ── memory_synthesis ──────────────────────────────────────────────────────────
@@ -389,5 +437,100 @@ mod tests {
             count > 0,
             "memory_consolidate error must emit status=failed enrichment event"
         );
+    }
+
+    #[test]
+    fn test_memory_consolidate_dry_run_does_not_mutate_and_validates_inputs() {
+        let mut ctx = make_ctx();
+        let old_ts = (chrono::Utc::now() - chrono::Duration::hours(48))
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+
+        let (id1, id2) = ctx
+            .storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "INSERT INTO memories (content, memory_type, workspace, importance, access_count, created_at, updated_at)
+                     VALUES ('Rust memory safety and ownership guide', 'note', 'default', 0.5, 0, ?1, ?1)",
+                    [&old_ts],
+                )?;
+                let id1 = conn.last_insert_rowid();
+                conn.execute(
+                    "INSERT INTO memories (content, memory_type, workspace, importance, access_count, created_at, updated_at)
+                     VALUES ('Rust memory safety and borrowing guide', 'note', 'default', 0.5, 0, ?1, ?1)",
+                    [&old_ts],
+                )?;
+                let id2 = conn.last_insert_rowid();
+                Ok((id1, id2))
+            })
+            .expect("seed old memories");
+
+        // 1. dry_run: true reports groups_found and memories_merged WITHOUT archiving or writing consolidated_memories!
+        let dry = memory_consolidate(
+            &ctx,
+            json!({"workspace": "default", "strategy": "content_overlap", "dry_run": true}),
+        );
+        assert!(dry.get("error").is_none(), "dry_run failed: {dry}");
+        assert_eq!(dry["dry_run"], true);
+        assert_eq!(dry["groups_found"], 1);
+        assert_eq!(dry["memories_merged"], 2);
+        assert_eq!(dry["memories_archived"], 0);
+
+        ctx.storage
+            .with_connection(|conn| {
+                let consolidated_count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM consolidated_memories", [], |r| {
+                        r.get(0)
+                    })?;
+                assert_eq!(
+                    consolidated_count, 0,
+                    "dry_run must not insert into consolidated_memories"
+                );
+                for id in [id1, id2] {
+                    let state: String = conn.query_row(
+                        "SELECT COALESCE(lifecycle_state, 'active') FROM memories WHERE id = ?1",
+                        [id],
+                        |r| r.get(0),
+                    )?;
+                    assert_eq!(state, "active", "dry_run must not archive memory {id}");
+                }
+                Ok(())
+            })
+            .expect("verify zero writes on dry_run");
+
+        // 2. Invalid strategy or non-boolean dry_run fails closed.
+        let bad_strat = memory_consolidate(
+            &ctx,
+            json!({"workspace": "default", "strategy": "unknown_strategy"}),
+        );
+        assert_eq!(bad_strat["error"]["code"], "invalid_params");
+
+        let bad_dry = memory_consolidate(&ctx, json!({"workspace": "default", "dry_run": "yes"}));
+        assert_eq!(bad_dry["error"]["code"], "invalid_params");
+
+        // 3. Direct call with restricted principal denies foreign workspace.
+        ctx.principal = Some(
+            crate::auth::TransportPrincipal::from_token_claims(crate::auth::TokenClaims {
+                user_id: crate::auth::UserId::from_string("scoped"),
+                key_id: "k1".to_string(),
+                permissions: crate::auth::PermissionSet::standard_user(),
+                namespace: Some("tenant-only".to_string()),
+                issued_at: chrono::Utc::now(),
+                expires_at: None,
+            })
+            .expect("claims"),
+        );
+        let denied = memory_consolidate(&ctx, json!({"workspace": "default", "dry_run": true}));
+        assert_eq!(denied["error"]["code"], "permission_denied");
+        ctx.principal = None;
+
+        // 4. dry_run: false applies consolidation and archives both memories.
+        let applied = memory_consolidate(
+            &ctx,
+            json!({"workspace": "default", "strategy": "content_overlap", "dry_run": false}),
+        );
+        assert!(applied.get("error").is_none(), "apply failed: {applied}");
+        assert_eq!(applied["groups_found"], 1);
+        assert_eq!(applied["memories_merged"], 2);
+        assert_eq!(applied["memories_archived"], 2);
     }
 }

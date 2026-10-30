@@ -16,7 +16,7 @@
 //! - `TransactionalBackend` - For backends that support ACID transactions
 //! - `CloudSyncBackend` - For backends with cloud synchronization
 
-mod active_artifacts;
+pub(crate) mod active_artifacts;
 pub mod agent_registry;
 mod audit;
 pub mod auto_linker;

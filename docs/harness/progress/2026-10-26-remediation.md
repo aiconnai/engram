@@ -183,3 +183,105 @@ bypass de admin. GO de 5 h, até 09:35Z; tag, release, registries, deleções e 
   - `Advertised Contracts` no #257, #258 e #259: o baseline das 9 variáveis documentadas pelo #257 só é regenerado em `127e3e89` (#260), como na integração. Exceção explícita, registrada em comentário no #257; voltou a passar no #260.
   - Runs de CI no `main` (push e agendados, incluindo um Nightly atrasado) foram cancelados durante a cadeia para liberar runners: cada árvore intermediária já tinha sido testada no PR. O CI do merge do #262 roda completo.
 - **Live state**: `Last commit` = `976fbe8b` (merge do #260), primeiro pai do merge do #262.
+
+## Follow-up Nightly e release (2026-10-27)
+
+Novo GO do owner, chat: diagnosticar Nightly, corrigir defeitos confirmados e lacunas relevantes
+de testes, resolver a proposta de verify-tag e preparar release e aviso de migração. Entregar
+evidências e recomendação antes de publicar ou executar mudanças operacionais. Não renova
+o GO histórico de push/PR/merge; sem tags de release, publicações, avisos enviados, deleções,
+settings ou recibos humanos fabricados.
+
+- Base: `2e84a59422b3659aaaf25c69dbe01b01ab321332`, checkout limpo; bootstrap e doctor executados.
+- [Plano](../plans/2026-10-27-nightly-release-readiness.md),
+  [canvas](../canvas/2026-10-27-nightly-release-readiness.md),
+  [evidência](../audits/2026-10-27-nightly-release-readiness.md),
+  [readiness](../../releases/v0.24.0-readiness.md).
+- Bug confirmado: árvore de escopos achatada por ordenar reverso e depois consumir com pop;
+  dois testes novos falharam antes do fix. Corrigida ordem; preservar órfãos e irmãos.
+- Lacunas: Bearer vazio, diagnósticos, flags/caps/contadores de extração, filtros e persistência
+  de auto-link. Miri mantém 20.000 casos nativos e interpreta prefixo de 256 do mesmo seed.
+- `CHANGELOG.md`: remediação incorporada à seção 0.24.0 para entrar nas notas extraídas pelo
+  workflow. Data é de preparação do candidato; publicação ainda pendente.
+- Pre-gate manual gerou só prompt advisory (sem inferência paga). Review independente e
+  receipt humano do candidato final pendentes; não há post-gate PASS desta sessão.
+
+- Fechamento técnico local: make ci PASS (2351 testes, 2 skips preexistentes, offline 12/536);
+  Miri PASS (5 filtros, 16 testes, texto 80 s); reexecução focada 18 caught / 0 missed /
+  4 timeouts (um ramo redundante removido). O Nightly ainda exige disposição dos timeouts.
+- Matriz reobservada integralmente em 2026-10-27T18:14:43Z (todas as verificações PASS).
+  SDKs empacotados localmente; proposta de confiança de assinatura e aviso preparados.
+  Recomendação: segurar publicação; integrar/revisar o candidato, resolver timeouts e
+  provisionamento de assinatura, obter receipts humanos e dry-runs no SHA final.
+
+- Preparação de artefatos encontrou defeitos adicionais confirmados: `--write-metadata npm`
+  procurava SDK `npm` onde a matriz declara `typescript`; retries incluíam o próprio metadata
+  no hash. Teste primeiro reproduziu ambos, helper corrigido, 12 testes + shellcheck PASS.
+  CI repetido para incluir o fix; geração dos metadados reais passa nos dois canais.
+- Instalação limpa dos SDKs PASS após corrigir o helper; artefatos vinculados ao SHA
+  de origem dos SDKs `2e84a594` (árvore SDK inalterada). Republicação exige artefatos
+  refeitos no SHA integrado final. Crates conjuntos empacotam; verificação de staging
+  encontra erro interno do Cargo 1.96; fontes extraídos compilam com patch local de types.
+
+## Resolução consolidada local (2026-10-29)
+
+Execução local em `fix/resolve-all-2026-10-29` (sobre `21cf80e9`, `origin/main` `2e84a594`) do
+[plano consolidado](../plans/2026-10-27-repository-execution-plan.md) e dos 5 lotes da auditoria
+`/code-review-rm`, mantendo todos os limites estritamente locais (sem push, PR, merge, tag,
+release, publicação em registries, remoção de branches/worktrees ou inferência paga):
+
+- **R1 (`src/text_util.rs`)**: `floor_char_boundary` / `ceil_char_boundary` delegados à stdlib e
+  `LowercaseIndex::find_window` reescrito com `split_first()`. `cargo-mutants --no-config --file src/text_util.rs`
+  passou com **42/42 mutantes detectados, 0 missed, 0 timeouts**.
+- **R3 (release tag verification fail-closed)**: adicionados [`allowed-signers`](../../releases/allowed-signers),
+  `scripts/verify-release-tag.sh`, materialização de `origin/main:scripts/verify-release-tag.sh` em
+  `.github/workflows/sdk-release.yml` e 14 testes herméticos em `scripts/test_sdk_release_workflow.py`
+  (recusa allowlist vazia/placeholder, substituição do verificador na tag e auto-autorização pelo commit da tag).
+- **R4 / R5 / R7**: empacotamento local conjunto `cargo package -p engram-types -p engram-core --registry crates-io --offline`
+  PASS; artefatos SDK `0.7.0` + contrato `--live` revalidados no SHA final; claims `"100% offline"`
+  qualificados em `README.md` e `docs/index.html`; documentos de levantamento/plano de `2026-10-27`
+  incorporados e reconciliados com [`v0.24.0-readiness.md`](../../releases/v0.24.0-readiness.md) e
+  [`2026-10-27-nightly-release-readiness.md`](../audits/2026-10-27-nightly-release-readiness.md).
+- **C1 (portabilidade Markdown RFC 0004)**: CLI `engram-cli import markdown`, `ImportOptions::default()`,
+  resposta MCP (`"dry_run"`), SDK Python (`vault_import(..., confirm=False)`) e SDK TypeScript (`confirm?: boolean`)
+  alinhados ao modo seguro de review/dry-run por default.
+- **H1 / Q1 / H2**: reconciliados `docs/harness/risk-register.yaml`,
+  [`2026-10-26-deferred-review-minors.md`](../known-issues/2026-10-26-deferred-review-minors.md) e
+  [`retrieval-performance-policy.md`](../../quality/retrieval-performance-policy.md); `merge_gate_ci.py` e
+  `merge-gate.py` endurecidos para falhar fechado (`CiRefusal`) quando `git show` da base falha
+  (`FLOOR_MERGE_GATE=50`), documentados no [canvas](../canvas/2026-10-29-resolve-all.md).
+- **S1 + Unidades 1–5 (runtime, pool SQLite, sync, lifecycle/retenção, consolidação e ingestão)**:
+  - `src/bin/server.rs` (timeouts HTTP sem leak, hook budget/truncation UTF-8, `workspace` scoping),
+    `src/storage/connection.rs` (`available_connections`, recovery de pool, cleanup de sidecars WAL/SHM),
+    `src/storage/active_artifacts.rs` + `src/sync/worker.rs` + `src/sync/cloud.rs` (dedup/cap de
+    `last_error` em crash-loop, guarda contra overwrite de DB ativo e `TempDownloadGuard` RAII) e
+    `src/multimodal/process.rs` (retry em `EINTR`).
+  - Anti-IDOR em 9 tools MCP by-id (`src/mcp/workspace_guard.rs` + handlers de lifecycle/policy +
+    [`workspace-operation-matrix.md`](../../security/workspace-operation-matrix.md)), validação estrita e
+    escopo por workspace em `src/storage/queries/retention.rs`, e alinhamento 4-way MCP/SDKs
+    (`check-sdk-contract-alignment.py` com 0 drift).
+  - `src/intelligence/consolidation_offline.rs` + `src/mcp/handlers/compression.rs` (timestamps
+    RFC3339 ms válidos, `preview_with_strategy` puro em `dry_run`, savepoint por grupo, filtro de
+    `word_sets` vazios/`transcript_chunk`/expiradas) e `src/intelligence/document_ingest.rs`
+    (chunking por índice de `char`, Markdown multi-bloco/tabelas, dedup intra-documento e buffer UTF-8
+    por página em `BoundedPdfText`).
+- **Revisão independente `R2` + Harness Script Guard**: subagente read-only independente revisou todo o
+  intervalo `origin/main` (`2e84a594`) até os commits `6aed4f28..56458055` em 3 rodadas e concluiu com
+  veredito **`PASS`** (0 achados abertos; **`PASS`** em `docs/harness/bin/*`). Parecer de agente não
+  substitui sign-off/receipt humano antes de merge.
+- **Pendências exclusivas do owner (em 2026-10-29)**: provisionar chave SSH pública real em
+  `docs/releases/allowed-signers`, autorizar push/PR/merge para `main`, emitir receipts humanos de
+  post-gate e criar tag assinada `v0.24.0` para disparo de publicação nos registries.
+
+## Provisionamento de signer SSH e abertura de PR (2026-10-30)
+
+Novo GO explícito do owner no chat (`2026-10-30`):
+1. Provisionar a chave pública SSH ativa do owner (`ron@ldinho.com.br`,
+   `SHA256:iinTT0HVuDeNCuJab1vXYI8fvRc/IPvR2Xx3LYhJLXA`) em
+   [`docs/releases/allowed-signers`](../../releases/allowed-signers) — commitada em `82f79bed` e
+   validada por `scripts/test_sdk_release_workflow.py` (**14/14 PASS**, cobrindo recusa fail-closed
+   para arquivo só com comentários e `ssh-keygen -Y match-principals` no trust store commitado).
+2. Executar `git push -u origin fix/resolve-all-2026-10-29` e abrir PR contra `main` para validação
+   do CI remoto e revisão humana.
+3. **Limites mantidos**: merge do PR, criação de tag/GitHub Release (`v0.24.0`), publicação em
+   crates.io/PyPI/npm, remoção de branches/worktrees e inferência paga seguem **não** autorizados.

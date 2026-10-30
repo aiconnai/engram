@@ -594,3 +594,62 @@ fn unix_read_only_with_connection_preserves_and_narrows_artifact_permissions() {
 
     assert_sqlite_artifact_modes(&db_path, 0o600);
 }
+
+#[test]
+fn in_memory_storage_pool_clamps_to_single_shared_database() {
+    let config = StorageConfig {
+        db_path: ":memory:".to_string(),
+        storage_mode: StorageMode::Local,
+        cloud_uri: None,
+        encrypt_cloud: false,
+        confidence_half_life_days: 30.0,
+        auto_sync: false,
+        sync_debounce_ms: 5000,
+    };
+    let pool = StoragePool::new(config, 4).unwrap();
+    pool.with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO memories (content, memory_type, workspace) VALUES ('hello', 'note', 'default')",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+
+    for _ in 0..5 {
+        let count: i64 = pool
+            .with_connection(|conn| {
+                Ok(conn.query_row("SELECT COUNT(*) FROM memories", [], |r| r.get(0))?)
+            })
+            .unwrap();
+        assert_eq!(
+            count, 1,
+            "all round-robin calls must observe the single migrated in-memory DB"
+        );
+    }
+}
+
+#[test]
+fn in_memory_compact_runs_vacuum_and_bare_relative_disk_probe_checks_current_dir() {
+    let storage = Storage::open_in_memory().unwrap();
+    let report = storage.compact(true).unwrap();
+    assert!(report.applied);
+    assert!(
+        report.vacuum_safe,
+        ":memory: compaction must treat VACUUM as safe"
+    );
+    assert_eq!(report.free_space_bytes, -1);
+    let vacuum_op = report
+        .operations
+        .iter()
+        .find(|op| op.name == "vacuum")
+        .expect("vacuum operation");
+    assert!(vacuum_op.applied);
+
+    assert_eq!(available_disk_bytes(":memory:"), None);
+    #[cfg(unix)]
+    assert!(
+        available_disk_bytes("nonexistent_bare_relative_engram.db").is_some(),
+        "bare relative filename must stat '.' instead of failing on non-existent file"
+    );
+}

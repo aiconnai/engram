@@ -12,6 +12,10 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-27
+
+Release candidate prepared for review; tag and package publication are pending.
+
 ### Security
 
 - **Batch tools enforce per-item workspaces** — `memory_create_batch` and `memory_ingest_fact_batch` authorize every item's `workspace` (central check, gRPC pre-check and handlers), closing a cross-workspace write introduced by the search/auth hardening commit `e04d3307`. Batch item arrays are derived from the catalog schema and fail closed on unreadable nested `workspace` claims.
@@ -19,42 +23,10 @@ package registries, and dated external sources.
 - **`memory_search_suggest` is workspace-scoped** — restricted principals get spelling corrections built only from their own workspace vocabulary.
 - **`permission_denial_for_mode` fails closed** for unknown tools.
 - **One `tools/call` unwrap point** — HTTP and gRPC unwrap the envelope once and authorize the same bare arguments the dispatcher sees; `name`/`arguments` keys inside real tool arguments are no longer treated as an envelope. A caller's per-call `_permission_mode` self-restriction is still applied by the dispatcher, so its denial stays in the tool result (HTTP 200).
-- **Log redaction (RISK-0002)** — sync/cloud, hooks, multimodal and the watcher (including its daemon) no longer log bucket/object keys, workspace and tool names, filesystem paths, `engram_url`, dry-run memory content, subprocess stderr or raw error text; errors are logged by class (`ENGRAM_LOG_ERROR_DETAIL=1` restores detail for debugging).
+- **Log redaction (RISK-0002)** — sync/cloud, hooks, multimodal, `engram-server` HTTP/WebSocket transport startup errors, and the watcher (including its daemon) no longer log bucket/object keys, workspace and tool names, filesystem paths, `engram_url`, dry-run memory content, subprocess stderr or raw error text; errors are logged by class (`ENGRAM_LOG_ERROR_DETAIL=1` restores detail for debugging).
+- **Cryptographic release-tag verification (`R3`)** — Added `scripts/verify-release-tag.sh` and `docs/releases/allowed-signers`, wired into `.github/workflows/sdk-release.yml` across `preflight`, `publish-python`, and `publish-npm` with anti-self-authorization (materializing both verifier script and trust store from `origin/main`).
+- **Lifecycle, policy, and server hook authorization (`Unit 1`, `Unit 3`)** — Added 9 lifecycle/policy by-ID tools (`memory_set_lifecycle`, `memory_lifecycle_update`, `memory_score`, `memory_promote`, `memory_explain`, `memory_reconcile_conflict`, `memory_promote_to_permanent`, `memory_boost`, `memory_set_expiration`) to `ID_SCOPED_TOOLS` with in-transaction `ensure_memory_access` checks; `engram-server` lifecycle hooks now require `Permission::Write` on `ResourceType::Memory`, reject unauthorized fallback to `"default"`, and skip `PostToolUse` reinforcement on error responses.
 - **Dependency advisories** — zip 9.0.5 and duckdb 1.10506.1 (RUSTSEC-2026-0367/0368/0369), tokio 1.53.3 (RUSTSEC-2026-0386), rustls-webpki 0.103.16, webpki-roots 1.0.11 and ctutils 0.4.6 (RUSTSEC-2026-0382/0381/0385); crypto-bigint 0.5 removed from the graph (RUSTSEC-2026-0387) by not enabling `aws-sdk-s3/sigv4a`.
-
-### Fixed
-
-- `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
-- `permission_mode_status` reports write-flag escalation (`write_flag_params`, `required_mode_with_write_flags`, `allowed_with_write_flags`).
-- Harness: `check-live-state.sh` requires the newest PASS review while the active task has none and matches review versions by exact slug; `harness-risk-register.sh` allocates ids past RISK-0008 and validates under Psych 4.
-- The HNSW index is reconciled with SQLite (expiry, supersede, merge, GC, content rewrites) on drain/cleanup cycles and compacts tombstones live; warmup no longer replays stale vectors or checkpointed deleted ids.
-- Deleted (single, cascade, batch) and content-edited memories are removed from the in-memory HNSW index, saving the index no longer persists removed vectors, and HNSW semantic search widens its bounded candidate fetch so `limit` holds after filtering.
-- `dream_consolidation_status` and `dream_insights` were documented as always available but require `dream-phase`; tool feature gating now has a single source (`catalog::required_features`).
-- `CrossEncoderReranker` returns an explicit "not implemented" error instead of fabricating scores, and model routing no longer reports the placeholder as operational.
-- SDK release workflow no longer hardcodes `v0.22.0` / `0.5.0`: it derives the core tag and SDK versions from the manifests and re-checks them after environment approval; `sdks/typescript/package-lock.json` synced to 0.7.0.
-- Quality-candidate scripts no longer use empty `except` blocks; the Rust risk inventory parser returns one tuple shape.
-
-### Changed
-
-- Search (from `e04d3307`): catalog default `limit` is 20, `offset` and `include_archived` are accepted, `SearchOptions.offset` is public, and `memory_search_by_identity` / `memory_session_search` are read-only. Python and TypeScript SDKs default `search` to limit 20 and accept `offset` (Python also `include_archived`).
-- **HNSW is opt-in** — `hnsw_enabled` defaults to `false` until the benchmark required by RFC 0003 exists; enable it with `ENGRAM_HNSW_ENABLED` / `--hnsw-enabled`. When off, no index is built at startup or maintained on writes. HNSW widening stops after two empty hydration rounds.
-- Snapshot loader reads archive entry names from the central directory and rejects undecodable names.
-- DuckDB bundled engine 1.4.4 → 1.5.6; `sqlite-vec` is a dev-dependency (benchmarks only).
-- CI pins cargo-audit 0.22.0 and cargo-outdated 0.19.0 (`--locked`); the TypeScript live lane uses Node 24; the docs job runs the public-claims, advertised-contracts and release-version checks.
-- `bump-version.py` verifies lockfiles and `__version__` and adds a read-only `--release-plan` mode.
-
-### Removed
-
-- S3 multi-region access point (SigV4a) signing.
-
-### Docs
-
-- Public claims corrected: measured latency (FTS5 p50 3.2 ms, hybrid p50 250 ms at 100K×384d) instead of "sub-millisecond"; nonexistent model "native adapters" and unsourced competitor tool counts removed; gRPC and ONNX marked optional; tool counts are 301 catalog / 254 default build.
-- RFC, ADR, plan and spec statuses record their implementation evidence; ROADMAP tool names corrected and cross-host federation marked not implemented.
-- Shared decision-triage guide trimmed for publication.
-- Optional server variables documented (`ENGRAM_CLEANUP_INTERVAL`, `ENGRAM_GRPC_BIND_ADDRESS`, `ENGRAM_WS_*`, `MEILISEARCH_*`); vector-search docs corrected (HNSW opt-in, sqlite-vec benchmarks only); Rust risk inventory regenerated without the removed Turso backend.
-
-## [0.24.0] - 2026-10-14
 
 ### Added
 
@@ -65,6 +37,14 @@ package registries, and dated external sources.
 
 ### Changed
 
+- Search (from `e04d3307`): catalog default `limit` is 20, `offset` and `include_archived` are accepted, `SearchOptions.offset` is public, and `memory_search_by_identity` / `memory_session_search` are read-only. Python and TypeScript SDKs default `search` to limit 20 and accept `offset` (Python also `include_archived`).
+- **HNSW is opt-in** — `hnsw_enabled` defaults to `false` until the benchmark required by RFC 0003 exists; enable it with `ENGRAM_HNSW_ENABLED` / `--hnsw-enabled`. When off, no index is built at startup or maintained on writes. HNSW widening stops after two empty hydration rounds.
+- Snapshot loader reads archive entry names from the central directory and rejects undecodable names.
+- DuckDB bundled engine 1.4.4 → 1.5.6; `sqlite-vec` is a dev-dependency (benchmarks only).
+- CI pins cargo-audit 0.22.0 and cargo-outdated 0.19.0 (`--locked`); the TypeScript live lane uses Node 24; the docs job runs the public-claims, advertised-contracts and release-version checks.
+- `bump-version.py` verifies lockfiles and `__version__` and adds a read-only `--release-plan` mode.
+- Miri smoke uses 256 deterministic Unicode oracle cases; native tests retain all 20,000 cases and the explicit adversarial matrix runs in both modes.
+- **Breaking cache-clear response:** `memory_cache_clear` now returns `{success, entries_cleared}` for global, explicit-workspace and principal-bound calls. Consumers reading `cleared`, `scope` or `workspace` must migrate; `search_cache_clear` keeps its existing response. See the [migration guide](docs/migrations/v0.24.0-cache-clear.md).
 - **Workspace-scoped `media_assets` schema migration `v49` (`#235`)** — Rebuilt `media_assets` with composite `PRIMARY KEY (workspace, file_hash)` and `idx_media_assets_workspace_memory` so identical media bytes ingested in different workspaces remain strictly isolated.
 - **Bounded multimodal media reads (`#236`)** — Enforced `MAX_MEDIA_FILE_BYTES = 50 MiB` (`open_bounded_media_file` + `Read::take`) before hashing or reading media files in `src/storage/media_ops.rs` and `src/mcp/handlers/multimodal.rs`.
 - **Cloud sync supply chain & atomic snapshot upload (`#239`, `#240`, `G1`)** — Upgraded `aws-sdk-s3` (`1.129.0`), `aws-config` (`1.8.15`), and `rustls` (`0.23.46`), removing `RUSTSEC-2026-0253`, `RUSTSEC-2026-0346`, and `RUSTSEC-2026-0349` from the default/cloud dependency graph; isolated `CloudStorage::upload` snapshots into unique sibling tempfiles (`Invariante #27`).
@@ -80,21 +60,42 @@ package registries, and dated external sources.
 - **`defer_embedding = true` enqueues (C7)** — Every producer (MCP `memory_create`, CLI create and interactive create, snapshot load, dream promotion) now enqueues a background embedding job; previously such memories were never embedded while health reported Healthy. With `false`, the memory is embedded right after commit and no stale pending job is left behind. `rebuild_derived_indexes` repairs memories flagged as pending without a job row.
 - **Storage errors are surfaced (Q2F)** — `delete_crossref` returns statement errors instead of `Ok`, and `list_memories` / `memory_list` fail with an error naming the undecodable row id (`undecodable memory row (id N)`) instead of silently omitting it.
 - **`engram-cli mcp install` (Q2F, final fixes)** — Refuses to overwrite a client config that is not a strict-JSON object (or whose `mcpServers` is not an object) unless `--force` is given, keeps every backup under a unique name (an identical backup is reused), writes atomically (temp file + rename), and exits non-zero if any target fails. The temp file and backups carry the config's permission bits (0600 for a new config), and a symlinked config is written through to its target so the link survives.
-- **Retention policy validation (PR review)** — `retention_policy_set` rejects `max_age_days`, `compress_after_days` and `auto_delete_after_days` outside `0..=36500` and a negative `max_memories` with an error. `retention_policy_apply` skips (and logs) a stored policy with such values instead of failing the whole run, so the other workspaces' policies still apply.
+- **Breaking Markdown import safe review-mode default (`C1`, RFC 0004)** — `engram-cli import markdown`, Rust `ImportOptions::default()`, Python `client.vault.vault_import()`, and TypeScript `client.vault.import()` now default to non-mutating review/dry-run mode (`confirm=false`), matching the MCP `memory_import_markdown` contract (which now also reports `"dry_run": !confirm`). Pass `--confirm` (CLI) or `confirm=True` / `{ confirm: true }` (Rust/SDKs) to apply changes (`--dry-run` remains accepted on the CLI as a deprecated alias).
+- **Retention policy validation & enforcement (PR review, `Unit 3`)** — `retention_policy_set` validates `max_age_days`, `compress_after_days` and `auto_delete_after_days` within `1..=36500`, `max_memories > 0`, `compress_max_importance` in `0.0..=1.0`, `compress_min_access >= 0`, and valid `MemoryType` names in `exclude_types`, while preserving existing `compress_max_importance` / `compress_min_access` on partial updates. `retention_policy_apply` enforces `max_age_days`, scopes `compress_after_days` strictly to the policy's workspace, honors `exclude_types` across all stages, and skips legacy out-of-range rows without blocking other workspaces.
 - **AAAK `lossless` round trip (PR review)** — `lossless` compression is verified on every call: when dictionary substitution would not decompress to the exact input (text that already contains shorthands such as `w/` or `e.g.`, word forms the dictionary cannot restore, surrounding whitespace), the input is stored unchanged under a new `[AAAK:v1:verbatim]` header, which `decompress` returns as-is.
 - **Multimodal output capture (PR review)** — A read error on `ffprobe`/`ffmpeg` output, or a reader that does not finish, now fails the call with `<bin> <stream> capture failed: ...` instead of returning empty or silently truncated output.
 - **Observability (O1)** — HTTP responses carry an `x-request-id` header (a caller-supplied value is echoed only if it is 1-64 chars of `[A-Za-z0-9._-]`). `mcp_success_total` no longer counts JSON-RPC errors or `isError` tool results returned with HTTP 200. Logs carry error classes instead of error text, paths or panic payloads unless `ENGRAM_LOG_ERROR_DETAIL=1` is set; the gRPC transport no longer returns the handler panic payload in its `Internal` status message.
 
 ### Fixed
 
+- `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
+- `permission_mode_status` reports write-flag escalation (`write_flag_params`, `required_mode_with_write_flags`, `allowed_with_write_flags`).
+- Harness: `check-live-state.sh` requires the newest PASS review while the active task has none and matches review versions by exact slug; `harness-risk-register.sh` allocates ids past RISK-0008 and validates under Psych 4.
+- The HNSW index is reconciled with SQLite (expiry, supersede, merge, GC, content rewrites) on drain/cleanup cycles and compacts tombstones live; warmup no longer replays stale vectors or checkpointed deleted ids.
+- Deleted (single, cascade, batch) and content-edited memories are removed from the in-memory HNSW index, saving the index no longer persists removed vectors, and HNSW semantic search widens its bounded candidate fetch so `limit` holds after filtering.
+- `dream_consolidation_status` and `dream_insights` were documented as always available but require `dream-phase`; tool feature gating now has a single source (`catalog::required_features`).
+- `CrossEncoderReranker` returns an explicit "not implemented" error instead of fabricating scores, and model routing no longer reports the placeholder as operational.
+- SDK release workflow no longer hardcodes `v0.22.0` / `0.5.0`: it derives the core tag and SDK versions from the manifests and re-checks them after environment approval; `sdks/typescript/package-lock.json` synced to 0.7.0.
+- SDK artifact metadata maps the npm registry channel to TypeScript compatibility and excludes its own output on retries, so generation works for both channels and is repeatable.
+- Quality-candidate scripts no longer use empty `except` blocks; the Rust risk inventory parser returns one tuple shape.
+- Hierarchical scope trees now attach children to their direct parents, preserving sibling branches and orphan roots; previously every stored scope could be returned as a separate root.
 - **PDF worker coverage profile under `RLIMIT_FSIZE = 0`** — Integration tests now spawn `engram-pdf-worker` with `LLVM_PROFILE_FILE=/dev/null` so coverage-instrumented builds do not fail with `SIGXFSZ` on exit.
 - **macOS `SQLITE_READONLY` (`1544`) `-shm` race retry (`#238`)** — `Storage::with_connection` and `Storage::with_read_connection` now retry transient `SQLITE_READONLY` (`1544`) errors when concurrent readers open `-shm` in WAL mode on macOS.
 - **SQLite artifact permission hardening dropped POSIX locks (G1)** — Restricting permissions on the database, WAL and SHM files used open/close on the live files, which drops the process's POSIX locks and could lose WAL frames. Permissions are now set by path (`fchmodat` without following symlinks), and caller-controlled paths that resolve to the active database are refused.
-- **Unicode and hex panics (C3)** — Search compaction, context grouping, gardening, compression budget checks and attestation hex parsing no longer panic on multibyte text or short hex input.
+- **Unicode and hex panics & mutation-loop termination (`C3`, `R1`)** — Search compaction, context grouping, gardening, compression budget checks and attestation hex parsing no longer panic on multibyte text or short hex input; `src/text_util.rs` delegates UTF-8 boundary search to stdlib methods and uses slice-head destructuring in `LowercaseIndex::find_window`, eliminating all four `cargo-mutants` timeout loops.
+- **Offline consolidation, document ingest, storage, and sync hardening (`S1`, `Units 1–5`)** — Fixed `OfflineConsolidator` RFC3339 cutoff/timestamp formatting, added read-only `dry_run` preview to `memory_consolidate`, wrapped per-group consolidation in SQL `SAVEPOINT`s, attached the `'consolidated'` tag on archive, and excluded `transcript_chunk` / expired / soft-deleted / empty-word-set rows. Fixed `DocumentIngestor` character-based word-boundary chunking with high overlap, Markdown block/GFM table extraction, intra-document chunk deduplication, and split-UTF-8 `BoundedPdfText` buffering. Clamped `StoragePool::new(":memory:", N)` to 1 connection, prevented integer overflow in `Storage::compact` free-space checks, bounded/deduplicated `SyncWorker` `last_error` across crash loops, enforced active-DB inode guards on sync push/pull, added `TempDownloadGuard` in `CloudStorage`, retried `EINTR` in `multimodal/process.rs`, wired `realtime`/`meilisearch` into `engram-server`, and made harness `merge_gate_ci.py` fail closed (`CiRefusal`) on `GitError`.
 
 ### Removed
 
+- S3 multi-region access point (SigV4a) signing.
 - **Turso/libSQL backend (breaking Rust/build change)** — Completed the v0.24.0 sunset from [ADR-STORAGE-20260816-1](docs/adr/2026-08-16-turso-backend-deprecation-and-sunset.md). Removed the `turso` Cargo feature, optional `libsql` dependency, `storage::turso_backend` module, and `TursoBackend` / `TursoConfig` exports. Builds requesting `--features turso` and Rust imports of those types must change. SQLite WAL remains the canonical store, with optional S3/R2 backup sync through the existing `cloud` feature. The legacy backend had a separate schema runner; existing Turso databases are not automatically converted or guaranteed to open as Engram SQLite databases. See the [migration guide](docs/migrations/turso-sunset.md).
+
+### Docs
+
+- Public claims corrected: measured latency (FTS5 p50 3.2 ms, hybrid p50 250 ms at 100K×384d) instead of "sub-millisecond"; nonexistent model "native adapters" and unsourced competitor tool counts removed; gRPC and ONNX marked optional; tool counts are 301 catalog / 254 default build.
+- RFC, ADR, plan and spec statuses record their implementation evidence; ROADMAP tool names corrected and cross-host federation marked not implemented.
+- Shared decision-triage guide trimmed for publication.
+- Optional server variables documented (`ENGRAM_CLEANUP_INTERVAL`, `ENGRAM_GRPC_BIND_ADDRESS`, `ENGRAM_WS_*`, `MEILISEARCH_*`); vector-search docs corrected (HNSW opt-in, sqlite-vec benchmarks only); Rust risk inventory regenerated without the removed Turso backend.
 
 ---
 

@@ -124,15 +124,20 @@ def base_references(hg: Any, repo: Path, base: str) -> Set[str]:
         text = hg.git(repo, ["show", f"{base}:{CI_WORKFLOW_PATH}"]).decode("utf-8", "replace")
         listing = hg.git(repo, ["ls-tree", "-r", "-z", "--name-only", "--full-tree",
                                 "--end-of-options", base])
-    except hg.GitError:
-        return set()
+    except hg.GitError as exc:
+        raise CiRefusal("ci_base_unverifiable",
+                        f"cannot inspect base CI workflow references at {base}: {exc}") from exc
     files = {p.decode("utf-8", "replace") for p in listing.split(b"\0") if p}
     return required_job_references(text, files.__contains__)
 
 
 def protected_changes(hg: Any, repo: Path, base: str, head: str) -> List[str]:
-    out = hg.git(repo, ["diff", "--name-only", "-z", "--no-renames", "--no-ext-diff",
-                        "--end-of-options", base, head])
+    try:
+        out = hg.git(repo, ["diff", "--name-only", "-z", "--no-renames", "--no-ext-diff",
+                            "--end-of-options", base, head])
+    except hg.GitError as exc:
+        raise CiRefusal("ci_base_unverifiable",
+                        f"cannot diff {base}..{head} for protected CI paths: {exc}") from exc
     paths = [p.decode("utf-8", "replace") for p in out.split(b"\0") if p]
     referenced = base_references(hg, repo, base)
     return sorted(p for p in paths if is_protected(p) or p in referenced)
@@ -140,10 +145,15 @@ def protected_changes(hg: Any, repo: Path, base: str, head: str) -> List[str]:
 
 def workflow_blob(hg: Any, repo: Path, commit: str) -> str:
     try:
-        return hg.git(repo, ["rev-parse", "--verify", "--end-of-options",
-                             f"{commit}:{CI_WORKFLOW_PATH}"]).decode().strip()
-    except hg.GitError:
+        out = hg.git(repo, ["ls-tree", "--full-tree", "--end-of-options",
+                            commit, "--", CI_WORKFLOW_PATH]).decode("utf-8", "replace").strip()
+    except hg.GitError as exc:
+        raise CiRefusal("ci_workflow_unverifiable",
+                        f"cannot resolve {CI_WORKFLOW_PATH} blob at {commit}: {exc}") from exc
+    if not out:
         return ""
+    header = out.split("\t", 1)[0].split()
+    return header[2] if len(header) >= 3 and header[1] == "blob" else ""
 
 
 def _is_int(value: Any) -> bool:

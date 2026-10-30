@@ -1,5 +1,5 @@
 schema_version: harness-risk-register-v1
-updated_at: 2026-10-26T20:48:18Z
+updated_at: 2026-10-29T22:12:00Z
 entries:
 
   - id: RISK-0001
@@ -19,13 +19,13 @@ entries:
   - id: RISK-0002
     date: 2026-10-05
     status: monitoring
-    description: "Logs fora dos caminhos criticos da O1 (cerca de 250 sites, incl. sync/cloud, hooks, multimodal e watcher) ainda podem imprimir paths ou texto de erro; so os caminhos criticos foram redigidos"
-    probability: 3
+    description: "Logs fora dos caminhos criticos da O1 ainda podem imprimir paths ou texto de erro em modulos legados; sync/cloud, hooks, multimodal, watcher e bin/server ja foram redigidos"
+    probability: 2
     impact: 3
-    score: 9
+    score: 6
     owner: "@team"
-    mitigation: "Usar observability::redact (redacted/path_label/opaque) em todo novo log. 2026-10-26: 41 sites redigidos em sync/cloud, hooks, multimodal e watcher (fix/log-redaction-sweep, integrado em remediation/integration) com teste de captura por modulo; session_id segue em claro (correlacao); o restante do repositorio ainda precisa de varredura por lane."
-    contingency: "Operar com RUST_LOG em nivel info e nao reter logs compartilhados ate a varredura completa"
+    mitigation: "Usar observability::redact (redacted/path_label/opaque/io_class) em todo log. PR #256 (2dca9f00, mesclado no main em 2e84a594) redigiu 41 sites em sync/cloud, hooks, multimodal e watcher com testes de captura por modulo; em 2026-10-29 os 2 sites restantes em src/bin/server.rs foram redigidos."
+    contingency: "Operar com RUST_LOG em nivel info e nao reter logs compartilhados ate a varredura residual"
     monitoring:
       - "novo log com %err ou path.display()"
       - "ENGRAM_LOG_ERROR_DETAIL ativo em ambiente compartilhado"
@@ -33,43 +33,43 @@ entries:
   - id: RISK-0003
     date: 2026-10-26
     status: monitoring
-    description: "Regressao de autorizacao em e04d3307: um principal restrito pode escrever em workspace alheio via memory_create_batch e memory_ingest_fact_batch (achado pelo levantamento de 2026-10-26). Correcao em fix/workspace-batch-auth, ainda nao mesclada."
-    probability: 4
+    description: "Regressao de autorizacao em e04d3307 em memory_create_batch e memory_ingest_fact_batch; corrigida e mesclada em origin/main (2e84a594), mantida em monitoramento ate o receipt pos-gate."
+    probability: 1
     impact: 5
-    score: 20
+    score: 5
     owner: "Ronaldo (correcao: WT1)"
-    mitigation: "Corrigido em remediation/integration (c50b552e + f53b75a0, teste de regressao por tool de lote; e2e gRPC em 83e3816c); ainda nao publicado em origin/main. Fechar quando o merge humano registrar o SHA no main."
-    contingency: "Decisao do owner sobre desabilitar as tools de lote para principais restritos ate o merge da correcao"
+    mitigation: "Mesclado em origin/main via PRs #247 (f304bf51), #254 (3e6687b7) e #255 (8b1eb9ab -> 2e84a594), com testes de regressao por tool de lote e e2e gRPC; em 2026-10-29 estendido ID_SCOPED_TOOLS e ensure_memory_access para as 9 tools de lifecycle/policy por ID. Fechar apos receipt humano pos-gate."
+    contingency: "Reverter ou bloquear tools de lote caso qualquer desvio de escopo apareca nos gates"
     monitoring:
-      - "merge de fix/workspace-batch-auth"
-      - "novas tools de lote com workspace por item"
+      - "receipt humano pos-gate para a stack 2e84a594"
+      - "novas tools de lote ou por ID sem workspace_guard"
 
   - id: RISK-0004
     date: 2026-10-26
-    status: open
-    description: "Minors de autorizacao adiados do programa de outubro: cache de resultados sem principal na chave (ledger 235), resources/subscribe sem principal (97), tool desconhecida fail-open em permission_denial_for_mode e escalada por flag de escrita ignorada em permission_mode_status_report (107). Triagem em known-issues/2026-10-26-deferred-review-minors.md."
-    probability: 3
+    status: monitoring
+    description: "Minors de autorizacao adiados do programa de outubro: cache de resultados (ledger 235), resources/subscribe (97), tool desconhecida fail-open e escalada por flag de escrita (107), e teste e2e gRPC (98)."
+    probability: 1
     impact: 4
-    score: 12
+    score: 4
     owner: "Ronaldo (correcao: WT1)"
-    mitigation: "WT1 corrige cache, resources/subscribe e tool desconhecida; a escalada por flag de escrita e o teste e2e gRPC ainda nao tem dono. Status so muda com SHA de merge e teste."
+    mitigation: "Todos os itens mesclados em origin/main (2e84a594) via PRs #247, #254 e #255 (cache 15b984ab, subscribe 14f44449+f53b75a0, tool desconhecida 4d4cdc8e, escalada por flag de escrita a677c10e, e2e gRPC 83e3816c). Mantido em monitoring ate o receipt humano pos-gate."
     contingency: ""
     monitoring:
-      - "merge de fix/workspace-batch-auth"
+      - "receipt humano pos-gate"
       - "novo item de autorizacao no ledger"
 
   - id: RISK-0005
     date: 2026-10-26
     status: monitoring
-    description: "merge_gate_ci.base_references() falha aberto (conjunto vazio) se o git falhar, e outros minors do H5 (required_jobs depende de indentacao, conjunto protegido amplo). O avaliador so aponta elegibilidade e o merge segue humano."
-    probability: 2
-    impact: 2
-    score: 4
+    description: "merge_gate_ci.base_references() e workflow_blob() falhavam aberto se o git falhasse, e outros minors do H5 (required_jobs depende de indentacao, conjunto protegido amplo). O avaliador so aponta elegibilidade e o merge segue humano."
+    probability: 1
+    impact: 3
+    score: 3
     owner: "@team"
-    mitigation: "Corrigir em task de harness com review independente (docs/harness/bin/* e process-critical); manter o merge humano obrigatorio"
+    mitigation: "Em 2026-10-29 (H2), base_references(), protected_changes() e workflow_blob() passaram a falhar fechado (CiRefusal ci_base_unverifiable / ci_workflow_unverifiable) com 3 testes hermeticos em test_merge_gate.py (floor 50). Aguarda review humano independente de docs/harness/bin/*; merge segue humano."
     contingency: ""
     monitoring:
-      - "merge-gate emitindo eligible sem avaliar o conjunto protegido dinamico"
+      - "review humano independente das mudancas em docs/harness/bin/merge_gate_ci.py e merge-gate.py"
 
   - id: RISK-0006
     date: 2026-10-26
@@ -102,12 +102,12 @@ entries:
   - id: RISK-0008
     date: 2026-10-26
     status: monitoring
-    description: "Exceptions de advisory: 2 registros (11 antes do sunset Turso) vencem em 2026-12-31. Segundo o levantamento de 2026-10-26, 7 novos RUSTSEC deixam Security Audit e Cargo Deny (required) vermelhos desde 2026-10-17."
-    probability: 4
+    description: "Exceptions governadas de advisory: 2 registros remanescentes (RUSTSEC-2026-0097 e RUSTSEC-2023-0071) vencem em 2026-12-31. Os 7 advisories de outubro foram corrigidos e mesclados no main via PR #246 (f383c837 -> 2e84a594)."
+    probability: 2
     impact: 3
-    score: 12
+    score: 6
     owner: "Ronaldo (correcao: WT2)"
-    mitigation: "Resolvido em remediation/integration (fix/supply-chain-2026-10): cargo audit 0 vulnerabilidades (1 aviso governado ttf-parser), cargo deny advisories/bans/licenses/sources ok, sem excecao nova. CI agendado do main segue vermelho ate o merge humano. Nao renovar excecao de advisory corrigivel (GATES)."
+    mitigation: "Mesclado em origin/main via PR #246 (f383c837 -> 2e84a594): cargo audit com 0 vulnerabilidades nao governadas, cargo deny advisories/bans/licenses/sources ok, CI do main verde desde f304bf51. Acompanhar remocao das 2 excecoes governadas antes de 2026-12-31 sem renovar advisory corrigivel (GATES)."
     contingency: ""
     monitoring:
       - "vencimento de 2026-12-31"

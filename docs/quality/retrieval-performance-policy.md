@@ -183,13 +183,13 @@ status, SHA or supervisor binding), exit 3 intact but `floors.accepted` is not
 true (floors pending review), exit 2 usage. `scripts/test_quality_candidate_consume.py`
 pins it.
 
-### CI wiring (Q1b): report-only until floors are accepted
+### CI wiring (Q1b): report-only workflow with accepted v2 floors
 
 `.github/workflows/quality-candidate.yml` (job "Candidate Quality Evidence
 (report-only, not required)") runs the snippet above on pull requests and pushes
 to `main`. It is **not** a branch-protection context, is not part of `ci.yml`
-and is in no `needs:` chain, so it cannot block a merge while the floors are
-pending. It uses no `continue-on-error`:
+and is in no `needs:` chain, so it remains non-blocking until per-runner-class
+Criterion latency baselines are calibrated. It uses no `continue-on-error`:
 
 - The candidate is checked out in `cand/` with full history. The anchor is
   `git merge-base HEAD origin/main`; when that equals the candidate (a push to
@@ -202,10 +202,13 @@ pending. It uses no `continue-on-error`:
   (never sourced from the candidate). `ENGRAM_QUALITY_SUPERVISOR` is
   `${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}` and both steps pass
   `--require-supervisor`.
-- A failed capture or run, or a consumer exit 1, fails the job. Consumer exit 3
-  (intact evidence, floors not accepted) is reported as a warning and in the step
-  summary as `NOT ACCEPTED`; that is the expected state of the report-only phase.
-  The report and Criterion capture are uploaded as the
+- A failed capture or run, or a consumer exit 1, fails the job. With v2 floors
+  independently reviewed and sealed on `main` (`#240` / `e17fb5e`), consumer
+  exit 0 (`ACCEPTED`) is expected whenever the trusted anchor is at or after
+  `e17fb5e` and metrics meet the floors; consumer exit 3 (`NOT ACCEPTED`) occurs
+  only if a future floor entry is still `proposed-pending-independent-review` or
+  if the anchor predates `e17fb5e`, and is surfaced as a warning in the step
+  summary. The report and Criterion capture are uploaded as the
   `quality-candidate-evidence` artifact.
 - The candidate's build scripts and tests still execute in the same job and user
   as the trusted verifier. The trusted checkout protects against verifier edits
@@ -214,14 +217,14 @@ pending. It uses no `continue-on-error`:
 
 Fast offline unit tests are blocking: the required `Test (ubuntu-latest)` job and
 `scripts/ci.sh` step 5 run `python3 -m unittest scripts/test_run_quality_candidate.py`
-and `scripts/test_quality_candidate_consume.py`. Promotion of the candidate lane to
-a required context needs, first, independent human review of the v2 corpus labels,
-runner and floors (`review.status = accepted-independent-review`, sealed, merged so
-the anchor carries it), a reviewed per-runner-class Criterion baseline, and
-anchoring of the hot-path baselines: `runner.py` now anchors
-`docs/quality/budgets.json` hot-path baselines against `--floors-anchor`
-(rejecting any removed hot path or raised baseline vs the trusted anchor,
-exactly as floors are anchored).
+and `scripts/test_quality_candidate_consume.py`. Two of the three prerequisites
+for promoting the candidate lane to a required context are now landed on `main`
+(`#240`): independent human review and sealing of v2 `candidate-floors.json`
+(`review.status = accepted-independent-review`, `e17fb5e`), and hot-path
+`docs/quality/budgets.json` anchoring against `--floors-anchor` in `runner.py`
+and `criterion.py` (`dd3b6ae`). The remaining prerequisite before promoting the
+workflow to a required branch-protection context is a reviewed per-runner-class
+Criterion latency baseline (updated together with `REQUIRED_CI_CONTEXTS`).
 
 ### What the runner enforces
 
@@ -282,12 +285,15 @@ a floor to make a run pass, and never rebaseline to hide a regression.
 
 Label provenance of v2 (recorded in the file's `labeling` block and asserted by
 `candidate_corpus_is_well_formed_and_covers_required_categories`): the memories
-and relevance labels were **authored by an LLM (Claude Sonnet 5.5, task Q7,
-2026-10-05) and have not been reviewed by a human**. They were written before any
-metric was computed and are not edited to move a number; a label change needs a
-corpus version bump, a new corpus SHA256 and a new reviewed floors entry. Until a
-human reviews them, the floors are `proposed-pending-independent-review`
-regression detectors, not an accepted quality bar. `forbidden_workspaces` and
+and relevance labels were originally **authored by an LLM (Claude Sonnet 5.5,
+task Q7, 2026-10-05)**, and the frozen in-file `labeling.review_status` marker
+remains `llm-authored-not-human-reviewed` so `corpus_sha256` stays immutable.
+They were written before any metric was computed and are not edited to move a
+number; a label change needs a corpus version bump, a new corpus SHA256 and a
+new reviewed floors entry. Independent human review and acceptance of the v2
+evaluation bar is recorded and sealed in `docs/quality/candidate-floors.json`
+(`review.status = "accepted-independent-review"`, reviewer `Ronaldo`,
+2026-10-14, `#240` / `e17fb5e`). `forbidden_workspaces` and
 `forbidden_keys` are hard invariants; `discouraged_keys` (negation/ambiguity
 siblings) are reported as diagnostics only because lexical engines cannot honour
 them as invariants.

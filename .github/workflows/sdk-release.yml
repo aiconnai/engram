@@ -59,6 +59,8 @@ jobs:
           INPUT_PUBLISH: ${{ inputs.publish }}
           INPUT_TAG: ${{ inputs.tag }}
           GH_TOKEN: ${{ github.token }}
+          ENGRAM_RELEASE_ALLOWED_SIGNERS: ${{ vars.ENGRAM_RELEASE_ALLOWED_SIGNERS }}
+          ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256: ${{ vars.ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256 }}
         run: |
           set -euo pipefail
           [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]] || { echo "::error::SDK releases require explicit dispatch"; exit 1; }
@@ -76,7 +78,9 @@ jobs:
             [[ "${INPUT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::publish requires an exact stable vX.Y.Z core release tag"; exit 1; }
             [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == "${INPUT_TAG}" ]] || { echo "::error::publish requires the exact tag ref"; exit 1; }
             [[ "$(git cat-file -t "${INPUT_TAG}")" == "tag" ]] || { echo "::error::publish requires an annotated tag object"; exit 1; }
-            git verify-tag "${INPUT_TAG}" >/dev/null || { echo "::error::publish requires a cryptographically signed tag"; exit 1; }
+            trusted_verifier="${RUNNER_TEMP:-/tmp}/verify-release-tag.sh"
+            git show origin/main:scripts/verify-release-tag.sh > "${trusted_verifier}" || { echo "::error::cannot load trusted release-tag verifier from origin/main"; exit 1; }
+            bash "${trusted_verifier}" --repo . --tag "${INPUT_TAG}" --expected-sha "${INPUT_SHA}" --trusted-ref origin/main || { echo "::error::publish requires a cryptographically signed tag"; exit 1; }
             [[ "$(git rev-list -n 1 "${INPUT_TAG}^{commit}")" == "${INPUT_SHA}" ]] || { echo "::error::tag, github.sha, and supplied SHA do not agree"; exit 1; }
             gh release view "${INPUT_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName | jq -e --arg tag "${INPUT_TAG}" '.isDraft == false and .isPrerelease == false and .tagName == $tag' >/dev/null || {
               echo "::error::approved immutable GitHub Release is missing"; exit 1;
@@ -226,6 +230,8 @@ jobs:
           RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
           RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
           EXPECTED_VERSION: ${{ needs.preflight.outputs.python_version }}
+          ENGRAM_RELEASE_ALLOWED_SIGNERS: ${{ vars.ENGRAM_RELEASE_ALLOWED_SIGNERS }}
+          ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256: ${{ vars.ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256 }}
         run: |
           set -euo pipefail
           test "${GITHUB_SHA}" = "${RELEASE_SHA}"
@@ -233,7 +239,9 @@ jobs:
           test "${GITHUB_REF_NAME}" = "${RELEASE_TAG}"
           test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
           test "$(git cat-file -t "${RELEASE_TAG}")" = tag
-          git verify-tag "${RELEASE_TAG}" >/dev/null
+          trusted_verifier="${RUNNER_TEMP:-/tmp}/verify-release-tag.sh"
+          git show origin/main:scripts/verify-release-tag.sh > "${trusted_verifier}"
+          bash "${trusted_verifier}" --repo . --tag "${RELEASE_TAG}" --expected-sha "${RELEASE_SHA}" --trusted-ref origin/main
           test "$(git rev-list -n 1 "${RELEASE_TAG}^{commit}")" = "${RELEASE_SHA}"
           gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName | jq -e --arg tag "${RELEASE_TAG}" '.isDraft == false and .isPrerelease == false and .tagName == $tag' >/dev/null
           plan="$(python3 scripts/bump-version.py --release-plan --release-tag "${RELEASE_TAG}")"
@@ -277,6 +285,8 @@ jobs:
           RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
           RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
           EXPECTED_VERSION: ${{ needs.preflight.outputs.npm_version }}
+          ENGRAM_RELEASE_ALLOWED_SIGNERS: ${{ vars.ENGRAM_RELEASE_ALLOWED_SIGNERS }}
+          ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256: ${{ vars.ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256 }}
         run: |
           set -euo pipefail
           test "${GITHUB_SHA}" = "${RELEASE_SHA}"
@@ -284,7 +294,9 @@ jobs:
           test "${GITHUB_REF_NAME}" = "${RELEASE_TAG}"
           test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
           test "$(git cat-file -t "${RELEASE_TAG}")" = tag
-          git verify-tag "${RELEASE_TAG}" >/dev/null
+          trusted_verifier="${RUNNER_TEMP:-/tmp}/verify-release-tag.sh"
+          git show origin/main:scripts/verify-release-tag.sh > "${trusted_verifier}"
+          bash "${trusted_verifier}" --repo . --tag "${RELEASE_TAG}" --expected-sha "${RELEASE_SHA}" --trusted-ref origin/main
           test "$(git rev-list -n 1 "${RELEASE_TAG}^{commit}")" = "${RELEASE_SHA}"
           gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,tagName | jq -e --arg tag "${RELEASE_TAG}" '.isDraft == false and .isPrerelease == false and .tagName == $tag' >/dev/null
           plan="$(python3 scripts/bump-version.py --release-plan --release-tag "${RELEASE_TAG}")"

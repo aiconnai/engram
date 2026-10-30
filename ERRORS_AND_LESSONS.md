@@ -125,6 +125,30 @@ Tech Debt, Security, Performance, Fragile Areas
 
 ---
 
+### [API] SDK registry channels differ from compatibility identifiers
+**Context:** `verify-sdk-artifacts.sh --write-metadata npm` preparing SDK 0.7.0.
+**Wrong:** Looking up `sdk=npm` in a matrix whose SDK identifier is `typescript`, or hashing an existing metadata output when repeating generation.
+**Right:** Map the registry channel to its SDK identifier explicitly and exclude only the metadata output from the artifact hash list. Exercise both channels twice and assert compatibility, source SHA and the exact archive hashes.
+**Date:** 2026-10-27
+
+### [Testing] `cargo package --no-verify` poisons `target/package/tmp-registry` for interdependent crates
+**Context:** Packaging unpublished interdependent workspace crates (`cargo package -p engram-types -p engram-core --registry crates-io --offline`) on Cargo 1.96.
+**Wrong:** Running `cargo package --no-verify` first in the default `target/` directory and then re-running `cargo package` without `--no-verify` in the same `target/` directory, which fails with `no hash listed for engram-types` because the `--no-verify` run wrote index entries without checksum hashes into `target/package/tmp-registry`.
+**Right:** Run verified `cargo package -p engram-types -p engram-core --registry crates-io --offline` against a clean `--target-dir` without running `--no-verify` in that directory first.
+**Date:** 2026-10-29
+
+### [Logic] `chrono` `%f` formats 9-digit nanoseconds without a decimal point (unlike SQLite `strftime('%f')`)
+**Context:** Formatting RFC3339 timestamps in Rust (`src/intelligence/consolidation_offline.rs`) to match SQLite's `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`.
+**Wrong:** Calling `Utc::now().format("%Y-%m-%dT%H:%M:%fZ")` in `chrono` — in SQLite `%f` expands to `SS.SSS` (seconds + millisecond fraction), whereas in `chrono` `%f` expands to 9-digit nanoseconds (`000000000`) with NO seconds and NO dot, producing unparseable timestamps.
+**Right:** Use `Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)` in Rust and `julianday(...)` in SQLite comparisons so both RFC3339 (`T`/`Z`) and legacy space-separated SQLite timestamps compare accurately.
+**Date:** 2026-10-29
+
+### [Data Processing] Nested transactions fail when library methods are called inside `Storage::with_transaction`
+**Context:** Adding per-group atomicity inside `OfflineConsolidator::consolidate_with_strategy`, which is invoked both standalone on a `Connection` and inside `Storage::with_transaction` (`BEGIN IMMEDIATE`) by `dream::run_once_workspace`.
+**Wrong:** Starting `BEGIN` / `conn.unchecked_transaction()` inside the callee, which fails with `cannot start a transaction within a transaction` whenever an outer `with_transaction` is active.
+**Right:** Use an RAII SQL `SAVEPOINT` guard (`SAVEPOINT name` / `RELEASE SAVEPOINT name` / `ROLLBACK TO SAVEPOINT name; RELEASE SAVEPOINT name`), which works identically in autocommit mode and nested inside `BEGIN IMMEDIATE`.
+**Date:** 2026-10-29
+
 ## Rationalization Table
 
 Common excuses that lead to mistakes. If you catch yourself thinking these, stop.

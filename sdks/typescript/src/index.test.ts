@@ -606,6 +606,19 @@ describe("EngramClient", () => {
 
       await client.admin.lifecycleUpdate(10, { action: "promote" });
       expect(requestMethod(21)).toBe("memory_lifecycle_update");
+
+      await client.admin.lifecycleUpdate(10, {
+        action: "decay",
+        workspace: "ws-a",
+        dryRun: true,
+      });
+      expect(requestMethod(22)).toBe("memory_lifecycle_update");
+      expect(requestArguments(22)).toEqual({
+        id: 10,
+        action: "decay",
+        workspace: "ws-a",
+        dry_run: true,
+      });
     });
   });
 
@@ -982,6 +995,37 @@ describe("EngramClient", () => {
         confirm: true,
       });
       expect(res.applied).toBe(2);
+    });
+
+    it("should default vault import to confirm=false (RFC 0004 review mode) and reject conflicting flags", async () => {
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          scanned: 3,
+          in_sync: 2,
+          new: 1,
+          pending: 0,
+          conflict: 0,
+          applied: 0,
+          dry_run: true,
+        })
+      );
+      const res = await client.vaultImport({
+        inputDir: "./vault",
+      });
+      expect(requestMethod(0)).toBe("memory_import_markdown");
+      expect(requestArguments(0)).toEqual({
+        input_dir: "./vault",
+        confirm: false,
+      });
+      expect(res.dry_run).toBe(true);
+
+      await expect(
+        client.vaultImport({
+          inputDir: "./vault",
+          confirm: true,
+          dryRun: true,
+        })
+      ).rejects.toThrow(/cannot both be true/);
     });
 
     it("should preview vault import with dryRun", async () => {

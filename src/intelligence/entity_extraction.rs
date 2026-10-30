@@ -527,9 +527,162 @@ mod tests {
             ..Default::default()
         };
 
-        let result = extract_entities("@a @b @c @d @e", &config, None);
+        let result = extract_entities("@alice @bob @carol @dave @eve", &config, None);
 
-        assert!(result.entities.len() <= 2);
+        assert_eq!(result.entities.len(), 2);
+        assert_eq!(result.total_mentions, 2);
+        assert_eq!(result.entities[0].normalized, "alice");
+        assert_eq!(result.entities[1].normalized, "bob");
+    }
+
+    #[test]
+    fn test_extraction_stages_respect_flags_and_remaining_budget() {
+        // Each stage must fill the remaining budget, stop at the cap and avoid
+        // running later stages once that cap is reached (including their counters).
+        let content = "@alice @bob @carol one@alpha.test two@beta.test three@gamma.test https://alpha.test https://beta.test https://gamma.test Alice Smith, Bob Jones, Carol White";
+        for (mentions, emails, urls, names, expected) in [
+            (true, true, true, true, vec!["@alice", "@bob"]),
+            (
+                false,
+                true,
+                true,
+                true,
+                vec!["one@alpha.test", "two@beta.test"],
+            ),
+            (false, false, true, true, vec!["alpha.test", "beta.test"]),
+            (false, false, false, true, vec!["Alice Smith", "Bob Jones"]),
+            (false, false, false, false, vec![]),
+        ] {
+            let config = ExtractionConfig {
+                extract_mentions: mentions,
+                extract_emails: emails,
+                extract_urls: urls,
+                extract_names: names,
+                lookup_aliases: false,
+                max_entities: 2,
+                ..Default::default()
+            };
+            let result = extract_entities(content, &config, None);
+            let actual: Vec<&str> = result
+                .entities
+                .iter()
+                .map(|e| e.mention_text.as_str())
+                .collect();
+            assert_eq!(actual, expected);
+            assert_eq!(result.total_mentions, expected.len());
+        }
+    }
+
+    #[test]
+    fn test_duplicate_emails_urls_and_names_preserve_counts_and_positions() {
+        for (text, kind) in [
+            (
+                "alice@example.test alice@example.test",
+                ExtractedEntityType::Email,
+            ),
+            (
+                "https://example.test/a https://example.test/b",
+                ExtractedEntityType::Url,
+            ),
+            ("Alice Smith, Alice Smith", ExtractedEntityType::Name),
+        ] {
+            let config = ExtractionConfig {
+                extract_mentions: false,
+                extract_emails: kind == ExtractedEntityType::Email,
+                extract_urls: kind == ExtractedEntityType::Url,
+                extract_names: kind == ExtractedEntityType::Name,
+                lookup_aliases: false,
+                ..Default::default()
+            };
+            let result = extract_entities(text, &config, None);
+            assert_eq!(result.total_mentions, 2);
+            assert_eq!(result.entities.len(), 1);
+            assert_eq!(result.entities[0].count, 2);
+            assert_eq!(result.entities[0].position, 0);
+            assert_eq!(result.entities[0].entity_type, kind);
+        }
+    }
+
+    #[test]
+    fn test_common_domains_and_phrases_are_not_entities() {
+        let config = ExtractionConfig {
+            extract_mentions: false,
+            extract_emails: false,
+            lookup_aliases: false,
+            ..Default::default()
+        };
+        let result = extract_entities(
+            "https://GITHUB.com, https://example.test, New York, Alice Smith",
+            &config,
+            None,
+        );
+        assert_eq!(result.total_mentions, 2);
+        assert_eq!(result.entities.len(), 2);
+        assert_eq!(result.entities[0].mention_text, "example.test");
+        assert_eq!(result.entities[1].mention_text, "Alice Smith");
+    }
+
+    #[test]
+    fn test_auto_link_memory_persists_links_and_reports_their_count() {
+        use crate::storage::identity_links::{get_memory_identities, resolve_alias};
+        use crate::storage::{queries::create_memory, Storage};
+        use crate::types::CreateMemoryInput;
+
+        let storage = Storage::open_in_memory().unwrap();
+        storage
+            .with_connection(|conn| {
+                let memory = create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "synthetic entity linking fixture".to_string(),
+                        defer_embedding: true,
+                        ..Default::default()
+                    },
+                )?;
+                // Unresolved mentions must not silently create identities.
+                assert_eq!(auto_link_memory(conn, memory.id, "@alice", false)?, 0);
+                assert!(get_memory_identities(conn, memory.id)?.is_empty());
+                assert!(resolve_alias(conn, "alice")?.is_none());
+
+                assert_eq!(auto_link_memory(conn, memory.id, "@alice @bob", true)?, 2);
+                assert_eq!(get_memory_identities(conn, memory.id)?.len(), 2);
+                let alice = resolve_alias(conn, "alice")?.unwrap();
+                let bob = resolve_alias(conn, "bob")?.unwrap();
+                assert_ne!(alice.canonical_id, bob.canonical_id);
+
+                let extracted = extract_entities(
+                    "@alice @bob @unknown",
+                    &ExtractionConfig::default(),
+                    Some(conn),
+                );
+                assert_eq!(extracted.resolved_count, 2);
+                assert_eq!(
+                    extracted.entities[0].resolved_id.as_deref(),
+                    Some(alice.canonical_id.as_str())
+                );
+                assert_eq!(
+                    extracted.entities[1].resolved_id.as_deref(),
+                    Some(bob.canonical_id.as_str())
+                );
+                assert_eq!(extracted.entities[2].resolved_id, None);
+
+                let second = create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "synthetic existing alias fixture".to_string(),
+                        defer_embedding: true,
+                        ..Default::default()
+                    },
+                )?;
+                assert_eq!(
+                    auto_link_memory(conn, second.id, "@alice @bob @unknown", false)?,
+                    2
+                );
+                assert_eq!(get_memory_identities(conn, second.id)?.len(), 2);
+                assert!(resolve_alias(conn, "unknown")?.is_none());
+                Ok(())
+            })
+            .unwrap();
     }
 
     #[test]

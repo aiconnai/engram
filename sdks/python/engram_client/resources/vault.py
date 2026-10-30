@@ -40,7 +40,7 @@ class VaultMixin(ResourceMixin):
         self,
         input_dir: str = "./memories-export",
         workspace: str | None = None,
-        confirm: bool = True,
+        confirm: bool = False,
         force_version: bool = False,
     ) -> dict[str, Any]:
         """Import Markdown files into Engram with SHA-256 drift detection.
@@ -48,11 +48,11 @@ class VaultMixin(ResourceMixin):
         Args:
             input_dir: Path to directory containing exported markdown files.
             workspace: Optional workspace override for imported memories.
-            confirm: If True, applies changes to database. If False, performs a dry-run.
+            confirm: Apply writes when True; dry-run review mode when False (default, per RFC 0004).
             force_version: If True, overwrites even when version conflict is detected.
 
         Returns:
-            Dict containing import report (scanned, in_sync, new, pending, conflict, applied).
+            Dict containing import report (scanned, in_sync, new, pending, conflict, applied, dry_run).
         """
         params: dict[str, Any] = {
             "input_dir": input_dir,
