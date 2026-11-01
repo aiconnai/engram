@@ -103,6 +103,7 @@ pub(super) use unix::write_batch;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod unix {
     use super::*;
+    use std::collections::BTreeMap;
     use std::ffi::{CStr, CString, OsStr};
     use std::fs::{File, OpenOptions};
     use std::io::Write;
@@ -114,6 +115,10 @@ mod unix {
     fn c_name(name: &OsStr) -> io::Result<CString> {
         CString::new(name.as_bytes())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "null byte in export path"))
+    }
+
+    fn sync_to_filesystem(file: &File) -> io::Result<()> {
+        rustix::fs::fsync(file).map_err(io::Error::from)
     }
 
     fn open_child(parent: &File, name: &CStr, create: bool) -> io::Result<Option<File>> {
@@ -135,7 +140,7 @@ mod unix {
             if made < 0 && io::Error::last_os_error().kind() != io::ErrorKind::AlreadyExists {
                 return Err(io::Error::last_os_error());
             }
-            parent.sync_all()?;
+            sync_to_filesystem(parent)?;
             // SAFETY: open the just-created directory without following a replacement symlink.
             fd = unsafe {
                 libc::openat(
@@ -312,10 +317,10 @@ mod unix {
         let mut file = unsafe { File::from_raw_fd(fd) };
         let result = (|| {
             write(&mut file)?;
-            file.sync_all()?;
+            sync_to_filesystem(&file)?;
             check_file(parent, name, protected)?;
             publish(&temp)?;
-            parent.sync_all()
+            Ok(())
         })();
         if let Err(err) = result {
             // SAFETY: removes only our temporary name in the pinned directory, never a link target.
@@ -336,6 +341,15 @@ mod unix {
         root: &Path,
         batch: &[(PathBuf, String)],
         storage: &Storage,
+    ) -> io::Result<()> {
+        write_batch_with_barrier(root, batch, storage, |directory| directory.sync_all())
+    }
+
+    fn write_batch_with_barrier(
+        root: &Path,
+        batch: &[(PathBuf, String)],
+        storage: &Storage,
+        mut barrier: impl FnMut(&File) -> io::Result<()>,
     ) -> io::Result<()> {
         validate_batch(root, batch, storage)?;
         let protected = protected_inodes(storage);
@@ -361,17 +375,50 @@ mod unix {
                 open_root(root, true)?.ok_or_else(|| io::Error::other("export root unavailable"))?
             }
         };
-        for (relative, bytes) in batch {
-            let parent = parent_dir(&dir, relative, true)?
+        // Group by destination directory so its metadata is synchronized once.
+        // Keep only one pinned representative per device, not one fd per file
+        // or directory: large exports must not exhaust the descriptor limit.
+        let mut groups: BTreeMap<PathBuf, Vec<&(PathBuf, String)>> = BTreeMap::new();
+        for entry in batch {
+            groups
+                .entry(entry.0.parent().unwrap_or_else(|| Path::new("")).to_owned())
+                .or_default()
+                .push(entry);
+        }
+        let root_files = groups.remove(Path::new(""));
+        let mut devices: BTreeMap<u64, File> = BTreeMap::new();
+        // The root group contains index.md, which remains last in the batch.
+        for (_, files) in groups
+            .into_iter()
+            .chain(root_files.into_iter().map(|files| (PathBuf::new(), files)))
+        {
+            let first = files
+                .first()
+                .ok_or_else(|| io::Error::other("empty export group"))?;
+            let parent = parent_dir(&dir, &first.0, true)?
                 .ok_or_else(|| io::Error::other("export parent unavailable"))?;
-            let name = c_name(
-                relative
-                    .file_name()
-                    .ok_or_else(|| io::Error::other("missing filename"))?,
-            )?;
-            atomic_write(&parent, &name, &protected, |file| {
-                file.write_all(bytes.as_bytes())
-            })?;
+            for (relative, bytes) in files {
+                let name = c_name(
+                    relative
+                        .file_name()
+                        .ok_or_else(|| io::Error::other("missing filename"))?,
+                )?;
+                atomic_write(&parent, &name, &protected, |file| {
+                    file.write_all(bytes.as_bytes())
+                })?;
+            }
+            sync_to_filesystem(&parent)?;
+            if let std::collections::btree_map::Entry::Vacant(entry) =
+                devices.entry(parent.metadata()?.dev())
+            {
+                entry.insert(parent.try_clone()?);
+            }
+        }
+        // On macOS this performs F_FULLFSYNC: prior fsync'd data and metadata
+        // on that device are durable when it succeeds (fcntl(2)). Linux has
+        // already fsync'd each file/directory. Errors remain batch failures.
+        for directory in devices.values() {
+            barrier(directory)?;
         }
         Ok(())
     }
@@ -415,6 +462,25 @@ mod unix {
         }
 
         #[test]
+        fn followup_final_durability_error_is_not_reported_as_success() {
+            let fixture = tempfile::tempdir().unwrap();
+            let root = std::fs::canonicalize(fixture.path()).unwrap();
+            let storage = Storage::open_in_memory().unwrap();
+            let batch = vec![(PathBuf::from("note.md"), "complete file".into())];
+            let result = write_batch_with_barrier(&root, &batch, &storage, |_| {
+                Err(io::Error::other("injected final durability failure"))
+            });
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("durability failure"));
+            assert_eq!(
+                std::fs::read_to_string(root.join("note.md")).unwrap(),
+                "complete file"
+            );
+        }
+
+        #[test]
         fn p0_directory_swap_to_symlink_cannot_redirect_write() {
             let fixture = tempfile::tempdir().unwrap();
             let root = std::fs::canonicalize(fixture.path()).unwrap();
@@ -451,6 +517,37 @@ mod unix {
                 open_root(&root, false).is_err(),
                 "mode 0700 does not exclude macOS ACL grants"
             );
+        }
+
+        #[cfg(target_os = "linux")]
+        #[test]
+        fn followup_linux_default_acl_is_rejected_despite_private_mode_bits() {
+            let fixture = tempfile::tempdir().unwrap();
+            let root = std::fs::canonicalize(fixture.path()).unwrap();
+            let dir = open_root(&root, false).unwrap().unwrap();
+            // Linux POSIX ACL xattr v2, including a named numeric user. A
+            // default ACL does not change the directory's access mode bits.
+            let mut value = 2u32.to_le_bytes().to_vec();
+            for (tag, permissions, id) in [
+                (0x01u16, 7u16, u32::MAX),
+                (0x02, 7, 1_000_001),
+                (0x04, 0, u32::MAX),
+                (0x10, 7, u32::MAX),
+                (0x20, 0, u32::MAX),
+            ] {
+                value.extend(tag.to_le_bytes());
+                value.extend(permissions.to_le_bytes());
+                value.extend(id.to_le_bytes());
+            }
+            rustix::fs::fsetxattr(
+                &dir,
+                "system.posix_acl_default",
+                &value,
+                rustix::fs::XattrFlags::empty(),
+            )
+            .expect("Linux test filesystem must support the ACL fixture");
+            assert_eq!(dir.metadata().unwrap().mode() & 0o022, 0);
+            assert!(open_root(&root, false).is_err());
         }
     }
 }

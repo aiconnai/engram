@@ -39,7 +39,7 @@ pub(super) fn check_directory(dir: &File) -> io::Result<()> {
     let result = if first == 0 {
         Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
-            "export directories must not have extended or inherited ACLs",
+            "export directories must not have ACLs (including deny-only entries); use a private subdirectory without an ACL",
         ))
     } else {
         let error = io::Error::last_os_error();

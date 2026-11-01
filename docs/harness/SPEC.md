@@ -55,6 +55,10 @@ verificação no candidato. [Log](progress/2026-11-01-markdown-export-safety.md)
 [canvas](canvas/2026-11-01-markdown-export-safety.md). Tag 0.24.0 aguarda resultado; sem autorização
 de push/PR/merge/tag/publicação, configs reais, RFC0004a ou programa inteiro de evolução.
 
+Follow-up da revisão: corrigir compatibilidade das tags e custo de sincronização na branch export,
+revalidar em Linux/macOS e registrar RISK-0011 para import em candidato separado. Sem ampliar para
+projeção Git. [Log retomável](progress/2026-11-01-markdown-portability-followup.md).
+
 ## Tarefa anterior: Turso/libSQL sunset v0.24.0
 
 - **Status**: implementação concluída e commitada em `08cb17a4` (2026-10-23); sensores completos PASS

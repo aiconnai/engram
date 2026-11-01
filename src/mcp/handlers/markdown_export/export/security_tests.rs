@@ -244,6 +244,24 @@ fn p0_export_fixture_child() {
     assert!(r.get("error").is_none(), "{r}");
     assert_eq!(r["memories_exported"], 3);
 
+    // The public Rust facade must propagate structured handler denials, not
+    // turn a denied filesystem operation into a successful zero-file report.
+    std::env::set_var("ENGRAM_PERMISSION_MODE", "read_only");
+    let report = crate::portability::markdown::export_markdown(
+        &c.storage,
+        &crate::portability::markdown::ExportOptions {
+            output_dir: root.join("wrapper-denied"),
+            workspace: Some("markdown_export_schema".into()),
+            ..Default::default()
+        },
+    );
+    assert!(
+        report.is_err(),
+        "structured permission error became success: {report:?}"
+    );
+    assert!(!root.join("wrapper-denied").exists());
+    std::env::remove_var("ENGRAM_PERMISSION_MODE");
+
     let rejected = root.join("foreign-workspace");
     let r = dispatch(
         &c,

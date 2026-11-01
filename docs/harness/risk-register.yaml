@@ -135,9 +135,24 @@ entries:
     impact: 5
     score: 15
     owner: "Ronaldo / integrador P0"
-    mitigation: "P0 autorizado em fix/markdown-export-safety sobre main 2e84a594: testes RED na base, correcao local com full final PASS/515 s e parecer estatico apos correcoes de ACL/instantes; formal post-gate e integracao pendentes. Diretorios ancorados, autorizacao de escrita/raiz, expiracao, erros explicitos, ordenacao, direcao e escrita atomica por arquivo. Nao fecha por baseline verde; integrar/revisar no candidato da tag. Log: docs/harness/progress/2026-11-01-markdown-export-safety.md."
-    contingency: "ENGRAM_EXPORT_BASE_DIR sozinho nao mitiga o codigo anterior. Nao publicar a tag antes de resolver o P0 no candidato escolhido; nenhuma tag/publicacao executada."
+    mitigation: "Candidato local fix/markdown-export-safety sobre main 2e84a594 (0cd2d2d5/4bf79f85). Full historico PASS/515 s nao cobre o follow-up atual: codec de tags internas, fsync por arquivo/diretorio com flush final por dispositivo e decoder de erros. Novos gates e revisao pendentes. P1 permanece separado. Log: docs/harness/progress/2026-11-01-markdown-portability-followup.md."
+    contingency: "ENGRAM_EXPORT_BASE_DIR sozinho nao mitiga o codigo publicado. Tag 0.24.0 aguarda os bloqueantes do export e a avaliacao do import RISK-0011; sem publicacao ou alteracao operacional."
     monitoring:
-      - "regressoes de traversal, symlink, hardlink/SQLite e autorizacao antes dos efeitos"
-      - "expiradas/referencias indevidas, erros ocultos ou indice nao deterministico"
-      - "SHA da integracao, full gate e revisao; risco aberto ate fechamento com evidencia"
+      - "tags session:/category:/confidence:/file:/trace:, aux e colisoes no codec"
+      - "traversal, links/SQLite, autorizacao, expiracao, erros e determinismo"
+      - "custo de export e erro de flush final; validacao Linux e SHA da integracao"
+
+  - id: RISK-0011
+    date: 2026-11-01
+    status: open
+    description: "Import Markdown aceita filesystem sem raiz administrada no modo scoped_write, segue links e usa engram_id de arquivo sem autorizar o workspace persistido. Classificacao anterior a transacao permite corrida de versao."
+    probability: 3
+    impact: 5
+    score: 15
+    owner: "Ronaldo / integrador import"
+    mitigation: "Analise estatica delimitada confirmou os fluxos; testes dinamicos e candidato separado pendentes. Exigir maintenance sem raiz, leitura ancorada no-follow com limites e autorizacao/reclassificacao dentro da transacao. Preservar guard de artefatos SQLite antes de abrir arquivos e propagar erros ao wrapper publico."
+    contingency: "Manter tag 0.24.0 aguardando avaliacao/correcao; nenhuma tool foi desabilitada em ambiente real. Nao alegar bypass de criacao via frontmatter no dispatcher sem evidencia: override autorizado prevalece."
+    monitoring:
+      - "principal alpha com engram_id de beta e inexistente: mesma negacao, sem mutacao"
+      - "symlink/hardlink/ciclo/FIFO, limites de leitura e aliases SQLite antes do open"
+      - "mudanca de versao/workspace entre preview e apply, erros e estado parcial"

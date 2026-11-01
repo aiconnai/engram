@@ -25,6 +25,7 @@ package registries, and dated external sources.
 
 ### Fixed
 
+- Markdown entity grouping safely encodes internal tags (`session:`, `category:`, `file:`, etc.) and reserved names instead of rejecting the workspace. Export uses POSIX fsync with one final strong flush per device, avoiding repeated macOS device flushes; public Markdown wrappers propagate structured errors.
 - Markdown export excludes expired memories and ineligible references, reads data/relations in one snapshot, propagates decode/query errors, sorts ties deterministically and marks incoming relations explicitly. No success is reported for an incomplete batch; atomicity is per file.
 - `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
 - `permission_mode_status` reports write-flag escalation (`write_flag_params`, `required_mode_with_write_flags`, `allowed_with_write_flags`).

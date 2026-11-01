@@ -104,7 +104,73 @@ pub(super) fn p0_export(
 }
 
 #[test]
-fn p0_traversal_tag_is_rejected_before_writing() {
+#[ignore = "manual local I/O measurement; no timing threshold in CI"]
+fn followup_manual_export_300_probe() {
+    for run in 0..3 {
+        let c = ctx();
+        for n in 0..300 {
+            p0_memory(
+                &c,
+                &format!("Synthetic benchmark {n:03}\n{}", "x".repeat(224)),
+                vec!["benchmark".into()],
+            );
+        }
+        c.storage.with_connection(|conn| {conn.execute("UPDATE memories SET created_at='2026-01-01T00:00:00+00:00',updated_at='2026-01-01T00:00:00+00:00'",[])?;Ok(())}).unwrap();
+        let fixture = tempfile::tempdir().unwrap();
+        let start = std::time::Instant::now();
+        let result = p0_export(&c, fixture.path(), "flat");
+        let elapsed = start.elapsed().as_secs_f64();
+        assert!(result.get("error").is_none(), "{result}");
+        assert_eq!(result["memories_exported"], 300);
+        let files: Vec<_> = std::fs::read_dir(fixture.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
+        let bytes: u64 = files
+            .iter()
+            .map(|p| std::fs::metadata(p).unwrap().len())
+            .sum();
+        println!(
+            "ENGRAM_EXPORT_PROBE {}",
+            serde_json::json!({"run":run,"memories":300,"files":files.len(),"bytes":bytes,"seconds":elapsed})
+        );
+    }
+}
+
+#[test]
+fn followup_entity_group_accepts_tags_generated_by_engram() {
+    for tag in [
+        "session:abc",
+        "category:architecture",
+        "confidence:0.95",
+        "file:src/main.rs",
+        "trace:trace-1",
+        "aux",
+        "CON.txt",
+    ] {
+        let c = ctx();
+        let id = p0_memory(&c, "Namespaced note", vec![tag.into()]);
+        let fixture = tempfile::tempdir().unwrap();
+        let r = p0_export(&c, fixture.path(), "entity");
+        assert!(r.get("error").is_none(), "tag={tag}: {r}");
+        let dirs: Vec<_> = std::fs::read_dir(fixture.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.is_dir())
+            .collect();
+        assert_eq!(dirs.len(), 1);
+        assert!(super::filesystem::validate_component(
+            dirs[0].file_name().unwrap().to_str().unwrap()
+        )
+        .is_ok());
+        assert!(dirs[0].join(format!("{id}-namespaced-note.md")).is_file());
+        let index = std::fs::read_to_string(fixture.path().join("index.md")).unwrap();
+        assert!(index.contains(dirs[0].file_name().unwrap().to_str().unwrap()));
+    }
+}
+
+#[test]
+fn p0_traversal_tag_is_encoded_without_writing_outside_root() {
     let c = ctx();
     p0_memory(&c, "Private note", vec!["../../escaped".into()]);
     let fixture = tempfile::tempdir().unwrap();
@@ -112,8 +178,20 @@ fn p0_traversal_tag_is_rejected_before_writing() {
     std::fs::create_dir(&base).unwrap();
     let out = base.join("export");
     let r = p0_export(&c, &out, "entity");
-    assert!(r.get("error").is_some(), "{r}");
-    assert!(!out.exists(), "invalid batch must not create output");
+    assert!(r.get("error").is_none(), "{r}");
+    assert!(out.join("index.md").exists());
+    let dirs: Vec<_> = std::fs::read_dir(&out)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.is_dir())
+        .collect();
+    assert_eq!(dirs.len(), 1);
+    assert!(dirs[0]
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .starts_with("~e1-"));
     assert!(!fixture.path().join("escaped").exists());
 }
 

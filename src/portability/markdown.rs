@@ -157,15 +157,15 @@ pub fn export_markdown(storage: &Storage, opts: &ExportOptions) -> Result<Export
         }),
     );
 
-    if let Some(err) = val.get("error").and_then(|v| v.as_str()) {
-        if val.get("files_written").and_then(|v| v.as_u64()) == Some(0) {
+    if let Some(err) = val.get("error") {
+        if err.is_string() && val.get("files_written").and_then(|v| v.as_u64()) == Some(0) {
             return Ok(ExportReport {
                 files_written: 0,
                 output_dir: opts.output_dir.display().to_string(),
                 workspace,
             });
         }
-        return Err(EngramError::InvalidInput(err.to_string()));
+        return Err(EngramError::InvalidInput(handler_error_message(err)));
     }
 
     let files_written = val
@@ -194,8 +194,18 @@ pub fn import_markdown(storage: &Storage, opts: &ImportOptions) -> Result<Import
         }),
     );
 
-    if let Some(err) = val.get("error").and_then(|v| v.as_str()) {
-        return Err(EngramError::InvalidInput(err.to_string()));
+    if let Some(err) = val.get("error") {
+        return Err(EngramError::InvalidInput(handler_error_message(err)));
+    }
+
+    if val
+        .get("files")
+        .and_then(|v| v.as_array())
+        .is_some_and(|files| files.iter().any(|file| file["status"] == "error"))
+    {
+        return Err(EngramError::InvalidInput(
+            "Markdown import reported file errors; inspect the tool result before retrying".into(),
+        ));
     }
 
     let scanned = val.get("scanned").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
@@ -222,6 +232,14 @@ pub fn import_markdown(storage: &Storage, opts: &ImportOptions) -> Result<Import
         applied,
         dry_run: opts.dry_run,
     })
+}
+
+fn handler_error_message(error: &serde_json::Value) -> String {
+    error
+        .as_str()
+        .or_else(|| error.get("message").and_then(|value| value.as_str()))
+        .unwrap_or("Markdown operation failed with a structured error")
+        .to_string()
 }
 
 /// Preview Markdown files import without mutating storage (dry-run mode).
