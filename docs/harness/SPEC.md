@@ -47,6 +47,14 @@
 - **Gates**: `bootstrap.sh`, `doctor.sh`, `check-live-state.sh` estrito, lane offline e `git diff --check`.
   O gate completo (`sensors.sh`) e o post-gate com receipt humano ficam com o integrador/owner.
 
+## Follow-up autorizado — 2026-11-01, P0 export Markdown
+
+Owner autorizou seguir no P0 independente após o plano v3. Correção local sobre main revalidada,
+testes RED/GREEN, paths/permissões/expiração/integridade/atomicidade e catálogo/reference, com
+verificação no candidato. [Log](progress/2026-11-01-markdown-export-safety.md),
+[canvas](canvas/2026-11-01-markdown-export-safety.md). Tag 0.24.0 aguarda resultado; sem autorização
+de push/PR/merge/tag/publicação, configs reais, RFC0004a ou programa inteiro de evolução.
+
 ## Tarefa anterior: Turso/libSQL sunset v0.24.0
 
 - **Status**: implementação concluída e commitada em `08cb17a4` (2026-10-23); sensores completos PASS

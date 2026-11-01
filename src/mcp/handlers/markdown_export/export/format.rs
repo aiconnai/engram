@@ -151,7 +151,7 @@ pub(super) fn build_index_markdown(
     index.push_str("## By Type\n\n");
 
     let mut sorted_types: Vec<_> = type_counts.iter().collect();
-    sorted_types.sort_by(|a, b| b.1.cmp(a.1));
+    sorted_types.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     for (mem_type, count) in &sorted_types {
         index.push_str(&format!(
             "- **{}/** -- {} memories\n",

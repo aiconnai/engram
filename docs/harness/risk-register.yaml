@@ -1,5 +1,5 @@
 schema_version: harness-risk-register-v1
-updated_at: 2026-10-26T20:48:18Z
+updated_at: 2026-11-01T08:30:31Z
 entries:
 
   - id: RISK-0001
@@ -126,3 +126,18 @@ entries:
     monitoring:
       - "citar PASS sem receipt como aprovacao"
       - "gate completo sem receipt commitado"
+
+  - id: RISK-0010
+    date: 2026-10-31
+    status: open
+    description: "Export Markdown publicado permite escape por tag e escrita read_only; inclui expiradas, omite erros, gera indice instavel e relacoes com direcao incorreta."
+    probability: 3
+    impact: 5
+    score: 15
+    owner: "Ronaldo / integrador P0"
+    mitigation: "P0 autorizado em fix/markdown-export-safety sobre main 2e84a594: testes RED na base, correcao local com full final PASS/515 s e parecer estatico apos correcoes de ACL/instantes; formal post-gate e integracao pendentes. Diretorios ancorados, autorizacao de escrita/raiz, expiracao, erros explicitos, ordenacao, direcao e escrita atomica por arquivo. Nao fecha por baseline verde; integrar/revisar no candidato da tag. Log: docs/harness/progress/2026-11-01-markdown-export-safety.md."
+    contingency: "ENGRAM_EXPORT_BASE_DIR sozinho nao mitiga o codigo anterior. Nao publicar a tag antes de resolver o P0 no candidato escolhido; nenhuma tag/publicacao executada."
+    monitoring:
+      - "regressoes de traversal, symlink, hardlink/SQLite e autorizacao antes dos efeitos"
+      - "expiradas/referencias indevidas, erros ocultos ou indice nao deterministico"
+      - "SHA da integracao, full gate e revisao; risco aberto ate fechamento com evidencia"

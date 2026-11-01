@@ -1,0 +1,36 @@
+Parecer estático: **o candidato precisa de ajustes em dois pontos**. Não é aprovação formal, post-gate ou autorização operacional.
+
+Alvo: `9036e4debf3b7f3dba44a13b9ceebc85ae6ddd9e6d5413b2816766c4c527c0eb`; snapshot: `d487efaec1bd5b29955c80622740960e4af358c40a4f2e67dcd80390c843b790`; base declarada: `2e84a59422b3659aaaf25c69dbe01b01ab321332`. Conferi receipt/manifest/target e os hashes dos 14 arquivos; todos coincidiram com o manifest e permaneceram iguais ao final.
+
+1. **[HIGH] ACLs podem invalidar a confiança nos diretórios.**
+   Local: [filesystem.rs:152](/private/tmp/engram-p0-review-mb_jue_s/candidate/src/mcp/handlers/markdown_export/export/filesystem.rs:152).
+   `trusted_directory` verifica somente proprietário e bits `022`. No macOS, um diretório pertencente ao servidor com modo `0700` pode conceder escrita a outro usuário por ACL e passar nessa verificação. Esse outro usuário não está na exclusão documentada de processos com a mesma identidade do servidor. Com permissão para alterar entradas, ele pode substituir o nome temporário após sua criação: o código sincroniza o descritor original, mas publica pelo nome em `renameat` — [filesystem.rs:270](/private/tmp/engram-p0-review-mb_jue_s/candidate/src/mcp/handlers/markdown_export/export/filesystem.rs:270). Isso permite publicar conteúdo substituído com resultado de sucesso. ACLs herdáveis também precisam ser consideradas ao afirmar que arquivos novos são privados.
+   **Recomendação:** recusar permissões adicionais incompatíveis com o diretório confiável, incluindo ACLs de escrita, e garantir que temporários não herdem acesso alheio. Acrescentar regressão específica de ACL no macOS e comportamento explícito quando a inspeção não estiver disponível. A conclusão é estática; não executei exploração.
+
+2. **[MED] A comparação textual não implementa corretamente o corte de expiração.**
+   Local: [query.rs:58](/private/tmp/engram-p0-review-mb_jue_s/candidate/src/mcp/handlers/markdown_export/export/query.rs:58).
+   Para cutoff `2030-01-01T00:00:00+00:00`, a expiração equivalente `2030-01-01T00:00:00Z` satisfaz `expires_at > cutoff`, pois `Z` ordena depois de `+`. Uma memória expirada pode entrar nos arquivos, índice e relações. Ambos são formatos UTC válidos. O teste novo em `security_tests.rs` usa `+00:00` nos dois lados e não captura essa diferença.
+   **Recomendação:** comparar instantes, preservando precisão e tratamento explícito de timestamps inválidos. Cobrir igualdade entre `Z`/`+00:00`, diferentes precisões fracionárias e instantes imediatamente anteriores/posteriores ao corte.
+
+Cobertura reconciliada dos 14 paths:
+
+| Path | Revisão realizada |
+|---|---|
+| `CHANGELOG.md` | Mudanças de segurança e compatibilidade |
+| `docs/MCP_TOOLS.md` | Anotação mutating e requisitos publicados |
+| `docs/migrations/v0.24.0-markdown-export-security.md` | Contrato, limitações e ausência de P1 |
+| `export.rs` | Wiring dos módulos e testes |
+| `export/filesystem.rs` | Componentes, descritores, links, SQLite, temporários e publicação |
+| `export/format.rs` | Desempate determinístico |
+| `export/format_tests.rs` | Regressão do índice |
+| `export/handler.rs` | Autorização, preflight, renderização e falhas |
+| `export/handler_tests.rs` | Traversal, links, read-only, dados, expiração e direção |
+| `export/query.rs` | Snapshot, seleção, decoding, referências e ordenação |
+| `export/security_tests.rs` | Principais, raiz, SQLite, subprocessos e determinismo |
+| `src/mcp/permission.rs` | Exigência dinâmica e relatório de permissões |
+| `src/mcp/tools/catalog/admin.rs` | Classificação e descrição da ferramenta |
+| `tests/portability_permissions_routing_tests.rs` | Expectativa read-only corrigida |
+
+Nos demais fluxos examinados, não identifiquei outro defeito concreto: componentes gerados são validados; travessia usa diretórios fixados por descritor com `O_NOFOLLOW`; destinos regulares não são abertos para truncamento; há proteção para SQLite ativo e hardlinks; autorização precede efeitos; relações exigem extremos elegíveis no workspace; erros de decoding/consulta são propagados; inbound não recebe semântica outbound; falhas parciais não retornam sucesso. O escopo permanece P0, sem implementação de manifest/scanner/projeção P1 ou setup.
+
+Esta foi uma passagem `static_only`. Não executei código, testes ou builds, não alterei arquivos nem toquei Git, rede ou credenciais. Os testes foram inspecionados, não atestados. Não alego perfil `max`, auditoria MCP global, isolamento de execução, consumo/modelo observados ou autorização de merge.

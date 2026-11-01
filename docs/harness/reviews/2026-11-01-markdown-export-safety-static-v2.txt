@@ -1,0 +1,22 @@
+Reavaliação estática focada: **os dois achados anteriores estão resolvidos na fonte; não identifiquei novo defeito concreto no delta examinado**.
+
+- Target: `26db892e3081efcda47503271aa9e8770a9eecd985ba77733e58bddb9527d608`
+- Snapshot: `215728a53af6b14fa2a205a50a4a7ec5de4a37a6b4f4e70c0c2d304f171de646`
+- Base/política confiável: `2e84a59422b3659aaaf25c69dbe01b01ab321332`
+
+Conferi receipt, manifest e target. Recomputei os hashes dos **15 paths**, todos coincidentes com o manifest e estáveis ao final. A comparação dos diretórios `trusted/` não encontrou diferenças.
+
+A cobertura do delta reconciliou oito arquivos novos/alterados e sete inalterados:
+
+| Disposição | Paths |
+|---|---|
+| Delta revisado integralmente | `CHANGELOG.md`, `docs/MCP_TOOLS.md`, documento de compatibilidade, `export/filesystem.rs`, novo `export/filesystem/acl.rs`, `export/query.rs`, `export/security_tests.rs`, catálogo `admin.rs` |
+| Bytes iguais ao snapshot v1 | `export.rs`, `export/format.rs`, `export/format_tests.rs`, `export/handler.rs`, `export/handler_tests.rs`, `permission.rs`, `tests/portability_permissions_routing_tests.rs` |
+
+**ACL:** `trusted_directory` agora exige inspeção pelo descritor. O helper macOS recusa ACL não vazia; Linux verifica atributos conhecidos e a lista de atributos, propagando erros de inspeção. A restrição conservadora impede a concessão adicional que invalidava a confiança baseada somente em proprietário/mode. Conferi declarações, constantes e convenção de retorno macOS nos headers/manuais do SDK local. A regressão macOS cobre ACL permissiva apesar dos bits privados.
+
+**Expiração:** a seleção agora lê e compara instantes RFC3339 com precisão de nanossegundos, exclui igualdade e propaga timestamp inválido. As regressões contemplam `Z`, `+00:00`, offsets equivalentes e os limites de ±1 ns. Isso elimina o contraexemplo textual do parecer anterior.
+
+A compatibilidade está descrita de modo coerente: suporte seguro limitado a Linux/macOS, recusa de ACLs e erro quando sua inspeção falha; outras plataformas falham explicitamente. O delta permanece no P0, sem acrescentar projeção P1, scanner, manifest ou setup.
+
+Limites: fiz somente leitura estática. Não executei testes, código ou builds; não alterei arquivos, Git, rede ou credenciais. Portanto, não atesto resultados executados, comportamento Linux em execução ou integração dos símbolos nativos. A revisão foi focada no delta, sem repetir auditoria ampla. Este parecer não é post-gate, receipt, aprovação formal, perfil `max` completo ou autorização de merge.

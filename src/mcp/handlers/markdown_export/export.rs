@@ -1,3 +1,4 @@
+mod filesystem;
 mod format;
 mod handler;
 mod query;
@@ -10,3 +11,5 @@ mod format_tests;
 mod handler_tests;
 #[cfg(test)]
 mod naming_tests;
+#[cfg(test)]
+mod security_tests;

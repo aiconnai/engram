@@ -7,9 +7,9 @@
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
-| Last sensors | `2026-10-23 status=pass mode=full timestamp=2026-10-23T20:10:00Z duration_sec=310, sem exclusões (receipts commitados em 08cb17a4; rodado no candidato do sunset, run anterior falhou em offline_lane). Sem receipt commitado de 2026-09-03 a 2026-10-23; não reexecutado depois. Detalhe em progress/2026-10-26-remediation.md.` |
-| Last commit | `976fbe8b` |
-| Last live-state check | `2026-10-27 — Claude, após o merge do #260 no main: Last commit = 976fbe8b, primeiro pai do merge do #262 (último da pilha); vale estrito no main depois desse merge. bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Não substitui post-gate.` |
+| Last sensors | `2026-11-01 status=pass mode=full timestamp=2026-11-01T09:02:00Z duration_sec=515, sem exclusões, no P0 isolado sobre main 2e84a594. Primeiro full PASS/467 s precedeu os ajustes de revisão; final inclui ACL/instantes. Logs/receipts preservados; integrações tiveram falha de bind no sandbox e passaram fora dele com permissão. Sem fechamento de RISK-0010/post-gate.` |
+| Last commit | `2e84a594` |
+| Last live-state check | `2026-11-01 — branch local fix/markdown-export-safety, base 2e84a594; produto corrigido e full PASS/515 s, em preparação do commit. Parecer estático v2 com dois achados resolvidos; formal post-gate/receipt humano pendentes. Invocação: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md; doctor no log próprio.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -22,7 +22,7 @@
   2026-10-26 achou (estado vivo defasado, regressão de autorização de `e04d3307`, advisories, release
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
-- **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
+- **Handoff (2026-10-27)**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md). **P0 autorizado (2026-11-01)**: [log](./progress/2026-11-01-markdown-export-safety.md), branch local `fix/markdown-export-safety`; tag aguarda resultado, sem push/PR/merge/publicação autorizados.
 - **Autorização atual** (owner, chat, 2026-10-27): push e um PR por frente (#244–#262), opção A; merges
   feitos pelo Claude por exceção explícita à regra de merge humano, só para esta pilha. Ordem, SHAs e CI:
   [log da sprint](./progress/2026-10-26-remediation.md#publicação-2026-10-27).

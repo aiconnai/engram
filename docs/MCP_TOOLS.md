@@ -207,7 +207,7 @@ Total tools: **301**
 | `memory_rebuild_crossrefs` | advanced | memory.admin | always | idempotentHint | none |
 | `memory_archive_old` | advanced | memory.lifecycle | always | mutating (no MCP hints) | none |
 | `memory_from_trace` | advanced | feature.langfuse | langfuse | mutating (no MCP hints) | `trace_id` |
-| `memory_export_markdown` | advanced | memory.admin | always | readOnlyHint | `workspace` |
+| `memory_export_markdown` | advanced | memory.admin | always | mutating (no MCP hints) | `workspace` |
 | `memory_import_markdown` | advanced | memory.admin | always | mutating (no MCP hints) | `input_dir` |
 | `memory_block_create` | standard | memory.block | always | mutating (no MCP hints) | `name` |
 | `memory_block_get` | standard | memory.block | always | readOnlyHint | `name` |
@@ -3534,12 +3534,12 @@ Create a memory from a specific Langfuse trace ID.
 
 ### `memory_export_markdown`
 
-Export a workspace as human-readable Markdown files with YAML frontmatter and wiki-style [[links]]. Creates one .md file per memory, organized by type in subdirectories, with an index.md overview.
+Write unexpired workspace memories as Markdown files with YAML frontmatter and directional [[links]]. Requires scoped_write within ENGRAM_EXPORT_BASE_DIR, otherwise maintenance. Output directories must be owned by the server user, not group/world writable and have no extended/default ACLs. Safe filesystem writes require Linux/macOS.
 
 - Tier: `advanced`
 - Group: `memory.admin`
 - Required feature: `always`
-- Annotations: readOnlyHint
+- Annotations: mutating (no MCP hints)
 - Required inputs: `workspace`
 
 | Input | Type | Required | Summary |

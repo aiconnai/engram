@@ -337,7 +337,7 @@ pub const TOOLS: &[ToolDef] = &[
         },
     ToolDef {
             name: "memory_export_markdown",
-            description: "Export a workspace as human-readable Markdown files with YAML frontmatter and wiki-style [[links]]. Creates one .md file per memory, organized by type in subdirectories, with an index.md overview.",
+            description: "Write unexpired workspace memories as Markdown files with YAML frontmatter and directional [[links]]. Requires scoped_write within ENGRAM_EXPORT_BASE_DIR, otherwise maintenance. Output directories must be owned by the server user, not group/world writable and have no extended/default ACLs. Safe filesystem writes require Linux/macOS.",
             schema: r#"{
                 "type": "object",
                 "properties": {
@@ -348,7 +348,7 @@ pub const TOOLS: &[ToolDef] = &[
                 },
                 "required": ["workspace"]
             }"#,
-            annotations: ToolAnnotations::read_only(),
+            annotations: ToolAnnotations::mutating(),
             tier: ToolTier::Advanced,
         },
     ToolDef {

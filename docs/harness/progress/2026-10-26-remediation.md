@@ -183,3 +183,19 @@ bypass de admin. GO de 5 h, até 09:35Z; tag, release, registries, deleções e 
   - `Advertised Contracts` no #257, #258 e #259: o baseline das 9 variáveis documentadas pelo #257 só é regenerado em `127e3e89` (#260), como na integração. Exceção explícita, registrada em comentário no #257; voltou a passar no #260.
   - Runs de CI no `main` (push e agendados, incluindo um Nightly atrasado) foram cancelados durante a cadeia para liberar runners: cada árvore intermediária já tinha sido testada no PR. O CI do merge do #262 roda completo.
 - **Live state**: `Last commit` = `976fbe8b` (merge do #260), primeiro pai do merge do #262.
+
+
+## P0 export Markdown autorizado — 2026-11-01
+
+Owner autorizou seguir no hotfix separado, sobre origin/main revalidada `2e84a594`, branch local
+`fix/markdown-export-safety`. Tag 0.24.0 aguarda resultado; sem push/PR/merge/tag/publicação ou dados
+reais autorizados. [Log](2026-11-01-markdown-export-safety.md),
+[canvas](../canvas/2026-11-01-markdown-export-safety.md), RISK-0010 open. Checkout principal e
+documentos do programa de evolução não foram incorporados ao hotfix. Regressores RED e candidato
+local corrigido em verificação; revisão nova/post-gate pendentes, sem aprovação retroativa.
+
+
+P0: full final PASS em `2026-11-01T09:02:00Z`, 515 s, sem exclusões, depois de dois achados
+de revisão (ACL macOS e timestamps) reproduzidos/corrigidos. 78 testes Markdown e 23 integrações
+passam. Parecer estático v2 sem novo defeito concreto não é aprovação formal ou receipt humano.
+RISK-0010 open até integração/fechamento; sem tag/push/PR/merge. Commit local em preparação.
