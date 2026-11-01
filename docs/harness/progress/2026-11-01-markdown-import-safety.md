@@ -103,3 +103,15 @@ orçamentos históricos (não são benchmark do candidato), contratos Python/SDK
 claims, superfícies anunciadas e PDF packaging. Nenhuma falha instável neste full. Hook/pre-commit
 com fmt+clippy all-targets/all-features será mantido ao commitar. Sem merge/tag; formal post-gate
 exige operador humano/receipt externo (CODE_REVIEW_POLICY linhas111–122), ainda pendente.
+
+## Handoff do candidato local
+
+Produto commitado em `ffb515972935608af2667e1512de3f49ce3b942c`, com hook fmt+clippy all-targets/all-features PASS.
+Os18 paths do alvo final foram conferidos contra o commit:17 hashes idênticos e lookup.rs ausente.
+Full422s e complementoCI13PASS cobrem código/contratos finais; Linux100+25PASS no recorte declarado.
+Writer/ACL do P0 mantêm FFI já revisada; Rustix foi usado para fsync/novo reader, sem migração integral
+do writer nem nova FFI em produção no import. ACL deny-only continua recusada com mensagem/nota.
+
+Pendências operacionais: revisão formal/post-gate com receipt registrado pelo operador humano fora
+das worktrees, integração e validação no candidato da tag. RISK-0010/0011 abertos no publicado.
+Sem publicação, merge/tag ou acesso a dados reais. Checkout principal mantém os planos não commitados.

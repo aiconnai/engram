@@ -150,7 +150,7 @@ entries:
     impact: 5
     score: 15
     owner: "Ronaldo / integrador import"
-    mitigation: "Candidato local fix/markdown-import-safety sobre export9bca4efa. RED2PASS/12FAIL reproduziu IDOR/links/raiz; correcao com guard antes de IO, reader ancorado limitado e autorizacao/classificacao/aplicacao em TX. Review encontrou dois achados adicionais, corrigidos com RED/GREEN: tabs no parser e resultado pos-commit unknown. Mac fullPASS/422s, complementoCI13PASS, Linux100+25PASS (probe/helper declarados); formal post-gate/receipt e integracao pendentes. Log docs/harness/progress/2026-11-01-markdown-import-safety.md."
+    mitigation: "Candidato local fix/markdown-import-safety, commit ffb51597, sobre export9bca4efa. RED2PASS/12FAIL reproduziu IDOR/links/raiz; correcao com guard antes de IO, reader ancorado limitado e autorizacao/classificacao/aplicacao em TX. Review encontrou dois achados adicionais, corrigidos com RED/GREEN: tabs no parser e resultado pos-commit unknown. Mac fullPASS/422s, complementoCI13PASS, Linux100+25PASS (probe/helper declarados); formal post-gate/receipt e integracao pendentes. Log docs/harness/progress/2026-11-01-markdown-import-safety.md."
     contingency: "Manter tag 0.24.0 aguardando avaliacao/correcao; nenhuma tool foi desabilitada em ambiente real. Nao alegar bypass de criacao via frontmatter no dispatcher sem evidencia: override autorizado prevalece."
     monitoring:
       - "principal alpha com engram_id de beta e inexistente: mesma negacao, sem mutacao"

@@ -8,8 +8,8 @@
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
 | Last sensors | `2026-11-01 status=pass mode=full timestamp=2026-11-01T16:41:04Z duration_sec=422, import RISK-0011, sem exclusões. CI complementar 13 comandos PASS; Linux arm64 (Rust1.97.1) 100+25 PASS, 1 probe e 1 helper ignorados nos pais, helper executado pelos regressores G1.` |
-| Last commit | `9bca4efa` |
-| Last live-state check | `2026-11-01 — import local sobre 9bca4efa, sensores full PASS/422 s, 18 paths revisados (17 regulares+lookup ausente); pós-commit unknown coberto. Invocação: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Formal post-gate/receipt pendentes.` |
+| Last commit | `ffb51597` |
+| Last live-state check | `2026-11-01 — import commitado em ffb51597 sobre 9bca4efa, sensores full PASS/422 s, 18 paths revisados (17 regulares+lookup ausente); pós-commit unknown coberto. Invocação: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Formal post-gate/receipt pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
