@@ -199,3 +199,9 @@ P0: full final PASS em `2026-11-01T09:02:00Z`, 515 s, sem exclusões, depois de 
 de revisão (ACL macOS e timestamps) reproduzidos/corrigidos. 78 testes Markdown e 23 integrações
 passam. Parecer estático v2 sem novo defeito concreto não é aprovação formal ou receipt humano.
 RISK-0010 open até integração/fechamento; sem tag/push/PR/merge. Commit local em preparação.
+
+
+Código P0 commitado localmente em `0cd2d2d562bb514ac9870a1e2e8e3f657d9feaa4`; hook passou habilitado.
+Quinze blobs do commit correspondem ao snapshot estático v2; live-state estrito PASS e worktree
+limpa antes do fechamento documental. Sem push/PR/merge/tag; formal post-gate/receipt e integração
+no candidato de release continuam pendentes, RISK-0010 open.

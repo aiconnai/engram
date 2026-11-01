@@ -8,8 +8,8 @@
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
 | Last sensors | `2026-11-01 status=pass mode=full timestamp=2026-11-01T09:02:00Z duration_sec=515, sem exclusões, no P0 isolado sobre main 2e84a594. Primeiro full PASS/467 s precedeu os ajustes de revisão; final inclui ACL/instantes. Logs/receipts preservados; integrações tiveram falha de bind no sandbox e passaram fora dele com permissão. Sem fechamento de RISK-0010/post-gate.` |
-| Last commit | `2e84a594` |
-| Last live-state check | `2026-11-01 — branch local fix/markdown-export-safety, base 2e84a594; produto corrigido e full PASS/515 s, em preparação do commit. Parecer estático v2 com dois achados resolvidos; formal post-gate/receipt humano pendentes. Invocação: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md; doctor no log próprio.` |
+| Last commit | `0cd2d2d5` |
+| Last live-state check | `2026-11-01 — branch local fix/markdown-export-safety, produto commitado em 0cd2d2d5 sobre main 2e84a594, full PASS/515 s e 15 hashes revisados conferidos contra o commit. Parecer estático v2 com dois achados resolvidos; formal post-gate/receipt humano pendentes. Invocação: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md; doctor no log próprio.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido

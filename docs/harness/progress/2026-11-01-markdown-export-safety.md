@@ -139,3 +139,17 @@ Refresh do estado vivo: primeira checagem estrita recusou a descrição sem a in
 (`Last live-state check does not name the checker CLI invocation`). Campo corrigido sem alterar o
 checker/gates; doctor iniciado nesse mesmo refresh também recusou o campo antigo. Checagem estrita
 e doctor reexecutados após a correção, antes do commit. Nenhum comportamento de produto mudou.
+
+
+## Commit e handoff local
+
+Código commitado em `0cd2d2d562bb514ac9870a1e2e8e3f657d9feaa4`, pai `2e84a59422b3659aaaf25c69dbe01b01ab321332`,
+branch `fix/markdown-export-safety`. Hook instalado rodou de novo no commit e passou (0,39 s),
+sem desativação. Os 15 blobs de produto/contratos no commit coincidem byte a byte com o manifest
+revisado do snapshot v2; comprovante local `committed-review-match.json`. Estado vivo estrito PASS
+em head `0cd2d2d5`, worktree clean antes deste fechamento documental. Último refresh registra o
+commit de código como ancestral; não inventa review do snapshot completo pós-commit.
+
+Entrega de implementação local concluída. Integração em main/candidato da tag, runtime Linux,
+post-gate formal e receipt humano permanecem próximos passos próprios; RISK-0010 continua open.
+Fonte de produto não mudou após o full final; esta atualização final é apenas memória canônica.
