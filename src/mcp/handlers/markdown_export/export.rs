@@ -1,4 +1,4 @@
-mod filesystem;
+pub(super) mod filesystem;
 mod format;
 mod handler;
 mod query;

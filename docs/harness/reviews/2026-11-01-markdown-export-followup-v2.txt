@@ -1,0 +1,11 @@
+O achado está **resolvido na fonte**. Não identifiquei novo defeito concreto neste delta.
+
+- Target: `36482dffc930d58f4ae92e9df76012e663a3387b624ad49d359e1384b1dc3516`
+- Manifest/snapshot: `1fc1461496327562b4361db1be433e251096784db30eefa349c833c152e947e0`
+
+Conferi os hashes dos 11 arquivos: todos coincidem com o manifest. A comparação confirmou apenas duas alterações:
+
+- `format.rs`: reserva o prefixo sem distinção ASCII de caixa, usando bytes sem risco de corte UTF-8.
+- `naming_tests.rs`: verifica que o literal em maiúsculas não produz nome equivalente à saída codificada em filesystem sem distinção de caixa.
+
+Os outros nove arquivos permanecem idênticos à captura anterior. Revisão somente estática; não executei testes nem atesto o RED/GREEN informado pelo integrador. Este parecer não constitui aprovação formal, post-gate ou autorização de merge.

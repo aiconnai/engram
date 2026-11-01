@@ -72,59 +72,44 @@ pub(super) fn parse_frontmatter(content: &str) -> HashMap<String, String> {
     let mut i = 0;
     while i < fm_lines.len() {
         let line = fm_lines[i];
-        if let Some(colon_pos) = line.find(": ") {
-            let key = line[..colon_pos].trim();
-            let value = line[colon_pos + 2..].trim();
-
-            if !key.starts_with("engram_") {
-                i += 1;
-                continue;
-            }
-
-            if key == "engram_tags" && value.is_empty() {
-                // Sequence mode — collect following `  - item` lines
-                let mut tags: Vec<String> = Vec::new();
-                i += 1;
-                while i < fm_lines.len() {
-                    let next = fm_lines[i];
-                    if let Some(item) = next.strip_prefix("  - ") {
-                        tags.push(item.trim().to_string());
-                        i += 1;
-                    } else {
-                        break;
-                    }
-                }
-                if !tags.is_empty() {
-                    map.insert("engram_tags_list".to_string(), tags.join(","));
-                }
-                continue;
-            }
-
-            // Strip surrounding quotes
-            let cleaned = value.trim_matches('"').to_string();
-            map.insert(key.to_string(), cleaned);
-        } else {
-            // Handle `engram_tags:` without trailing space (value is empty on same line)
-            let trimmed = line.trim();
-            if trimmed == "engram_tags:" {
-                let mut tags: Vec<String> = Vec::new();
-                i += 1;
-                while i < fm_lines.len() {
-                    let next = fm_lines[i];
-                    if let Some(item) = next.strip_prefix("  - ") {
-                        tags.push(item.trim().to_string());
-                        i += 1;
-                    } else {
-                        break;
-                    }
-                }
-                if !tags.is_empty() {
-                    map.insert("engram_tags_list".to_string(), tags.join(","));
-                }
-                continue;
-            }
-        }
         i += 1;
+        let Some((raw_key, raw_value)) = line.split_once(':') else {
+            continue;
+        };
+        // YAML scalar mapping separators allow space, tab or end-of-line.
+        // Preserve explicitly empty identity/version values for validation.
+        if !raw_value.is_empty() && !raw_value.starts_with([' ', '\t']) {
+            continue;
+        }
+        let key = raw_key.trim();
+        let key = key
+            .strip_prefix('"')
+            .and_then(|key| key.strip_suffix('"'))
+            .or_else(|| {
+                key.strip_prefix('\'')
+                    .and_then(|key| key.strip_suffix('\''))
+            })
+            .unwrap_or(key);
+        if !key.starts_with("engram_") {
+            continue;
+        }
+        let value = raw_value.trim();
+        if key == "engram_tags" && value.is_empty() {
+            let mut tags = Vec::new();
+            while i < fm_lines.len() {
+                if let Some(item) = fm_lines[i].strip_prefix("  - ") {
+                    tags.push(item.trim().to_string());
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            if !tags.is_empty() {
+                map.insert("engram_tags_list".to_string(), tags.join(","));
+            }
+            continue;
+        }
+        map.insert(key.to_string(), value.trim_matches('"').to_string());
     }
 
     map

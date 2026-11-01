@@ -135,7 +135,7 @@ entries:
     impact: 5
     score: 15
     owner: "Ronaldo / integrador P0"
-    mitigation: "Candidato local fix/markdown-export-safety sobre main 2e84a594 (0cd2d2d5/4bf79f85). Full historico PASS/515 s nao cobre o follow-up atual: codec de tags internas, fsync por arquivo/diretorio com flush final por dispositivo e decoder de erros. Novos gates e revisao pendentes. P1 permanece separado. Log: docs/harness/progress/2026-11-01-markdown-portability-followup.md."
+    mitigation: "Candidato local fix/markdown-export-safety sobre main 2e84a594 (0cd2d2d5/4bf79f85). Full historico PASS/515 s nao cobre o follow-up atual: codec de tags internas, fsync por arquivo/diretorio com flush final por dispositivo e decoder de erros. Follow-up commitado em 9bca4efa: full PASS/459 s, Linux 81+22 PASS (1 probe manual ignorado), review estatico v2 sem novo achado; formal post-gate e integracao pendentes. P1 permanece separado. Log: docs/harness/progress/2026-11-01-markdown-portability-followup.md."
     contingency: "ENGRAM_EXPORT_BASE_DIR sozinho nao mitiga o codigo publicado. Tag 0.24.0 aguarda os bloqueantes do export e a avaliacao do import RISK-0011; sem publicacao ou alteracao operacional."
     monitoring:
       - "tags session:/category:/confidence:/file:/trace:, aux e colisoes no codec"
@@ -150,7 +150,7 @@ entries:
     impact: 5
     score: 15
     owner: "Ronaldo / integrador import"
-    mitigation: "Analise estatica delimitada confirmou os fluxos; testes dinamicos e candidato separado pendentes. Exigir maintenance sem raiz, leitura ancorada no-follow com limites e autorizacao/reclassificacao dentro da transacao. Preservar guard de artefatos SQLite antes de abrir arquivos e propagar erros ao wrapper publico."
+    mitigation: "Candidato local fix/markdown-import-safety sobre export9bca4efa. RED2PASS/12FAIL reproduziu IDOR/links/raiz; correcao com guard antes de IO, reader ancorado limitado e autorizacao/classificacao/aplicacao em TX. Review encontrou dois achados adicionais, corrigidos com RED/GREEN: tabs no parser e resultado pos-commit unknown. Mac fullPASS/422s, complementoCI13PASS, Linux100+25PASS (probe/helper declarados); formal post-gate/receipt e integracao pendentes. Log docs/harness/progress/2026-11-01-markdown-import-safety.md."
     contingency: "Manter tag 0.24.0 aguardando avaliacao/correcao; nenhuma tool foi desabilitada em ambiente real. Nao alegar bypass de criacao via frontmatter no dispatcher sem evidencia: override autorizado prevalece."
     monitoring:
       - "principal alpha com engram_id de beta e inexistente: mesma negacao, sem mutacao"

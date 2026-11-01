@@ -1,0 +1,33 @@
+Parecer estático: **precisa de um ajuste bloqueante no codec deste alvo**. Não identifiquei outro defeito concreto no delta examinado.
+
+- Target: `0a2d0f4d46e065eda7540f8588f355d475e9633f9cff473c8abbdda3b2d94855`
+- Manifest/snapshot: `109721a87a6180229d10c49d919e3ec7c978978655de09d8b1da7d483b329005`
+- Base: `4bf79f85df7adaa9385eb8b9e459650d13fcc774`
+
+Conferi receipt/target/manifest e recomputei os hashes dos **11 paths**, todos coincidentes e estáveis ao final. Revisei todo o delta contra `base/`.
+
+**[MED — bloqueante deste alvo] O prefixo reservado permite impersonação em filesystem sem distinção de caixa.**  
+Local: [format.rs:50](/private/tmp/engram-export-followup-review-a3nsnnae/candidate/src/mcp/handlers/markdown_export/export/format.rs:50).
+
+A reserva usa `label.starts_with("~e1-")`, distinguindo caixa. Seja `encoded` o diretório gerado para `session:a/b`: uma tag literal igual a esse nome, alterando somente o prefixo para `~E1-`, passa pelo caminho “seguro” e permanece inalterada. Em APFS sem distinção de caixa, os dois nomes apontam ao mesmo diretório. Isso mistura grupos e viola a promessa documentada de que uma tag literal não pode impersonar uma saída codificada. Os IDs preservam folhas distintas; não estou alegando sobrescrita de memórias ou escape de raiz.
+
+A regressão atual cobre somente o literal com prefixo minúsculo. **Correção mínima:** reservar o prefixo sem distinção ASCII de caixa e testar a variante `~E1-`. Não é necessário ampliar esta mudança para case-folding Unicode geral.
+
+Cobertura dos 11 arquivos:
+
+| Paths | Verificação |
+|---|---|
+| `CHANGELOG.md`, documento de compatibilidade | Contrato do codec, ACL, durabilidade e limites das medidas |
+| `Cargo.toml`, `Cargo.lock` | Dependência direta `rustix` limitada a Linux/macOS e lock correspondente |
+| `export/filesystem.rs` | Agrupamento, descritores, atomicidade, fsync e flush final |
+| `export/filesystem/acl.rs` | Delta da mensagem de recusa, incluindo ACL deny-only |
+| `export/format.rs` | Codificação, prefixo reservado, digest e limites |
+| `export/handler_tests.rs`, `export/naming_tests.rs` | Casos namespaced, traversal codificado e colisões |
+| `export/security_tests.rs` | Propagação da recusa estruturada pelo wrapper |
+| `src/portability/markdown.rs` | Decoder de erro e rejeição de erros individuais no import |
+
+A sequência de durabilidade tem sustentação estática: cada temporário recebe POSIX fsync antes do rename; cada diretório recebe fsync após seu grupo; o flush final ocorre uma vez por device e suas falhas propagam erro. O SDK macOS local documenta que `F_FULLFSYNC` persiste dados previamente sincronizados no mesmo device; a std local usa essa operação em `File::sync_all`. A retenção de descritores cresce por device, não por arquivo ou grupo. A atomicidade continua por arquivo, sem promessa de transação da árvore.
+
+O decoder passa a reconhecer erros estruturados, evitando relatório bem-sucedido de zero arquivos para uma recusa. O novo teste Linux constrói uma ACL default válida sem alterar os bits de acesso e verifica sua recusa. Esses testes foram inspecionados, não executados.
+
+Limites: revisão somente estática e delimitada ao delta. Não executei alvo, builds, testes ou rede; não alterei arquivos ou Git. Não atesto as medições de desempenho nem resultados Linux em execução. Este parecer não é perfil `max`, post-gate, receipt humano ou autorização de merge.

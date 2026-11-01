@@ -59,6 +59,11 @@ Follow-up da revisão: corrigir compatibilidade das tags e custo de sincronizaç
 revalidar em Linux/macOS e registrar RISK-0011 para import em candidato separado. Sem ampliar para
 projeção Git. [Log retomável](progress/2026-11-01-markdown-portability-followup.md).
 
+RISK-0011: branch local separada `fix/markdown-import-safety`, baseada no export `9bca4efa`.
+Leitura ancorada limitada, modo conforme raiz e autorização/classificação/aplicação transacionais;
+fixtures temporárias com principals reais antes da correção. [Canvas](canvas/2026-11-01-markdown-import-safety.md)
+e [log](progress/2026-11-01-markdown-import-safety.md). Mesmos limites operacionais do P0.
+
 ## Tarefa anterior: Turso/libSQL sunset v0.24.0
 
 - **Status**: implementação concluída e commitada em `08cb17a4` (2026-10-23); sensores completos PASS

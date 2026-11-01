@@ -205,3 +205,22 @@ Código P0 commitado localmente em `0cd2d2d562bb514ac9870a1e2e8e3f657d9feaa4`; h
 Quinze blobs do commit correspondem ao snapshot estático v2; live-state estrito PASS e worktree
 limpa antes do fechamento documental. Sem push/PR/merge/tag; formal post-gate/receipt e integração
 no candidato de release continuam pendentes, RISK-0010 open.
+
+
+### Follow-up Markdown, 2026-11-01
+
+Export local `9bca4efa`: tags codificadas, sincronização por lote, decoder público, testes RED/GREEN,
+review estático com um achado corrigido e 11 hashes reconciliados; Linux nativo 81+22 PASS (1 probe
+manual ignorado), sensores full PASS/459 s sem exclusões. Log próprio markdown-portability-followup.
+Import RISK-0011 em branch própria; tag aguarda bloqueantes, sem push/PR/merge/publicação.
+
+
+### Candidato separado import, 2026-11-01
+
+RISK-0011: guard de raiz/mode, reader ancorado/limitado sem links, autorização por workspace persistido
+com classificação/aplicação no mesmo TX. RED2PASS/12FAIL antes da correção; review detectou parser/tab
+e resultado pós-commit, ambos corrigidos com reprodução e GREEN. 100 testes Markdown + integrações
+G1/vault/routing verdes; Linux arm64 100+25 PASS (probe/helper declarados). Full PASS/422s sem exclusões,
+CI complementar13PASS; baseline documental de ENGRAM_EXPORT_BASE_DIR atualizado sem supressões.
+Log próprio 2026-11-01-markdown-import-safety, outputs crus e hashes. Candidato local sobre9bca4efa;
+formal post-gate/receipt humano e integração pendentes. Nenhum merge/tag/publicação nesta retomada.

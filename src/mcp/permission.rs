@@ -149,8 +149,10 @@ pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode
     let canonical = canonical_tool_name(tool_name);
     // Workspace write permission does not grant arbitrary server filesystem
     // access. Only the administrator's configured export root permits it.
-    if canonical == "memory_export_markdown"
-        && !std::env::var("ENGRAM_EXPORT_BASE_DIR").is_ok_and(|root| !root.trim().is_empty())
+    if matches!(
+        canonical,
+        "memory_export_markdown" | "memory_import_markdown"
+    ) && !std::env::var("ENGRAM_EXPORT_BASE_DIR").is_ok_and(|root| !root.trim().is_empty())
     {
         return PermissionMode::Maintenance;
     }

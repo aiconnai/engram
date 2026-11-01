@@ -78,3 +78,30 @@ canonical_journey 10 PASS, permission_modes_tests 9 PASS, portability_permission
 Mac `green-final.log`: 81 PASS/1 probe manual ignorado. Doctor PASS com aviso histórico de ausência
 de post-gate da sprint; diff --check e fmt --check PASS. Commit local prepara o candidato; full
 novo continua pendente, sem reaproveitar o PASS histórico de 515 s como validação deste delta.
+
+## Gate final do export
+
+Commit `9bca4efaeb07d9deff722ab50c407dfe77f02f63`, hook ativo fmt+clippy all-targets/all-features PASS.
+Os 11 hashes do manifest revisado foram conferidos contra os blobs do commit: todos iguais.
+`sensors.sh` full PASS, timestamp 2026-11-01T16:08:11Z, 459 s, sem exclusões. Receipt e log canônicos
+atualizados na branch export; `target/markdown-export-followup/full.log` preservado. Sem falha instável
+nesta rodada. Formal post-gate, receipt humano e integração continuam pendentes. Import branch
+`fix/markdown-import-safety` parte do commit de produto; seu RED roda depois deste gate, serialmente.
+
+## Inventário público e evidência final
+
+O complemento dos comandos obrigatórios de scripts/ci.sh encontrou um delta de documentação que
+sensors.sh não cobre: ENGRAM_EXPORT_BASE_DIR anunciada em MCP_TOOLS mas ausente do baseline.
+Gerador oficial --write adicionou só essa env var + metadados de captura; comparação estrutural
+com o baseline anterior comprovou ausência de outras alterações/supressões. Mesmo arquivo gerado
+nas duas branches, base9bca ancestral comum, hash a3b1ad10cf4bd29d9e68336372cf56e7b48f7d84280959bb1636951212161eb8.
+Review estático adicional conferiu hashes, fonte anterior intacta e somente esse path novo:
+export target780732afce19557d02fffdb5691a1231fe13f5f3fb7db8a624bdd3336a172ff3 (12regulares);
+import targetfabb19e15d33cd476527e59bd077d524461c12ae6bca16de1d21973e8b632154 (17regulares+lookup ausente).
+Raw outputs dos reviews preservados em reviews/*export-followup-v*.txt, *import-v*.txt e
+*markdown-contract-addendum.txt (somente os aplicáveis a esta branch). Não são approval/receipt.
+
+Teste advertised-contracts nesta branch: 7 PASS após atualizar o baseline documental. Full459 s
+continua evidência do código Rust idêntico a9bca; adendo não alterou código, só contrato e artefatos.
+Não houve novo full para esse delta documental. O programa de evolução/checkout principal continua
+preservado e não entra nestes commits. Import permanece em candidato separado.

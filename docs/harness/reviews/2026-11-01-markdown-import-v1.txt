@@ -1,0 +1,36 @@
+Parecer estático: **precisa de ajustes em dois pontos delimitados**.
+
+- Target: `73ef357922375f266d77ce3bdda295b463823604aebe01adbd228b86d2d802c8`
+- Manifest/snapshot: `b1be35910a84c399bfc5bb052d2b16a6db52d8a8be5b6b3b802312326d2544ab`
+- Base: `9bca4efaeb07d9deff722ab50c407dfe77f02f63`
+
+Conferi os 17 paths: os hashes dos 16 arquivos regulares coincidem com o manifest e permaneceram estáveis; `import/lookup.rs` está ausente conforme declarado.
+
+1. **[HIGH] `applied: 0` pode negar escritas já commitadas.**  
+   Local: [import/handler.rs:46](/private/tmp/engram-import-review-bxz5c058/candidate/src/mcp/handlers/markdown_export/import/handler.rs:46).  
+   Todo erro de `import_batch` recebe `applied=0`, supondo rollback. Entretanto, `Storage::with_transaction_dyn` executa `tx.commit()` e depois chama `reassert_sqlite_artifact_permissions_after`. Essa revalidação pode retornar erro de filesystem após um commit bem-sucedido. Nesse cenário, o lote está persistido, mas o resultado afirma zero aplicações, induzindo reconciliação ou retry incorretos.  
+   **Correção:** distinguir rollback confirmado de erro posterior ao commit ou resultado desconhecido; não emitir zero incondicionalmente. Acrescentar regressão para falha de revalidação após commit. O trigger ABORT existente testa corretamente uma falha anterior ao commit, mas não cobre este fluxo.
+
+2. **[MED] IDs/versões explícitos separados por tab escapam da validação.**  
+   Local: [frontmatter.rs:75](/private/tmp/engram-import-review-bxz5c058/candidate/src/mcp/handlers/markdown_export/frontmatter.rs:75).  
+   O parser reconhece somente `": "`. Em um bloco válido com `engram_id:\t0`, a linha não entra nesse ramo nem no fallback de chave vazia. O campo desaparece do mapa; `prepare` interpreta ID ausente e permite criar uma nota com `confirm=true`. Analogamente, `engram_version:\t0` vira versão padrão 1. Isso contraria o contrato novo de rejeitar valores explícitos inválidos.  
+   **Correção:** reconhecer o separador seguido de whitespace permitido para essas chaves, preservando o valor para validação. Testar IDs e versões inválidos com tab em review/confirm, comprovando ausência de mutação.
+
+Cobertura reconciliada:
+
+| Paths | Verificação |
+|---|---|
+| `CHANGELOG.md`, `docs/MCP_TOOLS.md`, documento de compatibilidade | Contrato, limites e alterações operacionais |
+| `export.rs`, `export/filesystem.rs`, novo `filesystem/reader.rs` | Wiring, descritores, no-follow, quotas, ACL e proteção SQLite antes de abrir arquivo regular |
+| `frontmatter.rs`, `import.rs`, `import/files.rs` | Parsing e substituição do walker |
+| `import/apply.rs`, `import/handler.rs` | Autorização, classificação, transação e resultados |
+| `import/lookup.rs` | Remoção conferida; lookup passou à conexão da transação |
+| `import/integration_tests.rs`, `import/security_tests.rs` | Trigger de rollback, IDOR, criação autorizada, entradas adversas e processos limitados |
+| `permission.rs`, catálogo `admin.rs` | Autorização dependente da raiz e descrição pública |
+| `tests/storage_posix_lock_regression_tests.rs` | Aliases SQLite e sobrevivência de escritas após processo externo |
+
+Nos demais fluxos examinados, a fonte sustenta a correção pretendida: autorização pelo workspace persistido antes de hash/versão, equivalência foreign/missing para principal restrito, classificação integral antes da primeira escrita, BEGIN IMMEDIATE no confirm, leitura antecipada dos arquivos, quotas explícitas e operações de diretório ancoradas. Não encontrei chamada de embedding/rede ou leitura de arquivos de entrada dentro da transação.
+
+Os testes adicionados verificam estado persistido, tags e versões, incluindo rollback por trigger e G1 com processo externo. **Foram inspecionados, não executados por mim**; não atesto os resultados RED/GREEN informados pelo integrador.
+
+Esta revisão foi somente estática, sem executar alvo, builds, testes ou rede, nem alterar arquivos ou Git. Não constitui auditoria global, perfil `max`, post-gate, receipt humano ou aprovação de merge.

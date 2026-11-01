@@ -13,6 +13,27 @@ use crate::storage::Storage;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod acl;
 
+pub(in crate::mcp::handlers::markdown_export) struct MarkdownSource {
+    pub relative: PathBuf,
+    pub raw: String,
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod reader;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(in crate::mcp::handlers::markdown_export) use reader::read_markdown;
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub(in crate::mcp::handlers::markdown_export) fn read_markdown(
+    _root: &Path,
+    _storage: &Storage,
+) -> io::Result<Vec<MarkdownSource>> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "safe filesystem import requires Linux/macOS directory-relative and ACL operations",
+    ))
+}
+
 pub(super) fn validate_component(name: &str) -> io::Result<()> {
     let stem = name.split('.').next().unwrap_or("").to_ascii_uppercase();
     let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
@@ -121,7 +142,7 @@ mod unix {
         rustix::fs::fsync(file).map_err(io::Error::from)
     }
 
-    fn open_child(parent: &File, name: &CStr, create: bool) -> io::Result<Option<File>> {
+    pub(super) fn open_child(parent: &File, name: &CStr, create: bool) -> io::Result<Option<File>> {
         // SAFETY: parent is a live directory fd and name is NUL-terminated.
         // O_DIRECTORY prevents opening a SQLite regular file even transiently.
         let mut fd = unsafe {
@@ -157,7 +178,7 @@ mod unix {
         Ok(Some(unsafe { File::from_raw_fd(fd) }))
     }
 
-    fn trusted_directory(dir: &File) -> io::Result<()> {
+    pub(super) fn trusted_directory(dir: &File) -> io::Result<()> {
         let metadata = dir.metadata()?;
         // SAFETY: geteuid has no arguments and does not mutate memory.
         if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o022 != 0 {
@@ -169,7 +190,7 @@ mod unix {
         super::acl::check_directory(dir)
     }
 
-    fn open_root(path: &Path, create: bool) -> io::Result<Option<File>> {
+    pub(super) fn open_root(path: &Path, create: bool) -> io::Result<Option<File>> {
         if !path.is_absolute() {
             return Err(io::Error::other("export root is not absolute"));
         }
@@ -216,7 +237,7 @@ mod unix {
         Ok(Some(dir))
     }
 
-    fn protected_inodes(storage: &Storage) -> Vec<(u64, u64)> {
+    pub(super) fn protected_inodes(storage: &Storage) -> Vec<(u64, u64)> {
         if storage.db_path() == ":memory:" {
             return Vec::new();
         }
@@ -231,7 +252,11 @@ mod unix {
     }
 
     #[allow(clippy::unnecessary_cast)] // libc's dev_t/ino_t differ across Unix targets.
-    fn check_file(parent: &File, name: &CStr, protected: &[(u64, u64)]) -> io::Result<()> {
+    pub(super) fn check_file(
+        parent: &File,
+        name: &CStr,
+        protected: &[(u64, u64)],
+    ) -> io::Result<()> {
         let mut stat = MaybeUninit::<libc::stat>::uninit();
         // SAFETY: stat points to enough writable storage, parent is live and name valid.
         // This inspects the entry without opening/closing a SQLite-bearing inode.
