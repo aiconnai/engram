@@ -4,17 +4,29 @@ use rusqlite::Connection;
 use serde_json::{json, Value};
 
 use crate::error::EngramError;
-use crate::mcp::handlers::HandlerContext;
+use crate::portability::markdown::MarkdownContext;
 
 pub(super) type RelatedMap = HashMap<i64, Vec<(i64, String)>>;
 
 /// Read memories and their eligible relations from one consistent SQLite snapshot.
 /// The transaction ends before rendering or filesystem I/O.
 pub(super) fn query_export_snapshot(
-    ctx: &HandlerContext,
+    ctx: &MarkdownContext<'_>,
     workspace: &str,
     include_links: bool,
 ) -> Result<(Vec<Value>, RelatedMap), EngramError> {
+    if let Some(principal) = ctx
+        .principal
+        .filter(|p| !crate::auth::access::allows_all_workspaces(p))
+    {
+        let allowed = crate::types::normalize_workspace(workspace)
+            .is_ok_and(|normalized| principal.allows_workspace(Some(&normalized)));
+        if !allowed {
+            return Err(EngramError::Unauthorized(
+                "Markdown target workspace is not allowed".into(),
+            ));
+        }
+    }
     ctx.storage.with_connection(|conn| {
         let tx = conn.unchecked_transaction()?;
         let cutoff = chrono::Utc::now().to_rfc3339();

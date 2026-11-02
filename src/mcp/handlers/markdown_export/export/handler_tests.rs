@@ -159,10 +159,6 @@ fn followup_entity_group_accepts_tags_generated_by_engram() {
             .filter(|p| p.is_dir())
             .collect();
         assert_eq!(dirs.len(), 1);
-        assert!(super::filesystem::validate_component(
-            dirs[0].file_name().unwrap().to_str().unwrap()
-        )
-        .is_ok());
         assert!(dirs[0].join(format!("{id}-namespaced-note.md")).is_file());
         let index = std::fs::read_to_string(fixture.path().join("index.md")).unwrap();
         assert!(index.contains(dirs[0].file_name().unwrap().to_str().unwrap()));

@@ -6,6 +6,7 @@
 //! - Memory ownership and sharing
 //! - Namespace isolation
 
+pub(crate) mod access;
 mod permissions;
 mod tokens;
 mod transport_principal;

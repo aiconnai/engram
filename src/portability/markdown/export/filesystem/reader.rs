@@ -151,7 +151,7 @@ impl Walk<'_> {
     }
 }
 
-pub(in crate::mcp::handlers::markdown_export) fn read_markdown(
+pub(in crate::portability::markdown) fn read_markdown(
     root: &Path,
     storage: &Storage,
 ) -> io::Result<Vec<MarkdownSource>> {

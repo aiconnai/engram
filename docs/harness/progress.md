@@ -37,6 +37,7 @@
 
 - **Candidato integrado local (2026-11-01)**: remediação646636f6 + import1faa5c6f (inclui export9bca4efa), mantendo79889460; [log](progress/2026-11-01-markdown-release-integration.md). Trabalho local; nenhuma autorização remota ampliada.
 
+- **Markdown architecture (2026-11-02)**: local refactor authorized; [plan](plans/2026-11-02-markdown-portability-core.md), [evidence](progress/2026-11-02-markdown-portability-core.md).
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 
 Pilha #244–#262 mesclada no main `2e84a594` em 2026-10-27. Follow-up Nightly/release local preparado;

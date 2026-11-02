@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 use serde_json::Value;
 
 use crate::auth::TransportPrincipal;
@@ -273,26 +273,7 @@ fn id_value(value: &Value) -> Option<i64> {
 /// a workspace the principal may not access, so callers cannot tell the two
 /// apart. Unrestricted principals and `None` (stdio owner) always pass. Call it
 /// on the same connection/transaction that reads or mutates the row.
-pub fn ensure_memory_access(
-    conn: &Connection,
-    principal: Option<&TransportPrincipal>,
-    id: i64,
-) -> Result<()> {
-    let Some(principal) = principal.filter(|p| is_workspace_restricted(p)) else {
-        return Ok(());
-    };
-    let workspace: Option<String> = conn
-        .query_row(
-            "SELECT workspace FROM memories WHERE id = ?1",
-            [id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    match workspace {
-        Some(workspace) if principal.allows_workspace(Some(&workspace)) => Ok(()),
-        Some(_) | None => Err(EngramError::NotFound(id)),
-    }
-}
+pub use crate::auth::access::ensure_memory_access;
 
 /// Authorize every memory ID in `arguments` before a tool runs.
 pub fn authorize_memory_arguments(

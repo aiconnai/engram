@@ -344,3 +344,10 @@ estado lógico; confirm aplica2; flagsconflitantes recusam antes doDB). Compleme
 Linux arm64/Rust1.97.1:103Markdown+29integraçõesPASS (probe/helper explícitos), SDKPython2 eTS4+types.
 Review estático corrigiu perda de história documental; formal post-gate/receipt humano permanecem
 pendentes. Handoff altera só metadados, sem fonte executável nova depois dos gates.
+
+
+## Markdown portability architecture — 2026-11-02
+
+Owner approved local implementation after Q1–Q3/design confirmation. Isolated
+branch refactor/markdown-portability-core based on integrated60ed4eec. Preserve
+contracts and safety; [task evidence](2026-11-02-markdown-portability-core.md).

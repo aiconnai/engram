@@ -238,3 +238,10 @@ Combinar remediação646636f6 com import1faa5c6f em worktree/branch nova; reter7
 validar CLI/SDKs/MCP review default, omitir entradas ocultas do vault, rodar gates no candidato.
 [Log](progress/2026-11-01-markdown-release-integration.md), [canvas](canvas/2026-11-01-markdown-release-integration.md).
 Sem publicar, alterar branch principal ou renovar mandato remoto da branch anterior.
+
+## Follow-up autorizado — Markdown architecture (2026-11-02)
+
+Owner approved local deepening of Markdown export/import together, preserving
+public behavior and extracting only shared auth policy. Separate worktree based
+on 60ed4eec; [plan](plans/2026-11-02-markdown-portability-core.md) and
+[evidence](progress/2026-11-02-markdown-portability-core.md). No remote authority added.

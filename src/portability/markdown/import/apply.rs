@@ -1,21 +1,23 @@
 use std::collections::HashMap;
 
 use rusqlite::{Connection, OptionalExtension};
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::files::MarkdownSource;
 use super::status::{classify_import_status, ImportStatus};
+use crate::auth::access::ensure_memory_access;
 use crate::error::{EngramError, Result};
-use crate::mcp::handlers::markdown_export::frontmatter::{
+use crate::portability::markdown::frontmatter::{
     extract_body, frontmatter_tags, import_payload, parse_frontmatter,
 };
-use crate::mcp::handlers::HandlerContext;
-use crate::mcp::workspace_guard::ensure_memory_access;
+use crate::portability::markdown::MarkdownContext;
 use crate::storage::queries::{compute_content_hash, compute_content_hash_raw};
 use crate::types::{CreateMemoryInput, UpdateMemoryInput};
 
-#[derive(Debug)]
-pub(super) struct ImportFailure {
+#[derive(Debug, thiserror::Error)]
+#[error("{error}")]
+pub(crate) struct ImportFailure {
     error: EngramError,
     // Storage can fail at COMMIT or in permission revalidation after COMMIT.
     // A completed callback alone cannot prove either rollback or persistence.
@@ -32,24 +34,33 @@ impl From<EngramError> for ImportFailure {
 }
 
 impl ImportFailure {
-    pub(super) fn into_value(self) -> Value {
-        use crate::mcp::error::ToolError;
-        if let Some(attempted) = self.attempted {
-            let mut value = ToolError::internal(
-                "Import completion is uncertain; inspect the canonical database before retrying",
-            )
-            .into_value();
-            value["applied"] = Value::Null;
-            value["attempted"] = json!(attempted);
-            value["outcome"] = json!("unknown");
-            value
-        } else {
-            let mut value = ToolError::from(self.error).into_value();
-            value["applied"] = json!(0);
-            value["outcome"] = json!("not_applied");
-            value
-        }
+    pub(crate) fn into_parts(self) -> (EngramError, Option<u64>) {
+        (self.error, self.attempted)
     }
+}
+
+/// Complete domain result; each adapter chooses its public representation.
+#[derive(Debug, Serialize)]
+pub(crate) struct ImportOutcome {
+    pub scanned: usize,
+    pub in_sync: usize,
+    pub new: usize,
+    pub pending: usize,
+    pub conflict: usize,
+    pub applied: usize,
+    pub dry_run: bool,
+    pub files: Vec<ImportFile>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ImportFile {
+    pub file: String,
+    pub engram_id: Option<i64>,
+    pub status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub applied: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 struct Input {
@@ -117,7 +128,7 @@ fn prepare(sources: Vec<MarkdownSource>) -> Result<Vec<Input>> {
 }
 
 fn creation(
-    ctx: &HandlerContext,
+    ctx: &MarkdownContext<'_>,
     input: &Input,
     workspace: Option<&str>,
 ) -> Result<CreateMemoryInput> {
@@ -154,7 +165,7 @@ fn update(input: &Input) -> Result<UpdateMemoryInput> {
 }
 
 fn plan(
-    ctx: &HandlerContext,
+    ctx: &MarkdownContext<'_>,
     conn: &Connection,
     input: &Input,
     workspace: Option<&str>,
@@ -163,7 +174,7 @@ fn plan(
     let state: Option<(String, i64)> = if let Some(id) = input.id {
         // The file's claimed workspace never authorizes an existing ID.
         // Same connection/snapshot as classification and mutation.
-        ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
+        ensure_memory_access(conn, ctx.principal, id)?;
         conn.query_row(
             "SELECT content_hash, version FROM memories WHERE id = ?1",
             [id],
@@ -211,13 +222,13 @@ fn plan(
 }
 
 fn run(
-    ctx: &HandlerContext,
+    ctx: &MarkdownContext<'_>,
     conn: &Connection,
     inputs: &[Input],
     workspace: Option<&str>,
     force: bool,
     confirm: bool,
-) -> Result<Value> {
+) -> Result<ImportOutcome> {
     // Authorize and classify the entire batch before the first write. With
     // confirm, BEGIN IMMEDIATE excludes concurrent writers through application.
     let plans = inputs
@@ -261,37 +272,39 @@ fn run(
                 ("conflict", Some(reason))
             }
         };
-        let mut detail = json!({"file":plan.file,"engram_id":id,"status":status});
-        if confirm && changed {
-            detail["applied"] = json!(true);
-        }
-        if let Some(reason) = reason {
-            detail["reason"] = json!(reason);
-        }
-        files.push(detail);
+        files.push(ImportFile {
+            file: plan.file,
+            engram_id: id,
+            status,
+            applied: (confirm && changed).then_some(true),
+            reason,
+        });
     }
-    Ok(
-        json!({"scanned":inputs.len(),"in_sync":synced,"new":new,"pending":pending,"pending_updates":pending,"conflict":conflicts,"conflicts":conflicts,"applied":applied,"dry_run":!confirm,"files":files}),
-    )
+    Ok(ImportOutcome {
+        scanned: inputs.len(),
+        in_sync: synced,
+        new,
+        pending,
+        conflict: conflicts,
+        applied,
+        dry_run: !confirm,
+        files,
+    })
 }
 
 pub(super) fn import_batch(
-    ctx: &HandlerContext,
+    ctx: &MarkdownContext<'_>,
     sources: Vec<MarkdownSource>,
     workspace: Option<&str>,
     force: bool,
     confirm: bool,
-) -> std::result::Result<Value, ImportFailure> {
+) -> std::result::Result<ImportOutcome, ImportFailure> {
     let inputs = prepare(sources)?; // Parsing and filesystem IO happen before DB transactions.
     let mut attempted = None;
     let result = if confirm {
         ctx.storage.with_transaction(|conn| {
             let report = run(ctx, conn, &inputs, workspace, force, true)?;
-            attempted = Some(
-                report["applied"]
-                    .as_u64()
-                    .ok_or_else(|| EngramError::Internal("Missing import action count".into()))?,
-            );
+            attempted = Some(report.applied as u64);
             Ok(report)
         })
     } else {

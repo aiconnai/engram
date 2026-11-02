@@ -129,9 +129,6 @@ fn test_build_index_markdown_type_grouping_links() {
     ));
 }
 
-// ── memory_export_markdown (requires HandlerContext — skip here) ──
-// Integration tests are in tests/markdown_export.rs
-
 // ── RFC 0004 canonical frontmatter ────────────────────────────────
 
 #[test]

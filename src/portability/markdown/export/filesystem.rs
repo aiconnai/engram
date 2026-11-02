@@ -13,7 +13,7 @@ use crate::storage::Storage;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod acl;
 
-pub(in crate::mcp::handlers::markdown_export) struct MarkdownSource {
+pub(in crate::portability::markdown) struct MarkdownSource {
     pub relative: PathBuf,
     pub raw: String,
 }
@@ -21,10 +21,10 @@ pub(in crate::mcp::handlers::markdown_export) struct MarkdownSource {
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod reader;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub(in crate::mcp::handlers::markdown_export) use reader::read_markdown;
+pub(in crate::portability::markdown) use reader::read_markdown;
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub(in crate::mcp::handlers::markdown_export) fn read_markdown(
+pub(in crate::portability::markdown) fn read_markdown(
     _root: &Path,
     _storage: &Storage,
 ) -> io::Result<Vec<MarkdownSource>> {
