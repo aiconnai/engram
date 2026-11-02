@@ -188,7 +188,7 @@ fn test_mcp_permission_modes_enforcement_and_denial_shapes() {
     assert!(permission_denial_for_mode("memory_search", PermissionMode::ReadOnly).is_none());
     assert!(permission_denial_for_mode("model_routing_status", PermissionMode::ReadOnly).is_none());
     assert!(
-        permission_denial_for_mode("memory_export_markdown", PermissionMode::ReadOnly).is_none()
+        permission_denial_for_mode("memory_export_markdown", PermissionMode::ReadOnly).is_some()
     );
 
     let ro_write_denial = permission_denial_for_mode("memory_create", PermissionMode::ReadOnly)

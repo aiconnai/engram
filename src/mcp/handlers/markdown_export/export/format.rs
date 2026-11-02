@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::storage::queries::compute_content_hash_raw;
 
 pub(super) fn compute_file_subdir(group: &str, mem: &Value) -> Option<String> {
-    match group {
+    let label = match group {
         "flat" => None,
         "day" => {
             let created = mem.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
@@ -37,7 +37,44 @@ pub(super) fn compute_file_subdir(group: &str, mem: &Value) -> Option<String> {
             )
         }
         _ => None,
+    };
+    label.map(|label| encode_group_component(&label))
+}
+
+/// Keep existing safe labels, but encode namespaces, reserved names and long
+/// components. Reserve the escape prefix so a literal label cannot impersonate
+/// an encoded output. Hash the original bytes, not the lossy slug.
+fn encode_group_component(label: &str) -> String {
+    const PREFIX: &str = "~e1-";
+    if label.len() <= 160
+        && !label
+            .as_bytes()
+            .get(..PREFIX.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(PREFIX.as_bytes()))
+        && !label.eq_ignore_ascii_case("index.md")
+        && super::filesystem::validate_component(label).is_ok()
+    {
+        return label.to_string();
     }
+    use sha2::{Digest, Sha256};
+    let hash = format!("{:x}", Sha256::digest(label.as_bytes()));
+    let suffix: String = hash.chars().take(24).collect();
+    let slug: String = label
+        .chars()
+        .take(24)
+        .map(|c| {
+            if c.is_alphanumeric() || matches!(c, '-' | '_') {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let slug = slug.trim_matches('-');
+    format!(
+        "{PREFIX}{}-{suffix}",
+        if slug.is_empty() { "label" } else { slug }
+    )
 }
 
 pub(super) fn format_memory_markdown(
@@ -151,7 +188,7 @@ pub(super) fn build_index_markdown(
     index.push_str("## By Type\n\n");
 
     let mut sorted_types: Vec<_> = type_counts.iter().collect();
-    sorted_types.sort_by(|a, b| b.1.cmp(a.1));
+    sorted_types.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     for (mem_type, count) in &sorted_types {
         index.push_str(&format!(
             "- **{}/** -- {} memories\n",

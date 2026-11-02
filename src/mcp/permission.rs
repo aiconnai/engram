@@ -147,6 +147,15 @@ pub fn required_mode(tool_name: &str) -> Option<PermissionMode> {
 pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode {
     let base = required_mode(tool_name).unwrap_or(PermissionMode::Admin);
     let canonical = canonical_tool_name(tool_name);
+    // Workspace write permission does not grant arbitrary server filesystem
+    // access. Only the administrator's configured export root permits it.
+    if matches!(
+        canonical,
+        "memory_export_markdown" | "memory_import_markdown"
+    ) && !std::env::var("ENGRAM_EXPORT_BASE_DIR").is_ok_and(|root| !root.trim().is_empty())
+    {
+        return PermissionMode::Maintenance;
+    }
     let writes = WRITE_FLAG_PARAMS
         .iter()
         .filter(|(tool, _)| *tool == canonical)
@@ -224,7 +233,7 @@ fn status_report_for(active: Option<PermissionMode>, target_tool: Option<&str>) 
     let active_str = active.map(|m| m.as_str()).unwrap_or("unconstrained");
 
     if let Some(tool) = target_tool {
-        let req = required_mode(tool);
+        let req = required_mode(tool).map(|_| required_mode_for_call(tool, &Value::Null));
         let allowed = match (active, req) {
             (Some(act), Some(r)) => act.allows(r),
             (None, _) => true,
@@ -256,6 +265,7 @@ fn status_report_for(active: Option<PermissionMode>, target_tool: Option<&str>) 
                 .iter()
                 .filter(|t| {
                     required_mode(t.name)
+                        .map(|_| required_mode_for_call(t.name, &Value::Null))
                         .map(|r| act.allows(r))
                         .unwrap_or(false)
                 })

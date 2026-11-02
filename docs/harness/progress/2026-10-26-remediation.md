@@ -285,3 +285,52 @@ Novo GO explícito do owner no chat (`2026-10-30`):
    do CI remoto e revisão humana.
 3. **Limites mantidos**: merge do PR, criação de tag/GitHub Release (`v0.24.0`), publicação em
    crates.io/PyPI/npm, remoção de branches/worktrees e inferência paga seguem **não** autorizados.
+
+## P0 export Markdown autorizado — 2026-11-01
+
+Owner autorizou seguir no hotfix separado, sobre origin/main revalidada `2e84a594`, branch local
+`fix/markdown-export-safety`. Tag 0.24.0 aguarda resultado; sem push/PR/merge/tag/publicação ou dados
+reais autorizados. [Log](2026-11-01-markdown-export-safety.md),
+[canvas](../canvas/2026-11-01-markdown-export-safety.md), RISK-0010 open. Checkout principal e
+documentos do programa de evolução não foram incorporados ao hotfix. Regressores RED e candidato
+local corrigido em verificação; revisão nova/post-gate pendentes, sem aprovação retroativa.
+
+
+P0: full final PASS em `2026-11-01T09:02:00Z`, 515 s, sem exclusões, depois de dois achados
+de revisão (ACL macOS e timestamps) reproduzidos/corrigidos. 78 testes Markdown e 23 integrações
+passam. Parecer estático v2 sem novo defeito concreto não é aprovação formal ou receipt humano.
+RISK-0010 open até integração/fechamento; sem tag/push/PR/merge. Commit local em preparação.
+
+
+Código P0 commitado localmente em `0cd2d2d562bb514ac9870a1e2e8e3f657d9feaa4`; hook passou habilitado.
+Quinze blobs do commit correspondem ao snapshot estático v2; live-state estrito PASS e worktree
+limpa antes do fechamento documental. Sem push/PR/merge/tag; formal post-gate/receipt e integração
+no candidato de release continuam pendentes, RISK-0010 open.
+
+
+### Follow-up Markdown, 2026-11-01
+
+Export local `9bca4efa`: tags codificadas, sincronização por lote, decoder público, testes RED/GREEN,
+review estático com um achado corrigido e 11 hashes reconciliados; Linux nativo 81+22 PASS (1 probe
+manual ignorado), sensores full PASS/459 s sem exclusões. Log próprio markdown-portability-followup.
+Import RISK-0011 em branch própria; tag aguarda bloqueantes, sem push/PR/merge/publicação.
+
+
+### Candidato separado import, 2026-11-01
+
+RISK-0011: guard de raiz/mode, reader ancorado/limitado sem links, autorização por workspace persistido
+com classificação/aplicação no mesmo TX. RED2PASS/12FAIL antes da correção; review detectou parser/tab
+e resultado pós-commit, ambos corrigidos com reprodução e GREEN. 100 testes Markdown + integrações
+G1/vault/routing verdes; Linux arm64 100+25 PASS (probe/helper declarados). Full PASS/422s sem exclusões,
+CI complementar13PASS; baseline documental de ENGRAM_EXPORT_BASE_DIR atualizado sem supressões.
+Log próprio 2026-11-01-markdown-import-safety, outputs crus e hashes. Candidato local sobre9bca4efa;
+formal post-gate/receipt humano e integração pendentes. Nenhum merge/tag/publicação nesta retomada.
+
+
+## Candidato integrado local, 2026-11-01
+
+Integração646636f6 +1faa5c6f mantém79889460, todos os fixes da remediação e o hardening Markdown.
+Raiz/IDOR/unknown preservados; reader omite metadados e lixeira ocultos, MCP responde dry_run.
+Testes focais103+CLI3/G1/vault e SDKs verdes, gates do combinado ainda pendentes.
+[Log próprio](2026-11-01-markdown-release-integration.md); formal post-gate/receipt humano pendentes,
+sem publicação/merge de main/tag. Planejamento sujo no checkout principal permanece preservado.

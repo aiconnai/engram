@@ -18,6 +18,8 @@ Release candidate prepared for review; tag and package publication are pending.
 
 ### Security
 
+- **Markdown filesystem import (RISK-0011)** — scoped writers require an administrator-configured root; unconfined reads require maintenance even during review. Bounded directory-relative reads reject links, special files and SQLite artifacts before opening regular files. Existing IDs are authorized by their stored workspace, and confirmed batches authorize/classify/apply within one transaction. Pre-commit failures roll back; completion uncertainty is explicit. See [compatibility notes](docs/migrations/v0.24.0-markdown-import-security.md).
+- **Markdown filesystem export** — `memory_export_markdown` is a write operation: scoped writers need an administrator-configured `ENGRAM_EXPORT_BASE_DIR`; unconfined destinations require maintenance privileges. Linux/macOS directory-relative writes reject unsafe components, symlinks, hard links, active SQLite artifacts and directory ACLs, and publish private temporary files by atomic rename. Other platforms fail closed. See [compatibility notes](docs/migrations/v0.24.0-markdown-export-security.md).
 - **Batch tools enforce per-item workspaces** — `memory_create_batch` and `memory_ingest_fact_batch` authorize every item's `workspace` (central check, gRPC pre-check and handlers), closing a cross-workspace write introduced by the search/auth hardening commit `e04d3307`. Batch item arrays are derived from the catalog schema and fail closed on unreadable nested `workspace` claims.
 - **Resource subscriptions are principal-aware** — `resources/subscribe` and `resources/unsubscribe` apply the same workspace policy as `resources/read`.
 - **`memory_search_suggest` is workspace-scoped** — restricted principals get spelling corrections built only from their own workspace vocabulary.
@@ -68,6 +70,8 @@ Release candidate prepared for review; tag and package publication are pending.
 
 ### Fixed
 
+- Markdown entity grouping safely encodes internal tags (`session:`, `category:`, `file:`, etc.) and reserved names instead of rejecting the workspace. Export uses POSIX fsync with one final strong flush per device, avoiding repeated macOS device flushes; public Markdown wrappers propagate structured errors.
+- Markdown export excludes expired memories and ineligible references, reads data/relations in one snapshot, propagates decode/query errors, sorts ties deterministically and marks incoming relations explicitly. No success is reported for an incomplete batch; atomicity is per file.
 - `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
 - `permission_mode_status` reports write-flag escalation (`write_flag_params`, `required_mode_with_write_flags`, `allowed_with_write_flags`).
 - Harness: `check-live-state.sh` requires the newest PASS review while the active task has none and matches review versions by exact slug; `harness-risk-register.sh` allocates ids past RISK-0008 and validates under Psych 4.

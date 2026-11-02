@@ -1,0 +1,19 @@
+Adendo estático: **não identifiquei achado concreto no novo path** `docs/contracts/advertised-surfaces.toml`.
+
+| Captura | Target | Manifest/snapshot |
+|---|---|---|
+| Export | `780732afce19557d02fffdb5691a1231fe13f5f3fb7db8a624bdd3336a172ff3` | `97458d75912006fd99c1fca20e39a55b3a37f58b14ab1b6fda98d96f1471e2a7` |
+| Import | `fabb19e15d33cd476527e59bd077d524461c12ae6bca16de1d21973e8b632154` | `2f2e57177dd724ebac8d66bfa954bbaf1b58e644b534816026db209493a94ce6` |
+
+O baseline é idêntico nas duas capturas, com SHA256 `a3b1ad10cf4bd29d9e68336372cf56e7b48f7d84280959bb1636951212161eb8`. Revisei o diff completo: somente `base_sha`, `captured_date` e a adição de `ENGRAM_EXPORT_BASE_DIR` em `docs_contract.env_vars` mudaram.
+
+Não houve remoção ou trimming de superfícies, alteração das fontes inventariadas, supressão ou mudança de controles nesse arquivo.
+
+A integridade reconciliou:
+
+- Export: 12 arquivos regulares com hashes coincidentes com o manifest; os 11 paths anteriores permanecem byte a byte idênticos.
+- Import: 17 arquivos regulares com hashes coincidentes com o manifest, mais `lookup.rs` ausente conforme declarado. Os 17 paths anteriores permanecem intactos, incluindo essa ausência.
+
+Este adendo cobre somente o baseline acrescentado e sua ligação às capturas anteriores; não reabre nem amplia as revisões de produto. Não executei alvo, gerador, testes, builds ou rede e não atesto os resultados de checks informados pelo integrador. Não houve escrita em source, checkout ou Git. Não constitui perfil `max`, post-gate, receipt humano ou aprovação formal.
+
+Texto integral preservado em `/private/tmp/engram-native-review-transcripts/contract-addendum.txt`.

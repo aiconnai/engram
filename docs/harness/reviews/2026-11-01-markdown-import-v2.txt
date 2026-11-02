@@ -1,0 +1,15 @@
+Reavaliação estática: **os dois achados estão resolvidos na fonte; não identifiquei novo defeito concreto no delta**.
+
+- Target: `3df5fe646d44cc3face560eb53d1a1b4aad6dc3285b898a91d4e2a50f1ac6939`
+- Manifest/snapshot: `a336a488219aec7005d16640fb93475a16b946f0d015158f077606fedab865f5`
+- Base: `9bca4efaeb07d9deff722ab50c407dfe77f02f63`
+
+Conferi os 17 paths: os hashes dos 16 arquivos regulares coincidem com o manifest; `lookup.rs` permanece ausente. O delta contém oito arquivos alterados, revisados integralmente: parser, aplicação, handler, integração, changelog, referência MCP, compatibilidade e catálogo. Os outros oito arquivos regulares e as instruções confiáveis permanecem iguais.
+
+**Parsing:** separadores com espaço, tab ou fim de linha preservam o campo para validação; chaves escalares quoted/unquoted são reconhecidas. IDs e versões zero dos exemplos anteriores deixam de virar ausência/default. As regressões cobrem review e confirm, verificando erro e ausência de novas memórias. A documentação delimita corretamente o parser, sem prometer suporte geral a objetos/aliases YAML.
+
+**Resultado pós-callback:** `ImportFailure` distingue falha antes da conclusão do callback de erro posterior. O primeiro caso mantém `not_applied/applied: 0`; o segundo retorna conservadoramente `unknown/applied: null/attempted: N`, com orientação para reconciliar antes de retry e sem expor o erro de filesystem original. Isso evita declarar rollback quando o commit pode ter persistido.
+
+A nova regressão pós-commit examina conteúdo persistido e autocommit após restaurar o alias de pai configurado. Ela cobre o caminho relevante de revalidação posterior ao commit; o teste anterior de trigger continua cobrindo rollback antes do commit.
+
+Não executei alvo, testes ou builds e não atesto os RED/GREEN informados pelo integrador. Não houve edição, Git, rede ou acesso a credenciais. Este parecer é delimitado ao delta e não constitui perfil `max`, post-gate, receipt humano ou aprovação de merge.
