@@ -6,9 +6,9 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
+| Last review | `2026-11-02 — parecer Terra6.1/high PASS com override explícito do owner: docs/harness/reviews/2026-11-02-markdown-portability-core-terra-v2-post.md, alvo 039ec951. Opinião independente; post-gate com receipt humano ainda PENDING.` |
 | Last sensors | `2026-11-02T16:51:50Z status=pass mode=full duration_sec=410, sem exclusões, em 0da56ffc (Markdown portability core). Código igual ao alvo das duas revisões estáticas; post-gate/receipt humano pendentes.` |
-| Last commit | `0da56ffc` |
+| Last commit | `039ec951` |
 | Last live-state check | `2026-11-02 — em 0da56ffc: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md PASS estrito e doctor exit0 após evidências finais. WARN preexistente de review da sprint. Código inalterado após full PASS; formal post-gate/receipt pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
@@ -37,7 +37,7 @@
 
 - **Candidato integrado local (2026-11-01)**: remediação646636f6 + import1faa5c6f (inclui export9bca4efa), mantendo79889460; [log](progress/2026-11-01-markdown-release-integration.md). Trabalho local; nenhuma autorização remota ampliada.
 
-- **Markdown architecture (2026-11-02)**: código local `0da56ffc`, full PASS/410s, 112+20 focais PASS, revisão estática sem achados; [evidência](progress/2026-11-02-markdown-portability-core.md). Post-gate humano pendente.
+- **Markdown architecture (2026-11-02)**: código `0da56ffc`, full PASS/410s, Terra6.1/high PASS em `039ec951`; [evidência](progress/2026-11-02-markdown-portability-core.md). Falta receipt humano; handoff guiado preparado.
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 
 Pilha #244–#262 mesclada no main `2e84a594` em 2026-10-27. Follow-up Nightly/release local preparado;

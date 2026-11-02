@@ -356,3 +356,9 @@ Markdown architecture: implementação0da56ffc em branch própria, full PASS410s
 (2026-11-02T16:51:50Z),112+20 testes focais PASS, duas opiniões estáticas sem
 achados. [Evidência](2026-11-02-markdown-portability-core.md). Post-gate formal
 PENDING por revisão/receipt ausentes; publicação não ampliada.
+
+
+Markdown handoff (owner: "fix all",2026-11-02): persistido o parecer Terra6.1/high
+PASS e override do Sonnet. Produto igual a0da56ffc; nenhum defeito novo identificado.
+Pendência do gate agora é receipt humano; procedimento guiado externo preparado.
+[Estado atual](2026-11-02-markdown-portability-core.md#current-handoff-status).

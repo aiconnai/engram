@@ -1,5 +1,22 @@
 # Markdown portability core — evidence log
 
+## Current handoff status
+
+Owner selected Terra6.1/high instead of Sonnet (chat: "faca com um terra 6.1 high").
+The [complete Terra review](../reviews/2026-11-02-markdown-portability-core-terra-v2-post.md)
+returned PASS for60ed4eec..039ec951, with no substantive findings. Native model
+selection was requested through collaboration.spawn_agent; no provider signature
+or independent effective-model attestation is claimed. Bootstrap was verified
+against the trusted base and executed; no reviewer tests/product code were run.
+
+Product code remains byte-identical to tested/reviewed0da56ffc. Formal gate moved
+from review-missing to receipt-missing. The operator must issue the receipt outside
+all worktrees; no human approval has been fabricated. A guided external handoff
+is prepared under `target/markdown-portability-core/completion/`; its final
+manifest binds the reviewed head, gate and review hashes. It closes only the
+post-gate after genuine operator input, not remote merge or publication.
+
+
 ## Authorization and baseline
 
 User approved compatibility, both workflows, shared auth distribution and final
@@ -73,3 +90,18 @@ worktree retained. No push, PR, merge, tag, publish or production access.
 Handoff validation caught an over-abbreviated Last live-state check field: it
 must include the complete checker CLI invocation. Restored that literal command;
 this correction changes documentation only, not the tested/reviewed source.
+
+## Completion follow-up — 2026-11-02
+
+Owner asked "fix all" after Terra PASS. Remaining gaps were handoff bookkeeping
+and the cumbersome human receipt flow, not identified product defects. Persisted
+the immutable Terra response, recorded the backend override and prepared a guided
+operator procedure. Current main2e84a594 is18 baseline commits plus2 refactor
+commits behind039ec951; fast-forward is possible but integration is not applied
+while the receipt gate remains pending. No policy or gate implementation changed.
+Final review of this documentation-only delta and operator manifest are preserved
+in `target/markdown-portability-core/completion/` after freezing this commit.
+
+Persisting the newer PASS artifact initially exposed live-state drift: the checker
+required Last review to point at that latest opinion. Updated the pointer with an
+explicit non-authoritative/PENDING description; no receipt or merge authority added.
