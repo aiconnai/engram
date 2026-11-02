@@ -1,0 +1,37 @@
+Parecer estático: **há um bloqueante documental na resolução do merge**. Não identifiquei regressão executável concreta no delta de integração examinado.
+
+- Target: `322ee4eb646f32952d26db6631b337ed7db8dc8f44727aba739ff816f001be2c`
+- Manifest/snapshot: `5c61c618bc93579da5584db6c7ac6cf7a7cd361c856ca630562796c399d6019f`
+- Base: `646636f64ec97ff42996130bb2df919cdf8029a7`
+- Incoming: `1faa5c6f364707be7c4f395fb698353640681bf3`
+
+Conferi todos os 56 paths: **55 arquivos regulares com hashes coincidentes com o manifest**, estáveis na reconferência final, e `import/lookup.rs` ausente conforme declarado.
+
+**[HIGH — bloqueante documental] A integração remove memória canônica da remediação e deixa uma referência viva sem destino.**  
+Local: [log ativo:190](/private/tmp/engram-release-integration-review-w6dgb1eb/candidate/docs/harness/progress/2026-10-26-remediation.md:190), [SPEC:52](/private/tmp/engram-release-integration-review-w6dgb1eb/candidate/docs/harness/SPEC.md:52) e [progress.md:32](/private/tmp/engram-release-integration-review-w6dgb1eb/candidate/docs/harness/progress.md:32).
+
+Comparado à base646, o log ativo perdeu integralmente as seções “Follow-up Nightly e release (2026-10-27)”, “Resolução consolidada local (2026-10-29)” e “Provisionamento de signer SSH e abertura de PR (2026-10-30)”, substituídas pelas entradas Markdown. Isso elimina a proveniência de verificações, correções e limites de autorização da remediação. `progress.md` ainda aponta para `#provisionamento-de-signer-ssh-e-abertura-de-pr-2026-10-30`, que deixou de existir. SPEC também perde o follow-up de27 e o histórico subsequente, enquanto o novo log da integração afirma que as duas histórias foram preservadas.
+
+**Correção:** reconstruir SPEC e o log ativo preservando integralmente a base confiável e acrescentando as seções exclusivas do incoming e da integração; conferir literalmente a preservação e a âncora referenciada. Reter os registros históricos não renova seus mandatos operacionais. O achado foi comunicado ao integrador, mas este parecer continua vinculado ao snapshot v1 congelado.
+
+Cobertura reconciliada dos 56 paths:
+
+| Disposição | Quantidade e conteúdo |
+|---|---|
+| Herança explícita, byte a byte igual ao incoming | 39 arquivos regulares: hardening já revisado, Cargo, baseline anunciado, testes existentes e artefatos históricos de evidência/processo |
+| Ausência herdada | 1 path: `import/lookup.rs` |
+| Conflitos documentais revisados contra ambos os pais | 6: CHANGELOG, MCP_TOOLS, SPEC, progress, log ativo e risk register |
+| Novos artefatos da integração | 3: canvas, log próprio e pre-review advisory; este último é preparação histórica, não aprovação nem autoridade de escopo |
+| Compatibilidade | 1: documento de segurança do import |
+| Delta Rust revisado em profundidade | 5: reader, apply, integration_tests, catálogo admin e fachada Markdown |
+| Novo E2E CLI | 1: `tests/cli_markdown_import_tests.rs` |
+
+No delta executável, a fachada combina corretamente `ImportOptions::default().dry_run=true` da remediação com o decoder de erros estruturados. `apply::run` devolve `dry_run=!confirm`, mantendo o tratamento anterior de resultado unknown. O reader ignora nomes ocultos antes de stat/open/traversal, mas incrementa primeiro o contador de entradas; descendentes ocultos não consomem quotas nem entram na importação. Links visíveis continuam sujeitos aos guards herdados.
+
+Os três testes CLI exercitam o binário real em sete invocações: quatro variantes sem confirmação, uma confirmação com create/update e duas ordens de flags conflitantes. Comparam estado lógico, versões e tags; exigem sucesso real nos previews e rejeição antes de criar banco nas flags conflitantes. A suíte MCP verifica omissão/false/true de confirm diretamente e pelo dispatcher.
+
+CHANGELOG preserva a seção0.24.0 preparada da base e acrescenta quatro bullets Markdown; o baseline anunciado e os riscos0001–0009 permanecem herdados da remediação, com0010/0011 abertos. Não há scripts, workflows, política de gates ou schema alterados entre os paths inventariados. Os defaults CLI/SDK sem mudança no inventário são herança da base; não refiz a auditoria desses paths nem atesto os resultados da outra frente.
+
+Limites: revisão estática de integração/delta, com herança explícita das revisões anteriores; não é auditoria global renovada. Não executei alvo, testes, builds, Cargo, rede ou Git, não li credenciais e não alterei o candidato. Os resultados RED/GREEN, CLI, G1, vault e SDK informados pelo integrador não foram atestados por mim. Este parecer não constitui perfil `max`, post-gate, receipt humano, autorização operacional ou aprovação formal.
+
+Texto integral preservado em `/private/tmp/engram-native-review-transcripts/integration-v1.txt`.

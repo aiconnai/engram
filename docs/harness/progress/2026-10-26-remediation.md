@@ -334,3 +334,13 @@ Raiz/IDOR/unknown preservados; reader omite metadados e lixeira ocultos, MCP res
 Testes focais103+CLI3/G1/vault e SDKs verdes, gates do combinado ainda pendentes.
 [Log próprio](2026-11-01-markdown-release-integration.md); formal post-gate/receipt humano pendentes,
 sem publicação/merge de main/tag. Planejamento sujo no checkout principal permanece preservado.
+
+
+### Verificação do combinado9040153b
+
+Full novo PASS em2026-11-02T00:19:12Z (01/11 local),422s, sem exclusões; executou sobre o merge
+commitado9040153b, não sobre uma branch isolada. CLI real3PASS/7invocações (semconfirm não altera
+estado lógico; confirm aplica2; flagsconflitantes recusam antes doDB). ComplementoCI14comandosPASS.
+Linux arm64/Rust1.97.1:103Markdown+29integraçõesPASS (probe/helper explícitos), SDKPython2 eTS4+types.
+Review estático corrigiu perda de história documental; formal post-gate/receipt humano permanecem
+pendentes. Handoff altera só metadados, sem fonte executável nova depois dos gates.

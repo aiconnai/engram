@@ -1,0 +1,20 @@
+Reavaliação estática da integração: **o bloqueante documental da v1 foi resolvido no snapshot v2; não identifiquei novo defeito concreto neste delta**.
+
+- Target v2: `5089d54c11b968659bea9dbd4675dd9d08e46eb2c6b1b94aa2ff009d8d1d782a`
+- Manifest/snapshot v2: `1de6b6d170857d94f324fcd3993cbcbae42ed4aa5e55195ef7a2a1705c70115f`
+- Base confiável: `646636f64ec97ff42996130bb2df919cdf8029a7`
+- Incoming: `1faa5c6f364707be7c4f395fb698353640681bf3`
+
+**V1:** o alvo `322ee4eb646f32952d26db6631b337ed7db8dc8f44727aba739ff816f001be2c` tinha um achado HIGH: remoção das seções históricas da remediação e referência viva para a âncora de signer/PR removida. O parecer integral permanece imutável em `/private/tmp/engram-native-review-transcripts/integration-v1.txt`, SHA256 `8f910471c54c04084c23253b41ac96b0cca0bcb6a7f20e16deb4554d10cdd7eb`.
+
+**V2:** conferi os 56 paths: hashes dos 55 arquivos regulares coincidentes com o manifest e `import/lookup.rs` ausente. Somente três documentos mudaram em relação à v1; os outros 52 arquivos regulares permanecem byte a byte idênticos, além da ausência herdada.
+
+Revisei integralmente o delta de SPEC, log ativo e log próprio da integração. O log ativo agora começa com todo o conteúdo literal da base646, incluindo as seções de27,29 e30/10. A heading que sustenta `#provisionamento-de-signer-ssh-e-abertura-de-pr-2026-10-30` está presente novamente. O diff de SPEC contra a base contém somente acréscimos P0/integração, preservando o follow-up27 e todo o histórico anterior. O log próprio registra o achado, a reconstrução e a separação dos snapshots.
+
+Essas adições não renovam os mandatos históricos: a seção da integração continua explicitamente local e sem publicação, alteração de main ou extensão da autorização remota anterior.
+
+A cobertura executável da v1 permanece por herança explícita: nenhum byte Rust, SDK, teste, Cargo, baseline anunciado ou gate foi alterado nesta correção documental. Não repeti a revisão ampla nem atribuo nova evidência de execução a essa herança.
+
+Limites: revisão estática/delta, sem executar alvo, testes, builds, Cargo, rede ou Git, sem ler credenciais ou alterar o candidato. Não atesto os RED/GREEN, checks CLI/G1/vault/SDK ou futuros gates do integrador. Este parecer não é perfil `max`, post-gate, receipt humano, autorização operacional ou aprovação formal.
+
+Texto integral desta reavaliação preservado em `/private/tmp/engram-native-review-transcripts/integration-v2.txt`.

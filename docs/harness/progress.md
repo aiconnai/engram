@@ -7,9 +7,9 @@
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-10-23 — parecer Sonnet PASS, opinião independente e NÃO post-gate com receipt humano: docs/harness/reviews/2026-10-23-turso-sunset-v2-post.md. Sem review da sprint atual nem de d922a60e/e04d3307/c9de7136/b29cd16c. O veredito de 2026-10-14 não registra reviewer, intervalo nem receipt (nota de proveniência em reviews/).` |
-| Last sensors | `2026-11-01 — receipts das branches são históricos; nenhum gate do candidato integrado executado ainda. Último import isolado full422s e export459s não atestam esta combinação.` |
-| Last commit | `646636f6` |
-| Last live-state check | `2026-11-01 — integração local em fix/markdown-release-integration:646636f6 +1faa5c6f, em preparação. Invocação: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Gate/receipt do novo candidato pendentes.` |
+| Last sensors | `2026-11-02T00:19:12Z status=pass mode=full duration_sec=422, sem exclusões, no commit integrado9040153b (pais646636f6+1faa5c6f). ComplementoCI14 comandos PASS. Linux arm64/Rust1.97.1:103+29 PASS; probe manual e helper G1 declarados no log.` |
+| Last commit | `9040153b` |
+| Last live-state check | `2026-11-01 local — candidato integrado9040153b contém79889460; CLI real review-default comprovado, hashes56paths conferidos. Invocação: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md. Post-gate/receipt humano pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
