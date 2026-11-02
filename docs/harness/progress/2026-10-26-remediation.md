@@ -351,3 +351,8 @@ pendentes. Handoff altera só metadados, sem fonte executável nova depois dos g
 Owner approved local implementation after Q1–Q3/design confirmation. Isolated
 branch refactor/markdown-portability-core based on integrated60ed4eec. Preserve
 contracts and safety; [task evidence](2026-11-02-markdown-portability-core.md).
+
+Markdown architecture: implementação0da56ffc em branch própria, full PASS410s
+(2026-11-02T16:51:50Z),112+20 testes focais PASS, duas opiniões estáticas sem
+achados. [Evidência](2026-11-02-markdown-portability-core.md). Post-gate formal
+PENDING por revisão/receipt ausentes; publicação não ampliada.
