@@ -191,7 +191,12 @@ impl ChildGuard {
             }
             self.kill_group();
         }
-        let status = self.child.try_wait()?;
+        let status = loop {
+            match self.child.try_wait() {
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                other => break other?,
+            }
+        };
         if status.is_some() {
             self.reaped = true;
         }
@@ -201,27 +206,33 @@ impl ChildGuard {
     /// True once the leader has exited, without reaping it (`WNOWAIT`).
     #[cfg(unix)]
     fn leader_exited(&self) -> std::io::Result<bool> {
-        // SAFETY: `siginfo_t` is plain data for which all-zero is valid, and
-        // `waitid` only writes into it. `WNOHANG | WNOWAIT` neither blocks nor
-        // reaps the child.
-        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-        let rc = unsafe {
-            libc::waitid(
-                libc::P_PID,
-                self.child.id() as libc::id_t,
-                &mut info,
-                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-            )
-        };
-        if rc != 0 {
-            return Err(std::io::Error::last_os_error());
+        loop {
+            // SAFETY: `siginfo_t` is plain data for which all-zero is valid, and
+            // `waitid` only writes into it. `WNOHANG | WNOWAIT` neither blocks nor
+            // reaps the child.
+            let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+            let rc = unsafe {
+                libc::waitid(
+                    libc::P_PID,
+                    self.child.id() as libc::id_t,
+                    &mut info,
+                    libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+                )
+            };
+            if rc != 0 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(err);
+            }
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            // SAFETY: after a successful waitid, `si_pid` is valid to read.
+            let pid = unsafe { info.si_pid() };
+            #[cfg(not(any(target_os = "linux", target_os = "android")))]
+            let pid = info.si_pid;
+            return Ok(pid != 0);
         }
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        // SAFETY: after a successful waitid, `si_pid` is valid to read.
-        let pid = unsafe { info.si_pid() };
-        #[cfg(not(any(target_os = "linux", target_os = "android")))]
-        let pid = info.si_pid;
-        Ok(pid != 0)
     }
 
     fn kill_group(&self) {
@@ -249,7 +260,13 @@ impl ChildGuard {
                 );
             }
         }
-        if let Err(error) = self.child.wait() {
+        let wait_res = loop {
+            match self.child.wait() {
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                other => break other,
+            }
+        };
+        if let Err(error) = wait_res {
             tracing::warn!(
                 target = "engram::multimodal::process",
                 error_class = %crate::observability::redact::io_class(&error),

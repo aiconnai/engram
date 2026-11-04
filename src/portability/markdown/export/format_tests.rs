@@ -129,9 +129,6 @@ fn test_build_index_markdown_type_grouping_links() {
     ));
 }
 
-// ── memory_export_markdown (requires HandlerContext — skip here) ──
-// Integration tests are in tests/markdown_export.rs
-
 // ── RFC 0004 canonical frontmatter ────────────────────────────────
 
 #[test]
@@ -236,4 +233,18 @@ fn test_content_hash_prefix() {
 fn test_content_hash_deterministic() {
     assert_eq!(compute_content_hash("abc"), compute_content_hash("abc"));
     assert_ne!(compute_content_hash("abc"), compute_content_hash("xyz"));
+}
+
+#[test]
+fn p0_index_tied_counts_have_a_total_order() {
+    let names: Vec<String> = (0..32).map(|n| format!("type{n:02}")).collect();
+    for _ in 0..8 {
+        let counts: HashMap<String, usize> = names.iter().cloned().map(|s| (s, 1)).collect();
+        let index = build_index_markdown("work", &[], &counts, &HashMap::new(), "flat");
+        let positions: Vec<usize> = names
+            .iter()
+            .map(|s| index.find(&format!("**{s}s/**")).unwrap())
+            .collect();
+        assert!(positions.windows(2).all(|p| p[0] < p[1]), "{index}");
+    }
 }

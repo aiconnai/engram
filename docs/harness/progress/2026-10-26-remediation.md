@@ -183,3 +183,227 @@ bypass de admin. GO de 5 h, até 09:35Z; tag, release, registries, deleções e 
   - `Advertised Contracts` no #257, #258 e #259: o baseline das 9 variáveis documentadas pelo #257 só é regenerado em `127e3e89` (#260), como na integração. Exceção explícita, registrada em comentário no #257; voltou a passar no #260.
   - Runs de CI no `main` (push e agendados, incluindo um Nightly atrasado) foram cancelados durante a cadeia para liberar runners: cada árvore intermediária já tinha sido testada no PR. O CI do merge do #262 roda completo.
 - **Live state**: `Last commit` = `976fbe8b` (merge do #260), primeiro pai do merge do #262.
+
+## Follow-up Nightly e release (2026-10-27)
+
+Novo GO do owner, chat: diagnosticar Nightly, corrigir defeitos confirmados e lacunas relevantes
+de testes, resolver a proposta de verify-tag e preparar release e aviso de migração. Entregar
+evidências e recomendação antes de publicar ou executar mudanças operacionais. Não renova
+o GO histórico de push/PR/merge; sem tags de release, publicações, avisos enviados, deleções,
+settings ou recibos humanos fabricados.
+
+- Base: `2e84a59422b3659aaaf25c69dbe01b01ab321332`, checkout limpo; bootstrap e doctor executados.
+- [Plano](../plans/2026-10-27-nightly-release-readiness.md),
+  [canvas](../canvas/2026-10-27-nightly-release-readiness.md),
+  [evidência](../audits/2026-10-27-nightly-release-readiness.md),
+  [readiness](../../releases/v0.24.0-readiness.md).
+- Bug confirmado: árvore de escopos achatada por ordenar reverso e depois consumir com pop;
+  dois testes novos falharam antes do fix. Corrigida ordem; preservar órfãos e irmãos.
+- Lacunas: Bearer vazio, diagnósticos, flags/caps/contadores de extração, filtros e persistência
+  de auto-link. Miri mantém 20.000 casos nativos e interpreta prefixo de 256 do mesmo seed.
+- `CHANGELOG.md`: remediação incorporada à seção 0.24.0 para entrar nas notas extraídas pelo
+  workflow. Data é de preparação do candidato; publicação ainda pendente.
+- Pre-gate manual gerou só prompt advisory (sem inferência paga). Review independente e
+  receipt humano do candidato final pendentes; não há post-gate PASS desta sessão.
+
+- Fechamento técnico local: make ci PASS (2351 testes, 2 skips preexistentes, offline 12/536);
+  Miri PASS (5 filtros, 16 testes, texto 80 s); reexecução focada 18 caught / 0 missed /
+  4 timeouts (um ramo redundante removido). O Nightly ainda exige disposição dos timeouts.
+- Matriz reobservada integralmente em 2026-10-27T18:14:43Z (todas as verificações PASS).
+  SDKs empacotados localmente; proposta de confiança de assinatura e aviso preparados.
+  Recomendação: segurar publicação; integrar/revisar o candidato, resolver timeouts e
+  provisionamento de assinatura, obter receipts humanos e dry-runs no SHA final.
+
+- Preparação de artefatos encontrou defeitos adicionais confirmados: `--write-metadata npm`
+  procurava SDK `npm` onde a matriz declara `typescript`; retries incluíam o próprio metadata
+  no hash. Teste primeiro reproduziu ambos, helper corrigido, 12 testes + shellcheck PASS.
+  CI repetido para incluir o fix; geração dos metadados reais passa nos dois canais.
+- Instalação limpa dos SDKs PASS após corrigir o helper; artefatos vinculados ao SHA
+  de origem dos SDKs `2e84a594` (árvore SDK inalterada). Republicação exige artefatos
+  refeitos no SHA integrado final. Crates conjuntos empacotam; verificação de staging
+  encontra erro interno do Cargo 1.96; fontes extraídos compilam com patch local de types.
+
+## Resolução consolidada local (2026-10-29)
+
+Execução local em `fix/resolve-all-2026-10-29` (sobre `21cf80e9`, `origin/main` `2e84a594`) do
+[plano consolidado](../plans/2026-10-27-repository-execution-plan.md) e dos 5 lotes da auditoria
+`/code-review-rm`, mantendo todos os limites estritamente locais (sem push, PR, merge, tag,
+release, publicação em registries, remoção de branches/worktrees ou inferência paga):
+
+- **R1 (`src/text_util.rs`)**: `floor_char_boundary` / `ceil_char_boundary` delegados à stdlib e
+  `LowercaseIndex::find_window` reescrito com `split_first()`. `cargo-mutants --no-config --file src/text_util.rs`
+  passou com **42/42 mutantes detectados, 0 missed, 0 timeouts**.
+- **R3 (release tag verification fail-closed)**: adicionados [`allowed-signers`](../../releases/allowed-signers),
+  `scripts/verify-release-tag.sh`, materialização de `origin/main:scripts/verify-release-tag.sh` em
+  `.github/workflows/sdk-release.yml` e 14 testes herméticos em `scripts/test_sdk_release_workflow.py`
+  (recusa allowlist vazia/placeholder, substituição do verificador na tag e auto-autorização pelo commit da tag).
+- **R4 / R5 / R7**: empacotamento local conjunto `cargo package -p engram-types -p engram-core --registry crates-io --offline`
+  PASS; artefatos SDK `0.7.0` + contrato `--live` revalidados no SHA final; claims `"100% offline"`
+  qualificados em `README.md` e `docs/index.html`; documentos de levantamento/plano de `2026-10-27`
+  incorporados e reconciliados com [`v0.24.0-readiness.md`](../../releases/v0.24.0-readiness.md) e
+  [`2026-10-27-nightly-release-readiness.md`](../audits/2026-10-27-nightly-release-readiness.md).
+- **C1 (portabilidade Markdown RFC 0004)**: CLI `engram-cli import markdown`, `ImportOptions::default()`,
+  resposta MCP (`"dry_run"`), SDK Python (`vault_import(..., confirm=False)`) e SDK TypeScript (`confirm?: boolean`)
+  alinhados ao modo seguro de review/dry-run por default.
+- **H1 / Q1 / H2**: reconciliados `docs/harness/risk-register.yaml`,
+  [`2026-10-26-deferred-review-minors.md`](../known-issues/2026-10-26-deferred-review-minors.md) e
+  [`retrieval-performance-policy.md`](../../quality/retrieval-performance-policy.md); `merge_gate_ci.py` e
+  `merge-gate.py` endurecidos para falhar fechado (`CiRefusal`) quando `git show` da base falha
+  (`FLOOR_MERGE_GATE=50`), documentados no [canvas](../canvas/2026-10-29-resolve-all.md).
+- **S1 + Unidades 1–5 (runtime, pool SQLite, sync, lifecycle/retenção, consolidação e ingestão)**:
+  - `src/bin/server.rs` (timeouts HTTP sem leak, hook budget/truncation UTF-8, `workspace` scoping),
+    `src/storage/connection.rs` (`available_connections`, recovery de pool, cleanup de sidecars WAL/SHM),
+    `src/storage/active_artifacts.rs` + `src/sync/worker.rs` + `src/sync/cloud.rs` (dedup/cap de
+    `last_error` em crash-loop, guarda contra overwrite de DB ativo e `TempDownloadGuard` RAII) e
+    `src/multimodal/process.rs` (retry em `EINTR`).
+  - Anti-IDOR em 9 tools MCP by-id (`src/mcp/workspace_guard.rs` + handlers de lifecycle/policy +
+    [`workspace-operation-matrix.md`](../../security/workspace-operation-matrix.md)), validação estrita e
+    escopo por workspace em `src/storage/queries/retention.rs`, e alinhamento 4-way MCP/SDKs
+    (`check-sdk-contract-alignment.py` com 0 drift).
+  - `src/intelligence/consolidation_offline.rs` + `src/mcp/handlers/compression.rs` (timestamps
+    RFC3339 ms válidos, `preview_with_strategy` puro em `dry_run`, savepoint por grupo, filtro de
+    `word_sets` vazios/`transcript_chunk`/expiradas) e `src/intelligence/document_ingest.rs`
+    (chunking por índice de `char`, Markdown multi-bloco/tabelas, dedup intra-documento e buffer UTF-8
+    por página em `BoundedPdfText`).
+- **Revisão independente `R2` + Harness Script Guard**: subagente read-only independente revisou todo o
+  intervalo `origin/main` (`2e84a594`) até os commits `6aed4f28..56458055` em 3 rodadas e concluiu com
+  veredito **`PASS`** (0 achados abertos; **`PASS`** em `docs/harness/bin/*`). Parecer de agente não
+  substitui sign-off/receipt humano antes de merge.
+- **Pendências exclusivas do owner (em 2026-10-29)**: provisionar chave SSH pública real em
+  `docs/releases/allowed-signers`, autorizar push/PR/merge para `main`, emitir receipts humanos de
+  post-gate e criar tag assinada `v0.24.0` para disparo de publicação nos registries.
+
+## Provisionamento de signer SSH e abertura de PR (2026-10-30)
+
+Novo GO explícito do owner no chat (`2026-10-30`):
+1. Provisionar a chave pública SSH ativa do owner (`ron@ldinho.com.br`,
+   `SHA256:iinTT0HVuDeNCuJab1vXYI8fvRc/IPvR2Xx3LYhJLXA`) em
+   [`docs/releases/allowed-signers`](../../releases/allowed-signers) — commitada em `82f79bed` e
+   validada por `scripts/test_sdk_release_workflow.py` (**14/14 PASS**, cobrindo recusa fail-closed
+   para arquivo só com comentários e `ssh-keygen -Y match-principals` no trust store commitado).
+2. Executar `git push -u origin fix/resolve-all-2026-10-29` e abrir PR contra `main` para validação
+   do CI remoto e revisão humana.
+3. **Limites mantidos**: merge do PR, criação de tag/GitHub Release (`v0.24.0`), publicação em
+   crates.io/PyPI/npm, remoção de branches/worktrees e inferência paga seguem **não** autorizados.
+
+## P0 export Markdown autorizado — 2026-11-01
+
+Owner autorizou seguir no hotfix separado, sobre origin/main revalidada `2e84a594`, branch local
+`fix/markdown-export-safety`. Tag 0.24.0 aguarda resultado; sem push/PR/merge/tag/publicação ou dados
+reais autorizados. [Log](2026-11-01-markdown-export-safety.md),
+[canvas](../canvas/2026-11-01-markdown-export-safety.md), RISK-0010 open. Checkout principal e
+documentos do programa de evolução não foram incorporados ao hotfix. Regressores RED e candidato
+local corrigido em verificação; revisão nova/post-gate pendentes, sem aprovação retroativa.
+
+
+P0: full final PASS em `2026-11-01T09:02:00Z`, 515 s, sem exclusões, depois de dois achados
+de revisão (ACL macOS e timestamps) reproduzidos/corrigidos. 78 testes Markdown e 23 integrações
+passam. Parecer estático v2 sem novo defeito concreto não é aprovação formal ou receipt humano.
+RISK-0010 open até integração/fechamento; sem tag/push/PR/merge. Commit local em preparação.
+
+
+Código P0 commitado localmente em `0cd2d2d562bb514ac9870a1e2e8e3f657d9feaa4`; hook passou habilitado.
+Quinze blobs do commit correspondem ao snapshot estático v2; live-state estrito PASS e worktree
+limpa antes do fechamento documental. Sem push/PR/merge/tag; formal post-gate/receipt e integração
+no candidato de release continuam pendentes, RISK-0010 open.
+
+
+### Follow-up Markdown, 2026-11-01
+
+Export local `9bca4efa`: tags codificadas, sincronização por lote, decoder público, testes RED/GREEN,
+review estático com um achado corrigido e 11 hashes reconciliados; Linux nativo 81+22 PASS (1 probe
+manual ignorado), sensores full PASS/459 s sem exclusões. Log próprio markdown-portability-followup.
+Import RISK-0011 em branch própria; tag aguarda bloqueantes, sem push/PR/merge/publicação.
+
+
+### Candidato separado import, 2026-11-01
+
+RISK-0011: guard de raiz/mode, reader ancorado/limitado sem links, autorização por workspace persistido
+com classificação/aplicação no mesmo TX. RED2PASS/12FAIL antes da correção; review detectou parser/tab
+e resultado pós-commit, ambos corrigidos com reprodução e GREEN. 100 testes Markdown + integrações
+G1/vault/routing verdes; Linux arm64 100+25 PASS (probe/helper declarados). Full PASS/422s sem exclusões,
+CI complementar13PASS; baseline documental de ENGRAM_EXPORT_BASE_DIR atualizado sem supressões.
+Log próprio 2026-11-01-markdown-import-safety, outputs crus e hashes. Candidato local sobre9bca4efa;
+formal post-gate/receipt humano e integração pendentes. Nenhum merge/tag/publicação nesta retomada.
+
+
+## Candidato integrado local, 2026-11-01
+
+Integração646636f6 +1faa5c6f mantém79889460, todos os fixes da remediação e o hardening Markdown.
+Raiz/IDOR/unknown preservados; reader omite metadados e lixeira ocultos, MCP responde dry_run.
+Testes focais103+CLI3/G1/vault e SDKs verdes, gates do combinado ainda pendentes.
+[Log próprio](2026-11-01-markdown-release-integration.md); formal post-gate/receipt humano pendentes,
+sem publicação/merge de main/tag. Planejamento sujo no checkout principal permanece preservado.
+
+
+### Verificação do combinado9040153b
+
+Full novo PASS em2026-11-02T00:19:12Z (01/11 local),422s, sem exclusões; executou sobre o merge
+commitado9040153b, não sobre uma branch isolada. CLI real3PASS/7invocações (semconfirm não altera
+estado lógico; confirm aplica2; flagsconflitantes recusam antes doDB). ComplementoCI14comandosPASS.
+Linux arm64/Rust1.97.1:103Markdown+29integraçõesPASS (probe/helper explícitos), SDKPython2 eTS4+types.
+Review estático corrigiu perda de história documental; formal post-gate/receipt humano permanecem
+pendentes. Handoff altera só metadados, sem fonte executável nova depois dos gates.
+
+
+## Markdown portability architecture — 2026-11-02
+
+Owner approved local implementation after Q1–Q3/design confirmation. Isolated
+branch refactor/markdown-portability-core based on integrated60ed4eec. Preserve
+contracts and safety; [task evidence](2026-11-02-markdown-portability-core.md).
+
+Markdown architecture: implementação0da56ffc em branch própria, full PASS410s
+(2026-11-02T16:51:50Z),112+20 testes focais PASS, duas opiniões estáticas sem
+achados. [Evidência](2026-11-02-markdown-portability-core.md). Post-gate formal
+PENDING por revisão/receipt ausentes; publicação não ampliada.
+
+
+Markdown handoff (owner: "fix all",2026-11-02): persistido o parecer Terra6.1/high
+PASS e override do Sonnet. Produto igual a0da56ffc; nenhum defeito novo identificado.
+Pendência do gate agora é receipt humano; procedimento guiado externo preparado.
+[Estado atual](2026-11-02-markdown-portability-core.md#current-handoff-status).
+
+## Cloud download cancellation — 2026-11-04
+
+Task: cloud-download-cancellation; base d9915e992c375751c3b88c5f5577f113b188a4bb.
+PR #264 is published; all six required checks and ten PR workflows passed on that
+base. Ronaldo's renewed H1 receipt covers60ed4eec..d9915e99, verified on2026-11-03;
+it does not authorize a later HEAD or merge. Historical handoff entries above retain
+their original dates and pending states.
+
+The requested xhigh two-axis review of main2e84a594..d9915e99 found Standards0 and
+Spec1MED: cancelling a queued Tokio file open can outlive the future-owned cleanup
+guard and create an orphan temporary afterward. Owner requested this fix in chat.
+[Plan](../plans/2026-11-04-cloud-download-cancellation.md) and
+[canvas](../canvas/2026-11-04-cloud-download-cancellation.md) define the bounded change.
+
+The regression exercises the real offline CloudStorage download with one blocking
+worker and channel barriers, including completion of create_dir_all before queuing
+file preparation. No sleeps, real credentials or remote object store are used.
+RED: the new queued-open regression ran exactly one test and failed on the orphan
+`.download-*.tmp` (0.01s). GREEN: the same test passed after the ownership fix;
+all37 cloud tests then passed (0.65s), including queued preparation, an undelivered
+prepared result and a commit already queued at cancellation. The last case may
+finish a complete replacement; the first two preserve the original destination.
+
+Preparation and commit now own the guard inside blocking work or its result;
+file handles close before cleanup, and ownership starts only after exclusive
+creation. The existing downloaded Vec is moved, not copied. Public signatures,
+mode preservation, encryption and SQLite guards remain unchanged.
+
+An initial unsupported `--no-default-features --features cloud` compilation failed
+on the existing reqwest import; no behavior result is claimed for it. Focused
+verification uses defaults plus cloud. Cloud all-targets Clippy and formatting
+passed. Full sensors PASS on2026-11-04T19:04:50Z in389s, without exclusions:
+required-feature Clippy/tests, server/watcher, WASM, rustdoc, MCP reference,
+offline harness lane, PR-title fixtures and doctor. The existing warning about
+the broader remediation review remains; negative title fixtures intentionally
+print FAIL while the aggregate result is PASS. The tracked-tree secret scan passed.
+
+Independent xhigh static review returned PASS on the working patch. Source hashes
+still match that snapshot: cloud.rs fc2588322f14a97f8ce4e10bfeea722f51af4d6e1e2d4f00c7040710f910288d;
+cloud_tests_failure.rs 7126d98a2f6d19f13b4196b0b66076a8e961daa079da412a61dd81850b05bdcb.
+These are static-review/test observations, not a final-commit approval or receipt.
+After freezing, rebind the review to the actual HEAD and preserve the opinion plus
+the human-only completion procedure in ignored local artifacts. The new receipt
+and remote CI are pending at this committed handoff; merge/release remain separate.

@@ -1,0 +1,435 @@
+{
+  "base_sha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+  "candidate_branch": "fix/nightly-release-readiness-2026-10-27",
+  "source_sha256": {
+    "src/auth/transport_principal.rs": "0e95aca6bc5467f7d7ae5b649902e7b3ff9d6e76c4ae184407ad583440570ffd",
+    "src/intelligence/entity_extraction.rs": "50b799468b4e84454d6cfaebad7521bbc16b2ade9f68e29e2ab0f7adc129c828",
+    "src/storage/scoping.rs": "b9b7c5d1375d07a377bc681dfb8ff0c9b6492fcca6af011011c4000989d70e2d",
+    "src/text_util.rs": "05724cae156e9e54a73248911fdce47450cd13661c112ca4396795f967ec0d5d"
+  },
+  "authority": "execution evidence recorded by implementer; not independent review or human approval",
+  "tool": "cargo-mutants 27.1.0",
+  "profile": "ci",
+  "jobs": 2,
+  "timeout_seconds": 60,
+  "test_filters": [
+    "auth::transport_principal::tests",
+    "storage::scoping::tests",
+    "intelligence::entity_extraction::tests",
+    "text_util::tests"
+  ],
+  "selected_original_findings": 23,
+  "applicable_mutants": 22,
+  "baseline_tests": 48,
+  "counts": {
+    "caught": 18,
+    "missed": 0,
+    "timeout": 4
+  },
+  "outcomes": [
+    {
+      "scenario": "Baseline",
+      "summary": "Success",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 34.398731959,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.658997458,
+          "process_status": "Success"
+        }
+      ]
+    },
+    {
+      "scenario": "src/text_util.rs:19:18: replace -= with /= in floor_char_boundary",
+      "summary": "Timeout",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 21.158996875,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 60.006765292,
+          "process_status": "Timeout"
+        }
+      ]
+    },
+    {
+      "scenario": "src/text_util.rs:26:14: replace >= with < in ceil_char_boundary",
+      "summary": "Timeout",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 45.96302625,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 60.014075,
+          "process_status": "Timeout"
+        }
+      ]
+    },
+    {
+      "scenario": "src/text_util.rs:31:18: replace += with *= in ceil_char_boundary",
+      "summary": "Timeout",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 15.147426042,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 60.017032666,
+          "process_status": "Timeout"
+        }
+      ]
+    },
+    {
+      "scenario": "src/auth/transport_principal.rs:31:29: replace || with && in TransportPrincipal::from_process_bearer",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 18.498983125,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.810779458,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/auth/transport_principal.rs:92:9: replace <impl std::fmt::Display for TransportPrincipalError>::fmt -> std::fmt::Result with Ok(Default::default())",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 17.405148792,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.755086041,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/text_util.rs:138:32: replace + with * in LowercaseIndex<'a>::find_window",
+      "summary": "Timeout",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 19.121853166,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 60.047588625,
+          "process_status": "Timeout"
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:204:30: replace && with || in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 21.506512,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.931958209,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:216:28: replace += with *= in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 21.287090167,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.807506542,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:218:35: replace >= with < in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 21.842545667,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.875443042,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:225:50: replace < with == in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 21.833876125,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.69659175,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:240:36: replace += with -= in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 24.498146,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.818228541,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:225:50: replace < with <= in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 24.47256325,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.968173209,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:244:35: replace >= with < in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 28.8850775,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.751147125,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:251:51: replace < with <= in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 28.670656292,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.919284875,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:283:36: replace += with *= in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 28.697094458,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.752825791,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:268:35: replace >= with < in extract_entities",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 28.915884083,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.702969125,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:341:5: replace is_common_domain -> bool with false",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 27.64784125,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.908540834,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:361:5: replace is_common_phrase -> bool with false",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 27.726723,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.806354125,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:397:5: replace auto_link_memory -> Result<usize> with Ok(0)",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 26.357070167,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.864635291,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:397:5: replace auto_link_memory -> Result<usize> with Ok(1)",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 26.508338292,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.712242708,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/intelligence/entity_extraction.rs:441:26: replace += with *= in auto_link_memory",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 26.467496583,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.759718417,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "src/storage/scoping.rs:346:70: replace == with != in build_tree",
+      "summary": "CaughtMutant",
+      "phases": [
+        {
+          "phase": "Build",
+          "duration": 26.373535167,
+          "process_status": "Success"
+        },
+        {
+          "phase": "Test",
+          "duration": 0.710660167,
+          "process_status": {
+            "Failure": 101
+          }
+        }
+      ]
+    }
+  ]
+}

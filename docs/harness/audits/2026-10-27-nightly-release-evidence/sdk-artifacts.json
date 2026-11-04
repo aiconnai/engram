@@ -1,0 +1,30 @@
+{
+  "sdk_source_commit": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+  "sdk_tree_sha": "9080917136df5c2e118b04979c2768f95660806e",
+  "scope": "SDK sources unchanged from base; not final core release SHA binding",
+  "python_build": {
+    "python": "3.10",
+    "setuptools": "84.0.0",
+    "twine_check": "pass"
+  },
+  "typescript_build": {
+    "node": "22.22.3",
+    "tests_passed": 103,
+    "type_check": "pass",
+    "build": "pass",
+    "pack": "pass"
+  },
+  "clean_install_verifier": "pass",
+  "installed_live_contracts": "not run",
+  "metadata_regression_tests": 12,
+  "files": {
+    "python/python-sdk-metadata.json": "c14bfc1c1c72ecdef4de87c6a02d2895e1341cccdd4f145115f1f8be4ed80d23",
+    "python/engram_client-0.7.0.tar.gz": "cc3523b45c9207157c3e8c2512654e3fbcd32105ecbd0b11f6afd771a23840cd",
+    "python/engram_client-0.7.0-py3-none-any.whl": "84690c6b5a5a7d0b80bd122f31f9e40b0947ea38d2535d0b1f7870f3d14b123f",
+    "npm/npm-sdk-metadata.json": "18d647a513bf3539f60260ff01d33033f64b1d58e7c8be44e4c3da1147ec1878",
+    "npm/engram-client-0.7.0.tgz": "2a17efbceacdb66020915a68048f810ff8f67c1b496251f4101dfce4770bf637"
+  },
+  "log_path": "/private/tmp/engram-sdk-install-live.log",
+  "log_sha256": "c7bb61eab9db4bb635f63a9eea3e14eb7b246ac38d97d55d91549c14959faf6c",
+  "authority": "execution evidence recorded by implementer; not publication approval"
+}

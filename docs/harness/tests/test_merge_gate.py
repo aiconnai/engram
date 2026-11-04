@@ -545,6 +545,69 @@ class CiPolicyPaths(Base):
         self.assertEqual(MG.MERGE_POLICIES[POLICY_VERSION]["ci_policy_sha256"],
                          MG.CI.policy_fingerprint())
 
+    def test_base_references_git_error_fails_closed_for_dynamic_ci_references(self):
+        w = self.world
+        ci_text = ("jobs:\n  fmt:\n    name: Format\n    runs-on: ubuntu-latest\n    steps:\n"
+                   "      - run: python3 tools/fmt_gate.py --config tools/fmt.json\n")
+        base = w.commit({CI_YML: ci_text.encode(), "tools/fmt_gate.py": b"gate\n",
+                         "tools/fmt.json": b"{}\n"})
+        head = w.commit({CI_YML: ci_text.encode(), "tools/fmt_gate.py": b"gate\n",
+                         "tools/fmt.json": b'{"skip": true}\n'}, parent=base)
+        real_git = MG.HG.git
+
+        for subcmd in ("show", "ls-tree"):
+            with self.subTest(subcmd):
+                def fail_on_subcmd(repo, args, *rest, _subcmd=subcmd, **kw):
+                    if args and args[0] == _subcmd and "-r" in args or (
+                        args and args[0] == _subcmd and _subcmd == "show"
+                    ):
+                        raise MG.HG.GitError(f"injected {_subcmd} failure")
+                    return real_git(repo, args, *rest, **kw)
+
+                with self.assertRaises(MG.CI.CiRefusal) as ctx:
+                    with mock.patch.object(MG.HG, "git", side_effect=fail_on_subcmd):
+                        MG.CI.protected_changes(MG.HG, w.repo, base, head)
+                self.assertEqual(ctx.exception.code, "ci_base_unverifiable")
+
+                with mock.patch.object(MG.HG, "git", side_effect=fail_on_subcmd):
+                    doc = self.evaluate(self.op.inputs())
+                self.assertRefused(doc, "ci_base_unverifiable")
+                self.assertEqual(doc["sections"]["ci"], "fail")
+
+    def test_missing_base_ci_workflow_fails_closed(self):
+        w = self.world
+        files_without_ci = {k: v for k, v in w.base_files.items() if k != CI_YML}
+        base_no_ci = w.fx.repo.commit(
+            {**files_without_ci, "tools/fmt.json": b"{}\n"},
+            parent=w.base,
+        )
+        head_no_ci = w.fx.repo.commit(
+            {**files_without_ci, "tools/fmt.json": b'{"skip": true}\n'},
+            parent=base_no_ci,
+        )
+        with self.assertRaises(MG.CI.CiRefusal) as ctx:
+            MG.CI.protected_changes(MG.HG, w.repo, base_no_ci, head_no_ci)
+        self.assertEqual(ctx.exception.code, "ci_base_unverifiable")
+        self.assertEqual(MG.CI.workflow_blob(MG.HG, w.repo, base_no_ci), "")
+
+    def test_workflow_blob_git_error_fails_closed(self):
+        w = self.world
+        with self.assertRaises(MG.CI.CiRefusal) as ctx:
+            MG.CI.workflow_blob(MG.HG, w.repo, "deadbeef" * 5)
+        self.assertEqual(ctx.exception.code, "ci_workflow_unverifiable")
+
+        real_git = MG.HG.git
+
+        def fail_workflow_ls_tree(repo, args, *rest, **kw):
+            if args and args[0] == "ls-tree" and CI_YML in args:
+                raise MG.HG.GitError("injected workflow ls-tree failure")
+            return real_git(repo, args, *rest, **kw)
+
+        with mock.patch.object(MG.HG, "git", side_effect=fail_workflow_ls_tree):
+            doc = self.evaluate(self.op.inputs())
+        self.assertRefused(doc, "ci_workflow_unverifiable")
+        self.assertEqual(doc["sections"]["ci"], "fail")
+
 
 class IntegratedTree(Base):
     def test_merge_queue_commit_needs_its_own_evidence_unless_its_tree_is_the_head_tree(self):

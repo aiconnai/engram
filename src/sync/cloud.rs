@@ -3,7 +3,7 @@
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::Client as S3Client;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::encryption::{
     decrypt_data_with_provider, decrypt_data_with_provider_for_key_id, encrypt_data_with_provider,
@@ -158,10 +158,12 @@ impl CloudStorage {
     ///
     /// The object is validated first (key identity, format) and then written
     /// to a sibling temp file, fsynced and renamed over `local_path`, so an
-    /// interrupted or failed download leaves the previous file intact (no
-    /// partial or truncated database) and no temp file behind. Rename swaps
-    /// the directory entry: never point it at a database that is open (in this
-    /// or another process); see the G1 note on [`Self::upload`].
+    /// failed preparation leaves the previous file intact (no partial or
+    /// truncated database). Cancelled preparation cleans its temporary file
+    /// when its blocking work finishes; a rename already queued may still
+    /// commit a complete replacement after cancellation. Rename swaps the
+    /// directory entry: never point it at a database that is open (in this or
+    /// another process); see the G1 note on [`Self::upload`].
     pub async fn download(&self, local_path: &Path) -> Result<u64> {
         refuse_hot_sqlite_target(local_path)?;
         let object = self.backend.get_object(&self.bucket, &self.key).await?;
@@ -187,7 +189,7 @@ impl CloudStorage {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        replace_file_atomically(local_path, &decrypted).await?;
+        replace_file_atomically(local_path, decrypted).await?;
 
         tracing::info!(
             "Downloaded {} bytes from s3://{}/{}",
@@ -296,18 +298,14 @@ fn refuse_hot_sqlite_target(target: &Path) -> Result<()> {
 
 /// Make the rename durable. Best effort: the file is already replaced, so a
 /// failure only weakens crash durability and is logged, not returned.
-async fn sync_parent_dir(target: &Path) {
+fn sync_parent_dir(target: &Path) {
     #[cfg(unix)]
     {
         let parent = match target.parent() {
             Some(p) if !p.as_os_str().is_empty() => p,
             _ => Path::new("."),
         };
-        let result = async {
-            let dir = tokio::fs::File::open(parent).await?;
-            dir.sync_all().await
-        }
-        .await;
+        let result = std::fs::File::open(parent).and_then(|dir| dir.sync_all());
         if let Err(error) = result {
             tracing::warn!(
                 path = %crate::observability::redact::path_label(parent),
@@ -320,46 +318,85 @@ async fn sync_parent_dir(target: &Path) {
     let _ = target;
 }
 
+/// Owns cleanup inside a blocking operation or its undelivered result, so a
+/// cancelled waiter cannot remove the path before file creation finishes.
+struct TempDownloadGuard {
+    path: PathBuf,
+    disarmed: bool,
+}
+
+impl TempDownloadGuard {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            disarmed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.disarmed = true;
+    }
+}
+
+impl Drop for TempDownloadGuard {
+    fn drop(&mut self) {
+        if !self.disarmed {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
 /// Write `bytes` to a sibling temp file, fsync it, and rename it over `target`.
-/// The temp file is removed on every failure path. An existing target keeps its
-/// permissions; a new one is owner-only.
-async fn replace_file_atomically(target: &Path, bytes: &[u8]) -> Result<()> {
-    use tokio::io::AsyncWriteExt;
+/// Preparation and commit each retain cleanup ownership until their blocking
+/// work finishes. A discarded preparation result removes its closed temporary;
+/// a commit already queued may complete after its caller is cancelled.
+async fn replace_file_atomically(target: &Path, bytes: Vec<u8>) -> Result<()> {
+    use std::io::Write;
+    #[cfg(unix)]
+    use std::os::unix::fs::OpenOptionsExt;
 
-    let file_name = target
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| EngramError::Config("download target has no file name".to_string()))?;
-    let temp = target.with_file_name(format!(
-        ".{file_name}.download-{}.tmp",
-        uuid::Uuid::new_v4().simple()
-    ));
-
-    let outcome: Result<()> = async {
-        let mut options = tokio::fs::OpenOptions::new();
+    let target = target.to_path_buf();
+    let preparation_target = target.clone();
+    let mut prepared = tokio::task::spawn_blocking(move || -> Result<TempDownloadGuard> {
+        let file_name = preparation_target
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| EngramError::Config("download target has no file name".to_string()))?;
+        let temp = preparation_target.with_file_name(format!(
+            ".{file_name}.download-{}.tmp",
+            uuid::Uuid::new_v4().simple()
+        ));
+        // Declare the guard first so errors/panics close the file before
+        // removing it, including on systems that cannot unlink an open file.
+        let mut guard = TempDownloadGuard::new(temp);
+        let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
         options.mode(0o600);
-        let mut file = options.open(&temp).await?;
-        file.write_all(bytes).await?;
-        file.sync_all().await?;
+        let mut file = options.open(&guard.path)?;
+        // Only an exclusively created file belongs to this cleanup guard.
+        guard.disarmed = false;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
         drop(file);
-        if let Ok(existing) = tokio::fs::metadata(target).await {
+        if let Ok(existing) = std::fs::metadata(&preparation_target) {
             if existing.is_file() {
-                tokio::fs::set_permissions(&temp, existing.permissions()).await?;
+                std::fs::set_permissions(&guard.path, existing.permissions())?;
             }
         }
-        tokio::fs::rename(&temp, target).await?;
-        sync_parent_dir(target).await;
-        Ok(())
-    }
-    .await;
+        Ok(guard)
+    })
+    .await
+    .map_err(|error| EngramError::Sync(format!("download preparation task failed: {error}")))??;
 
-    if outcome.is_err() {
-        // Best-effort teardown: the business error is already in `outcome`.
-        let _ = tokio::fs::remove_file(&temp).await;
-    }
-    outcome
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        std::fs::rename(&prepared.path, &target)?;
+        prepared.disarm();
+        sync_parent_dir(&target);
+        Ok(())
+    })
+    .await
+    .map_err(|error| EngramError::Sync(format!("download commit task failed: {error}")))?
 }
 
 /// Cloud file metadata

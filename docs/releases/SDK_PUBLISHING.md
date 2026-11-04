@@ -65,7 +65,14 @@ requires all of the following immediately before a registry request:
 
 1. The immutable final GitHub Release for the exact core tag
    (`v<Cargo.toml version>`) exists and its annotated tag passes cryptographic
-   `git verify-tag` validation.
+   signature validation via `origin/main:scripts/verify-release-tag.sh`
+   (materialized from `origin/main` into `${RUNNER_TEMP}` and using an explicit
+   OpenSSH `allowed_signers` trust anchor from protected repository/environment
+   variable `ENGRAM_RELEASE_ALLOWED_SIGNERS` — optionally pinned by
+   `ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256` — or from
+   `origin/main:docs/releases/allowed-signers`, never trusting a verifier script
+   or signers file from the tag tree under verification; fails closed when no
+   trusted signer is configured).
 2. `tag`, `github.sha`, the supplied full SHA, and checked-out HEAD agree, and
    the version mapping above passes.
 3. Exactly one channel (`python` or `npm`) is selected with `dry_run=false`

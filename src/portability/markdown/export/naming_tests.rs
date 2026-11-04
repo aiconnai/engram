@@ -149,3 +149,34 @@ fn test_grouping_by_entity_no_tags() {
     let subdir = compute_file_subdir("entity", &mem);
     assert_eq!(subdir.as_deref(), Some("untagged"));
 }
+
+#[test]
+fn followup_encoded_groups_distinguish_replaced_characters_and_literal_outputs() {
+    let group = |tag: &str| {
+        compute_file_subdir(
+            "entity",
+            &json!({"tags":serde_json::to_string(&vec![tag]).unwrap()}),
+        )
+        .unwrap()
+    };
+    let slash = group("session:a/b");
+    let backslash = group("session:a\\b");
+    assert_ne!(slash, backslash);
+    assert_ne!(
+        group(&slash),
+        slash,
+        "literal tag must not impersonate an encoded tag"
+    );
+    assert!(
+        !group(&slash.to_ascii_uppercase()).eq_ignore_ascii_case(&slash),
+        "literal tag must not impersonate an encoded tag on case-insensitive filesystems"
+    );
+    for tag in ["session:abc", "../../escape", "aux", ""] {
+        let encoded = group(tag);
+        assert!(
+            super::filesystem::validate_component(&encoded).is_ok(),
+            "{tag}: {encoded}"
+        );
+    }
+    assert!(group(&"字".repeat(100)).len() <= 160);
+}

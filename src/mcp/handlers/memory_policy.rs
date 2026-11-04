@@ -20,18 +20,32 @@ use super::HandlerContext;
 const POLICY_REINFORCEMENT_BOOST: f32 = 0.10;
 const DECAY_STEP: f32 = 0.05;
 
+fn optional_bool_param(params: &Value, key: &str) -> std::result::Result<Option<bool>, Value> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(json!({"error": format!("{key} must be a boolean")})),
+    }
+}
+
 pub fn memory_score(ctx: &HandlerContext, params: Value) -> Value {
     let id = match required_id(&params) {
         Ok(id) => id,
         Err(error) => return error,
     };
-    let persist = params
-        .get("persist")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let explicit_persist = match optional_bool_param(&params, "persist") {
+        Ok(val) => val,
+        Err(error) => return error,
+    };
+    let dry_run = match optional_bool_param(&params, "dry_run") {
+        Ok(val) => val,
+        Err(error) => return error,
+    };
+    let persist = explicit_persist.unwrap_or_else(|| dry_run.map(|d| !d).unwrap_or(false));
 
     let result = if persist {
         ctx.storage.with_transaction(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             let (memory, existing_policy, features, score) = score_memory(conn, id)?;
             let policy = upsert_policy_record(conn, policy_input(id, &score))?;
             emit_policy_event(conn, "memory_score", &policy, false);
@@ -47,6 +61,7 @@ pub fn memory_score(ctx: &HandlerContext, params: Value) -> Value {
         })
     } else {
         ctx.storage.with_connection(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             let (memory, existing_policy, features, score) = score_memory(conn, id)?;
             Ok(json!({
                 "memory_id": id,
@@ -67,13 +82,14 @@ pub fn memory_promote(ctx: &HandlerContext, params: Value) -> Value {
         Ok(id) => id,
         Err(error) => return error,
     };
-    let canonical_tier = params
-        .get("canonical_tier")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let canonical_tier = match optional_bool_param(&params, "canonical_tier") {
+        Ok(val) => val.unwrap_or(false),
+        Err(error) => return error,
+    };
 
     ctx.storage
         .with_transaction(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             load_memory_readonly(conn, id)?;
             let policy =
                 record_reinforcement(conn, id, POLICY_REINFORCEMENT_BOOST, "memory_promote")?;
@@ -98,15 +114,33 @@ pub fn memory_promote(ctx: &HandlerContext, params: Value) -> Value {
 }
 
 pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
-    let dry_run = params
-        .get("dry_run")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-    let workspace = params
-        .get("workspace")
-        .and_then(|v| v.as_str())
-        .unwrap_or("default")
-        .to_string();
+    let dry_run = match optional_bool_param(&params, "dry_run") {
+        Ok(val) => val.unwrap_or(true),
+        Err(error) => return error,
+    };
+    let raw_workspace = match params.get("workspace") {
+        None | Some(Value::Null) => ctx
+            .principal
+            .as_ref()
+            .filter(|p| crate::mcp::workspace_guard::is_workspace_restricted(p))
+            .and_then(|p| p.auth_context().namespace.as_deref())
+            .unwrap_or("default"),
+        Some(Value::String(ws)) => ws.as_str(),
+        Some(_) => return json!({"error": "workspace must be a string"}),
+    };
+    let workspace = match crate::types::normalize_workspace(raw_workspace) {
+        Ok(ws) => ws,
+        Err(e) => return json!({"error": format!("Invalid workspace: {e}")}),
+    };
+    if let Some(ref p) = ctx.principal {
+        if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+            "memory_decay",
+            p,
+            Some(&workspace),
+        ) {
+            return denial;
+        }
+    }
 
     let result = if dry_run {
         ctx.storage.with_connection(|conn| {
@@ -163,6 +197,7 @@ pub fn memory_explain(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_connection(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             let (_memory, stored_policy, features, score) = score_memory(conn, id)?;
             let explanation = explain_policy_score(&features, &score);
             let latest_policy_event_count = policy_event_count(conn, id)?;
@@ -198,6 +233,7 @@ pub fn memory_reconcile_conflict(ctx: &HandlerContext, params: Value) -> Value {
 
     ctx.storage
         .with_transaction(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
             load_memory_readonly(conn, id)?;
             let policy = record_contradiction(conn, id, "memory_reconcile_conflict", &reason)?;
             Ok(json!({

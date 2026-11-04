@@ -417,7 +417,10 @@ class MemoriesMixin(ResourceMixin):
             params["state"] = state
         if reason is not None:
             params["reason"] = reason
-        resolved_persist = persist if persist is not None else (not dry_run if dry_run is not None else None)
-        if resolved_persist is not None:
-            params["persist"] = resolved_persist
+        if workspace is not None:
+            params["workspace"] = workspace
+        if dry_run is not None:
+            params["dry_run"] = dry_run
+        if persist is not None:
+            params["persist"] = persist
         return await self._mcp_call("memory_lifecycle_update", params)

@@ -337,7 +337,7 @@ pub const TOOLS: &[ToolDef] = &[
         },
     ToolDef {
             name: "memory_export_markdown",
-            description: "Export a workspace as human-readable Markdown files with YAML frontmatter and wiki-style [[links]]. Creates one .md file per memory, organized by type in subdirectories, with an index.md overview.",
+            description: "Write unexpired workspace memories as Markdown files with YAML frontmatter and directional [[links]]. Requires scoped_write within ENGRAM_EXPORT_BASE_DIR, otherwise maintenance. Output directories must be owned by the server user, not group/world writable and have no extended/default ACLs. Safe filesystem writes require Linux/macOS.",
             schema: r#"{
                 "type": "object",
                 "properties": {
@@ -348,12 +348,12 @@ pub const TOOLS: &[ToolDef] = &[
                 },
                 "required": ["workspace"]
             }"#,
-            annotations: ToolAnnotations::read_only(),
+            annotations: ToolAnnotations::mutating(),
             tier: ToolTier::Advanced,
         },
     ToolDef {
             name: "memory_import_markdown",
-            description: "Import memories from Markdown files with engram_ frontmatter (RFC 0004). Review mode by default (confirm: false) — returns a staged list without writing. Detects drift via content_hash and version conflicts via engram_version. Ignores non-engram_ frontmatter keys (Obsidian-safe).",
+            description: "Import bounded Markdown files with engram_ frontmatter on Linux/macOS. Requires scoped_write within ENGRAM_EXPORT_BASE_DIR, otherwise maintenance, including review mode. Input directories must be server-owned, not group/world writable and have no ACLs; links and SQLite artifacts are refused. Authorizes existing IDs by their persisted workspace. Review is default; confirm uses one database transaction. Pre-commit failures roll back; commit/completion failures report an unknown outcome requiring reconciliation. Detects drift/version conflicts and ignores non-engram_ keys (Obsidian-safe). Skips hidden entries beneath the input root. Missing IDs are rejected for workspace-restricted principals; unrestricted local owners treat them as new.",
             schema: r#"{
                 "type": "object",
                 "properties": {

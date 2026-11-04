@@ -66,7 +66,7 @@ esac
 
 # Tripwire floors (current counts: unittest 76, self-test 18, fixtures 39, live-state 46,
 # review-gate 39 tests, lane contract 19, sandbox adapter 54, context budget 50, runner 75,
-# merge gate 47, retention 21, standing checks 52; every floor is the exact count so a silently
+# merge gate 50, retention 21, standing checks 52; every floor is the exact count so a silently
 # shadowed or dropped test trips the lane; docs/harness/tests/test_offline_lane.py mirrors them).
 FLOOR_VALIDATOR_UNIT=76
 FLOOR_VALIDATOR_SELF=18
@@ -77,7 +77,7 @@ FLOOR_LANE_CONTRACT=19
 FLOOR_SANDBOX_UNIT=54
 FLOOR_CONTEXT_BUDGET=50
 FLOOR_RUNNER_UNIT=75
-FLOOR_MERGE_GATE=47
+FLOOR_MERGE_GATE=50
 FLOOR_RETENTION=21
 FLOOR_STANDING_CHECKS=52
 

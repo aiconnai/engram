@@ -292,7 +292,7 @@ crate::engram_server_only! {
         .unwrap();
         assert_eq!(
             resolve_hook_workspace(&json!({"workspace": "ws-beta"}), Some(&principal)),
-            "ws-alpha"
+            Some("ws-alpha".to_string())
         );
 
         let (alpha_policy, beta_policy) = handler
@@ -428,5 +428,148 @@ crate::engram_server_only! {
                 "warmup must run iff hnsw_enabled (enabled={enabled})"
             );
         }
+    }
+
+    #[cfg(feature = "hooks")]
+    #[test]
+    fn test_anonymous_and_readonly_principals_do_not_drain_pending_injections_and_errors_skip_post_tool_use() {
+        use engram::auth::{PermissionSet, TokenClaims, TransportPrincipal, UserId};
+        use engram::storage::pending_injections;
+        use engram::storage::queries::{create_memory, get_policy_record};
+        use std::collections::HashMap;
+
+        let mut handler = test_handler();
+        handler.enable_hooks();
+
+        let mem_id = handler
+            .storage
+            .with_connection(|conn| {
+                pending_injections::enqueue(
+                    conn,
+                    "default",
+                    r#"{"source_session_id":"s-anon","ended_at":"2026-01-01T00:00:00Z","notes":"keep safe","notes_truncated":false}"#,
+                    Some("s-anon"),
+                    None,
+                )?;
+                let mem = create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "policy probe".to_string(),
+                        memory_type: MemoryType::Note,
+                        tags: vec![],
+                        metadata: HashMap::new(),
+                        importance: None,
+                        scope: Default::default(),
+                        workspace: Some("default".to_string()),
+                        tier: Default::default(),
+                        defer_embedding: true,
+                        ttl_seconds: None,
+                        dedup_mode: Default::default(),
+                        dedup_threshold: None,
+                        event_time: None,
+                        event_duration_seconds: None,
+                        trigger_pattern: None,
+                        summary_of_id: None,
+                        media_url: None,
+                    },
+                )?;
+                Ok(mem.id)
+            })
+            .unwrap();
+
+        let init_req = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(1)),
+            method: methods::INITIALIZE.to_string(),
+            params: json!({
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "workspace": "default",
+                "session_id": "s-anon-next"
+            }),
+        };
+
+        let anon = TransportPrincipal::anonymous_loopback();
+        let resp = handler.handle_request_as(init_req.clone(), Some(anon));
+        let result = resp.result.expect("initialize must still succeed with HTTP 200");
+        assert!(
+            result.get("pending_injections").is_none(),
+            "AnonymousLoopback initialize must not drain pending_injections"
+        );
+        assert_eq!(
+            result
+                .pointer("/capabilities/resources/subscribe")
+                .and_then(|v| v.as_bool()),
+            Some(true),
+            "2025-11-25 initialize must advertise resources.subscribe = true"
+        );
+
+        let readonly = TransportPrincipal::from_token_claims(TokenClaims {
+            user_id: UserId::from_string("reader"),
+            key_id: "key-ro".to_string(),
+            permissions: PermissionSet::read_only(),
+            namespace: Some("default".to_string()),
+            issued_at: chrono::Utc::now(),
+            expires_at: None,
+        })
+        .unwrap();
+        let ro_resp = handler.handle_request_as(init_req, Some(readonly));
+        assert!(
+            ro_resp
+                .result
+                .expect("read-only initialize must succeed")
+                .get("pending_injections")
+                .is_none(),
+            "read-only token initialize must not drain pending_injections"
+        );
+
+        let remaining = handler
+            .storage
+            .with_connection(|conn| pending_injections::pending_count(conn, "default"))
+            .unwrap();
+        assert_eq!(remaining, 1, "pending injection must remain queued");
+
+        // Failed tool call must not fire PostToolUse reinforcement.
+        let bad_call = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(2)),
+            method: methods::CALL_TOOL.to_string(),
+            params: json!({
+                "name": "nonexistent_tool",
+                "arguments": {
+                    "id": mem_id,
+                    "workspace": "default"
+                }
+            }),
+        };
+        let _ = handler.handle_request_as(bad_call, None);
+        let policy = handler
+            .storage
+            .with_connection(|conn| get_policy_record(conn, mem_id))
+            .unwrap()
+            .expect("policy record");
+        assert_eq!(policy.reinforcement_count, 0);
+    }
+
+    #[test]
+    fn test_with_realtime_wires_handler_context_and_publishes_events() {
+        let manager = RealtimeManager::new();
+        let handler = test_handler().with_realtime(manager.clone());
+        assert!(handler.make_context().realtime.is_some());
+
+        let created = handler.handle_tool_call(
+            "memory_create",
+            json!({
+                "content": "realtime broadcast check",
+                "memory_type": "note",
+                "workspace": "default"
+            }),
+            None,
+            None,
+        );
+        assert!(created.get("error").is_none(), "memory_create failed: {created}");
+        assert!(
+            !manager.get_events_after(0).is_empty(),
+            "memory_create should broadcast a realtime event when with_realtime is wired"
+        );
     }
 }

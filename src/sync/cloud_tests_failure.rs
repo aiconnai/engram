@@ -19,6 +19,125 @@ fn write(path: &std::path::Path, bytes: &[u8]) {
     std::fs::write(path, bytes).expect("test file is written");
 }
 
+#[test]
+fn cancelled_download_with_queued_file_creation_leaves_no_temp_file() {
+    assert_cancelled_download_cleanup(CancelPoint::QueuedPreparation);
+}
+
+#[test]
+fn cancelled_download_with_undelivered_preparation_leaves_no_temp_file() {
+    assert_cancelled_download_cleanup(CancelPoint::UndeliveredPreparation);
+}
+
+#[test]
+fn cancelled_download_with_queued_commit_finishes_atomic_replacement() {
+    assert_cancelled_download_cleanup(CancelPoint::QueuedCommit);
+}
+
+#[derive(Clone, Copy)]
+enum CancelPoint {
+    QueuedPreparation,
+    UndeliveredPreparation,
+    QueuedCommit,
+}
+
+fn assert_cancelled_download_cleanup(cancel_at: CancelPoint) {
+    use std::future::Future;
+    use std::task::{Context, Poll, Waker};
+
+    fn occupy_pool() -> (std::sync::mpsc::Sender<()>, tokio::task::JoinHandle<()>) {
+        let (release, wait) = std::sync::mpsc::channel();
+        let (entered, ready) = std::sync::mpsc::channel();
+        let task = tokio::task::spawn_blocking(move || {
+            entered.send(()).expect("signal occupied blocking pool");
+            wait.recv_timeout(Duration::from_secs(10))
+                .expect("release occupied blocking pool");
+        });
+        ready
+            .recv_timeout(Duration::from_secs(10))
+            .expect("blocking pool worker started");
+        (release, task)
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .expect("single blocking worker runtime");
+    runtime.block_on(async {
+        let store = InMemoryCloudStore::default();
+        let cloud = CloudStorage::test_fixture_plaintext("bucket", "path.db", store);
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.db");
+        let target = dir.path().join("local.db");
+        write(&source, b"remote generation two");
+        cloud.upload(&source).await.unwrap();
+        write(&target, b"local generation one");
+
+        let mut download = Box::pin(cloud.download(&target));
+        let mut context = Context::from_waker(Waker::noop());
+
+        // Complete the real download's create_dir_all before queuing its file
+        // preparation. The occupied worker makes both poll boundaries exact.
+        let (release_directory, directory_blocker) = occupy_pool();
+        assert!(matches!(
+            download.as_mut().poll(&mut context),
+            Poll::Pending
+        ));
+        release_directory.send(()).unwrap();
+        directory_blocker.await.unwrap();
+        tokio::task::spawn_blocking(|| {}).await.unwrap();
+
+        let (release_file, file_blocker) = occupy_pool();
+        assert!(matches!(
+            download.as_mut().poll(&mut context),
+            Poll::Pending
+        ));
+        if matches!(cancel_at, CancelPoint::QueuedPreparation) {
+            drop(download);
+            release_file.send(()).unwrap();
+            file_blocker.await.unwrap();
+        } else {
+            release_file.send(()).unwrap();
+            file_blocker.await.unwrap();
+            tokio::task::spawn_blocking(|| {}).await.unwrap();
+            if matches!(cancel_at, CancelPoint::QueuedCommit) {
+                let (release_commit, commit_blocker) = occupy_pool();
+                assert!(matches!(
+                    download.as_mut().poll(&mut context),
+                    Poll::Pending
+                ));
+                drop(download);
+                release_commit.send(()).unwrap();
+                commit_blocker.await.unwrap();
+            } else {
+                // Preparation finished, but its cleanup-owning result has not
+                // been received by the cancelled download future.
+                drop(download);
+            }
+        }
+        // One blocking worker drains the queued file operation before this
+        // fence, including disposal of a result whose caller was cancelled.
+        tokio::task::spawn_blocking(|| {}).await.unwrap();
+
+        let expected: &[u8] = if matches!(cancel_at, CancelPoint::QueuedCommit) {
+            b"remote generation two"
+        } else {
+            b"local generation one"
+        };
+        assert_eq!(std::fs::read(&target).unwrap(), expected);
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .filter(|name| name.to_string_lossy().contains(".download-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "orphaned download files: {leftovers:?}"
+        );
+    });
+}
+
 #[tokio::test]
 async fn download_never_mutates_the_existing_file_in_place() {
     use std::io::Read;

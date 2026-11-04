@@ -639,14 +639,23 @@ def _ci_inputs(inp: Inputs, untrusted: Sequence[Path]) -> Tuple[List[Any], List[
 
 def _check_ci(inp: Inputs, ev: Evaluation, untrusted: Sequence[Path], head: str,
               base: str) -> None:
-    protected = CI.protected_changes(HG, inp.repo, base, head)
+    try:
+        protected = CI.protected_changes(HG, inp.repo, base, head)
+    except CI.CiRefusal as exc:
+        ev.refuse("ci", exc.code, exc.detail)
+        protected = []
     if protected:
         ev.refuse("ci", "ci_policy_paths_changed", "the PR changes CI definitions or gate scripts, "
                   f"so its own CI results are not policy input: {', '.join(protected)[:300]}")
-    if CI.workflow_blob(HG, inp.repo, head) != CI.workflow_blob(HG, inp.repo, base) \
-            or not CI.workflow_blob(HG, inp.repo, base):
-        ev.refuse("ci", "ci_workflow_changed",
-                  f"{CI.CI_WORKFLOW_PATH} differs from the base or is absent")
+    try:
+        head_blob = CI.workflow_blob(HG, inp.repo, head)
+        base_blob = CI.workflow_blob(HG, inp.repo, base)
+    except CI.CiRefusal as exc:
+        ev.refuse("ci", exc.code, exc.detail)
+    else:
+        if head_blob != base_blob or not base_blob:
+            ev.refuse("ci", "ci_workflow_changed",
+                      f"{CI.CI_WORKFLOW_PATH} differs from the base or is absent")
     try:
         check_runs, workflow_runs = _ci_inputs(inp, untrusted)
         results, refusals = CI.results_by_context(check_runs, workflow_runs, head)

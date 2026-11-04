@@ -1,0 +1,92 @@
+{
+  "base_sha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+  "candidate_branch": "fix/nightly-release-readiness-2026-10-27",
+  "source_sha256": {
+    "src/auth/transport_principal.rs": "0e95aca6bc5467f7d7ae5b649902e7b3ff9d6e76c4ae184407ad583440570ffd",
+    "src/intelligence/entity_extraction.rs": "50b799468b4e84454d6cfaebad7521bbc16b2ade9f68e29e2ab0f7adc129c828",
+    "src/storage/scoping.rs": "b9b7c5d1375d07a377bc681dfb8ff0c9b6492fcca6af011011c4000989d70e2d",
+    "src/text_util.rs": "05724cae156e9e54a73248911fdce47450cd13661c112ca4396795f967ec0d5d"
+  },
+  "authority": "execution evidence recorded by implementer; not independent review or human approval",
+  "command": "MIRI_SMOKE_TOOLCHAIN=nightly CARGO_NET_OFFLINE=true bash scripts/run-miri-smoke.sh",
+  "platform": "aarch64-apple-darwin",
+  "miri_version": "miri 0.1.0 (66da6cae1a 2026-04-20)",
+  "report": {
+    "counts": {
+      "fail": 0,
+      "not-run": 0,
+      "pass": 5,
+      "unsupported": 0
+    },
+    "lane": "miri",
+    "lane_errors": [],
+    "lane_status": null,
+    "settings": {
+      "toolchain": "nightly",
+      "wall_secs": "1800"
+    },
+    "status": "pass",
+    "targets": [
+      {
+        "corpus_files": null,
+        "elapsed_secs": 80,
+        "executed": 5,
+        "exit_code": "0",
+        "note": "5 test(s) passed under Miri",
+        "reproducer": "",
+        "seed_files": null,
+        "stage": "run",
+        "status": "pass",
+        "target": "text_util::tests::"
+      },
+      {
+        "corpus_files": null,
+        "elapsed_secs": 28,
+        "executed": 5,
+        "exit_code": "0",
+        "note": "5 test(s) passed under Miri",
+        "reproducer": "",
+        "seed_files": null,
+        "stage": "run",
+        "status": "pass",
+        "target": "storage::scoping::tests::test_parse"
+      },
+      {
+        "corpus_files": null,
+        "elapsed_secs": 19,
+        "executed": 1,
+        "exit_code": "0",
+        "note": "1 test(s) passed under Miri",
+        "reproducer": "",
+        "seed_files": null,
+        "stage": "run",
+        "status": "pass",
+        "target": "storage::scoping::tests::test_parent"
+      },
+      {
+        "corpus_files": null,
+        "elapsed_secs": 18,
+        "executed": 1,
+        "exit_code": "0",
+        "note": "1 test(s) passed under Miri",
+        "reproducer": "",
+        "seed_files": null,
+        "stage": "run",
+        "status": "pass",
+        "target": "storage::scoping::tests::test_ancestors"
+      },
+      {
+        "corpus_files": null,
+        "elapsed_secs": 21,
+        "executed": 4,
+        "exit_code": "0",
+        "note": "4 test(s) passed under Miri",
+        "reproducer": "",
+        "seed_files": null,
+        "stage": "run",
+        "status": "pass",
+        "target": "storage::scoping::tests::test_contains"
+      }
+    ]
+  }
+}

@@ -283,7 +283,7 @@ export interface LifecycleUpdateOptions {
     | "restore";
   canonicalTier?: boolean;
   ttlSeconds?: number;
-  state?: "active" | "stale" | "archived" | "purged";
+  state?: "active" | "stale" | "archived";
   reason?: string;
   persist?: boolean;
   workspace?: string;
@@ -623,7 +623,9 @@ export interface VaultExportReport {
 export interface VaultImportOptions {
   inputDir: string;
   workspace?: string;
+  /** Apply writes to SQLite when true; defaults to false (RFC 0004 review mode). */
   confirm?: boolean;
+  /** Explicit dry-run review flag (defaults to true unless `confirm: true` is passed). */
   dryRun?: boolean;
   forceVersion?: boolean;
 }

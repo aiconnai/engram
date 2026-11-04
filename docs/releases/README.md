@@ -24,6 +24,13 @@ MCP tools, SDK APIs, CLI behavior, storage behavior, or agent workflows. The
 version in `Cargo.toml` must already equal the tag you intend to push; the
 release and SDK workflows fail closed when they differ.
 
+## Prepared 0.24.0 candidate
+
+See the [readiness decision](v0.24.0-readiness.md),
+[SDK 0.7.0 notes](v0.7.0-sdk-notes.md) and
+[cache-clear migration/consumer notice](../migrations/v0.24.0-cache-clear.md).
+These documents prepare the release; publication remains pending.
+
 ## Before Tagging
 
 Run these from the exact commit that will be tagged:

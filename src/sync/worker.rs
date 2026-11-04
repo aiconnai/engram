@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use tokio::sync::mpsc;
 use tokio::time::{interval, Instant};
 
@@ -312,28 +312,37 @@ impl DirtyTracker {
     }
 }
 
-fn is_live_database(conn: &Arc<Mutex<Connection>>, db_path: &std::path::Path) -> bool {
-    let live = conn
-        .lock()
+fn live_connection_path(conn: &Arc<Mutex<Connection>>) -> Option<PathBuf> {
+    conn.lock()
         .path()
         .filter(|p| !p.is_empty())
-        .map(std::path::PathBuf::from);
-    let Some(live) = live else {
+        .map(PathBuf::from)
+}
+
+fn is_live_database(conn: &Arc<Mutex<Connection>>, db_path: &std::path::Path) -> bool {
+    let Some(live) = live_connection_path(conn) else {
         return false; // in-memory connection: no file to protect
     };
-    let canon = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-    canon(&live) == canon(db_path)
+    crate::storage::active_artifacts::is_same_sqlite_file(&live, db_path)
 }
 
 /// A pull replaces the target file by rename; doing that to the database this
-/// worker's own connection has open orphans the open connection and drops its
-/// locks (G1). Refuse when `db_path` is the connection's database.
+/// worker's own connection has open (including hard links, sidecars, or `/dev/fd`
+/// descriptor aliases) orphans the open connection and drops its locks (G1).
 fn refuse_live_database(conn: &Arc<Mutex<Connection>>, db_path: &std::path::Path) -> Result<()> {
-    if is_live_database(conn, db_path) {
+    if crate::storage::active_artifacts::is_descriptor_alias_path(db_path) {
         return Err(EngramError::Sync(format!(
-            "refusing to pull over '{}': it is the live database of this process",
+            "refusing to pull over '{}': descriptor alias paths under /dev and /proc may alias the live database of this process",
             db_path.display()
         )));
+    }
+    if let Some(live) = live_connection_path(conn) {
+        if crate::storage::active_artifacts::is_active_sqlite_artifact_for_db(&live, db_path) {
+            return Err(EngramError::Sync(format!(
+                "refusing to pull over '{}': it is the live database of this process (or one of its SQLite side files)",
+                db_path.display()
+            )));
+        }
     }
     Ok(())
 }
@@ -347,6 +356,12 @@ async fn push_database(
     db_path: &std::path::Path,
     cloud: &CloudStorage,
 ) -> Result<u64> {
+    if crate::storage::active_artifacts::is_descriptor_alias_path(db_path) {
+        return Err(EngramError::Sync(format!(
+            "refusing to push '{}': descriptor alias paths under /dev and /proc may alias the live database of this process",
+            db_path.display()
+        )));
+    }
     if is_live_database(conn, db_path) {
         let dir = SyncSnapshotDir::create()?;
         let snapshot_path = dir.snapshot_path();
@@ -364,6 +379,14 @@ async fn push_database(
         drop(dir);
         uploaded
     } else {
+        if let Some(live) = live_connection_path(conn) {
+            if crate::storage::active_artifacts::is_active_sqlite_artifact_for_db(&live, db_path) {
+                return Err(EngramError::Sync(format!(
+                    "refusing to push '{}': it is an active SQLite side file of the live database",
+                    db_path.display()
+                )));
+            }
+        }
         cloud.upload(db_path).await
     }
 }
@@ -399,22 +422,71 @@ impl Drop for SyncSnapshotDir {
     }
 }
 
+const MAX_SYNC_LAST_ERROR_BYTES: usize = 1024;
+const INTERRUPTED_SYNC_MSG: &str = "previous sync was interrupted before completing";
+const INTERRUPTED_SYNC_SUFFIX: &str = "; previous sync was interrupted before completing";
+
+fn cap_sync_error(msg: &str) -> &str {
+    crate::text_util::truncate_bytes(msg, MAX_SYNC_LAST_ERROR_BYTES)
+}
+
+fn format_interrupted_last_error(existing: Option<&str>) -> String {
+    let base = existing.unwrap_or("").trim();
+    if base.is_empty() || base == INTERRUPTED_SYNC_MSG {
+        return INTERRUPTED_SYNC_MSG.to_string();
+    }
+    let mut stripped = base;
+    while let Some(s) = stripped.strip_suffix(INTERRUPTED_SYNC_SUFFIX) {
+        stripped = s.trim_end();
+    }
+    if stripped.is_empty() || stripped == INTERRUPTED_SYNC_MSG {
+        return INTERRUPTED_SYNC_MSG.to_string();
+    }
+    let max_prefix = MAX_SYNC_LAST_ERROR_BYTES.saturating_sub(INTERRUPTED_SYNC_SUFFIX.len());
+    let capped_prefix = crate::text_util::truncate_bytes(stripped, max_prefix).trim_end();
+    if capped_prefix.is_empty() {
+        INTERRUPTED_SYNC_MSG.to_string()
+    } else {
+        format!("{capped_prefix}{INTERRUPTED_SYNC_SUFFIX}")
+    }
+}
+
 /// Clear a stale `is_syncing` flag left by a process that died mid-sync.
-/// Returns whether a stale flag was found. `last_error` records it so the
-/// partial state is visible instead of silently looking idle.
+/// Returns whether a stale flag was found. `last_error` records it in a
+/// deduplicated, byte-bounded form (`<= 1024` UTF-8 bytes) so repeated
+/// crash-loop restarts cannot grow `sync_state.last_error` without bound.
 pub(crate) fn reset_interrupted_sync(conn: &Connection) -> Result<bool> {
-    let changed = conn.execute(
-        "UPDATE sync_state SET
-            is_syncing = 0,
-            last_error = CASE
-                WHEN last_error IS NULL OR last_error = ''
-                    THEN 'previous sync was interrupted before completing'
-                ELSE last_error || '; previous sync was interrupted before completing'
-            END
-         WHERE id = 1 AND is_syncing = 1",
-        [],
-    )?;
-    Ok(changed > 0)
+    conn.execute_batch("SAVEPOINT sp_reset_interrupted_sync")?;
+    let outcome: Result<bool> = (|| {
+        let row: Option<Option<String>> = conn
+            .query_row(
+                "SELECT last_error FROM sync_state WHERE id = 1 AND is_syncing = 1",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let Some(existing) = row else {
+            return Ok(false);
+        };
+        let next_error = format_interrupted_last_error(existing.as_deref());
+        let changed = conn.execute(
+            "UPDATE sync_state SET is_syncing = 0, last_error = ?1 WHERE id = 1 AND is_syncing = 1",
+            params![next_error],
+        )?;
+        Ok(changed > 0)
+    })();
+    match outcome {
+        Ok(val) => {
+            conn.execute_batch("RELEASE SAVEPOINT sp_reset_interrupted_sync")?;
+            Ok(val)
+        }
+        Err(err) => {
+            let _ = conn.execute_batch(
+                "ROLLBACK TO SAVEPOINT sp_reset_interrupted_sync; RELEASE SAVEPOINT sp_reset_interrupted_sync",
+            );
+            Err(err)
+        }
+    }
 }
 
 fn mark_sync_started(conn: &Connection) -> Result<()> {
@@ -436,12 +508,13 @@ fn record_sync_success(conn: &Connection, completed_at: &DateTime<Utc>) -> Resul
 }
 
 fn record_sync_failure(conn: &Connection, error_message: &str) -> Result<()> {
+    let capped = cap_sync_error(error_message);
     conn.execute(
         "UPDATE sync_state SET
             is_syncing = 0,
             last_error = ?
          WHERE id = 1",
-        params![error_message],
+        params![capped],
     )?;
     Ok(())
 }
@@ -549,5 +622,87 @@ mod tests {
         // Then: the event is emitted with the error class, never the text.
         assert!(captured().contains("sync_state bookkeeping write failed"));
         assert_logs_exclude(&[SECRET]);
+    }
+
+    #[test]
+    fn reset_interrupted_sync_deduplicates_and_bounds_last_error_across_crash_loops() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE sync_state (
+                id INTEGER PRIMARY KEY,
+                pending_changes INTEGER NOT NULL DEFAULT 0,
+                last_sync TEXT,
+                last_error TEXT,
+                is_syncing INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO sync_state (id, is_syncing, last_error) VALUES (1, 1, NULL);",
+        )
+        .unwrap();
+
+        assert!(reset_interrupted_sync(&conn).unwrap());
+        let first = get_sync_status(&conn).unwrap().last_error.unwrap();
+        assert_eq!(first, INTERRUPTED_SYNC_MSG);
+
+        // Simulate 25 crash-loop restarts without an intervening success.
+        for _ in 0..25 {
+            mark_sync_started(&conn).unwrap();
+            assert!(reset_interrupted_sync(&conn).unwrap());
+        }
+        let after_loop = get_sync_status(&conn).unwrap().last_error.unwrap();
+        assert_eq!(after_loop, INTERRUPTED_SYNC_MSG);
+
+        // Now record an oversized multibyte error and simulate repeated crash-loop restarts.
+        let huge = format!("falha S3: {}", "é😀".repeat(600));
+        record_sync_failure(&conn, &huge).unwrap();
+        let recorded = get_sync_status(&conn).unwrap().last_error.unwrap();
+        assert!(recorded.len() <= MAX_SYNC_LAST_ERROR_BYTES);
+
+        for _ in 0..10 {
+            mark_sync_started(&conn).unwrap();
+            assert!(reset_interrupted_sync(&conn).unwrap());
+        }
+        let bounded = get_sync_status(&conn).unwrap().last_error.unwrap();
+        assert!(bounded.len() <= MAX_SYNC_LAST_ERROR_BYTES);
+        assert!(bounded.ends_with(INTERRUPTED_SYNC_SUFFIX));
+        assert_eq!(
+            bounded.matches(INTERRUPTED_SYNC_MSG).count(),
+            1,
+            "interrupted suffix must never stack more than once"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuse_live_database_rejects_hard_links_sidecars_and_descriptor_aliases() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("live.db");
+        let conn = Arc::new(Mutex::new(Connection::open(&db_path).unwrap()));
+        conn.lock()
+            .execute_batch("PRAGMA journal_mode = WAL; CREATE TABLE t(x); INSERT INTO t VALUES(1);")
+            .unwrap();
+
+        let hard_link = dir.path().join("live-hardlink.db");
+        std::fs::hard_link(&db_path, &hard_link).unwrap();
+        let wal_sidecar = dir.path().join("live.db-wal");
+        let shm_sidecar = dir.path().join("live.db-shm");
+
+        for forbidden in [
+            db_path.as_path(),
+            hard_link.as_path(),
+            wal_sidecar.as_path(),
+            shm_sidecar.as_path(),
+            std::path::Path::new("/dev/fd/0"),
+        ] {
+            let err = refuse_live_database(&conn, forbidden)
+                .expect_err("must refuse pulling over live DB or aliases");
+            assert!(
+                err.to_string().contains("live database"),
+                "unexpected error for {}: {err}",
+                forbidden.display()
+            );
+        }
+
+        let unrelated = dir.path().join("other.db");
+        assert!(refuse_live_database(&conn, &unrelated).is_ok());
     }
 }

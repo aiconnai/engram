@@ -1,0 +1,25 @@
+{
+  "base_sha": "2e84a59422b3659aaaf25c69dbe01b01ab321332",
+  "source_sha256": {
+    "src/auth/transport_principal.rs": "0e95aca6bc5467f7d7ae5b649902e7b3ff9d6e76c4ae184407ad583440570ffd",
+    "src/intelligence/entity_extraction.rs": "50b799468b4e84454d6cfaebad7521bbc16b2ade9f68e29e2ab0f7adc129c828",
+    "src/storage/scoping.rs": "b9b7c5d1375d07a377bc681dfb8ff0c9b6492fcca6af011011c4000989d70e2d",
+    "src/text_util.rs": "05724cae156e9e54a73248911fdce47450cd13661c112ca4396795f967ec0d5d",
+    "scripts/verify-sdk-artifacts.sh": "d7d3c18a820173c31c54799cffe8f4449c943149cc110cbf46f1317f4142d38e",
+    "scripts/test_sdk_release_workflow.py": "751cd1f2ac21a78ac38dfa71e59b931cd4a83b10af85dbb759841edc2cac88cc"
+  },
+  "command": "CARGO_NET_OFFLINE=true make ci",
+  "exit_code": 0,
+  "rust_tests": {
+    "passed": 2351,
+    "skipped_preexisting": 2
+  },
+  "offline_lane": {
+    "components": 12,
+    "checks": 536
+  },
+  "log_path": "/private/tmp/engram-ci-candidate-final.log",
+  "log_sha256": "2c1e2c12111f8cd714b5dea79670a0e35499709d1c9467fd3db21cb9ee97fc88",
+  "authority": "implementer-recorded command result; not independent review or human approval",
+  "sdk_workflow_tests_separate_run": 12
+}

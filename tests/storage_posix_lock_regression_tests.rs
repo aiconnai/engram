@@ -168,6 +168,34 @@ fn committed_writes_survive_another_process_open_and_close() {
 }
 
 #[test]
+fn markdown_import_refuses_sqlite_aliases_without_dropping_locks() {
+    let fixture = tempfile::tempdir().unwrap();
+    let db_path = fixture.path().join("memory.db");
+    let storage = open_with_probe_table(&db_path);
+    insert_probe(&storage, "create-wal-and-shm");
+    for (index, suffix) in ["", "-wal", "-shm"].iter().enumerate() {
+        let artifact = std::path::PathBuf::from(format!("{}{suffix}", db_path.display()));
+        assert!(artifact.exists(), "SQLite artifact fixture must exist");
+        for hardlink in [false, true] {
+            let input = fixture.path().join(format!("input-{index}-{hardlink}"));
+            std::fs::create_dir(&input).unwrap();
+            let alias = input.join("artifact.md");
+            if hardlink {
+                std::fs::hard_link(&artifact, &alias).unwrap();
+            } else {
+                std::os::unix::fs::symlink(&artifact, &alias).unwrap();
+            }
+            let result = engram::portability::preview_markdown(&storage, input, None);
+            assert!(
+                result.is_err(),
+                "SQLite alias must be refused before regular-file open"
+            );
+            assert_writes_survive_foreign_open_close(&storage, &db_path);
+        }
+    }
+}
+
+#[test]
 fn second_in_process_open_does_not_drop_the_first_handles_locks() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db_path = dir.path().join("memory.db");

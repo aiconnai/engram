@@ -150,6 +150,42 @@ mod tests {
     }
 
     #[test]
+    fn process_bearer_rejects_empty_token_or_empty_configuration() {
+        for (header, secret) in [
+            ("Bearer ", "secret"),
+            ("Bearer secret", ""),
+            ("Bearer ", ""),
+        ] {
+            let err = TransportPrincipal::from_process_bearer(Some(header), secret).unwrap_err();
+            assert_eq!(err, TransportPrincipalError::MalformedBearer);
+        }
+    }
+
+    #[test]
+    fn principal_errors_have_distinct_diagnostics() {
+        for (error, message) in [
+            (
+                TransportPrincipalError::MissingBearer,
+                "missing bearer token",
+            ),
+            (
+                TransportPrincipalError::MalformedBearer,
+                "malformed bearer token",
+            ),
+            (
+                TransportPrincipalError::InvalidBearer,
+                "invalid bearer token",
+            ),
+            (
+                TransportPrincipalError::ExpiredToken,
+                "expired stored token",
+            ),
+        ] {
+            assert_eq!(error.to_string(), message);
+        }
+    }
+
+    #[test]
     fn constant_time_secret_comparison_keeps_valid_and_wrong_paths_distinct() {
         assert!(constant_time_secret_eq(
             "abcdefghijklmnop",

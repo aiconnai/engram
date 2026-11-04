@@ -6,10 +6,16 @@
 use serde_json::{json, Value};
 
 use super::tools::TOOL_DEFINITIONS;
-use crate::auth::{Permission, PermissionSet, ResourceType, TransportPrincipal};
+#[cfg(test)]
+use crate::auth::PermissionSet;
+use crate::auth::TransportPrincipal;
 use crate::observability::{record_permission_denied, PermissionDeniedReason};
 
-const MODE_ENV: &str = "ENGRAM_PERMISSION_MODE";
+pub(crate) use crate::auth::access::allows_all_workspaces;
+use crate::auth::access::{
+    check_environment_mode, markdown_required_mode, principal_allows_mode,
+    principal_permission_mode, ModeDenial, MODE_ENV,
+};
 
 const ADMIN_TOOLS: &[&str] = &[
     "agent_deregister",
@@ -42,38 +48,7 @@ const MAINTENANCE_TOOLS: &[&str] = &[
     "sync_cleanup",
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PermissionMode {
-    ReadOnly,
-    ScopedWrite,
-    Maintenance,
-    Admin,
-}
-
-impl PermissionMode {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::ReadOnly => "read_only",
-            Self::ScopedWrite => "scoped_write",
-            Self::Maintenance => "maintenance",
-            Self::Admin => "admin",
-        }
-    }
-
-    pub fn parse(value: &str) -> Option<Self> {
-        match value.trim() {
-            "read_only" => Some(Self::ReadOnly),
-            "scoped_write" => Some(Self::ScopedWrite),
-            "maintenance" => Some(Self::Maintenance),
-            "admin" => Some(Self::Admin),
-            _ => None,
-        }
-    }
-
-    fn allows(self, required: Self) -> bool {
-        self >= required
-    }
-}
+pub use crate::auth::access::PermissionMode;
 
 /// Names the dispatcher routes to the same handler as a catalog tool. They must
 /// be classified exactly like their canonical tool (never fail open).
@@ -147,6 +122,14 @@ pub fn required_mode(tool_name: &str) -> Option<PermissionMode> {
 pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode {
     let base = required_mode(tool_name).unwrap_or(PermissionMode::Admin);
     let canonical = canonical_tool_name(tool_name);
+    // Workspace write permission does not grant arbitrary server filesystem
+    // access. Only the administrator's configured export root permits it.
+    if matches!(
+        canonical,
+        "memory_export_markdown" | "memory_import_markdown"
+    ) {
+        return markdown_required_mode();
+    }
     let writes = WRITE_FLAG_PARAMS
         .iter()
         .filter(|(tool, _)| *tool == canonical)
@@ -193,19 +176,15 @@ pub fn permission_denial_from_env(tool_name: &str) -> Option<Value> {
 }
 
 fn permission_denial_from_env_for_call(tool_name: &str, params: &Value) -> Option<Value> {
-    let raw = match std::env::var(MODE_ENV) {
-        Ok(value) if !value.trim().is_empty() => value,
-        Ok(_) | Err(std::env::VarError::NotPresent) => return None,
-        Err(std::env::VarError::NotUnicode(_)) => {
-            return Some(invalid_permission_mode(tool_name, "<non-unicode>"));
+    match check_environment_mode(required_mode_for_call(tool_name, params)) {
+        Ok(()) => None,
+        Err(ModeDenial::InvalidConfiguration(raw)) => {
+            Some(invalid_permission_mode(tool_name, &raw))
         }
-    };
-
-    let Some(mode) = PermissionMode::parse(&raw) else {
-        return Some(invalid_permission_mode(tool_name, &raw));
-    };
-
-    permission_denial_for_call(tool_name, params, mode)
+        Err(ModeDenial::Insufficient { current, required }) => {
+            Some(permission_denied(tool_name, current, required))
+        }
+    }
 }
 
 /// Returns the active permission mode configured in the process environment, if any.
@@ -224,7 +203,7 @@ fn status_report_for(active: Option<PermissionMode>, target_tool: Option<&str>) 
     let active_str = active.map(|m| m.as_str()).unwrap_or("unconstrained");
 
     if let Some(tool) = target_tool {
-        let req = required_mode(tool);
+        let req = required_mode(tool).map(|_| required_mode_for_call(tool, &Value::Null));
         let allowed = match (active, req) {
             (Some(act), Some(r)) => act.allows(r),
             (None, _) => true,
@@ -256,6 +235,7 @@ fn status_report_for(active: Option<PermissionMode>, target_tool: Option<&str>) 
                 .iter()
                 .filter(|t| {
                     required_mode(t.name)
+                        .map(|_| required_mode_for_call(t.name, &Value::Null))
                         .map(|r| act.allows(r))
                         .unwrap_or(false)
                 })
@@ -757,38 +737,7 @@ pub(crate) fn requests_all_workspaces(params: &Value) -> bool {
     }
 }
 
-pub(crate) fn allows_all_workspaces(principal: &TransportPrincipal) -> bool {
-    !matches!(principal, TransportPrincipal::AnonymousLoopback(_))
-        && principal.allows_workspace(None)
-}
-
-fn principal_allows_mode(principal: &TransportPrincipal, required: PermissionMode) -> bool {
-    let permissions = &principal.auth_context().permissions;
-    match required {
-        PermissionMode::ReadOnly => {
-            permissions.has_permission(Permission::Read, ResourceType::Memory)
-        }
-        PermissionMode::ScopedWrite => {
-            permissions.has_permission(Permission::Write, ResourceType::Memory)
-        }
-        PermissionMode::Maintenance | PermissionMode::Admin => {
-            permissions.has_permission(Permission::Admin, ResourceType::System)
-        }
-    }
-}
-
-fn principal_permission_mode(permissions: &PermissionSet) -> PermissionMode {
-    if permissions.has_permission(Permission::Admin, ResourceType::System) {
-        PermissionMode::Admin
-    } else if permissions.has_permission(Permission::Write, ResourceType::Memory) {
-        PermissionMode::ScopedWrite
-    } else {
-        PermissionMode::ReadOnly
-    }
-}
-
 fn invalid_permission_mode(tool_name: &str, raw: &str) -> Value {
-    record_permission_denied(PermissionDeniedReason::InvalidModeConfig);
     json!({
         "error": {
             "code": "invalid_permission_mode",

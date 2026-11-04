@@ -125,6 +125,14 @@ async def test_memories_mixin_methods(mock_client):
         "memory_lifecycle_update", {"id": 42, "action": "promote"}
     )
 
+    await mock_client.lifecycle_update(
+        42, action="decay", workspace="ws-a", dry_run=True
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_lifecycle_update",
+        {"id": 42, "action": "decay", "workspace": "ws-a", "dry_run": True},
+    )
+
 
 @pytest.mark.asyncio
 async def test_search_mixin_methods(mock_client):
@@ -524,7 +532,40 @@ async def test_vault_mixin(mock_client):
     )
 
     mock_client._mcp_call = AsyncMock(
-        return_value={"scanned": 5, "in_sync": 3, "new": 1, "pending": 1, "conflict": 0, "applied": 2}
+        return_value={
+            "scanned": 5,
+            "in_sync": 3,
+            "new": 1,
+            "pending": 1,
+            "conflict": 0,
+            "applied": 0,
+            "dry_run": True,
+        }
+    )
+    await mock_client.vault_import(
+        input_dir="./vault",
+        workspace="default",
+    )
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_import_markdown",
+        {
+            "input_dir": "./vault",
+            "workspace": "default",
+            "confirm": False,
+            "force_version": False,
+        },
+    )
+
+    mock_client._mcp_call = AsyncMock(
+        return_value={
+            "scanned": 5,
+            "in_sync": 3,
+            "new": 1,
+            "pending": 1,
+            "conflict": 0,
+            "applied": 2,
+            "dry_run": False,
+        }
     )
     await mock_client.vault_import(
         input_dir="./vault",

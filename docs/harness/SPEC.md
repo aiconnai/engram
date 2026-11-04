@@ -47,6 +47,35 @@
 - **Gates**: `bootstrap.sh`, `doctor.sh`, `check-live-state.sh` estrito, lane offline e `git diff --check`.
   O gate completo (`sensors.sh`) e o post-gate com receipt humano ficam com o integrador/owner.
 
+## Follow-up autorizado — 2026-10-27
+
+A pilha #244–#262 está mesclada no main `2e84a594`. O GO antigo encerrou às 09:35Z.
+Novo GO do owner (chat): diagnosticar Nightly, corrigir defeitos confirmados e lacunas
+relevantes de testes, resolver a proposta de verify-tag e preparar release/aviso de migração;
+entregar evidências e recomendação antes de publicar ou executar mudanças operacionais.
+O [plano do follow-up](plans/2026-10-27-nightly-release-readiness.md) detalha paths e aceite.
+Permite alterações e verificações locais; não autoriza push/PR/merge, tags de release,
+publicação, envio de avisos, deleções ou settings. Os limites históricos acima referem-se
+à frente WT5 original; este follow-up inclui os testes, o fix de scoping e os defeitos confirmados do gerador
+de metadados de SDK ali delimitados.
+
+## Follow-up autorizado — 2026-11-01, P0 export Markdown
+
+Owner autorizou seguir no P0 independente após o plano v3. Correção local sobre main revalidada,
+testes RED/GREEN, paths/permissões/expiração/integridade/atomicidade e catálogo/reference, com
+verificação no candidato. [Log](progress/2026-11-01-markdown-export-safety.md),
+[canvas](canvas/2026-11-01-markdown-export-safety.md). Tag 0.24.0 aguarda resultado; sem autorização
+de push/PR/merge/tag/publicação, configs reais, RFC0004a ou programa inteiro de evolução.
+
+Follow-up da revisão: corrigir compatibilidade das tags e custo de sincronização na branch export,
+revalidar em Linux/macOS e registrar RISK-0011 para import em candidato separado. Sem ampliar para
+projeção Git. [Log retomável](progress/2026-11-01-markdown-portability-followup.md).
+
+RISK-0011: branch local separada `fix/markdown-import-safety`, baseada no export `9bca4efa`.
+Leitura ancorada limitada, modo conforme raiz e autorização/classificação/aplicação transacionais;
+fixtures temporárias com principals reais antes da correção. [Canvas](canvas/2026-11-01-markdown-import-safety.md)
+e [log](progress/2026-11-01-markdown-import-safety.md). Mesmos limites operacionais do P0.
+
 ## Tarefa anterior: Turso/libSQL sunset v0.24.0
 
 - **Status**: implementação concluída e commitada em `08cb17a4` (2026-10-23); sensores completos PASS
@@ -202,3 +231,17 @@ O plano `docs/harness/plans/2026-06-05-engram-harness-improvement-execution-plan
 ---
 
 **Nota**: Este SPEC é mutável durante a sprint. Atualizações de escopo vão para o log de progresso e (quando relevante) para um novo version do SPEC com nota de data. Invariants do harness não mudam sem ADR + gates anteriores.
+
+## Follow-up local — candidato integrado Markdown, 2026-11-01
+
+Combinar remediação646636f6 com import1faa5c6f em worktree/branch nova; reter79889460 e hardening,
+validar CLI/SDKs/MCP review default, omitir entradas ocultas do vault, rodar gates no candidato.
+[Log](progress/2026-11-01-markdown-release-integration.md), [canvas](canvas/2026-11-01-markdown-release-integration.md).
+Sem publicar, alterar branch principal ou renovar mandato remoto da branch anterior.
+
+## Follow-up autorizado — Markdown architecture (2026-11-02)
+
+Owner approved local deepening of Markdown export/import together, preserving
+public behavior and extracting only shared auth policy. Separate worktree based
+on 60ed4eec; [plan](plans/2026-11-02-markdown-portability-core.md) and
+[evidence](progress/2026-11-02-markdown-portability-core.md). No remote authority added.

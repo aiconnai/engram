@@ -10,8 +10,73 @@ use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::queries::update_memory_lifecycle_state;
 use crate::types::{LifecycleState, Memory, MemoryScope, MemoryTier, MemoryType, Visibility};
 
+fn resolve_optional_workspace(
+    ctx: &HandlerContext,
+    tool_name: &str,
+    params: &Value,
+) -> std::result::Result<Option<String>, Value> {
+    let normalized = match params.get("workspace") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(ws)) => match crate::types::normalize_workspace(ws) {
+            Ok(norm) => Some(norm),
+            Err(e) => return Err(json!({"error": format!("Invalid workspace: {e}")})),
+        },
+        Some(_) => return Err(json!({"error": "workspace must be a string"})),
+    };
+    if let Some(ref p) = ctx.principal {
+        if normalized.is_none()
+            && matches!(p, crate::auth::TransportPrincipal::AnonymousLoopback(_))
+        {
+            return Err(crate::mcp::permission::workspace_claim_denied(tool_name, p));
+        }
+        if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+            tool_name,
+            p,
+            normalized.as_deref(),
+        ) {
+            return Err(denial);
+        }
+    }
+    Ok(normalized)
+}
+
+fn resolve_required_workspace(
+    ctx: &HandlerContext,
+    tool_name: &str,
+    params: &Value,
+) -> std::result::Result<String, Value> {
+    let raw = match params.get("workspace") {
+        None | Some(Value::Null) => return Err(json!({"error": "workspace is required"})),
+        Some(Value::String(ws)) => ws.as_str(),
+        Some(_) => return Err(json!({"error": "workspace must be a string"})),
+    };
+    let normalized = match crate::types::normalize_workspace(raw) {
+        Ok(norm) => norm,
+        Err(e) => return Err(json!({"error": format!("Invalid workspace: {e}")})),
+    };
+    if let Some(ref p) = ctx.principal {
+        if let Some(denial) =
+            crate::mcp::permission::permission_denial_for_principal(tool_name, p, Some(&normalized))
+        {
+            return Err(denial);
+        }
+    }
+    Ok(normalized)
+}
+
+fn optional_bool(params: &Value, key: &str) -> Result<Option<bool>, String> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(format!("{key} must be a boolean")),
+    }
+}
+
 pub fn lifecycle_status(ctx: &HandlerContext, params: Value) -> Value {
-    let workspace = params.get("workspace").and_then(|v| v.as_str());
+    let workspace = match resolve_optional_workspace(ctx, "lifecycle_status", &params) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
 
     ctx.storage
         .with_connection(|conn| {
@@ -28,7 +93,7 @@ pub fn lifecycle_status(ctx: &HandlerContext, params: Value) -> Value {
             };
 
             let mut stmt = conn.prepare(query)?;
-            let rows: Vec<(String, i64)> = if let Some(ws) = workspace {
+            let rows: Vec<(String, i64)> = if let Some(ref ws) = workspace {
                 stmt.query_map(params![ws], |row| {
                     Ok((
                         row.get::<_, Option<String>>(0)?
@@ -72,85 +137,102 @@ pub fn lifecycle_status(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+fn collect_lifecycle_transitions(
+    conn: &rusqlite::Connection,
+    workspace: Option<&str>,
+    now: DateTime<Utc>,
+    config: &LifecycleConfig,
+) -> crate::error::Result<Vec<LifecycleTransition>> {
+    let candidate_query = if workspace.is_some() {
+        "SELECT id, content, memory_type, importance, access_count,
+                created_at, updated_at, last_accessed_at, lifecycle_state,
+                workspace, tier
+         FROM memories
+         WHERE valid_to IS NULL
+           AND COALESCE(lifecycle_state, 'active') != 'archived'
+           AND workspace = ?
+         ORDER BY id ASC"
+    } else {
+        "SELECT id, content, memory_type, importance, access_count,
+                created_at, updated_at, last_accessed_at, lifecycle_state,
+                workspace, tier
+         FROM memories
+         WHERE valid_to IS NULL
+           AND COALESCE(lifecycle_state, 'active') != 'archived'
+         ORDER BY id ASC"
+    };
+
+    let candidates: Vec<Memory> = {
+        let mut stmt = conn.prepare(candidate_query)?;
+        if let Some(ws) = workspace {
+            stmt.query_map(params![ws], |row| lifecycle_memory_from_row(row, now))?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        } else {
+            stmt.query_map([], |row| lifecycle_memory_from_row(row, now))?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        }
+    };
+
+    Ok(candidates
+        .into_iter()
+        .filter_map(|memory| {
+            let next = decide_lifecycle_state(&memory, now, config);
+            if next == memory.lifecycle_state {
+                return None;
+            }
+            Some(LifecycleTransition {
+                id: memory.id,
+                workspace: memory.workspace,
+                preview: memory.content.chars().take(50).collect(),
+                next,
+            })
+        })
+        .collect())
+}
+
 pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
-    let dry_run = params
-        .get("dry_run")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-    let workspace = params.get("workspace").and_then(|v| v.as_str());
+    let dry_run = match optional_bool(&params, "dry_run") {
+        Ok(val) => val.unwrap_or(true),
+        Err(message) => return json!({"error": message}),
+    };
+    let workspace = match resolve_optional_workspace(ctx, "lifecycle_run", &params) {
+        Ok(ws) => ws,
+        Err(err) => return err,
+    };
     let config = match lifecycle_config_from_params(&params) {
         Ok(config) => config,
         Err(message) => return json!({"error": message}),
     };
     let now = Utc::now();
 
-    ctx.storage
-        .with_transaction(|conn| {
-            let candidate_query = if workspace.is_some() {
-                "SELECT id, content, memory_type, importance, access_count,
-                        created_at, updated_at, last_accessed_at, lifecycle_state,
-                        workspace, tier
-                 FROM memories
-                 WHERE valid_to IS NULL
-                   AND COALESCE(lifecycle_state, 'active') != 'archived'
-                   AND workspace = ?
-                 ORDER BY id ASC"
-            } else {
-                "SELECT id, content, memory_type, importance, access_count,
-                        created_at, updated_at, last_accessed_at, lifecycle_state,
-                        workspace, tier
-                 FROM memories
-                 WHERE valid_to IS NULL
-                   AND COALESCE(lifecycle_state, 'active') != 'archived'
-                 ORDER BY id ASC"
-            };
-
-            let candidates: Vec<Memory> = {
-                let mut stmt = conn.prepare(candidate_query)?;
-                if let Some(ws) = workspace {
-                    stmt.query_map(params![ws], |row| lifecycle_memory_from_row(row, now))?
-                        .collect::<rusqlite::Result<Vec<_>>>()?
-                } else {
-                    stmt.query_map([], |row| lifecycle_memory_from_row(row, now))?
-                        .collect::<rusqlite::Result<Vec<_>>>()?
-                }
-            };
-
-            let transitions: Vec<LifecycleTransition> = candidates
-                .into_iter()
-                .filter_map(|memory| {
-                    let next = decide_lifecycle_state(&memory, now, &config);
-                    if next == memory.lifecycle_state {
-                        return None;
-                    }
-                    Some(LifecycleTransition {
-                        id: memory.id,
-                        preview: memory.content.chars().take(50).collect(),
-                        next,
-                    })
-                })
-                .collect();
-
-            let stale_candidates = transition_previews(&transitions, LifecycleState::Stale);
-            let archive_candidates = transition_previews(&transitions, LifecycleState::Archived);
-
-            if dry_run {
+    if dry_run {
+        return ctx
+            .storage
+            .with_connection(|conn| {
+                let transitions =
+                    collect_lifecycle_transitions(conn, workspace.as_deref(), now, &config)?;
+                let stale_candidates = transition_previews(&transitions, LifecycleState::Stale);
+                let archive_candidates =
+                    transition_previews(&transitions, LifecycleState::Archived);
                 // Counts must reflect every transition, not the capped preview
-                // arrays (which are limited to 10 for response size). Reading
-                // `.len()` of the previews would undercount whenever more than
-                // 10 memories transition, making dry_run disagree with apply.
-                return Ok(json!({
+                // arrays (which are limited to 10 for response size).
+                Ok(json!({
                     "dry_run": true,
                     "would_mark_stale": count_transitions(&transitions, LifecycleState::Stale),
                     "would_archive": count_transitions(&transitions, LifecycleState::Archived),
                     "stale_candidates": stale_candidates,
                     "archive_candidates": archive_candidates
-                }));
-            }
+                }))
+            })
+            .unwrap_or_else(|e| json!({"error": e.to_string()}));
+    }
 
+    ctx.storage
+        .with_transaction(|conn| {
+            let transitions =
+                collect_lifecycle_transitions(conn, workspace.as_deref(), now, &config)?;
             let mut stale_count = 0;
             let mut archive_count = 0;
-            let mut transitioned_ids: Vec<(i64, LifecycleState)> = Vec::new();
 
             for transition in &transitions {
                 update_memory_lifecycle_state(conn, transition.id, transition.next)?;
@@ -159,26 +241,25 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
                     LifecycleState::Stale => stale_count += 1,
                     LifecycleState::Archived => archive_count += 1,
                 }
-                transitioned_ids.push((transition.id, transition.next));
             }
 
             let operation_id = uuid::Uuid::new_v4().to_string();
-            for (mem_id, new_state) in &transitioned_ids {
-                let new_state = new_state.to_string();
+            for transition in &transitions {
+                let new_state = transition.next.to_string();
                 emit_best_effort(
                     conn,
                     &EnrichmentEvent {
                         operation_id: &operation_id,
                         event_type: "lifecycle_transition",
-                        memory_id: Some(*mem_id),
+                        memory_id: Some(transition.id),
                         version_id: None,
                         triggered_by: "lifecycle_run",
                         agent_id: None,
-                        workspace,
-                        params: json!({"dry_run": dry_run}),
+                        workspace: Some(transition.workspace.as_str()),
+                        params: json!({"dry_run": false}),
                         outcome: json!({"new_state": new_state}),
                         status: "completed",
-                        dry_run,
+                        dry_run: false,
                     },
                 );
             }
@@ -195,6 +276,7 @@ pub fn lifecycle_run(ctx: &HandlerContext, params: Value) -> Value {
 #[derive(Clone)]
 struct LifecycleTransition {
     id: i64,
+    workspace: String,
     preview: String,
     next: LifecycleState,
 }
@@ -326,9 +408,19 @@ fn lifecycle_memory_from_row(
 }
 
 fn parse_rfc3339_or_now(value: String, now: DateTime<Utc>) -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339(&value)
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or(now)
+    if let Ok(dt) = DateTime::parse_from_rfc3339(&value) {
+        return dt.with_timezone(&Utc);
+    }
+    for fmt in ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S%.f"] {
+        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(&value, fmt) {
+            return naive.and_utc();
+        }
+    }
+    tracing::warn!(
+        target = "engram::lifecycle",
+        "unparseable memory timestamp in lifecycle scan; falling back to now"
+    );
+    now
 }
 
 /// Total number of transitions targeting `state`, uncapped. Used for the
@@ -377,14 +469,15 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
     };
 
     ctx.storage
-        .with_connection(|conn| {
-            match update_memory_lifecycle_state(conn, id, lifecycle_state) {
-                Ok(_) => {}
+        .with_transaction(|conn| {
+            crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
+            let updated = match update_memory_lifecycle_state(conn, id, lifecycle_state) {
+                Ok(mem) => mem,
                 Err(crate::error::EngramError::NotFound(_)) => {
                     return Ok(json!({"error": "Memory not found"}));
                 }
                 Err(e) => return Err(e),
-            }
+            };
 
             let operation_id = uuid::Uuid::new_v4().to_string();
             emit_best_effort(
@@ -396,7 +489,7 @@ pub fn memory_set_lifecycle(ctx: &HandlerContext, params: Value) -> Value {
                     version_id: None,
                     triggered_by: "memory_set_lifecycle",
                     agent_id: None,
-                    workspace: None,
+                    workspace: Some(updated.workspace.as_str()),
                     params: json!({"state": state}),
                     outcome: json!({"new_state": state}),
                     status: "completed",
@@ -430,38 +523,62 @@ pub fn lifecycle_config(_ctx: &HandlerContext, params: Value) -> Value {
 pub fn retention_policy_set(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::set_retention_policy;
 
-    let workspace = match params.get("workspace").and_then(|v| v.as_str()) {
-        Some(w) => w,
-        None => return json!({"error": "workspace is required"}),
+    let workspace = match resolve_required_workspace(ctx, "retention_policy_set", &params) {
+        Ok(ws) => ws,
+        Err(err) => return err,
     };
-    let max_age_days = params.get("max_age_days").and_then(|v| v.as_i64());
-    let max_memories = params.get("max_memories").and_then(|v| v.as_i64());
-    let compress_after_days = params.get("compress_after_days").and_then(|v| v.as_i64());
-    let compress_max_importance = params
-        .get("compress_max_importance")
-        .and_then(|v| v.as_f64())
-        .map(|f| f as f32);
-    let compress_min_access = params
-        .get("compress_min_access")
-        .and_then(|v| v.as_i64())
-        .map(|i| i as i32);
-    let auto_delete_after_days = params
-        .get("auto_delete_after_days")
-        .and_then(|v| v.as_i64());
-    let exclude_types: Option<Vec<String>> = params
-        .get("exclude_types")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        });
+    let max_age_days = match optional_i64(&params, "max_age_days") {
+        Ok(v) => v,
+        Err(msg) => return json!({"error": msg}),
+    };
+    let max_memories = match optional_i64(&params, "max_memories") {
+        Ok(v) => v,
+        Err(msg) => return json!({"error": msg}),
+    };
+    let compress_after_days = match optional_i64(&params, "compress_after_days") {
+        Ok(v) => v,
+        Err(msg) => return json!({"error": msg}),
+    };
+    let compress_max_importance = match optional_f64(&params, "compress_max_importance") {
+        Ok(Some(f)) if f.is_finite() => Some(f as f32),
+        Ok(Some(_)) => return json!({"error": "compress_max_importance must be a finite number"}),
+        Ok(None) => None,
+        Err(msg) => return json!({"error": msg}),
+    };
+    let compress_min_access = match optional_i64(&params, "compress_min_access") {
+        Ok(Some(i)) => match i32::try_from(i) {
+            Ok(val) => Some(val),
+            Err(_) => return json!({"error": "compress_min_access is out of range"}),
+        },
+        Ok(None) => None,
+        Err(msg) => return json!({"error": msg}),
+    };
+    let auto_delete_after_days = match optional_i64(&params, "auto_delete_after_days") {
+        Ok(v) => v,
+        Err(msg) => return json!({"error": msg}),
+    };
+    let exclude_types: Option<Vec<String>> = match params.get("exclude_types") {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(arr)) => {
+            let mut types = Vec::with_capacity(arr.len());
+            for item in arr {
+                match item.as_str() {
+                    Some(s) => types.push(s.to_string()),
+                    None => {
+                        return json!({"error": "exclude_types must be an array of strings"});
+                    }
+                }
+            }
+            Some(types)
+        }
+        Some(_) => return json!({"error": "exclude_types must be an array of strings"}),
+    };
 
     ctx.storage
         .with_transaction(|conn| {
             let policy = set_retention_policy(
                 conn,
-                workspace,
+                &workspace,
                 max_age_days,
                 max_memories,
                 compress_after_days,
@@ -478,13 +595,13 @@ pub fn retention_policy_set(ctx: &HandlerContext, params: Value) -> Value {
 pub fn retention_policy_get(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::get_retention_policy;
 
-    let workspace = match params.get("workspace").and_then(|v| v.as_str()) {
-        Some(w) => w,
-        None => return json!({"error": "workspace is required"}),
+    let workspace = match resolve_required_workspace(ctx, "retention_policy_get", &params) {
+        Ok(ws) => ws,
+        Err(err) => return err,
     };
 
     ctx.storage
-        .with_connection(|conn| match get_retention_policy(conn, workspace)? {
+        .with_connection(|conn| match get_retention_policy(conn, &workspace)? {
             Some(policy) => Ok(json!(policy)),
             None => Ok(json!({
                 "workspace": workspace,
@@ -495,8 +612,17 @@ pub fn retention_policy_get(ctx: &HandlerContext, params: Value) -> Value {
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
-pub fn retention_policy_list(ctx: &HandlerContext, _params: Value) -> Value {
+pub fn retention_policy_list(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::list_retention_policies;
+
+    if let Some(denial) = crate::mcp::permission::check_tool_authorization(
+        None,
+        "retention_policy_list",
+        &params,
+        ctx.principal.as_ref(),
+    ) {
+        return denial;
+    }
 
     ctx.storage
         .with_connection(|conn| {
@@ -509,14 +635,14 @@ pub fn retention_policy_list(ctx: &HandlerContext, _params: Value) -> Value {
 pub fn retention_policy_delete(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::delete_retention_policy;
 
-    let workspace = match params.get("workspace").and_then(|v| v.as_str()) {
-        Some(w) => w,
-        None => return json!({"error": "workspace is required"}),
+    let workspace = match resolve_required_workspace(ctx, "retention_policy_delete", &params) {
+        Ok(ws) => ws,
+        Err(err) => return err,
     };
 
     ctx.storage
         .with_transaction(|conn| {
-            let deleted = delete_retention_policy(conn, workspace)?;
+            let deleted = delete_retention_policy(conn, &workspace)?;
             Ok(json!({"deleted": deleted, "workspace": workspace}))
         })
         .unwrap_or_else(|e| json!({"error": e.to_string()}))
@@ -525,10 +651,19 @@ pub fn retention_policy_delete(ctx: &HandlerContext, params: Value) -> Value {
 pub fn retention_policy_apply(ctx: &HandlerContext, params: Value) -> Value {
     use crate::storage::queries::apply_retention_policies;
 
-    let dry_run = params
-        .get("dry_run")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    if let Some(denial) = crate::mcp::permission::check_tool_authorization(
+        None,
+        "retention_policy_apply",
+        &params,
+        ctx.principal.as_ref(),
+    ) {
+        return denial;
+    }
+
+    let dry_run = match optional_bool(&params, "dry_run") {
+        Ok(val) => val.unwrap_or(false),
+        Err(message) => return json!({"error": message}),
+    };
 
     if dry_run {
         use crate::storage::queries::list_retention_policies;
@@ -583,10 +718,13 @@ pub fn retention_policy_apply(ctx: &HandlerContext, params: Value) -> Value {
 
 /// Unified facade for memory lifecycle mutations: promotion, decay, expiration, and scoring.
 pub fn memory_lifecycle_update(ctx: &HandlerContext, params: Value) -> Value {
-    let action = params
-        .get("action")
-        .and_then(|v| v.as_str())
-        .unwrap_or("promote");
+    use rusqlite::OptionalExtension;
+
+    let action = match params.get("action") {
+        None | Some(Value::Null) => "promote",
+        Some(Value::String(s)) => s.as_str(),
+        Some(_) => return json!({"error": "action must be a string"}),
+    };
 
     match action {
         "promote" => super::memory_policy::memory_promote(ctx, params),
@@ -597,7 +735,52 @@ pub fn memory_lifecycle_update(ctx: &HandlerContext, params: Value) -> Value {
             }
             super::memory_policy::memory_promote(ctx, p)
         }
-        "decay" => super::memory_policy::memory_decay(ctx, params),
+        "decay" => {
+            let mut p = params;
+            let Some(id) = p.get("id").and_then(|v| v.as_i64()) else {
+                return json!({"error": "id is required"});
+            };
+            let claimed_workspace = match p.get("workspace") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(raw)) => match crate::types::normalize_workspace(raw) {
+                    Ok(ws) => Some(ws),
+                    Err(e) => return json!({"error": e.to_string()}),
+                },
+                Some(_) => return json!({"error": "workspace must be a string"}),
+            };
+            let lookup = ctx.storage.with_connection(|conn| {
+                crate::mcp::workspace_guard::ensure_memory_access(
+                    conn,
+                    ctx.principal.as_ref(),
+                    id,
+                )?;
+                let ws: Option<String> = conn
+                    .query_row(
+                        "SELECT workspace FROM memories WHERE id = ?1 AND valid_to IS NULL",
+                        [id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                ws.ok_or(crate::error::EngramError::NotFound(id))
+            });
+            let mem_ws = match lookup {
+                Ok(ws) => ws,
+                Err(e) => return json!({"error": e.to_string()}),
+            };
+            if let Some(ref claimed) = claimed_workspace {
+                if claimed != &mem_ws {
+                    return json!({
+                        "error": format!(
+                            "workspace mismatch for memory {id}: requested '{claimed}', memory belongs to '{mem_ws}'"
+                        )
+                    });
+                }
+            }
+            if let Value::Object(ref mut map) = p {
+                map.insert("workspace".to_string(), json!(mem_ws));
+            }
+            super::memory_policy::memory_decay(ctx, p)
+        }
         "expire" | "set_expiration" => super::memory_crud::set_expiration(ctx, params),
         "score" => super::memory_policy::memory_score(ctx, params),
         "explain" => super::memory_policy::memory_explain(ctx, params),
@@ -1057,6 +1240,195 @@ mod lifecycle_tests {
         assert!(
             result.get("error").is_some(),
             "lifecycle_config must reject invalid params, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_run_ages_sqlite_space_separated_timestamps() {
+        let ctx = test_ctx();
+        let id = ctx
+            .storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "INSERT INTO memories (
+                         content, memory_type, workspace, tier, importance,
+                         access_count, lifecycle_state, created_at, updated_at, last_accessed_at
+                     )
+                     VALUES ('sqlite format memory', 'note', 'default', 'permanent', 0.0, 0, 'active',
+                             '2020-01-01 00:00:00', '2020-01-01 00:00:00', '2020-01-01 00:00:00')",
+                    [],
+                )?;
+                Ok(conn.last_insert_rowid())
+            })
+            .expect("seed sqlite timestamp memory");
+
+        let result = lifecycle_run(&ctx, json!({"dry_run": false, "workspace": "default"}));
+        assert!(result.get("error").is_none(), "unexpected error: {result}");
+        assert_eq!(result["archived"].as_i64(), Some(1), "{result}");
+        assert_eq!(lifecycle_state(&ctx, id), "archived");
+    }
+
+    #[test]
+    fn test_memory_set_lifecycle_records_workspace_and_rejects_purged() {
+        let ctx = test_ctx();
+        let id = ctx
+            .storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "INSERT INTO memories (content, memory_type, workspace, tier, importance, access_count, lifecycle_state)
+                     VALUES ('scoped lifecycle row', 'note', 'tenant-lifecycle', 'permanent', 0.5, 0, 'active')",
+                    [],
+                )?;
+                Ok(conn.last_insert_rowid())
+            })
+            .expect("seed memory");
+
+        let purged = memory_set_lifecycle(&ctx, json!({"id": id, "state": "purged"}));
+        assert!(
+            purged.get("error").is_some(),
+            "purged is not a valid persisted lifecycle state: {purged}"
+        );
+        assert_eq!(lifecycle_state(&ctx, id), "active");
+
+        let updated = memory_set_lifecycle(&ctx, json!({"id": id, "state": "archived"}));
+        assert!(
+            updated.get("error").is_none(),
+            "unexpected error: {updated}"
+        );
+        assert_eq!(lifecycle_state(&ctx, id), "archived");
+
+        let event_ws: Option<String> = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT workspace FROM enrichment_events
+                     WHERE triggered_by = 'memory_set_lifecycle' AND memory_id = ?1
+                     ORDER BY id DESC LIMIT 1",
+                    [id],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("query enrichment_events workspace");
+        assert_eq!(event_ws.as_deref(), Some("tenant-lifecycle"));
+    }
+
+    #[test]
+    fn test_retention_policy_set_rejects_wrong_typed_json_fields() {
+        let ctx = test_ctx();
+        for bad in [
+            json!({"workspace": "default", "max_age_days": "30"}),
+            json!({"workspace": "default", "max_memories": "100"}),
+            json!({"workspace": "default", "compress_max_importance": "0.5"}),
+            json!({"workspace": "default", "exclude_types": "note"}),
+            json!({"workspace": "default", "exclude_types": [123]}),
+        ] {
+            let res = retention_policy_set(&ctx, bad.clone());
+            assert!(
+                res.get("error").is_some(),
+                "expected error for wrong-typed payload {bad}, got: {res}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_memory_lifecycle_update_decay_requires_integer_id_and_matching_workspace() {
+        let ctx = test_ctx();
+        let (ws_a_id, ws_b_id) = ctx
+            .storage
+            .with_transaction(|conn| {
+                conn.execute(
+                    "INSERT INTO memories (content, memory_type, workspace, tier, importance, access_count, lifecycle_state)
+                     VALUES ('decay row a', 'note', 'ws-a', 'permanent', 0.8, 0, 'active')",
+                    [],
+                )?;
+                let a = conn.last_insert_rowid();
+                conn.execute(
+                    "INSERT INTO memories (content, memory_type, workspace, tier, importance, access_count, lifecycle_state)
+                     VALUES ('decay row b', 'note', 'ws-b', 'permanent', 0.8, 0, 'active')",
+                    [],
+                )?;
+                let b = conn.last_insert_rowid();
+                Ok((a, b))
+            })
+            .expect("seed memories");
+        let _ = crate::mcp::handlers::memory_policy::memory_score(
+            &ctx,
+            json!({"id": ws_a_id, "persist": true}),
+        );
+        let _ = crate::mcp::handlers::memory_policy::memory_score(
+            &ctx,
+            json!({"id": ws_b_id, "persist": true}),
+        );
+        let score_a_before: f64 = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
+                    [ws_a_id],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("read initial ws-a retention_score");
+        let score_b_before: f64 = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
+                    [ws_b_id],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("read initial ws-b retention_score");
+
+        for invalid in [
+            json!({"action": "decay", "dry_run": false}),
+            json!({"id": "999999", "action": "decay", "workspace": "ws-b", "dry_run": false}),
+            json!({"id": ws_a_id, "action": "decay", "workspace": "ws-b", "dry_run": false}),
+            json!({"id": ws_a_id, "action": "decay", "workspace": 42, "dry_run": false}),
+        ] {
+            let res = memory_lifecycle_update(&ctx, invalid.clone());
+            assert!(
+                res.get("error").is_some(),
+                "expected error for invalid decay payload {invalid}, got: {res}"
+            );
+        }
+
+        let valid_ok = memory_lifecycle_update(
+            &ctx,
+            json!({"id": ws_a_id, "action": "decay", "workspace": "WS-A", "dry_run": false}),
+        );
+        assert!(
+            valid_ok.get("error").is_none(),
+            "matching normalized workspace should succeed: {valid_ok}"
+        );
+        let score_a_after: f64 = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
+                    [ws_a_id],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("read ws-a retention_score");
+        assert!(
+            score_a_after < score_a_before,
+            "ws-a policy score should decay ({score_a_before} -> {score_a_after})"
+        );
+
+        let score_b_after: f64 = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
+                    [ws_b_id],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("read ws-b retention_score");
+        assert!(
+            (score_b_after - score_b_before).abs() < 1e-6,
+            "ws-b policy score must remain untouched ({score_b_before}), got {score_b_after}"
         );
     }
 }

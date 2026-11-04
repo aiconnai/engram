@@ -3,6 +3,182 @@ use super::test_support::*;
 use serde_json::json;
 
 #[test]
+fn mcp_success_reports_effective_review_mode_on_the_wire() {
+    for dispatch in [false, true] {
+        for confirm in [None, Some(false), Some(true)] {
+            let c = ctx();
+            let fixture = tempfile::tempdir().unwrap();
+            std::fs::write(fixture.path().join("new.md"), "new note").unwrap();
+            let mut params = json!({"input_dir":fixture.path(),"workspace":"default"});
+            if let Some(confirm) = confirm {
+                params["confirm"] = json!(confirm);
+            }
+            let result = if dispatch {
+                crate::mcp::handlers::dispatch(&c, "memory_import_markdown", params)
+            } else {
+                memory_import_markdown(&c, params)
+            };
+            assert!(result.get("error").is_none(), "{result}");
+            let writes = confirm == Some(true);
+            assert_eq!(result["dry_run"], !writes, "wire result: {result}");
+            assert_eq!(result["applied"], usize::from(writes));
+            let count = c
+                .storage
+                .with_connection(|conn| {
+                    Ok(conn.query_row("SELECT COUNT(*) FROM memories", [], |row| {
+                        row.get::<_, i64>(0)
+                    })?)
+                })
+                .unwrap();
+            assert_eq!(count, i64::from(writes));
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn import_post_commit_hardening_error_does_not_report_zero_applied() {
+    let fixture = tempfile::tempdir().unwrap();
+    let physical = fixture.path().join("physical");
+    let replacement = fixture.path().join("replacement");
+    std::fs::create_dir(&physical).unwrap();
+    std::fs::create_dir(&replacement).unwrap();
+    let alias = fixture.path().join("configured-parent");
+    std::os::unix::fs::symlink(&physical, &alias).unwrap();
+    let db_path = alias.join("memory.db");
+    let mut c = ctx();
+    c.storage = crate::storage::Storage::open(crate::types::StorageConfig {
+        db_path: db_path.to_string_lossy().into_owned(),
+        storage_mode: crate::types::StorageMode::Local,
+        cloud_uri: None,
+        encrypt_cloud: false,
+        confidence_half_life_days: 30.0,
+        auto_sync: false,
+        sync_debounce_ms: 5000,
+    })
+    .unwrap();
+    let id = make_memory(&c, "original before post-commit error", &[]);
+    let input = fixture.path().join("input");
+    std::fs::create_dir(&input).unwrap();
+    write_md(
+        &input,
+        "edit.md",
+        Some(id),
+        1,
+        &[],
+        0.5,
+        "committed despite hardening error",
+        &[],
+    );
+    let sentinel = fixture.path().join("sentinel");
+    std::fs::write(&sentinel, "private fixture").unwrap();
+    // SQLite opened the canonical physical parent. Fault-inject a replacement
+    // of Storage's configured parent alias: its post-commit hardening fails,
+    // while the live DB/WAL/SHM themselves are never opened, moved or replaced.
+    std::os::unix::fs::symlink(&sentinel, replacement.join("memory.db")).unwrap();
+    std::fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink(&replacement, &alias).unwrap();
+    let result = memory_import_markdown(&c, json!({"input_dir":input,"confirm":true}));
+    std::fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink(&physical, &alias).unwrap();
+    assert!(
+        result.get("error").is_some(),
+        "hardening failure must remain an error"
+    );
+    assert_eq!(db_row(&c, id).0, "committed despite hardening error");
+    assert!(c
+        .storage
+        .with_connection(|conn| Ok(conn.is_autocommit()))
+        .unwrap());
+    assert!(
+        result["applied"].is_null(),
+        "post-commit error cannot claim applied=0: {result}"
+    );
+    assert_eq!(result["outcome"], "unknown");
+    assert_eq!(result["attempted"], 1);
+    assert_eq!(
+        std::fs::read_to_string(sentinel).unwrap(),
+        "private fixture"
+    );
+}
+
+#[test]
+fn import_tab_separated_invalid_identity_and_version_are_not_missing() {
+    for confirm in [true, false] {
+        for key in [
+            "engram_id",
+            "engram_version",
+            "'engram_id'",
+            "\"engram_version\"",
+        ] {
+            let c = ctx();
+            let fixture = tempfile::tempdir().unwrap();
+            std::fs::write(
+                fixture.path().join("invalid.md"),
+                format!("---\n{key}:\t0\n---\nmust not become a note\n"),
+            )
+            .unwrap();
+            let result =
+                memory_import_markdown(&c, json!({"input_dir":fixture.path(),"confirm":confirm}));
+            assert!(
+                result.get("error").is_some(),
+                "{key}, confirm={confirm}: {result}"
+            );
+            assert_eq!(result["applied"], 0);
+            assert_eq!(
+                c.storage
+                    .with_connection(|conn| Ok(conn.query_row(
+                        "SELECT COUNT(*) FROM memories",
+                        [],
+                        |row| row.get::<_, i64>(0)
+                    )?))
+                    .unwrap(),
+                0
+            );
+        }
+    }
+}
+
+#[test]
+fn import_database_error_rolls_back_earlier_updates() {
+    let c = ctx();
+    let first = make_memory(&c, "first original", &["first"]);
+    let second = make_memory(&c, "second original", &["second"]);
+    let before = (db_row(&c, first), db_row(&c, second));
+    let dir = tempfile::tempdir().unwrap();
+    write_md(
+        dir.path(),
+        "00-first.md",
+        Some(first),
+        1,
+        &["changed"],
+        0.9,
+        "first edit",
+        &[],
+    );
+    write_md(
+        dir.path(),
+        "99-second.md",
+        Some(second),
+        1,
+        &["changed"],
+        0.9,
+        "second edit",
+        &[],
+    );
+    c.storage.with_connection(|conn| {
+        conn.execute_batch(&format!("CREATE TRIGGER reject_second_import BEFORE UPDATE OF content ON memories WHEN NEW.id = {second} BEGIN SELECT RAISE(ABORT, 'injected import failure'); END;"))?;
+        Ok(())
+    }).unwrap();
+    let result = memory_import_markdown(&c, json!({"input_dir":dir.path(),"confirm":true}));
+    assert!(result.get("error").is_some(), "{result}");
+    assert_eq!(result["applied"], 0);
+    assert_eq!((db_row(&c, first), db_row(&c, second)), before);
+    assert_eq!(db_tags(&c, first), vec!["first"]);
+    assert_eq!(db_tags(&c, second), vec!["second"]);
+}
+
+#[test]
 fn test_import_in_sync_when_body_matches() {
     let c = ctx();
     let id = make_memory(&c, "hello world", &["alpha"]);

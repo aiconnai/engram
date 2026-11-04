@@ -158,6 +158,47 @@ pub struct ConsolidatedMemory {
 // OfflineConsolidator
 // =============================================================================
 
+fn now_rfc3339_millis() -> String {
+    Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+fn memories_has_valid_to(conn: &Connection) -> bool {
+    conn.prepare("SELECT valid_to FROM memories LIMIT 0")
+        .is_ok()
+}
+
+struct SavepointGuard<'a> {
+    conn: &'a Connection,
+    committed: bool,
+}
+
+impl<'a> SavepointGuard<'a> {
+    fn begin(conn: &'a Connection) -> Result<Self> {
+        conn.execute_batch("SAVEPOINT sp_consolidate_group")?;
+        Ok(Self {
+            conn,
+            committed: false,
+        })
+    }
+
+    fn commit(mut self) -> Result<()> {
+        self.conn
+            .execute_batch("RELEASE SAVEPOINT sp_consolidate_group")?;
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for SavepointGuard<'_> {
+    fn drop(&mut self) {
+        if !self.committed {
+            let _ = self.conn.execute_batch(
+                "ROLLBACK TO SAVEPOINT sp_consolidate_group; RELEASE SAVEPOINT sp_consolidate_group",
+            );
+        }
+    }
+}
+
 /// Runs a full sleep-time consolidation pass against a SQLite connection.
 pub struct OfflineConsolidator {
     config: ConsolidationConfig,
@@ -236,6 +277,46 @@ impl OfflineConsolidator {
         self.consolidate_with_strategy(conn, workspace, GroupingStrategy::ContentOverlap)
     }
 
+    /// Preview consolidation statistics without writing summaries or archiving memories.
+    pub(crate) fn preview_with_strategy(
+        &self,
+        conn: &Connection,
+        workspace: &str,
+        strategy: GroupingStrategy,
+    ) -> Result<ConsolidationReport> {
+        let groups = self.find_groups(conn, workspace, strategy)?;
+
+        let mut valid_groups = 0usize;
+        let mut memories_merged = 0usize;
+        let mut tokens_before = 0usize;
+        let mut tokens_after = 0usize;
+
+        for group in &groups {
+            let pairs = self.fetch_contents_in_workspace(conn, workspace, &group.memory_ids)?;
+            if pairs.len() < 2 {
+                continue;
+            }
+            valid_groups += 1;
+            let tb: usize = pairs.iter().map(|(_, c)| word_count(c)).sum();
+            let summary = Self::merge_group(&pairs);
+            let ta = word_count(&summary);
+
+            memories_merged += pairs.len();
+            tokens_before += tb;
+            tokens_after += ta;
+        }
+
+        let tokens_saved = tokens_before.saturating_sub(tokens_after);
+        Ok(ConsolidationReport {
+            groups_found: valid_groups,
+            memories_merged,
+            memories_archived: 0,
+            tokens_before,
+            tokens_after,
+            tokens_saved,
+        })
+    }
+
     /// Run the full consolidation pipeline with an explicit strategy.
     pub fn consolidate_with_strategy(
         &self,
@@ -245,27 +326,32 @@ impl OfflineConsolidator {
     ) -> Result<ConsolidationReport> {
         let groups = self.find_groups(conn, workspace, strategy)?;
 
+        let mut valid_groups = 0usize;
         let mut memories_merged = 0usize;
         let mut memories_archived = 0usize;
         let mut tokens_before = 0usize;
         let mut tokens_after = 0usize;
 
         for group in &groups {
-            // Fetch content for each id in the group
-            let pairs = self.fetch_contents(conn, &group.memory_ids)?;
+            let sp = SavepointGuard::begin(conn)?;
+            // Fetch content only for eligible live rows in this workspace.
+            let pairs = self.fetch_contents_in_workspace(conn, workspace, &group.memory_ids)?;
             if pairs.len() < 2 {
+                sp.commit()?;
                 continue;
             }
+
+            let surviving_ids: Vec<i64> = pairs.iter().map(|(id, _)| *id).collect();
 
             // Token counts (word-level proxy)
             let tb: usize = pairs.iter().map(|(_, c)| word_count(c)).sum();
             let summary = Self::merge_group(&pairs);
             let ta = word_count(&summary);
 
-            // Persist
+            // Persist using the surviving IDs actually merged
             save_consolidation(
                 conn,
-                &group.memory_ids,
+                &surviving_ids,
                 &summary,
                 strategy.as_str(),
                 tb as i64,
@@ -273,9 +359,11 @@ impl OfflineConsolidator {
                 workspace,
             )?;
 
-            // Archive originals
-            let archived = self.archive_memories(conn, &group.memory_ids)?;
+            // Archive originals and attach `consolidated` tag atomically inside savepoint
+            let archived = self.archive_memories_in_workspace(conn, workspace, &surviving_ids)?;
+            sp.commit()?;
 
+            valid_groups += 1;
             memories_merged += pairs.len();
             memories_archived += archived;
             tokens_before += tb;
@@ -285,7 +373,7 @@ impl OfflineConsolidator {
         let tokens_saved = tokens_before.saturating_sub(tokens_after);
 
         Ok(ConsolidationReport {
-            groups_found: groups.len(),
+            groups_found: valid_groups,
             memories_merged,
             memories_archived,
             tokens_before,
@@ -298,25 +386,49 @@ impl OfflineConsolidator {
     // Private helpers
     // -------------------------------------------------------------------------
 
-    /// Fetch candidate memories (id, content, created_at) older than threshold.
+    /// Fetch candidate memories (id, content) older than threshold.
     fn fetch_candidates(&self, conn: &Connection, workspace: &str) -> Result<Vec<(i64, String)>> {
         let hours = self.config.min_age_hours;
-        // SQLite: datetime('now', '-N hours')
-        let cutoff = format!("datetime('now', '-{hours} hours')");
+        let max_hours = (crate::storage::queries::MAX_OFFSET_DAYS as f64) * 24.0;
+        if !hours.is_finite() || hours < 0.0 || hours > max_hours {
+            return Err(crate::error::EngramError::InvalidInput(format!(
+                "min_age_hours ({hours}) must be finite and within 0.0..={max_hours}"
+            )));
+        }
+
+        let now_dt = Utc::now();
+        let offset_ms = (hours * 3_600_000.0).round() as i64;
+        let cutoff_dt = now_dt - chrono::Duration::milliseconds(offset_ms);
+        let now_str = now_dt.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let cutoff_str = cutoff_dt.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let cmp_op = if hours == 0.0 { "<=" } else { "<" };
+        let valid_to_clause = if memories_has_valid_to(conn) {
+            " AND valid_to IS NULL"
+        } else {
+            ""
+        };
 
         let sql = format!(
             "SELECT id, content FROM memories
              WHERE workspace = ?1
-               AND created_at < {cutoff}
-               AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')
-             ORDER BY created_at ASC
-             LIMIT ?2"
+               AND julianday(created_at) {cmp_op} julianday(?2)
+               AND (expires_at IS NULL OR julianday(expires_at) > julianday(?3))
+               AND memory_type != 'transcript_chunk'
+               AND (lifecycle_state IS NULL OR lifecycle_state != 'archived'){valid_to_clause}
+             ORDER BY julianday(created_at) ASC, id ASC
+             LIMIT ?4"
         );
 
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(params![workspace, self.config.batch_size as i64], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-        })?;
+        let rows = stmt.query_map(
+            params![
+                workspace,
+                cutoff_str,
+                now_str,
+                self.config.batch_size as i64
+            ],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+        )?;
 
         let mut result = Vec::new();
         for row in rows {
@@ -325,30 +437,46 @@ impl OfflineConsolidator {
         Ok(result)
     }
 
-    /// Fetch (id, content) pairs for the supplied ids.
-    fn fetch_contents(&self, conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, String)>> {
+    /// Fetch (id, content) pairs for the supplied ids within `workspace`,
+    /// excluding archived, soft-deleted, and immutable transcript rows.
+    fn fetch_contents_in_workspace(
+        &self,
+        conn: &Connection,
+        workspace: &str,
+        ids: &[i64],
+    ) -> Result<Vec<(i64, String)>> {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
 
+        let valid_to_clause = if memories_has_valid_to(conn) {
+            " AND valid_to IS NULL"
+        } else {
+            ""
+        };
         let placeholders: String = ids
             .iter()
             .enumerate()
-            .map(|(i, _)| format!("?{}", i + 1))
+            .map(|(i, _)| format!("?{}", i + 2))
             .collect::<Vec<_>>()
             .join(", ");
 
         let sql = format!(
-            "SELECT id, content FROM memories WHERE id IN ({placeholders}) ORDER BY id ASC"
+            "SELECT id, content FROM memories
+             WHERE workspace = ?1
+               AND (lifecycle_state IS NULL OR lifecycle_state != 'archived')
+               AND memory_type != 'transcript_chunk'{valid_to_clause}
+               AND id IN ({placeholders})
+             ORDER BY id ASC"
         );
 
         let mut stmt = conn.prepare(&sql)?;
 
-        // Build params dynamically
-        let params_vec: Vec<&dyn rusqlite::types::ToSql> = ids
-            .iter()
-            .map(|id| id as &dyn rusqlite::types::ToSql)
-            .collect();
+        let mut params_vec: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(ids.len() + 1);
+        params_vec.push(&workspace);
+        for id in ids {
+            params_vec.push(id as &dyn rusqlite::types::ToSql);
+        }
 
         let rows = stmt.query_map(params_vec.as_slice(), |row| {
             Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
@@ -373,7 +501,7 @@ impl OfflineConsolidator {
         let mut groups: Vec<ConsolidationGroup> = Vec::new();
 
         for i in 0..candidates.len() {
-            if assigned.contains(&i) {
+            if assigned.contains(&i) || word_sets[i].is_empty() {
                 continue;
             }
 
@@ -382,7 +510,7 @@ impl OfflineConsolidator {
             let mut pair_count = 0usize;
 
             for j in (i + 1)..candidates.len() {
-                if assigned.contains(&j) {
+                if assigned.contains(&j) || word_sets[j].is_empty() {
                     continue;
                 }
                 if group_indices.len() >= max_group {
@@ -560,17 +688,47 @@ impl OfflineConsolidator {
     /// Archive originals: add `consolidated` tag and set lifecycle_state.
     ///
     /// Returns the count of memories successfully updated.
-    fn archive_memories(&self, conn: &Connection, ids: &[i64]) -> Result<usize> {
+    fn archive_memories_in_workspace(
+        &self,
+        conn: &Connection,
+        workspace: &str,
+        ids: &[i64],
+    ) -> Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        conn.execute(
+            "INSERT OR IGNORE INTO tags (name) VALUES ('consolidated')",
+            [],
+        )?;
+
+        let valid_to_clause = if memories_has_valid_to(conn) {
+            " AND valid_to IS NULL"
+        } else {
+            ""
+        };
+        let update_sql = format!(
+            "UPDATE memories
+             SET lifecycle_state = 'archived',
+                 updated_at = ?2
+             WHERE id = ?1
+               AND workspace = ?3
+               AND (lifecycle_state IS NULL OR lifecycle_state != 'archived'){valid_to_clause}"
+        );
+
+        let now = now_rfc3339_millis();
         let mut count = 0usize;
         for &id in ids {
-            let updated = conn.execute(
-                "UPDATE memories
-                 SET lifecycle_state = 'archived',
-                     updated_at = ?2
-                 WHERE id = ?1",
-                params![id, Utc::now().format("%Y-%m-%dT%H:%M:%fZ").to_string()],
-            )?;
-            count += updated;
+            let updated = conn.execute(&update_sql, params![id, now, workspace])?;
+            if updated > 0 {
+                conn.execute(
+                    "INSERT OR IGNORE INTO memory_tags (memory_id, tag_id)
+                     SELECT ?1, id FROM tags WHERE name = 'consolidated'",
+                    params![id],
+                )?;
+                count += updated;
+            }
         }
         Ok(count)
     }
@@ -593,7 +751,7 @@ pub fn save_consolidation(
     workspace: &str,
 ) -> Result<i64> {
     let source_json = serde_json::to_string(source_ids)?;
-    let now = Utc::now().format("%Y-%m-%dT%H:%M:%fZ").to_string();
+    let now = now_rfc3339_millis();
 
     conn.execute(
         "INSERT INTO consolidated_memories
@@ -674,8 +832,8 @@ fn tokenize(text: &str) -> HashSet<String> {
 
 /// Jaccard similarity between two sets.
 fn jaccard<T: Eq + std::hash::Hash>(a: &HashSet<T>, b: &HashSet<T>) -> f32 {
-    if a.is_empty() && b.is_empty() {
-        return 1.0;
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
     }
     let intersection = a.intersection(b).count();
     let union = a.len() + b.len() - intersection;
@@ -768,6 +926,7 @@ mod tests {
             procedure_failure_count INTEGER NOT NULL DEFAULT 0,
             summary_of_id INTEGER,
             lifecycle_state TEXT NOT NULL DEFAULT 'active',
+            valid_to TEXT,
             metadata TEXT NOT NULL DEFAULT '{}'
         );
         CREATE TABLE IF NOT EXISTS tags (
@@ -791,15 +950,17 @@ mod tests {
         conn
     }
 
-    /// Insert a memory with a specific `created_at` offset in hours from now.
+    /// Insert a memory with a specific `created_at` offset in hours from now (RFC3339 format).
     fn insert_memory(conn: &Connection, content: &str, workspace: &str, hours_ago: f64) -> i64 {
-        let created_at = format!("datetime('now', '-{hours_ago} hours')");
-        let sql = format!(
+        let offset_ms = (hours_ago * 3_600_000.0).round() as i64;
+        let ts = (Utc::now() - chrono::Duration::milliseconds(offset_ms))
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        conn.execute(
             "INSERT INTO memories (content, workspace, created_at, updated_at)
-             VALUES (?1, ?2, {created_at}, {created_at})"
-        );
-        conn.execute(&sql, params![content, workspace])
-            .expect("insert memory");
+             VALUES (?1, ?2, ?3, ?3)",
+            params![content, workspace, ts],
+        )
+        .expect("insert memory");
         conn.last_insert_rowid()
     }
 
@@ -1154,5 +1315,134 @@ mod tests {
         assert_eq!(records.len(), 2);
         // Most recent (highest id) first
         assert!(records[0].id > records[1].id);
+    }
+
+    #[test]
+    fn test_consolidation_rfc3339_same_day_cutoff_and_valid_timestamps() {
+        let conn = open_conn();
+        // 3 hours ago vs min_age_hours = 2.0 on the same UTC day (RFC3339 'T' format)
+        let id1 = insert_memory(
+            &conn,
+            "Same day RFC3339 memory alpha beta gamma",
+            "ws_rfc",
+            3.0,
+        );
+        let id2 = insert_memory(
+            &conn,
+            "Same day RFC3339 memory alpha beta delta",
+            "ws_rfc",
+            3.0,
+        );
+        // Fresh memory (0.2h ago) must NOT be picked up when min_age_hours = 2.0
+        let fresh_id = insert_memory(
+            &conn,
+            "Same day RFC3339 memory alpha beta epsilon",
+            "ws_rfc",
+            0.2,
+        );
+
+        let consolidator = OfflineConsolidator::new(ConsolidationConfig {
+            min_age_hours: 2.0,
+            ..default_config()
+        });
+        let report = consolidator
+            .consolidate(&conn, "ws_rfc")
+            .expect("consolidate");
+
+        assert_eq!(report.groups_found, 1);
+        assert_eq!(report.memories_merged, 2);
+        assert_eq!(report.memories_archived, 2);
+
+        // Archived memories must carry valid RFC3339 updated_at and the `consolidated` tag!
+        for id in [id1, id2] {
+            let (state, updated_at): (String, String) = conn
+                .query_row(
+                    "SELECT lifecycle_state, updated_at FROM memories WHERE id = ?1",
+                    params![id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .expect("read archived memory");
+            assert_eq!(state, "archived");
+            chrono::DateTime::parse_from_rfc3339(&updated_at)
+                .unwrap_or_else(|e| panic!("invalid RFC3339 updated_at '{updated_at}': {e}"));
+
+            let tags = fetch_tags(&conn, id).expect("fetch tags");
+            assert!(
+                tags.contains("consolidated"),
+                "archived memory {id} must receive 'consolidated' tag, got {tags:?}"
+            );
+        }
+
+        let fresh_state: String = conn
+            .query_row(
+                "SELECT lifecycle_state FROM memories WHERE id = ?1",
+                params![fresh_id],
+                |r| r.get(0),
+            )
+            .expect("fresh state");
+        assert_eq!(fresh_state, "active");
+
+        let records = list_consolidations(&conn, "ws_rfc", 10).expect("list");
+        assert_eq!(records.len(), 1);
+        chrono::DateTime::parse_from_rfc3339(&records[0].created_at).unwrap_or_else(|e| {
+            panic!(
+                "invalid RFC3339 consolidated created_at '{}': {e}",
+                records[0].created_at
+            )
+        });
+    }
+
+    #[test]
+    fn test_consolidation_excludes_empty_word_sets_transcripts_expired_and_deleted() {
+        let conn = open_conn();
+        // Punctuation/emoji-only memories produce empty word sets and must NEVER group together.
+        insert_memory(&conn, "!!! ??? ...", "ws_filter", 5.0);
+        insert_memory(&conn, "--- *** ///", "ws_filter", 5.0);
+
+        // Immutable transcript_chunk memories must NEVER be consolidated.
+        let old_ts = (Utc::now() - chrono::Duration::hours(5))
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let past_exp = (Utc::now() - chrono::Duration::hours(1))
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        conn.execute(
+            "INSERT INTO memories (content, memory_type, workspace, created_at, updated_at)
+             VALUES ('Transcript shared words alpha beta gamma', 'transcript_chunk', 'ws_filter', ?1, ?1),
+                    ('Transcript shared words alpha beta delta', 'transcript_chunk', 'ws_filter', ?1, ?1)",
+            params![old_ts],
+        )
+        .expect("insert transcripts");
+
+        // Expired and soft-deleted rows must also be skipped.
+        conn.execute(
+            "INSERT INTO memories (content, workspace, created_at, updated_at, expires_at)
+             VALUES ('Expired shared words one two three', 'ws_filter', ?1, ?1, ?2),
+                    ('Expired shared words one two four', 'ws_filter', ?1, ?1, ?2)",
+            params![old_ts, past_exp],
+        )
+        .expect("insert expired");
+        conn.execute(
+            "INSERT INTO memories (content, workspace, created_at, updated_at, valid_to)
+             VALUES ('Deleted shared words red green blue', 'ws_filter', ?1, ?1, ?2),
+                    ('Deleted shared words red green yellow', 'ws_filter', ?1, ?1, ?2)",
+            params![old_ts, past_exp],
+        )
+        .expect("insert soft-deleted");
+
+        let consolidator = OfflineConsolidator::new(default_config());
+        let report = consolidator
+            .consolidate(&conn, "ws_filter")
+            .expect("consolidate filtered");
+        assert_eq!(report.groups_found, 0);
+        assert_eq!(report.memories_merged, 0);
+        assert_eq!(report.memories_archived, 0);
+
+        // Invalid min_age_hours (NaN, negative, infinity) must fail closed.
+        for bad_hours in [-1.0, f64::NAN, f64::INFINITY] {
+            let bad = OfflineConsolidator::new(ConsolidationConfig {
+                min_age_hours: bad_hours,
+                ..default_config()
+            });
+            assert!(bad.consolidate(&conn, "ws_filter").is_err());
+        }
     }
 }

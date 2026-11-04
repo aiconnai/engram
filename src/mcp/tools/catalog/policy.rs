@@ -77,9 +77,11 @@ pub const TOOLS: &[ToolDef] = &[
                     },
                     "canonical_tier": {"type": "boolean", "default": false, "description": "When action='promote' and canonical_tier=true, promotes to permanent canonical tier"},
                     "ttl_seconds": {"type": "integer", "description": "Time-to-live in seconds when action='expire'"},
-                    "state": {"type": "string", "enum": ["active", "stale", "archived", "purged"], "description": "Target lifecycle state when action='transition'"},
+                    "state": {"type": "string", "enum": ["active", "stale", "archived"], "description": "Target lifecycle state when action='transition'"},
                     "reason": {"type": "string", "description": "Audit reason or explanation for the transition or reconciliation"},
-                    "persist": {"type": "boolean", "default": false, "description": "When action='score', whether to persist the evaluated policy"}
+                    "persist": {"type": "boolean", "default": false, "description": "When action='score', whether to persist the evaluated policy"},
+                    "workspace": {"type": "string", "description": "Workspace scope (used for workspace-scoped actions such as decay or restricted-principal authorization)"},
+                    "dry_run": {"type": "boolean", "description": "When action='decay' (default true) or action='score', preview without persisting mutations"}
                 },
                 "required": ["id"]
             }"#,

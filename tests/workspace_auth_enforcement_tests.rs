@@ -1249,3 +1249,204 @@ fn test_search_handlers_workspace_isolation_and_contracts() {
 
     let _ = own_second_id;
 }
+
+#[test]
+fn test_lifecycle_and_policy_id_scoped_tools_prevent_foreign_idor() {
+    use engram::mcp::handlers::{lifecycle as lifecycle_handlers, memory_crud, memory_policy};
+
+    let mut ctx = test_ctx();
+    let own_id = seed_memory(&ctx, OWN_CONTENT, OWN_WS);
+    let foreign_id = seed_memory(&ctx, FOREIGN_SECRET, FOREIGN_WS);
+
+    let own_daily = dispatch(
+        &ctx,
+        "memory_create_daily",
+        json!({"content": "own daily note", "workspace": OWN_WS, "ttl_seconds": 3600}),
+    );
+    let own_daily_id = own_daily["id"].as_i64().expect("own daily id");
+    let foreign_daily = dispatch(
+        &ctx,
+        "memory_create_daily",
+        json!({"content": "payroll daily secret", "workspace": FOREIGN_WS, "ttl_seconds": 3600}),
+    );
+    let foreign_daily_id = foreign_daily["id"].as_i64().expect("foreign daily id");
+
+    let scoped_admin = create_principal("agent-lifecycle", Some(OWN_WS), PermissionSet::admin());
+
+    let policy_state = |ctx: &HandlerContext, id: i64| -> String {
+        ctx.storage
+            .with_connection(|conn| {
+                let row: Option<Vec<rusqlite::types::Value>> = conn
+                    .query_row(
+                        "SELECT salience_score, retention_score, retrieval_priority,
+                                reinforcement_count, contradiction_count, policy_reason, updated_at
+                         FROM memory_policy WHERE memory_id = ?1",
+                        [id],
+                        |r| (0..7).map(|i| r.get(i)).collect(),
+                    )
+                    .ok();
+                Ok(format!("{row:?}"))
+            })
+            .expect("policy state")
+    };
+
+    let foreign_before = row_state(&ctx, foreign_id);
+    let foreign_daily_before = row_state(&ctx, foreign_daily_id);
+    let foreign_policy_before = policy_state(&ctx, foreign_id);
+
+    // 1. Dispatch path with valid own workspace claim but foreign target ID.
+    let dispatch_attempts = [
+        (
+            "memory_set_lifecycle",
+            json!({"id": foreign_id, "state": "archived", "workspace": OWN_WS}),
+        ),
+        (
+            "memory_lifecycle_update",
+            json!({"id": foreign_id, "action": "promote", "workspace": OWN_WS}),
+        ),
+        (
+            "memory_lifecycle_update",
+            json!({"id": foreign_id, "action": "decay", "dry_run": false, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_lifecycle_update",
+            json!({"id": foreign_id, "action": "expire", "ttl_seconds": 60, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_lifecycle_update",
+            json!({"id": foreign_id, "action": "transition", "state": "stale", "workspace": OWN_WS}),
+        ),
+        (
+            "memory_score",
+            json!({"id": foreign_id, "persist": true, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_score",
+            json!({"id": foreign_id, "persist": false, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_promote",
+            json!({"id": foreign_id, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_explain",
+            json!({"id": foreign_id, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_reconcile_conflict",
+            json!({"id": foreign_id, "reason": "conflict", "workspace": OWN_WS}),
+        ),
+        (
+            "memory_promote_to_permanent",
+            json!({"id": foreign_daily_id, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_boost",
+            json!({"id": foreign_id, "boost_amount": 0.2, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_set_expiration",
+            json!({"id": foreign_id, "ttl_seconds": 120, "workspace": OWN_WS}),
+        ),
+    ];
+
+    for (tool, params) in dispatch_attempts {
+        let res = dispatch_as(&mut ctx, &scoped_admin, tool, params);
+        let is_denied = ToolError::is_error_response(&res) || res.get("error").is_some();
+        assert!(
+            is_denied,
+            "{tool}: expected denial for foreign ID, got {res}"
+        );
+        assert!(
+            !res.to_string().contains("payroll"),
+            "{tool}: leaked foreign content: {res}"
+        );
+    }
+
+    assert_eq!(foreign_before, row_state(&ctx, foreign_id));
+    assert_eq!(foreign_daily_before, row_state(&ctx, foreign_daily_id));
+    assert_eq!(foreign_policy_before, policy_state(&ctx, foreign_id));
+
+    // 2. Direct handler calls (bypassing dispatch()) must still enforce ensure_memory_access.
+    ctx.principal = Some(scoped_admin.clone());
+    let direct_attempts = [
+        lifecycle_handlers::memory_set_lifecycle(
+            &ctx,
+            json!({"id": foreign_id, "state": "archived"}),
+        ),
+        lifecycle_handlers::memory_lifecycle_update(
+            &ctx,
+            json!({"id": foreign_id, "action": "promote"}),
+        ),
+        memory_policy::memory_score(&ctx, json!({"id": foreign_id, "persist": true})),
+        memory_policy::memory_promote(&ctx, json!({"id": foreign_id})),
+        memory_policy::memory_explain(&ctx, json!({"id": foreign_id})),
+        memory_policy::memory_reconcile_conflict(&ctx, json!({"id": foreign_id, "reason": "test"})),
+        memory_crud::memory_promote_to_permanent(&ctx, json!({"id": foreign_daily_id})),
+        memory_crud::memory_boost(&ctx, json!({"id": foreign_id, "boost_amount": 0.2})),
+        memory_crud::set_expiration(&ctx, json!({"id": foreign_id, "ttl_seconds": 60})),
+        memory_policy::memory_decay(&ctx, json!({"workspace": FOREIGN_WS, "dry_run": false})),
+    ];
+    for (idx, res) in direct_attempts.iter().enumerate() {
+        let is_denied = ToolError::is_error_response(res) || res.get("error").is_some();
+        assert!(is_denied, "direct call #{idx} must fail closed: {res}");
+        assert!(
+            !res.to_string().contains("payroll"),
+            "direct call #{idx} leaked: {res}"
+        );
+    }
+    ctx.principal = None;
+
+    assert_eq!(foreign_before, row_state(&ctx, foreign_id));
+    assert_eq!(foreign_daily_before, row_state(&ctx, foreign_daily_id));
+    assert_eq!(foreign_policy_before, policy_state(&ctx, foreign_id));
+
+    // 3. Positive controls on own_id / own_daily_id succeed for scoped principal.
+    for (tool, params) in [
+        (
+            "memory_score",
+            json!({"id": own_id, "persist": true, "workspace": OWN_WS}),
+        ),
+        ("memory_promote", json!({"id": own_id, "workspace": OWN_WS})),
+        ("memory_explain", json!({"id": own_id, "workspace": OWN_WS})),
+        (
+            "memory_reconcile_conflict",
+            json!({"id": own_id, "reason": "verified", "workspace": OWN_WS}),
+        ),
+        (
+            "memory_set_lifecycle",
+            json!({"id": own_id, "state": "stale", "workspace": OWN_WS}),
+        ),
+        (
+            "memory_lifecycle_update",
+            json!({"id": own_id, "action": "restore", "workspace": OWN_WS}),
+        ),
+        (
+            "memory_promote_to_permanent",
+            json!({"id": own_daily_id, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_boost",
+            json!({"id": own_id, "boost_amount": 0.1, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_set_expiration",
+            json!({"id": own_id, "ttl_seconds": 3600, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_decay",
+            json!({"workspace": OWN_WS, "dry_run": false}),
+        ),
+    ] {
+        let res = dispatch_as(&mut ctx, &scoped_admin, tool, params);
+        assert!(
+            !ToolError::is_error_response(&res) && res.get("error").is_none(),
+            "positive control {tool} failed on own workspace: {res}"
+        );
+    }
+    assert_eq!(
+        foreign_policy_before,
+        policy_state(&ctx, foreign_id),
+        "memory_decay must stay scoped to OWN_WS"
+    );
+}
