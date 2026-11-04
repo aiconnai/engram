@@ -7,9 +7,9 @@
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-11-02 — parecer Terra6.1/high PASS com override explícito do owner: docs/harness/reviews/2026-11-02-markdown-portability-core-terra-v2-post.md, alvo 039ec951. Opinião independente; post-gate com receipt humano ainda PENDING.` |
-| Last sensors | `2026-11-02T16:51:50Z status=pass mode=full duration_sec=410, sem exclusões, em 0da56ffc (Markdown portability core). Código igual ao alvo das duas revisões estáticas; post-gate/receipt humano pendentes.` |
-| Last commit | `039ec951` |
-| Last live-state check | `2026-11-02 — em 0da56ffc: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md PASS estrito e doctor exit0 após evidências finais. WARN preexistente de review da sprint. Código inalterado após full PASS; formal post-gate/receipt pendentes.` |
+| Last sensors | `2026-11-04T19:04:50Z status=pass mode=full duration_sec=389, sem exclusões, em d9915e99 + cloud-download-cancellation. Cloud: 37 testes e clippy all-targets separados PASS. Fontes iguais ao snapshot da revisão independente xhigh; novo HEAD/receipt ainda pendentes.` |
+| Last commit | `d9915e99` |
+| Last live-state check | `2026-11-04 — em d9915e99 + cloud-download-cancellation: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md PASS estrito e doctor exit0 após full PASS389s e evidências cloud. WARN preexistente de review da sprint. Novo HEAD/receipt pendentes no handoff.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -37,7 +37,7 @@
 
 - **Candidato integrado local (2026-11-01)**: remediação646636f6 + import1faa5c6f (inclui export9bca4efa), mantendo79889460; [log](progress/2026-11-01-markdown-release-integration.md). Trabalho local; nenhuma autorização remota ampliada.
 
-- **Markdown architecture (2026-11-02)**: código `0da56ffc`, full PASS/410s, Terra6.1/high PASS em `039ec951`; [evidência](progress/2026-11-02-markdown-portability-core.md). Falta receipt humano; handoff guiado preparado.
+- **PR #264 / S1 (2026-11-04)**: d9915e99 publicado com CI remoto verde e H1 humano verificado em 03/11 para60ed..d991. Review xhigh do PR completo: Standards0 / Spec1MED (cancelamento cloud). Owner pediu corrigir; [plano](plans/2026-11-04-cloud-download-cancellation.md) e [log](progress/2026-10-26-remediation.md#cloud-download-cancellation--2026-11-04). Novo código exige nova validação/revisão/receipt; merge continua separado.
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 
 Pilha #244–#262 mesclada no main `2e84a594` em 2026-10-27. Follow-up Nightly/release local preparado;

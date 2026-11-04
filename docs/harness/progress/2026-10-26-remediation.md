@@ -362,3 +362,48 @@ Markdown handoff (owner: "fix all",2026-11-02): persistido o parecer Terra6.1/hi
 PASS e override do Sonnet. Produto igual a0da56ffc; nenhum defeito novo identificado.
 Pendência do gate agora é receipt humano; procedimento guiado externo preparado.
 [Estado atual](2026-11-02-markdown-portability-core.md#current-handoff-status).
+
+## Cloud download cancellation — 2026-11-04
+
+Task: cloud-download-cancellation; base d9915e992c375751c3b88c5f5577f113b188a4bb.
+PR #264 is published; all six required checks and ten PR workflows passed on that
+base. Ronaldo's renewed H1 receipt covers60ed4eec..d9915e99, verified on2026-11-03;
+it does not authorize a later HEAD or merge. Historical handoff entries above retain
+their original dates and pending states.
+
+The requested xhigh two-axis review of main2e84a594..d9915e99 found Standards0 and
+Spec1MED: cancelling a queued Tokio file open can outlive the future-owned cleanup
+guard and create an orphan temporary afterward. Owner requested this fix in chat.
+[Plan](../plans/2026-11-04-cloud-download-cancellation.md) and
+[canvas](../canvas/2026-11-04-cloud-download-cancellation.md) define the bounded change.
+
+The regression exercises the real offline CloudStorage download with one blocking
+worker and channel barriers, including completion of create_dir_all before queuing
+file preparation. No sleeps, real credentials or remote object store are used.
+RED: the new queued-open regression ran exactly one test and failed on the orphan
+`.download-*.tmp` (0.01s). GREEN: the same test passed after the ownership fix;
+all37 cloud tests then passed (0.65s), including queued preparation, an undelivered
+prepared result and a commit already queued at cancellation. The last case may
+finish a complete replacement; the first two preserve the original destination.
+
+Preparation and commit now own the guard inside blocking work or its result;
+file handles close before cleanup, and ownership starts only after exclusive
+creation. The existing downloaded Vec is moved, not copied. Public signatures,
+mode preservation, encryption and SQLite guards remain unchanged.
+
+An initial unsupported `--no-default-features --features cloud` compilation failed
+on the existing reqwest import; no behavior result is claimed for it. Focused
+verification uses defaults plus cloud. Cloud all-targets Clippy and formatting
+passed. Full sensors PASS on2026-11-04T19:04:50Z in389s, without exclusions:
+required-feature Clippy/tests, server/watcher, WASM, rustdoc, MCP reference,
+offline harness lane, PR-title fixtures and doctor. The existing warning about
+the broader remediation review remains; negative title fixtures intentionally
+print FAIL while the aggregate result is PASS. The tracked-tree secret scan passed.
+
+Independent xhigh static review returned PASS on the working patch. Source hashes
+still match that snapshot: cloud.rs fc2588322f14a97f8ce4e10bfeea722f51af4d6e1e2d4f00c7040710f910288d;
+cloud_tests_failure.rs 7126d98a2f6d19f13b4196b0b66076a8e961daa079da412a61dd81850b05bdcb.
+These are static-review/test observations, not a final-commit approval or receipt.
+After freezing, rebind the review to the actual HEAD and preserve the opinion plus
+the human-only completion procedure in ignored local artifacts. The new receipt
+and remote CI are pending at this committed handoff; merge/release remain separate.
