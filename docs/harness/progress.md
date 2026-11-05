@@ -6,10 +6,10 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-11-02 — parecer Terra6.1/high PASS com override explícito do owner: docs/harness/reviews/2026-11-02-markdown-portability-core-terra-v2-post.md, alvo 039ec951. Opinião independente; post-gate com receipt humano ainda PENDING.` |
-| Last sensors | `2026-11-04T19:04:50Z status=pass mode=full duration_sec=389, sem exclusões, em d9915e99 + cloud-download-cancellation. Cloud: 37 testes e clippy all-targets separados PASS. Fontes iguais ao snapshot da revisão independente xhigh; novo HEAD/receipt ainda pendentes.` |
-| Last commit | `d9915e99` |
-| Last live-state check | `2026-11-04 — em d9915e99 + cloud-download-cancellation: bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md PASS estrito e doctor exit0 após full PASS389s e evidências cloud. WARN preexistente de review da sprint. Novo HEAD/receipt pendentes no handoff.` |
+| Last review | `2026-11-05 — revisão estática independente solicitada native/xhigh do snapshot local: docs/harness/reviews/2026-11-05-sdk-release-dry-run-post.md. Reconciliação do HEAD final e receipt H1 próprios pendentes; sem atestação independente do modelo efetivo.` |
+| Last sensors | `2026-11-05T04:42:56Z status=pass mode=full duration_sec=409, sem exclusões, em 7ca7a9b8 + sdk-release-dry-run. Tentativa anterior falhou no link obrigatório do escopo negativo; corrigido e suíte completa repetida. Workflow: 15; TypeScript: 104; pacotes e live locais PASS.` |
+| Last commit | `7ca7a9b8` |
+| Last live-state check | `2026-11-05 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md PASS estrito e doctor exit0 após full PASS409s sem exclusões; revisão congelada, novo receipt e upstream pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,19 +23,15 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat, 2026-10-30): após resolução local completa ([plano consolidado](./plans/2026-10-27-repository-execution-plan.md),
-  [canvas](./canvas/2026-10-29-resolve-all.md)), provisionar `ron@ldinho.com.br` em `docs/releases/allowed-signers` (`82f79bed`),
-  executar `git push` de `fix/resolve-all-2026-10-29` e abrir PR contra `main` (merges #244–#262 encerraram em 2026-10-27T09:35Z).
-- **Limites**: merge deste PR, tag/GitHub Release (`v0.24.0`), publicação em registries, remoção de branches/worktrees
-  e settings do GitHub **não** estão autorizados (aguardam CI remoto e decisão do owner); sem dados reais,
-  chamadas pagas ou produção. [Negativo do harness](./WHAT_WE_DONT_DO.md); [escopo canônico](./SPEC.md).
+- **Autorização atual** (owner, chat, 2026-11-05): PR #264 mesclado por decisão explícita em `main7ca7a9b8`; executar CI/Nightly pós-merge, observar canais e validar pacotes em dry-run. Follow-up local de dois bloqueios SDK: [plano](plans/2026-11-05-sdk-release-dry-run.md).
+- **Limites**: o follow-up exige revisão e receipt H1 próprios antes de upstream; seu merge, tag/GitHub Release (`v0.24.0`), registries, notices, remoção de branches/worktrees e settings aguardam decisão separada. Sem dados reais, chamadas pagas ou produção. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [escopo canônico](./SPEC.md).
 - **Última evidência**: [Provisionamento e PR (2026-10-30)](./progress/2026-10-26-remediation.md#provisionamento-de-signer-ssh-e-abertura-de-pr-2026-10-30): 42/42 mutantes em `text_util.rs` (0 timeouts), verify-tag SSH fail-closed + signer `82f79bed` (14/14), defaults RFC 0004, merge-gate fail-closed, fixes S1 + unidades 1–5 e CI/SDKs locais verdes. Receipts humanos pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
   `python3 docs/harness/bin/measure-context.py --section docs/harness/progress-history.md#<âncora>`.
 
-- **Candidato integrado local (2026-11-01)**: remediação646636f6 + import1faa5c6f (inclui export9bca4efa), mantendo79889460; [log](progress/2026-11-01-markdown-release-integration.md). Trabalho local; nenhuma autorização remota ampliada.
+- **Release validation (2026-11-05)**: PR264 mesclado em main7ca7a9b8 com decisão humana; CI e SDKs live PASS. Nightly completo41966511833: somente mutações pendentes; crates verificados e canais read-only PASS. SDK dry-run41966515107 encontrou parser Python e caminho npm; [plano do fix](plans/2026-11-05-sdk-release-dry-run.md), [auditoria](audits/2026-11-05-release-validation.md). Sem autorização de tag/publicação.
 
 - **PR #264 / S1 (2026-11-04)**: d9915e99 publicado com CI remoto verde e H1 humano verificado em 03/11 para60ed..d991. Review xhigh do PR completo: Standards0 / Spec1MED (cancelamento cloud). Owner pediu corrigir; [plano](plans/2026-11-04-cloud-download-cancellation.md) e [log](progress/2026-10-26-remediation.md#cloud-download-cancellation--2026-11-04). Novo código exige nova validação/revisão/receipt; merge continua separado.
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)

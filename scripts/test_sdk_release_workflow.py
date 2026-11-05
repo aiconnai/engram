@@ -8,11 +8,13 @@ every safety gate still present, and the publish jobs re-derive the version mapp
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import unittest
 import tomllib
@@ -200,6 +202,44 @@ class TestPreflightGuardBehaviour(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("bash"), "bash is required")
 class TestArtifactMetadata(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("npm") and shutil.which("node"), "npm and node are required")
+    def test_relative_artifact_directory_installs_from_consumer_workdir(self):
+        matrix = tomllib.loads((REPO_ROOT / "docs/releases/channel-matrix.toml").read_text())
+        version = next(row["local_version"] for row in matrix["channels"] if row["id"] == "npm")
+        with tempfile.TemporaryDirectory() as tmp:
+            working = Path(tmp)
+            artifacts = working / "relative artifacts"
+            artifacts.mkdir()
+            package = {
+                "name": "engram-client", "version": version, "type": "module",
+                "exports": "./dist/index.js",
+            }
+            with tarfile.open(artifacts / f"engram-client-{version}.tgz", "w:gz") as archive:
+                for name, body in (
+                    ("package/package.json", json.dumps(package).encode()),
+                    ("package/dist/index.js", b"export class EngramClient {}\n"),
+                    ("package/dist/index.d.ts", b"export declare class EngramClient {}\n"),
+                ):
+                    entry = tarfile.TarInfo(name)
+                    entry.size = len(body)
+                    archive.addfile(entry, io.BytesIO(body))
+            args = [
+                "bash", str(REPO_ROOT / "scripts/verify-sdk-artifacts.sh"),
+                "--artifact-dir", "relative artifacts", "--expected-sha", "2" * 40,
+            ]
+            metadata = subprocess.run(
+                [*args, "--write-metadata", "npm"], cwd=working,
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(metadata.returncode, 0, metadata.stdout + metadata.stderr)
+            verified = subprocess.run(
+                [*args, "--channel", "npm"], cwd=working,
+                env={**os.environ, "npm_config_offline": "true", "npm_config_cache": str(working / "npm-cache")},
+                capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+            self.assertIn("SDK artifacts verified", verified.stdout)
+
     def test_registry_channels_map_to_sdk_compatibility_and_can_be_repeated(self):
         matrix = tomllib.loads((REPO_ROOT / "docs/releases/channel-matrix.toml").read_text())
         for channel, sdk, registry, filenames in (

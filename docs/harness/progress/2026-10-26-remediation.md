@@ -407,3 +407,22 @@ These are static-review/test observations, not a final-commit approval or receip
 After freezing, rebind the review to the actual HEAD and preserve the opinion plus
 the human-only completion procedure in ignored local artifacts. The new receipt
 and remote CI are pending at this committed handoff; merge/release remain separate.
+
+## Release validation and SDK dry-run — 2026-11-05
+
+Task:sdk-release-dry-run. Owner authorized the three post-merge validation steps.
+Main7ca7a9b8 contains PR264, merge explicitly approved despite disclosed H5 refusal;
+the cloud H1 receipt was separately verified for d9915e99..3bffe826. No H5 eligible
+verdict or broader receipt is inferred. Historical pending entries remain snapshots.
+
+Main CI and both live SDK workflows passed. Manual Nightly41966511833 and SDK
+dry-run41966515107 bind to7ca7a9b8. Both Rust crates passed verified offline packaging
+from a clean target; registry/channel observations match the matrix at04:16:20Z.
+The SDK dry-run failed on two confirmed release-only paths. The bounded candidate
+fixes parser compatibility and artifact-path resolution; real RED/GREEN reproductions
+and15 passing workflow tests are recorded in the
+[audit](../audits/2026-11-05-release-validation.md). Full fix sensors passed at2026-11-05T04:42:56Z in409s without exclusions,
+after repairing the required negative-scope link and retaining the initial failure.
+Real local package installs/live checks and104 TypeScript tests also passed.
+Nightly mutation outcome, frozen review/H1 and corrected remote dry-run remain
+pending. No release operation.
