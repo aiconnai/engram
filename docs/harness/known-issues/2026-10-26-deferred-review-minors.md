@@ -7,6 +7,11 @@ arquivo, e ele não serve como `--known-issue` de `sensors.sh`.
 **Registrado em**: [`progress/2026-10-26-remediation.md`](../progress/2026-10-26-remediation.md) e
 `risk-register.yaml` (RISK-0003, RISK-0004, RISK-0005).
 
+**Atualização07/11:** S1/ledger245 e o fail-closed de H2/ledger308 foram integrados em main7ca7a9b8
+via PR264 (inclui o follow-up cloud3bffe826). As linhas “corrigido na branch” abaixo preservam a
+triagem29/10; não reabrir essas correções por esse wording. Receipt/risco histórico mantêm seu
+escopo; os demais minors não ganham fechamento por associação. [Closeout atual](../plans/2026-11-07-release-closeout.md).
+
 Legenda de status: **mesclado no main** = correção publicada em `origin/main` com SHA citado;
 **corrigido na branch** = corrigido e testado em `fix/resolve-all-2026-10-29`, aguardando review/merge humano;
 **aberto** = nenhuma correção aplicada ainda; **parcial** = parte já tratada. Esta triagem preserva a estimativa

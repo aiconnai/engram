@@ -232,13 +232,20 @@ class TestArtifactMetadata(unittest.TestCase):
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(metadata.returncode, 0, metadata.stdout + metadata.stderr)
-            verified = subprocess.run(
-                [*args, "--channel", "npm"], cwd=working,
-                env={**os.environ, "npm_config_offline": "true", "npm_config_cache": str(working / "npm-cache")},
-                capture_output=True, text=True, timeout=60,
-            )
-            self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
-            self.assertIn("SDK artifacts verified", verified.stdout)
+            shadow = working / "alternate search root"
+            (shadow / artifacts.name).mkdir(parents=True)
+            for cdpath in ("", ".", str(shadow)):
+                with self.subTest(cdpath=cdpath):
+                    verified = subprocess.run(
+                        [*args, "--channel", "npm"], cwd=working,
+                        env={
+                            **os.environ, "CDPATH": cdpath, "npm_config_offline": "true",
+                            "npm_config_cache": str(working / "npm-cache"),
+                        },
+                        capture_output=True, text=True, timeout=60,
+                    )
+                    self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+                    self.assertIn("SDK artifacts verified", verified.stdout)
 
     def test_registry_channels_map_to_sdk_compatibility_and_can_be_repeated(self):
         matrix = tomllib.loads((REPO_ROOT / "docs/releases/channel-matrix.toml").read_text())

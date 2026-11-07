@@ -7,9 +7,9 @@
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-11-05 — revisão estática independente solicitada native/xhigh do snapshot local: docs/harness/reviews/2026-11-05-sdk-release-dry-run-post.md. Reconciliação do HEAD final e receipt H1 próprios pendentes; sem atestação independente do modelo efetivo.` |
-| Last sensors | `2026-11-05T04:42:56Z status=pass mode=full duration_sec=409, sem exclusões, em 7ca7a9b8 + sdk-release-dry-run. Tentativa anterior falhou no link obrigatório do escopo negativo; corrigido e suíte completa repetida. Workflow: 15; TypeScript: 104; pacotes e live locais PASS.` |
-| Last commit | `7ca7a9b8` |
-| Last live-state check | `2026-11-05 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md PASS estrito e doctor exit0 após full PASS409s sem exclusões; revisão congelada, novo receipt e upstream pendentes.` |
+| Last sensors | `2026-11-07T15:46:02Z status=pass mode=full duration_sec=417, sem exclusões, candidato release-closeout sobre2c7544db. Primeiro full545s falhou no link de evidência, corrigido sem mudar testes; histórico preservado.` |
+| Last commit | `2c7544db` |
+| Last live-state check | `2026-11-07 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após fullPASS417s; doctor PASS com WARN preexistente. Novo review/H1 próprios no closeout.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,17 +23,17 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat, 2026-11-05): PR #264 mesclado por decisão explícita em `main7ca7a9b8`; executar CI/Nightly pós-merge, observar canais e validar pacotes em dry-run. Follow-up local de dois bloqueios SDK: [plano](plans/2026-11-05-sdk-release-dry-run.md).
+- **Autorização atual** (owner, chat,2026-11-07): executar a sequência revisada: candidato isolado do fix SDK2c7544db, documentação/evidência e decisão final. [Plano](plans/2026-11-07-release-closeout.md); [evolução v4](plans/2026-11-07-engram-evolution-plan-v4.md).
 - **Limites**: o follow-up exige revisão e receipt H1 próprios antes de upstream; seu merge, tag/GitHub Release (`v0.24.0`), registries, notices, remoção de branches/worktrees e settings aguardam decisão separada. Sem dados reais, chamadas pagas ou produção. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [escopo canônico](./SPEC.md).
-- **Última evidência**: [Provisionamento e PR (2026-10-30)](./progress/2026-10-26-remediation.md#provisionamento-de-signer-ssh-e-abertura-de-pr-2026-10-30): 42/42 mutantes em `text_util.rs` (0 timeouts), verify-tag SSH fail-closed + signer `82f79bed` (14/14), defaults RFC 0004, merge-gate fail-closed, fixes S1 + unidades 1–5 e CI/SDKs locais verdes. Receipts humanos pendentes.
+- **Última evidência**: [closeout de07/11](./progress/2026-10-26-remediation.md#release-closeout--2026-11-07): main7ca7a9b8 integrado porPR264; CI/live SDKs e Nightly manual41966511833 com7jobsPASS. SDK dry-run41966515107 falhou; CDPATH reproduzido/corrigido, workflow15PASS. Novo receipt H1 próprio pendente.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
   `python3 docs/harness/bin/measure-context.py --section docs/harness/progress-history.md#<âncora>`.
 
-- **Release validation (2026-11-05)**: PR264 mesclado em main7ca7a9b8 com decisão humana; CI e SDKs live PASS. Nightly completo41966511833: somente mutações pendentes; crates verificados e canais read-only PASS. SDK dry-run41966515107 encontrou parser Python e caminho npm; [plano do fix](plans/2026-11-05-sdk-release-dry-run.md), [auditoria](audits/2026-11-05-release-validation.md). Sem autorização de tag/publicação.
+- **Release closeout (2026-11-07)**: main7ca7a9b8 CI42371841522 e Standing42366783284PASS; manualNightly41966511833 completoPASS. R3/Cargo/C1/H2/S1 delimitados integrados; evolução futura não implementada. [Auditoria atual](audits/2026-11-07-release-closeout.md).
 
-- **PR #264 / S1 (2026-11-04)**: d9915e99 publicado com CI remoto verde e H1 humano verificado em 03/11 para60ed..d991. Review xhigh do PR completo: Standards0 / Spec1MED (cancelamento cloud). Owner pediu corrigir; [plano](plans/2026-11-04-cloud-download-cancellation.md) e [log](progress/2026-10-26-remediation.md#cloud-download-cancellation--2026-11-04). Novo código exige nova validação/revisão/receipt; merge continua separado.
+- **PR #264 / S1**: merge emmain7ca7a9b8; receipts históricos Markdown/cloud registrados no log. Não cobrem o novo candidato SDK/closeout; histórico preservado. [Cloud](plans/2026-11-04-cloud-download-cancellation.md).
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 
 Pilha #244–#262 mesclada no main `2e84a594` em 2026-10-27. Follow-up Nightly/release local preparado;
