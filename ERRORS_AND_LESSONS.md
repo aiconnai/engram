@@ -19,26 +19,6 @@ Tech Debt, Security, Performance, Fragile Areas
 
 ---
 
-<!-- [placeholder] -->
-
-### [Dependencies] Example: version mismatch after update
-**Context:** After updating a dependency, imports or builds break
-**Wrong:** Blindly updating all deps at once without testing
-**Right:** Update one dependency at a time, run tests between each
-**Date:** (template)
-
-### [Config] Example: environment variable not loaded
-**Context:** App fails on startup with missing config error
-**Wrong:** Hardcoding the value as a workaround
-**Right:** Check .env file exists, verify loading mechanism, add to .env.example
-**Date:** (template)
-
-### [Logic] Example: off-by-one in pagination
-**Context:** API returns duplicate or missing items at page boundaries
-**Wrong:** Using 1-based offset with 0-based index
-**Right:** Standardize on 0-based indexing internally, convert at boundaries
-**Date:** (template)
-
 ### [Data Processing] Dream candidate kind changes need schema and storage updates
 **Context:** Adding a new `dream_candidates.kind` value such as `agent_writeback`.
 **Wrong:** Updating only Rust allowlists or metadata while SQLite still has a CHECK constraint that rejects the new kind.
@@ -149,7 +129,14 @@ Tech Debt, Security, Performance, Fragile Areas
 **Right:** Use an RAII SQL `SAVEPOINT` guard (`SAVEPOINT name` / `RELEASE SAVEPOINT name` / `ROLLBACK TO SAVEPOINT name; RELEASE SAVEPOINT name`), which works identically in autocommit mode and nested inside `BEGIN IMMEDIATE`.
 **Date:** 2026-10-29
 
+### [Config] Inherited CDPATH changes directory canonicalization output
+**Context:** Verifying an SDK archive from a relative artifact directory before entering a consumer.
+**Wrong:** Capturing `cd "$artifact_dir" && pwd -P`; CDPATH can redirect cd and print an extra path.
+**Right:** Clear CDPATH for that cd and test empty, dot and a competing search directory with spaces.
+**Date:** 2026-11-07
+
 ## Rationalization Table
+
 
 Common excuses that lead to mistakes. If you catch yourself thinking these, stop.
 

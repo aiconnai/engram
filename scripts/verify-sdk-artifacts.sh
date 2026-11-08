@@ -99,6 +99,9 @@ if [[ -n "$run_id" ]]; then
 fi
 
 [[ -n "$artifact_dir" && -d "$artifact_dir" ]] || die "--artifact-dir or --run-id is required"
+# Installation runs from a separate consumer directory; retain the caller's
+# artifact location across that directory change, including paths with spaces.
+artifact_dir="$(CDPATH='' cd -- "$artifact_dir" && pwd -P)"
 [[ -n "$expected_sha" ]] || expected_sha="$(git -C "$repo_root" rev-parse HEAD)"
 [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]] || die "expected SHA must be a full lowercase commit SHA"
 [[ "$channel" =~ ^(all|python|npm)$ ]] || die "--channel must be all, python, or npm"

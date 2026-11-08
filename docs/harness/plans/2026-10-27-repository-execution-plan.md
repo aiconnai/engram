@@ -1,6 +1,25 @@
 # Engram — levantamento e plano de execução, 2026-10-27
 
-Status: **plano proposto, sem iniciar as novas frentes**. Solicitado pelo owner no chat:
+## Atualização de execução — 2026-11-07
+
+O corpo abaixo preserva o levantamento de 27/10. A execução atual segue
+[closeout de release](2026-11-07-release-closeout.md) e a
+[revisão 4 da evolução](2026-11-07-engram-evolution-plan-v4.md).
+Main7ca7a9b8 contém PR264; o candidato SDK parte de2c7544db com o follow-up CDPATH.
+
+| Itens originais | Disposição atual |
+|---|---|
+| R1, R2/R6 em main | Fixes integrados; CI/live SDKs e Nightly manual41966511833 completos PASS. O agendado de07/11 pulou mutação; é escopo diferente. |
+| R3/R4 | Signer SSH/verificador já integrados; Cargo conjunto verificado em target limpo. Manter verificação da futura tag e ordem types→core. |
+| R5/R7 | Dry-run SDK remoto falhou; patch local/parser/path e CDPATH em validação. Consolidar aviso cache-clear + Markdown; novo SHA/receipt e decisão de publicação separados. |
+| C1/H2/S1 | Defaults seguros, merge-gate fail-closed e defeitos delimitados de runtime/sync integrados. Preview CLI com diff permanece aceite próprio; contagens não são diff. |
+| H1/Q1 | Reconciliação antiga entregue; refrescar drift de merge/Nightly/riscos. Não refazer revisão humana já registrada dos floors v2. |
+| Demais H/S/Q/P | Manter somente pendências residuais e propostas com critérios próprios. Não declarar os68 minors encerrados ou a evolução inteira implementada. |
+
+Os IDs EV- da revisão4 distinguem instalação/continuidade/projeção dos IDs deste plano.
+O estado abaixo é histórico; não reexecutar suas investigações já concluídas por checklist.
+
+Status original em27/10: **plano proposto, sem iniciar as novas frentes**. Solicitado pelo owner no chat:
 “levante as docs do repo, mais issues e tudo o que falta fazer e crie um plano de execucao”.
 Este levantamento amplia o mapa de trabalho; não amplia o GO de implementação ou operação.
 O GO anterior continua limitado a diagnóstico do Nightly, defeitos confirmados, testes e

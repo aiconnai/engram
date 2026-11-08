@@ -1,5 +1,5 @@
 schema_version: harness-risk-register-v1
-updated_at: 2026-10-29T22:12:00Z
+updated_at: 2026-11-07T15:38:47Z
 entries:
 
   - id: RISK-0001
@@ -66,7 +66,7 @@ entries:
     impact: 3
     score: 3
     owner: "@team"
-    mitigation: "Em 2026-10-29 (H2), base_references(), protected_changes() e workflow_blob() passaram a falhar fechado (CiRefusal ci_base_unverifiable / ci_workflow_unverifiable) com 3 testes hermeticos em test_merge_gate.py (floor 50). Aguarda review humano independente de docs/harness/bin/*; merge segue humano."
+    mitigation: "Em 2026-10-29 (H2), base_references(), protected_changes() e workflow_blob() passaram a falhar fechado (CiRefusal ci_base_unverifiable / ci_workflow_unverifiable) com 3 testes hermeticos em test_merge_gate.py (floor 50). Integrado em main7ca7a9b8 via PR264. Preservar os escopos de review/receipt no log; este closeout nao altera scripts do gate, e merge segue humano."
     contingency: ""
     monitoring:
       - "review humano independente das mudancas em docs/harness/bin/merge_gate_ci.py e merge-gate.py"
@@ -135,8 +135,8 @@ entries:
     impact: 5
     score: 15
     owner: "Ronaldo / integrador P0"
-    mitigation: "Candidato integrado local9040153b em fix/markdown-release-integration, pais646636f6+1faa5c6f, retendo79889460. FullPASS422s sem exclusoes, CI complementar14comandosPASS, Linux103+29PASS (probe/helper declarados). Review de merge corrigiu perda documental; historia-base preservada e hashes56paths conferidos no commit. Review-default CLI/Rust/Python/TS e campoMCPdry_run comprovados, hiddenentries excluidas sem seguir links; unknown pos-callback preservado. Formal post-gate/receipt humano, integracao em main e tag pendentes. Log docs/harness/progress/2026-11-01-markdown-release-integration.md."
-    contingency: "ENGRAM_EXPORT_BASE_DIR sozinho nao mitiga o codigo publicado. Tag 0.24.0 aguarda os bloqueantes do export e a avaliacao do import RISK-0011; sem publicacao ou alteracao operacional."
+    mitigation: "Hardening integrado em main7ca7a9b8 via PR264, incluindo core Markdown compartilhado0da56ffc e follow-up cloud3bffe826. A readiness de05/11 registra receipts Markdown ate d9915e99 e cloud d9915e99..3bffe826 verificados antes do merge; nao cobrem o novo closeout SDK. CI e Nightly manual41966511833 completos PASS no main. Manter historico de9040153b no log proprio; tag/publicacao e fechamento formal do risco permanecem decisoes do owner. Estado atual em docs/releases/v0.24.0-readiness.md e docs/harness/plans/2026-11-07-release-closeout.md."
+    contingency: "ENGRAM_EXPORT_BASE_DIR sozinho nao mitiga o codigo publicado. Hardening export/import integrado; tag0.24.0 aguarda SDK dry-run corrigido e decisao de release. Sem publicacao ou alteracao operacional nesta reconciliacao."
     monitoring:
       - "tags session:/category:/confidence:/file:/trace:, aux e colisoes no codec"
       - "traversal, links/SQLite, autorizacao, expiracao, erros e determinismo"
@@ -150,8 +150,8 @@ entries:
     impact: 5
     score: 15
     owner: "Ronaldo / integrador import"
-    mitigation: "Candidato integrado local9040153b em fix/markdown-release-integration, pais646636f6+1faa5c6f, retendo79889460. FullPASS422s sem exclusoes, CI complementar14comandosPASS, Linux103+29PASS (probe/helper declarados). Review de merge corrigiu perda documental; historia-base preservada e hashes56paths conferidos no commit. Review-default CLI/Rust/Python/TS e campoMCPdry_run comprovados, hiddenentries excluidas sem seguir links; unknown pos-callback preservado. Formal post-gate/receipt humano, integracao em main e tag pendentes. Log docs/harness/progress/2026-11-01-markdown-release-integration.md."
-    contingency: "Manter tag 0.24.0 aguardando avaliacao/correcao; nenhuma tool foi desabilitada em ambiente real. Nao alegar bypass de criacao via frontmatter no dispatcher sem evidencia: override autorizado prevalece."
+    mitigation: "Hardening integrado em main7ca7a9b8 via PR264, incluindo core Markdown compartilhado0da56ffc e follow-up cloud3bffe826. A readiness de05/11 registra receipts Markdown ate d9915e99 e cloud d9915e99..3bffe826 verificados antes do merge; nao cobrem o novo closeout SDK. CI e Nightly manual41966511833 completos PASS no main. Manter historico de9040153b no log proprio; tag/publicacao e fechamento formal do risco permanecem decisoes do owner. Estado atual em docs/releases/v0.24.0-readiness.md e docs/harness/plans/2026-11-07-release-closeout.md."
+    contingency: "Correcao integrada; manter decisao de tag0.24.0 separada do merge. Nenhuma tool foi desabilitada em ambiente real. Nao alegar bypass de criacao via frontmatter no dispatcher sem evidencia: override autorizado prevalece."
     monitoring:
       - "principal alpha com engram_id de beta e inexistente: mesma negacao, sem mutacao"
       - "symlink/hardlink/ciclo/FIFO, limites de leitura e aliases SQLite antes do open"

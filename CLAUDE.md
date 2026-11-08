@@ -116,16 +116,20 @@ cargo test
 
 ## Code Architecture
 
-<!-- [placeholder] -->
+The Rust core separates canonical SQLite storage, retrieval, MCP adapters and background work.
+Markdown export/import share `src/portability/markdown/`; CLI and MCP adapt that core.
 
 ### Patterns
-<!-- Ex: MVC, Clean Architecture, Event-driven, Layered, etc. -->
+Keep database transactions local and bounded; perform filesystem/network preparation first.
+Enforce transport/workspace policy in adapters and stored-workspace checks at the data boundary.
 
 ### Key Modules
-<!-- List the main modules/packages and their responsibilities -->
+`storage` owns canonical data; `search`/`embedding` derive retrieval state; `mcp` exposes tools.
+`intelligence`, `hooks` and `sync` handle consolidation, lifecycle and optional replication.
 
 ### Data Flow
-<!-- Describe the primary data flow of the application -->
+MCP/HTTP/gRPC → permission/workspace guard → domain/storage → response.
+CLI invokes the same domain core. Cloud backup uses SQLite snapshots.
 
 ---
 
@@ -205,7 +209,8 @@ Spinning without progress is the most expensive failure mode. Detecting it early
 
 ## Active Risks
 
-State on `main` after the remediation stack (#244–#262) merged on 2026-10-27. Detail: `docs/harness/risk-register.yaml`, `docs/harness/known-issues/`.
+State on `main7ca7a9b8` after PR #264; current release status: `docs/releases/v0.24.0-readiness.md`.
+Risk disposition and receipt scopes: `docs/harness/risk-register.yaml`, `docs/harness/known-issues/`.
 
 - **Authz regression from `e04d3307`** (RISK-0003): a restricted principal could write to a foreign workspace via `memory_create_batch` / `memory_ingest_fact_batch`. Fixed on `main` via #247, #254 and #255 (`c50b552e`, `f53b75a0`, gRPC e2e `83e3816c`); stays listed until the post-gate receipt.
 - **Unredacted logs** (RISK-0002): sync/cloud, hooks, multimodal and watcher were swept (41 sites, capture tests); the rest of the repository still needs a sweep; use `observability::redact` in new logs.
@@ -218,7 +223,6 @@ State on `main` after the remediation stack (#244–#262) merged on 2026-10-27. 
 
 ## Formatting Standards
 
-<!-- [placeholder] -->
 - Use consistent indentation (spaces or tabs, not mixed)
 - Maximum line length: 100 characters
 - Files end with a single newline
@@ -243,7 +247,6 @@ Before writing any code, announce:
 
 Before starting any task:
 
-<!-- [placeholder] -->
 - [ ] Read ERRORS_AND_LESSONS.md for known pitfalls
 - [ ] Check if a local CLAUDE.md exists in the working directory
 - [ ] Understand the existing code before making changes

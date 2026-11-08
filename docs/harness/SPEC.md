@@ -76,6 +76,17 @@ Leitura ancorada limitada, modo conforme raiz e autorização/classificação/ap
 fixtures temporárias com principals reais antes da correção. [Canvas](canvas/2026-11-01-markdown-import-safety.md)
 e [log](progress/2026-11-01-markdown-import-safety.md). Mesmos limites operacionais do P0.
 
+## Follow-up autorizado — release closeout, 2026-11-07
+
+Owner pediu executar a sequência revisada após a avaliação de07/11: candidato isolado baseado
+no fix SDK2c7544db sobre main7ca7a9b8, reconciliação documental/risco e evidência local para
+decisão final. [Plano](plans/2026-11-07-release-closeout.md),
+[canvas](canvas/2026-11-07-release-closeout.md). Inclui o defeito CDPATH reproduzido no verificador,
+seus testes e a documentação útil do passo6. Sem Rust/API/schema/versões ou novos gates.
+H1 humano continua necessário antes de upstream; merge/tag/publicação/notices/settings/cleanup
+mantêm decisão própria. A [evolução v4](plans/2026-11-07-engram-evolution-plan-v4.md) atualiza
+base/dependências; não aceita RFC0004a nem inicia experimentos ou execução operacional.
+
 ## Tarefa anterior: Turso/libSQL sunset v0.24.0
 
 - **Status**: implementação concluída e commitada em `08cb17a4` (2026-10-23); sensores completos PASS

@@ -152,7 +152,7 @@ jobs:
           RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check 'build>=1,<2' 'twine>=6,<7'
+          python3 -m pip install --disable-pip-version-check 'build>=1,<2' 'twine>=6,<7' 'packaging>=24.2'
           python3 -m build --outdir sdk-artifacts/python sdks/python
           python3 -m twine check sdk-artifacts/python/*
           scripts/verify-sdk-artifacts.sh --write-metadata python --artifact-dir sdk-artifacts/python --expected-sha "${RELEASE_SHA}"

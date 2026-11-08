@@ -407,3 +407,63 @@ These are static-review/test observations, not a final-commit approval or receip
 After freezing, rebind the review to the actual HEAD and preserve the opinion plus
 the human-only completion procedure in ignored local artifacts. The new receipt
 and remote CI are pending at this committed handoff; merge/release remain separate.
+
+## Release validation and SDK dry-run — 2026-11-05
+
+Task:sdk-release-dry-run. Owner authorized the three post-merge validation steps.
+Main7ca7a9b8 contains PR264, merge explicitly approved despite disclosed H5 refusal;
+the cloud H1 receipt was separately verified for d9915e99..3bffe826. No H5 eligible
+verdict or broader receipt is inferred. Historical pending entries remain snapshots.
+
+Main CI and both live SDK workflows passed. Manual Nightly41966511833 and SDK
+dry-run41966515107 bind to7ca7a9b8. Both Rust crates passed verified offline packaging
+from a clean target; registry/channel observations match the matrix at04:16:20Z.
+The SDK dry-run failed on two confirmed release-only paths. The bounded candidate
+fixes parser compatibility and artifact-path resolution; real RED/GREEN reproductions
+and15 passing workflow tests are recorded in the
+[audit](../audits/2026-11-05-release-validation.md). Full fix sensors passed at2026-11-05T04:42:56Z in409s without exclusions,
+after repairing the required negative-scope link and retaining the initial failure.
+Real local package installs/live checks and104 TypeScript tests also passed.
+Nightly mutation outcome, frozen review/H1 and corrected remote dry-run remain
+pending. No release operation.
+
+## Release closeout — 2026-11-07
+
+Owner requested execution of the updated assessment. New isolated branch
+fix/release-closeout-2026-11-07 starts at SDK fix2c7544db over main7ca7a9b8;
+old worktrees/planning files are preserved. [Plan](../plans/2026-11-07-release-closeout.md),
+[canvas](../canvas/2026-11-07-release-closeout.md),
+[evidence](../audits/2026-11-07-release-closeout.md),
+[evolution v4](../plans/2026-11-07-engram-evolution-plan-v4.md).
+
+The07/11 assessment confirmed full manual Nightly41966511833 terminal PASS with
+seven successful jobs including mutations, plus current CI/Standing and live SDKs
+on main. Scheduled Nightly skipped mutations; scopes are preserved separately.
+The SDK remote dry-run remains failed and its local correction is not upstream.
+
+Independent static Terra/xhigh inspection found CDPATH contamination in the new
+artifact-dir canonicalization. Existing test reproduced failure with CDPATH=.;
+the extended real-npm regression failed for dot and a competing search directory.
+Clear CDPATH for that cd; full15 workflow tests then passed. Packaging floor and
+publication guards unchanged. The new bytes need new review/H1, not the old bundle.
+
+Step6 architecture/template cleanup integrated selectively; evidence/plan/risk
+states reconciled without replacing historical reviews. Main Markdown fixes are
+integrated; publication and formal risk closure remain separate. Release notice
+preparation includes cache-clear plus Markdown import/export changes. No notices,
+tag, registry upload, GitHub setting or deletion performed. Final local checks
+and human-only completion are recorded in the evidence report as they finish.
+
+Closeout checks: Python wheel/sdist+Twine PASS; TypeScript type/build/104tests PASS;
+artifact-backed installed verifier PASS (Python happy1PASS/2unselected, npm CRUD,
+wrong-auth and cross-workspace negatives). Initial sandbox socket/cache/Git-link
+limitations were rerun with the required permissions, not exclusions or code fixes.
+The first full sensor failed545s at15:34:14Z only because Last evidence lacked its
+required active-log link. Link restored; focused50 context tests PASS. Keep the
+first fail in sensor history and execute the full retry. Fresh registry checks PASS.
+
+Full retry finished PASS at2026-11-07T15:46:02Z,417s, without exclusions, after the
+evidence pointer fix; all deterministic stages/doctor passed. The existing review
+warning and negative-title fixture failures are expected outputs, not skipped gates.
+Final metadata/review/commit binding follows; no human receipt or remote success
+is inferred from this local PASS.
