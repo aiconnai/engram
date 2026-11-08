@@ -467,3 +467,52 @@ evidence pointer fix; all deterministic stages/doctor passed. The existing revie
 warning and negative-title fixture failures are expected outputs, not skipped gates.
 Final metadata/review/commit binding follows; no human receipt or remote success
 is inferred from this local PASS.
+
+## Release execution — missing artifact signer, 2026-11-07
+
+PR265 merged as85502ad8 after owner instruction; tree matches reviewed69777156.
+Owner then requested release. SDK dry-run42430284800 PASS on that exact merge.
+Core dry-run42430325179 reached bundle creation and failed: missing
+scripts/sign-candidate-manifest.sh, removed in3128d444 but later called by64d515fc.
+No tag/publication. Isolated fix branch restores the interface and adds actual bundle
+CLI regressions to the existing PDF packaging tests. Canvas records limits.
+
+Protected release-github/release-pypi/release-npm environments were absent on read-only
+inspection; proposed settings await their separate owner decision. Signing probe
+matched the allowed owner SSH fingerprint without creating a tag. Cargo1.96 multi-crate
+packaging fails offline even in a tiny independent workspace; the same probe passes
+with index access. Full real archives are being verified online, without upload.
+
+Regression RED: the real bundle CLI failed4/4 target subcases on the missing helper.
+GREEN: restored RSA envelope v1 helper, fail-closed schema/digest/signature checks,
+private ephemeral keys and EXIT cleanup; all17 packaging tests PASS in2.328s.
+Tests cover actual create/verify for four target layouts, tampering/malformed envelopes,
+no key-temp leaks and rejection without GitHub identity attestation in trusted mode.
+Existing GitHub provenance verification is unchanged. ShellCheck and syntax PASS.
+Cargo verified both real archives online with --locked on85502ad8 (exit0); both
+offline attempts retained as failures, and a separate minimal workspace reproduces
+the Cargo offline-only issue. No --no-verify, publication or source workaround used.
+
+Full da correção: PASS em2026-11-08T00:57:42Z,406s, sem exclusões. Negative-title
+fixtures imprimem FAIL esperado; agregado PASS. Doctor conserva WARN histórico da
+tarefa ativa. Static peer review dos sete paths congelados não encontrou defeito;
+nenhuma atestação de modelo/custo ou max é inferida. Leitura posterior da readiness
+corrige a recomendação offline à luz do repro mínimo e da verificação online real.
+O snapshot inicial era apenas de leitura (modo físico644); nova captura preserva os
+modos declarados, incluindo755 do helper, antes do bind final. Fontes executáveis
+permanecem iguais aos testes17 e ao full; somente evidências/docs atualizadas depois.
+Core dry-run42430325179 terminou FAILURE nos quatro alvos pelo helper ausente;
+nenhuma release foi criada. O candidato corrigido requer novo H1 e nova matriz.
+
+Post-full metadata check initially failed because Last live-state check used generic
+wording instead of the required checker invocation. Restored the literal CLI path;
+reran doctor/strict and the focused context-budget checks without changing tests
+or executable source. This was a post-full metadata failure, not a suppressed sensor.
+
+The first focused context-budget run after those metadata edits returned49PASS/1FAIL:
+Limites omitted the literal push/merge boundary required by the unchanged fixture.
+Restored that boundary wording and reran the same50 tests; no test weakening.
+
+Final context-budget rerun:50/50PASS in14.469s. Doctor and strict live-state PASS
+after restoring the required literal CLI and push/merge boundaries. Full sensor
+receipt remains406s with source/test hashes unchanged; no sensor exclusion.
