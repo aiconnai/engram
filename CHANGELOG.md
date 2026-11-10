@@ -12,6 +12,10 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+### Security
+
+- **Bundled SQLite 3.54.1 (RUSTSEC-2026-0459, CVE-2026-119375)** — `rusqlite` 0.31 → 0.41.1 and `libsqlite3-sys` 0.28.0 → 0.39.1 in the root and `fuzz/` lockfiles. The previous bundled SQLite 3.45.0 could return uninitialized page-cache memory for a database opened with a `-wal` of a different page size. No schema, MCP or SDK change; `rusqlite` keeps the same feature surface (`cache` and `fallible_uint` are now explicit opt-ins).
+
 ## [0.24.0] - 2026-10-27
 
 Release candidate prepared for review; tag and package publication are pending.

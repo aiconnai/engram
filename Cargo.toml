@@ -191,7 +191,7 @@ tokio = { version = "1.35", features = [
 ] }
 
 # Database
-rusqlite = { version = "0.31", features = ["bundled", "vtab", "functions", "trace"] }
+rusqlite = { version = "0.41", default-features = false, features = ["bundled", "vtab", "functions", "trace", "cache", "fallible_uint"] }
 # statvfs free-space checks before VACUUM (#22) + flock singleton lock (#24)
 libc = "0.2"
 
