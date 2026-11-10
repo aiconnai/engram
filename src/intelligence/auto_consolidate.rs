@@ -191,6 +191,15 @@ pub struct ConsolidationCounts {
     pub skipped: usize,
 }
 
+/// Consolidation is report-only today: the actions in the report are
+/// proposals and nothing is merged, resolved or archived. Every report is
+/// therefore a dry run, whatever `policy.dry_run` asked for, so neither the
+/// caller nor `consolidation_runs` can mistake a proposal for a change.
+pub const REPORT_ONLY_NOTE: &str = "Consolidation is report-only: actions are proposals; \
+nothing was merged, resolved or archived.";
+
+/// Run one consolidation pass and persist its report. The returned report is
+/// always a dry run; see [`REPORT_ONLY_NOTE`].
 pub fn run_consolidation(
     storage: &Storage,
     workspace: &str,
@@ -219,10 +228,10 @@ pub fn run_consolidation(
             workspace: workspace.to_string(),
             started_at,
             finished_at: Utc::now(),
-            dry_run: policy.dry_run,
+            dry_run: true,
             actions,
         };
-        let _ = persist_report(storage, &report);
+        persist_report_logged(storage, &report);
         return Ok(report);
     }
 
@@ -394,12 +403,23 @@ pub fn run_consolidation(
         workspace: workspace.to_string(),
         started_at,
         finished_at: Utc::now(),
-        dry_run: policy.dry_run,
+        dry_run: true,
         actions,
     };
 
-    let _ = persist_report(storage, &report);
+    persist_report_logged(storage, &report);
     Ok(report)
+}
+
+/// History is best effort, but a lost row must be visible in the logs.
+fn persist_report_logged(storage: &Storage, report: &ConsolidationReport) {
+    if let Err(e) = persist_report(storage, report) {
+        tracing::warn!(
+            error = %crate::observability::redact::redacted(&e),
+            workspace = %report.workspace,
+            "failed to persist consolidation report"
+        );
+    }
 }
 
 fn persist_report(storage: &Storage, report: &ConsolidationReport) -> Result<()> {
@@ -666,6 +686,44 @@ mod tests {
             })
             .unwrap();
         assert_eq!(before, after);
+    }
+
+    /// Consolidation only proposes actions: a run that asks for writes must
+    /// not report itself as applied, and must leave memories untouched.
+    #[test]
+    fn run_without_dry_run_is_report_only() {
+        let s = open_storage();
+        let ws = "default";
+        let a = mk_memory(&s, "same text", ws);
+        let b = mk_memory(&s, "same text", ws);
+        let policy = ConsolidationPolicy {
+            dry_run: false,
+            ..Default::default()
+        };
+
+        let r = run_consolidation(&s, ws, &policy).unwrap();
+
+        assert!(
+            r.dry_run,
+            "nothing is applied, so the report must say dry_run"
+        );
+        for id in [a, b] {
+            let still_there = s
+                .with_connection(|c| Ok(crate::storage::queries::get_memory(c, id).is_ok()))
+                .unwrap();
+            assert!(still_there, "memory {id} must not be merged away");
+        }
+        let persisted_dry_run: i64 = s
+            .with_connection(|c| {
+                c.query_row(
+                    "SELECT dry_run FROM consolidation_runs WHERE workspace = ?",
+                    rusqlite::params![ws],
+                    |row| row.get(0),
+                )
+                .map_err(crate::error::EngramError::Database)
+            })
+            .unwrap();
+        assert_eq!(persisted_dry_run, 1);
     }
 
     #[test]

@@ -558,3 +558,49 @@ sqlite-vec benchmark at runtime (it compiles under clippy `--all-targets`), Linu
 Pre-existing and unrelated: `cargo deny --manifest-path fuzz/Cargo.toml check licenses` fails on
 the unlicensed `engram-fuzz` and libfuzzer-sys NCSA; CI only audits that lockfile.
 No Review Canvas; independent review and human H1 receipt are pending, as is every remote step.
+
+## Keyless HTTP and read-only authorization — 2026-11-10
+
+Task: keyless-http-authz-2026-11-10, branch claude/revise-e-avalie-62b8e4 from main 85502ad8.
+Origin: findings A-1 to A-4 of the 2026-11-10 read-only review. The owner authorized the fix
+commit, then push and PR of this branch (chat, 2026-11-10); merge stays a separate decision.
+[Canvas](../canvas/2026-11-10-keyless-http-authz.md).
+
+`7a572e15` closes: `palace_visualize` with `output_path` now needs the Markdown export mode and
+refuses paths outside `ENGRAM_EXPORT_BASE_DIR` before creating directories (A-1); an unnamed
+`/v1/events` stream is confined to `default` for a restricted principal (A-2);
+`memory_build_context` depth expansion stays in the searched and readable workspace (A-3); a
+keyless HTTP server refuses `Host`/`Origin` that do not name this machine, with
+`ENGRAM_HTTP_ALLOWED_HOSTS` and `ENGRAM_CORS_ORIGINS` as allowlists (A-4). `1b92dc93` adds the
+duplicate/malformed header and `Origin: null` test. The tests were written with the fix, not
+before it; no RED step was observed.
+
+Verification on the candidate tree: clippy `-D warnings` and nextest with
+`CI_REQUIRED_FEATURES` (2437 passed, 3 skipped); full sensors PASS at 2026-11-10T05:58:38Z,
+587s, without exclusions. Not done: a browser DNS-rebinding exercise. Known limits are in the
+canvas (stdio without a permission mode still writes anywhere; check-then-write race;
+`include_graph` neighbour IDs). Independent post-review and the human H1 receipt are pending;
+no remote success is inferred from this local PASS.
+
+After merging main `984ced80` (PR #266 and #267, rusqlite 0.41.1) into the branch as
+`09afe27f`, the full sensors rerun PASSED at 2026-11-10T07:10:28Z, 940s, without exclusions.
+
+## Honest consolidation and embedding migrate — 2026-11-10
+
+Task: honest-consolidation-and-migration-2026-11-10, branch
+fix/honest-consolidation-and-migration from main 85502ad8. Origin: findings B-1 and B-2 of the
+2026-11-10 read-only review. Owner decision (chat, 2026-11-10): downgrade both to honest
+reporting now; implement the real operations after the release.
+[Canvas](../canvas/2026-11-10-honest-consolidation-and-migration.md).
+
+`4e8bb283`: `memory_consolidate_batch` and the scheduler tick are report-only. Every report is
+a dry run, the response adds `applied: false` and a `note`, and no `consolidation` enrichment
+events are emitted. A failure to persist the report is logged (redacted) instead of dropped.
+`memory_embedding_migrate` without `dry_run` returns an error and writes nothing; its dry-run
+count surfaces storage errors. Tool descriptions, `docs/MCP_TOOLS.md`, the SDK doc comments and
+the `CHANGELOG.md` `Fixed` section are updated; no tool name, schema key or SDK signature
+changed. Tests were written first, and RED was observed on all three behaviour tests before
+the fix.
+
+Full sensors PASS at 2026-11-10T06:31:13Z, 984s, without exclusions; advertised-contracts and
+public-claims PASS. Independent post-review and the human H1 receipt are pending.

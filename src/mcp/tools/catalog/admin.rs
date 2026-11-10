@@ -500,7 +500,7 @@ pub const TOOLS: &[ToolDef] = &[
         },
     ToolDef {
             name: "memory_embedding_migrate",
-            description: "Re-embed all memories using the active embedding model; use dry_run to count affected memories without writing.",
+            description: "Count the memories a re-embedding migration would touch (dry_run=true). Re-embedding itself is not implemented yet: without dry_run the call returns an error and changes nothing; use memory_rebuild_embeddings to queue re-embedding with the active model.",
             schema: r#"{
                 "type": "object",
                 "properties": {
@@ -510,7 +510,7 @@ pub const TOOLS: &[ToolDef] = &[
                     },
                     "target_model": {
                         "type": "string",
-                        "description": "Target embedding model name to record in embedding_model column. Defaults to the active embedder's model name."
+                        "description": "Target embedding model name, echoed in the response. Nothing is recorded until re-embedding is implemented. Defaults to the active embedder's model name."
                     }
                 },
                 "required": []
@@ -995,12 +995,12 @@ pub const TOOLS: &[ToolDef] = &[
         },
     ToolDef {
             name: "memory_consolidate_batch",
-            description: "Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories. Defaults to dry-run; returns a structured report of actions taken (or that would be taken).",
+            description: "Run one report-only auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories and return the proposed actions. Nothing is merged, resolved or archived yet; dry_run=false is accepted but the report is still a dry run (applied=false).",
             schema: r#"{
                 "type": "object",
                 "properties": {
                     "workspace": {"type": "string", "default": "default"},
-                    "dry_run": {"type": "boolean", "default": true},
+                    "dry_run": {"type": "boolean", "default": true, "description": "Accepted for compatibility; consolidation is report-only, so false still applies nothing (applied=false)."},
                     "policy": {
                         "type": "object",
                         "properties": {
@@ -1008,7 +1008,7 @@ pub const TOOLS: &[ToolDef] = &[
                             "conflict_auto_resolve": {"type": "boolean", "default": false},
                             "summarize_age_days": {"type": "integer", "default": 90},
                             "max_actions_per_run": {"type": "integer", "default": 50},
-                            "dry_run": {"type": "boolean", "default": true},
+                            "dry_run": {"type": "boolean", "default": true, "description": "Ignored: consolidation is report-only."},
                             "utility_threshold": {"type": "number", "default": 0.3, "minimum": 0, "maximum": 1},
                             "min_feedback_events": {"type": "integer", "default": 3, "minimum": 0},
                             "max_access_count_for_archival": {"type": "integer", "default": 10, "minimum": 0},
