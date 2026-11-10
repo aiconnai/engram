@@ -7,9 +7,9 @@
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-11-05 — revisão estática independente solicitada native/xhigh do snapshot local: docs/harness/reviews/2026-11-05-sdk-release-dry-run-post.md. Reconciliação do HEAD final e receipt H1 próprios pendentes; sem atestação independente do modelo efetivo.` |
-| Last sensors | `2026-11-07T15:46:02Z status=pass mode=full duration_sec=417, sem exclusões, candidato release-closeout sobre2c7544db. Primeiro full545s falhou no link de evidência, corrigido sem mudar testes; histórico preservado.` |
-| Last commit | `2c7544db` |
-| Last live-state check | `2026-11-07 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após fullPASS417s; doctor PASS com WARN preexistente. Novo review/H1 próprios no closeout.` |
+| Last sensors | `2026-11-08T00:57:42Z status=pass mode=full duration_sec=406, sem exclusões, no candidato85502ad8+restauração do helper. Empacotamento17testes, ShellCheck, syntax e tamper self-test PASS separados.` |
+| Last commit | `85502ad8` |
+| Last live-state check | `2026-11-07 — helper local após full406s; bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md + doctor no fechamento. Novo review/H1 para a correção ainda pendentes; escopos anteriores preservados.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,9 +23,9 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat,2026-11-07): executar a sequência revisada: candidato isolado do fix SDK2c7544db, documentação/evidência e decisão final. [Plano](plans/2026-11-07-release-closeout.md); [evolução v4](plans/2026-11-07-engram-evolution-plan-v4.md).
-- **Limites**: o follow-up exige revisão e receipt H1 próprios antes de upstream; seu merge, tag/GitHub Release (`v0.24.0`), registries, notices, remoção de branches/worktrees e settings aguardam decisão separada. Sem dados reais, chamadas pagas ou produção. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [escopo canônico](./SPEC.md).
-- **Última evidência**: [closeout de07/11](./progress/2026-10-26-remediation.md#release-closeout--2026-11-07): main7ca7a9b8 integrado porPR264; CI/live SDKs e Nightly manual41966511833 com7jobsPASS. SDK dry-run41966515107 falhou; CDPATH reproduzido/corrigido, workflow15PASS. Novo receipt H1 próprio pendente.
+- **Autorização atual** (owner, chat,2026-11-07): após merge PR265, executar release Core0.24.0/SDKs0.7.0 e corrigir bloqueantes confirmados. Dry-runs no SHA85502ad8; helper ausente encontrado no Core. [Escopo da correção](canvas/2026-11-07-release-attestation-helper.md).
+- **Limites**: novo código exige review/H1 antes de novo push/merge e validação da matriz no SHA corrigido antes de tag/upload. Proteções/publishers ausentes aguardam decisão própria de settings; sem notices, remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
+- **Última evidência**: [release execution](./progress/2026-10-26-remediation.md#release-execution--missing-artifact-signer-2026-11-07): PR265 mesclado em85502ad8; SDK dry-run PASS. Core packaging encontrou helper ausente; restauração local e17 testes PASS. Novo candidato/review/H1 e matriz remota próprios pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
