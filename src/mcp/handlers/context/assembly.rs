@@ -86,6 +86,10 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
         ..Default::default()
     };
 
+    let scope_workspace = search_opts.workspace.as_deref().map(|workspace| {
+        crate::types::normalize_workspace(workspace).unwrap_or_else(|_| workspace.to_string())
+    });
+
     let query_embedding = ctx.embedder.embed(&query).ok();
     let embedding_ref = query_embedding.as_deref();
 
@@ -160,6 +164,18 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
                     .storage
                     .with_connection(|conn| crate::storage::queries::get_memory(conn, *id))
                 {
+                    // A crossref may point outside the searched workspace, or
+                    // outside what the caller may read; expansion must not
+                    // widen the search scope.
+                    if scope_workspace
+                        .as_deref()
+                        .is_some_and(|scope| scope != mem.workspace)
+                        || ctx.principal.as_ref().is_some_and(|principal| {
+                            !principal.allows_workspace(Some(&mem.workspace))
+                        })
+                    {
+                        continue;
+                    }
                     // Apply timeframe filter to expanded memories too
                     if let Some(cutoff) = time_cutoff {
                         if mem.created_at < cutoff {

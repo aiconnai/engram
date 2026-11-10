@@ -19,7 +19,7 @@ use tower_http::cors::{Any, CorsLayer};
 use super::super::protocol::McpHandler;
 use super::events::handle_events;
 use super::mcp_handler::handle_mcp;
-use super::metrics::RequestCounted;
+use super::metrics::{McpOutcome, RequestCounted};
 use super::rate_limit::{
     RateLimiterConfig, RateLimiterState, RATE_LIMIT_MAX_BUCKETS, RATE_LIMIT_STALE_AFTER_SECS,
 };
@@ -184,6 +184,10 @@ pub(super) fn build_router(
         ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
+            enforce_keyless_browser_boundary,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
             enforce_request_timeout,
         ))
         // Outermost: every response, including rejections, carries x-request-id.
@@ -194,6 +198,10 @@ pub(super) fn build_router(
         .layer(middleware::from_fn_with_state(
             state.clone(),
             enforce_auth_sse,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            enforce_keyless_browser_boundary,
         ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -299,6 +307,64 @@ async fn enforce_auth_sse(
         next,
     )
     .await
+}
+
+/// On a server without an API key, refuse requests whose `Host`/`Origin` do
+/// not name this machine (DNS rebinding and cross-site requests). A configured
+/// API key is the boundary instead, so keyed servers are left alone.
+async fn enforce_keyless_browser_boundary(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> axum::response::Response {
+    if state.api_key.is_some() {
+        return next.run(request).await;
+    }
+    let Some(reason) = state
+        .security
+        .keyless_request_denial(request.headers(), request.uri())
+    else {
+        return next.run(request).await;
+    };
+
+    let started = Instant::now();
+    let correlation = correlation_of(&request);
+    let path = request.uri().path();
+    let is_mcp = path == "/mcp" || path == "/v1/mcp";
+    let latency = started.elapsed();
+    if is_mcp {
+        if let Some(counted) = request.extensions().get::<RequestCounted>() {
+            counted.mark();
+        }
+        state
+            .metrics
+            .on_mcp_rejected_before_handler(McpOutcome::Forbidden, latency);
+    } else {
+        state.metrics.on_events_request(true, false);
+    }
+    OperationEvent::new(
+        if is_mcp { "http.mcp" } else { "http.events" },
+        correlation.as_str(),
+        "forbidden",
+        latency,
+    )
+    .http(None, None, StatusCode::FORBIDDEN.as_u16())
+    .failed(true)
+    .emit();
+
+    if is_mcp {
+        (
+            StatusCode::FORBIDDEN,
+            Json(super::super::protocol::McpResponse::error(
+                None,
+                -32003,
+                format!("Forbidden: {reason}"),
+            )),
+        )
+            .into_response()
+    } else {
+        StatusCode::FORBIDDEN.into_response()
+    }
 }
 
 async fn enforce_request_timeout(

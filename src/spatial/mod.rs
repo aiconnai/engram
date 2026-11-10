@@ -4,7 +4,7 @@ pub mod visualizer;
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 
 pub use visualizer::{PalaceDrawer, PalaceFormat, PalaceGraph, PalaceRoom, PalaceWing};
 
@@ -39,6 +39,42 @@ fn validate_output_file_path(path_str: &str) -> std::result::Result<std::path::P
         parent
     };
 
+    let base = match std::env::var("ENGRAM_EXPORT_BASE_DIR") {
+        Ok(base_str) if !base_str.trim().is_empty() => Some(
+            fs::canonicalize(&base_str)
+                .map_err(|e| format!("ENGRAM_EXPORT_BASE_DIR cannot be resolved: {}", e))?,
+        ),
+        _ => None,
+    };
+    let outside_base = || {
+        format!(
+            "output path '{}' is outside the allowed export base directory",
+            path_str
+        )
+    };
+
+    // Decide containment before touching the filesystem: a path outside the
+    // export base must not create directories on its way to being refused.
+    if let Some(base) = &base {
+        if p.components().any(|c| matches!(c, Component::ParentDir)) {
+            return Err("output path must not contain '..' components".to_string());
+        }
+        let existing = parent
+            .ancestors()
+            .find(|ancestor| ancestor.exists())
+            .unwrap_or_else(|| Path::new("."));
+        let existing = if existing.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            existing
+        };
+        let canon_existing = fs::canonicalize(existing)
+            .map_err(|e| format!("cannot resolve parent directory: {}", e))?;
+        if !canon_existing.starts_with(base) {
+            return Err(outside_base());
+        }
+    }
+
     if !parent.exists() {
         fs::create_dir_all(parent).map_err(|e| format!("cannot create output directory: {}", e))?;
     }
@@ -50,17 +86,15 @@ fn validate_output_file_path(path_str: &str) -> std::result::Result<std::path::P
         .ok_or_else(|| "path has no file name component".to_string())?;
     let canonical = canon_parent.join(file_name);
 
-    if let Ok(base_str) = std::env::var("ENGRAM_EXPORT_BASE_DIR") {
-        if !base_str.is_empty() {
-            let base = fs::canonicalize(&base_str)
-                .map_err(|e| format!("ENGRAM_EXPORT_BASE_DIR cannot be resolved: {}", e))?;
-            if !canonical.starts_with(&base) {
-                return Err(format!(
-                    "output path '{}' is outside the allowed export base directory",
-                    path_str
-                ));
-            }
+    if let Some(base) = &base {
+        if !canonical.starts_with(base) {
+            return Err(outside_base());
         }
+    }
+    // `fs::write` follows a symlink in the final component, which would leave
+    // the directory that was just checked.
+    if fs::symlink_metadata(&canonical).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return Err("output path must not be a symbolic link".to_string());
     }
 
     Ok(canonical)
@@ -101,4 +135,57 @@ pub fn generate_palace_visualizer(
         rendered,
         output_path: saved_path,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Runs in a child process so `ENGRAM_EXPORT_BASE_DIR` never leaks into
+    /// sibling tests that share this process environment.
+    #[test]
+    fn output_outside_export_base_is_refused_without_creating_directories() {
+        const CHILD: &str = "ENGRAM_SPATIAL_OUTPUT_PATH_CHILD";
+        if let Ok(root) = std::env::var(CHILD) {
+            let root = Path::new(&root);
+            let stray = root.join("outside/nested/palace.html");
+            let error = validate_output_file_path(stray.to_str().unwrap()).unwrap_err();
+            assert!(error.contains("outside the allowed export base"), "{error}");
+            assert!(
+                !root.join("outside").exists(),
+                "refusal must not create directories"
+            );
+
+            let escape = root.join("base/../outside/palace.html");
+            assert!(validate_output_file_path(escape.to_str().unwrap()).is_err());
+            assert!(!root.join("outside").exists());
+
+            let inside = root.join("base/new/palace.html");
+            let resolved = validate_output_file_path(inside.to_str().unwrap()).unwrap();
+            assert!(resolved.ends_with("base/new/palace.html"));
+
+            #[cfg(unix)]
+            {
+                let link = root.join("base/link.html");
+                std::os::unix::fs::symlink(root.join("target.html"), &link).unwrap();
+                let error = validate_output_file_path(link.to_str().unwrap()).unwrap_err();
+                assert!(error.contains("symbolic link"), "{error}");
+            }
+            return;
+        }
+
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("base")).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "spatial::tests::output_outside_export_base_is_refused_without_creating_directories",
+                "--nocapture",
+            ])
+            .env(CHILD, root.path())
+            .env("ENGRAM_EXPORT_BASE_DIR", root.path().join("base"))
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
 }

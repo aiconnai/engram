@@ -96,7 +96,7 @@ pub const TOOLS: &[ToolDef] = &[
                 },
                 "output_path": {
                     "type": "string",
-                    "description": "Optional local file path to save the rendered output."
+                    "description": "Optional server file path to save the rendered output. Saving is a filesystem write: it requires scoped_write within ENGRAM_EXPORT_BASE_DIR, otherwise maintenance."
                 }
             }
         }"#,

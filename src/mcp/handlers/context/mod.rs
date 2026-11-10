@@ -333,4 +333,67 @@ mod context_tests {
     fn test_safe_truncate_zero() {
         assert_eq!(safe_truncate("hello", 0), "");
     }
+
+    #[test]
+    fn build_context_depth_expansion_stays_in_the_searched_workspace() {
+        use crate::types::{CreateCrossRefInput, EdgeType};
+
+        let ctx = test_ctx();
+        let public = seed_memory(&ctx, "Quarterly roadmap for the orchard project", "note");
+        let foreign = super::super::dispatch(
+            &ctx,
+            "memory_create",
+            serde_json::json!({
+                "content": "zebracrossing payroll figures",
+                "memory_type": "note",
+                "workspace": "private"
+            }),
+        )["id"]
+            .as_i64()
+            .expect("foreign memory must be created");
+        ctx.storage
+            .with_connection(|conn| {
+                crate::storage::queries::create_crossref(
+                    conn,
+                    &CreateCrossRefInput {
+                        from_id: public,
+                        to_id: foreign,
+                        edge_type: EdgeType::default(),
+                        strength: None,
+                        source_context: None,
+                        pinned: false,
+                    },
+                )
+            })
+            .expect("cross-workspace crossref");
+
+        let scoped = super::memory_build_context(
+            &ctx,
+            serde_json::json!({"query": "orchard roadmap", "workspace": "default", "depth": 3}),
+        );
+        assert!(
+            !scoped.to_string().contains("zebracrossing"),
+            "expansion leaked a foreign workspace: {scoped}"
+        );
+
+        // An unrestricted caller that searches every workspace still expands.
+        let global = super::memory_build_context(
+            &ctx,
+            serde_json::json!({"query": "orchard roadmap", "depth": 3}),
+        );
+        assert!(global.to_string().contains("zebracrossing"), "{global}");
+
+        // A restricted principal never receives the foreign memory.
+        let mut restricted = test_ctx();
+        restricted.storage = ctx.storage.clone();
+        restricted.principal = Some(crate::auth::TransportPrincipal::anonymous_loopback());
+        let anonymous = super::memory_build_context(
+            &restricted,
+            serde_json::json!({"query": "orchard roadmap", "depth": 3}),
+        );
+        assert!(
+            !anonymous.to_string().contains("zebracrossing"),
+            "{anonymous}"
+        );
+    }
 }
