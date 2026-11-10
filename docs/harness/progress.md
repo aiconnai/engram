@@ -6,9 +6,9 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-11-10 — post-review independente (Claude Code Sonnet, processo separado, só leitura) de 85502ad8..0358ba36: docs/harness/reviews/2026-11-10-honest-consolidation-and-migration-2026-11-10-post.md, REVIEW_VERDICT PASS com 3 LOW; o LOW de descrição de dry_run foi corrigido em b91f03fe (só docs de catálogo). Receipt H1 pendente.` |
+| Last review | `2026-11-10 — post-reviews independentes (Claude Code Sonnet, processo separado, só leitura), ambas REVIEW_VERDICT PASS só com LOW: docs/harness/reviews/2026-11-10-keyless-http-authz-2026-11-10-v2-post.md (A-1..A-4, mesclado em #268) e docs/harness/reviews/2026-11-10-honest-consolidation-and-migration-2026-11-10-post.md (B-1/B-2, ..0358ba36; LOW de dry_run corrigido em b91f03fe). Receipts H1 pendentes.` |
 | Last sensors | `2026-11-10T06:31:13Z status=pass mode=full duration_sec=984, sem exclusões, candidato honest-consolidation-and-migration (B-1/B-2) sobre main 85502ad8.` |
-| Last commit | `b91f03fe` |
+| Last commit | `b4506254` |
 | Last live-state check | `2026-11-10 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 984s de B-1/B-2; doctor PASS com WARN preexistente. Review/H1 próprios pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
