@@ -113,8 +113,11 @@ answers `403` on `POST /mcp`, `POST /v1/mcp` and `GET /v1/events` unless:
 
 - `Host` (when sent) names `localhost`, `127.0.0.1` or `[::1]`, any port, or a
   name listed in `ENGRAM_HTTP_ALLOWED_HOSTS` (comma-separated, without port);
-- `Origin` (when sent) is a loopback origin, or is listed in
-  `ENGRAM_CORS_ORIGINS`.
+- `Origin` (when sent) is a loopback origin (`http` or `https`, any port) while
+  `ENGRAM_CORS_ORIGINS` is unset. Setting `ENGRAM_CORS_ORIGINS` to a
+  comma-separated list **replaces** that default: only the listed origins pass,
+  so add local dev origins such as `http://localhost:5173` explicitly if you
+  still need them. `*` accepts any origin.
 
 Clients that send neither header are unaffected. A server with an API key does
 not apply this check: the bearer token is its boundary.
