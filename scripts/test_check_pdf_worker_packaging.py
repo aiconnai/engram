@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -85,6 +88,105 @@ SMOKE_SCRIPT = "\n".join(
         "      # protocol smoke",
     )
 )
+
+
+@unittest.skipUnless(shutil.which("bash") and shutil.which("openssl"), "bash and openssl required")
+class ReleaseBundleRoundTripTests(unittest.TestCase):
+    def test_actual_bundle_creation_and_verification_for_each_release_target(self) -> None:
+        """Exercise the workflow's real packaging entry point and its local helpers."""
+        source_root = SCRIPT.parent.parent
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for name in ("verify-release-artifacts.sh", "sign-candidate-manifest.sh"):
+                source = source_root / "scripts" / name
+                if source.is_file():
+                    shutil.copy2(source, scripts / name)
+            shutil.copy2(source_root / "Cargo.lock", root / "Cargo.lock")
+            binaries = root / "binaries"
+            binaries.mkdir()
+            for name in ("engram-server", "engram-cli", "engram-pdf-worker"):
+                (binaries / name).write_text(f"fixture bytes for {name}\n", encoding="utf-8")
+            scratch = root / "tmp"
+            scratch.mkdir()
+            env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "TMPDIR": str(scratch)}
+            sha = "1" * 40
+            for target in (
+                "aarch64-apple-darwin", "x86_64-apple-darwin",
+                "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
+            ):
+                with self.subTest(target=target):
+                    output = root / target
+                    command = ["bash", str(scripts / "verify-release-artifacts.sh")]
+                    created = subprocess.run(
+                        [*command, "--create-bundle", "--binary-dir", str(binaries),
+                         "--output-dir", str(output), "--target", target,
+                         "--version", "v0.24.0", "--sha", sha, "--ref", "refs/heads/test"],
+                        cwd=root, env=env, text=True, capture_output=True, timeout=45,
+                    )
+                    self.assertEqual(created.returncode, 0, created.stdout + created.stderr)
+                    verified = subprocess.run(
+                        [*command, "--artifact-dir", str(output), "--expected-sha", sha,
+                         "--target", target, "--allow-untrusted-local"],
+                        cwd=root, env=env, text=True, capture_output=True, timeout=15,
+                    )
+                    self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+                    trusted = subprocess.run(
+                        [*command, "--artifact-dir", str(output), "--expected-sha", sha,
+                         "--target", target],
+                        cwd=root, env=env, text=True, capture_output=True, timeout=15,
+                    )
+                    self.assertNotEqual(trusted.returncode, 0)
+                    self.assertIn("missing identity-bound GitHub attestation", trusted.stderr)
+                    self.assertEqual(list(scratch.iterdir()), [], "temporary signing keys leaked")
+
+    def test_manifest_or_signature_tampering_is_rejected_and_scratch_is_cleaned(self) -> None:
+        helper = SCRIPT.parent / "sign-candidate-manifest.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scratch = root / "tmp"
+            scratch.mkdir()
+            env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "TMPDIR": str(scratch)}
+            manifest, signature = root / "manifest.json", root / "manifest.sig"
+            manifest.write_text('{"commit":"test-fixture"}\n', encoding="utf-8")
+            command = ["bash", str(helper)]
+            signed = subprocess.run(
+                [*command, "--manifest", str(manifest), "--signature", str(signature)],
+                env=env, text=True, capture_output=True, timeout=45,
+            )
+            self.assertEqual(signed.returncode, 0, signed.stdout + signed.stderr)
+            original_manifest = manifest.read_bytes()
+            original_signature = signature.read_bytes()
+
+            def verify() -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    [*command, "--verify", str(manifest), "--signature", str(signature)],
+                    env=env, text=True, capture_output=True, timeout=15,
+                )
+
+            self.assertEqual(verify().returncode, 0)
+            manifest.write_bytes(original_manifest + b"tampered")
+            self.assertNotEqual(verify().returncode, 0)
+            manifest.write_bytes(original_manifest)
+            envelope = json.loads(original_signature)
+            invalid = [
+                {**envelope, "algorithm": "unsigned"},
+                {**envelope, "manifest_sha256": "not-a-digest"},
+                {**envelope, "signature_base64": "not!base64"},
+                {**envelope, "signature_base64": "AA=="},
+                {**envelope, "public_key_pem": 42},
+                {key: value for key, value in envelope.items() if key != "public_key_pem"},
+                [],
+            ]
+            for value in invalid:
+                with self.subTest(value=value if isinstance(value, list) else list(value)):
+                    signature.write_text(json.dumps(value), encoding="utf-8")
+                    self.assertNotEqual(verify().returncode, 0)
+                    self.assertEqual(list(scratch.iterdir()), [], "failed verification leaked scratch")
+            signature.write_bytes(original_signature)
+            self.assertEqual(verify().returncode, 0)
+            self.assertEqual(list(scratch.iterdir()), [])
 
 
 class PdfWorkerPackagingContractTests(unittest.TestCase):
