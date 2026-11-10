@@ -7,9 +7,9 @@
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-11-05 — revisão estática independente solicitada native/xhigh do snapshot local: docs/harness/reviews/2026-11-05-sdk-release-dry-run-post.md. Reconciliação do HEAD final e receipt H1 próprios pendentes; sem atestação independente do modelo efetivo.` |
-| Last sensors | `2026-11-07T15:46:02Z status=pass mode=full duration_sec=417, sem exclusões, candidato release-closeout sobre2c7544db. Primeiro full545s falhou no link de evidência, corrigido sem mudar testes; histórico preservado.` |
-| Last commit | `2c7544db` |
-| Last live-state check | `2026-11-07 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após fullPASS417s; doctor PASS com WARN preexistente. Novo review/H1 próprios no closeout.` |
+| Last sensors | `2026-11-10T05:22:27Z status=pass mode=full duration_sec=484, sem exclusões, atualização rusqlite 0.41.1 (RUSTSEC-2026-0459). Primeiro full 175s falhou em 4 testes de storage::feedback (DDL multi-statement em execute), corrigido no teste; histórico preservado.` |
+| Last commit | `355ce301` |
+| Last live-state check | `2026-11-10 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 484s da atualização rusqlite; doctor PASS com WARN preexistente. Review/H1 próprios pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -33,6 +33,7 @@
 
 - **Release closeout (2026-11-07)**: main7ca7a9b8 CI42371841522 e Standing42366783284PASS; manualNightly41966511833 completoPASS. R3/Cargo/C1/H2/S1 delimitados integrados; evolução futura não implementada. [Auditoria atual](audits/2026-11-07-release-closeout.md).
 
+- **RUSTSEC-2026-0459 (2026-11-10)**: rusqlite 0.41.1 / libsqlite3-sys 0.39.1 em commit local; audit/deny e full PASS; review, H1 e upstream pendentes. [Log](./progress/2026-10-26-remediation.md#rustsec-2026-0459-rusqlite-update--2026-11-10).
 - **PR #264 / S1**: merge emmain7ca7a9b8; receipts históricos Markdown/cloud registrados no log. Não cobrem o novo candidato SDK/closeout; histórico preservado. [Cloud](plans/2026-11-04-cloud-download-cancellation.md).
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 

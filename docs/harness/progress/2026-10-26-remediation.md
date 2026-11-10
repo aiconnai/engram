@@ -467,3 +467,45 @@ evidence pointer fix; all deterministic stages/doctor passed. The existing revie
 warning and negative-title fixture failures are expected outputs, not skipped gates.
 Final metadata/review/commit binding follows; no human receipt or remote success
 is inferred from this local PASS.
+
+## RUSTSEC-2026-0459 rusqlite update — 2026-11-10
+
+Task: rusqlite-rustsec-2026-0459, branch claude/friendly-goldberg-b9b1cd from main 85502ad8.
+Delegated by the 2026-11-09 read-only review; the owner has not authorized push, PR, merge,
+tag or publication. Before the change `cargo audit` reported 1 vulnerability and
+`cargo deny check advisories` FAILED on libsqlite3-sys 0.28.0 in both lockfiles.
+
+Primary source read first: rusqlite GitHub release notes v0.32.0 to v0.41.1. Relevant breaks:
+0.35 rejects multi-statement SQL in `execute`/`prepare`; 0.38 makes `u64`/`usize`
+`ToSql`/`FromSql` (`fallible_uint`) and the statement cache (`cache`) opt-in; 0.41 turns
+`column_names` into an iterator (unused here) and declares Rust 1.89 (toolchain is 1.96.0).
+
+Change: `rusqlite = 0.41` with `default-features = false` and features `bundled`, `vtab`,
+`functions`, `trace`, `cache`, `fallible_uint`. Lock: rusqlite 0.41.1, libsqlite3-sys 0.39.1
+(SQLite 3.45.0 to 3.54.1), hashlink 0.12.2. With default features the wasm-only
+`sqlite-wasm-rs`/`rsqlite-vfs` stack would enter the lock and force thiserror 2.0.21; turning
+them off (0.31 had none) avoids that. Cargo's re-resolution also moved three `socket2` edges
+(hyper-util, quinn, quinn-udp) from 0.5.10 to the already-locked 0.6.5; those edges were
+restored by hand and `cargo metadata --locked` accepts the result, so no unrelated package
+changes. `fuzz/Cargo.lock` additionally resynced with the root manifest (rustix,
+linux-raw-sys, foldhash, hashbrown 0.17.1; ahash dropped). Bundled compile flags differ only by
+the removed `SQLITE_ENABLE_MEMORY_MANAGEMENT` and the obsolete `SQLITE_ENABLE_STAT2`.
+
+No `src/` production change. The first full sensors run FAILED at 2026-11-10T05:13:59Z (175s):
+4 `storage::feedback` unit tests passed a three-statement DDL constant to `conn.execute`
+(1845 passed). Older rusqlite silently ran only the first statement; the test setup now uses
+`execute_batch`, as production does in `search/utility.rs`. A scan of literal and constant SQL
+passed to `execute`/`prepare`/`query_row` in `src/`, `tests/` and `benches/` found no other site.
+
+Evidence after the fix: full sensors PASS at 2026-11-10T05:22:27Z, 484s, no exclusions.
+`cargo audit` (root and `--file fuzz/Cargo.lock`): 0 vulnerabilities, only the governed
+allowed warnings. `cargo deny check advisories bans licenses sources` on the root: all ok.
+`tests/storage_posix_lock_regression_tests.rs` 8 passed/1 ignored and
+`tests/storage_concurrency_regression_tests.rs` 7 passed; `cargo check --locked` in `fuzz/` ok.
+
+Not run: `duckdb-graph`/`full` feature builds (duckdb links libduckdb-sys, not libsqlite3-sys;
+`cargo tree -i libsqlite3-sys` shows rusqlite as the only dependent), the `benches/search.rs`
+sqlite-vec benchmark at runtime (it compiles under clippy `--all-targets`), Linux and remote CI.
+Pre-existing and unrelated: `cargo deny --manifest-path fuzz/Cargo.toml check licenses` fails on
+the unlicensed `engram-fuzz` and libfuzzer-sys NCSA; CI only audits that lockfile.
+No Review Canvas; independent review and human H1 receipt are pending, as is every remote step.
