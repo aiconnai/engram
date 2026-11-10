@@ -12,6 +12,14 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+### Security
+
+- **`palace_visualize` saving is a filesystem write** — a call with `output_path` now requires `scoped_write` within `ENGRAM_EXPORT_BASE_DIR`, otherwise `maintenance`, like `memory_export_markdown`; it was reachable in `read_only` mode and by the anonymous loopback principal. A path outside the export base is refused before any directory is created, `..` components are rejected under a base, and a symlink as the final component is refused in every mode, with or without `ENGRAM_EXPORT_BASE_DIR`.
+- **`GET /v1/events` is workspace-scoped for restricted principals** — a keyless (anonymous loopback) stream opened without `workspace` now receives `default` events only instead of every workspace's events and content previews.
+- **`memory_build_context` expansion stays in scope** — `depth` 2–3 no longer follows crossrefs into a workspace other than the one searched, or one the principal cannot read.
+- **Keyless HTTP validates `Host` and `Origin`** — without an API key, `/mcp`, `/v1/mcp` and `/v1/events` answer `403` to requests whose `Host` or `Origin` does not name this machine (DNS rebinding, cross-site requests). `ENGRAM_HTTP_ALLOWED_HOSTS` extends the `Host` allowlist; `ENGRAM_CORS_ORIGINS`, when set, replaces the loopback `Origin` default with its list; see [MCP_AUTH](docs/MCP_AUTH.md).
+- **Bundled SQLite 3.54.1 (RUSTSEC-2026-0459, CVE-2026-119375)** — `rusqlite` 0.31 → 0.41.1 and `libsqlite3-sys` 0.28.0 → 0.39.1 in the root and `fuzz/` lockfiles. The previous bundled SQLite 3.45.0 could return uninitialized page-cache memory for a database opened with a `-wal` of a different page size. No schema, MCP or SDK change; `rusqlite` keeps the same feature surface (`cache` and `fallible_uint` are now explicit opt-ins).
+
 ### Fixed
 
 - **`memory_consolidate_batch` no longer reports merges it never made** — consolidation only proposes actions, but `dry_run=false` (and the auto-consolidation scheduler) returned `duplicate_merged`/`conflict_resolved` actions as if applied, recorded the run as non-dry, and emitted `consolidation` enrichment events with status `completed`. Every report is now a dry run, the response adds `applied: false` and a `note`, no enrichment events are emitted, and the scheduler logs proposals. Actually applying merges is not implemented yet.

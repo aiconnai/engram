@@ -23,9 +23,9 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat,2026-11-07): executar a sequência revisada: candidato isolado do fix SDK2c7544db, documentação/evidência e decisão final. [Plano](plans/2026-11-07-release-closeout.md); [evolução v4](plans/2026-11-07-engram-evolution-plan-v4.md).
-- **Limites**: o follow-up exige revisão e receipt H1 próprios antes de upstream; seu merge, tag/GitHub Release (`v0.24.0`), registries, notices, remoção de branches/worktrees e settings aguardam decisão separada. Sem dados reais, chamadas pagas ou produção. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [escopo canônico](./SPEC.md).
-- **Última evidência**: [closeout de07/11](./progress/2026-10-26-remediation.md#release-closeout--2026-11-07): main7ca7a9b8 integrado porPR264; CI/live SDKs e Nightly manual41966511833 com7jobsPASS. SDK dry-run41966515107 falhou; CDPATH reproduzido/corrigido, workflow15PASS. Novo receipt H1 próprio pendente.
+- **Autorização atual** (owner, chat,2026-11-07): após merge PR265, executar release Core0.24.0/SDKs0.7.0 e corrigir bloqueantes confirmados. Dry-runs no SHA85502ad8; helper ausente encontrado no Core. [Escopo da correção](canvas/2026-11-07-release-attestation-helper.md).
+- **Limites**: novo código exige review/H1 antes de novo push/merge e validação da matriz no SHA corrigido antes de tag/upload. Proteções/publishers ausentes aguardam decisão própria de settings; sem notices, remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
+- **Última evidência**: [release execution](./progress/2026-10-26-remediation.md#release-execution--missing-artifact-signer-2026-11-07): PR265 mesclado em85502ad8; SDK dry-run PASS. Core packaging encontrou helper ausente; restauração local e17 testes PASS. Novo candidato/review/H1 e matriz remota próprios pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
@@ -34,6 +34,8 @@
 - **Release closeout (2026-11-07)**: main7ca7a9b8 CI42371841522 e Standing42366783284PASS; manualNightly41966511833 completoPASS. R3/Cargo/C1/H2/S1 delimitados integrados; evolução futura não implementada. [Auditoria atual](audits/2026-11-07-release-closeout.md).
 
 - **Consolidação/migração honestas (2026-11-10)**: B-1/B-2 viram relatório honesto em `4e8bb283`; full PASS; review independente, H1 e upstream pendentes. [Log](./progress/2026-10-26-remediation.md#honest-consolidation-and-embedding-migrate--2026-11-10).
+- **Keyless HTTP / autorização read-only (2026-11-10)**: A-1..A-4 corrigidos em `7a572e15` (+ teste `1b92dc93`); full PASS com features do CI; push/PR autorizados, review independente, H1 e merge pendentes. [Log](./progress/2026-10-26-remediation.md#keyless-http-and-read-only-authorization--2026-11-10).
+- **RUSTSEC-2026-0459 (2026-11-10)**: rusqlite 0.41.1 / libsqlite3-sys 0.39.1 em commit local; audit/deny e full PASS; review, H1 e upstream pendentes. [Log](./progress/2026-10-26-remediation.md#rustsec-2026-0459-rusqlite-update--2026-11-10).
 - **PR #264 / S1**: merge emmain7ca7a9b8; receipts históricos Markdown/cloud registrados no log. Não cobrem o novo candidato SDK/closeout; histórico preservado. [Cloud](plans/2026-11-04-cloud-download-cancellation.md).
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 

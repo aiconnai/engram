@@ -256,3 +256,20 @@ Owner approved local deepening of Markdown export/import together, preserving
 public behavior and extracting only shared auth policy. Separate worktree based
 on 60ed4eec; [plan](plans/2026-11-02-markdown-portability-core.md) and
 [evidence](progress/2026-11-02-markdown-portability-core.md). No remote authority added.
+
+## Release execution follow-up — missing artifact signer, 2026-11-07
+
+Owner requested publication after PR265 merge. Preflight on85502ad8 found the Core
+workflow calls a helper removed in3128d444. Bounded local restoration, real bundle
+regressions in the existing packaging suite, cleanup/strict envelope checks, docs
+and verification are authorized necessary remediation. [Canvas](canvas/2026-11-07-release-attestation-helper.md).
+No Rust/API/schema/versions or governance implementation changes. Tag/upload waits
+for a fixed reviewed candidate and protected-publication configuration.
+
+## Follow-up local — RUSTSEC-2026-0459 (2026-11-10)
+
+Delegated by the read-only main review of 2026-11-09 (`85502ad8`): update `rusqlite` so both
+lockfiles carry `libsqlite3-sys >= 0.39.0`. Scope: `Cargo.toml`, `Cargo.lock`, `fuzz/Cargo.lock`
+and mechanical compile/test fallout; no schema, MCP, SDK, other dependency or advisory exception.
+[Log](progress/2026-10-26-remediation.md#rustsec-2026-0459-rusqlite-update--2026-11-10).
+Local commits only: push, PR, merge, tag, publication and GitHub settings await the owner.

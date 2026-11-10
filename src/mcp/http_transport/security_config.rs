@@ -1,17 +1,27 @@
 use std::net::{IpAddr, SocketAddr};
 
-use axum::http::HeaderMap;
+use axum::http::header::{HOST, ORIGIN};
+use axum::http::uri::Authority;
+use axum::http::{HeaderMap, Uri};
 
 const TRUSTED_PROXIES_ENV: &str = "ENGRAM_HTTP_TRUSTED_PROXIES";
 pub(super) const MAX_BODY_BYTES_ENV: &str = "ENGRAM_HTTP_MAX_BODY_BYTES";
 pub(super) const REQUEST_TIMEOUT_MS_ENV: &str = "ENGRAM_HTTP_REQUEST_TIMEOUT_MS";
 pub(super) const DEFAULT_MAX_BODY_BYTES: usize = 1_048_576;
 pub(super) const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
+pub(super) const ALLOWED_HOSTS_ENV: &str = "ENGRAM_HTTP_ALLOWED_HOSTS";
+const CORS_ORIGINS_ENV: &str = "ENGRAM_CORS_ORIGINS";
 const MAX_FORWARDED_CHAIN: usize = 32;
+/// Names a browser can only reach by actually targeting this machine.
+const LOOPBACK_HOSTS: &[&str] = &["localhost", "127.0.0.1", "[::1]"];
 
 #[derive(Clone, Debug)]
 pub(super) struct HttpSecurityConfig {
     trusted_proxies: Vec<IpCidr>,
+    /// Extra `Host` names accepted on a keyless server (lowercase, no port).
+    allowed_hosts: Vec<String>,
+    /// Raw `ENGRAM_CORS_ORIGINS`: `None` keeps the loopback-only default.
+    cors_origins: Option<String>,
     pub(super) max_body_bytes: usize,
     pub(super) request_timeout: std::time::Duration,
 }
@@ -20,6 +30,8 @@ impl Default for HttpSecurityConfig {
     fn default() -> Self {
         Self {
             trusted_proxies: Vec::new(),
+            allowed_hosts: Vec::new(),
+            cors_origins: None,
             max_body_bytes: DEFAULT_MAX_BODY_BYTES,
             request_timeout: std::time::Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MS),
         }
@@ -51,9 +63,93 @@ impl HttpSecurityConfig {
         )?;
         Ok(Self {
             trusted_proxies,
+            allowed_hosts: std::env::var(ALLOWED_HOSTS_ENV)
+                .map(|value| Self::parse_allowed_hosts(&value))
+                .unwrap_or_default(),
+            cors_origins: std::env::var(CORS_ORIGINS_ENV).ok(),
             max_body_bytes,
             request_timeout: std::time::Duration::from_millis(request_timeout_ms),
         })
+    }
+
+    pub(super) fn parse_allowed_hosts(value: &str) -> Vec<String> {
+        value
+            .split(',')
+            .map(|entry| entry.trim().to_ascii_lowercase())
+            .filter(|entry| !entry.is_empty())
+            .collect()
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_browser_policy(mut self, hosts: &str, cors_origins: Option<&str>) -> Self {
+        self.allowed_hosts = Self::parse_allowed_hosts(hosts);
+        self.cors_origins = cors_origins.map(str::to_string);
+        self
+    }
+
+    fn host_name_allowed(&self, host: &str) -> bool {
+        let host = host.to_ascii_lowercase();
+        LOOPBACK_HOSTS.contains(&host.as_str()) || self.allowed_hosts.contains(&host)
+    }
+
+    /// Why a request to a keyless server must be refused, if it must.
+    ///
+    /// Without an API key the only thing separating this server from any web
+    /// page the operator visits is the browser's same-origin policy, which DNS
+    /// rebinding defeats: the page's own name is re-pointed at 127.0.0.1. Such
+    /// a request still carries the attacker's name in `Host` (and in `Origin`
+    /// when one is sent), so both must name this machine. Non-browser clients
+    /// that send neither header are unaffected.
+    pub(super) fn keyless_request_denial(
+        &self,
+        headers: &HeaderMap,
+        uri: &Uri,
+    ) -> Option<&'static str> {
+        let mut hosts = headers.get_all(HOST).iter();
+        let host = match (hosts.next(), hosts.next()) {
+            (Some(_), Some(_)) => return Some("multiple Host headers"),
+            (Some(value), None) => match value.to_str().ok().map(str::parse::<Authority>) {
+                Some(Ok(authority)) => Some(authority.host().to_string()),
+                _ => return Some("malformed Host header"),
+            },
+            // HTTP/2 carries the authority in the request target instead.
+            (None, _) => uri.host().map(str::to_string),
+        };
+        if host.is_some_and(|host| !self.host_name_allowed(&host)) {
+            return Some(
+                "Host is not a loopback name; set ENGRAM_HTTP_ALLOWED_HOSTS or an API key",
+            );
+        }
+
+        let mut origins = headers.get_all(ORIGIN).iter();
+        let origin = match (origins.next(), origins.next()) {
+            (Some(_), Some(_)) => return Some("multiple Origin headers"),
+            (Some(value), None) => match value.to_str() {
+                Ok(origin) => origin,
+                Err(_) => return Some("malformed Origin header"),
+            },
+            (None, _) => return None,
+        };
+        if self.origin_allowed(origin) {
+            None
+        } else {
+            Some("Origin is not allowed; set ENGRAM_CORS_ORIGINS or an API key")
+        }
+    }
+
+    fn origin_allowed(&self, origin: &str) -> bool {
+        match self.cors_origins.as_deref().map(str::trim) {
+            Some("*") => true,
+            Some(list) => list.split(',').any(|entry| entry.trim() == origin),
+            // Exact loopback host, any port: a prefix test would also accept
+            // `http://localhost.attacker.example`.
+            None => origin.parse::<Uri>().is_ok_and(|uri| {
+                matches!(uri.scheme_str(), Some("http" | "https"))
+                    && uri
+                        .host()
+                        .is_some_and(|host| LOOPBACK_HOSTS.contains(&host))
+            }),
+        }
     }
 
     fn parse_trusted_proxies(value: &str) -> Vec<IpCidr> {

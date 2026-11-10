@@ -3,8 +3,10 @@ use std::time::Duration;
 use axum::http::HeaderMap;
 
 use super::super::events::{
-    event_type_to_str, parse_event_type, realtime_event_to_sse, EventsQuery, SSE_RETRY_MS,
+    event_in_workspace, event_type_to_str, parse_event_type, realtime_event_to_sse,
+    scoped_workspace_filter, EventsQuery, SSE_RETRY_MS,
 };
+use crate::auth::TransportPrincipal;
 use crate::realtime::{EventType, RealtimeEvent};
 
 #[test]
@@ -265,3 +267,30 @@ fn test_retry_constant_is_3000ms() {
 }
 
 // ---- H2: constant-time token comparison --------------------------------
+
+#[test]
+fn anonymous_stream_without_workspace_is_confined_to_default() {
+    let anonymous = TransportPrincipal::anonymous_loopback();
+    let filter = scoped_workspace_filter(&anonymous, None).expect("anonymous must be scoped");
+    assert_eq!(filter, "default");
+
+    let private = RealtimeEvent::memory_created(1, "secret".to_string(), "private");
+    let public = RealtimeEvent::memory_created(2, "hello".to_string(), "default");
+    assert!(!event_in_workspace(&private, &filter));
+    assert!(event_in_workspace(&public, &filter));
+
+    // An event that names no workspace cannot be attributed, so it is withheld.
+    let mut unattributed = RealtimeEvent::memory_created(3, "x".to_string(), "default");
+    unattributed.data = None;
+    assert!(!event_in_workspace(&unattributed, &filter));
+}
+
+#[test]
+fn process_bearer_stream_without_workspace_stays_global() {
+    let owner = TransportPrincipal::from_process_bearer(Some("Bearer secret"), "secret").unwrap();
+    assert_eq!(scoped_workspace_filter(&owner, None), None);
+    assert_eq!(
+        scoped_workspace_filter(&owner, Some("alpha")).as_deref(),
+        Some("alpha")
+    );
+}

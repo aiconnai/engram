@@ -1,0 +1,9 @@
+PASS I reviewed only the supplied diff and did not run code or read the harness docs. The A-1 to A-4 fixes look coherent, scoped to the stated findings, and covered by tests.
+
+- [LOW] `docs/harness/progress.md:12`: "Last commit" says `346b2aac`, but the reviewed head is `6402309f`, which is the commit that records this progress. The field lags one commit behind. Update it or confirm that `check-live-state.sh` accepts the lag.
+- [LOW] `src/mcp/http_transport/security_config.rs:140-150` (`origin_allowed`): setting `ENGRAM_CORS_ORIGINS` to a specific list replaces the loopback default. A keyless operator who lists only `https://app.example` will see local dev origins such as `http://localhost:5173` refused with 403. This matches the documented "or is listed" wording and the CORS layer's behaviour, but it is a behaviour change. `docs/MCP_AUTH.md` could state it explicitly.
+- [LOW] `src/spatial/mod.rs` (`validate_output_file_path`): the final-component symlink check and the check-then-write race are acknowledged in the canvas as the same class as RISK-0007, and the canvas keeps the race open. The new symlink refusal also applies in `maintenance` mode when `ENGRAM_EXPORT_BASE_DIR` is unset. That is an intentional hardening, but the CHANGELOG describes it only for the base-dir case.
+
+I found no scope creep, no gate weakening, and no security-boundary drift. `docs/MCP_TOOLS.md`, `docs/contracts/advertised-surfaces.toml` (including `ENGRAM_HTTP_ALLOWED_HOSTS`) and the catalog description are consistent with each other. The canvas has the alternatives considered, hot-path cost, edge cases and a breakage-risk table. The full sensors run is recorded as PASS.
+
+REVIEW_VERDICT: PASS keyless Host/Origin boundary, events workspace scoping, build_context scope and palace_visualize write gating are coherent and tested; only minor doc and bookkeeping nits
