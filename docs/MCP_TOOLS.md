@@ -4186,7 +4186,7 @@ Run one report-only auto-consolidation pass over a workspace: detect duplicates,
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `workspace` | `string` | no | Default: `default`. |
-| `dry_run` | `boolean` | no | Default: `true`. |
+| `dry_run` | `boolean` | no | Accepted for compatibility; consolidation is report-only, so false still applies nothing (applied=false). Default: `true`. |
 | `policy` | `object` | no | No description. |
 
 ### `memory_consolidation_history`

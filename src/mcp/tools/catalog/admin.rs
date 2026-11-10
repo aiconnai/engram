@@ -1000,7 +1000,7 @@ pub const TOOLS: &[ToolDef] = &[
                 "type": "object",
                 "properties": {
                     "workspace": {"type": "string", "default": "default"},
-                    "dry_run": {"type": "boolean", "default": true},
+                    "dry_run": {"type": "boolean", "default": true, "description": "Accepted for compatibility; consolidation is report-only, so false still applies nothing (applied=false)."},
                     "policy": {
                         "type": "object",
                         "properties": {
@@ -1008,7 +1008,7 @@ pub const TOOLS: &[ToolDef] = &[
                             "conflict_auto_resolve": {"type": "boolean", "default": false},
                             "summarize_age_days": {"type": "integer", "default": 90},
                             "max_actions_per_run": {"type": "integer", "default": 50},
-                            "dry_run": {"type": "boolean", "default": true},
+                            "dry_run": {"type": "boolean", "default": true, "description": "Ignored: consolidation is report-only."},
                             "utility_threshold": {"type": "number", "default": 0.3, "minimum": 0, "maximum": 1},
                             "min_feedback_events": {"type": "integer", "default": 3, "minimum": 0},
                             "max_access_count_for_archival": {"type": "integer", "default": 10, "minimum": 0},

@@ -8,7 +8,7 @@
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-11-05 — revisão estática independente solicitada native/xhigh do snapshot local: docs/harness/reviews/2026-11-05-sdk-release-dry-run-post.md. Reconciliação do HEAD final e receipt H1 próprios pendentes; sem atestação independente do modelo efetivo.` |
 | Last sensors | `2026-11-10T06:31:13Z status=pass mode=full duration_sec=984, sem exclusões, candidato honest-consolidation-and-migration (B-1/B-2) sobre main 85502ad8.` |
-| Last commit | `4e8bb283` |
+| Last commit | `0358ba36` |
 | Last live-state check | `2026-11-10 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 984s de B-1/B-2; doctor PASS com WARN preexistente. Review/H1 próprios pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
