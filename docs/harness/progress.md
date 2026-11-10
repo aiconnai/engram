@@ -7,9 +7,9 @@
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
 | Last review | `2026-11-05 — revisão estática independente solicitada native/xhigh do snapshot local: docs/harness/reviews/2026-11-05-sdk-release-dry-run-post.md. Reconciliação do HEAD final e receipt H1 próprios pendentes; sem atestação independente do modelo efetivo.` |
-| Last sensors | `2026-11-07T15:46:02Z status=pass mode=full duration_sec=417, sem exclusões, candidato release-closeout sobre2c7544db. Primeiro full545s falhou no link de evidência, corrigido sem mudar testes; histórico preservado.` |
-| Last commit | `2c7544db` |
-| Last live-state check | `2026-11-07 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após fullPASS417s; doctor PASS com WARN preexistente. Novo review/H1 próprios no closeout.` |
+| Last sensors | `2026-11-10T05:58:38Z status=pass mode=full duration_sec=587, sem exclusões, candidato keyless-http-authz (A-1..A-4) sobre main 85502ad8, com CI_REQUIRED_FEATURES.` |
+| Last commit | `346b2aac` |
+| Last live-state check | `2026-11-10 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 587s do keyless-http-authz; doctor PASS com WARN preexistente. Review/H1 próprios pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -33,6 +33,7 @@
 
 - **Release closeout (2026-11-07)**: main7ca7a9b8 CI42371841522 e Standing42366783284PASS; manualNightly41966511833 completoPASS. R3/Cargo/C1/H2/S1 delimitados integrados; evolução futura não implementada. [Auditoria atual](audits/2026-11-07-release-closeout.md).
 
+- **Keyless HTTP / autorização read-only (2026-11-10)**: A-1..A-4 corrigidos em `7a572e15` (+ teste `1b92dc93`); full PASS com features do CI; push/PR autorizados, review independente, H1 e merge pendentes. [Log](./progress/2026-10-26-remediation.md#keyless-http-and-read-only-authorization--2026-11-10).
 - **PR #264 / S1**: merge emmain7ca7a9b8; receipts históricos Markdown/cloud registrados no log. Não cobrem o novo candidato SDK/closeout; histórico preservado. [Cloud](plans/2026-11-04-cloud-download-cancellation.md).
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 
