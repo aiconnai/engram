@@ -581,3 +581,6 @@ Verification on the candidate tree: clippy `-D warnings` and nextest with
 canvas (stdio without a permission mode still writes anywhere; check-then-write race;
 `include_graph` neighbour IDs). Independent post-review and the human H1 receipt are pending;
 no remote success is inferred from this local PASS.
+
+After merging main `984ced80` (PR #266 and #267, rusqlite 0.41.1) into the branch as
+`09afe27f`, the full sensors rerun PASSED at 2026-11-10T07:10:28Z, 940s, without exclusions.
