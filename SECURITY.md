@@ -2,9 +2,15 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+Security fixes land on `main` and ship in the next release. Only the latest
+released minor version receives them; older versions should upgrade.
+
+| Version | Supported |
+| ------- | --------- |
+| Latest release (see [Releases](https://github.com/aiconnai/engram/releases)) | :white_check_mark: |
+| Older releases | :x: |
+
+Release status and pending tags are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## Reporting a Vulnerability
 
@@ -14,7 +20,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 **DO NOT** open a public GitHub issue for security vulnerabilities.
 
-Instead, please report security issues via GitHub's private vulnerability reporting:
+Instead, please report security issues via GitHub's private vulnerability reporting (enabled for this repository):
 
 1. Go to the [Security tab](https://github.com/aiconnai/engram/security)
 2. Click "Report a vulnerability"
