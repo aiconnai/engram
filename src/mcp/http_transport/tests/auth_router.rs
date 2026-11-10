@@ -594,3 +594,51 @@ async fn keyed_server_is_not_subject_to_the_keyless_boundary() {
         .expect("request should be handled");
     assert_eq!(response.status(), StatusCode::OK);
 }
+
+#[test]
+fn keyless_boundary_refuses_ambiguous_or_malformed_headers() {
+    use axum::http::{HeaderValue, Uri};
+
+    let config = HttpSecurityConfig::default();
+    let uri: Uri = "/mcp".parse().expect("static uri");
+    let denial = |pairs: &[(&'static str, HeaderValue)]| {
+        let mut headers = HeaderMap::new();
+        for (name, value) in pairs {
+            headers.append(*name, value.clone());
+        }
+        config.keyless_request_denial(&headers, &uri)
+    };
+    let local = HeaderValue::from_static("localhost:3100");
+    let local_origin = HeaderValue::from_static("http://localhost:3100");
+
+    assert_eq!(
+        denial(&[("host", local.clone()), ("host", local.clone())]),
+        Some("multiple Host headers")
+    );
+    assert_eq!(
+        denial(&[("host", HeaderValue::from_static("bad host"))]),
+        Some("malformed Host header")
+    );
+    assert_eq!(
+        denial(&[
+            ("host", local.clone()),
+            ("origin", local_origin.clone()),
+            ("origin", local_origin.clone()),
+        ]),
+        Some("multiple Origin headers")
+    );
+    let non_utf8 =
+        HeaderValue::from_bytes(b"http://localhost\xff").expect("obs-text is a valid value");
+    assert_eq!(
+        denial(&[("host", local.clone()), ("origin", non_utf8)]),
+        Some("malformed Origin header")
+    );
+    // Sandboxed documents send `Origin: null`; it names no machine.
+    assert!(denial(&[
+        ("host", local.clone()),
+        ("origin", HeaderValue::from_static("null"))
+    ])
+    .is_some());
+    assert_eq!(denial(&[("host", local), ("origin", local_origin)]), None);
+    assert_eq!(denial(&[]), None);
+}
