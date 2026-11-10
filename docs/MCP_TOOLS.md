@@ -4538,7 +4538,7 @@ Generate or export a topological visualization of the memory palace in interacti
 | `workspace` | `string` | no | Target workspace (Palace). Defaults to 'default'. |
 | `wing` | `string` | no | Optional wing filter to isolate a specific palace wing. |
 | `format` | `string` | no | Visualization export format ('html', 'ascii', 'svg', 'mermaid', 'json'). Defaults to 'html'. Default: `html`. Allowed: `html`, `ascii`, `svg`, `mermaid`, `json`. |
-| `output_path` | `string` | no | Optional local file path to save the rendered output. |
+| `output_path` | `string` | no | Optional server file path to save the rendered output. Saving is a filesystem write: it requires scoped_write within ENGRAM_EXPORT_BASE_DIR, otherwise maintenance. |
 
 ### `memory_compress_aaak`
 

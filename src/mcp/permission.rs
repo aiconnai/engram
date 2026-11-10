@@ -130,6 +130,15 @@ pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode
     ) {
         return markdown_required_mode();
     }
+    // `palace_visualize` is read-only until it is asked to save its rendering
+    // to a server path; that is the same filesystem write as a Markdown export.
+    if canonical == "palace_visualize"
+        && params
+            .get("output_path")
+            .is_some_and(|value| !value.is_null())
+    {
+        return markdown_required_mode();
+    }
     let writes = WRITE_FLAG_PARAMS
         .iter()
         .filter(|(tool, _)| *tool == canonical)
@@ -876,6 +885,32 @@ mod tests {
         assert!(allowed.is_none());
         assert!(denied.is_some());
         assert!(private.is_some());
+    }
+
+    #[test]
+    fn palace_visualize_with_output_path_is_a_filesystem_write() {
+        let render_only = json!({"workspace": "default"});
+        let save = json!({"workspace": "default", "output_path": "/tmp/palace.html"});
+
+        assert_eq!(
+            required_mode_for_call("palace_visualize", &render_only),
+            PermissionMode::ReadOnly
+        );
+        // scoped_write inside ENGRAM_EXPORT_BASE_DIR, maintenance otherwise.
+        assert!(required_mode_for_call("palace_visualize", &save) >= PermissionMode::ScopedWrite);
+        assert_eq!(
+            required_mode_for_call("palace_visualize", &json!({"output_path": null})),
+            PermissionMode::ReadOnly
+        );
+
+        let anonymous = TransportPrincipal::anonymous_loopback();
+        assert!(
+            check_tool_authorization(None, "palace_visualize", &render_only, Some(&anonymous))
+                .is_none()
+        );
+        assert!(
+            check_tool_authorization(None, "palace_visualize", &save, Some(&anonymous)).is_some()
+        );
     }
 
     #[test]

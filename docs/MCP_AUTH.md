@@ -104,6 +104,21 @@ ENGRAM_HTTP_TRUSTED_PROXIES="127.0.0.0/8,10.0.0.0/8"
 
 Leave the variable unset to disable trusted-proxy mode.
 
+### Keyless servers: `Host` and `Origin`
+
+A server started without `ENGRAM_HTTP_API_KEY` accepts only loopback binds, and
+the browser's same-origin policy is then the only thing between it and any web
+page the operator opens. DNS rebinding defeats that policy, so a keyless server
+answers `403` on `POST /mcp`, `POST /v1/mcp` and `GET /v1/events` unless:
+
+- `Host` (when sent) names `localhost`, `127.0.0.1` or `[::1]`, any port, or a
+  name listed in `ENGRAM_HTTP_ALLOWED_HOSTS` (comma-separated, without port);
+- `Origin` (when sent) is a loopback origin, or is listed in
+  `ENGRAM_CORS_ORIGINS`.
+
+Clients that send neither header are unaffected. A server with an API key does
+not apply this check: the bearer token is its boundary.
+
 When a key header is set, its value is used as the bucket identity key.
 
 If the limit is exceeded, the server returns `429 Too Many Requests` with

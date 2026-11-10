@@ -12,6 +12,13 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+### Security
+
+- **`palace_visualize` saving is a filesystem write** — a call with `output_path` now requires `scoped_write` within `ENGRAM_EXPORT_BASE_DIR`, otherwise `maintenance`, like `memory_export_markdown`; it was reachable in `read_only` mode and by the anonymous loopback principal. A path outside the export base is refused before any directory is created, `..` components are rejected under a base, and a symlink as the final component is refused.
+- **`GET /v1/events` is workspace-scoped for restricted principals** — a keyless (anonymous loopback) stream opened without `workspace` now receives `default` events only instead of every workspace's events and content previews.
+- **`memory_build_context` expansion stays in scope** — `depth` 2–3 no longer follows crossrefs into a workspace other than the one searched, or one the principal cannot read.
+- **Keyless HTTP validates `Host` and `Origin`** — without an API key, `/mcp`, `/v1/mcp` and `/v1/events` answer `403` to requests whose `Host` or `Origin` does not name this machine (DNS rebinding, cross-site requests). `ENGRAM_HTTP_ALLOWED_HOSTS` and `ENGRAM_CORS_ORIGINS` extend the allowlists; see [MCP_AUTH](docs/MCP_AUTH.md).
+
 ## [0.24.0] - 2026-10-27
 
 Release candidate prepared for review; tag and package publication are pending.

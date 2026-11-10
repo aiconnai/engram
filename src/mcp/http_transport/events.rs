@@ -13,6 +13,8 @@ use tokio_stream::{Stream, StreamExt};
 
 use super::request_id::RequestId;
 use super::{authenticate_transport_principal, principal_can_read_workspace, AppState};
+use crate::auth::access::allows_all_workspaces;
+use crate::auth::TransportPrincipal;
 use crate::mcp::progress::ProgressNotification;
 use crate::observability::{CorrelationId, OperationEvent};
 use crate::realtime::{EventType, RealtimeEvent};
@@ -32,7 +34,8 @@ pub(super) struct EventsQuery {
     pub(super) event_types: Option<String>,
 
     /// Filter events to a specific workspace (matched against `data.workspace`).
-    /// If omitted, events from all workspaces are streamed.
+    /// If omitted, events from all workspaces are streamed to a principal that
+    /// may read all of them; a restricted principal gets `default` only.
     pub(super) workspace: Option<String>,
 }
 
@@ -111,6 +114,36 @@ pub(super) fn realtime_event_to_sse(event: &RealtimeEvent) -> Event {
 pub(super) fn progress_to_sse(notification: &ProgressNotification) -> Event {
     let data = serde_json::to_string(notification).unwrap_or_else(|_| "{}".to_string());
     Event::default().event("progress").data(data)
+}
+
+/// Workspace a restricted principal reads when it names none.
+const DEFAULT_WORKSPACE: &str = "default";
+
+/// Workspace the stream is confined to.
+///
+/// An omitted `workspace` means "every workspace" only for a principal that
+/// may read every workspace. A restricted principal that passes the request
+/// gate without naming one is confined to the `default` workspace, the only
+/// one such a principal can be allowed to read unnamed.
+pub(super) fn scoped_workspace_filter(
+    principal: &TransportPrincipal,
+    requested: Option<&str>,
+) -> Option<String> {
+    match requested {
+        Some(workspace) => Some(workspace.to_string()),
+        None if allows_all_workspaces(principal) => None,
+        None => Some(DEFAULT_WORKSPACE.to_string()),
+    }
+}
+
+/// `true` when the event names `workspace`; events naming none do not match.
+pub(super) fn event_in_workspace(event: &RealtimeEvent, workspace: &str) -> bool {
+    event
+        .data
+        .as_ref()
+        .and_then(|data| data.get("workspace"))
+        .and_then(|value| value.as_str())
+        == Some(workspace)
 }
 
 /// `GET /v1/events` — resumable Server-Sent Events stream of `RealtimeEvent`s.
@@ -195,7 +228,7 @@ pub(super) async fn handle_events(
         .and_then(|s| s.parse::<u64>().ok());
 
     let event_type_filter = query.parsed_event_types();
-    let workspace_filter = query.workspace.clone();
+    let workspace_filter = scoped_workspace_filter(&principal, query.workspace.as_deref());
 
     // Build a filter closure reused for both replay and live events.
     let apply_filters = {
@@ -207,18 +240,9 @@ pub(super) async fn handle_events(
                     return false;
                 }
             }
-            if let Some(ref ws) = ws_filter {
-                let event_ws = event
-                    .data
-                    .as_ref()
-                    .and_then(|d: &serde_json::Value| d.get("workspace"))
-                    .and_then(|v: &serde_json::Value| v.as_str());
-                match event_ws {
-                    Some(ews) if ews == ws => {}
-                    _ => return false,
-                }
-            }
-            true
+            ws_filter
+                .as_deref()
+                .is_none_or(|ws| event_in_workspace(event, ws))
         }
     };
 

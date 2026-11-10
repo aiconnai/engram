@@ -7,9 +7,11 @@ use tower::ServiceExt;
 
 use super::super::check_bearer;
 use super::super::router::cors_origin_allowed;
+use super::super::security_config::HttpSecurityConfig;
 use super::support::{
-    json_rpc_notification_request_with_headers, json_rpc_request, json_rpc_tool_call_request,
-    test_app, test_app_with_handler, CountingMcpHandler, ENV_LOCK,
+    json_rpc_notification_request_with_headers, json_rpc_request, json_rpc_request_with_headers,
+    json_rpc_tool_call_request, test_app, test_app_with_handler, test_app_with_limits,
+    CountingMcpHandler, ENV_LOCK,
 };
 
 #[test]
@@ -466,4 +468,129 @@ fn test_cors_origins_env_var_cases() {
     assert!(!cors_origin_allowed("https://other.example.com"));
 
     std::env::remove_var("ENGRAM_CORS_ORIGINS");
+}
+
+// ---- keyless Host / Origin boundary -------------------------------------
+
+fn keyless_app(security: HttpSecurityConfig) -> (axum::Router, Arc<AtomicUsize>) {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let app = test_app_with_limits(
+        Arc::new(CountingMcpHandler {
+            calls: Arc::clone(&calls),
+        }),
+        None,
+        None,
+        security,
+        0,
+        0,
+    );
+    (app, calls)
+}
+
+async fn keyless_status(
+    security: HttpSecurityConfig,
+    headers: &[(&str, &str)],
+) -> (StatusCode, usize) {
+    let (app, calls) = keyless_app(security);
+    let response = app
+        .oneshot(json_rpc_request_with_headers("/v1/mcp", None, headers))
+        .await
+        .expect("request should be handled");
+    (response.status(), calls.load(Ordering::SeqCst))
+}
+
+#[tokio::test]
+async fn keyless_server_rejects_rebound_host_before_dispatch() {
+    let default = HttpSecurityConfig::default;
+    for host in [
+        "attacker.example:3100",
+        "localhost.attacker.example",
+        "169.254.169.254",
+    ] {
+        assert_eq!(
+            keyless_status(default(), &[("host", host)]).await,
+            (StatusCode::FORBIDDEN, 0),
+            "{host}"
+        );
+    }
+    for host in [
+        "localhost:3100",
+        "127.0.0.1:3100",
+        "[::1]:3100",
+        "LOCALHOST",
+    ] {
+        assert_eq!(
+            keyless_status(default(), &[("host", host)]).await,
+            (StatusCode::OK, 1),
+            "{host}"
+        );
+    }
+    // Clients that send neither header (and every existing test) still work.
+    assert_eq!(keyless_status(default(), &[]).await, (StatusCode::OK, 1));
+}
+
+#[tokio::test]
+async fn keyless_server_rejects_foreign_origin_before_dispatch() {
+    let default = HttpSecurityConfig::default;
+    for origin in [
+        "https://attacker.example",
+        "http://localhost.attacker.example",
+        "null",
+    ] {
+        assert_eq!(
+            keyless_status(default(), &[("host", "localhost:3100"), ("origin", origin)]).await,
+            (StatusCode::FORBIDDEN, 0),
+            "{origin}"
+        );
+    }
+    assert_eq!(
+        keyless_status(
+            default(),
+            &[
+                ("host", "localhost:3100"),
+                ("origin", "http://localhost:5173")
+            ]
+        )
+        .await,
+        (StatusCode::OK, 1)
+    );
+}
+
+#[tokio::test]
+async fn keyless_boundary_honours_operator_allowlists() {
+    let configured = || {
+        HttpSecurityConfig::default()
+            .with_browser_policy("engram.internal", Some("https://app.example"))
+    };
+    assert_eq!(
+        keyless_status(
+            configured(),
+            &[
+                ("host", "engram.internal:3100"),
+                ("origin", "https://app.example")
+            ]
+        )
+        .await,
+        (StatusCode::OK, 1)
+    );
+    assert_eq!(
+        keyless_status(configured(), &[("host", "other.internal")]).await,
+        (StatusCode::FORBIDDEN, 0)
+    );
+}
+
+#[tokio::test]
+async fn keyed_server_is_not_subject_to_the_keyless_boundary() {
+    let response = test_app(Some("secret"))
+        .oneshot(json_rpc_request_with_headers(
+            "/v1/mcp",
+            Some("secret"),
+            &[
+                ("host", "engram.example.com"),
+                ("origin", "https://app.example.com"),
+            ],
+        ))
+        .await
+        .expect("request should be handled");
+    assert_eq!(response.status(), StatusCode::OK);
 }
