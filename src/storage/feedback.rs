@@ -153,7 +153,7 @@ mod tests {
 
     fn setup() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute(CREATE_UTILITY_FEEDBACK_TABLE, []).unwrap();
+        conn.execute_batch(CREATE_UTILITY_FEEDBACK_TABLE).unwrap();
         conn
     }
 

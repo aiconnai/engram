@@ -135,6 +135,12 @@ Tech Debt, Security, Performance, Fragile Areas
 **Right:** Clear CDPATH for that cd and test empty, dot and a competing search directory with spaces.
 **Date:** 2026-11-07
 
+### [Dependencies] `Connection::execute`/`prepare` reject multi-statement SQL since rusqlite 0.35
+**Context:** Upgrading `rusqlite` 0.31 to 0.41 (RUSTSEC-2026-0459); a test passed a `CREATE TABLE; CREATE INDEX; CREATE INDEX` constant to `conn.execute`.
+**Wrong:** Relying on `execute`/`prepare` with several statements: older versions ran only the first one and silently dropped the rest; 0.35+ fails with `MultipleStatement` (or the error of the unprepared tail).
+**Right:** Use `execute_batch` for multi-statement DDL. `u64`/`usize` `ToSql`/`FromSql` and the statement cache are opt-in features since 0.38 (`fallible_uint`, `cache`); keep `default-features = false` so the wasm-only `sqlite-wasm-rs` stack stays out of the lockfile.
+**Date:** 2026-11-10
+
 ## Rationalization Table
 
 

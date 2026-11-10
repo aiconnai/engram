@@ -468,6 +468,97 @@ warning and negative-title fixture failures are expected outputs, not skipped ga
 Final metadata/review/commit binding follows; no human receipt or remote success
 is inferred from this local PASS.
 
+## Release execution — missing artifact signer, 2026-11-07
+
+PR265 merged as85502ad8 after owner instruction; tree matches reviewed69777156.
+Owner then requested release. SDK dry-run42430284800 PASS on that exact merge.
+Core dry-run42430325179 reached bundle creation and failed: missing
+scripts/sign-candidate-manifest.sh, removed in3128d444 but later called by64d515fc.
+No tag/publication. Isolated fix branch restores the interface and adds actual bundle
+CLI regressions to the existing PDF packaging tests. Canvas records limits.
+
+Protected release-github/release-pypi/release-npm environments were absent on read-only
+inspection; proposed settings await their separate owner decision. Signing probe
+matched the allowed owner SSH fingerprint without creating a tag. Cargo1.96 multi-crate
+packaging fails offline even in a tiny independent workspace; the same probe passes
+with index access. Full real archives are being verified online, without upload.
+
+Regression RED: the real bundle CLI failed4/4 target subcases on the missing helper.
+GREEN: restored RSA envelope v1 helper, fail-closed schema/digest/signature checks,
+private ephemeral keys and EXIT cleanup; all17 packaging tests PASS in2.328s.
+Tests cover actual create/verify for four target layouts, tampering/malformed envelopes,
+no key-temp leaks and rejection without GitHub identity attestation in trusted mode.
+Existing GitHub provenance verification is unchanged. ShellCheck and syntax PASS.
+Cargo verified both real archives online with --locked on85502ad8 (exit0); both
+offline attempts retained as failures, and a separate minimal workspace reproduces
+the Cargo offline-only issue. No --no-verify, publication or source workaround used.
+
+Full da correção: PASS em2026-11-08T00:57:42Z,406s, sem exclusões. Negative-title
+fixtures imprimem FAIL esperado; agregado PASS. Doctor conserva WARN histórico da
+tarefa ativa. Static peer review dos sete paths congelados não encontrou defeito;
+nenhuma atestação de modelo/custo ou max é inferida. Leitura posterior da readiness
+corrige a recomendação offline à luz do repro mínimo e da verificação online real.
+O snapshot inicial era apenas de leitura (modo físico644); nova captura preserva os
+modos declarados, incluindo755 do helper, antes do bind final. Fontes executáveis
+permanecem iguais aos testes17 e ao full; somente evidências/docs atualizadas depois.
+Core dry-run42430325179 terminou FAILURE nos quatro alvos pelo helper ausente;
+nenhuma release foi criada. O candidato corrigido requer novo H1 e nova matriz.
+
+Post-full metadata check initially failed because Last live-state check used generic
+wording instead of the required checker invocation. Restored the literal CLI path;
+reran doctor/strict and the focused context-budget checks without changing tests
+or executable source. This was a post-full metadata failure, not a suppressed sensor.
+
+The first focused context-budget run after those metadata edits returned49PASS/1FAIL:
+Limites omitted the literal push/merge boundary required by the unchanged fixture.
+Restored that boundary wording and reran the same50 tests; no test weakening.
+
+Final context-budget rerun:50/50PASS in14.469s. Doctor and strict live-state PASS
+after restoring the required literal CLI and push/merge boundaries. Full sensor
+receipt remains406s with source/test hashes unchanged; no sensor exclusion.
+
+## RUSTSEC-2026-0459 rusqlite update — 2026-11-10
+
+Task: rusqlite-rustsec-2026-0459, branch claude/friendly-goldberg-b9b1cd from main 85502ad8.
+Delegated by the 2026-11-09 read-only review; the owner has not authorized push, PR, merge,
+tag or publication. Before the change `cargo audit` reported 1 vulnerability and
+`cargo deny check advisories` FAILED on libsqlite3-sys 0.28.0 in both lockfiles.
+
+Primary source read first: rusqlite GitHub release notes v0.32.0 to v0.41.1. Relevant breaks:
+0.35 rejects multi-statement SQL in `execute`/`prepare`; 0.38 makes `u64`/`usize`
+`ToSql`/`FromSql` (`fallible_uint`) and the statement cache (`cache`) opt-in; 0.41 turns
+`column_names` into an iterator (unused here) and declares Rust 1.89 (toolchain is 1.96.0).
+
+Change: `rusqlite = 0.41` with `default-features = false` and features `bundled`, `vtab`,
+`functions`, `trace`, `cache`, `fallible_uint`. Lock: rusqlite 0.41.1, libsqlite3-sys 0.39.1
+(SQLite 3.45.0 to 3.54.1), hashlink 0.12.2. With default features the wasm-only
+`sqlite-wasm-rs`/`rsqlite-vfs` stack would enter the lock and force thiserror 2.0.21; turning
+them off (0.31 had none) avoids that. Cargo's re-resolution also moved three `socket2` edges
+(hyper-util, quinn, quinn-udp) from 0.5.10 to the already-locked 0.6.5; those edges were
+restored by hand and `cargo metadata --locked` accepts the result, so no unrelated package
+changes. `fuzz/Cargo.lock` additionally resynced with the root manifest (rustix,
+linux-raw-sys, foldhash, hashbrown 0.17.1; ahash dropped). Bundled compile flags differ only by
+the removed `SQLITE_ENABLE_MEMORY_MANAGEMENT` and the obsolete `SQLITE_ENABLE_STAT2`.
+
+No `src/` production change. The first full sensors run FAILED at 2026-11-10T05:13:59Z (175s):
+4 `storage::feedback` unit tests passed a three-statement DDL constant to `conn.execute`
+(1845 passed). Older rusqlite silently ran only the first statement; the test setup now uses
+`execute_batch`, as production does in `search/utility.rs`. A scan of literal and constant SQL
+passed to `execute`/`prepare`/`query_row` in `src/`, `tests/` and `benches/` found no other site.
+
+Evidence after the fix: full sensors PASS at 2026-11-10T05:22:27Z, 484s, no exclusions.
+`cargo audit` (root and `--file fuzz/Cargo.lock`): 0 vulnerabilities, only the governed
+allowed warnings. `cargo deny check advisories bans licenses sources` on the root: all ok.
+`tests/storage_posix_lock_regression_tests.rs` 8 passed/1 ignored and
+`tests/storage_concurrency_regression_tests.rs` 7 passed; `cargo check --locked` in `fuzz/` ok.
+
+Not run: `duckdb-graph`/`full` feature builds (duckdb links libduckdb-sys, not libsqlite3-sys;
+`cargo tree -i libsqlite3-sys` shows rusqlite as the only dependent), the `benches/search.rs`
+sqlite-vec benchmark at runtime (it compiles under clippy `--all-targets`), Linux and remote CI.
+Pre-existing and unrelated: `cargo deny --manifest-path fuzz/Cargo.toml check licenses` fails on
+the unlicensed `engram-fuzz` and libfuzzer-sys NCSA; CI only audits that lockfile.
+No Review Canvas; independent review and human H1 receipt are pending, as is every remote step.
+
 ## Keyless HTTP and read-only authorization — 2026-11-10
 
 Task: keyless-http-authz-2026-11-10, branch claude/revise-e-avalie-62b8e4 from main 85502ad8.
