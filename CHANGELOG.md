@@ -20,6 +20,11 @@ package registries, and dated external sources.
 - **Keyless HTTP validates `Host` and `Origin`** — without an API key, `/mcp`, `/v1/mcp` and `/v1/events` answer `403` to requests whose `Host` or `Origin` does not name this machine (DNS rebinding, cross-site requests). `ENGRAM_HTTP_ALLOWED_HOSTS` extends the `Host` allowlist; `ENGRAM_CORS_ORIGINS`, when set, replaces the loopback `Origin` default with its list; see [MCP_AUTH](docs/MCP_AUTH.md).
 - **Bundled SQLite 3.54.1 (RUSTSEC-2026-0459, CVE-2026-119375)** — `rusqlite` 0.31 → 0.41.1 and `libsqlite3-sys` 0.28.0 → 0.39.1 in the root and `fuzz/` lockfiles. The previous bundled SQLite 3.45.0 could return uninitialized page-cache memory for a database opened with a `-wal` of a different page size. No schema, MCP or SDK change; `rusqlite` keeps the same feature surface (`cache` and `fallible_uint` are now explicit opt-ins).
 
+### Fixed
+
+- **`memory_consolidate_batch` no longer reports merges it never made** — consolidation only proposes actions, but `dry_run=false` (and the auto-consolidation scheduler) returned `duplicate_merged`/`conflict_resolved` actions as if applied, recorded the run as non-dry, and emitted `consolidation` enrichment events with status `completed`. Every report is now a dry run, the response adds `applied: false` and a `note`, no enrichment events are emitted, and the scheduler logs proposals. Actually applying merges is not implemented yet.
+- **`memory_embedding_migrate` no longer fakes a migration** — without `dry_run` it computed embeddings, discarded them, relabelled `embedding_model` to `target_model`, swallowed errors and returned `success: true`. It now returns an error and changes nothing; `dry_run=true` still counts affected memories and reports storage errors instead of `0`. Use `memory_rebuild_embeddings` to queue re-embedding with the active model. The TypeScript `admin.embeddingMigrate()` sends no `dry_run`, so it now receives that error.
+
 ## [0.24.0] - 2026-10-27
 
 Release candidate prepared for review; tag and package publication are pending.

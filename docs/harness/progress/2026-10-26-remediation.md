@@ -584,3 +584,23 @@ no remote success is inferred from this local PASS.
 
 After merging main `984ced80` (PR #266 and #267, rusqlite 0.41.1) into the branch as
 `09afe27f`, the full sensors rerun PASSED at 2026-11-10T07:10:28Z, 940s, without exclusions.
+
+## Honest consolidation and embedding migrate — 2026-11-10
+
+Task: honest-consolidation-and-migration-2026-11-10, branch
+fix/honest-consolidation-and-migration from main 85502ad8. Origin: findings B-1 and B-2 of the
+2026-11-10 read-only review. Owner decision (chat, 2026-11-10): downgrade both to honest
+reporting now; implement the real operations after the release.
+[Canvas](../canvas/2026-11-10-honest-consolidation-and-migration.md).
+
+`4e8bb283`: `memory_consolidate_batch` and the scheduler tick are report-only. Every report is
+a dry run, the response adds `applied: false` and a `note`, and no `consolidation` enrichment
+events are emitted. A failure to persist the report is logged (redacted) instead of dropped.
+`memory_embedding_migrate` without `dry_run` returns an error and writes nothing; its dry-run
+count surfaces storage errors. Tool descriptions, `docs/MCP_TOOLS.md`, the SDK doc comments and
+the `CHANGELOG.md` `Fixed` section are updated; no tool name, schema key or SDK signature
+changed. Tests were written first, and RED was observed on all three behaviour tests before
+the fix.
+
+Full sensors PASS at 2026-11-10T06:31:13Z, 984s, without exclusions; advertised-contracts and
+public-claims PASS. Independent post-review and the human H1 receipt are pending.

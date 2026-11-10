@@ -167,7 +167,12 @@ class SearchMixin(ResourceMixin):
         target_model: str | None = None,
         dry_run: bool | None = None,
     ) -> dict[str, Any]:
-        """Migrate embeddings from one provider to another."""
+        """Count memories an embedding migration would touch.
+
+        Only ``dry_run=True`` is implemented server-side. Without it the server
+        returns an error and changes nothing; re-embedding with the active model
+        is available through ``memory_rebuild_embeddings``.
+        """
         params: dict[str, Any] = {}
         resolved_target = target_model or to_provider
         if resolved_target is not None:

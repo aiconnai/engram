@@ -134,6 +134,10 @@ export class AdminResource extends BaseResource {
 
   /**
    * Migrate embeddings between providers.
+   *
+   * The server does not re-embed yet: this call (which sends no `dry_run`)
+   * returns an error and changes nothing. Use `memory_rebuild_embeddings`
+   * to queue re-embedding with the active model.
    */
   async embeddingMigrate(options?: EmbeddingMigrateOptions): Promise<unknown> {
     const params: Record<string, unknown> = {};

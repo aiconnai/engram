@@ -9,9 +9,8 @@ use serde_json::{json, Value};
 use super::HandlerContext;
 use crate::error::EngramError;
 use crate::intelligence::auto_consolidate::{
-    list_history, run_consolidation, ConsolidationAction, ConsolidationPolicy,
+    list_history, run_consolidation, ConsolidationPolicy, REPORT_ONLY_NOTE,
 };
-use crate::storage::enrichment_events::{emit_best_effort, EnrichmentEvent};
 use crate::storage::Storage;
 
 pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
@@ -81,62 +80,18 @@ pub fn memory_consolidate_batch(ctx: &HandlerContext, params: Value) -> Value {
         policy.dry_run = v;
     }
 
+    // Report-only: `run_consolidation` applies nothing, so no "completed"
+    // enrichment events are emitted and the response says so explicitly.
     match run_consolidation(&ctx.storage, &workspace, &policy) {
         Ok(report) => {
-            // Emit enrichment events for non-dry-run consolidation actions.
-            if !report.dry_run {
-                let operation_id = uuid::Uuid::new_v4().to_string();
-                let dry_run_flag = report.dry_run;
-                let ws_str = report.workspace.clone();
-                let actions_snapshot: Vec<_> = report
-                    .actions
-                    .iter()
-                    .filter_map(|a| match a {
-                        ConsolidationAction::DuplicateMerged { kept, merged, .. } => {
-                            Some((*kept, *merged))
-                        }
-                        ConsolidationAction::Summarized {
-                            memory_ids,
-                            summary_id,
-                        } => {
-                            // Emit for the first source id, carrying summary_id in outcome.
-                            memory_ids.first().map(|&id| (id, summary_id.unwrap_or(id)))
-                        }
-                        _ => None,
-                    })
-                    .collect();
-
-                if !actions_snapshot.is_empty() {
-                    let _ = ctx.storage.with_connection(|conn| {
-                        for (mem_id, _) in &actions_snapshot {
-                            emit_best_effort(
-                                conn,
-                                &EnrichmentEvent {
-                                    operation_id: &operation_id,
-                                    event_type: "consolidation",
-                                    memory_id: Some(*mem_id),
-                                    version_id: None,
-                                    triggered_by: "memory_consolidate_batch",
-                                    agent_id: None,
-                                    workspace: Some(ws_str.as_str()),
-                                    params: json!({}),
-                                    outcome: json!({}),
-                                    status: "completed",
-                                    dry_run: dry_run_flag,
-                                },
-                            );
-                        }
-                        Ok::<_, crate::error::EngramError>(())
-                    });
-                }
-            }
-
             let counts = report.counts();
             json!({
                 "workspace": report.workspace,
                 "started_at": report.started_at,
                 "finished_at": report.finished_at,
                 "dry_run": report.dry_run,
+                "applied": false,
+                "note": REPORT_ONLY_NOTE,
                 "counts": counts,
                 "actions": report.actions,
             })
@@ -216,7 +171,7 @@ pub fn auto_consolidator_status() -> Value {
         "pending_consolidation_count": pending_consolidation_count(),
         "scheduler_started": AUTO_CONSOLIDATOR_SCHEDULER_STARTED
             .load(std::sync::atomic::Ordering::SeqCst),
-        "note": "Maintenance loop only; runs inside this server process."
+        "note": "Maintenance loop only; runs inside this server process. Report-only: ticks record proposals and apply nothing."
     })
 }
 
@@ -268,7 +223,7 @@ fn ensure_auto_consolidator_scheduler(storage: Storage) -> bool {
                     || counts.skipped > 0
                 {
                     tracing::info!(
-                        "Auto-consolidation tick completed: duplicates={}, conflicts={}, summarized={}, skipped={}",
+                        "Auto-consolidation tick (report-only, nothing applied): proposed duplicates={}, conflicts={}, summarized={}, skipped={}",
                         counts.duplicates_merged,
                         counts.conflicts_resolved,
                         counts.summarized,
@@ -354,6 +309,77 @@ mod tests {
         let _ = run_auto_consolidator_tick(&storage, "default").expect("tick");
 
         assert_eq!(pending_consolidation_count(), 0);
+    }
+
+    fn handler_context() -> HandlerContext {
+        use parking_lot::{Mutex, RwLock};
+        use std::sync::Arc;
+        HandlerContext {
+            storage: Storage::open_in_memory().expect("in-memory storage"),
+            embedder: crate::embedding::create_embedder(&crate::types::EmbeddingConfig::default())
+                .expect("tfidf embedder"),
+            fuzzy_engine: Arc::new(Mutex::new(crate::search::FuzzyEngine::new())),
+            search_config: crate::search::SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(crate::embedding::EmbeddingCache::default()),
+            search_cache: Arc::new(crate::search::SearchResultCache::new(
+                crate::search::AdaptiveCacheConfig::default(),
+            )),
+            hnsw_index: Arc::new(RwLock::new(crate::search::HnswIndex::new(
+                crate::search::HnswConfig::new(128, crate::search::VectorMetric::Cosine),
+            ))),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 60,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+            progress_reporter: None,
+            principal: None,
+        }
+    }
+
+    /// `dry_run=false` must not claim merges or emit "completed" events for
+    /// actions that were never applied.
+    #[test]
+    fn consolidate_batch_without_dry_run_is_report_only() {
+        use crate::storage::queries::create_memory;
+        use crate::types::CreateMemoryInput;
+
+        let ctx = handler_context();
+        for _ in 0..2 {
+            ctx.storage
+                .with_connection(|conn| {
+                    create_memory(
+                        conn,
+                        &CreateMemoryInput {
+                            content: "same text".to_string(),
+                            ..Default::default()
+                        },
+                    )?;
+                    Ok(())
+                })
+                .expect("seed memory");
+        }
+
+        let response = memory_consolidate_batch(&ctx, json!({"dry_run": false}));
+
+        assert_eq!(response["applied"], json!(false), "{response}");
+        assert_eq!(response["dry_run"], json!(true), "{response}");
+        assert!(response["note"].is_string(), "{response}");
+        let events: i64 = ctx
+            .storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM enrichment_events WHERE event_type = 'consolidation'",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("count events");
+        assert_eq!(events, 0);
     }
 
     #[test]

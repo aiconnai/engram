@@ -54,10 +54,13 @@ pub fn memory_embedding_providers(ctx: &HandlerContext, _params: Value) -> Value
     })
 }
 
-/// Re-embed all memories using the currently active embedding model and update
-/// the `embedding_model` column to reflect the new backend.
+/// Count the memories a re-embedding migration would touch.
 ///
-/// This is a long-running operation — it processes memories in batches of 100.
+/// Only `dry_run` is implemented. Re-embedding is not: storing the new
+/// vectors and rebuilding the index are missing, so a write call answers with
+/// an error and changes nothing, rather than relabelling `embedding_model` on
+/// vectors that were never recomputed. `memory_rebuild_embeddings` queues
+/// every memory for re-embedding with the active model.
 pub fn memory_embedding_migrate(ctx: &HandlerContext, params: Value) -> Value {
     let dry_run = params
         .get("dry_run")
@@ -70,82 +73,134 @@ pub fn memory_embedding_migrate(ctx: &HandlerContext, params: Value) -> Value {
         .map(str::to_string)
         .unwrap_or_else(|| ctx.embedder.model_name().to_string());
 
-    if dry_run {
-        // Count how many memories would be re-embedded.
-        let count: i64 = ctx
-            .storage
-            .with_connection(|conn| {
-                let n: i64 = conn.query_row(
-                    "SELECT COUNT(*) FROM memories WHERE has_embedding = 1",
-                    [],
-                    |row| row.get(0),
-                )?;
-                Ok(n)
-            })
-            .unwrap_or(0);
-
+    if !dry_run {
         return json!({
-            "dry_run": true,
-            "memories_to_migrate": count,
+            "success": false,
+            "error": "memory_embedding_migrate does not re-embed yet; nothing was changed. \
+                      Use dry_run=true to count affected memories, or \
+                      memory_rebuild_embeddings to queue every memory for re-embedding \
+                      with the active model.",
+            "migrated": 0,
             "target_model": target_model
         });
     }
 
-    // List all memory IDs that have an embedding.
-    let ids: Vec<i64> = ctx
-        .storage
-        .with_connection(|conn| {
-            let mut stmt =
-                conn.prepare("SELECT id FROM memories WHERE has_embedding = 1 ORDER BY id")?;
-            let ids: rusqlite::Result<Vec<i64>> = stmt.query_map([], |row| row.get(0))?.collect();
-            Ok(ids?)
-        })
-        .unwrap_or_default();
+    let count = ctx.storage.with_connection(|conn| {
+        let n: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM memories WHERE has_embedding = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(n)
+    });
 
-    let total = ids.len();
-    let mut migrated = 0usize;
-    let mut errors = 0usize;
+    match count {
+        Ok(count) => json!({
+            "dry_run": true,
+            "memories_to_migrate": count,
+            "target_model": target_model
+        }),
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
 
-    for id in &ids {
-        // Re-generate embedding using current embedder.
-        let result = ctx.storage.with_connection(|conn| {
-            let content: String = conn.query_row(
-                "SELECT content FROM memories WHERE id = ?1",
-                rusqlite::params![id],
-                |row| row.get(0),
-            )?;
-            Ok(content)
-        });
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::queries::create_memory;
+    use crate::types::CreateMemoryInput;
+    use parking_lot::{Mutex, RwLock};
+    use std::sync::Arc;
 
-        match result {
-            Ok(content) => {
-                if let Ok(embedding) = ctx.embedder.embed(&content) {
-                    let _ = ctx.storage.with_connection(|conn| {
-                        // Update the embedding_model column.
-                        conn.execute(
-                            "UPDATE memories SET embedding_model = ?1 WHERE id = ?2",
-                            rusqlite::params![target_model, id],
-                        )?;
-                        // Re-queue embedding update via vec storage if available.
-                        let _ = embedding; // suppress unused warning
-                        Ok(())
-                    });
-                    migrated += 1;
-                } else {
-                    errors += 1;
-                }
-            }
-            Err(_) => {
-                errors += 1;
-            }
+    fn test_context() -> HandlerContext {
+        HandlerContext {
+            storage: crate::Storage::open_in_memory().expect("in-memory storage"),
+            embedder: crate::embedding::create_embedder(&crate::types::EmbeddingConfig::default())
+                .expect("tfidf embedder"),
+            fuzzy_engine: Arc::new(Mutex::new(crate::search::FuzzyEngine::new())),
+            search_config: crate::search::SearchConfig::default(),
+            realtime: None,
+            embedding_cache: Arc::new(crate::embedding::EmbeddingCache::default()),
+            search_cache: Arc::new(crate::search::SearchResultCache::new(
+                crate::search::AdaptiveCacheConfig::default(),
+            )),
+            hnsw_index: Arc::new(RwLock::new(crate::search::HnswIndex::new(
+                crate::search::HnswConfig::new(128, crate::search::VectorMetric::Cosine),
+            ))),
+            #[cfg(feature = "meilisearch")]
+            meili: None,
+            #[cfg(feature = "meilisearch")]
+            meili_indexer: None,
+            #[cfg(feature = "meilisearch")]
+            meili_sync_interval: 60,
+            #[cfg(feature = "langfuse")]
+            langfuse_runtime: Arc::new(tokio::runtime::Runtime::new().expect("langfuse runtime")),
+            progress_reporter: None,
+            principal: None,
         }
     }
 
-    json!({
-        "success": true,
-        "total": total,
-        "migrated": migrated,
-        "errors": errors,
-        "target_model": target_model
-    })
+    /// One embedded memory recorded under `old-model`.
+    fn seed_embedded_memory(ctx: &HandlerContext) -> i64 {
+        ctx.storage
+            .with_connection(|conn| {
+                let id = create_memory(
+                    conn,
+                    &CreateMemoryInput {
+                        content: "embedded memory".to_string(),
+                        ..Default::default()
+                    },
+                )?
+                .id;
+                conn.execute(
+                    "UPDATE memories SET has_embedding = 1, embedding_model = 'old-model' \
+                     WHERE id = ?1",
+                    rusqlite::params![id],
+                )?;
+                Ok(id)
+            })
+            .expect("seed memory")
+    }
+
+    fn embedding_model_of(ctx: &HandlerContext, id: i64) -> String {
+        ctx.storage
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT embedding_model FROM memories WHERE id = ?1",
+                    rusqlite::params![id],
+                    |row| row.get(0),
+                )?)
+            })
+            .expect("embedding_model")
+    }
+
+    #[test]
+    fn embedding_migrate_dry_run_counts_embedded_memories() {
+        let ctx = test_context();
+        seed_embedded_memory(&ctx);
+
+        let response = memory_embedding_migrate(&ctx, json!({"dry_run": true}));
+
+        assert_eq!(response["dry_run"], json!(true));
+        assert_eq!(response["memories_to_migrate"], json!(1));
+    }
+
+    /// Re-embedding is not implemented: the call must say so and must not
+    /// relabel vectors that were never recomputed.
+    #[test]
+    fn embedding_migrate_without_dry_run_reports_unsupported_and_writes_nothing() {
+        let ctx = test_context();
+        let id = seed_embedded_memory(&ctx);
+
+        let response =
+            memory_embedding_migrate(&ctx, json!({"dry_run": false, "target_model": "new-model"}));
+
+        assert!(
+            crate::mcp::error::ToolError::is_error_response(&response),
+            "must be an error response, got {response}"
+        );
+        assert_eq!(response["success"], json!(false));
+        assert_eq!(response["migrated"], json!(0));
+        assert_eq!(embedding_model_of(&ctx, id), "old-model");
+    }
 }
