@@ -3703,7 +3703,7 @@ Pack a set of memories into a token budget for LLM context, returning compressed
 
 ### `memory_embedding_migrate`
 
-Re-embed all memories using the active embedding model; use dry_run to count affected memories without writing.
+Count the memories a re-embedding migration would touch (dry_run=true). Re-embedding itself is not implemented yet: without dry_run the call returns an error and changes nothing; use memory_rebuild_embeddings to queue re-embedding with the active model.
 
 - Tier: `advanced`
 - Group: `memory.admin`
@@ -3714,7 +3714,7 @@ Re-embed all memories using the active embedding model; use dry_run to count aff
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
 | `dry_run` | `boolean` | no | If true, count memories to migrate without re-embedding them (default: false). |
-| `target_model` | `string` | no | Target embedding model name to record in embedding_model column. Defaults to the active embedder's model name. |
+| `target_model` | `string` | no | Target embedding model name, echoed in the response. Nothing is recorded until re-embedding is implemented. Defaults to the active embedder's model name. |
 
 ### `memory_embedding_providers`
 
@@ -4175,7 +4175,7 @@ Enable, disable, configure, or inspect the automatic consolidation scheduler. Us
 
 ### `memory_consolidate_batch`
 
-Run one auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories. Defaults to dry-run; returns a structured report of actions taken (or that would be taken).
+Run one report-only auto-consolidation pass over a workspace: detect duplicates, conflicts, and archive-eligible memories and return the proposed actions. Nothing is merged, resolved or archived yet; dry_run=false is accepted but the report is still a dry run (applied=false).
 
 - Tier: `advanced`
 - Group: `memory.lifecycle`
