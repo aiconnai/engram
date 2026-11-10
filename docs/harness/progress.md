@@ -6,9 +6,9 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-11-10 — post-review independente (Claude Code Sonnet, processo separado, só leitura) de 85502ad8..6402309f: docs/harness/reviews/2026-11-10-keyless-http-authz-2026-11-10-post.md, REVIEW_VERDICT PASS com 3 LOW; dois LOW de doc corrigidos depois, rerun -v2 sobre o HEAD novo. Receipt H1 pendente.` |
+| Last review | `2026-11-10 — post-review independente (Claude Code Sonnet, processo separado, só leitura) de 85502ad8..e14277e5: docs/harness/reviews/2026-11-10-keyless-http-authz-2026-11-10-v2-post.md, REVIEW_VERDICT PASS com 3 LOW (v1 de ..6402309f também PASS). Commits após o full sensors 05:58:38Z são só de docs. Receipt H1 pendente.` |
 | Last sensors | `2026-11-10T05:58:38Z status=pass mode=full duration_sec=587, sem exclusões, candidato keyless-http-authz (A-1..A-4) sobre main 85502ad8, com CI_REQUIRED_FEATURES.` |
-| Last commit | `6402309f` |
+| Last commit | `e14277e5` |
 | Last live-state check | `2026-11-10 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 587s do keyless-http-authz; doctor PASS com WARN preexistente. Review/H1 próprios pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
