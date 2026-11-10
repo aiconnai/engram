@@ -12,6 +12,10 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-10
+
+GitHub Release. Registry publication (crates.io, PyPI, npm) is a separate decision.
+
 ### Security
 
 - **`palace_visualize` saving is a filesystem write** — a call with `output_path` now requires `scoped_write` within `ENGRAM_EXPORT_BASE_DIR`, otherwise `maintenance`, like `memory_export_markdown`; it was reachable in `read_only` mode and by the anonymous loopback principal. A path outside the export base is refused before any directory is created, `..` components are rejected under a base, and a symlink as the final component is refused in every mode, with or without `ENGRAM_EXPORT_BASE_DIR`.
@@ -19,18 +23,6 @@ package registries, and dated external sources.
 - **`memory_build_context` expansion stays in scope** — `depth` 2–3 no longer follows crossrefs into a workspace other than the one searched, or one the principal cannot read.
 - **Keyless HTTP validates `Host` and `Origin`** — without an API key, `/mcp`, `/v1/mcp` and `/v1/events` answer `403` to requests whose `Host` or `Origin` does not name this machine (DNS rebinding, cross-site requests). `ENGRAM_HTTP_ALLOWED_HOSTS` extends the `Host` allowlist; `ENGRAM_CORS_ORIGINS`, when set, replaces the loopback `Origin` default with its list; see [MCP_AUTH](docs/MCP_AUTH.md).
 - **Bundled SQLite 3.54.1 (RUSTSEC-2026-0459, CVE-2026-119375)** — `rusqlite` 0.31 → 0.41.1 and `libsqlite3-sys` 0.28.0 → 0.39.1 in the root and `fuzz/` lockfiles. The previous bundled SQLite 3.45.0 could return uninitialized page-cache memory for a database opened with a `-wal` of a different page size. No schema, MCP or SDK change; `rusqlite` keeps the same feature surface (`cache` and `fallible_uint` are now explicit opt-ins).
-
-### Fixed
-
-- **`memory_consolidate_batch` no longer reports merges it never made** — consolidation only proposes actions, but `dry_run=false` (and the auto-consolidation scheduler) returned `duplicate_merged`/`conflict_resolved` actions as if applied, recorded the run as non-dry, and emitted `consolidation` enrichment events with status `completed`. Every report is now a dry run, the response adds `applied: false` and a `note`, no enrichment events are emitted, and the scheduler logs proposals. Actually applying merges is not implemented yet.
-- **`memory_embedding_migrate` no longer fakes a migration** — without `dry_run` it computed embeddings, discarded them, relabelled `embedding_model` to `target_model`, swallowed errors and returned `success: true`. It now returns an error and changes nothing; `dry_run=true` still counts affected memories and reports storage errors instead of `0`. Use `memory_rebuild_embeddings` to queue re-embedding with the active model. The TypeScript `admin.embeddingMigrate()` sends no `dry_run`, so it now receives that error.
-
-## [0.24.0] - 2026-10-27
-
-Release candidate prepared for review; tag and package publication are pending.
-
-### Security
-
 - **Markdown filesystem import (RISK-0011)** — scoped writers require an administrator-configured root; unconfined reads require maintenance even during review. Bounded directory-relative reads reject links, special files and SQLite artifacts before opening regular files. Existing IDs are authorized by their stored workspace, and confirmed batches authorize/classify/apply within one transaction. Pre-commit failures roll back; completion uncertainty is explicit. See [compatibility notes](docs/migrations/v0.24.0-markdown-import-security.md).
 - **Markdown filesystem export** — `memory_export_markdown` is a write operation: scoped writers need an administrator-configured `ENGRAM_EXPORT_BASE_DIR`; unconfined destinations require maintenance privileges. Linux/macOS directory-relative writes reject unsafe components, symlinks, hard links, active SQLite artifacts and directory ACLs, and publish private temporary files by atomic rename. Other platforms fail closed. See [compatibility notes](docs/migrations/v0.24.0-markdown-export-security.md).
 - **Batch tools enforce per-item workspaces** — `memory_create_batch` and `memory_ingest_fact_batch` authorize every item's `workspace` (central check, gRPC pre-check and handlers), closing a cross-workspace write introduced by the search/auth hardening commit `e04d3307`. Batch item arrays are derived from the catalog schema and fail closed on unreadable nested `workspace` claims.
@@ -83,6 +75,8 @@ Release candidate prepared for review; tag and package publication are pending.
 
 ### Fixed
 
+- **`memory_consolidate_batch` no longer reports merges it never made** — consolidation only proposes actions, but `dry_run=false` (and the auto-consolidation scheduler) returned `duplicate_merged`/`conflict_resolved` actions as if applied, recorded the run as non-dry, and emitted `consolidation` enrichment events with status `completed`. Every report is now a dry run, the response adds `applied: false` and a `note`, no enrichment events are emitted, and the scheduler logs proposals. Actually applying merges is not implemented yet.
+- **`memory_embedding_migrate` no longer fakes a migration** — without `dry_run` it computed embeddings, discarded them, relabelled `embedding_model` to `target_model`, swallowed errors and returned `success: true`. It now returns an error and changes nothing; `dry_run=true` still counts affected memories and reports storage errors instead of `0`. Use `memory_rebuild_embeddings` to queue re-embedding with the active model. The TypeScript `admin.embeddingMigrate()` sends no `dry_run`, so it now receives that error.
 - Markdown entity grouping safely encodes internal tags (`session:`, `category:`, `file:`, etc.) and reserved names instead of rejecting the workspace. Export uses POSIX fsync with one final strong flush per device, avoiding repeated macOS device flushes; public Markdown wrappers propagate structured errors.
 - Markdown export excludes expired memories and ineligible references, reads data/relations in one snapshot, propagates decode/query errors, sorts ties deterministically and marks incoming relations explicitly. No success is reported for an incomplete batch; atomicity is per file.
 - `memory_cache_clear` returns `{success, entries_cleared}` for every scope.
