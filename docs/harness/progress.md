@@ -6,10 +6,10 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-11-13 — post-review independente (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-13-remediation-2026-10-26-post.md (cobre 85502ad8..37ef480a + C1 fdfd41ce). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
-| Last sensors | `2026-11-13T17:28:16Z status=pass mode=full duration_sec=836, sem exclusões, no commit fdfd41ce (pre-v0.24.0-remediation sobre main 37ef480a).` |
-| Last commit | `fdfd41ce` |
-| Last live-state check | `2026-11-13 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 836s em fdfd41ce; doctor PASS. Receipts humanos H1 e tag assinada v0.24.0 pendentes.` |
+| Last review | `2026-11-13 — post-review independente v2 (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-13-remediation-2026-10-26-v2-post.md (cobre 37ef480a..b7959bbb no PR #277). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
+| Last sensors | `2026-11-13T23:35:03Z status=pass mode=full duration_sec=1185, sem exclusões, no commit b7959bbb (PR #277 pre-v0.24.0-remediation sobre main 37ef480a).` |
+| Last commit | `b7959bbb` |
+| Last live-state check | `2026-11-13 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 1185s em b7959bbb; doctor PASS. Receipts humanos H1 e tag assinada v0.24.0 pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,9 +23,9 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat, 2026-11-12/13): após merges `#266`–`#276` em `main` (`37ef480a`), executar **Opção A** pré-`v0.24.0` (`Node >= 22.12`, worktree isolado, gates locais completos, push da branch e abertura de PR contra `main`, parando antes de merge/`H1`, tag `v0.24.0`, advisories `GHSA-*` e registries). [Canvas](canvas/2026-11-12-pre-v0.24.0-remediation.md).
-- **Limites**: merge em `main` exige receipt humano `H1` fora da worktree; assinatura/push da tag `v0.24.0`, publicação de `GHSA-8xxr-p5q8-c7cg` / `GHSA-6q7w-w273-gq6p` e registries aguardam decisão humana separada; sem remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
-- **Última evidência**: [remediação pré-v0.24.0 Opção A](./progress/2026-10-26-remediation.md#pre-v0240-review-remediation-option-a--2026-11-13): `fdfd41ce` fecha os 13 achados da revisão `85502ad8..37ef480a` + guardas `GHSA-6q7w-w273-gq6p`/`A-5`/`A-6`/`A-7`/`Q-A`; `sensors.sh` full PASS (`836s`), TS `104/104`, Py `216/216` e post-review PASS. Receipts `H1`, merge e tag `v0.24.0` pendentes.
+- **Autorização atual** (owner, chat, 2026-11-12/13): após merges `#266`–`#276` em `main` (`37ef480a`), executar **Opção A** + fechamento do PR `#277` (`Cargo.lock` advisories, CI verde, merge de `#277` em `main` com `H1` pendente sem fabricar receipt e dry-run de `release.yml`, parando antes da tag `v0.24.0`, `GHSA-*` e registries). [Canvas](canvas/2026-11-12-pre-v0.24.0-remediation.md).
+- **Limites**: receipts humanos `H1` permanecem pendentes (nunca fabricados); assinatura/push da tag `v0.24.0`, publicação de `GHSA-8xxr-p5q8-c7cg` / `GHSA-6q7w-w273-gq6p` e registries externos (`crates.io`, `PyPI`, `npm`, `Homebrew`) estão fora de escopo; sem remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
+- **Última evidência**: [remediação pré-v0.24.0 Opção A](./progress/2026-10-26-remediation.md#pre-v0240-review-remediation-option-a--2026-11-13): `fdfd41ce` + `b7959bbb` fecham os 13 achados de `85502ad8..37ef480a`, guardas pré-tag e advisories `RUSTSEC-2026-0486`/`0523`/`0524`/`0538`; `sensors.sh` full PASS (`1185s`), TS `104/104`, Py `216/216` e post-review `v2` PASS. Receipts `H1` e tag `v0.24.0` pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:

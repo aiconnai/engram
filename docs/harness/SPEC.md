@@ -274,7 +274,7 @@ and mechanical compile/test fallout; no schema, MCP, SDK, other dependency or ad
 [Log](progress/2026-10-26-remediation.md#rustsec-2026-0459-rusqlite-update--2026-11-10).
 Local commits only: push, PR, merge, tag, publication and GitHub settings await the owner.
 
-## Follow-up autorizado — remediação pré-v0.24.0 (Opção A, 2026-11-12 / 2026-11-13)
+## Follow-up autorizado — remediação pré-v0.24.0 (Opção A + fechamento PR #277, 2026-11-12 / 2026-11-13)
 
 Após os merges autorizados pelo owner dos PRs `#266`–`#276` em `main` até `37ef480a` (`#266` helper de
 assinatura, `#267` `rusqlite` `0.41.1`, `#268` A-1..A-4, `#270` B-1/B-2, `#274` `vitest` `5.1.0` /
@@ -282,16 +282,20 @@ assinatura, `#267` `rusqlite` `0.41.1`, `#268` A-1..A-4, `#270` B-1/B-2, `#274` 
 controles GitHub (private vulnerability reporting, secret scanning + push protection, Dependabot e
 rascunhos privados `GHSA-8xxr-p5q8-c7cg` / `GHSA-6q7w-w273-gq6p`), a revisão de prontidão
 `85502ad8..37ef480a` identificou 13 achados e guardas pendentes pré-tag. O owner escolheu a **Opção A**
-(`Node >= 22.12`, worktree isolado sobre `origin/main` `37ef480a`, push da branch e abertura de PR
-contra `main`):
+(`Node >= 22.12`, worktree isolado sobre `origin/main` `37ef480a`, abertura do PR `#277`) e, após a
+publicação de 4 advisories RustSec em 2026-11-13, autorizou explicitamente (`A1` + `A2`, chat):
 - **Escopo autorizado**: corrigir os 13 achados de `85502ad8..37ef480a`, o bloqueio de overwrite
   cross-workspace no import Markdown (`GHSA-6q7w-w273-gq6p`), `A-5`/`A-6`/`A-7`/`Q-A`, compressão em
   `ID_SCOPED_TOOLS`, `decay` single-ID, modo `read_only` nos hooks, `refs/remotes/origin/main`
-  canônico em `verify-release-tag.sh`/`sdk-release.yml`, paridade SDKs Python/TypeScript, reconciliação
-  documental/live-state ([Canvas](canvas/2026-11-12-pre-v0.24.0-remediation.md);
+  canônico em `verify-release-tag.sh`/`sdk-release.yml`, paridade SDKs Python/TypeScript, atualização do
+  `Cargo.lock` para `rustix 1.1.6` (`RUSTSEC-2026-0486`), `quinn-proto 0.11.19` (`RUSTSEC-2026-0523`/`0524`)
+  e `quinn-udp 0.5.16` (`RUSTSEC-2026-0538`), reconciliação documental/live-state
+  ([Canvas](canvas/2026-11-12-pre-v0.24.0-remediation.md);
   [Log](progress/2026-10-26-remediation.md#pre-v0240-review-remediation-option-a--2026-11-13)),
-  `git push` da branch `fix/pre-v0.24.0-remediation` e abertura do PR contra `main`.
+  `git push` da branch `fix/pre-v0.24.0-remediation`, merge do PR `#277` em `main` após todos os checks
+  obrigatórios verdes no `HEAD` exato (registrando `H1` como pendente, sem fabricar receipt humano) e
+  execução do dry-run de `release.yml` (`dry_run=true`) sobre o `main` mesclado.
 - **Fora de escopo / fronteira remota**: `B-3`/`B-4` (`fu-archival`), refatoração `SAVEPOINT`
-  `is_autocommit()` e mutante sobrevivente ficam adiados para `v0.24.1`. Merge em `main` (receipts
-  humanos `H1`), assinatura/push da tag `v0.24.0`, publicação dos advisories `GHSA-*` e publicação em
-  crates.io, PyPI, npm ou Homebrew permanecem **excluídos** até decisão humana separada.
+  `is_autocommit()` e mutante sobrevivente ficam adiados para `v0.24.1`. Receipts humanos `H1`,
+  assinatura/push da tag `v0.24.0`, publicação dos advisories `GHSA-*` e publicação em crates.io, PyPI,
+  npm ou Homebrew permanecem **excluídos** até execução/decisão humana separada.

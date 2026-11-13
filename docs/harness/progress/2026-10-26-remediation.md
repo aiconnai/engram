@@ -629,5 +629,20 @@ Verification on `fdfd41ce`: full `sensors.sh` PASS at `2026-11-13T17:28:16Z` (`d
 PASS); Python SDK `pytest tests/` (`216` passed, `3` skipped); `test_sdk_release_workflow.py`
 (`15/15` PASS); `test_check_pdf_worker_packaging.py` (`18/18` PASS); `check-sdk-contract-alignment`,
 `check-advertised-contracts`, `check-public-claims`, `bump-version.py --check`, and
-`extract-release-notes.sh` all PASS. Human `H1` post-gate receipts (for `#266`–`#276` and this PR)
-and the owner-signed `v0.24.0` tag remain pending.
+`extract-release-notes.sh` all PASS.
+
+Follow-up on PR `#277` (`b7959bbb`, 2026-11-13): GitHub CI run `43474684895` surfaced four newly
+published RustSec advisories (`RUSTSEC-2026-0486` `rustix 1.1.3`, `RUSTSEC-2026-0523`/`0524`
+`quinn-proto 0.11.18`, `RUSTSEC-2026-0538` `quinn-udp 0.5.14`). Owner explicitly authorized (`A1` +
+`A2`, chat, 2026-11-13) updating `Cargo.lock`, merging PR `#277` into `main` once all required CI
+checks are green (with human `H1` receipts remaining pending and never fabricated), and running the
+`release.yml` dry-run on merged `main`, while keeping tag `v0.24.0`, `GHSA-*` publication, and
+external registries (`crates.io`, `PyPI`, `npm`, `Homebrew`) out of scope. `b7959bbb` updates
+`rustix 1.1.3 -> 1.1.6` (`linux-raw-sys 0.11.0 -> 0.12.1`), `quinn-proto 0.11.18 -> 0.11.19`, and
+`quinn-udp 0.5.14 -> 0.5.16` without adding advisory waivers; `cargo audit`, `cargo audit --file
+fuzz/Cargo.lock`, `cargo deny check advisories bans licenses sources`, and full `sensors.sh` at
+`2026-11-13T23:35:03Z` (`duration_sec=1185`, `mode=full`, zero exclusions) all PASSED, and
+independent post-review `v2`
+([`2026-11-13-remediation-2026-10-26-v2-post.md`](../reviews/2026-11-13-remediation-2026-10-26-v2-post.md))
+recorded `REVIEW_VERDICT: PASS`. Human `H1` post-gate receipts (for `#266`–`#277`) and the
+owner-signed `v0.24.0` tag remain pending.
