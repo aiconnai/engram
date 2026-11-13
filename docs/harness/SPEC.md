@@ -273,3 +273,25 @@ lockfiles carry `libsqlite3-sys >= 0.39.0`. Scope: `Cargo.toml`, `Cargo.lock`, `
 and mechanical compile/test fallout; no schema, MCP, SDK, other dependency or advisory exception.
 [Log](progress/2026-10-26-remediation.md#rustsec-2026-0459-rusqlite-update--2026-11-10).
 Local commits only: push, PR, merge, tag, publication and GitHub settings await the owner.
+
+## Follow-up autorizado — remediação pré-v0.24.0 (Opção A, 2026-11-12 / 2026-11-13)
+
+Após os merges autorizados pelo owner dos PRs `#266`–`#276` em `main` até `37ef480a` (`#266` helper de
+assinatura, `#267` `rusqlite` `0.41.1`, `#268` A-1..A-4, `#270` B-1/B-2, `#274` `vitest` `5.1.0` /
+`@types/node` `22`, `#275` `SECURITY.md`/`CLAUDE.md`, `#276` `CHANGELOG.md`) e habilitação de
+controles GitHub (private vulnerability reporting, secret scanning + push protection, Dependabot e
+rascunhos privados `GHSA-8xxr-p5q8-c7cg` / `GHSA-6q7w-w273-gq6p`), a revisão de prontidão
+`85502ad8..37ef480a` identificou 13 achados e guardas pendentes pré-tag. O owner escolheu a **Opção A**
+(`Node >= 22.12`, worktree isolado sobre `origin/main` `37ef480a`, push da branch e abertura de PR
+contra `main`):
+- **Escopo autorizado**: corrigir os 13 achados de `85502ad8..37ef480a`, o bloqueio de overwrite
+  cross-workspace no import Markdown (`GHSA-6q7w-w273-gq6p`), `A-5`/`A-6`/`A-7`/`Q-A`, compressão em
+  `ID_SCOPED_TOOLS`, `decay` single-ID, modo `read_only` nos hooks, `refs/remotes/origin/main`
+  canônico em `verify-release-tag.sh`/`sdk-release.yml`, paridade SDKs Python/TypeScript, reconciliação
+  documental/live-state ([Canvas](canvas/2026-11-12-pre-v0.24.0-remediation.md);
+  [Log](progress/2026-10-26-remediation.md#pre-v0240-review-remediation-option-a--2026-11-13)),
+  `git push` da branch `fix/pre-v0.24.0-remediation` e abertura do PR contra `main`.
+- **Fora de escopo / fronteira remota**: `B-3`/`B-4` (`fu-archival`), refatoração `SAVEPOINT`
+  `is_autocommit()` e mutante sobrevivente ficam adiados para `v0.24.1`. Merge em `main` (receipts
+  humanos `H1`), assinatura/push da tag `v0.24.0`, publicação dos advisories `GHSA-*` e publicação em
+  crates.io, PyPI, npm ou Homebrew permanecem **excluídos** até decisão humana separada.
