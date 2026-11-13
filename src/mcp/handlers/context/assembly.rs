@@ -1,8 +1,188 @@
 //! Prompt-context assembly tools (build_context, injection prompt, prepare_context).
+use std::collections::HashSet;
+
 use serde_json::{json, Value};
 
 use super::super::HandlerContext;
 use super::safe_truncate;
+use crate::auth::TransportPrincipal;
+use crate::mcp::ToolError;
+use crate::types::SearchOptions;
+
+#[derive(Debug, Clone, Default)]
+struct ContextWorkspaceScope {
+    allowed: Option<HashSet<String>>,
+}
+
+impl ContextWorkspaceScope {
+    fn allows(&self, workspace: &str, principal: Option<&TransportPrincipal>) -> bool {
+        self.allowed
+            .as_ref()
+            .is_none_or(|allowed| allowed.contains(workspace))
+            && principal.is_none_or(|p| p.allows_workspace(Some(workspace)))
+    }
+}
+
+/// Extract, normalize, and authorize `workspace`, `workspaces`, and `filters.workspace`
+/// claims against `ctx.principal`, matching `permission::requested_workspaces`.
+fn resolve_context_workspace_scope(
+    tool_name: &str,
+    params: &Value,
+    limit: i64,
+    ctx: &HandlerContext,
+) -> std::result::Result<(SearchOptions, ContextWorkspaceScope), Value> {
+    if let Some(ws_val) = params.get("workspace") {
+        if !ws_val.is_null() && !ws_val.is_string() {
+            return Err(ToolError::invalid_params("workspace must be a string").into_value());
+        }
+    }
+    if let Some(wss_val) = params.get("workspaces") {
+        if !wss_val.is_null()
+            && !wss_val
+                .as_array()
+                .is_some_and(|arr| !arr.is_empty() && arr.iter().all(Value::is_string))
+        {
+            return Err(ToolError::invalid_params(
+                "workspaces must be a non-empty array of strings",
+            )
+            .into_value());
+        }
+    }
+    if let Some(filter_ws_val) = params
+        .get("filters")
+        .and_then(Value::as_object)
+        .and_then(|f| f.get("workspace"))
+    {
+        if !filter_ws_val.is_null() && !filter_ws_val.is_string() {
+            return Err(
+                ToolError::invalid_params("filters.workspace must be a string").into_value(),
+            );
+        }
+    }
+
+    if let Some(p) = ctx.principal.as_ref() {
+        if let Some(denial) =
+            crate::mcp::permission::check_tool_authorization(None, tool_name, params, Some(p))
+        {
+            return Err(denial);
+        }
+    }
+
+    let top_ws = match params.get("workspace").and_then(Value::as_str) {
+        Some(raw) => Some(
+            crate::types::normalize_workspace(raw)
+                .map_err(|e| ToolError::invalid_params(e.to_string()).into_value())?,
+        ),
+        None => None,
+    };
+
+    let filter_ws = match params
+        .get("filters")
+        .and_then(Value::as_object)
+        .and_then(|f| f.get("workspace"))
+        .and_then(Value::as_str)
+    {
+        Some(raw) => Some(
+            crate::types::normalize_workspace(raw)
+                .map_err(|e| ToolError::invalid_params(e.to_string()).into_value())?,
+        ),
+        None => None,
+    };
+
+    if let (Some(ref a), Some(ref b)) = (&top_ws, &filter_ws) {
+        if a != b {
+            return Err(ToolError::invalid_params(
+                "workspace and filters.workspace must match when both are provided",
+            )
+            .into_value());
+        }
+    }
+    let single_ws = top_ws.or(filter_ws);
+
+    let multi_ws = if let Some(items) = params.get("workspaces").and_then(Value::as_array) {
+        let mut list = Vec::with_capacity(items.len());
+        for item in items {
+            if let Some(raw) = item.as_str() {
+                let normalized = crate::types::normalize_workspace(raw)
+                    .map_err(|e| ToolError::invalid_params(e.to_string()).into_value())?;
+                if !list.contains(&normalized) {
+                    list.push(normalized);
+                }
+            }
+        }
+        Some(list)
+    } else {
+        None
+    };
+
+    let mut effective_list = match (single_ws, multi_ws) {
+        (Some(ws), Some(list)) => {
+            if !list.contains(&ws) {
+                return Err(
+                    ToolError::invalid_params("workspace is not included in workspaces")
+                        .into_value(),
+                );
+            }
+            Some(vec![ws])
+        }
+        (Some(ws), None) => Some(vec![ws]),
+        (None, Some(list)) => Some(list),
+        (None, None) => None,
+    };
+
+    if let Some(p) = ctx.principal.as_ref() {
+        if !crate::mcp::permission::allows_all_workspaces(p) {
+            if effective_list.as_ref().is_none_or(Vec::is_empty) {
+                let default_ws = p
+                    .auth_context()
+                    .namespace
+                    .as_deref()
+                    .map(|ns| {
+                        crate::types::normalize_workspace(ns).unwrap_or_else(|_| ns.to_string())
+                    })
+                    .unwrap_or_else(|| "default".to_string());
+                effective_list = Some(vec![default_ws]);
+            }
+            if let Some(ref list) = effective_list {
+                for ws in list {
+                    if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+                        tool_name,
+                        p,
+                        Some(ws),
+                    ) {
+                        return Err(denial);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut search_opts = SearchOptions {
+        limit: Some(limit),
+        global: false,
+        ..Default::default()
+    };
+    let scope = match effective_list {
+        Some(list) if list.len() == 1 => {
+            let ws = list
+                .into_iter()
+                .next()
+                .expect("invariant: checked list length == 1");
+            let mut set = HashSet::with_capacity(1);
+            set.insert(ws.clone());
+            search_opts.workspace = Some(ws);
+            ContextWorkspaceScope { allowed: Some(set) }
+        }
+        Some(list) => {
+            let set: HashSet<String> = list.iter().cloned().collect();
+            search_opts.workspaces = Some(list);
+            ContextWorkspaceScope { allowed: Some(set) }
+        }
+        None => ContextWorkspaceScope { allowed: None },
+    };
+
+    Ok((search_opts, scope))
+}
 
 /// Build a structured prompt context from memories.
 ///
@@ -20,9 +200,7 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
     use crate::intelligence::context_builder::{
         ContextBuilder, MemoryEntry, PromptTemplate, Section, SimpleTokenCounter, Strategy,
     };
-    use crate::types::SearchOptions;
     use chrono::{Duration, Utc};
-    use std::collections::HashSet;
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q.to_string(),
@@ -77,18 +255,11 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
         _ => None, // "all" or unrecognized
     };
 
-    let search_opts = SearchOptions {
-        workspace: params
-            .get("workspace")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
-        limit: Some(limit as i64),
-        ..Default::default()
-    };
-
-    let scope_workspace = search_opts.workspace.as_deref().map(|workspace| {
-        crate::types::normalize_workspace(workspace).unwrap_or_else(|_| workspace.to_string())
-    });
+    let (search_opts, scope) =
+        match resolve_context_workspace_scope("memory_build_context", &params, limit as i64, ctx) {
+            Ok(resolved) => resolved,
+            Err(err) => return err,
+        };
 
     let query_embedding = ctx.embedder.embed(&query).ok();
     let embedding_ref = query_embedding.as_deref();
@@ -108,6 +279,9 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
         Ok(results) => results,
         Err(e) => return json!({"error": e.to_string()}),
     };
+
+    // Enforce workspace and principal confinement on initial search hits as well.
+    memories.retain(|r| scope.allows(&r.memory.workspace, ctx.principal.as_ref()));
 
     // Apply timeframe filter
     if let Some(cutoff) = time_cutoff {
@@ -158,31 +332,22 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
                 break;
             }
 
-            // Fetch the actual memories for the new frontier
+            // Fetch the actual memories for the new frontier and advance the next hop
+            // ONLY from memories that pass workspace, principal, timeframe, and type checks.
+            let mut accepted_next_frontier = Vec::new();
             for id in &next_frontier {
                 if let Ok(mem) = ctx
                     .storage
-                    .with_connection(|conn| crate::storage::queries::get_memory(conn, *id))
+                    .with_connection(|conn| crate::storage::queries::get_memory_readonly(conn, *id))
                 {
-                    // A crossref may point outside the searched workspace, or
-                    // outside what the caller may read; expansion must not
-                    // widen the search scope.
-                    if scope_workspace
-                        .as_deref()
-                        .is_some_and(|scope| scope != mem.workspace)
-                        || ctx.principal.as_ref().is_some_and(|principal| {
-                            !principal.allows_workspace(Some(&mem.workspace))
-                        })
-                    {
+                    if !scope.allows(&mem.workspace, ctx.principal.as_ref()) {
                         continue;
                     }
-                    // Apply timeframe filter to expanded memories too
                     if let Some(cutoff) = time_cutoff {
                         if mem.created_at < cutoff {
                             continue;
                         }
                     }
-                    // Apply type filter to expanded memories too
                     if let Some(ref types) = include_types {
                         if !types.contains(&mem.memory_type.as_str().to_string()) {
                             continue;
@@ -190,10 +355,14 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
                     }
                     all_memory_contents.push((mem.content.clone(), mem.created_at));
                     all_memory_ids.push(mem.id);
+                    accepted_next_frontier.push(mem.id);
                 }
             }
 
-            frontier = next_frontier;
+            if accepted_next_frontier.is_empty() {
+                break;
+            }
+            frontier = accepted_next_frontier;
         }
     }
 
@@ -218,27 +387,49 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
     let prompt = builder.build(&template, &entries, strategy);
     let token_estimate = builder.estimate_tokens(&prompt);
 
-    // Build graph data if requested
+    // Build graph data if requested (restricting edges so both endpoints are live and in scope).
     let graph = if include_graph {
+        let now_rfc3339 = Utc::now().to_rfc3339();
         ctx.storage
             .with_connection(|conn| {
+                let mut seen_edges: HashSet<(i64, i64, String)> = HashSet::new();
                 let mut edges = Vec::new();
                 for id in &all_memory_ids {
                     let mut stmt = conn.prepare(
-                        "SELECT from_id, to_id, edge_type FROM crossrefs
-                         WHERE from_id = ?1 OR to_id = ?1",
+                        "SELECT c.from_id, c.to_id, c.edge_type, mf.workspace, mt.workspace
+                         FROM crossrefs c
+                         JOIN memories mf ON mf.id = c.from_id
+                         JOIN memories mt ON mt.id = c.to_id
+                         WHERE (c.from_id = ?1 OR c.to_id = ?1)
+                           AND mf.valid_to IS NULL
+                           AND (mf.expires_at IS NULL OR mf.expires_at > ?2)
+                           AND mt.valid_to IS NULL
+                           AND (mt.expires_at IS NULL OR mt.expires_at > ?2)",
                     )?;
-                    let rows: Vec<Value> = stmt
-                        .query_map(rusqlite::params![id], |row| {
-                            Ok(json!({
-                                "source": row.get::<_, i64>(0)?,
-                                "target": row.get::<_, i64>(1)?,
-                                "relation": row.get::<_, String>(2)?
-                            }))
+                    let rows: Vec<(i64, i64, String, String, String)> = stmt
+                        .query_map(rusqlite::params![id, &now_rfc3339], |row| {
+                            Ok((
+                                row.get(0)?,
+                                row.get(1)?,
+                                row.get(2)?,
+                                row.get(3)?,
+                                row.get(4)?,
+                            ))
                         })?
                         .filter_map(|r| r.ok())
                         .collect();
-                    edges.extend(rows);
+                    for (source, target, relation, from_ws, to_ws) in rows {
+                        if scope.allows(&from_ws, ctx.principal.as_ref())
+                            && scope.allows(&to_ws, ctx.principal.as_ref())
+                            && seen_edges.insert((source, target, relation.clone()))
+                        {
+                            edges.push(json!({
+                                "source": source,
+                                "target": target,
+                                "relation": relation
+                            }));
+                        }
+                    }
                 }
                 Ok(json!({"edges": edges, "node_count": all_memory_ids.len()}))
             })
@@ -273,8 +464,6 @@ pub fn memory_build_context(ctx: &HandlerContext, params: Value) -> Value {
 /// - `workspace` (string, optional) — workspace to search in
 /// - `include_types` (array of string, optional) — filter by memory type (e.g. ["note","episodic"])
 pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::types::SearchOptions;
-
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q.to_string(),
         None => return json!({"error": "query is required"}),
@@ -295,14 +484,11 @@ pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value
         })
         .unwrap_or_default();
 
-    let search_opts = SearchOptions {
-        workspace: params
-            .get("workspace")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
-        limit: Some(20),
-        ..Default::default()
-    };
+    let (search_opts, scope) =
+        match resolve_context_workspace_scope("memory_get_injection_prompt", &params, 20, ctx) {
+            Ok(resolved) => resolved,
+            Err(err) => return err,
+        };
 
     let query_embedding = ctx.embedder.embed(&query).ok();
     let embedding_ref = query_embedding.as_deref();
@@ -318,10 +504,11 @@ pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value
         )
     });
 
-    let memories = match search_result {
+    let mut memories = match search_result {
         Ok(results) => results,
         Err(e) => return json!({"error": e.to_string()}),
     };
+    memories.retain(|r| scope.allows(&r.memory.workspace, ctx.principal.as_ref()));
 
     // Filter by memory type if include_types is specified.
     let memories: Vec<_> = if include_types.is_empty() {
@@ -428,7 +615,6 @@ pub fn memory_get_injection_prompt(ctx: &HandlerContext, params: Value) -> Value
 /// - `workspace` (string, optional) — workspace filter
 pub fn memory_prepare_context(ctx: &HandlerContext, params: Value) -> Value {
     use crate::intelligence::integration_orchestrator::IntegrationOrchestrator;
-    use crate::types::SearchOptions;
 
     let query = match params.get("query").and_then(|v| v.as_str()) {
         Some(q) => q.to_string(),
@@ -440,14 +626,11 @@ pub fn memory_prepare_context(ctx: &HandlerContext, params: Value) -> Value {
         .and_then(|v| v.as_u64())
         .unwrap_or(4000) as usize;
 
-    let search_opts = SearchOptions {
-        workspace: params
-            .get("workspace")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
-        limit: Some(50),
-        ..Default::default()
-    };
+    let (search_opts, scope) =
+        match resolve_context_workspace_scope("memory_prepare_context", &params, 50, ctx) {
+            Ok(resolved) => resolved,
+            Err(err) => return err,
+        };
 
     let query_embedding = ctx.embedder.embed(&query).ok();
     let embedding_ref = query_embedding.as_deref();
@@ -464,7 +647,11 @@ pub fn memory_prepare_context(ctx: &HandlerContext, params: Value) -> Value {
     });
 
     let memories: Vec<_> = match search_result {
-        Ok(results) => results.into_iter().map(|r| r.memory).collect(),
+        Ok(results) => results
+            .into_iter()
+            .map(|r| r.memory)
+            .filter(|m| scope.allows(&m.workspace, ctx.principal.as_ref()))
+            .collect(),
         Err(e) => return json!({"error": e.to_string()}),
     };
 

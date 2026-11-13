@@ -38,7 +38,7 @@ REQUIRED_GATES = (
     "approved immutable GitHub Release is missing",
     "Dry-run complete: no registry request was attempted.",
     "scripts/verify-release-tag.sh",
-    "--trusted-ref origin/main",
+    "--trusted-ref refs/remotes/origin/main",
     "ENGRAM_RELEASE_ALLOWED_SIGNERS",
     "environment: release-pypi",
     "environment: release-npm",
@@ -105,9 +105,9 @@ class TestWorkflowStatic(unittest.TestCase):
                 self.assertIn('--release-plan --release-tag "${RELEASE_TAG}"', block)
                 self.assertIn(f"s/^{key}=//p", block)
                 self.assertIn('jq -e --arg tag "${RELEASE_TAG}"', block)
-                self.assertIn('git show origin/main:scripts/verify-release-tag.sh > "${trusted_verifier}"', block)
+                self.assertIn('git show --end-of-options refs/remotes/origin/main:scripts/verify-release-tag.sh > "${trusted_verifier}"', block)
                 self.assertIn(
-                    'bash "${trusted_verifier}" --repo . --tag "${RELEASE_TAG}" --expected-sha "${RELEASE_SHA}" --trusted-ref origin/main',
+                    'bash "${trusted_verifier}" --repo . --tag "${RELEASE_TAG}" --expected-sha "${RELEASE_SHA}" --trusted-ref refs/remotes/origin/main',
                     block,
                 )
 
@@ -118,7 +118,7 @@ class TestWorkflowStatic(unittest.TestCase):
         for job in ("preflight", "publish-python", "publish-npm"):
             with self.subTest(job=job):
                 block = job_block(text, job)
-                self.assertIn("git show origin/main:scripts/verify-release-tag.sh", block)
+                self.assertIn("git show --end-of-options refs/remotes/origin/main:scripts/verify-release-tag.sh", block)
 
     def test_post_publish_verification_uses_sdk_version_not_core_tag(self):
         text = read_workflow()
@@ -380,9 +380,23 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
                 "--expected-sha",
                 main_sha,
                 "--trusted-ref",
-                "origin/main",
+                "refs/remotes/origin/main",
             )
             self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+
+            # 1b. Non-canonical --trusted-ref (without refs/* prefix) is rejected fail-closed
+            non_canonical_ref = self._verify(
+                "--repo",
+                str(repo),
+                "--tag",
+                "v1.0.0",
+                "--expected-sha",
+                main_sha,
+                "--trusted-ref",
+                "origin/main",
+            )
+            self.assertNotEqual(non_canonical_ref.returncode, 0)
+            self.assertIn("canonical refs/* ref", non_canonical_ref.stderr)
 
             # 2. Inline ENGRAM_RELEASE_ALLOWED_SIGNERS + SHA256 pin -> PASS on match, FAIL on mismatch
             inline_content = f"{trusted_line}\n"
@@ -395,7 +409,7 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
                 "--expected-sha",
                 main_sha,
                 "--trusted-ref",
-                "origin/main",
+                "refs/remotes/origin/main",
                 env={
                     "ENGRAM_RELEASE_ALLOWED_SIGNERS": trusted_line,
                     "ENGRAM_RELEASE_ALLOWED_SIGNERS_SHA256": inline_sha,
@@ -427,7 +441,7 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
                 "--expected-sha",
                 "f" * 40,
                 "--trusted-ref",
-                "origin/main",
+                "refs/remotes/origin/main",
             )
             self.assertNotEqual(wrong_sha.returncode, 0)
             self.assertIn("tag, github.sha, and supplied SHA do not agree", wrong_sha.stderr)
@@ -454,14 +468,16 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
                 "--expected-sha",
                 main_sha,
                 "--trusted-ref",
-                "origin/main",
+                "refs/remotes/origin/main",
             )
             self.assertNotEqual(rogue_res.returncode, 0)
             self.assertIn("publish requires a cryptographically signed tag", rogue_res.stderr)
 
-            # 5. Anti-self-authorization: tag commit alters BOTH docs/releases/allowed-signers
-            # AND scripts/verify-release-tag.sh in its own tree while origin/main still only
-            # trusts trusted_line -> materializing verifier from origin/main MUST FAIL!
+            # 5. Anti-self-authorization + ref-shadowing resistance: tag commit alters BOTH
+            # docs/releases/allowed-signers AND scripts/verify-release-tag.sh in its own tree
+            # AND creates a shadowing tag `refs/tags/origin/main` pointing to tampered_sha
+            # while `refs/remotes/origin/main` still only trusts trusted_line -> materializing
+            # verifier from `refs/remotes/origin/main` MUST FAIL!
             (repo / "scripts").mkdir(parents=True, exist_ok=True)
             (repo / "scripts" / "verify-release-tag.sh").write_text(
                 self.SCRIPT.read_text(encoding="utf-8"),
@@ -484,6 +500,8 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
             self._git(repo, "add", "docs/releases/allowed-signers", "scripts/verify-release-tag.sh")
             self._git(repo, "commit", "-m", "tamper: self-authorize rogue signer and neuter worktree verifier")
             tampered_sha = self._git(repo, "rev-parse", "HEAD")
+            # Attempt DWIM ref shadowing via refs/tags/origin/main -> tampered_sha
+            self._git(repo, "update-ref", "refs/tags/origin/main", tampered_sha)
             self._git(
                 repo,
                 "-c",
@@ -499,7 +517,7 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
             )
             trusted_verifier_copy = tmp / "trusted-verify-release-tag.sh"
             trusted_verifier_copy.write_text(
-                self._git(repo, "show", "origin/main:scripts/verify-release-tag.sh") + "\n",
+                self._git(repo, "show", "--end-of-options", "refs/remotes/origin/main:scripts/verify-release-tag.sh") + "\n",
                 encoding="utf-8",
             )
             clean_env = {
@@ -518,7 +536,7 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
                     "--expected-sha",
                     main_sha,
                     "--trusted-ref",
-                    "origin/main",
+                    "refs/remotes/origin/main",
                 ],
                 cwd=repo,
                 env=clean_env,
@@ -540,7 +558,7 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
                     "--expected-sha",
                     tampered_sha,
                     "--trusted-ref",
-                    "origin/main",
+                    "refs/remotes/origin/main",
                 ],
                 cwd=repo,
                 env=clean_env,
@@ -562,7 +580,7 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
                 "--expected-sha",
                 main_sha,
                 "--trusted-ref",
-                "origin/main",
+                "refs/remotes/origin/main",
             )
             self.assertNotEqual(unsigned.returncode, 0)
             self.assertIn("publish requires a cryptographically signed tag", unsigned.stderr)
@@ -577,7 +595,7 @@ class TestVerifyReleaseTagScript(unittest.TestCase):
                 "--expected-sha",
                 main_sha,
                 "--trusted-ref",
-                "origin/main",
+                "refs/remotes/origin/main",
             )
             self.assertNotEqual(lightweight.returncode, 0)
             self.assertIn("publish requires an annotated tag object", lightweight.stderr)

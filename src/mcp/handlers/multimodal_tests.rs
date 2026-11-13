@@ -241,6 +241,99 @@ fn test_search_by_image_tool_is_registered() {
     );
 }
 
+/// Serializes the tests below that change `ENGRAM_MEDIA_BASE_DIR`.
+static MEDIA_BASE_DIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn with_media_base_dir_str<T>(base: Option<&str>, body: impl FnOnce() -> T) -> T {
+    let _guard = MEDIA_BASE_DIR_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let previous = std::env::var_os("ENGRAM_MEDIA_BASE_DIR");
+    match base {
+        Some(v) => std::env::set_var("ENGRAM_MEDIA_BASE_DIR", v),
+        None => std::env::remove_var("ENGRAM_MEDIA_BASE_DIR"),
+    }
+    let out = body();
+    match previous {
+        Some(v) => std::env::set_var("ENGRAM_MEDIA_BASE_DIR", v),
+        None => std::env::remove_var("ENGRAM_MEDIA_BASE_DIR"),
+    }
+    out
+}
+
+fn with_media_base_dir<T>(base: &std::path::Path, body: impl FnOnce() -> T) -> T {
+    with_media_base_dir_str(Some(&base.to_string_lossy()), body)
+}
+
+#[test]
+fn search_by_image_with_base_dir_reads_files_inside_it() {
+    let base = tempfile::tempdir().unwrap();
+    let inside = base.path().join("query.png");
+    std::fs::write(&inside, b"not really a png").unwrap();
+    let validated = with_media_base_dir(base.path(), || {
+        super::validate_media_path(&inside.to_string_lossy())
+    })
+    .expect("a file inside the base dir must be accepted");
+    assert!(validated.starts_with(std::fs::canonicalize(base.path()).unwrap()));
+}
+
+#[test]
+fn search_by_image_treats_blank_media_base_dir_same_as_unset() {
+    let temp = tempfile::tempdir().unwrap();
+    let file = temp.path().join("query.png");
+    std::fs::write(&file, b"not really a png").unwrap();
+    for blank in [None, Some(""), Some("   ")] {
+        let validated = with_media_base_dir_str(blank, || {
+            super::validate_media_path(&file.to_string_lossy())
+        })
+        .expect("blank ENGRAM_MEDIA_BASE_DIR must behave like unset");
+        assert_eq!(validated, std::fs::canonicalize(&file).unwrap());
+    }
+}
+
+#[test]
+fn search_by_image_with_base_dir_rejects_dotdot_escape() {
+    let outer = tempfile::tempdir().unwrap();
+    let base = outer.path().join("media");
+    std::fs::create_dir(&base).unwrap();
+    std::fs::write(outer.path().join("secret.png"), b"secret").unwrap();
+    let escape = base.join("..").join("secret.png");
+
+    let ctx = make_ctx();
+    let result = with_media_base_dir(&base, || {
+        memory_search_by_image(&ctx, json!({"image_path": escape.to_string_lossy()}))
+    });
+    let error = result["error"].as_str().expect("escape must be refused");
+    assert!(
+        error.contains("outside the allowed base directory"),
+        "{error}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn search_by_image_with_base_dir_rejects_symlink_escape() {
+    let outer = tempfile::tempdir().unwrap();
+    let base = outer.path().join("media");
+    std::fs::create_dir(&base).unwrap();
+    let secret = outer.path().join("secret.png");
+    std::fs::write(&secret, b"secret").unwrap();
+    let link = base.join("link.png");
+    std::os::unix::fs::symlink(&secret, &link).unwrap();
+
+    let ctx = make_ctx();
+    let result = with_media_base_dir(&base, || {
+        memory_search_by_image(&ctx, json!({"image_path": link.to_string_lossy()}))
+    });
+    let error = result["error"]
+        .as_str()
+        .expect("symlink escape must be refused");
+    assert!(
+        error.contains("outside the allowed base directory"),
+        "{error}"
+    );
+}
+
 #[test]
 fn test_memory_ingest_media_roundtrip() {
     let ctx = make_ctx();

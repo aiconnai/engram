@@ -171,33 +171,52 @@ fn plan(
     workspace: Option<&str>,
     force: bool,
 ) -> Result<Plan> {
-    let state: Option<(String, i64)> = if let Some(id) = input.id {
+    let state: Option<(String, i64, String)> = if let Some(id) = input.id {
         // The file's claimed workspace never authorizes an existing ID.
         // Same connection/snapshot as classification and mutation.
         ensure_memory_access(conn, ctx.principal, id)?;
         conn.query_row(
-            "SELECT content_hash, version FROM memories WHERE id = ?1",
+            "SELECT content_hash, version, workspace FROM memories WHERE id = ?1",
             [id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()?
     } else {
         None
     };
+    let expected_ws = match workspace {
+        Some(ws) => Some(ws.to_string()),
+        None => input
+            .fm
+            .get("engram_workspace")
+            .map(|ws| {
+                crate::types::normalize_workspace(ws)
+                    .map_err(|error| EngramError::InvalidInput(error.to_string()))
+            })
+            .transpose()?,
+    };
+    if let (Some((_, _, ref stored_ws)), Some(ref target_ws)) = (&state, &expected_ws) {
+        if stored_ws != target_ws {
+            return Err(EngramError::InvalidInput(format!(
+                "engram_id {} belongs to workspace '{stored_ws}', not target workspace '{target_ws}'",
+                input.id.unwrap_or_default()
+            )));
+        }
+    }
     let (hash, baseline) = match input.fm.get("engram_content_hash") {
         Some(baseline) => (compute_content_hash_raw(&input.body), baseline.clone()),
         None => (
             compute_content_hash(&input.body),
             state
                 .as_ref()
-                .map(|(hash, _)| hash.clone())
+                .map(|(hash, _, _)| hash.clone())
                 .unwrap_or_default(),
         ),
     };
     let status = classify_import_status(
         state
             .as_ref()
-            .map(|(hash, version)| (hash.as_str(), *version)),
+            .map(|(hash, version, _)| (hash.as_str(), *version)),
         &hash,
         &baseline,
         input.version,
@@ -229,11 +248,27 @@ fn run(
     force: bool,
     confirm: bool,
 ) -> Result<ImportOutcome> {
+    let normalized_workspace = match workspace {
+        Some(raw) => {
+            let norm = crate::types::normalize_workspace(raw)
+                .map_err(|error| EngramError::InvalidInput(error.to_string()))?;
+            if ctx
+                .principal
+                .is_some_and(|principal| !principal.allows_workspace(Some(&norm)))
+            {
+                return Err(EngramError::Unauthorized(
+                    "Markdown target workspace is not allowed".into(),
+                ));
+            }
+            Some(norm)
+        }
+        None => None,
+    };
     // Authorize and classify the entire batch before the first write. With
     // confirm, BEGIN IMMEDIATE excludes concurrent writers through application.
     let plans = inputs
         .iter()
-        .map(|input| plan(ctx, conn, input, workspace, force))
+        .map(|input| plan(ctx, conn, input, normalized_workspace.as_deref(), force))
         .collect::<Result<Vec<_>>>()?;
     let (mut synced, mut new, mut pending, mut conflicts, mut applied) = (0, 0, 0, 0, 0);
     let mut files = Vec::new();

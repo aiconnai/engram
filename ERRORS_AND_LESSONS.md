@@ -111,11 +111,11 @@ Tech Debt, Security, Performance, Fragile Areas
 **Right:** Map the registry channel to its SDK identifier explicitly and exclude only the metadata output from the artifact hash list. Exercise both channels twice and assert compatibility, source SHA and the exact archive hashes.
 **Date:** 2026-10-27
 
-### [Testing] `cargo package --no-verify` poisons `target/package/tmp-registry` for interdependent crates
-**Context:** Packaging unpublished interdependent workspace crates (`cargo package -p engram-types -p engram-core --registry crates-io --offline`) on Cargo 1.96.
-**Wrong:** Running `cargo package --no-verify` first in the default `target/` directory and then re-running `cargo package` without `--no-verify` in the same `target/` directory, which fails with `no hash listed for engram-types` because the `--no-verify` run wrote index entries without checksum hashes into `target/package/tmp-registry`.
-**Right:** Run verified `cargo package -p engram-types -p engram-core --registry crates-io --offline` against a clean `--target-dir` without running `--no-verify` in that directory first.
-**Date:** 2026-10-29
+### [Testing] `cargo package` with `--no-verify` or `--offline` fails `tmp-registry` verification for unpublished workspace crates
+**Context:** Packaging unpublished interdependent workspace crates (`engram-types` + `engram-core`) with `cargo package -p engram-types -p engram-core --registry crates-io --locked` on Cargo 1.96.
+**Wrong:** Running `cargo package --no-verify` first in a reused `--target-dir` (which writes hashless entries into `target/package/tmp-registry`), or passing `--offline` when `engram-types` is not yet published on crates.io (which reproduces `no hash listed for engram-types` on Cargo 1.96 even in a fresh `--target-dir`).
+**Right:** Run verified online `cargo package -p engram-types -p engram-core --registry crates-io --locked --target-dir <fresh-dir>` with normal crates.io index access and an isolated `--target-dir`, and never substitute `--no-verify` for acceptance.
+**Date:** 2026-11-12
 
 ### [Logic] `chrono` `%f` formats 9-digit nanoseconds without a decimal point (unlike SQLite `strftime('%f')`)
 **Context:** Formatting RFC3339 timestamps in Rust (`src/intelligence/consolidation_offline.rs`) to match SQLite's `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`.

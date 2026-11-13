@@ -5,19 +5,45 @@ use serde_json::{json, Value};
 use super::super::HandlerContext;
 use super::run_command;
 
+/// Whether the caller may see the server checkout's git state.
+fn may_read_server_git_state(ctx: &HandlerContext) -> bool {
+    use crate::auth::access::{allows_all_workspaces, principal_allows_mode, PermissionMode};
+
+    match ctx.principal.as_ref() {
+        None => true,
+        Some(principal) => {
+            allows_all_workspaces(principal)
+                || principal_allows_mode(principal, PermissionMode::Maintenance)
+        }
+    }
+}
+
 /// Return a structured summary of current project state for a fresh agent.
 ///
 /// Params:
 /// - `workspace` (optional string, defaults to "default")
 /// - `max_records` (optional integer, default 10, max 50)
 /// - `token_budget` (optional integer, default 2000)
-/// - `include_git` (optional bool, default true)
+/// - `include_git` (optional bool, default true; the server checkout's git state
+///   is returned as `null` to principals that cannot read all workspaces and lack
+///   maintenance rights)
 pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
-    let workspace = params
+    let raw_workspace = params
         .get("workspace")
         .and_then(|v| v.as_str())
-        .unwrap_or("default")
-        .to_string();
+        .unwrap_or("default");
+    let Ok(workspace) = crate::types::normalize_workspace(raw_workspace) else {
+        return json!({"error": "invalid workspace"});
+    };
+    if let Some(ref principal) = ctx.principal {
+        if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+            "harness_status",
+            principal,
+            Some(&workspace),
+        ) {
+            return denial;
+        }
+    }
 
     let max_records = params
         .get("max_records")
@@ -136,7 +162,10 @@ pub fn handle_harness_status(ctx: &HandlerContext, params: Value) -> Value {
     }
 
     // ── Optional git state ────────────────────────────────────────────────────
-    let git_state = if include_git {
+    // The checkout belongs to the server, not to a workspace: only the local
+    // owner, a principal that may read every workspace, or one with
+    // maintenance/admin rights may see it.
+    let git_state = if include_git && may_read_server_git_state(ctx) {
         let branch = run_command("git", &["branch", "--show-current"]);
         let dirty_raw = run_command("git", &["status", "--short"]);
         let dirty_files: Option<Vec<String>> =

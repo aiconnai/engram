@@ -134,7 +134,7 @@ try {
 ## Requirements
 
 - TypeScript >= 5.3
-- Node.js >= 18 (uses native `fetch`)
+- Node.js >= 22.12 (uses native `fetch`)
 
 ## Related
 

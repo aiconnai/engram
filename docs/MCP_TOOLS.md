@@ -4288,7 +4288,7 @@ Replay one memory as it existed at a given RFC3339 timestamp and optionally retu
 
 ### `memory_search_by_image`
 
-Search memories using an image as the query. Uses multimodal embeddings (CLIP-style) or falls back to describing the image via vision model and searching by description. Returns semantically similar memories — text or media — ranked by relevance.
+Search memories using an image as the query. Uses multimodal embeddings (CLIP-style) or falls back to describing the image via vision model and searching by description. Returns semantically similar memories — text or media — ranked by relevance. The image is read from a server path: with ENGRAM_MEDIA_BASE_DIR set the path is confined to that directory (read_only suffices); without it the call requires maintenance mode.
 
 - Tier: `advanced`
 - Group: `feature.multimodal`
@@ -4298,7 +4298,7 @@ Search memories using an image as the query. Uses multimodal embeddings (CLIP-st
 
 | Input | Type | Required | Summary |
 |-------|------|----------|---------|
-| `image_path` | `string` | yes | Path to the local image file to use as the search query |
+| `image_path` | `string` | yes | Path to the local image file to use as the search query (must be inside ENGRAM_MEDIA_BASE_DIR when set) |
 | `limit` | `integer` | no | Maximum number of results to return Default: `10`. |
 | `min_score` | `number` | no | Minimum similarity score (0.0-1.0) Minimum: `0`. Maximum: `1`. |
 | `workspace` | `string` | no | Restrict search to a specific workspace |

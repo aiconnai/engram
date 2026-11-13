@@ -443,6 +443,27 @@ fn resolve_hook_workspace(
     params: &Value,
     principal: Option<&engram::auth::TransportPrincipal>,
 ) -> Option<String> {
+    if let Some(raw_mode) = params
+        .get("_permission_mode")
+        .or_else(|| params.get("permission_mode"))
+        .filter(|v| !v.is_null())
+    {
+        let mode_str = raw_mode.as_str()?;
+        let mode = engram::mcp::permission::PermissionMode::parse(mode_str)?;
+        if mode < engram::mcp::permission::PermissionMode::ScopedWrite {
+            return None;
+        }
+    }
+    match std::env::var("ENGRAM_PERMISSION_MODE") {
+        Ok(raw) if !raw.trim().is_empty() => {
+            let mode = engram::mcp::permission::PermissionMode::parse(&raw)?;
+            if mode < engram::mcp::permission::PermissionMode::ScopedWrite {
+                return None;
+            }
+        }
+        Ok(_) | Err(std::env::VarError::NotPresent) => {}
+        Err(std::env::VarError::NotUnicode(_)) => return None,
+    }
     if let Some(p) = principal {
         if !p.has_permission(
             engram::auth::Permission::Write,

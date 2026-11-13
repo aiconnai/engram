@@ -189,6 +189,112 @@ pub fn memory_decay(ctx: &HandlerContext, params: Value) -> Value {
     result.unwrap_or_else(|e| json!({"error": e.to_string()}))
 }
 
+pub(crate) fn memory_decay_single(ctx: &HandlerContext, params: Value) -> Value {
+    let id = match required_id(&params) {
+        Ok(id) => id,
+        Err(error) => return error,
+    };
+    let dry_run = match optional_bool_param(&params, "dry_run") {
+        Ok(val) => val.unwrap_or(true),
+        Err(error) => return error,
+    };
+    let explicit_ws = match params.get("workspace") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(ws)) => match crate::types::normalize_workspace(ws) {
+            Ok(norm) => Some(norm),
+            Err(e) => return json!({"error": format!("Invalid workspace: {e}")}),
+        },
+        Some(_) => return json!({"error": "workspace must be a string"}),
+    };
+
+    if dry_run {
+        ctx.storage
+            .with_connection(|conn| {
+                crate::mcp::workspace_guard::ensure_memory_access(
+                    conn,
+                    ctx.principal.as_ref(),
+                    id,
+                )?;
+                let (workspace, candidate) = decay_candidate_for_memory(conn, id)?;
+                if let Some(ref req_ws) = explicit_ws {
+                    if req_ws != &workspace {
+                        return Err(EngramError::InvalidInput(format!(
+                            "memory {id} belongs to workspace '{workspace}', not '{req_ws}'"
+                        )));
+                    }
+                }
+                if let Some(ref p) = ctx.principal {
+                    if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+                        "memory_lifecycle_update",
+                        p,
+                        Some(&workspace),
+                    ) {
+                        return Ok(denial);
+                    }
+                }
+                Ok(json!({
+                    "memory_id": id,
+                    "workspace": workspace,
+                    "dry_run": true,
+                    "candidate_count": 1,
+                    "candidates": [candidate],
+                    "concern": "dry-run only; no policy or lifecycle rows mutated"
+                }))
+            })
+            .unwrap_or_else(|e| json!({"error": e.to_string()}))
+    } else {
+        ctx.storage
+            .with_transaction(|conn| {
+                crate::mcp::workspace_guard::ensure_memory_access(
+                    conn,
+                    ctx.principal.as_ref(),
+                    id,
+                )?;
+                let (workspace, candidate) = decay_candidate_for_memory(conn, id)?;
+                if let Some(ref req_ws) = explicit_ws {
+                    if req_ws != &workspace {
+                        return Err(EngramError::InvalidInput(format!(
+                            "memory {id} belongs to workspace '{workspace}', not '{req_ws}'"
+                        )));
+                    }
+                }
+                if let Some(ref p) = ctx.principal {
+                    if let Some(denial) = crate::mcp::permission::permission_denial_for_principal(
+                        "memory_lifecycle_update",
+                        p,
+                        Some(&workspace),
+                    ) {
+                        return Ok(denial);
+                    }
+                }
+                let policy = upsert_policy_record(
+                    conn,
+                    PolicyRecordInput {
+                        memory_id: candidate.memory_id,
+                        salience_score: candidate.new_salience_score,
+                        retention_score: candidate.new_retention_score,
+                        retrieval_priority: candidate.new_retrieval_priority,
+                        policy_version: "heuristic-v1".to_string(),
+                        policy_reason: candidate.reason.clone(),
+                    },
+                )?;
+                emit_policy_event(conn, "memory_decay", &policy, false);
+                Ok(json!({
+                    "memory_id": id,
+                    "workspace": workspace,
+                    "dry_run": false,
+                    "candidate_count": 1,
+                    "policy_updates": 1,
+                    "lifecycle_updates": 0,
+                    "candidates": [candidate],
+                    "policy": policy,
+                    "concern": "apply is conservative: only memory_policy scores are updated; use lifecycle_run for lifecycle transitions"
+                }))
+            })
+            .unwrap_or_else(|e| json!({"error": e.to_string()}))
+    }
+}
+
 pub fn memory_explain(ctx: &HandlerContext, params: Value) -> Value {
     let id = match required_id(&params) {
         Ok(id) => id,
@@ -341,6 +447,47 @@ struct DecayCandidate {
     reason: String,
 }
 
+fn decay_candidate_for_memory(
+    conn: &rusqlite::Connection,
+    id: MemoryId,
+) -> Result<(String, DecayCandidate)> {
+    let (memory, stored_policy, _features, score) = score_memory(conn, id)?;
+    let current_salience = stored_policy
+        .as_ref()
+        .map(|p| p.salience_score)
+        .unwrap_or(score.salience_score);
+    let current_retention = stored_policy
+        .as_ref()
+        .map(|p| p.retention_score)
+        .unwrap_or(score.retention_score);
+    let current_priority = stored_policy
+        .as_ref()
+        .map(|p| p.retrieval_priority)
+        .unwrap_or(score.retrieval_priority);
+
+    let new_salience = decay_score(current_salience);
+    let new_retention = decay_score(current_retention);
+    let new_priority = decay_score(current_priority);
+    let lifecycle_target = None;
+    let workspace = memory.workspace.clone();
+
+    Ok((
+        workspace,
+        DecayCandidate {
+            memory_id: id,
+            current_salience_score: current_salience,
+            current_retention_score: current_retention,
+            current_retrieval_priority: current_priority,
+            new_salience_score: new_salience,
+            new_retention_score: new_retention,
+            new_retrieval_priority: new_priority,
+            lifecycle_state: memory.lifecycle_state.to_string(),
+            lifecycle_target,
+            reason: format!("memory_decay:{}", score.policy_reason),
+        },
+    ))
+}
+
 fn decay_candidates(conn: &rusqlite::Connection, workspace: &str) -> Result<Vec<DecayCandidate>> {
     let mut stmt = conn.prepare(
         "SELECT id
@@ -355,37 +502,8 @@ fn decay_candidates(conn: &rusqlite::Connection, workspace: &str) -> Result<Vec<
 
     let mut candidates = Vec::with_capacity(ids.len());
     for id in ids {
-        let (memory, stored_policy, _features, score) = score_memory(conn, id)?;
-        let current_salience = stored_policy
-            .as_ref()
-            .map(|p| p.salience_score)
-            .unwrap_or(score.salience_score);
-        let current_retention = stored_policy
-            .as_ref()
-            .map(|p| p.retention_score)
-            .unwrap_or(score.retention_score);
-        let current_priority = stored_policy
-            .as_ref()
-            .map(|p| p.retrieval_priority)
-            .unwrap_or(score.retrieval_priority);
-
-        let new_salience = decay_score(current_salience);
-        let new_retention = decay_score(current_retention);
-        let new_priority = decay_score(current_priority);
-        let lifecycle_target = None;
-
-        candidates.push(DecayCandidate {
-            memory_id: id,
-            current_salience_score: current_salience,
-            current_retention_score: current_retention,
-            current_retrieval_priority: current_priority,
-            new_salience_score: new_salience,
-            new_retention_score: new_retention,
-            new_retrieval_priority: new_priority,
-            lifecycle_state: memory.lifecycle_state.to_string(),
-            lifecycle_target,
-            reason: format!("memory_decay:{}", score.policy_reason),
-        });
+        let (_workspace, candidate) = decay_candidate_for_memory(conn, id)?;
+        candidates.push(candidate);
     }
 
     Ok(candidates)

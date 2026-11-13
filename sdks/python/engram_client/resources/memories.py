@@ -423,4 +423,6 @@ class MemoriesMixin(ResourceMixin):
             params["dry_run"] = dry_run
         if persist is not None:
             params["persist"] = persist
+        elif action == "score" and dry_run is not None:
+            params["persist"] = not dry_run
         return await self._mcp_call("memory_lifecycle_update", params)

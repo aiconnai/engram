@@ -188,6 +188,85 @@ class ReleaseBundleRoundTripTests(unittest.TestCase):
             self.assertEqual(verify().returncode, 0)
             self.assertEqual(list(scratch.iterdir()), [])
 
+    def test_sign_candidate_manifest_key_cli_and_leading_dash_edge_cases(self) -> None:
+        helper = SCRIPT.parent / "sign-candidate-manifest.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scratch = root / "tmp"
+            scratch.mkdir()
+            env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "TMPDIR": str(scratch)}
+            manifest = root / "manifest.json"
+            signature = root / "manifest.sig"
+            manifest.write_text('{"commit":"edge-cases"}\n', encoding="utf-8")
+            command = ["bash", str(helper)]
+
+            corrupt_key = root / "corrupt.pem"
+            corrupt_key.write_text("not a pem key\n", encoding="utf-8")
+            corrupt = subprocess.run(
+                [*command, "--manifest", str(manifest), "--key", str(corrupt_key), "--signature", str(signature)],
+                env=env, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=10,
+            )
+            self.assertNotEqual(corrupt.returncode, 0)
+            self.assertIn("failed to extract public key from signing key", corrupt.stderr)
+
+            enc_key = root / "encrypted.pem"
+            subprocess.run(
+                [
+                    "openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048",
+                    "-aes-256-cbc", "-pass", "pass:secret-passphrase", "-out", str(enc_key),
+                ],
+                check=True, capture_output=True, text=True, timeout=15,
+            )
+            encrypted = subprocess.run(
+                [*command, "--manifest", str(manifest), "--key", str(enc_key), "--signature", str(signature)],
+                env=env, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=10,
+            )
+            self.assertNotEqual(encrypted.returncode, 0)
+            self.assertIn("failed to extract public key from signing key", encrypted.stderr)
+
+            ec_key = root / "ec.pem"
+            subprocess.run(
+                ["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256", "-out", str(ec_key)],
+                check=True, capture_output=True, text=True, timeout=15,
+            )
+            non_rsa = subprocess.run(
+                [*command, "--manifest", str(manifest), "--key", str(ec_key), "--signature", str(signature)],
+                env=env, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=10,
+            )
+            self.assertNotEqual(non_rsa.returncode, 0)
+            self.assertIn("signing key must be RSA", non_rsa.stderr)
+
+            for bad_args, expected_msg in (
+                (["--manifest", str(manifest), "--signature"], "--signature requires a value"),
+                (["--manifest", str(manifest), "--key", "--signature", str(signature)], "--key requires a value"),
+            ):
+                missing = subprocess.run(
+                    [*command, *bad_args],
+                    env=env, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=10,
+                )
+                self.assertNotEqual(missing.returncode, 0)
+                self.assertIn(expected_msg, missing.stderr)
+
+            dash_dir = root / "dash"
+            dash_dir.mkdir()
+            (dash_dir / "-manifest.json").write_text('{"commit":"leading-dash"}\n', encoding="utf-8")
+            rsa_key = dash_dir / "-key.pem"
+            subprocess.run(
+                ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(rsa_key)],
+                check=True, capture_output=True, text=True, timeout=15,
+            )
+            dash_signed = subprocess.run(
+                [*command, "--manifest", "-manifest.json", "--key", "-key.pem", "--signature", "-manifest.sig"],
+                cwd=dash_dir, env=env, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=15,
+            )
+            self.assertEqual(dash_signed.returncode, 0, dash_signed.stdout + dash_signed.stderr)
+            dash_verified = subprocess.run(
+                [*command, "--verify", "-manifest.json", "--signature", "-manifest.sig"],
+                cwd=dash_dir, env=env, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=15,
+            )
+            self.assertEqual(dash_verified.returncode, 0, dash_verified.stdout + dash_verified.stderr)
+            self.assertEqual(list(scratch.iterdir()), [])
+
 
 class PdfWorkerPackagingContractTests(unittest.TestCase):
     def setUp(self) -> None:

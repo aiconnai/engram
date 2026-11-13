@@ -468,6 +468,26 @@ fn build_operational_context(
         request.current_commit_hash.as_deref(),
     );
 
+    // The inner call must not reach anything the caller would be denied by
+    // invoking `context_build_bundle` directly (its `workspace` is an alias for
+    // `workspace_path_hash`, so a workspace claim cannot bind it).
+    if let Some(denial) = crate::mcp::permission::check_tool_authorization(
+        None,
+        "context_build_bundle",
+        &params,
+        ctx.principal.as_ref(),
+    ) {
+        warnings.push(
+            "context_build_bundle denied for this principal; operational context withheld"
+                .to_string(),
+        );
+        return json!({
+            "included": false,
+            "reason": "permission_denied",
+            "error": denial.pointer("/error/code").cloned().unwrap_or(Value::Null),
+        });
+    }
+
     let response = context::context_build_bundle(ctx, params);
     if let Some(error) = response.get("error").and_then(Value::as_str) {
         warnings.push(format!("context_build_bundle failed: {error}"));

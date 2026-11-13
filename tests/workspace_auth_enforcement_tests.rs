@@ -1348,6 +1348,18 @@ fn test_lifecycle_and_policy_id_scoped_tools_prevent_foreign_idor() {
             "memory_set_expiration",
             json!({"id": foreign_id, "ttl_seconds": 120, "workspace": OWN_WS}),
         ),
+        (
+            "memory_compress",
+            json!({"id": foreign_id, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_decompress",
+            json!({"id": foreign_id, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_compress_for_context",
+            json!({"ids": [foreign_id], "workspace": OWN_WS}),
+        ),
     ];
 
     for (tool, params) in dispatch_attempts {
@@ -1432,6 +1444,18 @@ fn test_lifecycle_and_policy_id_scoped_tools_prevent_foreign_idor() {
         (
             "memory_set_expiration",
             json!({"id": own_id, "ttl_seconds": 3600, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_compress",
+            json!({"id": own_id, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_decompress",
+            json!({"id": own_id, "workspace": OWN_WS}),
+        ),
+        (
+            "memory_compress_for_context",
+            json!({"ids": [own_id], "workspace": OWN_WS}),
         ),
         (
             "memory_decay",

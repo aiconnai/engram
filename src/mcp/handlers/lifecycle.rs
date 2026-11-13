@@ -718,8 +718,6 @@ pub fn retention_policy_apply(ctx: &HandlerContext, params: Value) -> Value {
 
 /// Unified facade for memory lifecycle mutations: promotion, decay, expiration, and scoring.
 pub fn memory_lifecycle_update(ctx: &HandlerContext, params: Value) -> Value {
-    use rusqlite::OptionalExtension;
-
     let action = match params.get("action") {
         None | Some(Value::Null) => "promote",
         Some(Value::String(s)) => s.as_str(),
@@ -735,52 +733,7 @@ pub fn memory_lifecycle_update(ctx: &HandlerContext, params: Value) -> Value {
             }
             super::memory_policy::memory_promote(ctx, p)
         }
-        "decay" => {
-            let mut p = params;
-            let Some(id) = p.get("id").and_then(|v| v.as_i64()) else {
-                return json!({"error": "id is required"});
-            };
-            let claimed_workspace = match p.get("workspace") {
-                None | Some(Value::Null) => None,
-                Some(Value::String(raw)) => match crate::types::normalize_workspace(raw) {
-                    Ok(ws) => Some(ws),
-                    Err(e) => return json!({"error": e.to_string()}),
-                },
-                Some(_) => return json!({"error": "workspace must be a string"}),
-            };
-            let lookup = ctx.storage.with_connection(|conn| {
-                crate::mcp::workspace_guard::ensure_memory_access(
-                    conn,
-                    ctx.principal.as_ref(),
-                    id,
-                )?;
-                let ws: Option<String> = conn
-                    .query_row(
-                        "SELECT workspace FROM memories WHERE id = ?1 AND valid_to IS NULL",
-                        [id],
-                        |row| row.get(0),
-                    )
-                    .optional()?;
-                ws.ok_or(crate::error::EngramError::NotFound(id))
-            });
-            let mem_ws = match lookup {
-                Ok(ws) => ws,
-                Err(e) => return json!({"error": e.to_string()}),
-            };
-            if let Some(ref claimed) = claimed_workspace {
-                if claimed != &mem_ws {
-                    return json!({
-                        "error": format!(
-                            "workspace mismatch for memory {id}: requested '{claimed}', memory belongs to '{mem_ws}'"
-                        )
-                    });
-                }
-            }
-            if let Value::Object(ref mut map) = p {
-                map.insert("workspace".to_string(), json!(mem_ws));
-            }
-            super::memory_policy::memory_decay(ctx, p)
-        }
+        "decay" => super::memory_policy::memory_decay_single(ctx, params),
         "expire" | "set_expiration" => super::memory_crud::set_expiration(ctx, params),
         "score" => super::memory_policy::memory_score(ctx, params),
         "explain" => super::memory_policy::memory_explain(ctx, params),
@@ -1333,7 +1286,7 @@ mod lifecycle_tests {
     #[test]
     fn test_memory_lifecycle_update_decay_requires_integer_id_and_matching_workspace() {
         let ctx = test_ctx();
-        let (ws_a_id, ws_b_id) = ctx
+        let (ws_a_id, ws_a_sibling_id, ws_b_id) = ctx
             .storage
             .with_transaction(|conn| {
                 conn.execute(
@@ -1344,41 +1297,39 @@ mod lifecycle_tests {
                 let a = conn.last_insert_rowid();
                 conn.execute(
                     "INSERT INTO memories (content, memory_type, workspace, tier, importance, access_count, lifecycle_state)
+                     VALUES ('decay sibling in ws-a', 'note', 'ws-a', 'permanent', 0.8, 0, 'active')",
+                    [],
+                )?;
+                let a_sibling = conn.last_insert_rowid();
+                conn.execute(
+                    "INSERT INTO memories (content, memory_type, workspace, tier, importance, access_count, lifecycle_state)
                      VALUES ('decay row b', 'note', 'ws-b', 'permanent', 0.8, 0, 'active')",
                     [],
                 )?;
                 let b = conn.last_insert_rowid();
-                Ok((a, b))
+                Ok((a, a_sibling, b))
             })
             .expect("seed memories");
-        let _ = crate::mcp::handlers::memory_policy::memory_score(
-            &ctx,
-            json!({"id": ws_a_id, "persist": true}),
-        );
-        let _ = crate::mcp::handlers::memory_policy::memory_score(
-            &ctx,
-            json!({"id": ws_b_id, "persist": true}),
-        );
-        let score_a_before: f64 = ctx
-            .storage
-            .with_connection(|conn| {
-                Ok(conn.query_row(
-                    "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
-                    [ws_a_id],
-                    |row| row.get(0),
-                )?)
-            })
-            .expect("read initial ws-a retention_score");
-        let score_b_before: f64 = ctx
-            .storage
-            .with_connection(|conn| {
-                Ok(conn.query_row(
-                    "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
-                    [ws_b_id],
-                    |row| row.get(0),
-                )?)
-            })
-            .expect("read initial ws-b retention_score");
+        for id in [ws_a_id, ws_a_sibling_id, ws_b_id] {
+            let _ = crate::mcp::handlers::memory_policy::memory_score(
+                &ctx,
+                json!({"id": id, "persist": true}),
+            );
+        }
+        let read_score = |id: i64| -> f64 {
+            ctx.storage
+                .with_connection(|conn| {
+                    Ok(conn.query_row(
+                        "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
+                        [id],
+                        |row| row.get(0),
+                    )?)
+                })
+                .expect("read retention_score")
+        };
+        let score_a_before = read_score(ws_a_id);
+        let score_a_sibling_before = read_score(ws_a_sibling_id);
+        let score_b_before = read_score(ws_b_id);
 
         for invalid in [
             json!({"action": "decay", "dry_run": false}),
@@ -1401,31 +1352,23 @@ mod lifecycle_tests {
             valid_ok.get("error").is_none(),
             "matching normalized workspace should succeed: {valid_ok}"
         );
-        let score_a_after: f64 = ctx
-            .storage
-            .with_connection(|conn| {
-                Ok(conn.query_row(
-                    "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
-                    [ws_a_id],
-                    |row| row.get(0),
-                )?)
-            })
-            .expect("read ws-a retention_score");
+        assert_eq!(valid_ok["memory_id"], json!(ws_a_id));
+        assert_eq!(valid_ok["candidate_count"], json!(1));
+        assert_eq!(valid_ok["policy_updates"], json!(1));
+
+        let score_a_after = read_score(ws_a_id);
         assert!(
             score_a_after < score_a_before,
-            "ws-a policy score should decay ({score_a_before} -> {score_a_after})"
+            "ws-a target policy score should decay ({score_a_before} -> {score_a_after})"
         );
 
-        let score_b_after: f64 = ctx
-            .storage
-            .with_connection(|conn| {
-                Ok(conn.query_row(
-                    "SELECT retention_score FROM memory_policy WHERE memory_id = ?1",
-                    [ws_b_id],
-                    |row| row.get(0),
-                )?)
-            })
-            .expect("read ws-b retention_score");
+        let score_a_sibling_after = read_score(ws_a_sibling_id);
+        assert!(
+            (score_a_sibling_after - score_a_sibling_before).abs() < 1e-6,
+            "sibling memory in ws-a must remain untouched ({score_a_sibling_before}), got {score_a_sibling_after}"
+        );
+
+        let score_b_after = read_score(ws_b_id);
         assert!(
             (score_b_after - score_b_before).abs() < 1e-6,
             "ws-b policy score must remain untouched ({score_b_before}), got {score_b_after}"

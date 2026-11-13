@@ -14,7 +14,7 @@ use axum::{
     Json, Router,
 };
 use serde_json::json;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use super::super::protocol::McpHandler;
 use super::events::handle_events;
@@ -77,45 +77,33 @@ async fn handle_health(State(state): State<AppState>) -> impl IntoResponse {
 
 /// Return `true` if `origin` is permitted according to `ENGRAM_CORS_ORIGINS`.
 ///
-/// - Unset → only `http://localhost` and `http://127.0.0.1` prefixes allowed.
-/// - `*`   → all origins allowed (opt-in).
-/// - Comma-separated list → exact match required.
+/// - Unset or blank → loopback `http`/`https` origins (`localhost`, `127.0.0.1`, `[::1]`, any port).
+/// - `*`   → all non-empty origins allowed (opt-in).
+/// - Comma-separated list → exact match required (empty entries ignored).
 #[allow(dead_code)]
 pub(crate) fn cors_origin_allowed(origin: &str) -> bool {
-    match env::var("ENGRAM_CORS_ORIGINS") {
-        Err(_) => origin.starts_with("http://localhost") || origin.starts_with("http://127.0.0.1"),
-        Ok(val) if val.trim() == "*" => true,
-        Ok(val) => val.split(',').any(|s| s.trim() == origin),
-    }
+    HttpSecurityConfig::from_cors_env_str(env::var("ENGRAM_CORS_ORIGINS").ok().as_deref())
+        .origin_allowed(origin)
 }
 
-/// Build a `CorsLayer` honouring `ENGRAM_CORS_ORIGINS`.
-fn build_cors_layer() -> CorsLayer {
-    match env::var("ENGRAM_CORS_ORIGINS") {
-        Ok(val) if val.trim() == "*" => CorsLayer::new()
+/// Build a `CorsLayer` honouring `security`'s CORS origin policy so preflight
+/// `Access-Control-Allow-Origin` and keyless `Origin` validation stay identical.
+fn build_cors_layer(security: &HttpSecurityConfig) -> CorsLayer {
+    if security.allows_any_cors_origin() {
+        CorsLayer::new()
             .allow_origin(Any)
             .allow_methods(Any)
-            .allow_headers(Any),
-        Ok(val) => {
-            let origins: Vec<HeaderValue> = val
-                .split(',')
-                .filter_map(|s| s.trim().parse::<HeaderValue>().ok())
-                .collect();
-            CorsLayer::new()
-                .allow_origin(origins)
-                .allow_methods(Any)
-                .allow_headers(Any)
-        }
-        Err(_) => {
-            let origins: Vec<HeaderValue> = ["http://localhost", "http://127.0.0.1"]
-                .iter()
-                .filter_map(|s| s.parse::<HeaderValue>().ok())
-                .collect();
-            CorsLayer::new()
-                .allow_origin(origins)
-                .allow_methods(Any)
-                .allow_headers(Any)
-        }
+            .allow_headers(Any)
+    } else {
+        let cors_security = security.clone();
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _req| {
+                origin
+                    .to_str()
+                    .is_ok_and(|value| cors_security.origin_allowed(value))
+            }))
+            .allow_methods(Any)
+            .allow_headers(Any)
     }
 }
 
@@ -170,7 +158,7 @@ pub(super) fn build_router(
         security,
     };
 
-    let cors = build_cors_layer();
+    let cors = build_cors_layer(&state.security);
 
     let mcp_routes = Router::new()
         .route("/mcp", post(handle_mcp))

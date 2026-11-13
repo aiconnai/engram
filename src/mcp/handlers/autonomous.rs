@@ -361,25 +361,59 @@ pub fn memory_agent_stop(_ctx: &HandlerContext, params: Value) -> Value {
 // ── memory_agent_status ───────────────────────────────────────────────────────
 
 /// Return agent status information.
+///
+/// `total_memories` is global for the local owner and for principals that may
+/// read every workspace. A restricted principal gets the count of the requested
+/// workspace only, and no count at all when that workspace is not readable.
 pub fn memory_agent_status(ctx: &HandlerContext, params: Value) -> Value {
-    use crate::storage::queries::get_stats;
-
     let workspace = params
         .get("workspace")
         .and_then(|v| v.as_str())
         .unwrap_or("default");
 
-    ctx.storage
-        .with_connection(|conn| {
-            let stats = get_stats(conn)?;
-            Ok(json!({
+    let count = ctx
+        .storage
+        .with_connection(|conn| match ctx.principal.as_ref() {
+            Some(principal) if !crate::mcp::permission::allows_all_workspaces(principal) => {
+                readable_workspace_count(conn, principal, workspace)
+            }
+            _ => crate::storage::queries::get_stats(conn).map(|stats| Some(stats.total_memories)),
+        });
+
+    match count {
+        Ok(total_memories) => {
+            let mut status = json!({
                 "workspace": workspace,
-                "total_memories": stats.total_memories,
                 "agent_model": "tick-based",
                 "status": "idle",
-            }))
-        })
-        .unwrap_or_else(|e| json!({"error": e.to_string()}))
+            });
+            if let (Some(total), Some(map)) = (total_memories, status.as_object_mut()) {
+                map.insert("total_memories".to_string(), json!(total));
+            }
+            status
+        }
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
+/// Active memories in `workspace`, or `None` when the principal may not read it.
+fn readable_workspace_count(
+    conn: &rusqlite::Connection,
+    principal: &crate::auth::TransportPrincipal,
+    workspace: &str,
+) -> crate::error::Result<Option<i64>> {
+    let Ok(normalized) = crate::types::normalize_workspace(workspace) else {
+        return Ok(None);
+    };
+    if !principal.allows_workspace(Some(&normalized)) {
+        return Ok(None);
+    }
+    let count = conn.query_row(
+        "SELECT COUNT(*) FROM memories WHERE workspace = ?1 AND valid_to IS NULL",
+        [&normalized],
+        |row| row.get(0),
+    )?;
+    Ok(Some(count))
 }
 
 // ── memory_agent_metrics ──────────────────────────────────────────────────────

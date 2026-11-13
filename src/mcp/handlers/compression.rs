@@ -101,13 +101,12 @@ pub fn memory_compress_for_context(ctx: &HandlerContext, params: Value) -> Value
         let mut inputs: Vec<MemoryInput> = Vec::new();
         for &id in &ids {
             crate::mcp::workspace_guard::ensure_memory_access(conn, ctx.principal.as_ref(), id)?;
-            if let Ok(m) = get_memory(conn, id) {
-                inputs.push(MemoryInput {
-                    id: m.id,
-                    content: m.content,
-                    importance: m.importance,
-                });
-            }
+            let m = get_memory(conn, id)?;
+            inputs.push(MemoryInput {
+                id: m.id,
+                content: m.content,
+                importance: m.importance,
+            });
         }
 
         let mut compressor = ContextCompressor::new(token_budget);

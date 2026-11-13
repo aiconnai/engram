@@ -133,6 +133,12 @@ async def test_memories_mixin_methods(mock_client):
         {"id": 42, "action": "decay", "workspace": "ws-a", "dry_run": True},
     )
 
+    await mock_client.lifecycle_update(42, action="score", dry_run=False)
+    mock_client._mcp_call.assert_awaited_with(
+        "memory_lifecycle_update",
+        {"id": 42, "action": "score", "dry_run": False, "persist": True},
+    )
+
 
 @pytest.mark.asyncio
 async def test_search_mixin_methods(mock_client):

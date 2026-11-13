@@ -542,6 +542,43 @@ crate::engram_server_only! {
             }),
         };
         let _ = handler.handle_request_as(bad_call, None);
+
+        // Per-call `_permission_mode: "read_only"` must also suppress SessionStart and PostToolUse writes.
+        let ro_mode_init = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(3)),
+            method: methods::INITIALIZE.to_string(),
+            params: json!({
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "workspace": "default",
+                "session_id": "s-ro-mode",
+                "_permission_mode": "read_only"
+            }),
+        };
+        let ro_mode_init_resp = handler.handle_request_as(ro_mode_init, None);
+        assert!(
+            ro_mode_init_resp
+                .result
+                .expect("read_only mode initialize must succeed")
+                .get("pending_injections")
+                .is_none(),
+            "_permission_mode=read_only must not drain pending_injections on SessionStart"
+        );
+        let ro_mode_call = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(4)),
+            method: methods::CALL_TOOL.to_string(),
+            params: json!({
+                "name": "memory_expand",
+                "arguments": {
+                    "ids": [mem_id],
+                    "workspace": "default",
+                    "_permission_mode": "read_only"
+                }
+            }),
+        };
+        let _ = handler.handle_request_as(ro_mode_call, None);
+
         let policy = handler
             .storage
             .with_connection(|conn| get_policy_record(conn, mem_id))

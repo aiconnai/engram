@@ -23,12 +23,12 @@ cleanup() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --artifact-dir) artifact_dir=${2:-}; shift 2 ;;
-    --expected-sha) expected_sha=${2:-}; shift 2 ;;
-    --manifest) manifest=${2:-}; shift 2 ;;
-    --run-id) run_id=${2:-}; shift 2 ;;
-    --channel) channel=${2:-}; shift 2 ;;
-    --write-metadata) mode="write"; channel=${2:-}; shift 2 ;;
+    --artifact-dir) [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || die "--artifact-dir requires a value"; artifact_dir="$2"; shift 2 ;;
+    --expected-sha) [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || die "--expected-sha requires a value"; expected_sha="$2"; shift 2 ;;
+    --manifest) [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || die "--manifest requires a value"; manifest="$2"; shift 2 ;;
+    --run-id) [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || die "--run-id requires a value"; run_id="$2"; shift 2 ;;
+    --channel) [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || die "--channel requires a value"; channel="$2"; shift 2 ;;
+    --write-metadata) [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || die "--write-metadata requires python or npm"; mode="write"; channel="$2"; shift 2 ;;
     --live) run_live=true; shift ;;
     --self-test-version-mismatch)
       tmp="$(mktemp -d "${TMPDIR:-/tmp}/engram-sdk-mismatch.XXXXXX")"

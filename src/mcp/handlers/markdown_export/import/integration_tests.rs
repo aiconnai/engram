@@ -429,3 +429,53 @@ fn test_import_stages_file_without_engram_id_as_new() {
     );
     assert_eq!(r_confirmed["applied"].as_i64(), Some(1));
 }
+
+#[test]
+fn test_import_rejects_cross_workspace_overwrite_on_explicit_workspace() {
+    let c = ctx();
+    let beta_id = c
+        .storage
+        .with_connection(|conn| {
+            crate::storage::queries::create_memory(
+                conn,
+                &crate::types::CreateMemoryInput {
+                    content: "beta original".to_string(),
+                    workspace: Some("beta".to_string()),
+                    ..Default::default()
+                },
+            )
+        })
+        .unwrap()
+        .id;
+
+    let dir = tempfile::tempdir().unwrap();
+    write_md(
+        dir.path(),
+        "cross.md",
+        Some(beta_id),
+        1,
+        &[],
+        0.5,
+        "attempt overwrite from alpha import",
+        &[],
+    );
+
+    let err = memory_import_markdown(
+        &c,
+        json!({
+            "input_dir": dir.path().to_str().unwrap(),
+            "workspace": "alpha",
+            "confirm": true
+        }),
+    );
+    assert_eq!(
+        err["error"]["code"].as_str(),
+        Some("invalid_params"),
+        "explicit workspace override must reject overwriting a memory stored in another workspace: {err}"
+    );
+    assert_eq!(
+        db_row(&c, beta_id).0,
+        "beta original",
+        "beta memory must remain untouched"
+    );
+}

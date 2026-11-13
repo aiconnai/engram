@@ -619,6 +619,28 @@ describe("EngramClient", () => {
         workspace: "ws-a",
         dry_run: true,
       });
+
+      await client.admin.embeddingMigrate({
+        targetModel: "voyage-3",
+        dryRun: true,
+      });
+      expect(requestMethod(23)).toBe("memory_embedding_migrate");
+      expect(requestArguments(23)).toEqual({
+        target_model: "voyage-3",
+        dry_run: true,
+      });
+
+      await client.admin.lifecycleUpdate(10, {
+        action: "score",
+        dryRun: false,
+      });
+      expect(requestMethod(24)).toBe("memory_lifecycle_update");
+      expect(requestArguments(24)).toEqual({
+        id: 10,
+        action: "score",
+        dry_run: false,
+        persist: true,
+      });
     });
   });
 
@@ -1026,6 +1048,34 @@ describe("EngramClient", () => {
           dryRun: true,
         })
       ).rejects.toThrow(/cannot both be true/);
+
+      await expect(
+        client.vaultImport({
+          inputDir: "./vault",
+          confirm: false,
+          dryRun: false,
+        })
+      ).rejects.toThrow(/cannot both be false/);
+
+      mockFetch.mockResolvedValueOnce(
+        okResponse({
+          scanned: 2,
+          in_sync: 1,
+          new: 0,
+          pending: 1,
+          conflict: 0,
+          applied: 1,
+          dry_run: false,
+        })
+      );
+      await client.vaultImport({
+        inputDir: "./vault",
+        dryRun: false,
+      });
+      expect(requestArguments(1)).toEqual({
+        input_dir: "./vault",
+        confirm: true,
+      });
     });
 
     it("should preview vault import with dryRun", async () => {

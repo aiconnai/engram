@@ -40,6 +40,9 @@ pub fn memory_describe_image(ctx: &HandlerContext, params: Value) -> Value {
         Err(e) => return json!({"error": format!("Vision provider not configured: {}", e)}),
     };
 
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&image_path) {
+        return json!({"error": e.to_string()});
+    }
     let validated_path = match validate_media_path(&image_path) {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
@@ -99,6 +102,9 @@ pub fn memory_transcribe_audio(ctx: &HandlerContext, params: Value) -> Value {
         None => return json!({"error": "audio_path is required"}),
     };
 
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&audio_path) {
+        return json!({"error": e.to_string()});
+    }
     let validated_audio = match validate_media_path(&audio_path) {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
@@ -209,6 +215,9 @@ pub fn memory_process_video(ctx: &HandlerContext, params: Value) -> Value {
         Err(e) => return json!({"error": format!("Vision provider not configured: {}", e)}),
     };
 
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&video_path) {
+        return json!({"error": e.to_string()});
+    }
     let validated_video = match validate_media_path(&video_path) {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
@@ -344,7 +353,9 @@ fn query_media_assets(
 /// no multimodal embedder is available.
 ///
 /// Required params:
-/// - `image_path` (string) — path to the local image file
+/// - `image_path` (string) — path to the local image file. Confined to
+///   `ENGRAM_MEDIA_BASE_DIR` when set; otherwise the permission layer requires
+///   `maintenance` mode (`required_mode_for_call`).
 ///
 /// Optional params:
 /// - `limit` (integer, default 10) — maximum results
@@ -380,6 +391,9 @@ pub fn memory_search_by_image(ctx: &HandlerContext, params: Value) -> Value {
     let _ = strategy;
 
     // Step 1: Validate and read the image file
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&image_path) {
+        return json!({"error": e.to_string()});
+    }
     let validated_image = match validate_media_path(&image_path) {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
@@ -572,6 +586,9 @@ pub fn memory_ingest_media(ctx: &HandlerContext, params: Value) -> Value {
         None => return json!({"error": "media_path is required"}),
     };
 
+    if let Err(e) = ctx.storage.refuse_active_sqlite_artifact(&media_path) {
+        return json!({"error": e.to_string()});
+    }
     let validated_path = match validate_media_path(&media_path) {
         Ok(p) => p,
         Err(e) => return json!({"error": e.to_string()}),
@@ -818,7 +835,10 @@ fn validate_media_path(path: &str) -> crate::error::Result<std::path::PathBuf> {
     let canonical = std::fs::canonicalize(path)
         .map_err(|e| EngramError::InvalidInput(format!("media path is not accessible: {}", e)))?;
 
-    if let Ok(base_str) = std::env::var("ENGRAM_MEDIA_BASE_DIR") {
+    if let Some(base_str) = std::env::var("ENGRAM_MEDIA_BASE_DIR")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
         let base = std::fs::canonicalize(&base_str).map_err(|e| {
             EngramError::InvalidInput(format!("ENGRAM_MEDIA_BASE_DIR is not accessible: {}", e))
         })?;

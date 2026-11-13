@@ -66,10 +66,32 @@ impl HttpSecurityConfig {
             allowed_hosts: std::env::var(ALLOWED_HOSTS_ENV)
                 .map(|value| Self::parse_allowed_hosts(&value))
                 .unwrap_or_default(),
-            cors_origins: std::env::var(CORS_ORIGINS_ENV).ok(),
+            cors_origins: Self::normalize_cors_origins(std::env::var(CORS_ORIGINS_ENV).ok()),
             max_body_bytes,
             request_timeout: std::time::Duration::from_millis(request_timeout_ms),
         })
+    }
+
+    pub(super) fn normalize_cors_origins(value: Option<String>) -> Option<String> {
+        value.and_then(|raw| {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+    }
+
+    pub(super) fn from_cors_env_str(cors_origins: Option<&str>) -> Self {
+        Self {
+            cors_origins: Self::normalize_cors_origins(cors_origins.map(str::to_string)),
+            ..Self::default()
+        }
+    }
+
+    pub(super) fn allows_any_cors_origin(&self) -> bool {
+        self.cors_origins.as_deref() == Some("*")
     }
 
     pub(super) fn parse_allowed_hosts(value: &str) -> Vec<String> {
@@ -83,7 +105,7 @@ impl HttpSecurityConfig {
     #[cfg(test)]
     pub(super) fn with_browser_policy(mut self, hosts: &str, cors_origins: Option<&str>) -> Self {
         self.allowed_hosts = Self::parse_allowed_hosts(hosts);
-        self.cors_origins = cors_origins.map(str::to_string);
+        self.cors_origins = Self::normalize_cors_origins(cors_origins.map(str::to_string));
         self
     }
 
@@ -137,18 +159,21 @@ impl HttpSecurityConfig {
         }
     }
 
-    fn origin_allowed(&self, origin: &str) -> bool {
-        match self.cors_origins.as_deref().map(str::trim) {
+    pub(super) fn origin_allowed(&self, origin: &str) -> bool {
+        let origin = origin.trim();
+        if origin.is_empty() {
+            return false;
+        }
+        match self.cors_origins.as_deref() {
             Some("*") => true,
-            Some(list) => list.split(',').any(|entry| entry.trim() == origin),
+            Some(list) => list
+                .split(',')
+                .map(str::trim)
+                .filter(|entry| !entry.is_empty())
+                .any(|entry| entry == origin),
             // Exact loopback host, any port: a prefix test would also accept
             // `http://localhost.attacker.example`.
-            None => origin.parse::<Uri>().is_ok_and(|uri| {
-                matches!(uri.scheme_str(), Some("http" | "https"))
-                    && uri
-                        .host()
-                        .is_some_and(|host| LOOPBACK_HOSTS.contains(&host))
-            }),
+            None => is_loopback_origin(origin),
         }
     }
 
@@ -207,6 +232,32 @@ impl HttpSecurityConfig {
             .or_else(|| chain.first().copied())
             .or(Some(peer_ip))
     }
+}
+
+fn is_loopback_origin(origin: &str) -> bool {
+    if origin.ends_with('/') {
+        return false;
+    }
+    let Ok(uri) = origin.parse::<Uri>() else {
+        return false;
+    };
+    if !matches!(uri.scheme_str(), Some("http" | "https")) {
+        return false;
+    }
+    if uri
+        .authority()
+        .is_none_or(|auth| auth.as_str().contains('@'))
+    {
+        return false;
+    }
+    if !matches!(uri.path_and_query().map(|pq| pq.as_str()), None | Some("/")) {
+        return false;
+    }
+    uri.host().is_some_and(|host| {
+        LOOPBACK_HOSTS
+            .iter()
+            .any(|allowed| host.eq_ignore_ascii_case(allowed))
+    })
 }
 
 fn parse_positive_env<T>(name: &str, default: T, zero: T, maximum: T) -> Result<T, String>
