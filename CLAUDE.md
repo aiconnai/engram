@@ -218,7 +218,7 @@ Risk disposition and receipt scopes: `docs/harness/risk-register.yaml`, `docs/ha
 - **Unredacted logs** (RISK-0002): sync/cloud, hooks, multimodal and watcher swept; use `observability::redact` in new logs.
 - **No required review on `main`** (D8, RISK-0006): `enforce_admins=false`, no PR review rule; H1 human receipts remain pending for the 2026-10-27 stack, #266-#276, and the pre-`v0.24.0` candidate.
 - **C4 SQLite descriptor-bound open** (RISK-0007): ADR still *Proposed*; Invariant #27 mitigates by path/inode checks.
-- **Advisories** (RISK-0008): RUSTSEC-2026-0459 fixed by #267 (rusqlite 0.41.1); secret scanning, push protection, Dependabot and private vulnerability reporting enabled 2026-11-10.
+- **Advisories** (RISK-0008): RUSTSEC-2026-0459 fixed by #267 (rusqlite 0.41.1) and RUSTSEC-2026-0486/0523/0524/0538 fixed in PR #277 (rustix 1.1.6, quinn-proto 0.11.19, quinn-udp 0.5.16); secret scanning, push protection, Dependabot and private vulnerability reporting enabled 2026-11-10.
 - **Unreleased Markdown export/import fixes** (RISK-0010, RISK-0011): `v0.21.2` remains the latest published release tag; fixes are prepared for `v0.24.0` while draft advisories `GHSA-8xxr-p5q8-c7cg` and `GHSA-6q7w-w273-gq6p` wait for the signed `v0.24.0` release.
 - **Evidence provenance** (RISK-0009): several PASS verdicts lack a human H1 receipt.
 
