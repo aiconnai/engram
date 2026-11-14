@@ -646,3 +646,25 @@ independent post-review `v2`
 ([`2026-11-13-remediation-2026-10-26-v2-post.md`](../reviews/2026-11-13-remediation-2026-10-26-v2-post.md))
 recorded `REVIEW_VERDICT: PASS`. Human `H1` post-gate receipts (for `#266`–`#277`) and the
 owner-signed `v0.24.0` tag remain pending.
+
+### Post-v0.24.0 GitHub Release & Advisory Reconciliation (`2026-11-14`)
+
+PR `#277` (`c9d47061`) merged into `main` at `f4be2c401789917c0bb1d27469ac0d992d8d712d` on
+`2026-11-14T00:00:10Z` with 27/27 PR checks green and push workflows green (`43531158703`),
+followed by passing dry-runs `43531227625` (`release.yml`), `43547337840` (`sdk-release.yml`),
+`43581239677` (`Nightly`), `43590523739` (`Standing Checks`), and `43596881579` (`CI`). After the
+owner signed and pushed tag `v0.24.0` (`f4be2c40`), the owner authorized (`A1` + `A2`, chat,
+`2026-11-14`) approving `release-github` (`26634632310`) on Release run `43611154035`, verifying
+all 4 target asset bundles with `scripts/verify-github-release.sh` (`PASS`, release published
+`2026-11-14T17:05:28Z`), publishing advisories `GHSA-8xxr-p5q8-c7cg` (`2026-11-14T17:08:08Z`) and
+`GHSA-6q7w-w273-gq6p` (`2026-11-14T17:08:09Z`) as-is without requesting CVEs, and reconciling docs
+and `docs/releases/channel-matrix.toml` on `main`.
+
+Commit `D1` (`d8db705a`) synced `docs/releases/channel-matrix.toml`, `SECURITY.md`, `CLAUDE.md`,
+`CHANGELOG.md`, `docs/releases/v0.24.0-readiness.md`, and
+`docs/harness/canvas/2026-11-12-pre-v0.24.0-remediation.md`. Full `sensors.sh` at
+`2026-11-14T17:38:35Z` (`duration_sec=1648`, `mode=full`, zero exclusions) PASSED, and independent
+post-review ([`2026-11-14-remediation-2026-10-26-post.md`](../reviews/2026-11-14-remediation-2026-10-26-post.md))
+recorded `REVIEW_VERDICT: PASS`. Human `H1` post-gate receipts (`#266`–`#277` and post-release sync)
+remain pending and never fabricated, and external registries (`crates.io` `0.21.1`, PyPI `0.4.0`,
+npm `0.3.0`, Homebrew `0.21.2`) remain untouched.

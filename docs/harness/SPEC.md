@@ -299,3 +299,19 @@ publicação de 4 advisories RustSec em 2026-11-13, autorizou explicitamente (`A
   `is_autocommit()` e mutante sobrevivente ficam adiados para `v0.24.1`. Receipts humanos `H1`,
   assinatura/push da tag `v0.24.0`, publicação dos advisories `GHSA-*` e publicação em crates.io, PyPI,
   npm ou Homebrew permanecem **excluídos** até execução/decisão humana separada.
+
+## Closeout pós-release v0.24.0 (2026-11-14)
+
+Após o merge do PR `#277` (`f4be2c401789917c0bb1d27469ac0d992d8d712d`) em `main` com todos os
+checks obrigatórios verdes e dry-runs de `release.yml` (`43531227625`) e `sdk-release.yml`
+(`43547337840`) aprovados em `f4be2c40`, o owner assinou e enviou a tag `v0.24.0` e autorizou
+explicitamente (`A1` + `A2`, chat, 2026-11-14):
+- **Escopo autorizado**: aprovar o deployment `release-github` (`26634632310`) na execução
+  `43611154035` do workflow `Release`, validar o GitHub Release `v0.24.0` publicado (`2026-11-14T17:05:28Z`)
+  com `scripts/verify-github-release.sh` nos 4 alvos, publicar como estão os advisories
+  `GHSA-8xxr-p5q8-c7cg` e `GHSA-6q7w-w273-gq6p` (sem solicitar CVEs) e abrir/validar/mesclar este PR
+  de reconciliação (`docs/releases/channel-matrix.toml`, `SECURITY.md`, `CLAUDE.md`, `CHANGELOG.md`,
+  `docs/releases/v0.24.0-readiness.md`, canvas e documentos do harness).
+- **Fora de escopo / pendências preservadas**: publicação em `crates.io`, PyPI, npm ou Homebrew e
+  solicitação de CVEs permanecem **excluídas**; receipts humanos `H1` permanecem **pendentes** (nunca
+  fabricados).
