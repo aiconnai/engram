@@ -10,9 +10,12 @@ released minor version receives them; older versions should upgrade.
 | Latest release (see [Releases](https://github.com/aiconnai/engram/releases)) | :white_check_mark: |
 | Older releases | :x: |
 
-Release status and pending tags are tracked in [CHANGELOG.md](CHANGELOG.md) and
-[docs/releases/v0.24.0-readiness.md](docs/releases/v0.24.0-readiness.md): `v0.21.2`
-is the latest published GitHub Release until the signed `v0.24.0` release tag is pushed.
+Release status and channel verification are tracked in [CHANGELOG.md](CHANGELOG.md),
+[docs/releases/v0.24.0-readiness.md](docs/releases/v0.24.0-readiness.md), and
+[docs/releases/channel-matrix.toml](docs/releases/channel-matrix.toml): `v0.24.0`
+is the latest published GitHub Release (at commit `f4be2c40`); `GHSA-8xxr-p5q8-c7cg`
+and `GHSA-6q7w-w273-gq6p` are published, while external package registries (`crates.io`,
+PyPI, npm, Homebrew) remain on prior versions pending a separate publication decision.
 
 ## Reporting a Vulnerability
 

@@ -12,9 +12,9 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
-## [0.24.0]
+## [0.24.0] - 2026-11-14
 
-Release candidate prepared for the `v0.24.0` GitHub Release (`v0.21.2` remains the latest published release until the signed `v0.24.0` tag is pushed; registry publication to crates.io, PyPI, and npm is a separate decision).
+Published as the signed `v0.24.0` GitHub Release (commit `f4be2c401789917c0bb1d27469ac0d992d8d712d`, `2026-11-14`); closes security advisories `GHSA-8xxr-p5q8-c7cg` and `GHSA-6q7w-w273-gq6p`. Registry publication to `crates.io`, PyPI, npm, and Homebrew remains a separate decision.
 
 ### Security
 
@@ -1080,7 +1080,7 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 - **0.2.0** - Early feature parity milestone
 - **0.1.0** - Initial release with full feature set
 
-[0.24.0]: https://github.com/aiconnai/engram/compare/v0.23.0...v0.24.0
+[0.24.0]: https://github.com/aiconnai/engram/compare/v0.21.2...v0.24.0
 [0.23.0]: https://github.com/aiconnai/engram/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/aiconnai/engram/compare/v0.21.2...v0.22.0
 [0.21.2]: https://github.com/aiconnai/engram/compare/v0.21.1...v0.21.2
