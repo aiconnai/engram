@@ -73,6 +73,9 @@ pub const ID_SCOPED_TOOLS: &[&str] = &[
     "memory_promote_to_permanent",
     "memory_boost",
     "memory_set_expiration",
+    "memory_compress",
+    "memory_decompress",
+    "memory_compress_for_context",
 ];
 
 /// Tools whose `workspace` parameter is NOT the memory workspace: in the

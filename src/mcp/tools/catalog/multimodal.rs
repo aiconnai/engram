@@ -7,11 +7,11 @@ use crate::mcp::tools::{ToolDef, ToolTier};
 pub const TOOLS: &[ToolDef] = &[
     ToolDef {
             name: "memory_search_by_image",
-            description: "Search memories using an image as the query. Uses multimodal embeddings (CLIP-style) or falls back to describing the image via vision model and searching by description. Returns semantically similar memories — text or media — ranked by relevance.",
+            description: "Search memories using an image as the query. Uses multimodal embeddings (CLIP-style) or falls back to describing the image via vision model and searching by description. Returns semantically similar memories — text or media — ranked by relevance. The image is read from a server path: with ENGRAM_MEDIA_BASE_DIR set the path is confined to that directory (read_only suffices); without it the call requires maintenance mode.",
             schema: r#"{
                 "type": "object",
                 "properties": {
-                    "image_path": {"type": "string", "description": "Path to the local image file to use as the search query"},
+                    "image_path": {"type": "string", "description": "Path to the local image file to use as the search query (must be inside ENGRAM_MEDIA_BASE_DIR when set)"},
                     "limit": {"type": "integer", "default": 10, "description": "Maximum number of results to return"},
                     "min_score": {"type": "number", "minimum": 0, "maximum": 1, "description": "Minimum similarity score (0.0-1.0)"},
                     "workspace": {"type": "string", "description": "Restrict search to a specific workspace"},

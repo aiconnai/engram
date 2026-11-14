@@ -53,23 +53,28 @@ sha256_file() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tag)
-      tag="${2:-}"
+      [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || fail "--tag requires a value"
+      tag="$2"
       shift 2
       ;;
     --expected-sha)
-      expected_sha="${2:-}"
+      [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || fail "--expected-sha requires a value"
+      expected_sha="$2"
       shift 2
       ;;
     --allowed-signers)
-      allowed_signers_arg="${2:-}"
+      [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || fail "--allowed-signers requires a value"
+      allowed_signers_arg="$2"
       shift 2
       ;;
     --trusted-ref)
-      trusted_ref="${2:-}"
+      [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || fail "--trusted-ref requires a value"
+      trusted_ref="$2"
       shift 2
       ;;
     --repo)
-      repo_dir="${2:-}"
+      [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || fail "--repo requires a value"
+      repo_dir="$2"
       shift 2
       ;;
     -h|--help)
@@ -108,10 +113,13 @@ elif [[ -n "${ENGRAM_RELEASE_ALLOWED_SIGNERS_FILE:-}" ]]; then
   [[ -f "${ENGRAM_RELEASE_ALLOWED_SIGNERS_FILE}" ]] || fail "publish requires a cryptographically signed tag (ENGRAM_RELEASE_ALLOWED_SIGNERS_FILE not found)"
   cp "${ENGRAM_RELEASE_ALLOWED_SIGNERS_FILE}" "${resolved_signers}"
 elif [[ -n "${trusted_ref}" ]]; then
-  if ! git -C "${repo_dir}" cat-file -e "${trusted_ref}:docs/releases/allowed-signers" 2>/dev/null; then
+  if [[ "${trusted_ref}" != refs/* ]] || ! git -C "${repo_dir}" show-ref --verify --quiet "${trusted_ref}"; then
+    fail "publish requires a cryptographically signed tag (trusted-ref must be a canonical refs/* ref present in the repository: ${trusted_ref})"
+  fi
+  if ! git -C "${repo_dir}" cat-file -e --end-of-options "${trusted_ref}:docs/releases/allowed-signers" 2>/dev/null; then
     fail "publish requires a cryptographically signed tag (cannot read ${trusted_ref}:docs/releases/allowed-signers)"
   fi
-  git -C "${repo_dir}" show "${trusted_ref}:docs/releases/allowed-signers" > "${resolved_signers}"
+  git -C "${repo_dir}" show --end-of-options "${trusted_ref}:docs/releases/allowed-signers" > "${resolved_signers}"
 else
   default_signers="${repo_dir}/docs/releases/allowed-signers"
   [[ -f "${default_signers}" ]] || fail "publish requires a cryptographically signed tag (missing docs/releases/allowed-signers)"

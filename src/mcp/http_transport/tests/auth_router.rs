@@ -536,6 +536,9 @@ async fn keyless_server_rejects_foreign_origin_before_dispatch() {
         "https://attacker.example",
         "http://localhost.attacker.example",
         "null",
+        "",
+        "http://localhost:5173/extra-path",
+        "http://user@localhost:5173",
     ] {
         assert_eq!(
             keyless_status(default(), &[("host", "localhost:3100"), ("origin", origin)]).await,
@@ -543,9 +546,24 @@ async fn keyless_server_rejects_foreign_origin_before_dispatch() {
             "{origin}"
         );
     }
+    for origin in [
+        "http://localhost:5173",
+        "http://LOCALHOST:5173",
+        "https://127.0.0.1:8443",
+        "http://[::1]:3000",
+    ] {
+        assert_eq!(
+            keyless_status(default(), &[("host", "localhost:3100"), ("origin", origin)]).await,
+            (StatusCode::OK, 1),
+            "{origin}"
+        );
+    }
+
+    // Blank ENGRAM_CORS_ORIGINS keeps the loopback default rather than denying all origins.
+    let blank_cors = || HttpSecurityConfig::default().with_browser_policy("", Some("   "));
     assert_eq!(
         keyless_status(
-            default(),
+            blank_cors(),
             &[
                 ("host", "localhost:3100"),
                 ("origin", "http://localhost:5173")
@@ -554,6 +572,57 @@ async fn keyless_server_rejects_foreign_origin_before_dispatch() {
         .await,
         (StatusCode::OK, 1)
     );
+
+    // Trailing commas in ENGRAM_CORS_ORIGINS must never admit an empty Origin header.
+    let trailing_comma =
+        || HttpSecurityConfig::default().with_browser_policy("", Some("https://app.example.com, "));
+    assert_eq!(
+        keyless_status(
+            trailing_comma(),
+            &[("host", "localhost:3100"), ("origin", "")]
+        )
+        .await,
+        (StatusCode::FORBIDDEN, 0)
+    );
+}
+
+#[tokio::test]
+async fn cors_preflight_allows_loopback_ports_and_rejects_foreign_origins_by_default() {
+    use axum::body::Body;
+    use axum::http::Request;
+
+    for (origin, expect_allowed) in [
+        ("http://localhost:5173", true),
+        ("http://LOCALHOST:5173", true),
+        ("http://127.0.0.1:4173", true),
+        ("http://[::1]:3000", true),
+        ("https://attacker.example", false),
+        ("http://localhost.attacker.example", false),
+    ] {
+        let (app, _) = keyless_app(HttpSecurityConfig::default());
+        let preflight = Request::builder()
+            .method("OPTIONS")
+            .uri("/v1/mcp")
+            .header("host", "localhost:3100")
+            .header("origin", origin)
+            .header("access-control-request-method", "POST")
+            .header("access-control-request-headers", "content-type")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(preflight).await.expect("preflight handled");
+        let acao = response
+            .headers()
+            .get("access-control-allow-origin")
+            .and_then(|v| v.to_str().ok());
+        if expect_allowed {
+            assert_eq!(acao, Some(origin), "expected CORS allow for {origin}");
+        } else {
+            assert!(
+                acao.is_none(),
+                "unexpected CORS allow for {origin}: {acao:?}"
+            );
+        }
+    }
 }
 
 #[tokio::test]

@@ -58,9 +58,11 @@ const DISPATCH_ALIASES: &[(&str, &str)] = &[
 ];
 
 /// Parameters that make an otherwise read-only tool write. A call carrying a
-/// truthy value requires `scoped_write`.
+/// truthy value requires `scoped_write` (or `markdown_required_mode` for
+/// server-filesystem exports such as `palace_visualize.output_path`).
 const WRITE_FLAG_PARAMS: &[(&str, &str)] = &[
     ("memory_predict_links", "auto_apply"),
+    ("palace_visualize", "output_path"),
     ("sync_state", "update_version"),
 ];
 
@@ -139,6 +141,13 @@ pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode
     {
         return markdown_required_mode();
     }
+    // The query image is read from a server path. Without a configured media
+    // root nothing confines that read, so it needs the same elevated mode as
+    // unconfined Markdown filesystem access. With a root, the handler
+    // canonicalizes and confines the path (no `..` or symlink escape).
+    if canonical == "memory_search_by_image" && !media_base_dir_configured() {
+        return base.max(PermissionMode::Maintenance);
+    }
     let writes = WRITE_FLAG_PARAMS
         .iter()
         .filter(|(tool, _)| *tool == canonical)
@@ -152,6 +161,11 @@ pub fn required_mode_for_call(tool_name: &str, params: &Value) -> PermissionMode
     } else {
         base
     }
+}
+
+/// Whether `ENGRAM_MEDIA_BASE_DIR` confines server-side media reads.
+fn media_base_dir_configured() -> bool {
+    std::env::var("ENGRAM_MEDIA_BASE_DIR").is_ok_and(|root| !root.trim().is_empty())
 }
 
 fn permission_denial_for_call(
@@ -1001,6 +1015,99 @@ mod tests {
         // Unconstrained process: nothing is denied.
         let open = status_report_for(None, Some("memory_predict_links"));
         assert_eq!(open["allowed_with_write_flags"], true);
+
+        // `palace_visualize` surfaces `output_path` in `write_flag_params` and escalates
+        // to `markdown_required_mode` (`maintenance` when ENGRAM_EXPORT_BASE_DIR is unset,
+        // `scoped_write` when set).
+        let palace_ro = status_report_for(Some(PermissionMode::ReadOnly), Some("palace_visualize"));
+        assert_eq!(palace_ro["required_mode"], "read_only");
+        assert_eq!(palace_ro["allowed"], true);
+        assert_eq!(palace_ro["write_flag_params"], json!(["output_path"]));
+        assert!(matches!(
+            palace_ro["required_mode_with_write_flags"].as_str(),
+            Some("maintenance" | "scoped_write")
+        ));
+        assert_eq!(palace_ro["allowed_with_write_flags"], false);
+    }
+
+    static MEDIA_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Run `body` with `ENGRAM_MEDIA_BASE_DIR` set to `value` (or removed),
+    /// restoring the previous value afterwards.
+    fn with_media_base_dir<T>(value: Option<&str>, body: impl FnOnce() -> T) -> T {
+        let _guard = MEDIA_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let previous = std::env::var_os("ENGRAM_MEDIA_BASE_DIR");
+        match value {
+            Some(v) => std::env::set_var("ENGRAM_MEDIA_BASE_DIR", v),
+            None => std::env::remove_var("ENGRAM_MEDIA_BASE_DIR"),
+        }
+        let out = body();
+        match previous {
+            Some(v) => std::env::set_var("ENGRAM_MEDIA_BASE_DIR", v),
+            None => std::env::remove_var("ENGRAM_MEDIA_BASE_DIR"),
+        }
+        out
+    }
+
+    #[test]
+    fn search_by_image_without_media_base_dir_requires_maintenance() {
+        let params = json!({"image_path": "/etc/hosts"});
+        for unset in [None, Some(""), Some("   ")] {
+            with_media_base_dir(unset, || {
+                assert_eq!(
+                    required_mode_for_call("memory_search_by_image", &params),
+                    PermissionMode::Maintenance,
+                    "unconfined server path read must be elevated (base dir {unset:?})"
+                );
+                let denial = permission_denial_for_call(
+                    "memory_search_by_image",
+                    &params,
+                    PermissionMode::ScopedWrite,
+                )
+                .expect("scoped_write must not read arbitrary server paths");
+                assert_eq!(denial["error"]["code"], "permission_denied");
+                assert_eq!(denial["error"]["required_mode"], "maintenance");
+                assert!(permission_denial_for_call(
+                    "memory_search_by_image",
+                    &params,
+                    PermissionMode::Maintenance
+                )
+                .is_none());
+            });
+        }
+    }
+
+    #[test]
+    fn search_by_image_with_media_base_dir_stays_read_only() {
+        with_media_base_dir(Some("/tmp"), || {
+            let params = json!({"image_path": "/tmp/q.png"});
+            assert_eq!(
+                required_mode_for_call("memory_search_by_image", &params),
+                PermissionMode::ReadOnly
+            );
+            assert!(permission_denial_for_call(
+                "memory_search_by_image",
+                &params,
+                PermissionMode::ReadOnly
+            )
+            .is_none());
+        });
+    }
+
+    #[test]
+    fn other_read_only_tools_ignore_media_base_dir() {
+        with_media_base_dir(None, || {
+            assert_eq!(
+                required_mode_for_call("memory_get", &Value::Null),
+                PermissionMode::ReadOnly
+            );
+            assert_eq!(
+                required_mode_for_call("memory_list_media", &Value::Null),
+                PermissionMode::ReadOnly
+            );
+        });
     }
 
     #[test]

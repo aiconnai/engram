@@ -222,6 +222,8 @@ export interface CacheClearOptions {
 export interface EmbeddingMigrateOptions {
   fromProvider?: string;
   toProvider?: string;
+  targetModel?: string;
+  dryRun?: boolean;
 }
 
 export interface FeedbackStatsOptions {

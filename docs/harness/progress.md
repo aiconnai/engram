@@ -6,10 +6,10 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-11-10 — post-reviews independentes (Claude Code Sonnet, processo separado, só leitura), ambas REVIEW_VERDICT PASS só com LOW: docs/harness/reviews/2026-11-10-keyless-http-authz-2026-11-10-v2-post.md (A-1..A-4, mesclado em #268) e docs/harness/reviews/2026-11-10-honest-consolidation-and-migration-2026-11-10-post.md (B-1/B-2, ..0358ba36; LOW de dry_run corrigido em b91f03fe). Receipts H1 pendentes.` |
-| Last sensors | `2026-11-10T06:31:13Z status=pass mode=full duration_sec=984, sem exclusões, candidato honest-consolidation-and-migration (B-1/B-2) sobre main 85502ad8.` |
-| Last commit | `b4506254` |
-| Last live-state check | `2026-11-10 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 984s de B-1/B-2; doctor PASS com WARN preexistente. Review/H1 próprios pendentes.` |
+| Last review | `2026-11-13 — post-review independente v2 (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-13-remediation-2026-10-26-v2-post.md (cobre 37ef480a..b7959bbb no PR #277). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
+| Last sensors | `2026-11-13T23:35:03Z status=pass mode=full duration_sec=1185, sem exclusões, no commit b7959bbb (PR #277 pre-v0.24.0-remediation sobre main 37ef480a).` |
+| Last commit | `b7959bbb` |
+| Last live-state check | `2026-11-13 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 1185s em b7959bbb; doctor PASS. Receipts humanos H1 e tag assinada v0.24.0 pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,20 +23,16 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat,2026-11-07): após merge PR265, executar release Core0.24.0/SDKs0.7.0 e corrigir bloqueantes confirmados. Dry-runs no SHA85502ad8; helper ausente encontrado no Core. [Escopo da correção](canvas/2026-11-07-release-attestation-helper.md).
-- **Limites**: novo código exige review/H1 antes de novo push/merge e validação da matriz no SHA corrigido antes de tag/upload. Proteções/publishers ausentes aguardam decisão própria de settings; sem notices, remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
-- **Última evidência**: [release execution](./progress/2026-10-26-remediation.md#release-execution--missing-artifact-signer-2026-11-07): PR265 mesclado em85502ad8; SDK dry-run PASS. Core packaging encontrou helper ausente; restauração local e17 testes PASS. Novo candidato/review/H1 e matriz remota próprios pendentes.
+- **Autorização atual** (owner, chat, 2026-11-12/13): após merges `#266`–`#276` em `main` (`37ef480a`), executar **Opção A** + fechamento do PR `#277` (`Cargo.lock` advisories, CI verde, merge de `#277` em `main` com `H1` pendente sem fabricar receipt e dry-run de `release.yml`, parando antes da tag `v0.24.0`, `GHSA-*` e registries). [Canvas](canvas/2026-11-12-pre-v0.24.0-remediation.md).
+- **Limites**: receipts humanos `H1` permanecem pendentes (nunca fabricados); assinatura/push da tag `v0.24.0`, publicação de `GHSA-8xxr-p5q8-c7cg` / `GHSA-6q7w-w273-gq6p` e registries externos (`crates.io`, `PyPI`, `npm`, `Homebrew`) estão fora de escopo; sem remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
+- **Última evidência**: [remediação pré-v0.24.0 Opção A](./progress/2026-10-26-remediation.md#pre-v0240-review-remediation-option-a--2026-11-13): `fdfd41ce` + `b7959bbb` fecham os 13 achados de `85502ad8..37ef480a`, guardas pré-tag e advisories `RUSTSEC-2026-0486`/`0523`/`0524`/`0538`; `sensors.sh` full PASS (`1185s`), TS `104/104`, Py `216/216` e post-review `v2` PASS. Receipts `H1` e tag `v0.24.0` pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
   `python3 docs/harness/bin/measure-context.py --section docs/harness/progress-history.md#<âncora>`.
 
-- **Release closeout (2026-11-07)**: main7ca7a9b8 CI42371841522 e Standing42366783284PASS; manualNightly41966511833 completoPASS. R3/Cargo/C1/H2/S1 delimitados integrados; evolução futura não implementada. [Auditoria atual](audits/2026-11-07-release-closeout.md).
-
-- **Consolidação/migração honestas (2026-11-10)**: B-1/B-2 viram relatório honesto em `4e8bb283`; full PASS; review independente, H1 e upstream pendentes. [Log](./progress/2026-10-26-remediation.md#honest-consolidation-and-embedding-migrate--2026-11-10).
-- **Keyless HTTP / autorização read-only (2026-11-10)**: A-1..A-4 corrigidos em `7a572e15` (+ teste `1b92dc93`); full PASS com features do CI; push/PR autorizados, review independente, H1 e merge pendentes. [Log](./progress/2026-10-26-remediation.md#keyless-http-and-read-only-authorization--2026-11-10).
-- **RUSTSEC-2026-0459 (2026-11-10)**: rusqlite 0.41.1 / libsqlite3-sys 0.39.1 em commit local; audit/deny e full PASS; review, H1 e upstream pendentes. [Log](./progress/2026-10-26-remediation.md#rustsec-2026-0459-rusqlite-update--2026-11-10).
-- **PR #264 / S1**: merge emmain7ca7a9b8; receipts históricos Markdown/cloud registrados no log. Não cobrem o novo candidato SDK/closeout; histórico preservado. [Cloud](plans/2026-11-04-cloud-download-cancellation.md).
+- **Merges #266–#276 em `main` (`37ef480a`, 2026-11-10)**: helper de assinatura (`#266`), `rusqlite` `0.41.1` (`#267`, [log](./progress/2026-10-26-remediation.md#rustsec-2026-0459-rusqlite-update--2026-11-10)), keyless HTTP/read-only A-1..A-4 (`#268`, [log](./progress/2026-10-26-remediation.md#keyless-http-and-read-only-authorization--2026-11-10)), B-1/B-2 honestos (`#270`, [log](./progress/2026-10-26-remediation.md#honest-consolidation-and-embedding-migrate--2026-11-10)), Vitest 5 (`#274`), `SECURITY.md`/`CLAUDE.md` (`#275`) e `CHANGELOG.md` (`#276`) mesclados com CI e release dry-run PASS; receipts `H1` pendentes.
+- **Release closeout anterior (`7ca7a9b8`, 2026-11-07)**: CI 42371841522, Standing 42366783284 e manual Nightly 41966511833 completo PASS ([auditoria](audits/2026-11-07-release-closeout.md); [cloud](plans/2026-11-04-cloud-download-cancellation.md)).
 ## Sprint atual — frentes (estado ao abrir; o integrador atualiza)
 
 Pilha #244–#262 mesclada no main `2e84a594` em 2026-10-27. Follow-up Nightly/release local preparado;

@@ -250,7 +250,7 @@ async with EngramClient(base_url="...", api_key="...", tenant="...") as client:
 | `cache_stats()` | Get cache statistics |
 | `cache_clear(**kwargs)` | Clear the embedding and search cache |
 | `embedding_providers()` | List available embedding providers |
-| `embedding_migrate(**kwargs)` | Migrate embeddings between providers |
+| `embedding_migrate(**kwargs)` | Count memories an embedding migration would touch (`dry_run=True` only) |
 
 #### Retrieval Feedback
 

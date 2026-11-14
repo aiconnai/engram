@@ -604,3 +604,45 @@ the fix.
 
 Full sensors PASS at 2026-11-10T06:31:13Z, 984s, without exclusions; advertised-contracts and
 public-claims PASS. Independent post-review and the human H1 receipt are pending.
+
+## Pre-v0.24.0 review remediation (Option A) — 2026-11-13
+
+Task: `remediation-2026-10-26` (`pre-v0.24.0-remediation`), branch `fix/pre-v0.24.0-remediation`
+from `origin/main` `37ef480a334f82e0867c4446365834ed5bb472ea` (after PRs `#266`–`#276` merged on
+`main`). Owner selected Option A (`Node >= 22.12`, isolated worktree, full local gates, branch push
+and single PR creation, stopping before `H1` merge and `v0.24.0` tag/advisory/registry publication).
+[Canvas](../canvas/2026-11-12-pre-v0.24.0-remediation.md); independent post-review:
+[`2026-11-13-remediation-2026-10-26-post.md`](../reviews/2026-11-13-remediation-2026-10-26-post.md).
+
+`fdfd41ce` closes all 13 findings from the `85502ad8..37ef480a` release-readiness review plus
+remaining pre-`v0.24.0` security/scope blockers (`deep-001`..`003`, `deep-005`, `deep-006`,
+`contracts-001`..`003`, `shallow-003`, `shallow-007`, `shallow-009`, `GHSA-6q7w-w273-gq6p` Markdown
+import cross-workspace ID overwrite guard, `A-5` `memory_search_by_image` `ENGRAM_MEDIA_BASE_DIR`
+confinement + pre-canonicalize active SQLite artifact refusal, `A-6`/`A-7`/`Q-A` handler scope
+guards, compression tools in `ID_SCOPED_TOOLS`, single-ID `memory_decay_single`, `read_only` server
+hook suppression, and canonical `refs/remotes/origin/main` + `--end-of-options` tag verification).
+`B-3`/`B-4` (`fu-archival`), `SAVEPOINT` `is_autocommit()` refactors, and the surviving mutant test
+are explicitly deferred to `v0.24.1`.
+
+Verification on `fdfd41ce`: full `sensors.sh` PASS at `2026-11-13T17:28:16Z` (`duration_sec=836`,
+`mode=full`, zero exclusions); TypeScript SDK `npm ci && npm run type-check && npm test` (`104/104`
+PASS); Python SDK `pytest tests/` (`216` passed, `3` skipped); `test_sdk_release_workflow.py`
+(`15/15` PASS); `test_check_pdf_worker_packaging.py` (`18/18` PASS); `check-sdk-contract-alignment`,
+`check-advertised-contracts`, `check-public-claims`, `bump-version.py --check`, and
+`extract-release-notes.sh` all PASS.
+
+Follow-up on PR `#277` (`b7959bbb`, 2026-11-13): GitHub CI run `43474684895` surfaced four newly
+published RustSec advisories (`RUSTSEC-2026-0486` `rustix 1.1.3`, `RUSTSEC-2026-0523`/`0524`
+`quinn-proto 0.11.18`, `RUSTSEC-2026-0538` `quinn-udp 0.5.14`). Owner explicitly authorized (`A1` +
+`A2`, chat, 2026-11-13) updating `Cargo.lock`, merging PR `#277` into `main` once all required CI
+checks are green (with human `H1` receipts remaining pending and never fabricated), and running the
+`release.yml` dry-run on merged `main`, while keeping tag `v0.24.0`, `GHSA-*` publication, and
+external registries (`crates.io`, `PyPI`, `npm`, `Homebrew`) out of scope. `b7959bbb` updates
+`rustix 1.1.3 -> 1.1.6` (`linux-raw-sys 0.11.0 -> 0.12.1`), `quinn-proto 0.11.18 -> 0.11.19`, and
+`quinn-udp 0.5.14 -> 0.5.16` without adding advisory waivers; `cargo audit`, `cargo audit --file
+fuzz/Cargo.lock`, `cargo deny check advisories bans licenses sources`, and full `sensors.sh` at
+`2026-11-13T23:35:03Z` (`duration_sec=1185`, `mode=full`, zero exclusions) all PASSED, and
+independent post-review `v2`
+([`2026-11-13-remediation-2026-10-26-v2-post.md`](../reviews/2026-11-13-remediation-2026-10-26-v2-post.md))
+recorded `REVIEW_VERDICT: PASS`. Human `H1` post-gate receipts (for `#266`–`#277`) and the
+owner-signed `v0.24.0` tag remain pending.

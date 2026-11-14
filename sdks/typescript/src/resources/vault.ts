@@ -31,10 +31,18 @@ export class VaultResource extends BaseResource {
    * pass `confirm: true` to apply database writes.
    */
   async import(options: VaultImportOptions): Promise<VaultImportReport> {
-    if (options.confirm && options.dryRun) {
-      throw new Error("vaultImport: confirm and dryRun cannot both be true");
+    if (
+      options.confirm !== undefined &&
+      options.dryRun !== undefined &&
+      options.confirm === options.dryRun
+    ) {
+      throw new Error(
+        `vaultImport: confirm (${options.confirm}) and dryRun (${options.dryRun}) cannot both be ${options.confirm}`
+      );
     }
-    const confirm = options.dryRun ? false : (options.confirm ?? false);
+    const confirm =
+      options.confirm ??
+      (options.dryRun !== undefined ? !options.dryRun : false);
     const params: Record<string, unknown> = {
       input_dir: options.inputDir,
       confirm,

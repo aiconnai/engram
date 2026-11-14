@@ -104,6 +104,24 @@ ENGRAM_HTTP_TRUSTED_PROXIES="127.0.0.0/8,10.0.0.0/8"
 
 Leave the variable unset to disable trusted-proxy mode.
 
+When a key header is set, its value is used as the bucket identity key.
+
+If the limit is exceeded, the server returns `429 Too Many Requests` with
+`Retry-After: 1` and a JSON-RPC error response (`code=-32005`) and message
+`Too Many Requests`.
+
+## Browser Clients
+
+By default, CORS allows loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any
+port over `http` or `https`) only. Set `ENGRAM_CORS_ORIGINS` to a
+comma-separated allowlist for browser clients:
+
+```bash
+ENGRAM_CORS_ORIGINS="https://app.example.com,https://admin.example.com"
+```
+
+Use `ENGRAM_CORS_ORIGINS="*"` only for explicitly open deployments.
+
 ### Keyless servers: `Host` and `Origin`
 
 A server started without `ENGRAM_HTTP_API_KEY` accepts only loopback binds, and
@@ -114,30 +132,13 @@ answers `403` on `POST /mcp`, `POST /v1/mcp` and `GET /v1/events` unless:
 - `Host` (when sent) names `localhost`, `127.0.0.1` or `[::1]`, any port, or a
   name listed in `ENGRAM_HTTP_ALLOWED_HOSTS` (comma-separated, without port);
 - `Origin` (when sent) is a loopback origin (`http` or `https`, any port) while
-  `ENGRAM_CORS_ORIGINS` is unset. Setting `ENGRAM_CORS_ORIGINS` to a
+  `ENGRAM_CORS_ORIGINS` is unset or blank. Setting `ENGRAM_CORS_ORIGINS` to a
   comma-separated list **replaces** that default: only the listed origins pass,
   so add local dev origins such as `http://localhost:5173` explicitly if you
-  still need them. `*` accepts any origin.
+  still need them. `*` accepts any non-empty origin.
 
 Clients that send neither header are unaffected. A server with an API key does
 not apply this check: the bearer token is its boundary.
-
-When a key header is set, its value is used as the bucket identity key.
-
-If the limit is exceeded, the server returns `429 Too Many Requests` with
-`Retry-After: 1` and a JSON-RPC error response (`code=-32005`) and message
-`Too Many Requests`.
-
-## Browser Clients
-
-By default, CORS allows localhost origins only. Set `ENGRAM_CORS_ORIGINS` to a
-comma-separated allowlist for browser clients:
-
-```bash
-ENGRAM_CORS_ORIGINS="https://app.example.com,https://admin.example.com"
-```
-
-Use `ENGRAM_CORS_ORIGINS="*"` only for explicitly open deployments.
 
 ## Fly.io deployment validation (auth + rate limit)
 

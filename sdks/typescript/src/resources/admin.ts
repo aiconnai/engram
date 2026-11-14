@@ -133,16 +133,18 @@ export class AdminResource extends BaseResource {
   }
 
   /**
-   * Migrate embeddings between providers.
+   * Count memories an embedding migration would touch.
    *
-   * The server does not re-embed yet: this call (which sends no `dry_run`)
-   * returns an error and changes nothing. Use `memory_rebuild_embeddings`
-   * to queue re-embedding with the active model.
+   * Only `dryRun: true` is implemented server-side. When `dryRun` is omitted
+   * or `false`, the server rejects the request and this method throws
+   * {@link EngramError} without changing stored embeddings. Use
+   * `memory_rebuild_embeddings` to queue re-embedding with the active model.
    */
   async embeddingMigrate(options?: EmbeddingMigrateOptions): Promise<unknown> {
     const params: Record<string, unknown> = {};
-    if (options?.toProvider !== undefined)
-      params.target_model = options.toProvider;
+    const target = options?.targetModel ?? options?.toProvider;
+    if (target !== undefined) params.target_model = target;
+    if (options?.dryRun !== undefined) params.dry_run = options.dryRun;
     return this.caller.mcpCall("memory_embedding_migrate", params);
   }
 
@@ -221,7 +223,11 @@ export class AdminResource extends BaseResource {
     if (options?.reason !== undefined) params.reason = options.reason;
     if (options?.workspace !== undefined) params.workspace = options.workspace;
     if (options?.dryRun !== undefined) params.dry_run = options.dryRun;
-    if (options?.persist !== undefined) params.persist = options.persist;
+    if (options?.persist !== undefined) {
+      params.persist = options.persist;
+    } else if (options?.action === "score" && options?.dryRun !== undefined) {
+      params.persist = !options.dryRun;
+    }
     return this.caller.mcpCall("memory_lifecycle_update", params);
   }
 }

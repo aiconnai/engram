@@ -169,9 +169,11 @@ class SearchMixin(ResourceMixin):
     ) -> dict[str, Any]:
         """Count memories an embedding migration would touch.
 
-        Only ``dry_run=True`` is implemented server-side. Without it the server
-        returns an error and changes nothing; re-embedding with the active model
-        is available through ``memory_rebuild_embeddings``.
+        Only ``dry_run=True`` is implemented server-side. When ``dry_run`` is
+        omitted or ``False``, the server rejects the request and this method
+        raises :class:`EngramError` without changing stored embeddings;
+        re-embedding with the active model is available through
+        ``memory_rebuild_embeddings``.
         """
         params: dict[str, Any] = {}
         resolved_target = target_model or to_provider

@@ -396,4 +396,217 @@ mod context_tests {
             "{anonymous}"
         );
     }
+
+    #[test]
+    fn context_assembly_enforces_workspaces_filters_and_normalization_for_restricted_principals() {
+        let ctx = test_ctx();
+        seed_memory(&ctx, "Orchard launch checklist public note", "note");
+        super::super::dispatch(
+            &ctx,
+            "memory_create",
+            serde_json::json!({
+                "content": "Orchard launch checklist secretcapybara",
+                "memory_type": "note",
+                "workspace": "private"
+            }),
+        );
+
+        // Uppercase workspace claim normalizes to canonical "default" and matches seeded rows.
+        let normalized_upper = super::memory_build_context(
+            &ctx,
+            serde_json::json!({"query": "Orchard launch checklist", "workspace": "DEFAULT"}),
+        );
+        assert!(
+            normalized_upper["prompt"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("public note"),
+            "uppercase workspace must normalize to 'default': {normalized_upper}"
+        );
+        assert!(
+            !normalized_upper.to_string().contains("secretcapybara"),
+            "normalized default workspace must exclude private workspace: {normalized_upper}"
+        );
+
+        // AnonymousLoopback using `workspaces: ["default"]` or `filters: {"workspace": "default"}`
+        // (omitting top-level `workspace`) must stay confined across all 3 context assembly tools.
+        let mut anon_ctx = test_ctx();
+        anon_ctx.storage = ctx.storage.clone();
+        anon_ctx.principal = Some(crate::auth::TransportPrincipal::anonymous_loopback());
+
+        for claim in [
+            serde_json::json!({"query": "Orchard launch checklist", "workspaces": ["default"]}),
+            serde_json::json!({"query": "Orchard launch checklist", "filters": {"workspace": "default"}}),
+        ] {
+            let built = super::memory_build_context(&anon_ctx, claim.clone());
+            assert!(
+                built["prompt"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("public note"),
+                "expected default memory in build_context for {claim}: {built}"
+            );
+            assert!(
+                !built.to_string().contains("secretcapybara"),
+                "build_context leaked foreign memory for {claim}: {built}"
+            );
+
+            let injected = super::memory_get_injection_prompt(&anon_ctx, claim.clone());
+            assert!(
+                !injected.to_string().contains("secretcapybara"),
+                "get_injection_prompt leaked foreign memory for {claim}: {injected}"
+            );
+
+            let prepared = super::memory_prepare_context(&anon_ctx, claim.clone());
+            assert!(
+                !prepared.to_string().contains("secretcapybara"),
+                "prepare_context leaked foreign memory for {claim}: {prepared}"
+            );
+        }
+
+        // Namespaced StoredToken without explicit workspace defaults to its namespace ("alpha"),
+        // never leaking "default" or "private".
+        super::super::dispatch(
+            &ctx,
+            "memory_create",
+            serde_json::json!({
+                "content": "Orchard launch checklist alphatokenonly",
+                "memory_type": "note",
+                "workspace": "alpha"
+            }),
+        );
+        let mut token_ctx = test_ctx();
+        token_ctx.storage = ctx.storage.clone();
+        token_ctx.principal = Some(
+            crate::auth::TransportPrincipal::from_token_claims(crate::auth::TokenClaims {
+                user_id: crate::auth::UserId::from_string("token-alpha"),
+                key_id: "key-alpha".to_string(),
+                permissions: crate::auth::PermissionSet::read_only(),
+                namespace: Some("alpha".to_string()),
+                issued_at: chrono::Utc::now(),
+                expires_at: None,
+            })
+            .expect("valid token claims"),
+        );
+
+        for tool_fn in [
+            super::memory_build_context
+                as fn(&super::super::HandlerContext, serde_json::Value) -> serde_json::Value,
+            super::memory_get_injection_prompt,
+            super::memory_prepare_context,
+        ] {
+            let unstated = tool_fn(
+                &token_ctx,
+                serde_json::json!({"query": "Orchard launch checklist"}),
+            );
+            assert!(
+                !unstated.to_string().contains("secretcapybara")
+                    && !unstated.to_string().contains("public note"),
+                "namespaced token without workspace leaked out-of-namespace memory: {unstated}"
+            );
+
+            for alpha_claim in [
+                serde_json::json!({"query": "Orchard launch checklist", "workspaces": ["alpha"]}),
+                serde_json::json!({"query": "Orchard launch checklist", "filters": {"workspace": "alpha"}}),
+            ] {
+                let scoped_alpha = tool_fn(&token_ctx, alpha_claim.clone());
+                assert!(
+                    !scoped_alpha.to_string().contains("secretcapybara")
+                        && !scoped_alpha.to_string().contains("public note"),
+                    "namespaced token with {alpha_claim} leaked out-of-namespace memory: {scoped_alpha}"
+                );
+                assert!(
+                    scoped_alpha.to_string().contains("alphatokenonly"),
+                    "namespaced token with {alpha_claim} must read its own namespace: {scoped_alpha}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn build_context_depth3_blocks_foreign_bridge_and_include_graph_omits_foreign_edges() {
+        use crate::types::{CreateCrossRefInput, EdgeType};
+
+        let ctx = test_ctx();
+        let mem_a = seed_memory(&ctx, "Anchor mercurybridge node", "note");
+        let mem_b_foreign = super::super::dispatch(
+            &ctx,
+            "memory_create",
+            serde_json::json!({
+                "content": "Intermediate foreign secretbridge node",
+                "memory_type": "note",
+                "workspace": "private"
+            }),
+        )["id"]
+            .as_i64()
+            .expect("foreign memory B");
+        let mem_c = seed_memory(
+            &ctx,
+            "Unmatched twohopdest payload reachable only via foreign B",
+            "note",
+        );
+
+        // Graph: A (default) -> B (private) -> C (default)
+        ctx.storage
+            .with_connection(|conn| {
+                crate::storage::queries::create_crossref(
+                    conn,
+                    &CreateCrossRefInput {
+                        from_id: mem_a,
+                        to_id: mem_b_foreign,
+                        edge_type: EdgeType::default(),
+                        strength: None,
+                        source_context: None,
+                        pinned: false,
+                    },
+                )?;
+                crate::storage::queries::create_crossref(
+                    conn,
+                    &CreateCrossRefInput {
+                        from_id: mem_b_foreign,
+                        to_id: mem_c,
+                        edge_type: EdgeType::default(),
+                        strength: None,
+                        source_context: None,
+                        pinned: false,
+                    },
+                )
+            })
+            .expect("create A->B->C crossrefs");
+
+        let scoped = super::memory_build_context(
+            &ctx,
+            serde_json::json!({
+                "query": "mercurybridge",
+                "workspace": "default",
+                "depth": 3,
+                "include_graph": true
+            }),
+        );
+        let serialized = scoped.to_string();
+        assert!(
+            !serialized.contains("secretbridge"),
+            "foreign hop-1 memory leaked: {scoped}"
+        );
+        assert!(
+            !serialized.contains("twohopdest"),
+            "depth=3 traversed rejected foreign node B to pull 2-hop C: {scoped}"
+        );
+
+        let edges = scoped["graph"]["edges"]
+            .as_array()
+            .expect("graph.edges array");
+        for edge in edges {
+            assert_ne!(
+                edge["source"].as_i64(),
+                Some(mem_b_foreign),
+                "include_graph leaked foreign source ID: {edge}"
+            );
+            assert_ne!(
+                edge["target"].as_i64(),
+                Some(mem_b_foreign),
+                "include_graph leaked foreign target ID: {edge}"
+            );
+        }
+    }
 }

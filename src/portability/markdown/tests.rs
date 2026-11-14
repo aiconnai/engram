@@ -169,6 +169,48 @@ fn typed_export_refuses_foreign_workspace_before_writing() {
 }
 
 #[test]
+fn typed_import_rejects_cross_workspace_overwrite_on_explicit_workspace() {
+    let storage = Storage::open_in_memory().unwrap();
+    let beta_id = seed(&storage, "beta", "Original beta note");
+    let ctx = MarkdownContext {
+        storage: &storage,
+        principal: None,
+    };
+    let fixture = tempfile::tempdir().unwrap();
+    std::fs::write(
+        fixture.path().join("cross.md"),
+        format!("---\nengram_id: {beta_id}\nengram_version: 1\n---\nAttempted alpha overwrite\n"),
+    )
+    .unwrap();
+    let err = import(
+        &ctx,
+        ImportRequest {
+            input_dir: fixture.path().to_str().unwrap(),
+            workspace: Some("alpha"),
+            force_version: true,
+            confirm: true,
+        },
+    )
+    .unwrap_err();
+    let (err, attempted) = err.into_parts();
+    assert!(
+        matches!(err, EngramError::InvalidInput(ref msg) if msg.contains("belongs to workspace 'beta'")),
+        "unexpected error: {err:?}"
+    );
+    assert!(attempted.is_none());
+    let content = storage
+        .with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT content FROM memories WHERE id = ?1",
+                [beta_id],
+                |row| row.get::<_, String>(0),
+            )?)
+        })
+        .unwrap();
+    assert_eq!(content, "Original beta note");
+}
+
+#[test]
 fn public_facades_keep_environment_policy_in_isolated_processes() {
     const CASE: &str = "ENGRAM_MARKDOWN_CORE_POLICY_CASE";
     if let Ok(case) = std::env::var(CASE) {
