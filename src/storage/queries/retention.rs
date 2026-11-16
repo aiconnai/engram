@@ -332,23 +332,30 @@ pub fn apply_retention_policies(conn: &Connection) -> Result<i64> {
             if count > max_mem {
                 // Archive excess (oldest, lowest importance first)
                 let excess = count - max_mem;
-                let archive_sql = format!(
-                    "UPDATE memories SET lifecycle_state = 'archived'
-                     WHERE id IN (
-                        SELECT id FROM memories
-                        WHERE workspace = ? AND valid_to IS NULL
-                          AND COALESCE(lifecycle_state, 'active') = 'active'{exclude_sql}
-                        ORDER BY importance ASC, access_count ASC, created_at ASC
-                        LIMIT ?
-                     )"
+                let select_sql = format!(
+                    "SELECT id FROM memories
+                     WHERE workspace = ? AND valid_to IS NULL
+                       AND COALESCE(lifecycle_state, 'active') = 'active'{exclude_sql}
+                     ORDER BY importance ASC, access_count ASC, created_at ASC
+                     LIMIT ?"
                 );
-                let mut archive_params: Vec<rusqlite::types::Value> =
+                let mut select_params: Vec<rusqlite::types::Value> =
                     vec![policy.workspace.clone().into()];
-                archive_params.extend(exclude_vals.into_iter().map(Into::into));
-                archive_params.push(excess.into());
-                let archived =
-                    conn.execute(&archive_sql, rusqlite::params_from_iter(archive_params))?;
-                total_affected += archived as i64;
+                select_params.extend(exclude_vals.into_iter().map(Into::into));
+                select_params.push(excess.into());
+                let victim_ids: Vec<i64> = {
+                    let mut stmt = conn.prepare(&select_sql)?;
+                    let rows = stmt
+                        .query_map(rusqlite::params_from_iter(select_params), |row| row.get(0))?;
+                    rows.collect::<std::result::Result<Vec<i64>, _>>()?
+                };
+                // Normal update path (version, memory_versions, event, sync_state)
+                // instead of one raw bulk UPDATE.
+                for id in victim_ids {
+                    if archive_memory_if_active(conn, id, Some(&policy.workspace))? {
+                        total_affected += 1;
+                    }
+                }
             }
         }
 
@@ -643,6 +650,63 @@ mod tests {
                 Ok(())
             })
             .expect("retention compression should be archived-only");
+    }
+
+    #[test]
+    fn apply_retention_max_memories_archival_uses_normal_update_bookkeeping() {
+        let storage = Storage::open_in_memory().expect("in-memory storage");
+        storage
+            .with_transaction(|conn| {
+                let mut ids = Vec::new();
+                for (content, importance) in [
+                    ("retention bookkeeping low importance", 0.1_f32),
+                    ("retention bookkeeping mid importance", 0.2),
+                    ("retention bookkeeping high importance", 0.9),
+                ] {
+                    ids.push(
+                        create_memory(
+                            conn,
+                            &CreateMemoryInput {
+                                content: content.to_string(),
+                                memory_type: MemoryType::Note,
+                                importance: Some(importance),
+                                workspace: Some("default".to_string()),
+                                tier: MemoryTier::Permanent,
+                                ..Default::default()
+                            },
+                        )?
+                        .id,
+                    );
+                }
+                set_retention_policy(conn, "default", None, Some(1), None, None, None, None, None)?;
+                let before: Vec<_> = ids
+                    .iter()
+                    .map(|id| update_footprint(conn, *id))
+                    .collect::<Result<_>>()?;
+
+                let affected = apply_retention_policies(conn)?;
+                assert_eq!(affected, 2);
+
+                let after: Vec<_> = ids
+                    .iter()
+                    .map(|id| update_footprint(conn, *id))
+                    .collect::<Result<_>>()?;
+                for index in 0..2 {
+                    assert_eq!(lifecycle_state(conn, ids[index])?, "archived");
+                    assert_eq!(after[index].0, before[index].0 + 1, "version bump");
+                    assert_eq!(after[index].1, before[index].1 + 1, "memory_versions row");
+                    assert_eq!(after[index].2, before[index].2 + 1, "change event");
+                }
+                assert_eq!(lifecycle_state(conn, ids[2])?, "active");
+                assert_eq!(after[2], {
+                    let mut untouched = before[2];
+                    untouched.3 = after[2].3;
+                    untouched
+                });
+                assert_eq!(after[2].3, before[2].3 + 2, "sync_state pending changes");
+                Ok(())
+            })
+            .expect("retention archival should leave normal update bookkeeping");
     }
 
     #[test]

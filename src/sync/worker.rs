@@ -456,7 +456,12 @@ fn format_interrupted_last_error(existing: Option<&str>) -> String {
 /// deduplicated, byte-bounded form (`<= 1024` UTF-8 bytes) so repeated
 /// crash-loop restarts cannot grow `sync_state.last_error` without bound.
 pub(crate) fn reset_interrupted_sync(conn: &Connection) -> Result<bool> {
-    conn.execute_batch("SAVEPOINT sp_reset_interrupted_sync")?;
+    let use_immediate = conn.is_autocommit();
+    if use_immediate {
+        conn.execute_batch("BEGIN IMMEDIATE")?;
+    } else {
+        conn.execute_batch("SAVEPOINT sp_reset_interrupted_sync")?;
+    }
     let outcome: Result<bool> = (|| {
         let row: Option<Option<String>> = conn
             .query_row(
@@ -477,13 +482,21 @@ pub(crate) fn reset_interrupted_sync(conn: &Connection) -> Result<bool> {
     })();
     match outcome {
         Ok(val) => {
-            conn.execute_batch("RELEASE SAVEPOINT sp_reset_interrupted_sync")?;
+            if use_immediate {
+                conn.execute_batch("COMMIT")?;
+            } else {
+                conn.execute_batch("RELEASE SAVEPOINT sp_reset_interrupted_sync")?;
+            }
             Ok(val)
         }
         Err(err) => {
-            let _ = conn.execute_batch(
-                "ROLLBACK TO SAVEPOINT sp_reset_interrupted_sync; RELEASE SAVEPOINT sp_reset_interrupted_sync",
-            );
+            if use_immediate {
+                let _ = conn.execute_batch("ROLLBACK");
+            } else {
+                let _ = conn.execute_batch(
+                    "ROLLBACK TO SAVEPOINT sp_reset_interrupted_sync; RELEASE SAVEPOINT sp_reset_interrupted_sync",
+                );
+            }
             Err(err)
         }
     }
@@ -668,6 +681,72 @@ mod tests {
             bounded.matches(INTERRUPTED_SYNC_MSG).count(),
             1,
             "interrupted suffix must never stack more than once"
+        );
+    }
+
+    #[test]
+    fn reset_interrupted_sync_supports_autocommit_and_nested_transactions() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE sync_state (
+                id INTEGER PRIMARY KEY,
+                pending_changes INTEGER NOT NULL DEFAULT 0,
+                last_sync TEXT,
+                last_error TEXT,
+                is_syncing INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE outer_probe (x INTEGER NOT NULL);
+            INSERT INTO sync_state (id, is_syncing, last_error) VALUES (1, 1, NULL);",
+        )
+        .unwrap();
+
+        // Top-level autocommit success returns to autocommit.
+        assert!(conn.is_autocommit());
+        assert!(reset_interrupted_sync(&conn).unwrap());
+        assert!(conn.is_autocommit());
+
+        // Inside an outer transaction, nested savepoint success preserves the outer tx.
+        mark_sync_started(&conn).unwrap();
+        conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+        assert!(!conn.is_autocommit());
+        conn.execute("INSERT INTO outer_probe (x) VALUES (1)", [])
+            .unwrap();
+        assert!(reset_interrupted_sync(&conn).unwrap());
+        assert!(!conn.is_autocommit());
+        conn.execute_batch("COMMIT").unwrap();
+        assert!(conn.is_autocommit());
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM outer_probe", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+
+        // Malformed sync_state triggers rollback: clean autocommit at top level and
+        // preserves outer transaction writes when nested.
+        let broken = Connection::open_in_memory().expect("broken db");
+        broken
+            .execute_batch(
+                "CREATE TABLE sync_state (id INTEGER PRIMARY KEY);
+                 CREATE TABLE outer_probe (x INTEGER NOT NULL);
+                 INSERT INTO sync_state (id) VALUES (1);",
+            )
+            .unwrap();
+        assert!(reset_interrupted_sync(&broken).is_err());
+        assert!(broken.is_autocommit());
+
+        broken.execute_batch("BEGIN IMMEDIATE").unwrap();
+        broken
+            .execute("INSERT INTO outer_probe (x) VALUES (42)", [])
+            .unwrap();
+        assert!(reset_interrupted_sync(&broken).is_err());
+        assert!(!broken.is_autocommit());
+        broken.execute_batch("COMMIT").unwrap();
+        assert_eq!(
+            broken
+                .query_row("SELECT x FROM outer_probe", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            42
         );
     }
 
