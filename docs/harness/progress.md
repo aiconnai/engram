@@ -6,10 +6,10 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-11-14 — post-review independente pós-release v0.24.0 (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-14-remediation-2026-10-26-post.md (cobre f4be2c40..d8db705a na branch docs/post-v0.24.0-release-sync). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
-| Last sensors | `2026-11-14T17:38:35Z status=pass mode=full duration_sec=1648, sem exclusões, no commit d8db705a (branch docs/post-v0.24.0-release-sync sobre main f4be2c40).` |
-| Last commit | `d8db705a` |
-| Last live-state check | `2026-11-14 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 1648s em d8db705a; doctor PASS, GitHub Release v0.24.0 (f4be2c40) e GHSAs publicados; receipts H1 e registries externos pendentes.` |
+| Last review | `2026-11-16 — post-review independente manutenção pós-v0.24.0 (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-16-remediation-2026-10-26-post.md (cobre e5767618..ce011e91 na branch fix/post-v0.24.0-maintenance). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
+| Last sensors | `2026-11-16T15:32:30Z status=pass mode=full duration_sec=380, sem exclusões, no commit ce011e91 (branch fix/post-v0.24.0-maintenance sobre main e5767618).` |
+| Last commit | `ce011e91` |
+| Last live-state check | `2026-11-16 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 380s em ce011e91; doctor PASS. Receipts humanos H1 e registries externos pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,9 +23,9 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat, 2026-11-14): após merge do `#277` (`f4be2c40`) e tag assinada `v0.24.0`, aprovar `release-github` (`43611154035`), validar `v0.24.0`, publicar `GHSA-8xxr-p5q8-c7cg` / `GHSA-6q7w-w273-gq6p` (sem CVEs) e mesclar PR de reconciliação pós-release em `main` (`H1` pendente). [Canvas](canvas/2026-11-12-pre-v0.24.0-remediation.md).
+- **Autorização atual** (owner, chat, 2026-11-16): após merge do `#278` (`e5767618`), executar **Opção A2** (teste do mutante sobrevivente em `entity_extraction.rs`, `B-3`/`B-4` via `archive_memory_if_active`, `BEGIN IMMEDIATE` em `SavepointGuard`/`reset_interrupted_sync` e 2 achados `[LOW]`) e mesclar na `main` com CI verde (`H1` pendente). [Canvas](canvas/2026-11-16-post-v0.24.0-maintenance.md).
 - **Limites**: receipts humanos `H1` permanecem pendentes (nunca fabricados); publicação externa em `crates.io`, `PyPI`, `npm` e `Homebrew` e pedidos de CVE permanecem fora de escopo; sem push de novas tags, merge administrativo (`--admin`), remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
-- **Última evidência**: [closeout pós-release v0.24.0](./progress/2026-10-26-remediation.md#post-v0240-github-release--advisory-reconciliation-2026-11-14): Release `v0.24.0` publicado (`43611154035`, `verify-github-release.sh` PASS), ambas as `GHSA-*` publicadas (`state=published`), `D1` (`d8db705a`) verde no `sensors.sh` (`1648s`) e [post-review PASS](./reviews/2026-11-14-remediation-2026-10-26-post.md). Receipts `H1` e registries pendentes.
+- **Última evidência**: [pacote de manutenção pós-v0.24.0](./progress/2026-10-26-remediation.md#post-v0240-maintenance-package-2026-11-16): `c1d1d3b7` + `ce011e91` fecham o mutante do `Nightly` `43702773481`, `B-3`/`B-4`, `BEGIN IMMEDIATE` e os 2 `[LOW]` pós-release; `sensors.sh` full PASS (`380s`) e [post-review PASS](./reviews/2026-11-16-remediation-2026-10-26-post.md). Receipts `H1` e registries pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:
