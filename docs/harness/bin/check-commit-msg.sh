@@ -37,7 +37,7 @@ CLEAN_MSG="${CLEAN_MSG%"${CLEAN_MSG##*[![:space:]]}"}"
 TYPES='feat|fix|docs|refactor|test|perf|ci|chore|revert|style|build'
 
 # Allowed scopes (harness + common engram areas + explicit tracker ids)
-SCOPES='harness|mcp|storage|search|intelligence|hooks|sdk-python|sdk-ts|cli|server|watcher|embedding|graph|sync|snapshot|attestation|ci|docs|infra|engra-[0-9]+|rfc-[0-9]+'
+SCOPES='harness|mcp|storage|search|intelligence|hooks|sdk-python|sdk-ts|cli|server|watcher|embedding|graph|sync|snapshot|attestation|ci|docs|infra|release|engra-[0-9]+|rfc-[0-9]+'
 
 if echo "$CLEAN_MSG" | grep -qE "^(${TYPES})\((${SCOPES})\): .+"; then
   echo "OK commit message: $CLEAN_MSG"
