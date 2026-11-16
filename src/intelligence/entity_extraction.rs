@@ -604,6 +604,84 @@ mod tests {
     }
 
     #[test]
+    fn test_extracted_entity_default_confidences() {
+        let expected = [
+            (ExtractedEntityType::Mention, 0.9_f32),
+            (ExtractedEntityType::Email, 0.95_f32),
+            (ExtractedEntityType::Url, 0.7_f32),
+            (ExtractedEntityType::Name, 0.5_f32),
+            (ExtractedEntityType::KnownAlias, 1.0_f32),
+        ];
+        for (kind, score) in expected {
+            assert!(
+                (kind.default_confidence() - score).abs() < f32::EPSILON,
+                "unexpected default_confidence for {kind:?}: {}",
+                kind.default_confidence()
+            );
+        }
+
+        for (text, extract_mentions, extract_emails, extract_urls, extract_names, kind, score) in [
+            (
+                "@alice",
+                true,
+                false,
+                false,
+                false,
+                ExtractedEntityType::Mention,
+                0.9_f32,
+            ),
+            (
+                "one@alpha.test",
+                false,
+                true,
+                false,
+                false,
+                ExtractedEntityType::Email,
+                0.95_f32,
+            ),
+            (
+                "https://alpha.test",
+                false,
+                false,
+                true,
+                false,
+                ExtractedEntityType::Url,
+                0.7_f32,
+            ),
+            (
+                "Alice Smith",
+                false,
+                false,
+                false,
+                true,
+                ExtractedEntityType::Name,
+                0.5_f32,
+            ),
+        ] {
+            let config = ExtractionConfig {
+                extract_mentions,
+                extract_emails,
+                extract_urls,
+                extract_names,
+                lookup_aliases: false,
+                ..Default::default()
+            };
+            let result = extract_entities(text, &config, None);
+            assert_eq!(
+                result.entities.len(),
+                1,
+                "unexpected entity count for {text}"
+            );
+            assert_eq!(result.entities[0].entity_type, kind);
+            assert!(
+                (result.entities[0].confidence - score).abs() < f32::EPSILON,
+                "unexpected extracted confidence for {kind:?}: {}",
+                result.entities[0].confidence
+            );
+        }
+    }
+
+    #[test]
     fn test_common_domains_and_phrases_are_not_entities() {
         let config = ExtractionConfig {
             extract_mentions: false,

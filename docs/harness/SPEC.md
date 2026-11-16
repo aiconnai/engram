@@ -315,3 +315,23 @@ explicitamente (`A1` + `A2`, chat, 2026-11-14):
 - **Fora de escopo / pendências preservadas**: publicação em `crates.io`, PyPI, npm ou Homebrew e
   solicitação de CVEs permanecem **excluídas**; receipts humanos `H1` permanecem **pendentes** (nunca
   fabricados).
+
+## Manutenção pós-v0.24.0 (Opção A2, 2026-11-16)
+
+Após o merge do PR `#278` (`e5767618cd50fa1b71ef886b0f94b37b0694734e`), o owner selecionou a
+**Opção A2** (`2026-11-16`, chat) e autorizou abrir, validar no CI e mesclar este pacote de
+manutenção pós-`v0.24.0`:
+- **Escopo autorizado**: adicionar teste unitário para `ExtractedEntityType::default_confidence` em
+  `src/intelligence/entity_extraction.rs` (fechando o mutante sobrevivente do `Nightly` `43702773481`),
+  encaminhar os caminhos de arquivamento em lote (`B-3`/`B-4`: `retention.rs`,
+  `consolidation_offline.rs` e `conflicts.rs`) por `pub(crate) fn archive_memory_if_active` em
+  `src/storage/queries/lifecycle.rs` com bookkeeping completo (`version`, `memory_versions`,
+  `memory_events`, `sync_state.pending_changes`) sem alterar a API pública Rust, usar `BEGIN IMMEDIATE`
+  quando `conn.is_autocommit()` for verdadeiro em `SavepointGuard` e `reset_interrupted_sync`
+  preservando `SAVEPOINT` aninhado, fechar os 2 achados `[LOW]` de
+  [`2026-11-14-remediation-2026-10-26-post.md`](reviews/2026-11-14-remediation-2026-10-26-post.md)
+  (`v0.24.0-readiness.md`, `CLAUDE.md` e escopo `release` em `check-commit-msg.sh`), documentar o
+  [Canvas](canvas/2026-11-16-post-v0.24.0-maintenance.md) e mesclar na `main` com CI verde.
+- **Fora de escopo / pendências preservadas**: publicação externa em `crates.io`, PyPI, npm ou
+  Homebrew permanece **excluída**, e os receipts humanos `H1` permanecem **pendentes** (nunca
+  fabricados).

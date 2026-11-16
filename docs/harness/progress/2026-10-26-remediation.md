@@ -668,3 +668,33 @@ post-review ([`2026-11-14-remediation-2026-10-26-post.md`](../reviews/2026-11-14
 recorded `REVIEW_VERDICT: PASS`. Human `H1` post-gate receipts (`#266`–`#277` and post-release sync)
 remain pending and never fabricated, and external registries (`crates.io` `0.21.1`, PyPI `0.4.0`,
 npm `0.3.0`, Homebrew `0.21.2`) remain untouched.
+
+### Post-v0.24.0 Maintenance Package (`2026-11-16`)
+
+Following PR `#278` merge into `main` (`e5767618cd50fa1b71ef886b0f94b37b0694734e`), Sunday
+`Nightly` (`43702773481`) reported 1 missed mutant in `src/intelligence/entity_extraction.rs:93:9`
+(`ExtractedEntityType::default_confidence -> f32` replaced with `1.0`). Owner selected **Option A2**
+(`2026-11-16`, chat) and authorized landing the maintenance package and merging into `main` once CI
+is green:
+- `M1` (`c1d1d3b7`): added `test_extracted_entity_default_confidences` in
+  `src/intelligence/entity_extraction.rs`; added `pub(crate) fn archive_memory_if_active` and
+  `#[cfg(test)] pub(crate) fn update_footprint` in `src/storage/queries/lifecycle.rs` and routed
+  `retention.rs`, `consolidation_offline.rs`, and `conflicts.rs` bulk archival through normal update
+  bookkeeping (`version`, `memory_versions`, `memory_events`, `sync_state.pending_changes`) without
+  changing `engram-core` public Rust API (`check-advertised-contracts.py` `PASS`, `19908` lines);
+  replaced `MINIMAL_SCHEMA` in `consolidation_offline.rs` tests with `run_migrations(&conn)`; and
+  updated `SavepointGuard` (`consolidation_offline.rs`) and `reset_interrupted_sync` (`src/sync/worker.rs`)
+  to use `BEGIN IMMEDIATE` when `conn.is_autocommit()` is true while preserving nested `SAVEPOINT`
+  transactions. Verified `cargo clippy -- -D warnings` (both CI features and `--features cloud`),
+  targeted `--lib` tests including `cargo test --locked --features cloud --lib sync::worker` (`6/6`),
+  and unchanged `Cargo.lock`.
+- `M2` (`ce011e91`): closed both `[LOW]` findings from `2026-11-14-remediation-2026-10-26-post.md`
+  (added `release` to `SCOPES` in `docs/harness/bin/check-commit-msg.sh`, updated
+  `docs/releases/v0.24.0-readiness.md` and `CLAUDE.md` at `297` lines `< 300`) and added
+  [`2026-11-16-post-v0.24.0-maintenance.md`](../canvas/2026-11-16-post-v0.24.0-maintenance.md).
+- Full `sensors.sh` at `2026-11-16T15:32:30Z` (`duration_sec=380`, `mode=full`, zero exclusions)
+  `PASS`, and independent post-review
+  ([`2026-11-16-remediation-2026-10-26-post.md`](../reviews/2026-11-16-remediation-2026-10-26-post.md))
+  recorded `REVIEW_VERDICT: PASS` (1 non-blocking `[LOW]` note on `reset_interrupted_sync` commit
+  error cleanup). Human `H1` post-gate receipts remain pending (never fabricated) and external
+  registries remain untouched.

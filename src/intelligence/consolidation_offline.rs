@@ -169,21 +169,32 @@ fn memories_has_valid_to(conn: &Connection) -> bool {
 
 struct SavepointGuard<'a> {
     conn: &'a Connection,
+    use_immediate: bool,
     committed: bool,
 }
 
 impl<'a> SavepointGuard<'a> {
     fn begin(conn: &'a Connection) -> Result<Self> {
-        conn.execute_batch("SAVEPOINT sp_consolidate_group")?;
+        let use_immediate = conn.is_autocommit();
+        if use_immediate {
+            conn.execute_batch("BEGIN IMMEDIATE")?;
+        } else {
+            conn.execute_batch("SAVEPOINT sp_consolidate_group")?;
+        }
         Ok(Self {
             conn,
+            use_immediate,
             committed: false,
         })
     }
 
     fn commit(mut self) -> Result<()> {
-        self.conn
-            .execute_batch("RELEASE SAVEPOINT sp_consolidate_group")?;
+        if self.use_immediate {
+            self.conn.execute_batch("COMMIT")?;
+        } else {
+            self.conn
+                .execute_batch("RELEASE SAVEPOINT sp_consolidate_group")?;
+        }
         self.committed = true;
         Ok(())
     }
@@ -192,9 +203,13 @@ impl<'a> SavepointGuard<'a> {
 impl Drop for SavepointGuard<'_> {
     fn drop(&mut self) {
         if !self.committed {
-            let _ = self.conn.execute_batch(
-                "ROLLBACK TO SAVEPOINT sp_consolidate_group; RELEASE SAVEPOINT sp_consolidate_group",
-            );
+            if self.use_immediate {
+                let _ = self.conn.execute_batch("ROLLBACK");
+            } else {
+                let _ = self.conn.execute_batch(
+                    "ROLLBACK TO SAVEPOINT sp_consolidate_group; RELEASE SAVEPOINT sp_consolidate_group",
+                );
+            }
         }
     }
 }
@@ -703,31 +718,18 @@ impl OfflineConsolidator {
             [],
         )?;
 
-        let valid_to_clause = if memories_has_valid_to(conn) {
-            " AND valid_to IS NULL"
-        } else {
-            ""
-        };
-        let update_sql = format!(
-            "UPDATE memories
-             SET lifecycle_state = 'archived',
-                 updated_at = ?2
-             WHERE id = ?1
-               AND workspace = ?3
-               AND (lifecycle_state IS NULL OR lifecycle_state != 'archived'){valid_to_clause}"
-        );
-
-        let now = now_rfc3339_millis();
         let mut count = 0usize;
         for &id in ids {
-            let updated = conn.execute(&update_sql, params![id, now, workspace])?;
-            if updated > 0 {
+            // Normal update path: version bump, `memory_versions` row, change
+            // event and `sync_state` update (skips rows outside `workspace`,
+            // soft-deleted rows and rows that are already archived).
+            if crate::storage::queries::archive_memory_if_active(conn, id, Some(workspace))? {
                 conn.execute(
                     "INSERT OR IGNORE INTO memory_tags (memory_id, tag_id)
                      SELECT ?1, id FROM tags WHERE name = 'consolidated'",
                     params![id],
                 )?;
-                count += updated;
+                count += 1;
             }
         }
         Ok(count)
@@ -899,52 +901,12 @@ mod tests {
     // Test helpers
     // ------------------------------------------------------------------
 
-    /// Minimal schema needed for tests: memories + consolidated_memories.
-    const MINIMAL_SCHEMA: &str = r#"
-        CREATE TABLE IF NOT EXISTS memories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT NOT NULL,
-            memory_type TEXT NOT NULL DEFAULT 'note',
-            importance REAL NOT NULL DEFAULT 0.5,
-            access_count INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-            last_accessed_at TEXT,
-            owner_id TEXT,
-            visibility TEXT NOT NULL DEFAULT 'private',
-            scope TEXT NOT NULL DEFAULT 'global',
-            workspace TEXT NOT NULL DEFAULT 'default',
-            tier TEXT NOT NULL DEFAULT 'permanent',
-            version INTEGER NOT NULL DEFAULT 1,
-            has_embedding INTEGER NOT NULL DEFAULT 0,
-            expires_at TEXT,
-            content_hash TEXT,
-            event_time TEXT,
-            event_duration_seconds INTEGER,
-            trigger_pattern TEXT,
-            procedure_success_count INTEGER NOT NULL DEFAULT 0,
-            procedure_failure_count INTEGER NOT NULL DEFAULT 0,
-            summary_of_id INTEGER,
-            lifecycle_state TEXT NOT NULL DEFAULT 'active',
-            valid_to TEXT,
-            metadata TEXT NOT NULL DEFAULT '{}'
-        );
-        CREATE TABLE IF NOT EXISTS tags (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE COLLATE NOCASE
-        );
-        CREATE TABLE IF NOT EXISTS memory_tags (
-            memory_id INTEGER NOT NULL,
-            tag_id INTEGER NOT NULL,
-            PRIMARY KEY (memory_id, tag_id),
-            FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE,
-            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-        );
-    "#;
-
+    /// Open an in-memory database with the real, fully migrated schema so that
+    /// archival can be checked against `memory_versions`, `memory_events` and
+    /// `sync_state` (a hand-written minimal schema hides those side effects).
     fn open_conn() -> Connection {
         let conn = Connection::open_in_memory().expect("in-memory db");
-        conn.execute_batch(MINIMAL_SCHEMA).expect("create tables");
+        crate::storage::migrations::run_migrations(&conn).expect("run migrations");
         conn.execute_batch(CREATE_CONSOLIDATED_MEMORIES_TABLE)
             .expect("create consolidated_memories");
         conn
@@ -1444,5 +1406,114 @@ mod tests {
             });
             assert!(bad.consolidate(&conn, "ws_filter").is_err());
         }
+    }
+
+    #[test]
+    fn test_consolidation_archival_uses_normal_update_bookkeeping() {
+        use crate::storage::queries::update_footprint;
+
+        let conn = open_conn();
+        let id1 = insert_memory(
+            &conn,
+            "Archival bookkeeping alpha beta gamma",
+            "ws_book",
+            5.0,
+        );
+        let id2 = insert_memory(
+            &conn,
+            "Archival bookkeeping alpha beta delta",
+            "ws_book",
+            5.0,
+        );
+        let before1 = update_footprint(&conn, id1).expect("footprint before 1");
+        let before2 = update_footprint(&conn, id2).expect("footprint before 2");
+
+        let report = OfflineConsolidator::new(default_config())
+            .consolidate(&conn, "ws_book")
+            .expect("consolidate");
+        assert_eq!(report.memories_archived, 2);
+
+        let after1 = update_footprint(&conn, id1).expect("footprint after 1");
+        let after2 = update_footprint(&conn, id2).expect("footprint after 2");
+        for (before, after) in [(before1, after1), (before2, after2)] {
+            assert_eq!(after.0, before.0 + 1, "version must be bumped");
+            assert_eq!(after.1, before.1 + 1, "memory_versions row must be added");
+            assert_eq!(after.2, before.2 + 1, "change event must be recorded");
+        }
+        assert_eq!(
+            after2.3,
+            before2.3 + 2,
+            "sync_state.pending_changes must count both archived memories"
+        );
+    }
+
+    #[test]
+    fn test_savepoint_guard_uses_immediate_at_top_level_and_savepoint_when_nested() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch("CREATE TABLE sp_probe (id INTEGER PRIMARY KEY, label TEXT NOT NULL);")
+            .expect("create sp_probe");
+        let labels = |c: &Connection| -> Vec<String> {
+            let mut stmt = c
+                .prepare("SELECT label FROM sp_probe ORDER BY id")
+                .expect("prepare");
+            stmt.query_map([], |row| row.get(0))
+                .expect("query")
+                .collect::<std::result::Result<Vec<String>, _>>()
+                .expect("collect")
+        };
+
+        // Top-level autocommit: drop rolls back BEGIN IMMEDIATE and restores autocommit.
+        assert!(conn.is_autocommit());
+        {
+            let sp = SavepointGuard::begin(&conn).expect("begin top-level rollback");
+            assert!(!conn.is_autocommit());
+            conn.execute("INSERT INTO sp_probe (label) VALUES ('rolled_back')", [])
+                .expect("insert rolled_back");
+            drop(sp);
+        }
+        assert!(conn.is_autocommit());
+        assert!(labels(&conn).is_empty());
+
+        // Top-level autocommit: commit persists write and restores autocommit.
+        {
+            let sp = SavepointGuard::begin(&conn).expect("begin top-level commit");
+            assert!(!conn.is_autocommit());
+            conn.execute("INSERT INTO sp_probe (label) VALUES ('committed')", [])
+                .expect("insert committed");
+            sp.commit().expect("commit top-level");
+        }
+        assert!(conn.is_autocommit());
+        assert_eq!(labels(&conn), vec!["committed"]);
+
+        // Inside an outer transaction: nested savepoints preserve the outer tx.
+        conn.execute_batch("BEGIN IMMEDIATE").expect("outer begin");
+        assert!(!conn.is_autocommit());
+        conn.execute("INSERT INTO sp_probe (label) VALUES ('outer')", [])
+            .expect("insert outer");
+        {
+            let sp = SavepointGuard::begin(&conn).expect("begin nested rollback");
+            assert!(!conn.is_autocommit());
+            conn.execute(
+                "INSERT INTO sp_probe (label) VALUES ('inner_rolled_back')",
+                [],
+            )
+            .expect("insert inner_rolled_back");
+            drop(sp);
+        }
+        assert!(!conn.is_autocommit());
+        {
+            let sp = SavepointGuard::begin(&conn).expect("begin nested commit");
+            assert!(!conn.is_autocommit());
+            conn.execute(
+                "INSERT INTO sp_probe (label) VALUES ('inner_committed')",
+                [],
+            )
+            .expect("insert inner_committed");
+            sp.commit().expect("commit nested");
+        }
+        assert!(!conn.is_autocommit());
+        conn.execute_batch("COMMIT").expect("outer commit");
+        assert!(conn.is_autocommit());
+        assert_eq!(labels(&conn), vec!["committed", "outer", "inner_committed"]);
     }
 }

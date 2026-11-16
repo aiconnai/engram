@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 
 use crate::error::Result;
-use crate::storage::queries::get_memory;
+use crate::storage::queries::{archive_memory_if_active, get_memory};
 use crate::types::MemoryId;
 
 use super::{
@@ -232,17 +232,11 @@ pub fn resolve_conflict(
     match resolution_type {
         ResolutionType::KeepA => {
             // Archive memory B
-            conn.execute(
-                "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ?",
-                params![memory_b_id],
-            )?;
+            archive_memory_if_active(conn, memory_b_id, None)?;
         }
         ResolutionType::KeepB => {
             // Archive memory A
-            conn.execute(
-                "UPDATE memories SET lifecycle_state = 'archived' WHERE id = ?",
-                params![memory_a_id],
-            )?;
+            archive_memory_if_active(conn, memory_a_id, None)?;
         }
         ResolutionType::DeleteBoth => {
             let now = Utc::now().to_rfc3339();

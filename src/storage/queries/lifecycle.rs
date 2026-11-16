@@ -77,3 +77,63 @@ pub fn update_memory_lifecycle_state(
 
     get_current_memory_including_expired(conn, id)
 }
+
+/// Archive a live, not-yet-archived memory through the normal update path.
+///
+/// Bulk-archival sites (retention, consolidation, conflict resolution) use this
+/// instead of a raw `UPDATE memories SET lifecycle_state = 'archived'`, so every
+/// archived memory gets the version bump, the `memory_versions` row, the change
+/// event and the `sync_state` update of [`update_memory_lifecycle_state`].
+///
+/// Memories that are missing, soft-deleted, already archived or (when
+/// `workspace` is given) in another workspace are left untouched and reported as
+/// `Ok(false)`, matching the guards of the former raw statements.
+pub(crate) fn archive_memory_if_active(
+    conn: &Connection,
+    id: i64,
+    workspace: Option<&str>,
+) -> Result<bool> {
+    let eligible: bool = conn.query_row(
+        "SELECT EXISTS(
+             SELECT 1 FROM memories
+             WHERE id = ?1
+               AND valid_to IS NULL
+               AND COALESCE(lifecycle_state, 'active') != 'archived'
+               AND (?2 IS NULL OR workspace = ?2)
+         )",
+        params![id, workspace],
+        |row| row.get(0),
+    )?;
+    if !eligible {
+        return Ok(false);
+    }
+    update_memory_lifecycle_state(conn, id, LifecycleState::Archived)?;
+    Ok(true)
+}
+
+/// Test-only snapshot of the bookkeeping a normal update must leave behind:
+/// `(version, memory_versions rows, memory_events rows, sync_state.pending_changes)`.
+#[cfg(test)]
+pub(crate) fn update_footprint(conn: &Connection, id: i64) -> Result<(i64, i64, i64, i64)> {
+    let version: i64 = conn.query_row(
+        "SELECT version FROM memories WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    )?;
+    let versions: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM memory_versions WHERE memory_id = ?1",
+        params![id],
+        |row| row.get(0),
+    )?;
+    let events: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM memory_events WHERE memory_id = ?1",
+        params![id],
+        |row| row.get(0),
+    )?;
+    let pending: i64 = conn.query_row(
+        "SELECT pending_changes FROM sync_state WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok((version, versions, events, pending))
+}
