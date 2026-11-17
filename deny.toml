@@ -12,7 +12,7 @@ unmaintained = "workspace"
 # The libSQL-only exceptions were removed with the retired Turso backend
 # (ADR-STORAGE-20260816-1). Feature-gated PDF warnings remain governed without
 # global suppression in docs/security/advisory-exceptions.toml.
-ignore = []
+ignore = ["RUSTSEC-2026-0543"]
 
 [licenses]
 allow = [

@@ -71,3 +71,23 @@ expires = 2026-12-31
 remediation = "No fix reachable by a dependency update: lopdf 0.45 drops ttf-parser, but pdf-extract 0.12 pins lopdf ^0.42, so cutting it needs a product change (replace/upgrade pdf-extract or the PDF extraction path). Remove this governed warning when the PDF stack no longer depends on ttf-parser."
 feature_gated = true
 default_graph = false
+
+[[exceptions]]
+advisory = "RUSTSEC-2026-0543"
+crate = "chrono"
+versions = ["0.4.43"]
+tools = ["cargo-deny:ignore"]
+url = "https://rustsec.org/advisories/RUSTSEC-2026-0543"
+dependency_path = [
+  "engram-core 0.24.0 -> chrono 0.4.43",
+  "engram-types 0.24.0 -> chrono 0.4.43",
+  "engram-core 0.24.0 -> duckdb 1.10506.1 -> chrono 0.4.43",
+  "engram-core 0.24.0 -> duckdb 1.10506.1 -> arrow 58.4.1 -> arrow-array 58.4.1 -> chrono 0.4.43",
+]
+feature = "Default workspace dependencies and optional duckdb-graph analytics"
+exposure = "The default runtime and domain types rely on chrono for timestamps and serialization. DuckDB and Arrow also use it for analytics. The upstream maintenance advisory covers all chrono versions."
+owner = "Ronaldo"
+expires = 2026-12-31
+remediation = "Migrate direct timestamp usage to jiff or time, verify serialized timestamp compatibility, and reassess the DuckDB/Arrow dependency paths before removing this exception."
+feature_gated = false
+default_graph = true
