@@ -34,7 +34,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/aiconnai/engram"
-Repository = "https://github.com/aiconnai/engram-python-sdk"
+Repository = "https://github.com/aiconnai/engram/tree/main/sdks/python"
 
 [tool.setuptools.packages.find]
 include = ["engram_client*"]
