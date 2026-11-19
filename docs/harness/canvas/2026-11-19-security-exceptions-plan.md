@@ -8,7 +8,7 @@ Scope: Anchor `scripts/test_check_security_exceptions.py` and `scripts/check-sec
 
 | Trigger | Evidence |
 |---|---|
-| Hardcoded `TODAY = date(2026, 10, 5)` in `scripts/test_check_security_exceptions.py:29` enforces `expires <= 2027-01-03` in the required `Security exception policy` CI job (`.github/workflows/ci.yml:527`), diverging from `[metadata].as_of` in `docs/security/advisory-exceptions.toml` | `scripts/test_check_security_exceptions.py`, `scripts/check-security-exceptions.py`, `docs/security/advisory-exceptions.toml` |
+| Hardcoded `TODAY = date(2026, 10, 5)` in `scripts/test_check_security_exceptions.py:29` enforces `expires <= 2027-01-03` in the `Security Gate` CI job (`.github/workflows/ci.yml:527`, transitively gating required `Test (ubuntu-latest)`), diverging from `[metadata].as_of` in `docs/security/advisory-exceptions.toml` | `scripts/test_check_security_exceptions.py`, `scripts/check-security-exceptions.py`, `docs/security/advisory-exceptions.toml` |
 | All 3 governed RustSec exceptions (`RUSTSEC-2026-0192`, `RUSTSEC-2024-0436`, `RUSTSEC-2026-0543`) expire on `2026-12-31` (`42` days) | `docs/security/advisory-exceptions.toml`, `docs/harness/risk-register.yaml` (`RISK-0008`) |
 
 ## Approaches Considered

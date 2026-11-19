@@ -1,8 +1,8 @@
 # RustSec `2026-12-31` Advisory-Exception Remediation Plan (Frente 3)
 
-**Date:** `2026-11-19`  
-**Baseline:** `origin/main` `531a80121d13621dff44a7899b1af6360e60b4eb` (`engram-core` `0.24.1` prepared)  
-**Hard Deadline:** `2026-12-31` (`42` days) — all three governed records in [`advisory-exceptions.toml`](../../security/advisory-exceptions.toml) expire on `2026-12-31` and block `Security exception policy` + `Security Gate` on `2027-01-01`.
+- **Date:** `2026-11-19`
+- **Baseline:** `origin/main` `531a80121d13621dff44a7899b1af6360e60b4eb` (`engram-core` `0.24.1` prepared)
+- **Hard Deadline:** `2026-12-31` (`42` days) — all three governed records in [`advisory-exceptions.toml`](../../security/advisory-exceptions.toml) expire on `2026-12-31` and block `Security exception policy` + `Security Gate` on `2027-01-01`.
 
 ---
 
@@ -13,7 +13,7 @@ Every dependency path and upstream crate version below was verified directly via
 | Advisory | Locked Crate | Kind | Graph Scope | Call Sites in Workspace | Upstream Reality (`crates.io` `2026-11-19`) | Can Be Eliminated From `Cargo.lock` Today? |
 |---|---|---|---|---|---|---|
 | `RUSTSEC-2026-0192` | `ttf-parser 0.25.1` | `unmaintained` (`cargo-audit:allowed-warning`) | `pdf` feature only (`default_graph = false`; enabled in `CI_REQUIRED_FEATURES`) | **1 call site** (`3` lines of `pdf_extract` in `src/intelligence/document_ingest.rs:660-663`) | `pdf-extract 0.12.1` still pins `lopdf ^0.42`, **but `lopdf 0.47.0` already dropped `ttf-parser` completely** and exposes `Document::extract_text(&[page_number])` | **Yes — 100% removable in Wave 1 (`v0.24.x`)** |
-| `RUSTSEC-2024-0436` | `paste 1.0.15` | `unmaintained` proc-macro (`cargo-audit:ignore`) | `onnx-embed` / `local-embeddings` optional feature only (`default_graph = false`; not in `CI_REQUIRED_FEATURES`) | **1 file** (`src/embedding/onnx.rs` via `tokenizers 0.23.1`) | HuggingFace `tokenizers 1.0.0-rc.4` (`tk-convert`, `tk-encode`, `tk-serialize`, `tk-train`) **removed both `paste` and `macro_rules_attribute`** (`0.23.1` is the last `0.x` release) | **Yes — 100% removable in Wave 2 via `tokenizers 1.0` (stable or RC alongside `ort 2.0.0-rc`)** |
+| `RUSTSEC-2024-0436` | `paste 1.0.15` | `unmaintained` proc-macro (`cargo-audit:ignore`) | `onnx-embed` / `local-embeddings` optional feature only (`default_graph = false`; not in `CI_REQUIRED_FEATURES`) | **1 file** (`src/embedding/onnx.rs` via `tokenizers 0.23.1`) | HuggingFace `tokenizers 1.0.0-rc.4` (`tk-convert`, `tk-encode`, `tk-serialize`, `tk-train`) **removed both `paste` and `macro_rules_attribute`** (`0.23.2` still depends on both) | **Yes — 100% removable in Wave 2 via `tokenizers 1.0` (stable or RC alongside `ort 2.0.0-rc`)** |
 | `RUSTSEC-2026-0543` | `chrono 0.4.43` | `unmaintained` (`cargo-deny:ignore`, `patched = []` across all versions including `0.4.45`) | **Default graph** (`default_graph = true`) + optional `duckdb-graph` | **`195` `.rs` files / `340` occurrences**, including public struct fields in `engram-types` (`20` sites) and `engram-core` (`19908`-line public API baseline) | Recommended replacements: `jiff 1.0.1` or `time 0.3.47`. **Critical upstream blocker:** even `duckdb 1.20000.2` → `arrow 60.0.0` → `arrow-array 60.0.0` retains a **mandatory (`optional = false`) normal dependency on `chrono ^0.4.40`** | **Default graph: Yes in `v0.25.0` (semver-minor API wave). Full `Cargo.lock` removal: Blocked upstream by Apache `arrow-array` while `duckdb` remains in workspace** |
 
 ---
@@ -21,7 +21,7 @@ Every dependency path and upstream crate version below was verified directly via
 ## 2. Sequenced Execution Waves
 
 ### Wave 0 (Completed in This PR) — Horizon-Test Anchor Hygiene
-- **Problem:** `scripts/test_check_security_exceptions.py` hardcoded `TODAY = date(2026, 10, 5)`, which caps `expires <= 2027-01-03` inside the `Security exception policy` CI job even when a valid renewal (`<= 90` days from evaluation day) passes `check-security-exceptions.py`.
+- **Problem:** `scripts/test_check_security_exceptions.py` hardcoded `TODAY = date(2026, 10, 5)`, which caps `expires <= 2027-01-03` inside the `Security Gate` CI job (`.github/workflows/ci.yml:527`, transitively blocking required `Test (ubuntu-latest)`) even when a valid renewal (`<= 90` days from evaluation day) passes `check-security-exceptions.py`.
 - **Fix landed here:** `scripts/check-security-exceptions.py` now parses and enforces `[metadata].as_of` (`as_of <= today` and `as_of <= expires <= as_of + 90 days`), `[metadata].as_of` is updated to `2026-11-19`, and `scripts/test_check_security_exceptions.py` derives its deterministic review anchor directly from `parse_as_of(CONFIG)`.
 
 ---

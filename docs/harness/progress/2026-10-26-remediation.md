@@ -746,3 +746,24 @@ Following PR `#282` merge into `main` (`1c8dd209e4291c0e55c5add0935f62dea5baf18e
   post-review ([`2026-11-19-remediation-2026-10-26-v2-post.md`](../reviews/2026-11-19-remediation-2026-10-26-v2-post.md))
   with `REVIEW_VERDICT: PASS` (zero issues). Tag signing, GitHub Release, external registries, and
   human `H1` post-gate receipts remain pending.
+
+### RustSec `2026-12-31` Remediation Plan & `metadata.as_of` Horizon Anchor (`2026-11-19`)
+
+Following PR `#283` merge into `main` (`531a80121d13621dff44a7899b1af6360e60b4eb`) and passing remote
+dry-runs `44535566914` (`release.yml`, `v0.24.1`) and `44535572381` (`sdk-release.yml`, `channel=all`),
+owner selected **Frente 3** (`2026-11-19`, chat):
+- `S1` (`6141e15e`): added `parse_as_of` and `as_of` horizon checks (`as_of <= today` and
+  `as_of <= expires <= as_of + 90 days`) in `scripts/check-security-exceptions.py`, anchored
+  `scripts/test_check_security_exceptions.py` on `parse_as_of(CONFIG)` (`8/8 OK`, removing the hardcoded
+  `TODAY = date(2026, 10, 5)` constant), updated `[metadata].as_of = 2026-11-19` in
+  `docs/security/advisory-exceptions.toml` while keeping all three `expires = 2026-12-31` dates unchanged,
+  documented the empirically verified wave plan (`W1-PDF` `lopdf 0.47` dropping `ttf-parser`, `W2-ONNX`
+  `tokenizers 1.0` dropping `paste`, and `W3A`/`W3B`/`W3C` `chrono -> jiff` + upstream `arrow-array`
+  constraint) in [`2026-11-19-rustsec-2026-12-31-remediation-plan.md`](../plans/2026-11-19-rustsec-2026-12-31-remediation-plan.md)
+  and [`2026-11-19-security-exceptions-plan.md`](../canvas/2026-11-19-security-exceptions-plan.md), and
+  linked `RISK-0008` in `docs/harness/risk-register.yaml`.
+- Full `sensors.sh` at `2026-11-19T15:58:23Z` (`duration_sec=314`, `mode=full`, zero exclusions) `PASS`,
+  and independent post-review
+  ([`2026-11-19-remediation-2026-10-26-v3-post.md`](../reviews/2026-11-19-remediation-2026-10-26-v3-post.md))
+  recorded `REVIEW_VERDICT: PASS` (1 `[LOW]` prose attribution/whitespace note resolved in `S2`).
+  `origin/main` remains at `531a8012`; human `H1` receipts, tag signing, and external registries stay pending.
