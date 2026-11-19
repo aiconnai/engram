@@ -16,22 +16,31 @@ pub fn generate_quality_report(
     workspace: Option<&str>,
 ) -> Result<QualityReport> {
     let workspace_filter = workspace.unwrap_or("default");
+    let now = Utc::now().to_rfc3339();
 
     // Total memories
     let total_memories: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM memories WHERE workspace = ? AND deleted_at IS NULL",
-        params![workspace_filter],
+        r#"
+        SELECT COUNT(*) FROM memories
+        WHERE workspace = ?1
+          AND valid_to IS NULL
+          AND (expires_at IS NULL OR expires_at > ?2)
+        "#,
+        params![workspace_filter, &now],
         |row| row.get(0),
     )?;
 
     // Average quality
-    let average_quality: f32 = conn
-        .query_row(
-            "SELECT COALESCE(AVG(quality_score), 0.5) FROM memories WHERE workspace = ? AND deleted_at IS NULL",
-            params![workspace_filter],
-            |row| row.get(0),
-        )
-        .unwrap_or(0.5);
+    let average_quality: f32 = conn.query_row(
+        r#"
+        SELECT COALESCE(AVG(quality_score), 0.5) FROM memories
+        WHERE workspace = ?1
+          AND valid_to IS NULL
+          AND (expires_at IS NULL OR expires_at > ?2)
+        "#,
+        params![workspace_filter, &now],
+        |row| row.get(0),
+    )?;
 
     // Quality distribution
     let mut distribution = HashMap::new();
@@ -45,24 +54,51 @@ pub fn generate_quality_report(
             _ => (0.0, 0.6),
         };
         let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM memories WHERE workspace = ? AND deleted_at IS NULL AND quality_score >= ? AND quality_score < ?",
-            params![workspace_filter, min, max],
+            r#"
+            SELECT COUNT(*) FROM memories
+            WHERE workspace = ?1
+              AND valid_to IS NULL
+              AND (expires_at IS NULL OR expires_at > ?2)
+              AND quality_score >= ?3
+              AND quality_score < ?4
+            "#,
+            params![workspace_filter, &now, min, max],
             |row| row.get(0),
-        ).unwrap_or(0);
+        )?;
         distribution.insert(grade, count);
     }
 
-    // Conflicts count
+    // Unresolved conflicts scoped to live memories in `workspace_filter`
     let conflicts_count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM memory_conflicts WHERE resolved_at IS NULL",
-        [],
+        r#"
+        SELECT COUNT(*)
+        FROM memory_conflicts mc
+        JOIN memories ma ON ma.id = mc.memory_a_id
+        JOIN memories mb ON mb.id = mc.memory_b_id
+        WHERE mc.resolved_at IS NULL
+          AND ma.valid_to IS NULL
+          AND mb.valid_to IS NULL
+          AND ma.workspace = ?1
+          AND mb.workspace = ?1
+        "#,
+        params![workspace_filter],
         |row| row.get(0),
     )?;
 
-    // Duplicates count
+    // Pending duplicates scoped to live memories in `workspace_filter`
     let duplicates_count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM duplicate_candidates WHERE status = 'pending'",
-        [],
+        r#"
+        SELECT COUNT(*)
+        FROM duplicate_candidates dc
+        JOIN memories ma ON ma.id = dc.memory_a_id
+        JOIN memories mb ON mb.id = dc.memory_b_id
+        WHERE dc.status = 'pending'
+          AND ma.valid_to IS NULL
+          AND mb.valid_to IS NULL
+          AND ma.workspace = ?1
+          AND mb.workspace = ?1
+        "#,
+        params![workspace_filter],
         |row| row.get(0),
     )?;
 
@@ -89,10 +125,16 @@ pub fn generate_quality_report(
 
     // Low quality count
     let low_quality_count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM memories WHERE workspace = ? AND deleted_at IS NULL AND quality_score < 0.5",
-        params![workspace_filter],
+        r#"
+        SELECT COUNT(*) FROM memories
+        WHERE workspace = ?1
+          AND valid_to IS NULL
+          AND (expires_at IS NULL OR expires_at > ?2)
+          AND quality_score < 0.5
+        "#,
+        params![workspace_filter, &now],
         |row| row.get(0),
-    ).unwrap_or(0);
+    )?;
 
     if low_quality_count > 0 {
         top_issues.push(QualityIssue {

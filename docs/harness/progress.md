@@ -6,10 +6,10 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-11-16 — post-review independente manutenção pós-v0.24.0 (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-16-remediation-2026-10-26-post.md (cobre e5767618..ce011e91 na branch fix/post-v0.24.0-maintenance). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
-| Last sensors | `2026-11-16T15:32:30Z status=pass mode=full duration_sec=380, sem exclusões, no commit ce011e91 (branch fix/post-v0.24.0-maintenance sobre main e5767618).` |
-| Last commit | `ce011e91` |
-| Last live-state check | `2026-11-16 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 380s em ce011e91; doctor PASS. Receipts humanos H1 e registries externos pendentes.` |
+| Last review | `2026-11-19 — post-review independente Frente 1 hotfix context_quality + worker.rs + sync harness (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-19-remediation-2026-10-26-post.md (cobre 597b71d3..3cf50bb0 na branch fix/context-quality-and-harness-sync). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
+| Last sensors | `2026-11-19T03:52:12Z status=pass mode=full duration_sec=515, sem exclusões, no commit 3cf50bb0 (branch fix/context-quality-and-harness-sync sobre main 597b71d3).` |
+| Last commit | `3cf50bb0` |
+| Last live-state check | `2026-11-19 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 515s em 3cf50bb0; doctor PASS. Receipts humanos H1 e registries externos pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,9 +23,9 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat, 2026-11-16): após merge do `#278` (`e5767618`), executar **Opção A2** (teste do mutante sobrevivente em `entity_extraction.rs`, `B-3`/`B-4` via `archive_memory_if_active`, `BEGIN IMMEDIATE` em `SavepointGuard`/`reset_interrupted_sync` e 2 achados `[LOW]`) e mesclar na `main` com CI verde (`H1` pendente). [Canvas](canvas/2026-11-16-post-v0.24.0-maintenance.md).
-- **Limites**: receipts humanos `H1` permanecem pendentes (nunca fabricados); publicação externa em `crates.io`, `PyPI`, `npm` e `Homebrew` e pedidos de CVE permanecem fora de escopo; sem push de novas tags, merge administrativo (`--admin`), remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
-- **Última evidência**: [pacote de manutenção pós-v0.24.0](./progress/2026-10-26-remediation.md#post-v0240-maintenance-package-2026-11-16): `c1d1d3b7` + `ce011e91` fecham o mutante do `Nightly` `43702773481`, `B-3`/`B-4`, `BEGIN IMMEDIATE` e os 2 `[LOW]` pós-release; `sensors.sh` full PASS (`380s`) e [post-review PASS](./reviews/2026-11-16-remediation-2026-10-26-post.md). Receipts `H1` e registries pendentes.
+- **Autorização atual** (owner, chat, 2026-11-19): sobre `origin/main` `597b71d3` (após `#279`–`#281`), executar **Frente 1** em PR enxuto: corrigir SQL/isolamento de workspace em `context_quality` + `DeleteBoth` via `delete_memory_if_active` + propagação de erros em `auto_consolidate`, fechar o `[LOW]` em `sync/worker.rs` (`ResetTxGuard`) e reconciliar `risk-register.yaml`, `CLAUDE.md` e estado vivo (`H1` pendente). [Canvas](canvas/2026-11-19-context-quality-and-harness-sync.md).
+- **Limites**: merge em `main` aguarda CI verde e decisão humana (nunca `--admin`); receipts humanos `H1` permanecem pendentes (nunca fabricados); publicação externa em `crates.io`, `PyPI`, `npm` e `Homebrew`, pedidos de CVE, push de novas tags, remoção de branches/worktrees, dados reais ou inferência paga permanecem fora de escopo. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
+- **Última evidência**: [hotfix context_quality e sync pós-#280/#281](./progress/2026-10-26-remediation.md#context-quality-schemaworkspace-hotfix--post-280281-harness-sync-2026-11-19): `95520a99` + `3cf50bb0` alinham `context_quality` com `SCHEMA_VERSION = 49`, fecham `ResetTxGuard` e reconciliam `RISK-0008`/`0010`/`0011`; `sensors.sh` full PASS (`515s`) e [post-review PASS](./reviews/2026-11-19-remediation-2026-10-26-post.md). Receipts `H1` e registries pendentes.
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:

@@ -2,7 +2,9 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 
 use crate::error::Result;
-use crate::storage::queries::{archive_memory_if_active, get_memory};
+use crate::storage::queries::{
+    archive_memory_if_active, delete_memory_if_active, get_memory_readonly,
+};
 use crate::types::MemoryId;
 
 use super::{
@@ -19,36 +21,40 @@ pub fn detect_conflicts(
     memory_id: MemoryId,
     config: &ContextQualityConfig,
 ) -> Result<Vec<MemoryConflict>> {
-    let memory = get_memory(conn, memory_id)?;
+    let memory = get_memory_readonly(conn, memory_id)?;
+    let now = Utc::now().to_rfc3339();
     let mut conflicts = Vec::new();
 
-    // Find memories with similar tags or content that might conflict
+    // Restrict candidates to live, non-archived memories in the same workspace,
+    // prioritizing candidates that share normalized tags with `memory_id`.
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, content, tags, updated_at
-        FROM memories
-        WHERE id != ? AND deleted_at IS NULL
-        AND (
-            -- Same workspace
-            workspace = (SELECT workspace FROM memories WHERE id = ?)
-            -- Or overlapping tags
-            OR EXISTS (
-                SELECT 1 FROM json_each(tags) t1
-                WHERE t1.value IN (SELECT value FROM json_each((SELECT tags FROM memories WHERE id = ?)))
-            )
-        )
+        SELECT m.id, m.content, m.updated_at
+        FROM memories m
+        WHERE m.id != ?1
+          AND m.valid_to IS NULL
+          AND (m.expires_at IS NULL OR m.expires_at > ?2)
+          AND COALESCE(m.lifecycle_state, 'active') != 'archived'
+          AND m.workspace = ?3
+        ORDER BY EXISTS (
+            SELECT 1
+            FROM memory_tags mt_candidate
+            JOIN memory_tags mt_target ON mt_candidate.tag_id = mt_target.tag_id
+            WHERE mt_candidate.memory_id = m.id
+              AND mt_target.memory_id = ?1
+        ) DESC,
+        m.updated_at DESC
         LIMIT 100
         "#,
     )?;
 
-    let candidates: Vec<(i64, String, String, String)> = stmt
-        .query_map(params![memory_id, memory_id, memory_id], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+    let candidates: Vec<(i64, String, String)> = stmt
+        .query_map(params![memory_id, now, &memory.workspace], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<std::result::Result<Vec<_>, _>>()?;
 
-    for (other_id, other_content, _other_tags, other_updated) in candidates {
+    for (other_id, other_content, other_updated) in candidates {
         // Check for staleness conflict
         let memory_date: DateTime<Utc> = memory.updated_at;
         let other_date: DateTime<Utc> = other_updated.parse().unwrap_or(memory_date);
@@ -58,7 +64,7 @@ pub fn detect_conflicts(
             // Check content similarity to see if they're about the same topic
             let similarity = calculate_text_similarity(&memory.content, &other_content);
             if similarity > 0.3 {
-                let conflict = create_conflict(
+                if let Some(conflict) = create_conflict(
                     conn,
                     memory_id,
                     other_id,
@@ -69,40 +75,44 @@ pub fn detect_conflicts(
                         days_diff,
                         similarity * 100.0
                     )),
-                )?;
-                conflicts.push(conflict);
+                )? {
+                    conflicts.push(conflict);
+                }
             }
         }
 
         // Check for duplicate/overlap
         let similarity = calculate_text_similarity(&memory.content, &other_content);
         if similarity >= config.duplicate_threshold {
-            let conflict = create_conflict(
+            if let Some(conflict) = create_conflict(
                 conn,
                 memory_id,
                 other_id,
                 ConflictType::Duplicate,
                 ConflictSeverity::High,
                 Some(format!("Content similarity: {:.0}%", similarity * 100.0)),
-            )?;
-            conflicts.push(conflict);
+            )? {
+                conflicts.push(conflict);
+            }
         } else if similarity >= config.semantic_threshold {
-            let conflict = create_conflict(
+            if let Some(conflict) = create_conflict(
                 conn,
                 memory_id,
                 other_id,
                 ConflictType::SemanticOverlap,
                 ConflictSeverity::Low,
                 Some(format!("Semantic overlap: {:.0}%", similarity * 100.0)),
-            )?;
-            conflicts.push(conflict);
+            )? {
+                conflicts.push(conflict);
+            }
         }
     }
 
     Ok(conflicts)
 }
 
-/// Create a conflict record
+/// Create or fetch an unresolved conflict record. Returns `Ok(None)` when the
+/// `(memory_a_id, memory_b_id, conflict_type)` tuple was already resolved.
 fn create_conflict(
     conn: &Connection,
     memory_a_id: MemoryId,
@@ -110,7 +120,7 @@ fn create_conflict(
     conflict_type: ConflictType,
     severity: ConflictSeverity,
     description: Option<String>,
-) -> Result<MemoryConflict> {
+) -> Result<Option<MemoryConflict>> {
     let now = Utc::now();
     let now_str = now.to_rfc3339();
 
@@ -130,9 +140,21 @@ fn create_conflict(
         ],
     )?;
 
-    let id = conn.last_insert_rowid();
+    let (id, resolved_at): (i64, Option<String>) = conn.query_row(
+        r#"
+        SELECT id, resolved_at
+        FROM memory_conflicts
+        WHERE memory_a_id = ?1 AND memory_b_id = ?2 AND conflict_type = ?3
+        "#,
+        params![memory_a_id, memory_b_id, conflict_type.as_str()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
 
-    Ok(MemoryConflict {
+    if resolved_at.is_some() {
+        return Ok(None);
+    }
+
+    Ok(Some(MemoryConflict {
         id,
         memory_a_id,
         memory_b_id,
@@ -144,7 +166,7 @@ fn create_conflict(
         resolution_type: None,
         resolution_notes: None,
         auto_detected: true,
-    })
+    }))
 }
 
 /// Get unresolved conflicts
@@ -239,11 +261,8 @@ pub fn resolve_conflict(
             archive_memory_if_active(conn, memory_a_id, None)?;
         }
         ResolutionType::DeleteBoth => {
-            let now = Utc::now().to_rfc3339();
-            conn.execute(
-                "UPDATE memories SET deleted_at = ? WHERE id IN (?, ?)",
-                params![now, memory_a_id, memory_b_id],
-            )?;
+            delete_memory_if_active(conn, memory_a_id)?;
+            delete_memory_if_active(conn, memory_b_id)?;
         }
         _ => {
             // KeepBoth, Merge, FalsePositive - no automatic action

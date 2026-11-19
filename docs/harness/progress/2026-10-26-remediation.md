@@ -698,3 +698,30 @@ is green:
   recorded `REVIEW_VERDICT: PASS` (1 non-blocking `[LOW]` note on `reset_interrupted_sync` commit
   error cleanup). Human `H1` post-gate receipts remain pending (never fabricated) and external
   registries remain untouched.
+
+### Context-Quality Schema/Workspace Hotfix & Post-`#280`/`#281` Harness Sync (`2026-11-19`)
+
+Following PR `#279` (`3b1cdb15`) and the owner's merges of PR `#281` (`33992508`, time-limiting
+`RUSTSEC-2026-0543` `chrono 0.4.43` through `2026-12-31`) and PR `#280` (`597b71d3`, canonical SDK
+source directory metadata), a full read-only repository review on `2026-11-19` found runtime SQL
+schema mismatches (`deleted_at` and `tags` columns) in `src/intelligence/context_quality/` masked by
+`.unwrap_or_default()` in `auto_consolidate::run_consolidation`, plus live-state and `risk-register.yaml`
+drift after `#280`/`#281`. Owner authorized **Frente 1** (`2026-11-19`, chat) in a lean PR over
+`origin/main` (`597b71d3`):
+- `F1` (`95520a99`): aligned `conflicts.rs`, `duplicates.rs`, and `report.rs` with `SCHEMA_VERSION = 49`
+  (`valid_to IS NULL`, `expires_at`, `lifecycle_state`, normalized `memory_tags`, `get_memory_readonly`,
+  and strict same-workspace confinement); routed `ResolutionType::DeleteBoth` through
+  `pub(crate) fn delete_memory_if_active` in `src/storage/queries/core/memory_delete.rs` (`19908` public
+  Rust API baseline lines unchanged); propagated storage errors from `find_near_duplicates` and
+  `detect_conflicts` in `src/intelligence/auto_consolidate.rs` (skipping `EngramError::NotFound`);
+  closed the `2026-11-16` `[LOW]` commit-failure rollback gap in `src/sync/worker.rs` via `ResetTxGuard`
+  (tested with a deferred-FK `COMMIT` failure under `--features cloud`); and added RED→GREEN regression
+  tests in `context_quality/tests.rs`, `auto_consolidate.rs`, and `sync/worker.rs`.
+- `F2` (`3cf50bb0`): reconciled `docs/harness/risk-register.yaml` (`RISK-0008` for the 3 active
+  `2026-12-31` exceptions, `RISK-0010`/`RISK-0011` `monitoring` post-`v0.24.0`), `CLAUDE.md` (`297 < 300`
+  lines), and [`2026-11-19-context-quality-and-harness-sync.md`](../canvas/2026-11-19-context-quality-and-harness-sync.md).
+- Full `sensors.sh` at `2026-11-19T03:52:12Z` (`duration_sec=515`, `mode=full`, zero exclusions) `PASS`,
+  and independent post-review
+  ([`2026-11-19-remediation-2026-10-26-post.md`](../reviews/2026-11-19-remediation-2026-10-26-post.md))
+  recorded `REVIEW_VERDICT: PASS` (2 non-blocking `[LOW]` notes). Human `H1` post-gate receipts remain
+  pending (never fabricated) and external registries remain untouched.

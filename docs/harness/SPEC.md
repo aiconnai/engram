@@ -335,3 +335,24 @@ manutenção pós-`v0.24.0`:
 - **Fora de escopo / pendências preservadas**: publicação externa em `crates.io`, PyPI, npm ou
   Homebrew permanece **excluída**, e os receipts humanos `H1` permanecem **pendentes** (nunca
   fabricados).
+
+## Hotfix `context_quality`, `[LOW]` `worker.rs` e reconciliação de harness/riscos (Frente 1, 2026-11-19)
+
+Após os merges dos PRs `#279` (`3b1cdb15`), `#281` (`33992508`, exceção governada `RUSTSEC-2026-0543`
+para `chrono 0.4.43` até `2026-12-31`) e `#280` (`597b71d3`, diretórios canônicos em `pyproject.toml`
+e `package.json`), a revisão integral do repositório em `2026-11-19` identificou queries SQL quebradas
+contra colunas inexistentes (`deleted_at` e `tags`) em `src/intelligence/context_quality/` e drift de
+estado vivo/riscos pós-`#280`/`#281`. O owner autorizou atacar a **Frente 1** em um PR enxuto sobre
+`origin/main` (`597b71d3`):
+- **Escopo autorizado**: alinhar `conflicts.rs`, `duplicates.rs` e `report.rs` com `SCHEMA_VERSION = 49`
+  (`valid_to`, `expires_at`, `lifecycle_state`, `memory_tags` e isolamento por `workspace`), rotear
+  `ResolutionType::DeleteBoth` por `pub(crate) fn delete_memory_if_active` (preservando eventos,
+  invalidação de `crossrefs`, `sync_state` e API pública Rust), propagar erros reais de banco em
+  `auto_consolidate::run_consolidation`, fechar o achado `[LOW]` de rollback em falha de `COMMIT` em
+  `src/sync/worker.rs` (`ResetTxGuard`), sincronizar `docs/harness/risk-register.yaml` (`RISK-0008`,
+  `RISK-0010`, `RISK-0011`), `CLAUDE.md` e documentos do harness
+  ([Canvas](canvas/2026-11-19-context-quality-and-harness-sync.md)), e abrir o PR contra `main`.
+- **Fora de escopo / pendências preservadas**: merge em `main` aguarda decisão/validação após CI verde;
+  publicação externa em `crates.io`, PyPI, npm ou Homebrew, push de novas tags e remoção de
+  branches/worktrees permanecem **excluídos**; receipts humanos `H1` permanecem **pendentes** (nunca
+  fabricados).
