@@ -43,8 +43,8 @@ crate = "paste"
 versions = ["1.0.15"]
 tools = ["cargo-audit:ignore"]
 dependency_path = [
-  "engram-core 0.24.0 -> tokenizers 0.23.1 -> paste 1.0.15",
-  "engram-core 0.24.0 -> tokenizers 0.23.1 -> macro_rules_attribute 0.2.2 -> paste 1.0.15",
+  "engram-core 0.24.1 -> tokenizers 0.23.1 -> paste 1.0.15",
+  "engram-core 0.24.1 -> tokenizers 0.23.1 -> macro_rules_attribute 0.2.2 -> paste 1.0.15",
 ]
 feature = "onnx-embed/local-embeddings optional feature only"
 exposure = "Unmaintained proc-macro dependency in optional local embedding tokenizers stack; not loaded by the default feature graph."
@@ -61,8 +61,8 @@ versions = ["0.25.1"]
 tools = ["cargo-audit:allowed-warning"]
 url = "https://github.com/harfbuzz/ttf-parser/issues/217"
 dependency_path = [
-  "engram-core 0.24.0 -> pdf-extract 0.12.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
-  "engram-core 0.24.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
+  "engram-core 0.24.1 -> pdf-extract 0.12.0 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
+  "engram-core 0.24.1 -> lopdf 0.42.0 -> ttf-parser 0.25.1",
 ]
 feature = "pdf optional feature only"
 exposure = "Feature-gated PDF ingestion font parsing path (the pdf feature is part of the required CI feature set, not the default one); bounded by input bytes before parsing, page-tree traversal before text extraction, and extracted text bytes; not present in the default non-PDF feature graph and not globally ignored in cargo-audit or cargo-deny."
@@ -79,10 +79,10 @@ versions = ["0.4.43"]
 tools = ["cargo-deny:ignore"]
 url = "https://rustsec.org/advisories/RUSTSEC-2026-0543"
 dependency_path = [
-  "engram-core 0.24.0 -> chrono 0.4.43",
+  "engram-core 0.24.1 -> chrono 0.4.43",
   "engram-types 0.24.0 -> chrono 0.4.43",
-  "engram-core 0.24.0 -> duckdb 1.10506.1 -> chrono 0.4.43",
-  "engram-core 0.24.0 -> duckdb 1.10506.1 -> arrow 58.4.1 -> arrow-array 58.4.1 -> chrono 0.4.43",
+  "engram-core 0.24.1 -> duckdb 1.10506.1 -> chrono 0.4.43",
+  "engram-core 0.24.1 -> duckdb 1.10506.1 -> arrow 58.4.1 -> arrow-array 58.4.1 -> chrono 0.4.43",
 ]
 feature = "Default workspace dependencies and optional duckdb-graph analytics"
 exposure = "The default runtime and domain types rely on chrono for timestamps and serialization. DuckDB and Arrow also use it for analytics. The upstream maintenance advisory covers all chrono versions."

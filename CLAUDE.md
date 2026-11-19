@@ -209,7 +209,7 @@ Spinning without progress is the most expensive failure mode. Detecting it early
 
 ## Active Risks
 
-State after v0.24.0 (`f4be2c40`), PRs #278–#281 (`597b71d3`), and 2026-11-19 `context_quality` hotfix; release status: `docs/releases/v0.24.0-readiness.md`.
+State after v0.24.0 (`f4be2c40`), PRs #278–#282 (`1c8dd209`), and prepared `v0.24.1` candidate; readiness: `docs/releases/v0.24.1-readiness.md`.
 Risk disposition and receipt scopes: `docs/harness/risk-register.yaml`, `docs/harness/known-issues/`.
 
 - **Authz regression from `e04d3307`** (RISK-0003): fixed via #247, #254 and #255; stays listed until the post-gate receipt.
