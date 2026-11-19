@@ -32,7 +32,7 @@
 
 [metadata]
 schema_version = 1
-as_of = 2026-10-26
+as_of = 2026-11-19
 owner = "Ronaldo"
 advisory_db_commit = "a78282a1414d6c28cc228c4eae3570451affb0dc"
 advisory_db_date = 2026-10-26

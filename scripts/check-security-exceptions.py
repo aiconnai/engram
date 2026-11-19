@@ -18,7 +18,7 @@ import argparse
 import dataclasses
 import sys
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -122,9 +122,18 @@ def local_date(table, key: str, advisory: str) -> date:
     """Read a required TOML local-date."""
 
     value = table.get(key)
-    if not isinstance(value, date):
+    if not isinstance(value, date) or isinstance(value, datetime):
         raise CheckError(f"{advisory}: missing TOML date {key}")
     return value
+
+
+def parse_as_of(path: Path) -> date:
+    """Read required [metadata].as_of review date from governed exception config."""
+
+    metadata = read_toml(path).get("metadata")
+    if not isinstance(metadata, dict):
+        raise CheckError("config must contain a [metadata] table with as_of")
+    return local_date(metadata, "as_of", "[metadata]")
 
 
 def parse_record(table) -> ExceptionRecord:
@@ -222,10 +231,14 @@ def validate_records(
     deny_ignores: frozenset[str],
     deny_skips: frozenset[str],
     today: date,
+    *,
+    as_of: date | None = None,
 ) -> None:
     """Validate ownership, expiry, parity, and scoped PDF classification."""
 
     errors: list[str] = []
+    if as_of is not None and as_of > today:
+        errors.append(f"[metadata].as_of ({as_of.isoformat()}) cannot be in the future")
     if deny_skips:
         errors.append(f"cargo-deny bans skip/skip-tree entries are not allowed: {show(deny_skips)}")
     for record in records:
@@ -236,6 +249,16 @@ def validate_records(
                 f"{record.advisory}: expiry {record.expires.isoformat()} is more than "
                 f"{MAX_HORIZON_DAYS} days ahead; renewals need fresh review"
             )
+        if as_of is not None:
+            if record.expires < as_of:
+                errors.append(
+                    f"{record.advisory}: expired on {record.expires.isoformat()} before [metadata].as_of ({as_of.isoformat()})"
+                )
+            if record.expires > as_of + timedelta(days=MAX_HORIZON_DAYS):
+                errors.append(
+                    f"{record.advisory}: expiry {record.expires.isoformat()} is more than "
+                    f"{MAX_HORIZON_DAYS} days ahead of [metadata].as_of ({as_of.isoformat()})"
+                )
         if not record.owner.strip():
             errors.append(f"{record.advisory}: missing owner")
         if AUDIT_WARNING in record.tools and AUDIT_IGNORE in record.tools:
@@ -312,6 +335,7 @@ def main() -> int:
                 advisory_ignores(args.deny_config),
                 cargo_deny_ban_skips(args.deny_config),
                 date.today(),
+                as_of=parse_as_of(args.config),
             )
             print(f"security exception check: PASS ({len(records)} governed records)")
     except CheckError as exc:
