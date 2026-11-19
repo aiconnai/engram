@@ -236,11 +236,9 @@ pub fn run_consolidation(
     }
 
     let dup_limit = (policy.max_actions_per_run as i64).max(1);
-    let candidates = storage
-        .with_connection(|conn| {
-            find_near_duplicates(conn, policy.duplicate_threshold as f32, dup_limit)
-        })
-        .unwrap_or_default();
+    let candidates = storage.with_connection(|conn| {
+        find_near_duplicates(conn, policy.duplicate_threshold as f32, dup_limit)
+    })?;
 
     for cand in candidates {
         if action_budget == 0 {
@@ -276,9 +274,12 @@ pub fn run_consolidation(
             if action_budget == 0 {
                 break;
             }
-            let conflicts = storage
-                .with_connection(|conn| detect_conflicts(conn, mid, &cq_config))
-                .unwrap_or_default();
+            let conflicts =
+                match storage.with_connection(|conn| detect_conflicts(conn, mid, &cq_config)) {
+                    Ok(conflicts) => conflicts,
+                    Err(crate::error::EngramError::NotFound(_)) => continue,
+                    Err(err) => return Err(err),
+                };
             for c in conflicts {
                 if action_budget == 0 {
                     break;
@@ -767,5 +768,49 @@ mod tests {
         };
         let s = serde_json::to_string(&a).unwrap();
         assert!(s.contains("\"kind\":\"summarized\""));
+    }
+
+    #[test]
+    fn run_consolidation_surfaces_duplicates_conflicts_and_propagates_db_errors() {
+        let s = open_storage();
+        let ws = "alpha";
+        mk_memory(
+            &s,
+            "Production Redis cluster runs on TLS port 6379 with auth",
+            ws,
+        );
+        mk_memory(
+            &s,
+            "Production Redis cluster runs on TLS port 6379 with auth",
+            ws,
+        );
+        let policy = ConsolidationPolicy {
+            conflict_auto_resolve: true,
+            ..Default::default()
+        };
+
+        let report = run_consolidation(&s, ws, &policy).expect("consolidation report");
+        let counts = report.counts();
+        assert!(
+            counts.duplicates_merged >= 1,
+            "expected duplicate proposal, got: {:?}",
+            report.actions
+        );
+        assert!(
+            counts.conflicts_resolved >= 1,
+            "expected conflict proposal, got: {:?}",
+            report.actions
+        );
+
+        // Schema corruption must surface as Err instead of silently returning 0 duplicates.
+        s.with_connection(|conn| {
+            conn.execute_batch("DROP TABLE duplicate_candidates;")?;
+            Ok(())
+        })
+        .expect("drop duplicate_candidates");
+        assert!(
+            run_consolidation(&s, ws, &policy).is_err(),
+            "database error in duplicate scan must not be swallowed"
+        );
     }
 }

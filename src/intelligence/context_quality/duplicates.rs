@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::error::Result;
 
@@ -53,58 +53,95 @@ pub fn find_near_duplicates(
     threshold: f32,
     limit: i64,
 ) -> Result<Vec<DuplicateCandidate>> {
-    // Get memories that haven't been checked yet
+    let now = Utc::now().to_rfc3339();
+
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, content FROM memories
-        WHERE deleted_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT ?
+        SELECT id, workspace, content FROM memories
+        WHERE valid_to IS NULL
+          AND (expires_at IS NULL OR expires_at > ?1)
+          AND COALESCE(lifecycle_state, 'active') != 'archived'
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?2
         "#,
     )?;
 
-    let memories: Vec<(i64, String)> = stmt
-        .query_map(params![limit * 2], |row| Ok((row.get(0)?, row.get(1)?)))?
-        .filter_map(|r| r.ok())
-        .collect();
+    let memories: Vec<(i64, String, String)> = stmt
+        .query_map(params![now, limit.saturating_mul(2)], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
 
     let mut duplicates = Vec::new();
 
-    // Compare pairs
+    // Compare pairs within the same workspace only
     for i in 0..memories.len() {
         for j in (i + 1)..memories.len() {
-            let (id_a, content_a) = &memories[i];
-            let (id_b, content_b) = &memories[j];
+            let (id_a, ws_a, content_a) = &memories[i];
+            let (id_b, ws_b, content_b) = &memories[j];
+            if ws_a != ws_b {
+                continue;
+            }
 
             let similarity = calculate_text_similarity(content_a, content_b);
 
             if similarity >= threshold {
-                // Check if already recorded
-                let exists: bool = conn.query_row(
-                    "SELECT 1 FROM duplicate_candidates WHERE memory_a_id = ? AND memory_b_id = ?",
-                    params![id_a, id_b],
-                    |_| Ok(true),
-                ).unwrap_or(false);
-
-                if !exists {
-                    conn.execute(
+                let existing: Option<(i64, String)> = conn
+                    .query_row(
                         r#"
-                        INSERT OR IGNORE INTO duplicate_candidates
-                        (memory_a_id, memory_b_id, similarity_score, similarity_type)
-                        VALUES (?, ?, ?, 'content')
+                        SELECT id, status
+                        FROM duplicate_candidates
+                        WHERE ((memory_a_id = ?1 AND memory_b_id = ?2)
+                            OR (memory_a_id = ?2 AND memory_b_id = ?1))
+                          AND similarity_type = 'content'
+                        LIMIT 1
                         "#,
-                        params![id_a, id_b, similarity],
-                    )?;
+                        params![id_a, id_b],
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )
+                    .optional()?;
 
-                    duplicates.push(DuplicateCandidate {
-                        id: 0,
-                        memory_a_id: *id_a,
-                        memory_b_id: *id_b,
-                        similarity_score: similarity,
-                        similarity_type: "content".to_string(),
-                        detected_at: Utc::now(),
-                        status: "pending".to_string(),
-                    });
+                match existing {
+                    None => {
+                        conn.execute(
+                            r#"
+                            INSERT OR IGNORE INTO duplicate_candidates
+                            (memory_a_id, memory_b_id, similarity_score, similarity_type)
+                            VALUES (?1, ?2, ?3, 'content')
+                            "#,
+                            params![id_a, id_b, similarity],
+                        )?;
+                        let candidate_id: i64 = conn.query_row(
+                            r#"
+                            SELECT id FROM duplicate_candidates
+                            WHERE memory_a_id = ?1 AND memory_b_id = ?2 AND similarity_type = 'content'
+                            "#,
+                            params![id_a, id_b],
+                            |row| row.get(0),
+                        )?;
+
+                        duplicates.push(DuplicateCandidate {
+                            id: candidate_id,
+                            memory_a_id: *id_a,
+                            memory_b_id: *id_b,
+                            similarity_score: similarity,
+                            similarity_type: "content".to_string(),
+                            detected_at: Utc::now(),
+                            status: "pending".to_string(),
+                        });
+                    }
+                    Some((candidate_id, status)) if status == "pending" => {
+                        duplicates.push(DuplicateCandidate {
+                            id: candidate_id,
+                            memory_a_id: *id_a,
+                            memory_b_id: *id_b,
+                            similarity_score: similarity,
+                            similarity_type: "content".to_string(),
+                            detected_at: Utc::now(),
+                            status,
+                        });
+                    }
+                    Some(_) => {}
                 }
             }
         }
@@ -140,8 +177,7 @@ pub fn get_pending_duplicates(conn: &Connection, limit: i64) -> Result<Vec<Dupli
                 status: row.get(6)?,
             })
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<std::result::Result<Vec<_>, _>>()?;
 
     Ok(duplicates)
 }
@@ -157,19 +193,22 @@ pub fn find_semantic_duplicates(
     threshold: f32,
     limit: i64,
 ) -> Result<Vec<DuplicateCandidate>> {
-    // Use existing embedding search infrastructure
+    let now = Utc::now().to_rfc3339();
+
     let mut stmt = conn.prepare(
         r#"
         SELECT m.id, e.embedding
         FROM memories m
         JOIN embeddings e ON m.id = e.memory_id
-        WHERE m.deleted_at IS NULL
-        LIMIT ?
+        WHERE m.valid_to IS NULL
+          AND (m.expires_at IS NULL OR m.expires_at > ?1)
+          AND COALESCE(m.lifecycle_state, 'active') != 'archived'
+        LIMIT ?2
         "#,
     )?;
 
     let memories: Vec<(i64, Vec<f32>)> = stmt
-        .query_map(params![limit], |row| {
+        .query_map(params![now, limit], |row| {
             let id: i64 = row.get(0)?;
             let embedding_blob: Vec<u8> = row.get(1)?;
             let embedding: Vec<f32> = embedding_blob
@@ -181,8 +220,7 @@ pub fn find_semantic_duplicates(
                 .collect();
             Ok((id, embedding))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<std::result::Result<Vec<_>, _>>()?;
 
     let mut duplicates = Vec::new();
 

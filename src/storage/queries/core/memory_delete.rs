@@ -50,3 +50,13 @@ pub fn delete_memory(conn: &Connection, id: i64) -> Result<()> {
 
     Ok(())
 }
+
+/// Soft-delete a live memory through [`delete_memory`], returning `Ok(false)` when
+/// the target is already soft-deleted or missing instead of [`EngramError::NotFound`].
+pub(crate) fn delete_memory_if_active(conn: &Connection, id: i64) -> Result<bool> {
+    match delete_memory(conn, id) {
+        Ok(()) => Ok(true),
+        Err(EngramError::NotFound(_)) => Ok(false),
+        Err(err) => Err(err),
+    }
+}

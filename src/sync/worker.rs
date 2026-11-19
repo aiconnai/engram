@@ -451,55 +451,79 @@ fn format_interrupted_last_error(existing: Option<&str>) -> String {
     }
 }
 
+struct ResetTxGuard<'a> {
+    conn: &'a Connection,
+    use_immediate: bool,
+    committed: bool,
+}
+
+impl<'a> ResetTxGuard<'a> {
+    fn begin(conn: &'a Connection) -> Result<Self> {
+        let use_immediate = conn.is_autocommit();
+        if use_immediate {
+            conn.execute_batch("BEGIN IMMEDIATE")?;
+        } else {
+            conn.execute_batch("SAVEPOINT sp_reset_interrupted_sync")?;
+        }
+        Ok(Self {
+            conn,
+            use_immediate,
+            committed: false,
+        })
+    }
+
+    fn commit(mut self) -> Result<()> {
+        if self.use_immediate {
+            self.conn.execute_batch("COMMIT")?;
+        } else {
+            self.conn
+                .execute_batch("RELEASE SAVEPOINT sp_reset_interrupted_sync")?;
+        }
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for ResetTxGuard<'_> {
+    fn drop(&mut self) {
+        if !self.committed {
+            if self.use_immediate {
+                if !self.conn.is_autocommit() {
+                    let _ = self.conn.execute_batch("ROLLBACK");
+                }
+            } else {
+                let _ = self.conn.execute_batch(
+                    "ROLLBACK TO SAVEPOINT sp_reset_interrupted_sync; RELEASE SAVEPOINT sp_reset_interrupted_sync",
+                );
+            }
+        }
+    }
+}
+
 /// Clear a stale `is_syncing` flag left by a process that died mid-sync.
 /// Returns whether a stale flag was found. `last_error` records it in a
 /// deduplicated, byte-bounded form (`<= 1024` UTF-8 bytes) so repeated
 /// crash-loop restarts cannot grow `sync_state.last_error` without bound.
 pub(crate) fn reset_interrupted_sync(conn: &Connection) -> Result<bool> {
-    let use_immediate = conn.is_autocommit();
-    if use_immediate {
-        conn.execute_batch("BEGIN IMMEDIATE")?;
-    } else {
-        conn.execute_batch("SAVEPOINT sp_reset_interrupted_sync")?;
-    }
-    let outcome: Result<bool> = (|| {
-        let row: Option<Option<String>> = conn
-            .query_row(
-                "SELECT last_error FROM sync_state WHERE id = 1 AND is_syncing = 1",
-                [],
-                |r| r.get(0),
-            )
-            .optional()?;
-        let Some(existing) = row else {
-            return Ok(false);
-        };
-        let next_error = format_interrupted_last_error(existing.as_deref());
-        let changed = conn.execute(
-            "UPDATE sync_state SET is_syncing = 0, last_error = ?1 WHERE id = 1 AND is_syncing = 1",
-            params![next_error],
-        )?;
-        Ok(changed > 0)
-    })();
-    match outcome {
-        Ok(val) => {
-            if use_immediate {
-                conn.execute_batch("COMMIT")?;
-            } else {
-                conn.execute_batch("RELEASE SAVEPOINT sp_reset_interrupted_sync")?;
-            }
-            Ok(val)
-        }
-        Err(err) => {
-            if use_immediate {
-                let _ = conn.execute_batch("ROLLBACK");
-            } else {
-                let _ = conn.execute_batch(
-                    "ROLLBACK TO SAVEPOINT sp_reset_interrupted_sync; RELEASE SAVEPOINT sp_reset_interrupted_sync",
-                );
-            }
-            Err(err)
-        }
-    }
+    let tx = ResetTxGuard::begin(conn)?;
+    let row: Option<Option<String>> = conn
+        .query_row(
+            "SELECT last_error FROM sync_state WHERE id = 1 AND is_syncing = 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(existing) = row else {
+        tx.commit()?;
+        return Ok(false);
+    };
+    let next_error = format_interrupted_last_error(existing.as_deref());
+    let changed = conn.execute(
+        "UPDATE sync_state SET is_syncing = 0, last_error = ?1 WHERE id = 1 AND is_syncing = 1",
+        params![next_error],
+    )?;
+    tx.commit()?;
+    Ok(changed > 0)
 }
 
 fn mark_sync_started(conn: &Connection) -> Result<()> {
@@ -747,6 +771,35 @@ mod tests {
                 .query_row("SELECT x FROM outer_probe", [], |r| r.get::<_, i64>(0))
                 .unwrap(),
             42
+        );
+
+        // Deferred FK failure at `COMMIT` time (after `UPDATE sync_state` succeeded)
+        // must still roll back and leave the connection in autocommit mode.
+        let deferred_fail = Connection::open_in_memory().expect("deferred fk db");
+        deferred_fail
+            .execute_batch(
+                "PRAGMA foreign_keys = ON;
+                 CREATE TABLE sync_state (
+                     id INTEGER PRIMARY KEY CHECK (id = 1),
+                     last_sync TEXT,
+                     pending_changes INTEGER NOT NULL DEFAULT 0,
+                     last_error TEXT,
+                     is_syncing INTEGER NOT NULL DEFAULT 1
+                 );
+                 INSERT INTO sync_state (id, is_syncing) VALUES (1, 1);
+                 CREATE TABLE fk_parent (id INTEGER PRIMARY KEY);
+                 CREATE TABLE fk_child (
+                     pid INTEGER NOT NULL REFERENCES fk_parent(id) DEFERRABLE INITIALLY DEFERRED
+                 );
+                 CREATE TRIGGER fail_on_commit AFTER UPDATE ON sync_state BEGIN
+                     INSERT INTO fk_child (pid) VALUES (999);
+                 END;",
+            )
+            .unwrap();
+        assert!(reset_interrupted_sync(&deferred_fail).is_err());
+        assert!(
+            deferred_fail.is_autocommit(),
+            "failed COMMIT must roll back instead of leaving transaction open"
         );
     }
 
