@@ -356,3 +356,20 @@ estado vivo/riscos pós-`#280`/`#281`. O owner autorizou atacar a **Frente 1** e
   publicação externa em `crates.io`, PyPI, npm ou Homebrew, push de novas tags e remoção de
   branches/worktrees permanecem **excluídos**; receipts humanos `H1` permanecem **pendentes** (nunca
   fabricados).
+
+## Preparação do candidato de patch `v0.24.1` (Frente 2, 2026-11-19)
+
+Após o merge do PR `#282` (`1c8dd209e4291c0e55c5add0935f62dea5baf18e`, CI push `44457161667` verde),
+o owner selecionou a **Frente 2** (`2026-11-19`, chat) para preparar o candidato de patch `v0.24.1`
+consolidando `#278`–`#282` sobre `v0.24.0` (`f4be2c40`):
+- **Escopo autorizado**: atualizar `Cargo.toml`, `Cargo.lock` e `fuzz/Cargo.lock` para `engram-core = 0.24.1`
+  (mantendo `engram-types = 0.24.0` e SDKs Python/TypeScript em `0.7.0`), atualizar os caminhos
+  informativos em `docs/security/advisory-exceptions.toml`, adicionar a seção `## [0.24.1]` em
+  `CHANGELOG.md`, reobservar registries read-only e preparar `docs/releases/channel-matrix.toml`
+  (`core_version = "0.24.1"`, `expected_present = false`, `latest_released_tag = "v0.24.0"`),
+  documentar a prontidão e o runbook em `docs/releases/v0.24.1-readiness.md` e
+  [`2026-11-19-prepare-v0.24.1.md`](canvas/2026-11-19-prepare-v0.24.1.md), e abrir o PR de preparação.
+- **Fora de escopo / pendências preservadas**: merge em `main`, execução de dry-runs remotos pós-merge,
+  assinatura/push da tag `v0.24.1`, criação do GitHub Release `v0.24.1` e publicação em `crates.io`,
+  PyPI, npm ou Homebrew permanecem sujeitos a decisões/aprovações humanas separadas; receipts humanos
+  `H1` permanecem **pendentes** (nunca fabricados).

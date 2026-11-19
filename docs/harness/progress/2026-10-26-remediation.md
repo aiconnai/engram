@@ -725,3 +725,24 @@ drift after `#280`/`#281`. Owner authorized **Frente 1** (`2026-11-19`, chat) in
   ([`2026-11-19-remediation-2026-10-26-post.md`](../reviews/2026-11-19-remediation-2026-10-26-post.md))
   recorded `REVIEW_VERDICT: PASS` (2 non-blocking `[LOW]` notes). Human `H1` post-gate receipts remain
   pending (never fabricated) and external registries remain untouched.
+
+### Patch Candidate `v0.24.1` Preparation (`2026-11-19`)
+
+Following PR `#282` merge into `main` (`1c8dd209e4291c0e55c5add0935f62dea5baf18e`, push `CI`
+`44457161667` `success`), owner selected **Frente 2** (`2026-11-19`, chat) to prepare patch candidate
+`v0.24.1` consolidating PRs `#278`–`#282` over `v0.24.0` (`f4be2c40`):
+- `R1` (`a7f594b0`): bumped `engram-core` to `0.24.1` in `Cargo.toml`, `Cargo.lock`, and `fuzz/Cargo.lock`
+  (keeping `engram-types` `0.24.0` and Python/TS SDKs `0.7.0`); updated informational dependency paths
+  in `docs/security/advisory-exceptions.toml`; added `## [0.24.1]` and compare link in `CHANGELOG.md`;
+  re-observed channels live via `check-release-channels.py --read-only` (`2026-11-19T05:50:13Z`) and
+  staged `docs/releases/channel-matrix.toml` (`expected_present = false` for `v0.24.1` while keeping
+  `latest_released_tag = "v0.24.0"` and `docs.observed_version = "v0.24.0"`); and added
+  `docs/releases/v0.24.1-readiness.md` and
+  [`2026-11-19-prepare-v0.24.1.md`](../canvas/2026-11-19-prepare-v0.24.1.md).
+- Verified `bump-version.py --check`, `bump-version.py --release-plan --release-tag v0.24.1`,
+  `check-release-channels.py --read-only` (`20/20 OK`), `extract-release-notes.sh v0.24.1`,
+  `cargo package -p engram-types -p engram-core --no-verify --locked`, full `sensors.sh` at
+  `2026-11-19T06:01:13Z` (`duration_sec=385`, `mode=full`, zero exclusions) `PASS`, and independent
+  post-review ([`2026-11-19-remediation-2026-10-26-v2-post.md`](../reviews/2026-11-19-remediation-2026-10-26-v2-post.md))
+  with `REVIEW_VERDICT: PASS` (zero issues). Tag signing, GitHub Release, external registries, and
+  human `H1` post-gate receipts remain pending.
