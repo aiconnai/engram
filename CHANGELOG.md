@@ -12,6 +12,25 @@ package registries, and dated external sources.
 
 ## [Unreleased]
 
+## [0.24.1]
+
+Prepared patch candidate over `v0.24.0` (`f4be2c401789917c0bb1d27469ac0d992d8d712d`); tag signing, GitHub Release creation, and external registry publication (`crates.io`, PyPI, npm, Homebrew) remain separate release-owner decisions.
+
+### Security
+
+- **Workspace-confined context-quality queries (`#282`)** — `detect_conflicts`, `find_near_duplicates`, and `generate_quality_report` now confine candidate pairing and report conflict/duplicate counts strictly to the target `workspace` (preventing cross-workspace tag-overlap or identical-text pairing and cross-workspace report count exposure).
+- **Time-bounded `chrono` maintenance advisory exception (`#281`, `RUSTSEC-2026-0543`)** — Recorded a governed `cargo-deny` exception in `docs/security/advisory-exceptions.toml` and `deny.toml` through `2026-12-31` while upstream `chrono` / `jiff` / `time` migration and `duckdb`/`arrow` transitive paths are evaluated.
+
+### Changed
+
+- **SDK canonical source directory metadata (`#280`)** — Updated `sdks/python/pyproject.toml` (`Repository = "https://github.com/aiconnai/engram/tree/main/sdks/python"`) and `sdks/typescript/package.json` (`repository.directory = "sdks/typescript"`) so `engram-client` `0.7.0` packages point directly to their canonical monorepo subdirectories.
+
+### Fixed
+
+- **Context-quality SQL aligned with `SCHEMA_VERSION = 49` and normal soft-delete bookkeeping (`#282`)** — Fixed `detect_conflicts`, `find_near_duplicates`, `find_semantic_duplicates`, and `generate_quality_report` queries that referenced legacy `deleted_at` and `tags` columns (breaking `quality_report`, `quality_find_duplicates`, `quality_find_conflicts`, and `quality_resolve_conflict(resolution="delete_both")`), routed `detect_conflicts` reads through `get_memory_readonly` so conflict scans do not inflate `access_count`, routed `ResolutionType::DeleteBoth` through `delete_memory_if_active` (`valid_to`, `crossrefs` invalidation, `MemoryEventType::Deleted`, and `sync_state.pending_changes`), and stopped swallowing storage errors in `auto_consolidate::run_consolidation`.
+- **Bulk archival bookkeeping parity (`#279`, `B-3`/`B-4`)** — Routed `retention.rs` (`max_memories`), `consolidation_offline.rs`, and `conflicts.rs` (`KeepA`/`KeepB`) bulk archival through `archive_memory_if_active` -> `update_memory_lifecycle_state`, recording `version + 1`, `memory_versions`, `MemoryEventType::Updated`, and `sync_state.pending_changes` without altering `engram-core`'s public Rust API.
+- **Top-level `BEGIN IMMEDIATE` and commit-failure rollback guards (`#279`, `#282`)** — `SavepointGuard` (`consolidation_offline.rs`) and `ResetTxGuard` (`sync/worker.rs`) now issue `BEGIN IMMEDIATE` when `conn.is_autocommit()` is true (acquiring the SQLite write lock up front with `busy_timeout`) while preserving nested `SAVEPOINT` semantics inside outer transactions, and roll back cleanly if `COMMIT` or `RELEASE SAVEPOINT` fails.
+
 ## [0.24.0] - 2026-11-14
 
 Published as the signed `v0.24.0` GitHub Release (commit `f4be2c401789917c0bb1d27469ac0d992d8d712d`, `2026-11-14`); closes security advisories `GHSA-8xxr-p5q8-c7cg` and `GHSA-6q7w-w273-gq6p`. Registry publication to `crates.io`, PyPI, npm, and Homebrew remains a separate decision.
@@ -1080,6 +1099,7 @@ This release brings Engram to full feature parity with [Memora](https://github.c
 - **0.2.0** - Early feature parity milestone
 - **0.1.0** - Initial release with full feature set
 
+[0.24.1]: https://github.com/aiconnai/engram/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/aiconnai/engram/compare/v0.21.2...v0.24.0
 [0.23.0]: https://github.com/aiconnai/engram/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/aiconnai/engram/compare/v0.21.2...v0.22.0

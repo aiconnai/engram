@@ -24,12 +24,13 @@ MCP tools, SDK APIs, CLI behavior, storage behavior, or agent workflows. The
 version in `Cargo.toml` must already equal the tag you intend to push; the
 release and SDK workflows fail closed when they differ.
 
-## Prepared 0.24.0 candidate
+## Prepared 0.24.1 candidate (and published 0.24.0 baseline)
 
-See the [readiness decision](v0.24.0-readiness.md),
+See the [0.24.1 readiness decision](v0.24.1-readiness.md), the historical
+[0.24.0 readiness decision](v0.24.0-readiness.md),
 [SDK 0.7.0 notes](v0.7.0-sdk-notes.md) and
 [cache-clear migration/consumer notice](../migrations/v0.24.0-cache-clear.md).
-These documents prepare the release; publication remains pending.
+GitHub Release `v0.24.0` is published; `v0.24.1` and external registry publication remain pending human gates.
 
 ## Before Tagging
 
