@@ -6,10 +6,10 @@
 | Active sprint | `Remediação pós-levantamento 2026-10-26` |
 | Active task | `remediation-2026-10-26` |
 | Active plan | `docs/harness/progress/2026-10-26-remediation.md` |
-| Last review | `2026-11-19 — post-review independente Frente 2 preparação do candidato v0.24.1 (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-19-remediation-2026-10-26-v2-post.md (cobre 1c8dd209..a7f594b0 na branch release/prepare-v0.24.1). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
-| Last sensors | `2026-11-19T06:01:13Z status=pass mode=full duration_sec=385, sem exclusões, no commit a7f594b0 (branch release/prepare-v0.24.1 sobre main 1c8dd209).` |
-| Last commit | `a7f594b0` |
-| Last live-state check | `2026-11-19 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 385s em a7f594b0; doctor PASS. Tag v0.24.1, registries externos e receipts humanos H1 pendentes.` |
+| Last review | `2026-11-19 — post-review independente Frente 3 plano 2026-12-31 e âncora metadata.as_of (subagente read-only com inputs obrigatórios de CODE_REVIEW_POLICY.md, REVIEW_VERDICT PASS): docs/harness/reviews/2026-11-19-remediation-2026-10-26-v3-post.md (cobre 531a8012..6141e15e na branch chore/security-exceptions-plan-2026-12-31). Parecer técnico independente, NÃO substitui receipts humanos H1 pendentes.` |
+| Last sensors | `2026-11-19T15:58:23Z status=pass mode=full duration_sec=314, sem exclusões, no commit 6141e15e (branch chore/security-exceptions-plan-2026-12-31 sobre main 531a8012).` |
+| Last commit | `6141e15e` |
+| Last live-state check | `2026-11-19 — bash docs/harness/bin/check-live-state.sh --progress docs/harness/progress.md após full PASS 314s em 6141e15e; doctor PASS. Tag v0.24.1, registries externos e receipts humanos H1 pendentes.` |
 
 > Resumo vivo, **≤150 linhas** (task H6). Orçamentos, medição e regras de retenção:
 > [`context-budget.md`](./context-budget.md). O texto anterior deste arquivo foi movido
@@ -23,9 +23,9 @@
   pipeline, claims públicos). [SPEC](./SPEC.md); [plano](./plans/2026-10-26-remediation-plan.md);
   log ativo [`progress/2026-10-26-remediation.md`](./progress/2026-10-26-remediation.md).
 - **Handoff (2026-10-27), ler antes de agir**: [`progress/2026-10-27-remediation-handoff.md`](./progress/2026-10-27-remediation-handoff.md).
-- **Autorização atual** (owner, chat, 2026-11-19): após merge do `#282` (`1c8dd209`), executar **Frente 2** preparando o candidato de patch `v0.24.1` (`Cargo.toml`, `Cargo.lock`, `fuzz/Cargo.lock`, `CHANGELOG.md`, `channel-matrix.toml` reobservado e `v0.24.1-readiness.md`) consolidando `#278`–`#282` (`H1`, tag e registries pendentes). [Canvas](canvas/2026-11-19-prepare-v0.24.1.md).
-- **Limites**: merge em `main` aguarda CI verde e decisão humana (nunca `--admin`); sem push de novas tags, criação de GitHub Release ou publicação externa em `crates.io`, `PyPI`, `npm` e `Homebrew` sem aprovação humana separada; receipts humanos `H1` permanecem pendentes (nunca fabricados); sem remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
-- **Última evidência**: [preparação do candidato v0.24.1](./progress/2026-10-26-remediation.md#patch-candidate-v0241-preparation-2026-11-19): `a7f594b0` prepara `engram-core 0.24.1`, `CHANGELOG.md`, `channel-matrix.toml` (`20/20 OK`) e `v0.24.1-readiness.md` sobre `#282` (`1c8dd209`); `sensors.sh` full PASS (`385s`) e [post-review PASS](./reviews/2026-11-19-remediation-2026-10-26-v2-post.md). Tag `v0.24.1`, registries e receipts `H1` pendentes.
+- **Autorização atual** (owner, chat, 2026-11-19): após merge do `#283` (`531a8012`) e dry-runs `44535566914`/`44535572381` verdes, executar **Frente 3**: ancorar `test_check_security_exceptions.py` em `metadata.as_of` e registrar o [plano `2026-12-31`](plans/2026-11-19-rustsec-2026-12-31-remediation-plan.md) (`W1-PDF`, `W2-ONNX`, `W3-CHRONO`). [Canvas](canvas/2026-11-19-security-exceptions-plan.md).
+- **Limites**: merge em `main` aguarda CI verde e decisão humana de ordem em relação à tag `v0.24.1` (nunca `--admin`); sem push de novas tags, criação de GitHub Release ou publicação externa em `crates.io`, `PyPI`, `npm` e `Homebrew` sem aprovação humana separada; receipts humanos `H1` permanecem pendentes (nunca fabricados); sem remoção de branches/worktrees, dados reais ou inferência paga. [Negativo do harness](./WHAT_WE_DONT_DO.md); [Gates](./GATES.md); [SPEC](./SPEC.md).
+- **Última evidência**: [plano `2026-12-31` e âncora `metadata.as_of`](./progress/2026-10-26-remediation.md#rustsec-2026-12-31-remediation-plan--metadataas_of-horizon-anchor-2026-11-19): `6141e15e` sincroniza `parse_as_of` (`8/8 OK`, vencimentos `2026-12-31` inalterados) e documenta as ondas `W1-PDF`/`W2-ONNX`/`W3-CHRONO` sobre `531a8012` (dry-runs `44535566914`/`44535572381` PASS); `sensors.sh` full PASS (`314s`) e [post-review PASS](./reviews/2026-11-19-remediation-2026-10-26-v3-post.md).
 - **Como retomar**: `bash docs/harness/bin/bootstrap.sh` → leitura obrigatória na ordem de
   `AGENTS.md`/`CLAUDE.md` (inalterada) → este arquivo → active plan →
   `bash docs/harness/bin/doctor.sh`. Seção histórica inteira, sem cortar parágrafo:

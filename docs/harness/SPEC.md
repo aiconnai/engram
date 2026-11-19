@@ -373,3 +373,18 @@ consolidando `#278`–`#282` sobre `v0.24.0` (`f4be2c40`):
   assinatura/push da tag `v0.24.1`, criação do GitHub Release `v0.24.1` e publicação em `crates.io`,
   PyPI, npm ou Homebrew permanecem sujeitos a decisões/aprovações humanas separadas; receipts humanos
   `H1` permanecem **pendentes** (nunca fabricados).
+
+## Plano `2026-12-31` de exceções RustSec e âncora `metadata.as_of` (Frente 3, 2026-11-19)
+
+Após o merge do PR `#283` (`531a8012`) e aprovação dos dry-runs de `release.yml` (`44535566914`) e
+`sdk-release.yml` (`44535572381`) em `531a8012`, o owner selecionou a **Frente 3** (`2026-11-19`, chat):
+- **Escopo autorizado**: substituir o `TODAY = date(2026, 10, 5)` fixo em
+  `scripts/test_check_security_exceptions.py` pela âncora determinística `[metadata].as_of` validada por
+  `scripts/check-security-exceptions.py` (`as_of = 2026-11-19` em `docs/security/advisory-exceptions.toml`,
+  sem estender os vencimentos `2026-12-31`), registrar o plano empírico por ondas (`W1-PDF`, `W2-ONNX`,
+  `W3A`/`W3B`/`W3C`) em [`2026-11-19-rustsec-2026-12-31-remediation-plan.md`](plans/2026-11-19-rustsec-2026-12-31-remediation-plan.md)
+  e [`2026-11-19-security-exceptions-plan.md`](canvas/2026-11-19-security-exceptions-plan.md), atualizar
+  `RISK-0008` em `docs/harness/risk-register.yaml` e abrir o PR mantendo `origin/main` em `531a8012`.
+- **Fora de escopo / pendências preservadas**: merge em `main` aguarda escolha de ordem do owner em
+  relação à tag `v0.24.1` (`531a8012`); assinatura/push de tags, publicação externa e receipts humanos
+  `H1` permanecem **pendentes** (nunca fabricados).

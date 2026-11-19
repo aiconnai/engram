@@ -107,7 +107,7 @@ entries:
     impact: 3
     score: 6
     owner: "Ronaldo"
-    mitigation: "Advisories corrigiveis mesclados em origin/main via PRs #246 (2e84a594), #267 (rusqlite 0.41.1) e #277 (rustix 1.1.6, quinn-proto 0.11.19, quinn-udp 0.5.16); PR #281 (33992508) limitou RUSTSEC-2026-0543 (chrono) ate 2026-12-31. Planejar migracao/avaliacao de chrono (jiff/time + duckdb/arrow), tokenizers e pdf-extract antes de 2026-12-31 sem renovar advisory corrigivel (GATES)."
+    mitigation: "Advisories corrigiveis mesclados em origin/main via PRs #246 (2e84a594), #267 (rusqlite 0.41.1) e #277 (rustix 1.1.6, quinn-proto 0.11.19, quinn-udp 0.5.16); PR #281 (33992508) limitou RUSTSEC-2026-0543 (chrono) ate 2026-12-31. Plano empirico por ondas registrado em docs/harness/plans/2026-11-19-rustsec-2026-12-31-remediation-plan.md (W1 lopdf 0.47 sem ttf-parser, W2 tokenizers 1.0 sem paste, W3A/W3B/W3C chrono -> jiff + bloqueio transitivo arrow-array) e ancora metadata.as_of sincronizada em check-security-exceptions.py."
     contingency: ""
     monitoring:
       - "vencimento de 2026-12-31 nas 3 excecoes governadas"
