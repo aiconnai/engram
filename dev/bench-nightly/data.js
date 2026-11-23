@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795344550755,
+  "lastUpdate": 1795434413744,
   "repoUrl": "https://github.com/aiconnai/engram",
   "entries": {
     "Engram Performance (Nightly)": [
@@ -66909,6 +66909,496 @@ window.BENCHMARK_DATA = {
             "name": "traversal/bfs_depth_3",
             "value": 576013,
             "range": "± 7532",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Ronaldo Lima",
+            "username": "limaronaldo",
+            "email": "ron@ldinho.com.br"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "531a80121d13621dff44a7899b1af6360e60b4eb",
+          "message": "Merge pull request #283 from aiconnai/release/prepare-v0.24.1\n\nchore(release): prepare v0.24.1 patch candidate over v0.24.0",
+          "timestamp": "2026-11-19T13:38:57Z",
+          "url": "https://github.com/aiconnai/engram/commit/531a80121d13621dff44a7899b1af6360e60b4eb"
+        },
+        "date": 1795434411274,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "community_detection/detect_communities_500_nodes",
+            "value": 5354097,
+            "range": "± 7021",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extractor_new/default",
+            "value": 5,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "entity_extraction/extract_mixed",
+            "value": 8387,
+            "range": "± 118",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_create/memory_create",
+            "value": 514054,
+            "range": "± 20059",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search/memory_search",
+            "value": 87763,
+            "range": "± 1841",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search_uncached/in_memory",
+            "value": 795489,
+            "range": "± 4037",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_search_uncached/disk_wal",
+            "value": 861367,
+            "range": "± 7351",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_list/memory_list",
+            "value": 445695,
+            "range": "± 5060",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_memory_stats/memory_stats",
+            "value": 138752,
+            "range": "± 1976",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "mcp_dispatch_error_path/unknown_tool",
+            "value": 707,
+            "range": "± 27",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_create/no_embedding",
+            "value": 332450,
+            "range": "± 11696",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_get/by_id",
+            "value": 63269,
+            "range": "± 1446",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/10",
+            "value": 189299,
+            "range": "± 955",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/10",
+            "value": 354147,
+            "range": "± 2610",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/50",
+            "value": 818718,
+            "range": "± 13233",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/50",
+            "value": 1049103,
+            "range": "± 14248",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/limit/100",
+            "value": 1618721,
+            "range": "± 20469",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "memory_list/with_tag_filter/100",
+            "value": 1828299,
+            "range": "± 19899",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/create",
+            "value": 56386,
+            "range": "± 727",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "crossref/get_related",
+            "value": 42222,
+            "range": "± 451",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "get_stats",
+            "value": 427561,
+            "range": "± 6777",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/create/in_memory",
+            "value": 273709,
+            "range": "± 9505",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/create/disk_wal",
+            "value": 607811,
+            "range": "± 56406",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/create/disk_cloud_safe",
+            "value": 1784534,
+            "range": "± 103416",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/get/in_memory",
+            "value": 66754,
+            "range": "± 1550",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/get/disk_wal",
+            "value": 144247,
+            "range": "± 16122",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/get/disk_cloud_safe",
+            "value": 971707,
+            "range": "± 52358",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/search/in_memory",
+            "value": 1176096,
+            "range": "± 49990",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/search/disk_wal",
+            "value": 1224096,
+            "range": "± 37216",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_modes/search/disk_cloud_safe",
+            "value": 1213467,
+            "range": "± 18912",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_1",
+            "value": 41915149,
+            "range": "± 1572405",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_1_one_writer",
+            "value": 70111571,
+            "range": "± 3244970",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_readonly_1",
+            "value": 1435651,
+            "range": "± 19295",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_readonly_1_one_writer",
+            "value": 24162109,
+            "range": "± 574997",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_4",
+            "value": 251161362,
+            "range": "± 8465042",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_4_one_writer",
+            "value": 281878543,
+            "range": "± 16449953",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_readonly_4",
+            "value": 3994066,
+            "range": "± 78229",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_readonly_4_one_writer",
+            "value": 29755778,
+            "range": "± 1567742",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_8",
+            "value": 487028578,
+            "range": "± 20149337",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_8_one_writer",
+            "value": 523963517,
+            "range": "± 19596179",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_readonly_8",
+            "value": 8054412,
+            "range": "± 94983",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "storage_concurrency/readers_readonly_8_one_writer",
+            "value": 34353418,
+            "range": "± 742192",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/authentication",
+            "value": 405224,
+            "range": "± 3391",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/database migration",
+            "value": 466584,
+            "range": "± 3959",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/React hooks optimization",
+            "value": 519474,
+            "range": "± 7781",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bm25_search/query/API rate limiting Redis",
+            "value": 576433,
+            "range": "± 5074",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/short",
+            "value": 99714,
+            "range": "± 1254",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/medium",
+            "value": 20168288,
+            "range": "± 129730",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "hybrid_search/query_type/long",
+            "value": 19194565,
+            "range": "± 169013",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/short",
+            "value": 818,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/medium",
+            "value": 2203,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/text_length/long",
+            "value": 5136,
+            "range": "± 48",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "tfidf_embedding/batch_100",
+            "value": 184201,
+            "range": "± 1893",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/1_char_typo",
+            "value": 19106,
+            "range": "± 184",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/2_char_typo",
+            "value": 17531,
+            "range": "± 213",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "fuzzy_search/typo_type/transposition",
+            "value": 19249,
+            "range": "± 138",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/100",
+            "value": 2364754,
+            "range": "± 9699",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/100",
+            "value": 1866091,
+            "range": "± 31028",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/1000",
+            "value": 19280327,
+            "range": "± 94647",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/1000",
+            "value": 18293736,
+            "range": "± 82732",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/hybrid_memories/10000",
+            "value": 195033284,
+            "range": "± 1835190",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_scale/semantic_only_memories/10000",
+            "value": 190193800,
+            "range": "± 2946326",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "search_index_v2_report/noop",
+            "value": 0,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/100",
+            "value": 6536,
+            "range": "± 48",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/500",
+            "value": 32506,
+            "range": "± 228",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/cargo/lines/2000",
+            "value": 132529,
+            "range": "± 664",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/20",
+            "value": 600,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/100",
+            "value": 578,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/output_filter/git/commits/500",
+            "value": 590,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/tight_500/500",
+            "value": 2827,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/medium_2k/2000",
+            "value": 9765,
+            "range": "± 101",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/truncation_engine/loose_8k/8000",
+            "value": 37551,
+            "range": "± 149",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/200",
+            "value": 12955,
+            "range": "± 96",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/full_pipeline/cargo_lines/1000",
+            "value": 65623,
+            "range": "± 624",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/semantic_compression/fixed_corpus_ratio_recall",
+            "value": 76975070,
+            "range": "± 246697",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/50",
+            "value": 42413303,
+            "range": "± 106124",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "token_reduction/consolidation/memories/200",
+            "value": 663825976,
+            "range": "± 6008260",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "traversal/bfs_depth_3",
+            "value": 1221830,
+            "range": "± 24383",
             "unit": "ns/iter"
           }
         ]
